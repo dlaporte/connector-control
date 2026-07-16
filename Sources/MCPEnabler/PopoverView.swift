@@ -20,16 +20,6 @@ struct PopoverView: View {
         }
         .frame(minWidth: 240, maxWidth: 380)
         .onAppear { state.reload() }
-        .confirmationDialog(
-            "Apply these changes to Claude's config?\n"
-            + (state.pendingApplyChanges ?? []).joined(separator: "\n"),
-            isPresented: Binding(get: { state.pendingApplyChanges != nil },
-                                 set: { if !$0 { state.cancelApply() } }),
-            titleVisibility: .visible
-        ) {
-            Button("Apply") { state.confirmApply() }
-            Button("Cancel", role: .cancel) { state.cancelApply() }
-        }
     }
 
     private func openEditor(_ target: EditTarget) {

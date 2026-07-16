@@ -10,11 +10,11 @@ struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginItemNote: String?
     @AppStorage("masterStoreDir") private var masterStoreDirSetting: String = ""
-    @AppStorage("restartBehavior") private var restartBehavior: String = "ask"
+    
     @AppStorage("claudeAppPath") private var claudeAppPath: String = "/Applications/Claude.app"
     @AppStorage("backupKeepCount") private var backupKeepCount: Int = 20
     @AppStorage("notifyExternalChanges") private var notifyExternalChanges: Bool = true
-    @AppStorage("confirmBeforeApply") private var confirmBeforeApply: Bool = false
+    @AppStorage("confirmBeforeRestart") private var confirmBeforeRestart: Bool = false
 
     var body: some View {
         TabView {
@@ -56,13 +56,7 @@ struct SettingsView: View {
             }
 
             Section {
-                Picker("After Apply:", selection: $restartBehavior) {
-                    Text("Ask to restart Claude").tag("ask")
-                    Text("Restart Claude automatically").tag("auto")
-                    Text("Do nothing").tag("never")
-                }
-
-                Toggle("Confirm before Apply", isOn: $confirmBeforeApply)
+                Toggle("Confirm before restarting Claude", isOn: $confirmBeforeRestart)
             }
 
             Section {

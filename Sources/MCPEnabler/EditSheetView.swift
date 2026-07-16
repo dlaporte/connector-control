@@ -29,6 +29,7 @@ struct EditTarget: Identifiable, Codable, Hashable {
 struct EditSheetView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismissWindow) private var dismissWindow
     let target: EditTarget
 
     @State private var view: EditView
@@ -124,7 +125,9 @@ struct EditSheetView: View {
         ) {
             Button("Remove", role: .destructive) {
                 state.remove(name: target.name)
-                dismiss()
+                // dismiss() here would only dismiss the confirmation dialog;
+                // the editor window needs the window-scoped action.
+                dismissWindow(id: "editor")
                 state.applyInteractively()
             }
         }

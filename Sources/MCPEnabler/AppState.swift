@@ -11,10 +11,6 @@ final class AppState: ObservableObject {
     @Published var needsClaudeRestart = false
     /// mcpServers as last read from / written to Claude's file, for dirty tracking.
     @Published private(set) var appliedServers: [String: JSONValue] = [:]
-    /// Set when "Confirm before Apply" is on and Apply has a non-empty change
-    /// set awaiting user confirmation; nil otherwise.
-    @Published var pendingApplyChanges: [String]?
-
     @Published private(set) var service: ConfigService
     private var watcher: FileWatcher?
     private var storeWatcher: FileWatcher?
@@ -43,9 +39,9 @@ final class AppState: ObservableObject {
         for oldDomain in ["com.dlaporte.custom-connector-control",
                           "com.dlaporte.mcp-enabler"] {
             guard let oldDefaults = UserDefaults(suiteName: oldDomain) else { continue }
-            for key in ["restartBehavior", "masterStoreDir", "claudeAppPath",
+            for key in ["masterStoreDir", "claudeAppPath",
                         "backupKeepCount", "notifyExternalChanges",
-                        "confirmBeforeApply", "lastApplyDate"] {
+                        "confirmBeforeRestart", "lastApplyDate"] {
                 if let value = oldDefaults.object(forKey: key),
                    UserDefaults.standard.object(forKey: key) == nil {
                     UserDefaults.standard.set(value, forKey: key)
@@ -199,62 +195,23 @@ final class AppState: ObservableObject {
     }
 
     func apply() {
-        let confirmOn = UserDefaults.standard.bool(forKey: "confirmBeforeApply")
-        let changes = ApplyPlan.changes(store: store, current: appliedServers)
-        if confirmOn && !changes.isEmpty {
-            pendingApplyChanges = changes
-        } else {
-            performApply()
-        }
-    }
-
-    func confirmApply() {
-        pendingApplyChanges = nil
         performApply()
     }
 
-    func cancelApply() {
-        pendingApplyChanges = nil
-    }
-
     /// Editor-window flow: saving there is a deliberate final act, so apply
-    /// immediately — honoring Confirm-before-Apply — and handle the After-Apply
-    /// setting with real alerts (the popover and its footer may not be open).
+    /// immediately. The derived Restart Required footer button handles the
+    /// restart nudge afterward.
     func applyInteractively() {
-        let changes = ApplyPlan.changes(store: store, current: appliedServers)
-        guard !changes.isEmpty else { return }
-        NSApp.activate(ignoringOtherApps: true)
-        if UserDefaults.standard.bool(forKey: "confirmBeforeApply") {
-            let alert = NSAlert()
-            alert.messageText = "Apply these changes to Claude's config?"
-            alert.informativeText = changes.joined(separator: "\n")
-            alert.addButton(withTitle: "Apply")
-            alert.addButton(withTitle: "Cancel")
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
-        }
-        performApply(interactive: true)
+        guard isDirty else { return }
+        performApply()
     }
 
-    private func performApply(interactive: Bool = false) {
+    private func performApply() {
         do {
             try service.apply(store)
             appliedServers = store.mcps.filter(\.value.enabled).mapValues(\.config)
             missingEnabled = []
             UserDefaults.standard.set(Date(), forKey: "lastApplyDate")
-            switch UserDefaults.standard.string(forKey: "restartBehavior") ?? "ask" {
-            case "auto": restartClaude()
-            case "never": break
-            default:
-                if interactive {
-                    let alert = NSAlert()
-                    alert.messageText = "Restart Claude Desktop to pick up the changes?"
-                    alert.addButton(withTitle: "Restart Now")
-                    alert.addButton(withTitle: "Later")
-                    if alert.runModal() == .alertFirstButtonReturn { restartClaude() }
-                } else {
-                    break
-                }
-            }
             refreshRestartState()
             lastError = nil
         } catch {
@@ -284,6 +241,15 @@ final class AppState: ObservableObject {
     func restoreMissing() { apply() }
 
     func restartClaude() {
+        if UserDefaults.standard.bool(forKey: "confirmBeforeRestart") {
+            NSApp.activate(ignoringOtherApps: true)
+            let alert = NSAlert()
+            alert.messageText = "Restart Claude Desktop now?"
+            alert.informativeText = "Any in-progress Claude conversation will be interrupted."
+            alert.addButton(withTitle: "Restart")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
         let appURL = URL(fileURLWithPath: UserDefaults.standard.string(forKey: "claudeAppPath")
             ?? "/Applications/Claude.app")
         ClaudeRestarter.restart(appURL: appURL) { [weak self] errorMessage in
