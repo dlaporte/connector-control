@@ -40,6 +40,18 @@ final class AppState: ObservableObject {
                 try? fm.moveItem(at: old, to: new)
             }
         }
+        // Files written before the 600-permissions fix may still be
+        // world-readable; sweep the whole store dir once per launch (cheap,
+        // idempotent — the store can hold env-var secrets).
+        if let files = fm.enumerator(at: new, includingPropertiesForKeys: [.isDirectoryKey]) {
+            for case let file as URL in files {
+                let isDir = (try? file.resourceValues(forKeys: [.isDirectoryKey]))?
+                    .isDirectory ?? false
+                try? fm.setAttributes(
+                    [.posixPermissions: isDir ? 0o700 : 0o600],
+                    ofItemAtPath: file.path)
+            }
+        }
         // Settings lived under the old bundle ids' defaults domains.
         for oldDomain in ["com.dlaporte.custom-connector-control",
                           "com.dlaporte.mcp-enabler"] {
