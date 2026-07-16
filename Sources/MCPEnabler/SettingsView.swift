@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage("claudeAppPath") private var claudeAppPath: String = "/Applications/Claude.app"
     @AppStorage("backupKeepCount") private var backupKeepCount: Int = 20
     @AppStorage("notifyExternalChanges") private var notifyExternalChanges: Bool = true
+    @AppStorage("confirmBeforeApply") private var confirmBeforeApply: Bool = false
 
     var body: some View {
         TabView {
@@ -48,6 +49,8 @@ struct SettingsView: View {
                 Text("Restart Claude automatically").tag("auto")
                 Text("Do nothing").tag("never")
             }
+
+            Toggle("Confirm before Apply", isOn: $confirmBeforeApply)
 
             Toggle("Notify when Claude's config changes externally",
                    isOn: $notifyExternalChanges)

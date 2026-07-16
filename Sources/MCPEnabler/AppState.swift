@@ -10,6 +10,9 @@ final class AppState: ObservableObject {
     @Published var showRestartPrompt = false
     /// mcpServers as last read from / written to Claude's file, for dirty tracking.
     @Published private(set) var appliedServers: [String: JSONValue] = [:]
+    /// Set when "Confirm before Apply" is on and Apply has a non-empty change
+    /// set awaiting user confirmation; nil otherwise.
+    @Published var pendingApplyChanges: [String]?
 
     @Published private(set) var service: ConfigService
     private var watcher: FileWatcher?
@@ -151,6 +154,25 @@ final class AppState: ObservableObject {
     }
 
     func apply() {
+        let confirmOn = UserDefaults.standard.bool(forKey: "confirmBeforeApply")
+        let changes = ApplyPlan.changes(store: store, current: appliedServers)
+        if confirmOn && !changes.isEmpty {
+            pendingApplyChanges = changes
+        } else {
+            performApply()
+        }
+    }
+
+    func confirmApply() {
+        pendingApplyChanges = nil
+        performApply()
+    }
+
+    func cancelApply() {
+        pendingApplyChanges = nil
+    }
+
+    private func performApply() {
         do {
             try service.apply(store)
             appliedServers = store.mcps.filter(\.value.enabled).mapValues(\.config)
