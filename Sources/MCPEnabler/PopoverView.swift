@@ -117,6 +117,16 @@ struct PopoverView: View {
             }
             .buttonStyle(.accessoryBar)
             .help("Add MCP")
+            Button {
+                NSApp.activate(ignoringOtherApps: true)
+                openSettings()
+            } label: {
+                Image(systemName: "gearshape")
+                    .imageScale(.medium)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.accessoryBar)
+            .help("Settings")
             Spacer()
             if state.isDirty {
                 Button("Apply") { state.apply() }
@@ -131,16 +141,6 @@ struct PopoverView: View {
                 .tint(.orange)
                 .controlSize(.small)
             }
-            Button {
-                NSApp.activate(ignoringOtherApps: true)
-                openSettings()
-            } label: {
-                Image(systemName: "gearshape")
-                    .imageScale(.medium)
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.accessoryBar)
-            .help("Settings")
             Button("Quit") { NSApp.terminate(nil) }
         }
         .padding(10)
