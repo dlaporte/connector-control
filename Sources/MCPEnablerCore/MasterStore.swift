@@ -45,8 +45,13 @@ public enum MasterStoreIO {
             let stamp = BackupTimestamp.string(from: now)
             let aside = url.deletingLastPathComponent()
                 .appendingPathComponent("mcps.corrupt.\(stamp).json")
-            try? fm.moveItem(at: url, to: aside)
-            return (.empty, aside)
+            do {
+                try fm.moveItem(at: url, to: aside)
+                return (.empty, aside)
+            } catch {
+                // Couldn't move it aside; the corrupt file stays in place.
+                return (.empty, url)
+            }
         }
     }
 

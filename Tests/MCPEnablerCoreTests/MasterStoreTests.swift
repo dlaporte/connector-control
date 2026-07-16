@@ -44,4 +44,21 @@ final class MasterStoreTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: corrupt, encoding: .utf8), "{not json!!")
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
+
+    func testLoadCorruptFileReportsOriginalPathWhenMoveFails() throws {
+        let fixedNow = Date(timeIntervalSince1970: 1_752_600_000)
+        let garbage = "{not json!!"
+        try Data(garbage.utf8).write(to: url)
+
+        // Pre-create the aside file so moveItem will fail due to name collision.
+        let stamp = BackupTimestamp.string(from: fixedNow)
+        let aside = url.deletingLastPathComponent()
+            .appendingPathComponent("mcps.corrupt.\(stamp).json")
+        try Data("existing".utf8).write(to: aside)
+
+        let result = MasterStoreIO.load(from: url, now: fixedNow)
+        XCTAssertEqual(result.store, .empty)
+        XCTAssertEqual(result.corruptFileURL, url)
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), garbage)
+    }
 }
