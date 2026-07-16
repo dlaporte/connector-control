@@ -47,9 +47,15 @@ public struct ConfigService {
 
     /// Backup the current file, copy the chosen backup over it, then persist a
     /// freshly reconciled store so the UI reflects the restored contents.
+    /// The backup's content is validated BEFORE the live file is touched.
     public func restoreClaudeConfig(from backup: URL, mergedWith store: MasterStore) throws {
-        try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config")
         let data = try Data(contentsOf: backup)
+        guard let parsed = try? JSONSerialization.jsonObject(with: data),
+              parsed is [String: Any] else {
+            throw ClaudeConfigError.malformed(
+                "backup \(backup.lastPathComponent) is not a valid config file")
+        }
+        try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config")
         try AtomicFile.write(data, to: paths.claudeConfigURL)
         let servers = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
         let outcome = Reconciler.reconcile(store: store, claudeServers: servers)

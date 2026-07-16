@@ -86,4 +86,19 @@ final class ConfigServiceTests: XCTestCase {
         try service.restoreClaudeConfig(from: backup, mergedWith: store)
         XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL).count, 3)
     }
+
+    func testRestoreRefusesMalformedBackup() throws {
+        let store = try service.loadAndReconcile().store
+        let badBackup = dir.appendingPathComponent("bad-backup.json")
+        try Data("{not json".utf8).write(to: badBackup)
+        let before = try Data(contentsOf: paths.claudeConfigURL)
+        XCTAssertThrowsError(try service.restoreClaudeConfig(
+            from: badBackup, mergedWith: store)) {
+            guard case ClaudeConfigError.malformed = $0 else {
+                return XCTFail("wrong error: \($0)")
+            }
+        }
+        XCTAssertEqual(try Data(contentsOf: paths.claudeConfigURL), before,
+                       "live config must be untouched after refused restore")
+    }
 }
