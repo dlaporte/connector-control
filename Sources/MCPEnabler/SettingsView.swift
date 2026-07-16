@@ -47,7 +47,7 @@ struct SettingsView: View {
                             loginItemNote = "Couldn't update login item: \(error.localizedDescription)"
                         }
                         if wantOn, SMAppService.mainApp.status == .requiresApproval {
-                            loginItemNote = "Approve MCP Enabler under System Settings → General → Login Items."
+                            loginItemNote = "Approve Custom Connector Control under System Settings → General → Login Items."
                         }
                     }
                 if let loginItemNote {

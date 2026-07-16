@@ -41,7 +41,7 @@ struct PopoverView: View {
                 .imageScale(.large)
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 1) {
-                Text("MCP Enabler").font(.headline)
+                Text("Custom Connector Control").font(.headline)
                 Text(headerSubtitle).font(.caption2).foregroundStyle(.secondary)
             }
             Spacer(minLength: 20)

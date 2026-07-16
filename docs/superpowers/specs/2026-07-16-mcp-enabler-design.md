@@ -1,5 +1,7 @@
 # MCP Enabler — Design Spec
 
+(Renamed to Custom Connector Control; original working name MCP Enabler.)
+
 **Date:** 2026-07-16
 **Status:** Approved pending user review
 

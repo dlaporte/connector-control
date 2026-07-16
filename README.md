@@ -1,4 +1,4 @@
-# MCP Enabler
+# Custom Connector Control
 
 A lightweight macOS menu bar app to enable/disable/edit the MCP servers in
 Claude Desktop's `claude_desktop_config.json` — with automatic backups of
@@ -7,8 +7,8 @@ everything it touches. See `docs/superpowers/specs/` for the full design.
 ## Build & install
 
     ./scripts/build-app.sh
-    cp -R "build/MCP Enabler.app" /Applications/
-    open "/Applications/MCP Enabler.app"
+    cp -R "build/Custom Connector Control.app" /Applications/
+    open "/Applications/Custom Connector Control.app"
 
 ## Development
 
@@ -19,7 +19,7 @@ everything it touches. See `docs/superpowers/specs/` for the full design.
 
 ## Data & backups
 
-- Master MCP list: `~/Library/Application Support/MCP Enabler/mcps.json`
+- Master MCP list: `~/Library/Application Support/Custom Connector Control/mcps.json`
 - Backups (last 20 per file + permanent first-run original):
-  `~/Library/Application Support/MCP Enabler/backups/`
+  `~/Library/Application Support/Custom Connector Control/backups/`
 - Claude's config is rewritten only on Apply; every other key in it is preserved.

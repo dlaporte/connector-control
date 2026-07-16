@@ -17,7 +17,7 @@ struct MCPEnablerApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        WindowGroup("MCP Editor", id: "editor", for: EditTarget.self) { $target in
+        WindowGroup("Connector Editor", id: "editor", for: EditTarget.self) { $target in
             if let target = $target.wrappedValue {
                 EditSheetView(target: target)
                     .environmentObject(state)

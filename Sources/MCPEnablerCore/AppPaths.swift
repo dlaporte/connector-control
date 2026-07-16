@@ -21,7 +21,7 @@ public struct AppPaths {
         let claude = environment["MCP_ENABLER_CLAUDE_CONFIG"].map(URL.init(fileURLWithPath:))
             ?? appSupport.appendingPathComponent("Claude/claude_desktop_config.json")
         let store = environment["MCP_ENABLER_STORE_DIR"].map(URL.init(fileURLWithPath:))
-            ?? appSupport.appendingPathComponent("MCP Enabler")
+            ?? appSupport.appendingPathComponent("Custom Connector Control")
         return AppPaths(claudeConfigURL: claude, storeDirURL: store)
     }
 }

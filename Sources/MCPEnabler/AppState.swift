@@ -21,9 +21,34 @@ final class AppState: ObservableObject {
     private var hasLoadedOnce = false
 
     init(service: ConfigService = AppState.makeService()) {
+        AppState.migrateFromMCPEnabler()
         self.service = service
         reload()
         armWatchers()
+    }
+
+    /// One-time migration from the app's previous name.
+    static func migrateFromMCPEnabler() {
+        let fm = FileManager.default
+        let appSupport = fm.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support")
+        let old = appSupport.appendingPathComponent("MCP Enabler")
+        let new = appSupport.appendingPathComponent("Custom Connector Control")
+        if fm.fileExists(atPath: old.path), !fm.fileExists(atPath: new.path) {
+            try? fm.moveItem(at: old, to: new)
+        }
+        // Settings lived under the old bundle id's defaults domain.
+        if UserDefaults.standard.object(forKey: "restartBehavior") == nil,
+           let oldDefaults = UserDefaults(suiteName: "com.dlaporte.mcp-enabler") {
+            for key in ["restartBehavior", "masterStoreDir", "claudeAppPath",
+                        "backupKeepCount", "notifyExternalChanges",
+                        "confirmBeforeApply", "lastApplyDate"] {
+                if let value = oldDefaults.object(forKey: key),
+                   UserDefaults.standard.object(forKey: key) == nil {
+                    UserDefaults.standard.set(value, forKey: key)
+                }
+            }
+        }
     }
 
     nonisolated static func makeService() -> ConfigService {
@@ -135,11 +160,11 @@ final class AppState: ObservableObject {
             // never on first load. At most one notification per reload.
             if firedMissingNotification {
                 let names = result.missingEnabled.joined(separator: ", ")
-                notify("MCP Enabler",
+                notify("Custom Connector Control",
                        "Claude's config is missing \(result.missingEnabled.count) "
                        + "MCP(s): \(names) — open the menu bar item to restore.")
             } else if claudeConfigChangedExternally {
-                notify("MCP Enabler", "Claude's config changed outside MCP Enabler.")
+                notify("Custom Connector Control", "Claude's config changed outside Custom Connector Control.")
             }
             refreshRestartState()
         } catch {
