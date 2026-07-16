@@ -57,41 +57,29 @@ struct EditSheetView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Picker("View", selection: viewBinding) {
-                Text("Form").tag(EditView.form)
-                Text("JSON").tag(EditView.json)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
-            if target.isNew {
-                Picker("Type", selection: $isRemote) {
-                    Text("Remote").tag(true)
-                    Text("Local").tag(false)
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Picker("View", selection: viewBinding) {
+                    Text("Form").tag(EditView.form)
+                    Text("JSON").tag(EditView.json)
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: isRemote) { _, nowRemote in
-                    guard view == .form else { return }
-                    if !nowRemote {
-                        // Discard the remote template's bridge invocation — a
-                        // local server has nothing to do with mcp-remote.
-                        if form.args.contains("mcp-remote") || form.command.isEmpty {
-                            form.command = "npx"
-                            form.args = ["-y", ""]
-                        }
-                    }
-                }
+                .labelsHidden()
+                .fixedSize()
+                Spacer()
             }
-
-            field("Name") {
-                TextField("my-mcp", text: $name).textFieldStyle(.roundedBorder)
-            }
+            .padding(.vertical, 10)
 
             if view == .form { formBody } else { jsonBody }
 
             if let error = validationError {
-                Text(error).font(.callout).foregroundStyle(.red)
+                Text(error)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 6)
             }
 
             Divider()
@@ -105,9 +93,9 @@ struct EditSheetView: View {
                     .keyboardShortcut(.defaultAction)
                     .disabled(view == .json && jsonError != nil)
             }
+            .padding(16)
         }
-        .padding(16)
-        .frame(width: 460)
+        .frame(width: 480, height: 420)
         .confirmationDialog(
             "Switching to Form view can’t fully represent this configuration. "
             + "These elements would be lost or altered:\n"
@@ -229,35 +217,64 @@ struct EditSheetView: View {
     // MARK: form body
 
     @ViewBuilder private var formBody: some View {
-        if isRemote {
-            field("Server URL") {
-                TextField("https://example.com/mcp", text: $remoteURL)
-                    .textFieldStyle(.roundedBorder)
+        Form {
+            Section {
+                if target.isNew {
+                    Picker("Type", selection: $isRemote) {
+                        Text("Remote").tag(true)
+                        Text("Local").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    .onChange(of: isRemote) { _, nowRemote in
+                        guard view == .form else { return }
+                        if !nowRemote {
+                            // Discard the remote template's bridge invocation — a
+                            // local server has nothing to do with mcp-remote.
+                            if form.args.contains("mcp-remote") || form.command.isEmpty {
+                                form.command = "npx"
+                                form.args = ["-y", ""]
+                            }
+                        }
+                    }
+                }
+                TextField("Name", text: $name, prompt: Text("my-mcp"))
             }
-            Text("Runs via npx mcp-remote — managed for you")
-                .font(.caption).foregroundStyle(.secondary)
-            if !form.env.isEmpty {
-                field("Environment variables") { envEditor }
+
+            if isRemote {
+                Section {
+                    TextField("Server URL", text: $remoteURL,
+                               prompt: Text("https://example.com/mcp"))
+                } footer: {
+                    Text("Runs via npx mcp-remote — managed for you.")
+                }
+                if !form.env.isEmpty {
+                    Section("Environment Variables") { envEditor }
+                }
+            } else {
+                Section {
+                    TextField("Command", text: $form.command, prompt: Text("npx"))
+                }
+                Section("Arguments") { argsEditor }
+                Section("Environment Variables") { envEditor }
             }
-        } else {
-            field("Command") {
-                TextField("npx", text: $form.command).textFieldStyle(.roundedBorder)
+
+            if !form.additional.isEmpty {
+                Section {
+                    DisclosureGroup(
+                        "\(form.additional.count) field(s) not editable here: "
+                        + form.additional.keys.sorted().joined(separator: ", ")
+                        + " — switch to JSON to edit"
+                    ) {
+                        Text(additionalPreview)
+                            .font(.system(.caption, design: .monospaced))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .font(.caption)
+                }
             }
-            field("Arguments") { argsEditor }
-            field("Environment variables") { envEditor }
         }
-        if !form.additional.isEmpty {
-            DisclosureGroup(
-                "\(form.additional.count) field(s) not editable here: "
-                + form.additional.keys.sorted().joined(separator: ", ")
-                + " — switch to JSON to edit"
-            ) {
-                Text(additionalPreview)
-                    .font(.system(.caption, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .font(.caption)
-        }
+        .formStyle(.grouped)
     }
 
     private var additionalPreview: String {
@@ -265,48 +282,41 @@ struct EditSheetView: View {
         return String(decoding: data, as: UTF8.self)
     }
 
-    private var argsEditor: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(form.args.indices, id: \.self) { index in
-                HStack {
-                    TextField("argument", text: $form.args[index])
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(.body, design: .monospaced))
-                    Button { form.args.remove(at: index) } label: {
-                        Image(systemName: "xmark.circle")
-                    }.buttonStyle(.plain)
-                }
+    @ViewBuilder private var argsEditor: some View {
+        ForEach(form.args.indices, id: \.self) { index in
+            HStack {
+                TextField("argument", text: $form.args[index])
+                    .font(.system(.body, design: .monospaced))
+                Button { form.args.remove(at: index) } label: {
+                    Image(systemName: "xmark.circle")
+                }.buttonStyle(.plain)
             }
-            Button("＋ Add argument") { form.args.append("") }
-                .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)
         }
+        Button("＋ Add argument") { form.args.append("") }
+            .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)
     }
 
-    private var envEditor: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(form.env.keys.sorted(), id: \.self) { key in
-                HStack {
-                    Text(key).font(.system(.body, design: .monospaced))
-                        .frame(width: 130, alignment: .leading)
-                    if envRevealed.contains(key) {
-                        TextField("value", text: envBinding(key))
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(.body, design: .monospaced))
-                    } else {
-                        SecureField("value", text: envBinding(key))
-                            .textFieldStyle(.roundedBorder)
-                    }
-                    Button {
-                        if envRevealed.contains(key) { envRevealed.remove(key) }
-                        else { envRevealed.insert(key) }
-                    } label: { Image(systemName: "eye") }.buttonStyle(.plain)
-                    Button { form.env.removeValue(forKey: key) } label: {
-                        Image(systemName: "xmark.circle")
-                    }.buttonStyle(.plain)
+    @ViewBuilder private var envEditor: some View {
+        ForEach(form.env.keys.sorted(), id: \.self) { key in
+            HStack {
+                Text(key).font(.system(.body, design: .monospaced))
+                    .frame(width: 130, alignment: .leading)
+                if envRevealed.contains(key) {
+                    TextField("value", text: envBinding(key))
+                        .font(.system(.body, design: .monospaced))
+                } else {
+                    SecureField("value", text: envBinding(key))
                 }
+                Button {
+                    if envRevealed.contains(key) { envRevealed.remove(key) }
+                    else { envRevealed.insert(key) }
+                } label: { Image(systemName: "eye") }.buttonStyle(.plain)
+                Button { form.env.removeValue(forKey: key) } label: {
+                    Image(systemName: "xmark.circle")
+                }.buttonStyle(.plain)
             }
-            EnvAdder { key, value in form.env[key] = value }
         }
+        EnvAdder { key, value in form.env[key] = value }
     }
 
     private func envBinding(_ key: String) -> Binding<String> {
@@ -316,18 +326,22 @@ struct EditSheetView: View {
     // MARK: json body
 
     @ViewBuilder private var jsonBody: some View {
-        TextEditor(text: $jsonText)
-            .font(.system(.callout, design: .monospaced))
-            .frame(height: 180)
-            .overlay(RoundedRectangle(cornerRadius: 6)
-                .stroke(jsonError == nil ? Color.secondary.opacity(0.3) : .red))
-            .onChange(of: jsonText) { _ = parsedJSON() }
-        if let error = jsonError {
-            Text(error).font(.caption).foregroundStyle(.red)
-        } else {
-            Text("Tip: paste a README snippet — a {\"mcpServers\": {…}} wrapper is unwrapped automatically.")
-                .font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 8) {
+            TextEditor(text: $jsonText)
+                .font(.system(.callout, design: .monospaced))
+                .frame(maxHeight: .infinity)
+                .overlay(RoundedRectangle(cornerRadius: 6)
+                    .stroke(jsonError == nil ? Color.secondary.opacity(0.3) : .red))
+                .onChange(of: jsonText) { _ = parsedJSON() }
+            if let error = jsonError {
+                Text(error).font(.caption).foregroundStyle(.red)
+            } else {
+                Text("Tip: paste a README snippet — a {\"mcpServers\": {…}} wrapper is unwrapped automatically.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
     }
 
     // MARK: save
@@ -366,13 +380,6 @@ struct EditSheetView: View {
         dismiss()
         state.applyInteractively()
     }
-
-    private func field(_ label: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label.uppercased()).font(.caption2).foregroundStyle(.secondary)
-            content()
-        }
-    }
 }
 
 /// Two fields + button for adding an env var.
@@ -384,9 +391,9 @@ struct EnvAdder: View {
     var body: some View {
         HStack {
             TextField("NAME", text: $key)
-                .textFieldStyle(.roundedBorder).frame(width: 130)
+                .frame(width: 130)
                 .font(.system(.body, design: .monospaced))
-            TextField("value", text: $value).textFieldStyle(.roundedBorder)
+            TextField("value", text: $value)
             Button("＋") {
                 let k = key.trimmingCharacters(in: .whitespaces)
                 guard !k.isEmpty else { return }
