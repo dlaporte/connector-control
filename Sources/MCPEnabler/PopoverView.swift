@@ -112,8 +112,10 @@ struct PopoverView: View {
                 openEditor(.newRemote())
             } label: {
                 Image(systemName: "plus")
+                    .imageScale(.medium)
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.accessoryBar)
             .help("Add MCP")
             Spacer()
             if state.isDirty {
@@ -134,8 +136,10 @@ struct PopoverView: View {
                 openSettings()
             } label: {
                 Image(systemName: "gearshape")
+                    .imageScale(.medium)
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.accessoryBar)
             .help("Settings")
             Button("Quit") { NSApp.terminate(nil) }
         }
@@ -164,9 +168,11 @@ struct MCPRow: View {
                 onEdit()
             } label: {
                 Image(systemName: "pencil")
+                    .imageScale(.medium)
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
-            .help("Edit")
+            .buttonStyle(.accessoryBar)
+            .help("Edit “\(name)”")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
