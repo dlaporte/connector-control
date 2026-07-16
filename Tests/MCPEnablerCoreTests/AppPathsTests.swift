@@ -7,7 +7,7 @@ final class AppPathsTests: XCTestCase {
         XCTAssertTrue(paths.claudeConfigURL.path.hasSuffix(
             "Library/Application Support/Claude/claude_desktop_config.json"))
         XCTAssertTrue(paths.storeDirURL.path.hasSuffix(
-            "Library/Application Support/Custom Connector Control"))
+            "Library/Application Support/Connector Control"))
         XCTAssertEqual(paths.masterStoreURL.lastPathComponent, "mcps.json")
         XCTAssertEqual(paths.backupsDirURL.lastPathComponent, "backups")
     }

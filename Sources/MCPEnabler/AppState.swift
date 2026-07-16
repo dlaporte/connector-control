@@ -27,19 +27,22 @@ final class AppState: ObservableObject {
         armWatchers()
     }
 
-    /// One-time migration from the app's previous name.
+    /// One-time migration from the app's previous names (newest first).
     static func migrateFromMCPEnabler() {
         let fm = FileManager.default
         let appSupport = fm.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support")
-        let old = appSupport.appendingPathComponent("MCP Enabler")
-        let new = appSupport.appendingPathComponent("Custom Connector Control")
-        if fm.fileExists(atPath: old.path), !fm.fileExists(atPath: new.path) {
-            try? fm.moveItem(at: old, to: new)
+        let new = appSupport.appendingPathComponent("Connector Control")
+        for oldName in ["Custom Connector Control", "MCP Enabler"] {
+            let old = appSupport.appendingPathComponent(oldName)
+            if fm.fileExists(atPath: old.path), !fm.fileExists(atPath: new.path) {
+                try? fm.moveItem(at: old, to: new)
+            }
         }
-        // Settings lived under the old bundle id's defaults domain.
-        if UserDefaults.standard.object(forKey: "restartBehavior") == nil,
-           let oldDefaults = UserDefaults(suiteName: "com.dlaporte.mcp-enabler") {
+        // Settings lived under the old bundle ids' defaults domains.
+        for oldDomain in ["com.dlaporte.custom-connector-control",
+                          "com.dlaporte.mcp-enabler"] {
+            guard let oldDefaults = UserDefaults(suiteName: oldDomain) else { continue }
             for key in ["restartBehavior", "masterStoreDir", "claudeAppPath",
                         "backupKeepCount", "notifyExternalChanges",
                         "confirmBeforeApply", "lastApplyDate"] {
@@ -160,11 +163,11 @@ final class AppState: ObservableObject {
             // never on first load. At most one notification per reload.
             if firedMissingNotification {
                 let names = result.missingEnabled.joined(separator: ", ")
-                notify("Custom Connector Control",
+                notify("Connector Control",
                        "Claude's config is missing \(result.missingEnabled.count) "
                        + "MCP(s): \(names) — open the menu bar item to restore.")
             } else if claudeConfigChangedExternally {
-                notify("Custom Connector Control", "Claude's config changed outside Custom Connector Control.")
+                notify("Connector Control", "Claude's config changed outside Connector Control.")
             }
             refreshRestartState()
         } catch {

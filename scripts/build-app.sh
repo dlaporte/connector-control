@@ -2,12 +2,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-APP="build/Custom Connector Control.app"
+APP="build/Connector Control.app"
 swift build -c release
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
-cp .build/release/MCPEnabler "$APP/Contents/MacOS/Custom Connector Control"
+cp .build/release/MCPEnabler "$APP/Contents/MacOS/Connector Control"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -15,9 +15,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleExecutable</key><string>Custom Connector Control</string>
-    <key>CFBundleIdentifier</key><string>com.dlaporte.custom-connector-control</string>
-    <key>CFBundleName</key><string>Custom Connector Control</string>
+    <key>CFBundleExecutable</key><string>Connector Control</string>
+    <key>CFBundleIdentifier</key><string>com.dlaporte.connector-control</string>
+    <key>CFBundleName</key><string>Connector Control</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>1.0</string>
     <key>CFBundleVersion</key><string>1</string>

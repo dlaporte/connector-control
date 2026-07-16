@@ -39,11 +39,8 @@ struct PopoverView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Image(systemName: "puzzlepiece.extension.fill")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Custom Connector Control").font(.headline)
+                Text("Connector Control").font(.headline)
                 Text(headerSubtitle).font(.caption2).foregroundStyle(.secondary)
             }
             Spacer(minLength: 20)
@@ -69,7 +66,7 @@ struct PopoverView: View {
                     headerIcon("power")
                 }
                 .buttonStyle(.accessoryBar)
-                .help("Quit Custom Connector Control")
+                .help("Quit Connector Control")
             }
         }
         .padding(.horizontal, 12)
