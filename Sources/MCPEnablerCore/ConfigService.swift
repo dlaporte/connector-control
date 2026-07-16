@@ -13,7 +13,7 @@ public struct ConfigService {
 
     /// Load master store (handling corruption), read Claude's servers,
     /// reconcile, persist the store if reconciliation changed it.
-    public func loadAndReconcile() throws
+    public func loadAndReconcile(baseline: [String: JSONValue]? = nil) throws
         -> (store: MasterStore, missingEnabled: [String], notes: [String],
             claudeServers: [String: JSONValue]) {
         var notes: [String] = []
@@ -24,7 +24,8 @@ public struct ConfigService {
                 + "\(corrupt.lastPathComponent) and rebuilt from Claude's config.")
         }
         let servers = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
-        let outcome = Reconciler.reconcile(store: loaded.store, claudeServers: servers)
+        let outcome = Reconciler.reconcile(
+            store: loaded.store, claudeServers: servers, baseline: baseline)
         if outcome.storeChanged || loaded.corruptFileURL != nil {
             try saveStore(outcome.store)
         }

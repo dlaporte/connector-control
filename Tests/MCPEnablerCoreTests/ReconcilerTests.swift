@@ -30,8 +30,33 @@ final class ReconcilerTests: XCTestCase {
     func testDisabledButPresentBecomesEnabled() {
         let outcome = Reconciler.reconcile(
             store: store(["s": MCPEntry(enabled: false, config: configA)]),
-            claudeServers: ["s": configA])
+            claudeServers: ["s": configA], baseline: [:])
         XCTAssertEqual(outcome.store.mcps["s"]?.enabled, true)
+        XCTAssertTrue(outcome.storeChanged)
+    }
+
+    func testPendingDisableSurvivesReloadWhenFileUnchanged() {
+        let outcome = Reconciler.reconcile(
+            store: store(["s": MCPEntry(enabled: false, config: configA)]),
+            claudeServers: ["s": configA], baseline: ["s": configA])
+        XCTAssertEqual(outcome.store.mcps["s"]?.enabled, false)
+        XCTAssertFalse(outcome.storeChanged)
+    }
+
+    func testPendingDisableSurvivesFreshLaunch() {
+        let outcome = Reconciler.reconcile(
+            store: store(["s": MCPEntry(enabled: false, config: configA)]),
+            claudeServers: ["s": configA], baseline: nil)
+        XCTAssertEqual(outcome.store.mcps["s"]?.enabled, false)
+        XCTAssertFalse(outcome.storeChanged)
+    }
+
+    func testDisabledButExternallyModifiedBecomesEnabled() {
+        let outcome = Reconciler.reconcile(
+            store: store(["s": MCPEntry(enabled: false, config: configA)]),
+            claudeServers: ["s": configB], baseline: ["s": configA])
+        XCTAssertEqual(outcome.store.mcps["s"]?.enabled, true)
+        XCTAssertEqual(outcome.store.mcps["s"]?.config, configB)
         XCTAssertTrue(outcome.storeChanged)
     }
 

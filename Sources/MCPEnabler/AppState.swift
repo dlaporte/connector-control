@@ -12,6 +12,7 @@ final class AppState: ObservableObject {
 
     let service: ConfigService
     private var watcher: FileWatcher?
+    private var hasLoadedOnce = false
 
     init(service: ConfigService = ConfigService(paths: .live())) {
         self.service = service
@@ -30,11 +31,13 @@ final class AppState: ObservableObject {
 
     func reload() {
         do {
-            let result = try service.loadAndReconcile()
+            let result = try service.loadAndReconcile(
+                baseline: hasLoadedOnce ? appliedServers : nil)
             store = result.store
             missingEnabled = result.missingEnabled
             appliedServers = result.claudeServers
             lastError = result.notes.first
+            hasLoadedOnce = true
         } catch {
             lastError = friendly(error)
         }

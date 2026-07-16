@@ -109,9 +109,12 @@ launch, on watcher events, and whenever the popover opens:
 - **MCP present in both but with a different config in Claude's file** → Claude's file
   wins (the user may have hand-edited it); the master store is updated. A backup of
   `mcps.json` is taken first.
-- **MCP present in Claude's file but marked disabled in the master store** → marked
-  enabled (Claude's file reflects what is actually running; the user evidently
-  re-added it outside the tool).
+- **MCP present in Claude's file but marked disabled in the master store** → if
+  the file entry matches the last-known state of Claude's file (baseline), this
+  is a pending disable awaiting Apply and is left disabled; it is marked enabled
+  only when the entry differs from — or is newly absent from — the baseline
+  (evidence it was re-added or changed externally). On a fresh launch there is
+  no baseline and the disable intent is preserved.
 - **MCP enabled in the master store but missing from Claude's file** → do NOT silently
   delete from the master store. Flag it in the UI: the menu bar icon gains a badge and
   the popover shows "Claude's config is missing N MCP(s) [Restore] [Mark disabled]".
