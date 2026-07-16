@@ -135,6 +135,9 @@ struct SettingsView: View {
                 .font(.callout)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
+                // Wrap to the window width instead of laying out at ideal
+                // (single-line) width.
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 4)
             Divider()
                 .padding(.vertical, 6)
