@@ -15,6 +15,7 @@ struct SettingsView: View {
     @AppStorage("backupKeepCount") private var backupKeepCount: Int = 20
     @AppStorage("notifyExternalChanges") private var notifyExternalChanges: Bool = true
     @AppStorage("confirmBeforeRestart") private var confirmBeforeRestart: Bool = true
+    @AppStorage("confirmBeforeQuit") private var confirmBeforeQuit: Bool = true
 
     var body: some View {
         TabView {
@@ -60,6 +61,7 @@ struct SettingsView: View {
 
             Section {
                 Toggle("Confirm before restarting Claude", isOn: $confirmBeforeRestart)
+                Toggle("Confirm before quitting", isOn: $confirmBeforeQuit)
             }
 
             Section {

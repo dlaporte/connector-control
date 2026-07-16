@@ -240,6 +240,20 @@ final class AppState: ObservableObject {
     /// Recovery for externally wiped MCPs: rewrite Claude's config from the store.
     func restoreMissing() { apply() }
 
+    func quitApp() {
+        if UserDefaults.standard.object(forKey: "confirmBeforeQuit") as? Bool ?? true {
+            NSApp.activate(ignoringOtherApps: true)
+            let alert = NSAlert()
+            alert.messageText = "Quit Connector Control?"
+            alert.informativeText =
+                "Config monitoring and wipe recovery stop while it isn't running."
+            alert.addButton(withTitle: "Quit")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        NSApp.terminate(nil)
+    }
+
     func restartClaude() {
         if UserDefaults.standard.object(forKey: "confirmBeforeRestart") as? Bool ?? true {
             NSApp.activate(ignoringOtherApps: true)

@@ -51,7 +51,7 @@ struct PopoverView: View {
                 .buttonStyle(.accessoryBar)
                 .help("Settings")
                 Button {
-                    NSApp.terminate(nil)
+                    state.quitApp()
                 } label: {
                     headerIcon("power")
                 }
