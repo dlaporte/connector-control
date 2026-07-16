@@ -73,7 +73,14 @@ public extension JSONValue {
             self = .null
         case let n as NSNumber:
             if CFGetTypeID(n) == CFBooleanGetTypeID() { self = .bool(n.boolValue) }
-            else if CFNumberIsFloatType(n) { self = .double(n.doubleValue) }
+            else if CFNumberIsFloatType(n) {
+                let d = n.doubleValue
+                // Canonicalize whole-valued floats (2.0 → 2): the write path
+                // re-emits them as integers anyway, and a stable representation
+                // prevents reconcile/backup churn on every reload.
+                if d.rounded() == d, let i = Int(exactly: d) { self = .int(i) }
+                else { self = .double(d) }
+            }
             else { self = .int(n.intValue) }
         case let s as String:
             self = .string(s)

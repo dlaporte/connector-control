@@ -36,6 +36,17 @@ final class JSONValueTests: XCTestCase {
         XCTAssertEqual(value, .object(["t": .bool(true), "one": .int(1)]))
     }
 
+    func testWholeValuedFloatsCanonicalizeToInt() throws {
+        let value = try JSONValue(any: ["x": 2.0, "y": 2.5])
+        XCTAssertEqual(value, .object(["x": .int(2), "y": .double(2.5)]))
+
+        // Parse round-trip stability: re-parsing a serialized whole-valued
+        // float must not flip it back and forth.
+        let parsed = try JSONValue.parse(Data(#"{"x": 2.0}"#.utf8))
+        let reparsed = try JSONValue.parse(try parsed.serialized())
+        XCTAssertEqual(reparsed, parsed)
+    }
+
     func testTypeName() {
         XCTAssertEqual(JSONValue.object([:]).typeName, "object")
         XCTAssertEqual(JSONValue.array([]).typeName, "array")
