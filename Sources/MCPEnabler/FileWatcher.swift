@@ -14,6 +14,10 @@ final class FileWatcher {
         self.onChange = onChange
     }
 
+    deinit {
+        stop()
+    }
+
     func start() {
         stop()
         lastModified = modificationDate()

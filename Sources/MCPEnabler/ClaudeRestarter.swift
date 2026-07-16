@@ -8,7 +8,9 @@ enum ClaudeRestarter {
     /// Calls completion on the main queue with nil on success or an error message.
     static func restart(completion: @escaping (String?) -> Void) {
         guard FileManager.default.fileExists(atPath: appURL.path) else {
-            completion("Claude.app was not found at \(appURL.path).")
+            DispatchQueue.main.async {
+                completion("Claude.app was not found at \(appURL.path).")
+            }
             return
         }
         let running = NSRunningApplication.runningApplications(
@@ -28,14 +30,15 @@ enum ClaudeRestarter {
             DispatchQueue.main.async {
                 if stillRunning {
                     completion("Claude didn’t quit (it may be showing a dialog). "
-                               + "Quit it manually, then it will relaunch.")
+                               + "Quit it manually, then click Restart Claude again.")
+                    return
                 }
                 NSWorkspace.shared.openApplication(
                     at: appURL,
                     configuration: NSWorkspace.OpenConfiguration()
                 ) { _, error in
                     DispatchQueue.main.async {
-                        if !stillRunning { completion(error?.localizedDescription) }
+                        completion(error?.localizedDescription)
                     }
                 }
             }

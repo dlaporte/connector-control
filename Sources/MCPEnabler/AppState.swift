@@ -85,6 +85,7 @@ final class AppState: ObservableObject {
         showRestartPrompt = false
         ClaudeRestarter.restart { [weak self] errorMessage in
             self?.lastError = errorMessage
+            if errorMessage != nil { self?.showRestartPrompt = true }
         }
     }
 
