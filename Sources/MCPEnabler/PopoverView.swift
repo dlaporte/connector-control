@@ -3,6 +3,7 @@ import MCPEnablerCore
 
 struct PopoverView: View {
     @EnvironmentObject var state: AppState
+    @State private var editTarget: EditTarget?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -14,6 +15,9 @@ struct PopoverView: View {
         }
         .frame(width: 380)
         .onAppear { state.reload() }
+        .sheet(item: $editTarget) { target in
+            EditSheetView(target: target).environmentObject(state)
+        }
     }
 
     private var missingBanner: some View {
@@ -44,7 +48,11 @@ struct PopoverView: View {
         ScrollView {
             VStack(spacing: 0) {
                 ForEach(state.sortedNames, id: \.self) { name in
-                    MCPRow(name: name)
+                    MCPRow(name: name) {
+                        if let entry = state.store.mcps[name] {
+                            editTarget = .existing(name: name, entry: entry)
+                        }
+                    }
                     Divider()
                 }
                 if state.store.mcps.isEmpty {
@@ -77,6 +85,7 @@ struct PopoverView: View {
 struct MCPRow: View {
     @EnvironmentObject var state: AppState
     let name: String
+    let onEdit: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
@@ -100,7 +109,9 @@ struct MCPRow: View {
                     .overlay(RoundedRectangle(cornerRadius: 4)
                         .stroke(.secondary.opacity(0.4)))
             }
-            // Edit chevron arrives in Task 11.
+            Button(action: onEdit) {
+                Image(systemName: "chevron.right").foregroundStyle(.secondary)
+            }.buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
