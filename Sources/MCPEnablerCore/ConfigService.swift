@@ -20,7 +20,7 @@ public struct ConfigService {
     /// UI keeps showing the user's MCP list instead of going blank.
     public func loadAndReconcile(baseline: [String: JSONValue]? = nil) throws
         -> (store: MasterStore, missingEnabled: [String], notes: [String],
-            claudeServers: [String: JSONValue]) {
+            claudeServers: [String: JSONValue]?) {
         var notes: [String] = []
         let loaded = MasterStoreIO.load(from: paths.masterStoreURL)
         if let corrupt = loaded.corruptFileURL {
@@ -35,7 +35,7 @@ public struct ConfigService {
             return (loaded.store, [],
                     ["Claude's config file is not valid JSON. Your MCP list is safe; "
                      + "use Backups ▸ Restore… to repair the file."],
-                    [:])
+                    nil)
         }
         let outcome = Reconciler.reconcile(
             store: loaded.store, claudeServers: servers, baseline: baseline)

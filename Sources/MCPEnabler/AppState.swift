@@ -35,9 +35,11 @@ final class AppState: ObservableObject {
                 baseline: hasLoadedOnce ? appliedServers : nil)
             store = result.store
             missingEnabled = result.missingEnabled
-            appliedServers = result.claudeServers
+            if let servers = result.claudeServers {
+                appliedServers = servers
+                hasLoadedOnce = true
+            }
             lastError = result.notes.first
-            hasLoadedOnce = true
         } catch {
             lastError = friendly(error)
         }

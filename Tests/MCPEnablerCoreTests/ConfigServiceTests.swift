@@ -28,7 +28,7 @@ final class ConfigServiceTests: XCTestCase {
                        ["scoutbook", "aws-mcp", "service-now"])
         XCTAssertTrue(result.store.mcps.values.allSatisfy(\.enabled))
         XCTAssertEqual(result.missingEnabled, [])
-        XCTAssertEqual(result.claudeServers.count, 3)
+        XCTAssertEqual(result.claudeServers?.count, 3)
         // reconciled store was persisted
         XCTAssertEqual(MasterStoreIO.load(from: paths.masterStoreURL).store, result.store)
     }
@@ -100,6 +100,7 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(result.missingEnabled, [])
         XCTAssertEqual(result.notes.count, 1)
         XCTAssertTrue(result.notes[0].contains("Backups"))
+        XCTAssertNil(result.claudeServers, "no baseline should be recorded from a failed reconcile")
         XCTAssertEqual(try service.backups.backups(series: "mcps").count, backupCountBefore,
                        "a failed reconcile pass must not save (and thus back up) the store")
     }
