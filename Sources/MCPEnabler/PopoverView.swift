@@ -13,7 +13,7 @@ struct PopoverView: View {
             if !state.missingEnabled.isEmpty { missingBanner }
             if let error = state.lastError { errorBanner(error) }
             mcpList
-            if state.isDirty || state.needsClaudeRestart {
+            if state.needsClaudeRestart {
                 Divider()
                 footer
             }
@@ -122,19 +122,14 @@ struct PopoverView: View {
     private var footer: some View {
         HStack {
             Spacer()
-            if state.isDirty {
-                Button("Apply") { state.apply() }
-                    .keyboardShortcut(.defaultAction)
-            } else if state.needsClaudeRestart {
-                Button {
-                    state.restartClaude()
-                } label: {
-                    Label("Restart Required", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
-                .controlSize(.small)
+            Button {
+                state.restartClaude()
+            } label: {
+                Label("Restart Required", systemImage: "arrow.clockwise")
             }
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+            .controlSize(.small)
         }
         .padding(10)
     }

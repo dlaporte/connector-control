@@ -192,6 +192,9 @@ final class AppState: ObservableObject {
     func setEnabled(_ name: String, _ on: Bool) {
         store.mcps[name]?.enabled = on
         persistStore()
+        // Toggles take effect immediately; the Restart Required button is the
+        // only follow-up step.
+        performApply()
     }
 
     func apply() {
@@ -279,6 +282,7 @@ final class AppState: ObservableObject {
         for name in missingEnabled { store.mcps[name]?.enabled = false }
         missingEnabled = []
         persistStore()
+        performApply()
     }
 
     private func persistStore() {
