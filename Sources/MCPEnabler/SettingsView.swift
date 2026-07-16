@@ -24,7 +24,13 @@ struct SettingsView: View {
             storageTab
                 .tabItem { Label("Storage", systemImage: "externaldrive") }
             claudeTab
-                .tabItem { Label("Claude", systemImage: "bubble.left.and.bubble.right") }
+                .tabItem {
+                    Label {
+                        Text("Claude")
+                    } icon: {
+                        Image(nsImage: claudeTabIcon)
+                    }
+                }
             aboutTab
                 .tabItem { Label("About", systemImage: "info.circle") }
         }
@@ -160,6 +166,14 @@ struct SettingsView: View {
             return "\(short) (\(build))"
         }
         return short
+    }
+
+    /// The installed Claude app's own icon (falls back to a generic app icon
+    /// when Claude isn't at the configured path).
+    private var claudeTabIcon: NSImage {
+        let icon = NSWorkspace.shared.icon(forFile: claudeAppPath)
+        icon.size = NSSize(width: 22, height: 22)
+        return icon
     }
 
     private func chooseStoreDir() {
