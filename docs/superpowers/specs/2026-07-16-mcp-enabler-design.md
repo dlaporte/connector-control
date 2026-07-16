@@ -230,6 +230,31 @@ config shape (three mcp-remote servers + `preferences` + unknown keys):
 
 UI layer is kept thin; manual verification checklist for popover/sheet/restart flows.
 
+## Settings
+
+Five user-configurable settings, stored in `UserDefaults`:
+
+| Setting | Key | Default |
+|---|---|---|
+| Master list location | `masterStoreDir` | absent (Application Support default) |
+| After Apply behavior | `restartBehavior` | `"ask"` (`"ask"` \| `"auto"` \| `"never"`) |
+| Claude app location | `claudeAppPath` | `/Applications/Claude.app` |
+| Backup retention | `backupKeepCount` | `20` |
+| Notify on external changes | `notifyExternalChanges` | `true` |
+
+Notes:
+
+- When the master list location is repointed to a custom (e.g. synced/cloud)
+  directory, backups always stay machine-local — they are never redirected there,
+  so a synced folder isn't filled with rotating backup files. Repointing seeds the
+  new location from the current store if it has no `mcps.json` yet.
+- `mcps.json` is watched for changes just like Claude's config file, so edits made
+  by an external sync tool (e.g. a `git pull` or Dropbox update landing on the
+  store file) are picked up and reconciled automatically.
+- The `MCP_ENABLER_STORE_DIR` / `MCP_ENABLER_CLAUDE_CONFIG` environment overrides
+  (used for sandboxed dev runs) always take precedence over the corresponding user
+  settings.
+
 ## Build & run
 
 Swift Package (`Package.swift`) with two targets — `MCPEnablerCore` (library, unit

@@ -6,9 +6,9 @@ public struct ConfigService {
     public let paths: AppPaths
     public let backups: BackupManager
 
-    public init(paths: AppPaths) {
+    public init(paths: AppPaths, keepCount: Int = 20) {
         self.paths = paths
-        self.backups = BackupManager(backupsDir: paths.backupsDirURL)
+        self.backups = BackupManager(backupsDir: paths.backupsDirURL, keepCount: keepCount)
     }
 
     /// Load master store (handling corruption), read Claude's servers,

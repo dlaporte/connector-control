@@ -22,4 +22,13 @@ final class AppPathsTests: XCTestCase {
         XCTAssertEqual(paths.masterStoreURL.path, "/tmp/x/store/mcps.json")
         XCTAssertEqual(paths.backupsDirURL.path, "/tmp/x/store/backups")
     }
+
+    func testExplicitBackupsDirURLIsHonoredIndependentlyOfStoreDir() {
+        let paths = AppPaths(
+            claudeConfigURL: URL(fileURLWithPath: "/tmp/x/claude.json"),
+            storeDirURL: URL(fileURLWithPath: "/tmp/x/store"),
+            backupsDirURL: URL(fileURLWithPath: "/tmp/machine-local/backups"))
+        XCTAssertEqual(paths.backupsDirURL.path, "/tmp/machine-local/backups")
+        XCTAssertEqual(paths.masterStoreURL.path, "/tmp/x/store/mcps.json")
+    }
 }

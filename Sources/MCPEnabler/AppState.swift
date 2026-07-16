@@ -10,17 +10,68 @@ final class AppState: ObservableObject {
     /// mcpServers as last read from / written to Claude's file, for dirty tracking.
     @Published private(set) var appliedServers: [String: JSONValue] = [:]
 
-    let service: ConfigService
+    @Published private(set) var service: ConfigService
     private var watcher: FileWatcher?
+    private var storeWatcher: FileWatcher?
     private var hasLoadedOnce = false
 
-    init(service: ConfigService = ConfigService(paths: .live())) {
+    init(service: ConfigService = AppState.makeService()) {
         self.service = service
         reload()
+        armWatchers()
+    }
+
+    nonisolated static func makeService() -> ConfigService {
+        let env = ProcessInfo.processInfo.environment
+        var paths = AppPaths.live()
+        // Env override (dev sandboxing) beats the user setting.
+        if env["MCP_ENABLER_STORE_DIR"] == nil,
+           let custom = UserDefaults.standard.string(forKey: "masterStoreDir") {
+            // Backups always stay machine-local: a synced store directory must
+            // not fill the user's repo/cloud folder with rotating backups.
+            paths = AppPaths(
+                claudeConfigURL: paths.claudeConfigURL,
+                storeDirURL: URL(fileURLWithPath: custom),
+                backupsDirURL: AppPaths.live(environment: [:]).backupsDirURL)
+        }
+        let keep = UserDefaults.standard.object(forKey: "backupKeepCount") as? Int ?? 20
+        return ConfigService(paths: paths, keepCount: keep)
+    }
+
+    private func armWatchers() {
         watcher = FileWatcher(url: service.paths.claudeConfigURL) { [weak self] in
             self?.reload()
         }
         watcher?.start()
+        storeWatcher = FileWatcher(url: service.paths.masterStoreURL) { [weak self] in
+            self?.reload()
+        }
+        storeWatcher?.start()
+    }
+
+    /// Repoints the master store to a new directory (or back to the default when
+    /// `dir` is nil). Seeds the new location from the current store if it has no
+    /// mcps.json yet, rebuilds the service, and re-arms both watchers.
+    func repointStore(to dir: URL?) {
+        let defaults = UserDefaults.standard
+        let previousStoreURL = service.paths.masterStoreURL
+        if let dir {
+            defaults.set(dir.path, forKey: "masterStoreDir")
+        } else {
+            defaults.removeObject(forKey: "masterStoreDir")
+        }
+        let rebuilt = AppState.makeService()
+        let newStoreURL = rebuilt.paths.masterStoreURL
+        if !FileManager.default.fileExists(atPath: newStoreURL.path),
+           FileManager.default.fileExists(atPath: previousStoreURL.path) {
+            try? FileManager.default.createDirectory(
+                at: rebuilt.paths.storeDirURL, withIntermediateDirectories: true)
+            try? FileManager.default.copyItem(at: previousStoreURL, to: newStoreURL)
+        }
+        service = rebuilt
+        hasLoadedOnce = false
+        armWatchers()
+        reload()
     }
 
     var isDirty: Bool {

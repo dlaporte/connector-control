@@ -1,10 +1,12 @@
 import SwiftUI
+import AppKit
 import ServiceManagement
 import MCPEnablerCore
 
 struct SettingsView: View {
     @EnvironmentObject var state: AppState
     @State private var showRestore = false
+    @AppStorage("masterStoreDir") private var masterStoreDirSetting: String = ""
 
     var body: some View {
         Form {
@@ -19,6 +21,19 @@ struct SettingsView: View {
                             + "bundle (run scripts/build-app.sh): \(error.localizedDescription)"
                     }
                 }))
+
+            Section("Storage") {
+                Text("MCP list location: \(state.service.paths.storeDirURL.path)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.head)
+                HStack {
+                    Button("Choose…") { chooseStoreDir() }
+                    Button("Use Default") { state.repointStore(to: nil) }
+                        .disabled(masterStoreDirSetting.isEmpty)
+                }
+            }
 
             Section("Backups") {
                 Text("Both config files are backed up automatically before every change.")
@@ -37,6 +52,17 @@ struct SettingsView: View {
         .frame(width: 360)
         .sheet(isPresented: $showRestore) {
             RestoreSheetView().environmentObject(state)
+        }
+    }
+
+    private func chooseStoreDir() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        if panel.runModal() == .OK, let url = panel.url {
+            state.repointStore(to: url)
         }
     }
 }

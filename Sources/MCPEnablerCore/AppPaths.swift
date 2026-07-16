@@ -3,13 +3,14 @@ import Foundation
 public struct AppPaths {
     public let claudeConfigURL: URL
     public let storeDirURL: URL
+    public let backupsDirURL: URL
 
     public var masterStoreURL: URL { storeDirURL.appendingPathComponent("mcps.json") }
-    public var backupsDirURL: URL { storeDirURL.appendingPathComponent("backups") }
 
-    public init(claudeConfigURL: URL, storeDirURL: URL) {
+    public init(claudeConfigURL: URL, storeDirURL: URL, backupsDirURL: URL? = nil) {
         self.claudeConfigURL = claudeConfigURL
         self.storeDirURL = storeDirURL
+        self.backupsDirURL = backupsDirURL ?? storeDirURL.appendingPathComponent("backups")
     }
 
     public static func live(
