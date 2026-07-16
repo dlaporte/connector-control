@@ -81,6 +81,19 @@ final class ClaudeConfigIOTests: XCTestCase {
         XCTAssertEqual(Set(try rootObject().keys), ["mcpServers"])
     }
 
+    func testReadEmptyFileReturnsEmptyServers() throws {
+        try write("")
+        XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: url), [:])
+    }
+
+    func testWriteToEmptyFileRecreatesConfig() throws {
+        try write("")
+        try ClaudeConfigIO.write(
+            mcpServers: ["a": .object(["command": .string("x")])], to: url)
+        XCTAssertEqual(Set(try rootObject().keys), ["mcpServers"])
+        XCTAssertEqual(Set(try ClaudeConfigIO.readMCPServers(at: url).keys), ["a"])
+    }
+
     func testWriteRefusesMalformedFile() throws {
         try write("{oops")
         XCTAssertThrowsError(try ClaudeConfigIO.write(mcpServers: [:], to: url))

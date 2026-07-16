@@ -28,6 +28,10 @@ public enum ClaudeConfigIO {
     private static func readRootIfPresent(at url: URL) throws -> [String: Any]? {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         let data = try Data(contentsOf: url)
+        // A zero-byte file (crash/truncation artifact) is deliberately treated
+        // like a missing file, not malformed JSON: there is nothing in it to
+        // preserve, and callers back up before writing. Reads yield no servers,
+        // which surfaces the missing-MCPs recovery UI instead of a hard error.
         guard !data.isEmpty else { return [:] }
         let parsed: Any
         do {
