@@ -66,7 +66,7 @@ struct PopoverView: View {
 
     private var footer: some View {
         HStack {
-            Menu("＋ Add") {
+            Menu("Add") {
                 Button("Remote Server…") {
                     openEditor(.newRemote())
                 }
