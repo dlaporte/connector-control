@@ -73,6 +73,17 @@ final class RemotePatternTests: XCTestCase {
         XCTAssertTrue(RemotePattern.isRemoteShaped(RemotePattern.make(url: "https://x.dev/mcp")))
     }
 
+    func testIsCanonicalShapeRequiresExactlyOneTrailingArg() {
+        XCTAssertTrue(RemotePattern.isCanonicalShape(
+            config(args: ["-y", "mcp-remote", "not a url"])))
+        XCTAssertTrue(RemotePattern.isCanonicalShape(
+            RemotePattern.make(url: "https://x.dev/mcp")))
+        XCTAssertFalse(RemotePattern.isCanonicalShape(
+            config(args: ["-y", "mcp-remote", "https://x.dev/mcp", "--header", "A: B"])),
+            "extra-args invocations are legitimate and must not be canonical")
+        XCTAssertFalse(RemotePattern.isCanonicalShape(config(args: ["-y", "pkg"])))
+    }
+
     func testIsRemoteShapedRejectsNonRemote() {
         XCTAssertFalse(RemotePattern.isRemoteShaped(config(args: ["-y", "some-package"])))
         XCTAssertFalse(RemotePattern.isRemoteShaped(config(command: "node", args: ["mcp-remote", "https://x.dev"])))

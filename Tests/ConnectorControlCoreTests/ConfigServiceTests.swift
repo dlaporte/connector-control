@@ -128,6 +128,36 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(try limited.backups.backups(series: "mcps").count, 2)
     }
 
+    func testStoreAuthoritativeReconcileKeepsAdoptedStore() throws {
+        // Normal first load imports the fixture's three servers.
+        _ = try service.loadAndReconcile()
+        // Simulate adopting a synced store that disagrees with the local
+        // Claude config: one connector changed, the local-only ones absent.
+        var adopted = MasterStore.empty
+        adopted.mcps["scoutbook"] = MCPEntry(
+            enabled: true, config: .object(["command": .string("changed")]))
+        try MasterStoreIO.save(adopted, to: paths.masterStoreURL)
+        let backupsBefore = try service.backups.backups(series: "mcps").count
+
+        let result = try service.loadAndReconcile(storeAuthoritative: true)
+        XCTAssertEqual(result.store.mcps.count, 1, "local servers must not be imported")
+        XCTAssertEqual(result.store.mcps["scoutbook"]?.config,
+                       .object(["command": .string("changed")]),
+                       "adopted store's config must win over the local file")
+        XCTAssertEqual(try service.backups.backups(series: "mcps").count,
+                       backupsBefore, "no persist churn when nothing changed")
+    }
+
+    func testRestoreReturnsRestoredServers() throws {
+        let store = try service.loadAndReconcile().store
+        try service.apply(store)
+        let backup = try XCTUnwrap(
+            try service.backups.backups(series: "claude_desktop_config").first)
+        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: store)
+        XCTAssertEqual(servers,
+                       try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL))
+    }
+
     func testRestoreRefusesMalformedBackup() throws {
         let store = try service.loadAndReconcile().store
         let badBackup = dir.appendingPathComponent("bad-backup.json")

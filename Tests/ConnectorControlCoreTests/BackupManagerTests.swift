@@ -76,6 +76,13 @@ final class BackupManagerTests: XCTestCase {
         XCTAssertEqual(try manager.backups(series: "claude_desktop_config").count, 2)
     }
 
+    func testBackupsArePrivate() throws {
+        let made = try XCTUnwrap(manager.backUp(fileAt: source, series: "mcps"))
+        let mode = try XCTUnwrap(FileManager.default
+            .attributesOfItem(atPath: made.path)[.posixPermissions] as? Int)
+        XCTAssertEqual(mode, 0o600)
+    }
+
     func testSeriesAreIndependent() throws {
         try manager.backUp(fileAt: source, series: "claude_desktop_config")
         try manager.backUp(fileAt: source, series: "mcps")

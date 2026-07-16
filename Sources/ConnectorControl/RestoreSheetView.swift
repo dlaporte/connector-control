@@ -48,10 +48,9 @@ struct RestoreSheetView: View {
             Button("Restore", role: .destructive) {
                 guard let backup = selection else { return }
                 do {
-                    try state.service.restoreClaudeConfig(
-                        from: backup, mergedWith: state.store)
-                    UserDefaults.standard.set(Date(), forKey: "lastApplyDate")
-                    state.reload()
+                    // AppState owns the full flow: it syncs the reconciliation
+                    // baseline to the restored file before reloading.
+                    try state.restoreClaudeConfig(from: backup)
                     dismiss()
                 } catch {
                     restoreError = error.localizedDescription

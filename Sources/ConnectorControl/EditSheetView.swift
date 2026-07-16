@@ -395,12 +395,30 @@ struct EditSheetView: View {
             }
             config = currentFormConfig()
         }
-        if RemotePattern.isRemoteShaped(config), RemotePattern.detect(config) == nil {
+        // Only the canonical `[-y] mcp-remote <url>` shape must carry a valid
+        // URL; extra-args invocations (e.g. --header) are legitimate and pass.
+        if RemotePattern.isCanonicalShape(config), RemotePattern.detect(config) == nil {
             validationError = "Server URL must be a valid http(s) URL."
             return
         }
-        let entry = MCPEntry(enabled: target.entry.enabled, config: config,
-                             lastEditView: view)
+        // The editor works on a snapshot taken at window-open; if the store's
+        // copy moved underneath (external edit reconciled in), don't silently
+        // overwrite it.
+        if !target.isNew,
+           let current = state.store.mcps[target.name]?.config,
+           current != target.entry.config {
+            NSApp.activate(ignoringOtherApps: true)
+            let alert = NSAlert()
+            alert.messageText = "“\(target.name)” changed outside this editor."
+            alert.informativeText = "Saving will overwrite that change with this editor's version."
+            alert.addButton(withTitle: "Save Anyway")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        let entry = MCPEntry(
+            enabled: state.store.mcps[target.name]?.enabled ?? target.entry.enabled,
+            config: config,
+            lastEditView: view)
         if let error = state.upsert(name: name, entry: entry,
                                     renamedFrom: target.isNew ? nil : target.name) {
             validationError = error

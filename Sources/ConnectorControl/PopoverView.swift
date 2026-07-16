@@ -13,7 +13,7 @@ struct PopoverView: View {
             if !state.missingEnabled.isEmpty { missingBanner }
             if let error = state.lastError { errorBanner(error) }
             mcpList
-            if state.needsClaudeRestart {
+            if state.needsClaudeRestart || state.applyRetryNeeded {
                 Divider()
                 footer
             }
@@ -123,14 +123,26 @@ struct PopoverView: View {
     private var footer: some View {
         HStack {
             Spacer()
-            Button {
-                state.restartClaude()
-            } label: {
-                Label("Restart Required", systemImage: "arrow.clockwise")
+            if state.applyRetryNeeded {
+                Button {
+                    state.apply()
+                } label: {
+                    Label("Apply Failed — Retry",
+                          systemImage: "exclamationmark.arrow.circlepath")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .controlSize(.small)
+            } else if state.needsClaudeRestart {
+                Button {
+                    state.restartClaude()
+                } label: {
+                    Label("Restart Required", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+                .controlSize(.small)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.orange)
-            .controlSize(.small)
         }
         .padding(10)
     }

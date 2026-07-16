@@ -18,7 +18,12 @@ public struct ConfigService {
     /// config turns out to be malformed, reconciliation is skipped entirely
     /// (nothing is written) and the store just loaded is returned as-is, so the
     /// UI keeps showing the user's MCP list instead of going blank.
-    public func loadAndReconcile(baseline: [String: JSONValue]? = nil) throws
+    /// With `storeAuthoritative`, the file's own current servers act as the
+    /// baseline, so every reconciliation rule resolves store-wins — used when
+    /// adopting a pre-existing (e.g. synced) store that must not be overwritten
+    /// by this machine's state.
+    public func loadAndReconcile(baseline: [String: JSONValue]? = nil,
+                                 storeAuthoritative: Bool = false) throws
         -> (store: MasterStore, missingEnabled: [String], notes: [String],
             claudeServers: [String: JSONValue]?) {
         var notes: [String] = []
@@ -38,7 +43,8 @@ public struct ConfigService {
                     nil)
         }
         let outcome = Reconciler.reconcile(
-            store: loaded.store, claudeServers: servers, baseline: baseline)
+            store: loaded.store, claudeServers: servers,
+            baseline: storeAuthoritative ? servers : baseline)
         if outcome.storeChanged || loaded.corruptFileURL != nil {
             try saveStore(outcome.store)
         }
@@ -63,7 +69,12 @@ public struct ConfigService {
     /// Backup the current file, copy the chosen backup over it, then persist a
     /// freshly reconciled store so the UI reflects the restored contents.
     /// The backup's content is validated BEFORE the live file is touched.
-    public func restoreClaudeConfig(from backup: URL, mergedWith store: MasterStore) throws {
+    /// Returns the restored file's servers so the caller can sync its
+    /// reconciliation baseline to them.
+    @discardableResult
+    public func restoreClaudeConfig(from backup: URL,
+                                    mergedWith store: MasterStore) throws
+        -> [String: JSONValue] {
         let data = try Data(contentsOf: backup)
         guard let parsed = try? JSONSerialization.jsonObject(with: data),
               parsed is [String: Any] else {
@@ -75,5 +86,6 @@ public struct ConfigService {
         let servers = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
         let outcome = Reconciler.reconcile(store: store, claudeServers: servers)
         if outcome.storeChanged { try saveStore(outcome.store) }
+        return servers
     }
 }

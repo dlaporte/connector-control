@@ -9,6 +9,9 @@ final class AppState: ObservableObject {
     @Published var missingEnabled: [String] = []
     @Published var lastError: String?
     @Published var needsClaudeRestart = false
+    /// True when the last apply threw; keeps a retry affordance visible even
+    /// after reload() refreshes lastError.
+    @Published var applyRetryNeeded = false
     /// mcpServers as last read from / written to Claude's file, for dirty tracking.
     @Published private(set) var appliedServers: [String: JSONValue] = [:]
     @Published private(set) var service: ConfigService
@@ -16,9 +19,11 @@ final class AppState: ObservableObject {
     private var storeWatcher: FileWatcher?
     private var hasLoadedOnce = false
 
-    init(service: ConfigService = AppState.makeService()) {
+    init(service: ConfigService? = nil) {
+        // Migration must run BEFORE the service reads UserDefaults — a default
+        // argument would be evaluated at the call site, ahead of this body.
         AppState.migrateFromLegacyNames()
-        self.service = service
+        self.service = service ?? AppState.makeService()
         reload()
         armWatchers()
     }
@@ -98,9 +103,11 @@ final class AppState: ObservableObject {
             try? FileManager.default.copyItem(at: previousStoreURL, to: newStoreURL)
         }
         service = rebuilt
-        hasLoadedOnce = false
         armWatchers()
-        reload()
+        // An adopted (pre-existing) store is authoritative — reconciling it
+        // against the local Claude config with fresh-launch "file wins"
+        // semantics would clobber a synced list with local state.
+        reload(storeAuthoritative: true)
     }
 
     /// Rebuilds the service from current settings (e.g. after backup retention
@@ -132,16 +139,18 @@ final class AppState: ObservableObject {
         needsClaudeRestart = launched < lastApply
     }
 
-    func reload() {
+    func reload(storeAuthoritative: Bool = false) {
         do {
             // Capture "before" state for the notification rules below, computed
             // BEFORE any state is overwritten.
             let wasLoaded = hasLoadedOnce
             let previousMissingWasEmpty = missingEnabled.isEmpty
             let previousApplied = appliedServers
+            let previousStoreMcps = store.mcps
 
             let result = try service.loadAndReconcile(
-                baseline: hasLoadedOnce ? appliedServers : nil)
+                baseline: hasLoadedOnce ? appliedServers : nil,
+                storeAuthoritative: storeAuthoritative)
             store = result.store
             missingEnabled = result.missingEnabled
             var firedMissingNotification = false
@@ -153,7 +162,14 @@ final class AppState: ObservableObject {
                 appliedServers = servers
                 hasLoadedOnce = true
             }
+            // Store-side external change (e.g. a synced mcps.json edited by a
+            // sync tool): our own persistStore writes leave the in-memory store
+            // already equal, so a mismatch here means an outside writer.
+            let storeChangedExternally =
+                wasLoaded && result.store.mcps != previousStoreMcps
+                && !claudeConfigChangedExternally
             lastError = result.notes.first
+            if !isDirty { applyRetryNeeded = false }
 
             // Fire notifications AFTER all state above has been assigned, and
             // never on first load. At most one notification per reload.
@@ -164,12 +180,27 @@ final class AppState: ObservableObject {
                        + "connector(s): \(names) — open the menu bar item to restore.")
             } else if claudeConfigChangedExternally {
                 notify("Connector Control", "Claude's config changed outside Connector Control.")
+            } else if storeChangedExternally {
+                notify("Connector Control",
+                       "The connector list changed outside Connector Control — "
+                       + "review it before your next change is applied.")
             }
             refreshRestartState()
         } catch {
             lastError = friendly(error)
             refreshRestartState()
         }
+    }
+
+    /// Restores Claude's config from a backup and syncs the reconciliation
+    /// baseline to the restored contents BEFORE reloading, so the app's own
+    /// restore isn't misread as an external change or a re-add.
+    func restoreClaudeConfig(from backup: URL) throws {
+        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: store)
+        appliedServers = servers
+        hasLoadedOnce = true
+        UserDefaults.standard.set(Date(), forKey: "lastApplyDate")
+        reload()
     }
 
     private func notify(_ title: String, _ body: String) {
@@ -217,8 +248,10 @@ final class AppState: ObservableObject {
             UserDefaults.standard.set(Date(), forKey: "lastApplyDate")
             refreshRestartState()
             lastError = nil
+            applyRetryNeeded = false
         } catch {
             lastError = friendly(error)
+            applyRetryNeeded = true
         }
     }
 

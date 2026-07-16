@@ -18,6 +18,8 @@ public struct BackupManager {
         guard !fm.fileExists(atPath: dest.path) else { return }
         try fm.createDirectory(at: backupsDir, withIntermediateDirectories: true)
         try fm.copyItem(at: url, to: dest)
+        // Backups can hold env-var secrets — keep them owner-only.
+        try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: dest.path)
     }
 
     @discardableResult
@@ -39,6 +41,8 @@ public struct BackupManager {
             try fm.removeItem(at: dest)
         }
         try fm.copyItem(at: url, to: dest)
+        // Backups can hold env-var secrets — keep them owner-only.
+        try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: dest.path)
         try prune(series: series)
         return dest
     }

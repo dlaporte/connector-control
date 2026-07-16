@@ -29,18 +29,33 @@ public enum RemotePattern {
 
     /// True when the config is an `npx [-y] mcp-remote …` invocation, regardless
     /// of whether the URL argument is valid. Used to keep the remote form active
-    /// and to block saves of remote-shaped configs whose URL doesn't validate.
+    /// for forced-remote targets.
     public static func isRemoteShaped(_ config: JSONValue) -> Bool {
+        strippedArgs(config)?.first == "mcp-remote"
+    }
+
+    /// True only for the CANONICAL bridge shape — `npx [-y] mcp-remote <arg>`
+    /// with exactly one trailing argument. Extra flags (e.g. --header) make a
+    /// config non-canonical: still remote-shaped, but save validation must not
+    /// insist the trailing args form a lone URL.
+    public static func isCanonicalShape(_ config: JSONValue) -> Bool {
+        guard let args = strippedArgs(config) else { return false }
+        return args.count == 2 && args.first == "mcp-remote"
+    }
+
+    /// String args with a leading "-y" stripped, or nil when the config isn't
+    /// an all-string-args npx invocation.
+    private static func strippedArgs(_ config: JSONValue) -> [String]? {
         guard case .object(let object) = config,
               case .string("npx") = object["command"] ?? .null,
               case .array(let rawArgs) = object["args"] ?? .null
-        else { return false }
+        else { return nil }
         var args: [String] = []
         for raw in rawArgs {
-            guard case .string(let s) = raw else { return false }
+            guard case .string(let s) = raw else { return nil }
             args.append(s)
         }
         if args.first == "-y" { args.removeFirst() }
-        return args.first == "mcp-remote"
+        return args
     }
 }

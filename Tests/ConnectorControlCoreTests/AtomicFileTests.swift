@@ -26,6 +26,14 @@ final class AtomicFileTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "two")
     }
 
+    func testWritesArePrivate() throws {
+        let url = dir.appendingPathComponent("secret.json")
+        try AtomicFile.write(Data("token".utf8), to: url)
+        let mode = try XCTUnwrap(FileManager.default
+            .attributesOfItem(atPath: url.path)[.posixPermissions] as? Int)
+        XCTAssertEqual(mode, 0o600)
+    }
+
     func testNoTempFilesLeftBehind() throws {
         let url = dir.appendingPathComponent("file.json")
         try AtomicFile.write(Data("x".utf8), to: url)

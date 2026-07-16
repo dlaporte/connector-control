@@ -7,6 +7,9 @@ public enum AtomicFile {
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
         let tmp = dir.appendingPathComponent(".\(url.lastPathComponent).tmp-\(UUID().uuidString)")
         try data.write(to: tmp)
+        // Connector configs can hold env-var secrets; never leave them
+        // world-readable (the default umask yields 644). Rename preserves this.
+        try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: tmp.path)
         defer { try? fm.removeItem(at: tmp) }
         if fm.fileExists(atPath: url.path) {
             _ = try fm.replaceItemAt(url, withItemAt: tmp)
