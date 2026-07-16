@@ -62,6 +62,20 @@ final class BackupManagerTests: XCTestCase {
             .contains { $0.lastPathComponent.contains(".original.") })
     }
 
+    func testSameMillisecondBackupsBothSucceed() throws {
+        let now = Date(timeIntervalSince1970: 1_752_600_000.123)
+        try Data("v0".utf8).write(to: source)
+        let first = try XCTUnwrap(manager.backUp(
+            fileAt: source, series: "claude_desktop_config", now: now))
+        try Data("v1".utf8).write(to: source)
+        let second = try XCTUnwrap(manager.backUp(
+            fileAt: source, series: "claude_desktop_config", now: now))
+        XCTAssertNotEqual(first, second)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: first.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second.path))
+        XCTAssertEqual(try manager.backups(series: "claude_desktop_config").count, 2)
+    }
+
     func testSeriesAreIndependent() throws {
         try manager.backUp(fileAt: source, series: "claude_desktop_config")
         try manager.backUp(fileAt: source, series: "mcps")

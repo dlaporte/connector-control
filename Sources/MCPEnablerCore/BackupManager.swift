@@ -25,8 +25,19 @@ public struct BackupManager {
         let fm = FileManager.default
         guard fm.fileExists(atPath: url.path) else { return nil }
         try fm.createDirectory(at: backupsDir, withIntermediateDirectories: true)
-        let dest = backupsDir
+        var dest = backupsDir
             .appendingPathComponent("\(series).\(BackupTimestamp.string(from: now)).json")
+        var counter = 2
+        while fm.fileExists(atPath: dest.path), counter <= 100 {
+            dest = backupsDir.appendingPathComponent(
+                "\(series).\(BackupTimestamp.string(from: now))-\(counter).json")
+            counter += 1
+        }
+        // Bound exhausted (100 same-millisecond backups already exist): overwrite
+        // rather than throw.
+        if fm.fileExists(atPath: dest.path) {
+            try fm.removeItem(at: dest)
+        }
         try fm.copyItem(at: url, to: dest)
         try prune(series: series)
         return dest
