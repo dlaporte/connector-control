@@ -13,8 +13,10 @@ struct PopoverView: View {
             if !state.missingEnabled.isEmpty { missingBanner }
             if let error = state.lastError { errorBanner(error) }
             mcpList
-            Divider()
-            footer
+            if state.isDirty || state.needsClaudeRestart {
+                Divider()
+                footer
+            }
         }
         .frame(minWidth: 240, maxWidth: 380)
         .onAppear { state.reload() }
@@ -45,6 +47,30 @@ struct PopoverView: View {
                 Text(headerSubtitle).font(.caption2).foregroundStyle(.secondary)
             }
             Spacer(minLength: 20)
+            HStack(spacing: 0) {
+                Button {
+                    openEditor(.newRemote())
+                } label: {
+                    headerIcon("plus")
+                }
+                .buttonStyle(.accessoryBar)
+                .help("Add MCP")
+                Button {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openSettings()
+                } label: {
+                    headerIcon("gearshape")
+                }
+                .buttonStyle(.accessoryBar)
+                .help("Settings")
+                Button {
+                    NSApp.terminate(nil)
+                } label: {
+                    headerIcon("power")
+                }
+                .buttonStyle(.accessoryBar)
+                .help("Quit Custom Connector Control")
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -108,25 +134,6 @@ struct PopoverView: View {
 
     private var footer: some View {
         HStack {
-            // Identical fixed frames: "plus" and "gearshape" have different
-            // glyph metrics and drift vertically without them.
-            HStack(spacing: 0) {
-                Button {
-                    openEditor(.newRemote())
-                } label: {
-                    footerIcon("plus")
-                }
-                .buttonStyle(.accessoryBar)
-                .help("Add MCP")
-                Button {
-                    NSApp.activate(ignoringOtherApps: true)
-                    openSettings()
-                } label: {
-                    footerIcon("gearshape")
-                }
-                .buttonStyle(.accessoryBar)
-                .help("Settings")
-            }
             Spacer()
             if state.isDirty {
                 Button("Apply") { state.apply() }
@@ -141,12 +148,11 @@ struct PopoverView: View {
                 .tint(.orange)
                 .controlSize(.small)
             }
-            Button("Quit") { NSApp.terminate(nil) }
         }
         .padding(10)
     }
 
-    private func footerIcon(_ systemName: String) -> some View {
+    private func headerIcon(_ systemName: String) -> some View {
         // resizable + scaledToFit centers by geometric bounds; centering by
         // font metrics leaves different glyphs (plus vs gear) at different
         // heights because SF Symbols align on the text baseline.
