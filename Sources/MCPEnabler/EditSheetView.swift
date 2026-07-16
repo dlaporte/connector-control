@@ -116,7 +116,7 @@ struct EditSheetView: View {
     }
 
     private func attemptSwitchToForm() {
-        guard jsonError == nil, let config = parsedJSON() else { return }
+        guard let config = effectiveJSONConfig() else { return }
         let analysis = FormMapper.analyze(config)
         if analysis.isLossless {
             adoptForm(analysis.model, config: config)
@@ -127,7 +127,7 @@ struct EditSheetView: View {
     }
 
     private func forceSwitchToForm() {
-        guard let config = parsedJSON() else { lossWarning = nil; return }
+        guard let config = effectiveJSONConfig() else { lossWarning = nil; return }
         adoptForm(FormMapper.analyze(config).model, config: config)
         lossWarning = nil
         view = .form
@@ -157,12 +157,37 @@ struct EditSheetView: View {
         }
     }
 
+    /// Unwraps a pasted {"mcpServers": {"name": {…}}} single-entry wrapper.
+    private func unwrappedPaste(_ parsed: JSONValue) -> (name: String, config: JSONValue)? {
+        guard case .object(let outer) = parsed, outer.count == 1,
+              case .object(let inner)? = outer["mcpServers"], inner.count == 1,
+              let entry = inner.first else { return nil }
+        return (entry.key, entry.value)
+    }
+
+    /// Parses the current JSON text and, if it's a pasted mcpServers wrapper,
+    /// unwraps it: fills `name` (when blank) and rewrites `jsonText` to the
+    /// inner config so subsequent JSON edits and Form adoption see the real
+    /// config rather than the wrapper. Returns the effective (unwrapped) config,
+    /// or nil if the JSON doesn't parse.
+    private func effectiveJSONConfig() -> JSONValue? {
+        guard let parsed = parsedJSON() else { return nil }
+        guard let paste = unwrappedPaste(parsed) else { return parsed }
+        if name.trimmingCharacters(in: .whitespaces).isEmpty { name = paste.name }
+        let data = (try? paste.config.serialized()) ?? Data()
+        jsonText = String(decoding: data, as: UTF8.self)
+        return paste.config
+    }
+
     private func currentFormConfig() -> JSONValue {
         if isRemote {
             guard case .object(var object) = RemotePattern.make(url: remoteURL) else {
                 return RemotePattern.make(url: remoteURL)
             }
             for (key, value) in form.additional { object[key] = value }
+            if !form.env.isEmpty {
+                object["env"] = .object(form.env.mapValues(JSONValue.string))
+            }
             return .object(object)
         }
         return FormMapper.serialize(form)
@@ -178,6 +203,9 @@ struct EditSheetView: View {
             }
             Text("Runs via npx mcp-remote — managed for you")
                 .font(.caption).foregroundStyle(.secondary)
+            if !form.env.isEmpty {
+                field("Environment variables") { envEditor }
+            }
         } else {
             field("Command") {
                 TextField("npx", text: $form.command).textFieldStyle(.roundedBorder)
@@ -275,15 +303,8 @@ struct EditSheetView: View {
         validationError = nil
         var config: JSONValue
         if view == .json {
-            guard var parsed = parsedJSON() else { return }
-            // Unwrap {"mcpServers": {"name": {...}}} paste convenience.
-            if case .object(let outer) = parsed, outer.count == 1,
-               case .object(let inner)? = outer["mcpServers"], inner.count == 1,
-               let (pastedName, pastedConfig) = inner.first {
-                if name.trimmingCharacters(in: .whitespaces).isEmpty { name = pastedName }
-                parsed = pastedConfig
-            }
-            config = parsed
+            guard let effective = effectiveJSONConfig() else { return }
+            config = effective
         } else {
             if isRemote {
                 guard let url = URL(string: remoteURL),
