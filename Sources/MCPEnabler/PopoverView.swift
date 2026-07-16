@@ -108,25 +108,25 @@ struct PopoverView: View {
 
     private var footer: some View {
         HStack {
-            Button {
-                openEditor(.newRemote())
-            } label: {
-                Image(systemName: "plus")
-                    .imageScale(.medium)
-                    .foregroundStyle(.secondary)
+            // Identical fixed frames: "plus" and "gearshape" have different
+            // glyph metrics and drift vertically without them.
+            HStack(spacing: 1) {
+                Button {
+                    openEditor(.newRemote())
+                } label: {
+                    footerIcon("plus")
+                }
+                .buttonStyle(.accessoryBar)
+                .help("Add MCP")
+                Button {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openSettings()
+                } label: {
+                    footerIcon("gearshape")
+                }
+                .buttonStyle(.accessoryBar)
+                .help("Settings")
             }
-            .buttonStyle(.accessoryBar)
-            .help("Add MCP")
-            Button {
-                NSApp.activate(ignoringOtherApps: true)
-                openSettings()
-            } label: {
-                Image(systemName: "gearshape")
-                    .imageScale(.medium)
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.accessoryBar)
-            .help("Settings")
             Spacer()
             if state.isDirty {
                 Button("Apply") { state.apply() }
@@ -144,6 +144,13 @@ struct PopoverView: View {
             Button("Quit") { NSApp.terminate(nil) }
         }
         .padding(10)
+    }
+
+    private func footerIcon(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(.secondary)
+            .frame(width: 20, height: 20)
     }
 }
 
