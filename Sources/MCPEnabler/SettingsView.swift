@@ -140,9 +140,6 @@ struct SettingsView: View {
                 .padding(.vertical, 6)
             Text("David LaPorte")
                 .font(.caption)
-            Text("Built with Claude Code")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
         }
         .padding(28)
         .frame(maxWidth: .infinity)
