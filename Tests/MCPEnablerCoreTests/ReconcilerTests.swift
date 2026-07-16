@@ -17,6 +17,25 @@ final class ReconcilerTests: XCTestCase {
         XCTAssertEqual(outcome.missingEnabled, [])
     }
 
+    func testPendingRemovalNotResurrected() {
+        // Connector deleted from the store; Claude's file still lists it,
+        // unchanged from the baseline → pending removal, must NOT re-import.
+        let outcome = Reconciler.reconcile(
+            store: .empty, claudeServers: ["gone": configA],
+            baseline: ["gone": configA])
+        XCTAssertNil(outcome.store.mcps["gone"])
+        XCTAssertFalse(outcome.storeChanged)
+    }
+
+    func testExternallyAddedServerImportsMidSession() {
+        // Baseline lacks the name → genuinely added outside the app → import.
+        let outcome = Reconciler.reconcile(
+            store: .empty, claudeServers: ["new": configA], baseline: [:])
+        XCTAssertEqual(outcome.store.mcps["new"],
+                       MCPEntry(enabled: true, config: configA, lastEditView: .form))
+        XCTAssertTrue(outcome.storeChanged)
+    }
+
     func testExternalEditWinsOverStore() {
         let outcome = Reconciler.reconcile(
             store: store(["s": MCPEntry(enabled: true, config: configA, lastEditView: .json)]),

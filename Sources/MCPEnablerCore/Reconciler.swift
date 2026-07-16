@@ -29,10 +29,14 @@ public enum Reconciler {
                     changed = true
                 }
                 result.mcps[name] = entry
-            } else {
+            } else if isExternalAddition(name: name, config: config,
+                                         baseline: baseline) {
                 result.mcps[name] = MCPEntry(enabled: true, config: config)
                 changed = true
             }
+            // else: the entry matches the baseline but is gone from the store —
+            // a PENDING REMOVAL awaiting Apply. Re-importing it here would
+            // silently resurrect a connector the user just deleted.
         }
 
         let missing = store.mcps
@@ -41,6 +45,17 @@ public enum Reconciler {
 
         return ReconcileOutcome(store: result, missingEnabled: missing,
                                 storeChanged: changed)
+    }
+
+    /// A file entry unknown to the store is imported only when it's genuinely
+    /// external: no baseline (fresh launch) or an entry that differs from the
+    /// baseline. When it matches the baseline exactly, the store-side absence
+    /// means the user deleted it and Apply hasn't landed yet.
+    private static func isExternalAddition(
+        name: String, config: JSONValue, baseline: [String: JSONValue]?
+    ) -> Bool {
+        guard let baseline else { return true }
+        return baseline[name] != config
     }
 
     /// A disabled-in-store server found in Claude's file is a PENDING DISABLE

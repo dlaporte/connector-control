@@ -86,7 +86,7 @@ struct EditSheetView: View {
             Divider()
             HStack {
                 if !target.isNew {
-                    Button("Remove…", role: .destructive) { confirmRemove = true }
+                    Button("Remove", role: .destructive) { confirmRemove = true }
                 }
                 Spacer()
                 Button("Cancel") { dismiss() }
@@ -114,13 +114,15 @@ struct EditSheetView: View {
             isPresented: $confirmRemove, titleVisibility: .visible
         ) {
             Button("Remove", role: .destructive) {
+                // Remove and apply in the same runloop turn: a watcher-driven
+                // reload between the two once resurrected the connector.
                 state.remove(name: target.name)
+                state.applyInteractively()
                 // SwiftUI's dismissal actions have proven unreliable from a
                 // dialog context in this window; close the AppKit window
                 // directly once the dialog has torn down.
                 DispatchQueue.main.async {
                     hostWindow?.close()
-                    state.applyInteractively()
                 }
             }
         }

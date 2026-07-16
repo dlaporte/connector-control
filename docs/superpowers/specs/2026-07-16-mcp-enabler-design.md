@@ -106,8 +106,11 @@ restore-from-backup.
 The app watches Claude's config file (DispatchSource file monitor) and reconciles on
 launch, on watcher events, and whenever the popover opens:
 
-- **MCP present in Claude's file but unknown to the master store** → import into the
-  master store as enabled. (Handles MCPs added by hand or by other tools.)
+- **MCP present in Claude's file but unknown to the master store** → imported as
+  enabled only when it's genuinely external: no baseline (fresh launch) or an
+  entry differing from the baseline. When the file entry matches the baseline
+  exactly, the store-side absence is a pending removal awaiting Apply and the
+  entry is NOT re-imported.
 - **MCP present in both but with a different config in Claude's file** → if the
   file entry still matches the baseline, the store's version is a pending edit
   awaiting Apply and is kept; Claude's file wins only when the file entry itself
