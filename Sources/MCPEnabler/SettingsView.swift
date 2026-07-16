@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage("masterStoreDir") private var masterStoreDirSetting: String = ""
     @AppStorage("restartBehavior") private var restartBehavior: String = "ask"
     @AppStorage("claudeAppPath") private var claudeAppPath: String = "/Applications/Claude.app"
+    @AppStorage("backupKeepCount") private var backupKeepCount: Int = 20
 
     var body: some View {
         Form {
@@ -42,6 +43,10 @@ struct SettingsView: View {
                     Button("Use Default") { state.repointStore(to: nil) }
                         .disabled(masterStoreDirSetting.isEmpty)
                 }
+                Stepper(
+                    "Keep last \(backupKeepCount) backups of each file",
+                    value: $backupKeepCount, in: 5...100)
+                .onChange(of: backupKeepCount) { _, _ in state.refreshServiceSettings() }
             }
 
             Section("Claude") {

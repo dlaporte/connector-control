@@ -115,6 +115,19 @@ final class ConfigServiceTests: XCTestCase {
                        "a failed reconcile pass must not save (and thus back up) the store")
     }
 
+    func testKeepCountIsHonored() throws {
+        let limited = ConfigService(paths: paths, keepCount: 2)
+        let store = try limited.loadAndReconcile().store
+        try MasterStoreIO.save(store, to: paths.masterStoreURL)
+        let base = Date()
+        try limited.backups.backUp(fileAt: paths.masterStoreURL, series: "mcps", now: base)
+        try limited.backups.backUp(
+            fileAt: paths.masterStoreURL, series: "mcps", now: base.addingTimeInterval(1))
+        try limited.backups.backUp(
+            fileAt: paths.masterStoreURL, series: "mcps", now: base.addingTimeInterval(2))
+        XCTAssertEqual(try limited.backups.backups(series: "mcps").count, 2)
+    }
+
     func testRestoreRefusesMalformedBackup() throws {
         let store = try service.loadAndReconcile().store
         let badBackup = dir.appendingPathComponent("bad-backup.json")

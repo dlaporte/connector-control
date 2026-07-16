@@ -74,6 +74,14 @@ final class AppState: ObservableObject {
         reload()
     }
 
+    /// Rebuilds the service from current settings (e.g. after backup retention
+    /// changes) without moving the store directory or resetting the
+    /// reconciliation baseline.
+    func refreshServiceSettings() {
+        service = AppState.makeService()
+        armWatchers()
+    }
+
     var isDirty: Bool {
         store.mcps.filter(\.value.enabled).mapValues(\.config) != appliedServers
     }
