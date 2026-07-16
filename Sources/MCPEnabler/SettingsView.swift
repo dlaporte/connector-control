@@ -140,7 +140,7 @@ struct SettingsView: View {
             Text("Version \(appVersion)")
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            Text("Manages the custom MCP connectors in Claude Desktop's "
+            Text("Manages the custom connectors in Claude Desktop’s "
                  + "configuration, with automatic backups of every change.")
                 .font(.callout)
                 .multilineTextAlignment(.center)

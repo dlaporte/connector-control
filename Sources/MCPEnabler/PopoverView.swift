@@ -42,7 +42,7 @@ struct PopoverView: View {
                     headerIcon("plus")
                 }
                 .buttonStyle(.accessoryBar)
-                .help("Add MCP")
+                .help("Add Connector")
                 Button {
                     NSApp.activate(ignoringOtherApps: true)
                     openSettings()
@@ -69,12 +69,12 @@ struct PopoverView: View {
     private var headerSubtitle: String {
         let total = state.store.mcps.count
         let enabled = state.store.mcps.values.filter(\.enabled).count
-        return total == 0 ? "No MCPs configured" : "\(enabled) of \(total) enabled"
+        return total == 0 ? "No connectors configured" : "\(enabled) of \(total) enabled"
     }
 
     private var missingBanner: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("Claude's config is missing \(state.missingEnabled.count) MCP(s): "
+            Label("Claude's config is missing \(state.missingEnabled.count) connector(s): "
                   + state.missingEnabled.joined(separator: ", "),
                   systemImage: "exclamationmark.triangle.fill")
                 .font(.callout)
@@ -112,7 +112,7 @@ struct PopoverView: View {
                 Divider()
             }
             if state.store.mcps.isEmpty {
-                Text("No MCPs configured yet — add one below.")
+                Text("No connectors configured yet — add one below.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding()

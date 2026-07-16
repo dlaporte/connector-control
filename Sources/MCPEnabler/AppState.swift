@@ -161,7 +161,7 @@ final class AppState: ObservableObject {
                 let names = result.missingEnabled.joined(separator: ", ")
                 notify("Connector Control",
                        "Claude's config is missing \(result.missingEnabled.count) "
-                       + "MCP(s): \(names) — open the menu bar item to restore.")
+                       + "connector(s): \(names) — open the menu bar item to restore.")
             } else if claudeConfigChangedExternally {
                 notify("Connector Control", "Claude's config changed outside Connector Control.")
             }
@@ -227,7 +227,7 @@ final class AppState: ObservableObject {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return "Name must not be empty." }
         if trimmed != oldName, store.mcps[trimmed] != nil {
-            return "An MCP named “\(trimmed)” already exists."
+            return "A connector named “\(trimmed)” already exists."
         }
         if let old = oldName, old != trimmed { store.mcps.removeValue(forKey: old) }
         store.mcps[trimmed] = entry

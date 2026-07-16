@@ -21,9 +21,9 @@ struct MCPEnablerApp: App {
             if let target = $target.wrappedValue {
                 EditSheetView(target: target)
                     .environmentObject(state)
-                    .navigationTitle(target.isNew ? "Add MCP" : "Edit “\(target.name)”")
+                    .navigationTitle(target.isNew ? "Add Connector" : "Edit “\(target.name)”")
             } else {
-                Text("Choose an MCP from the menu bar popover.")
+                Text("Choose a connector from the menu bar popover.")
                     .foregroundStyle(.secondary)
                     .padding(40)
             }

@@ -42,7 +42,7 @@ struct EditSheetView: View {
     @State private var lossWarning: [String]?   // non-nil → confirmation shown
     @State private var validationError: String?
     @State private var confirmRemove = false
-    @State private var removeCompleted = false
+    @State private var hostWindow: NSWindow?
     @State private var envRevealed: Set<String> = []
 
     init(target: EditTarget) {
@@ -92,7 +92,8 @@ struct EditSheetView: View {
                 Button("Cancel") { dismiss() }
                 Button("Save") { save() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(view == .json && jsonError != nil)
+                    .disabled((view == .json && jsonError != nil)
+                        || (view == .form && isRemote && !remoteURLValid))
             }
             .padding(16)
         }
@@ -114,19 +115,25 @@ struct EditSheetView: View {
         ) {
             Button("Remove", role: .destructive) {
                 state.remove(name: target.name)
-                // Dismissing from inside the dialog's action closes only the
-                // dialog; defer to the view context via removeCompleted.
-                removeCompleted = true
+                // SwiftUI's dismissal actions have proven unreliable from a
+                // dialog context in this window; close the AppKit window
+                // directly once the dialog has torn down.
+                DispatchQueue.main.async {
+                    hostWindow?.close()
+                    state.applyInteractively()
+                }
             }
         }
-        .onChange(of: removeCompleted) { _, done in
-            guard done else { return }
-            // Value-presented windows are identified by id AND value; the
-            // id-only overload doesn't match them. dismiss() as belt-and-braces.
-            dismissWindow(id: "editor", value: target)
-            dismiss()
-            state.applyInteractively()
-        }
+        .background(WindowFinder { hostWindow = $0 })
+    }
+
+    /// Basic URL syntax check for the remote form: http(s) scheme and a host.
+    private var remoteURLValid: Bool {
+        guard let url = URL(string: remoteURL),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              url.host != nil else { return false }
+        return true
     }
 
     // MARK: view switching
@@ -253,6 +260,11 @@ struct EditSheetView: View {
                 Section {
                     TextField("Server URL", text: $remoteURL,
                                prompt: Text("https://example.com/mcp"))
+                    if !remoteURL.isEmpty && !remoteURLValid {
+                        Text("Enter a valid http(s) URL, e.g. https://example.com/mcp")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
                 } footer: {
                     Text("Runs via npx mcp-remote — managed for you.")
                 }
@@ -394,6 +406,26 @@ struct EditSheetView: View {
         }
         dismiss()
         state.applyInteractively()
+    }
+}
+
+/// Hands the hosting NSWindow to SwiftUI state so it can be closed directly —
+/// SwiftUI dismissal actions don't fire reliably from dialog contexts here.
+private struct WindowFinder: NSViewRepresentable {
+    var onFound: (NSWindow) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { [weak view] in
+            if let window = view?.window { onFound(window) }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async { [weak nsView] in
+            if let window = nsView?.window { onFound(window) }
+        }
     }
 }
 
