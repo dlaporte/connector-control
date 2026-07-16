@@ -9,6 +9,9 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp .build/release/MCPEnabler "$APP/Contents/MacOS/Connector Control"
 
+mkdir -p "$APP/Contents/Resources"
+swift scripts/generate-icon.swift "$APP/Contents/Resources/AppIcon.icns"
+
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -16,6 +19,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key><string>Connector Control</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleIdentifier</key><string>com.dlaporte.connector-control</string>
     <key>CFBundleName</key><string>Connector Control</string>
     <key>CFBundlePackageType</key><string>APPL</string>
