@@ -11,10 +11,15 @@ final class AppState: ObservableObject {
     @Published private(set) var appliedServers: [String: JSONValue] = [:]
 
     let service: ConfigService
+    private var watcher: FileWatcher?
 
     init(service: ConfigService = ConfigService(paths: .live())) {
         self.service = service
         reload()
+        watcher = FileWatcher(url: service.paths.claudeConfigURL) { [weak self] in
+            self?.reload()
+        }
+        watcher?.start()
     }
 
     var isDirty: Bool {
@@ -75,6 +80,13 @@ final class AppState: ObservableObject {
 
     /// Recovery for externally wiped MCPs: rewrite Claude's config from the store.
     func restoreMissing() { apply() }
+
+    func restartClaude() {
+        showRestartPrompt = false
+        ClaudeRestarter.restart { [weak self] errorMessage in
+            self?.lastError = errorMessage
+        }
+    }
 
     func markMissingDisabled() {
         for name in missingEnabled { store.mcps[name]?.enabled = false }

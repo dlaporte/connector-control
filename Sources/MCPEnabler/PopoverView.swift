@@ -1,4 +1,5 @@
 import SwiftUI
+import ServiceManagement
 import MCPEnablerCore
 
 struct PopoverView: View {
@@ -93,9 +94,22 @@ struct PopoverView: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
+            Toggle("Launch at login", isOn: Binding(
+                get: { SMAppService.mainApp.status == .enabled },
+                set: { on in
+                    do {
+                        if on { try SMAppService.mainApp.register() }
+                        else { try SMAppService.mainApp.unregister() }
+                    } catch {
+                        state.lastError = "Launch at login needs the built app "
+                            + "bundle (run scripts/build-app.sh): \(error.localizedDescription)"
+                    }
+                }))
+                .font(.caption)
+                .toggleStyle(.checkbox)
             Spacer()
             if state.showRestartPrompt {
-                Button("Restart Claude") { /* wired in Task 13 */ }
+                Button("Restart Claude") { state.restartClaude() }
                 Button("Later") { state.showRestartPrompt = false }
             } else if state.isDirty {
                 Button("Apply") { state.apply() }
