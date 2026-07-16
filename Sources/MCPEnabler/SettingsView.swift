@@ -7,6 +7,7 @@ struct SettingsView: View {
     @EnvironmentObject var state: AppState
     @State private var showRestore = false
     @AppStorage("masterStoreDir") private var masterStoreDirSetting: String = ""
+    @AppStorage("restartBehavior") private var restartBehavior: String = "ask"
 
     var body: some View {
         Form {
@@ -21,6 +22,12 @@ struct SettingsView: View {
                             + "bundle (run scripts/build-app.sh): \(error.localizedDescription)"
                     }
                 }))
+
+            Picker("After Apply:", selection: $restartBehavior) {
+                Text("Ask to restart Claude").tag("ask")
+                Text("Restart Claude automatically").tag("auto")
+                Text("Do nothing").tag("never")
+            }
 
             Section("Storage") {
                 Text("MCP list location: \(state.service.paths.storeDirURL.path)")

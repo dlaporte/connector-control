@@ -107,7 +107,11 @@ final class AppState: ObservableObject {
             try service.apply(store)
             appliedServers = store.mcps.filter(\.value.enabled).mapValues(\.config)
             missingEnabled = []
-            showRestartPrompt = true
+            switch UserDefaults.standard.string(forKey: "restartBehavior") ?? "ask" {
+            case "auto": restartClaude()
+            case "never": break
+            default: showRestartPrompt = true
+            }
             lastError = nil
         } catch {
             lastError = friendly(error)
