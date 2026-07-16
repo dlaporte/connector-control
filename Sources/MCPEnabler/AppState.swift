@@ -241,7 +241,7 @@ final class AppState: ObservableObject {
     func restoreMissing() { apply() }
 
     func restartClaude() {
-        if UserDefaults.standard.bool(forKey: "confirmBeforeRestart") {
+        if UserDefaults.standard.object(forKey: "confirmBeforeRestart") as? Bool ?? true {
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
             alert.messageText = "Restart Claude Desktop now?"

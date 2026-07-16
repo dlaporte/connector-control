@@ -14,7 +14,7 @@ struct SettingsView: View {
     @AppStorage("claudeAppPath") private var claudeAppPath: String = "/Applications/Claude.app"
     @AppStorage("backupKeepCount") private var backupKeepCount: Int = 20
     @AppStorage("notifyExternalChanges") private var notifyExternalChanges: Bool = true
-    @AppStorage("confirmBeforeRestart") private var confirmBeforeRestart: Bool = false
+    @AppStorage("confirmBeforeRestart") private var confirmBeforeRestart: Bool = true
 
     var body: some View {
         TabView {
