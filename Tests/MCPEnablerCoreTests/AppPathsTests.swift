@@ -1,0 +1,25 @@
+import XCTest
+@testable import MCPEnablerCore
+
+final class AppPathsTests: XCTestCase {
+    func testLiveDefaultsPointAtClaudeAndMCPEnabler() {
+        let paths = AppPaths.live(environment: [:])
+        XCTAssertTrue(paths.claudeConfigURL.path.hasSuffix(
+            "Library/Application Support/Claude/claude_desktop_config.json"))
+        XCTAssertTrue(paths.storeDirURL.path.hasSuffix(
+            "Library/Application Support/MCP Enabler"))
+        XCTAssertEqual(paths.masterStoreURL.lastPathComponent, "mcps.json")
+        XCTAssertEqual(paths.backupsDirURL.lastPathComponent, "backups")
+    }
+
+    func testEnvironmentOverrides() {
+        let paths = AppPaths.live(environment: [
+            "MCP_ENABLER_CLAUDE_CONFIG": "/tmp/x/claude.json",
+            "MCP_ENABLER_STORE_DIR": "/tmp/x/store",
+        ])
+        XCTAssertEqual(paths.claudeConfigURL.path, "/tmp/x/claude.json")
+        XCTAssertEqual(paths.storeDirURL.path, "/tmp/x/store")
+        XCTAssertEqual(paths.masterStoreURL.path, "/tmp/x/store/mcps.json")
+        XCTAssertEqual(paths.backupsDirURL.path, "/tmp/x/store/backups")
+    }
+}
