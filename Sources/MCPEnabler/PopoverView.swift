@@ -116,12 +116,18 @@ struct PopoverView: View {
             .buttonStyle(.plain)
             .help("Add MCP")
             Spacer()
-            if state.showRestartPrompt {
-                Button("Restart Claude") { state.restartClaude() }
-                Button("Later") { state.showRestartPrompt = false }
-            } else if state.isDirty {
+            if state.isDirty {
                 Button("Apply") { state.apply() }
                     .keyboardShortcut(.defaultAction)
+            } else if state.needsClaudeRestart {
+                Button {
+                    state.restartClaude()
+                } label: {
+                    Label("Restart Required", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+                .controlSize(.small)
             }
             Button {
                 NSApp.activate(ignoringOtherApps: true)

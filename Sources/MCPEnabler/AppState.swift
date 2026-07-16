@@ -8,7 +8,7 @@ final class AppState: ObservableObject {
     @Published var store: MasterStore = .empty
     @Published var missingEnabled: [String] = []
     @Published var lastError: String?
-    @Published var showRestartPrompt = false
+    @Published var needsClaudeRestart = false
     /// mcpServers as last read from / written to Claude's file, for dirty tracking.
     @Published private(set) var appliedServers: [String: JSONValue] = [:]
     /// Set when "Confirm before Apply" is on and Apply has a non-empty change
@@ -93,6 +93,21 @@ final class AppState: ObservableObject {
 
     var sortedNames: [String] { store.mcps.keys.sorted() }
 
+    /// Claude needs a restart iff it's running on a config older than our last
+    /// write. Derived from the process launch date, so it self-clears however
+    /// Claude gets restarted — via us, by hand, or by an update.
+    func refreshRestartState() {
+        guard let lastApply = UserDefaults.standard.object(forKey: "lastApplyDate") as? Date,
+              let claude = NSRunningApplication.runningApplications(
+                withBundleIdentifier: ClaudeRestarter.bundleID).first,
+              let launched = claude.launchDate
+        else {
+            needsClaudeRestart = false
+            return
+        }
+        needsClaudeRestart = launched < lastApply
+    }
+
     func reload() {
         do {
             // Capture "before" state for the notification rules below, computed
@@ -126,8 +141,10 @@ final class AppState: ObservableObject {
             } else if claudeConfigChangedExternally {
                 notify("MCP Enabler", "Claude's config changed outside MCP Enabler.")
             }
+            refreshRestartState()
         } catch {
             lastError = friendly(error)
+            refreshRestartState()
         }
     }
 
@@ -149,7 +166,6 @@ final class AppState: ObservableObject {
     }
 
     func setEnabled(_ name: String, _ on: Bool) {
-        showRestartPrompt = false
         store.mcps[name]?.enabled = on
         persistStore()
     }
@@ -196,6 +212,7 @@ final class AppState: ObservableObject {
             try service.apply(store)
             appliedServers = store.mcps.filter(\.value.enabled).mapValues(\.config)
             missingEnabled = []
+            UserDefaults.standard.set(Date(), forKey: "lastApplyDate")
             switch UserDefaults.standard.string(forKey: "restartBehavior") ?? "ask" {
             case "auto": restartClaude()
             case "never": break
@@ -207,9 +224,10 @@ final class AppState: ObservableObject {
                     alert.addButton(withTitle: "Later")
                     if alert.runModal() == .alertFirstButtonReturn { restartClaude() }
                 } else {
-                    showRestartPrompt = true
+                    break
                 }
             }
+            refreshRestartState()
             lastError = nil
         } catch {
             lastError = friendly(error)
@@ -218,7 +236,6 @@ final class AppState: ObservableObject {
 
     /// Validates and saves an entry. Returns an error message, or nil on success.
     func upsert(name: String, entry: MCPEntry, renamedFrom oldName: String?) -> String? {
-        showRestartPrompt = false
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return "Name must not be empty." }
         if trimmed != oldName, store.mcps[trimmed] != nil {
@@ -231,7 +248,6 @@ final class AppState: ObservableObject {
     }
 
     func remove(name: String) {
-        showRestartPrompt = false
         store.mcps.removeValue(forKey: name)
         persistStore()
     }
@@ -240,12 +256,14 @@ final class AppState: ObservableObject {
     func restoreMissing() { apply() }
 
     func restartClaude() {
-        showRestartPrompt = false
         let appURL = URL(fileURLWithPath: UserDefaults.standard.string(forKey: "claudeAppPath")
             ?? "/Applications/Claude.app")
         ClaudeRestarter.restart(appURL: appURL) { [weak self] errorMessage in
             self?.lastError = errorMessage
-            if errorMessage != nil { self?.showRestartPrompt = true }
+            self?.refreshRestartState()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                self?.refreshRestartState()
+            }
         }
     }
 

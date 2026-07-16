@@ -50,8 +50,8 @@ struct RestoreSheetView: View {
                 do {
                     try state.service.restoreClaudeConfig(
                         from: backup, mergedWith: state.store)
+                    UserDefaults.standard.set(Date(), forKey: "lastApplyDate")
                     state.reload()
-                    state.showRestartPrompt = true
                     dismiss()
                 } catch {
                     restoreError = error.localizedDescription
