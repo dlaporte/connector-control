@@ -106,6 +106,7 @@ struct EditSheetView: View {
             Button("Remove", role: .destructive) {
                 state.remove(name: target.name)
                 dismiss()
+                state.applyInteractively()
             }
         }
     }
@@ -341,6 +342,7 @@ struct EditSheetView: View {
             return
         }
         dismiss()
+        state.applyInteractively()
     }
 
     private func field(_ label: String, @ViewBuilder content: () -> some View) -> some View {

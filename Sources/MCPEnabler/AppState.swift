@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 @preconcurrency import UserNotifications
 import MCPEnablerCore
@@ -172,7 +173,25 @@ final class AppState: ObservableObject {
         pendingApplyChanges = nil
     }
 
-    private func performApply() {
+    /// Editor-window flow: saving there is a deliberate final act, so apply
+    /// immediately — honoring Confirm-before-Apply — and handle the After-Apply
+    /// setting with real alerts (the popover and its footer may not be open).
+    func applyInteractively() {
+        let changes = ApplyPlan.changes(store: store, current: appliedServers)
+        guard !changes.isEmpty else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        if UserDefaults.standard.bool(forKey: "confirmBeforeApply") {
+            let alert = NSAlert()
+            alert.messageText = "Apply these changes to Claude's config?"
+            alert.informativeText = changes.joined(separator: "\n")
+            alert.addButton(withTitle: "Apply")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        performApply(interactive: true)
+    }
+
+    private func performApply(interactive: Bool = false) {
         do {
             try service.apply(store)
             appliedServers = store.mcps.filter(\.value.enabled).mapValues(\.config)
@@ -180,7 +199,16 @@ final class AppState: ObservableObject {
             switch UserDefaults.standard.string(forKey: "restartBehavior") ?? "ask" {
             case "auto": restartClaude()
             case "never": break
-            default: showRestartPrompt = true
+            default:
+                if interactive {
+                    let alert = NSAlert()
+                    alert.messageText = "Restart Claude Desktop to pick up the changes?"
+                    alert.addButton(withTitle: "Restart Now")
+                    alert.addButton(withTitle: "Later")
+                    if alert.runModal() == .alertFirstButtonReturn { restartClaude() }
+                } else {
+                    showRestartPrompt = true
+                }
             }
             lastError = nil
         } catch {
