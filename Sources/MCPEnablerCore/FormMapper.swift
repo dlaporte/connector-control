@@ -65,6 +65,9 @@ public enum FormMapper {
 
     public static func serialize(_ model: FormModel) -> JSONValue {
         var object = model.additional
+        // Accepted limitation: an explicit `"command": ""` in the source JSON is
+        // indistinguishable from an absent command and is dropped on round-trip.
+        // Such a config can never run, and save validation rejects empty commands.
         if !model.command.isEmpty {
             object["command"] = .string(model.command)
         }
