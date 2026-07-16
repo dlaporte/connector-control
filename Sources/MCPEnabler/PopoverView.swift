@@ -110,7 +110,7 @@ struct PopoverView: View {
         HStack {
             // Identical fixed frames: "plus" and "gearshape" have different
             // glyph metrics and drift vertically without them.
-            HStack(spacing: 1) {
+            HStack(spacing: 0) {
                 Button {
                     openEditor(.newRemote())
                 } label: {
@@ -147,10 +147,16 @@ struct PopoverView: View {
     }
 
     private func footerIcon(_ systemName: String) -> some View {
+        // resizable + scaledToFit centers by geometric bounds; centering by
+        // font metrics leaves different glyphs (plus vs gear) at different
+        // heights because SF Symbols align on the text baseline.
         Image(systemName: systemName)
-            .font(.system(size: 13, weight: .medium))
+            .resizable()
+            .scaledToFit()
+            .fontWeight(.medium)
             .foregroundStyle(.secondary)
-            .frame(width: 20, height: 20)
+            .frame(width: 12, height: 12)
+            .frame(width: 17, height: 17)
     }
 }
 
