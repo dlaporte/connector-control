@@ -28,7 +28,7 @@ struct SettingsView: View {
                 .tabItem { Label("About", systemImage: "info.circle") }
         }
         // Tall enough that the largest tab (Storage) fits without scrolling.
-        .frame(width: 480, height: 420)
+        .frame(width: 480, height: 340)
         .sheet(isPresented: $showRestore) {
             RestoreSheetView().environmentObject(state)
         }
