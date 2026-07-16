@@ -27,7 +27,8 @@ struct SettingsView: View {
             aboutTab
                 .tabItem { Label("About", systemImage: "info.circle") }
         }
-        .frame(width: 480)
+        // Tall enough that the largest tab (Storage) fits without scrolling.
+        .frame(width: 480, height: 420)
         .sheet(isPresented: $showRestore) {
             RestoreSheetView().environmentObject(state)
         }
@@ -81,16 +82,16 @@ struct SettingsView: View {
                     Button("Use Default") { state.repointStore(to: nil) }
                         .disabled(masterStoreDirSetting.isEmpty)
                 }
-                Stepper(value: $backupKeepCount, in: 5...100) {
-                    Text("Keep \(backupKeepCount) backups of each file")
-                }
-                .onChange(of: backupKeepCount) { _, _ in state.refreshServiceSettings() }
             }
 
             Section("Backups") {
                 Text("Both config files are backed up automatically before every change.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Stepper(value: $backupKeepCount, in: 5...100) {
+                    Text("Keep \(backupKeepCount) backups of each file")
+                }
+                .onChange(of: backupKeepCount) { _, _ in state.refreshServiceSettings() }
                 HStack {
                     Button("Reveal in Finder") {
                         NSWorkspace.shared.activateFileViewerSelecting(
