@@ -66,4 +66,16 @@ final class RemotePatternTests: XCTestCase {
             RemotePattern.detect(RemotePattern.make(url: "https://x.dev/mcp")),
             "https://x.dev/mcp")
     }
+
+    func testIsRemoteShapedAcceptsInvalidURL() {
+        XCTAssertTrue(RemotePattern.isRemoteShaped(config(args: ["-y", "mcp-remote", ""])))
+        XCTAssertTrue(RemotePattern.isRemoteShaped(config(args: ["mcp-remote", "not a url"])))
+        XCTAssertTrue(RemotePattern.isRemoteShaped(RemotePattern.make(url: "https://x.dev/mcp")))
+    }
+
+    func testIsRemoteShapedRejectsNonRemote() {
+        XCTAssertFalse(RemotePattern.isRemoteShaped(config(args: ["-y", "some-package"])))
+        XCTAssertFalse(RemotePattern.isRemoteShaped(config(command: "node", args: ["mcp-remote", "https://x.dev"])))
+        XCTAssertFalse(RemotePattern.isRemoteShaped(.object(["command": .string("npx")])))
+    }
 }

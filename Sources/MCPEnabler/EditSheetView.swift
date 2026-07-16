@@ -146,6 +146,7 @@ struct EditSheetView: View {
         form = model
         let detected = RemotePattern.detect(config)
         isRemote = detected != nil
+            || (target.forcesRemote && RemotePattern.isRemoteShaped(config))
         remoteURL = detected ?? ""
     }
 
@@ -327,6 +328,10 @@ struct EditSheetView: View {
                 return
             }
             config = currentFormConfig()
+        }
+        if RemotePattern.isRemoteShaped(config), RemotePattern.detect(config) == nil {
+            validationError = "Server URL must be a valid http(s) URL."
+            return
         }
         let entry = MCPEntry(enabled: target.entry.enabled, config: config,
                              lastEditView: view)

@@ -26,4 +26,21 @@ public enum RemotePattern {
         .object(["command": .string("npx"),
                  "args": .array([.string("-y"), .string("mcp-remote"), .string(url)])])
     }
+
+    /// True when the config is an `npx [-y] mcp-remote …` invocation, regardless
+    /// of whether the URL argument is valid. Used to keep the remote form active
+    /// and to block saves of remote-shaped configs whose URL doesn't validate.
+    public static func isRemoteShaped(_ config: JSONValue) -> Bool {
+        guard case .object(let object) = config,
+              case .string("npx") = object["command"] ?? .null,
+              case .array(let rawArgs) = object["args"] ?? .null
+        else { return false }
+        var args: [String] = []
+        for raw in rawArgs {
+            guard case .string(let s) = raw else { return false }
+            args.append(s)
+        }
+        if args.first == "-y" { args.removeFirst() }
+        return args.first == "mcp-remote"
+    }
 }
