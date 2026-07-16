@@ -248,8 +248,6 @@ final class AppState: ObservableObject {
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
             alert.messageText = "Quit Connector Control?"
-            alert.informativeText =
-                "Config monitoring stops while it isn't running."
             alert.addButton(withTitle: "Quit")
             alert.addButton(withTitle: "Cancel")
             guard alert.runModal() == .alertFirstButtonReturn else { return }
