@@ -1,5 +1,6 @@
 .superpowers/
 .DS_Store
 build/
+.build/
 DerivedData/
 .sandbox/
