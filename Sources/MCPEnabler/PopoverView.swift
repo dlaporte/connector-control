@@ -170,13 +170,18 @@ private struct WindowAutoSizer: NSViewRepresentable {
         }
 
         func resizeWindowToFit() {
-            guard let window, let content = window.contentView else { return }
-            let fitting = content.fittingSize
-            guard fitting.height > 1,
-                  abs(window.frame.height - fitting.height) > 1 else { return }
+            guard let window else { return }
+            // This view is the root VStack's background, so its own laid-out
+            // height IS the content's ideal height — even while the window is
+            // stuck taller. (contentView.fittingSize just echoes the current
+            // frame for hosting views, which is why it couldn't detect slack.)
+            let ideal = bounds.height
+            let current = window.contentView?.frame.height ?? window.frame.height
+            guard ideal > 1, current - ideal > 1 else { return }
             var frame = window.frame
-            frame.origin.y += frame.height - fitting.height
-            frame.size.height = fitting.height
+            let delta = current - ideal
+            frame.origin.y += delta
+            frame.size.height -= delta
             window.setFrame(frame, display: true, animate: false)
         }
     }

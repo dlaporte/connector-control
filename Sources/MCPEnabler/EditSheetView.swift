@@ -42,6 +42,7 @@ struct EditSheetView: View {
     @State private var lossWarning: [String]?   // non-nil → confirmation shown
     @State private var validationError: String?
     @State private var confirmRemove = false
+    @State private var removeCompleted = false
     @State private var envRevealed: Set<String> = []
 
     init(target: EditTarget) {
@@ -113,11 +114,18 @@ struct EditSheetView: View {
         ) {
             Button("Remove", role: .destructive) {
                 state.remove(name: target.name)
-                // dismiss() here would only dismiss the confirmation dialog;
-                // the editor window needs the window-scoped action.
-                dismissWindow(id: "editor")
-                state.applyInteractively()
+                // Dismissing from inside the dialog's action closes only the
+                // dialog; defer to the view context via removeCompleted.
+                removeCompleted = true
             }
+        }
+        .onChange(of: removeCompleted) { _, done in
+            guard done else { return }
+            // Value-presented windows are identified by id AND value; the
+            // id-only overload doesn't match them. dismiss() as belt-and-braces.
+            dismissWindow(id: "editor", value: target)
+            dismiss()
+            state.applyInteractively()
         }
     }
 
