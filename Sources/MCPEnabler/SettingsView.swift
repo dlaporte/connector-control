@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import CoreImage
 import UniformTypeIdentifiers
 import ServiceManagement
 import MCPEnablerCore
@@ -168,12 +169,30 @@ struct SettingsView: View {
         return short
     }
 
-    /// The installed Claude app's own icon (falls back to a generic app icon
-    /// when Claude isn't at the configured path).
+    /// The installed Claude app's own icon, desaturated to sit beside the
+    /// grayscale template tab icons (falls back to a generic app icon when
+    /// Claude isn't at the configured path).
     private var claudeTabIcon: NSImage {
         let icon = NSWorkspace.shared.icon(forFile: claudeAppPath)
-        icon.size = NSSize(width: 22, height: 22)
-        return icon
+        let size = NSSize(width: 22, height: 22)
+        guard let tiff = icon.tiffRepresentation,
+              let ciImage = CIImage(data: tiff),
+              let filter = CIFilter(name: "CIColorControls",
+                                    parameters: [kCIInputImageKey: ciImage,
+                                                 kCIInputSaturationKey: 0])
+        else {
+            icon.size = size
+            return icon
+        }
+        guard let output = filter.outputImage else {
+            icon.size = size
+            return icon
+        }
+        let rep = NSCIImageRep(ciImage: output)
+        let gray = NSImage(size: rep.size)
+        gray.addRepresentation(rep)
+        gray.size = size
+        return gray
     }
 
     private func chooseStoreDir() {
