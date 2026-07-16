@@ -327,6 +327,13 @@ struct EditSheetView: View {
 
     @ViewBuilder private var jsonBody: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // Name lives in the Form's group box; JSON view needs its own so a
+            // raw-JSON paste for a new MCP can be named without switching views.
+            HStack(spacing: 8) {
+                Text("Name")
+                TextField("my-mcp", text: $name)
+                    .textFieldStyle(.roundedBorder)
+            }
             TextEditor(text: $jsonText)
                 .font(.system(.callout, design: .monospaced))
                 .frame(maxHeight: .infinity)

@@ -19,6 +19,7 @@ struct PopoverView: View {
             }
         }
         .frame(minWidth: 240, maxWidth: 380)
+        .background(WindowAutoSizer())
         .onAppear { state.reload() }
     }
 
@@ -145,6 +146,39 @@ struct PopoverView: View {
             .foregroundStyle(.secondary)
             .frame(width: 12, height: 12)
             .frame(width: 17, height: 17)
+    }
+}
+
+/// MenuBarExtra's window grows with its content but doesn't reliably SHRINK
+/// when content gets shorter (footer clearing, banner dismissing, row removal),
+/// leaving dead space above and below the vertically-centered content. This
+/// shim snaps the window frame to the content's fitted height, anchored at the
+/// top edge since the window hangs from the menu bar.
+private struct WindowAutoSizer: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { TrackingView() }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            (nsView as? TrackingView)?.resizeWindowToFit()
+        }
+    }
+
+    final class TrackingView: NSView {
+        override func layout() {
+            super.layout()
+            resizeWindowToFit()
+        }
+
+        func resizeWindowToFit() {
+            guard let window, let content = window.contentView else { return }
+            let fitting = content.fittingSize
+            guard fitting.height > 1,
+                  abs(window.frame.height - fitting.height) > 1 else { return }
+            var frame = window.frame
+            frame.origin.y += frame.height - fitting.height
+            frame.size.height = fitting.height
+            window.setFrame(frame, display: true, animate: false)
+        }
     }
 }
 
