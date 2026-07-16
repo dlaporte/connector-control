@@ -50,24 +50,24 @@ struct PopoverView: View {
     }
 
     private var mcpList: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                ForEach(state.sortedNames, id: \.self) { name in
-                    MCPRow(name: name) {
-                        if let entry = state.store.mcps[name] {
-                            editTarget = .existing(name: name, entry: entry)
-                        }
+        // A plain VStack, not a ScrollView: the MenuBarExtra window sizes to the
+        // content's IDEAL height, and a ScrollView's ideal height is zero — the
+        // list rendered fully collapsed. The popover now grows with the list.
+        VStack(spacing: 0) {
+            ForEach(state.sortedNames, id: \.self) { name in
+                MCPRow(name: name) {
+                    if let entry = state.store.mcps[name] {
+                        editTarget = .existing(name: name, entry: entry)
                     }
-                    Divider()
                 }
-                if state.store.mcps.isEmpty {
-                    Text("No MCPs configured yet — add one below.")
-                        .foregroundStyle(.secondary)
-                        .padding()
-                }
+                Divider()
+            }
+            if state.store.mcps.isEmpty {
+                Text("No MCPs configured yet — add one below.")
+                    .foregroundStyle(.secondary)
+                    .padding()
             }
         }
-        .frame(maxHeight: 320)
     }
 
     private var footer: some View {
