@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 @preconcurrency import UserNotifications
-import MCPEnablerCore
+import ConnectorControlCore
 
 @MainActor
 final class AppState: ObservableObject {
@@ -17,14 +17,14 @@ final class AppState: ObservableObject {
     private var hasLoadedOnce = false
 
     init(service: ConfigService = AppState.makeService()) {
-        AppState.migrateFromMCPEnabler()
+        AppState.migrateFromLegacyNames()
         self.service = service
         reload()
         armWatchers()
     }
 
     /// One-time migration from the app's previous names (newest first).
-    static func migrateFromMCPEnabler() {
+    static func migrateFromLegacyNames() {
         let fm = FileManager.default
         let appSupport = fm.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support")
@@ -54,7 +54,7 @@ final class AppState: ObservableObject {
         let env = ProcessInfo.processInfo.environment
         var paths = AppPaths.live()
         // Env override (dev sandboxing) beats the user setting.
-        if env["MCP_ENABLER_STORE_DIR"] == nil,
+        if env["CONNECTOR_CONTROL_STORE_DIR"] == nil,
            let custom = UserDefaults.standard.string(forKey: "masterStoreDir") {
             // Backups always stay machine-local: a synced store directory must
             // not fill the user's repo/cloud folder with rotating backups.

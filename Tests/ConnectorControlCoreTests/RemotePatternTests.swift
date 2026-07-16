@@ -1,5 +1,5 @@
 import XCTest
-@testable import MCPEnablerCore
+@testable import ConnectorControlCore
 
 final class RemotePatternTests: XCTestCase {
     private func config(command: String = "npx", args: [String]) -> JSONValue {

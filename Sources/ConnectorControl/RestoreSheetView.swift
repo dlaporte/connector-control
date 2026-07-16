@@ -1,5 +1,5 @@
 import SwiftUI
-import MCPEnablerCore
+import ConnectorControlCore
 
 struct RestoreSheetView: View {
     @EnvironmentObject var state: AppState

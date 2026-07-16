@@ -1,5 +1,5 @@
 import XCTest
-@testable import MCPEnablerCore
+@testable import ConnectorControlCore
 
 final class BackupManagerTests: XCTestCase {
     var dir: URL!

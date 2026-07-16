@@ -18,9 +18,9 @@ public struct AppPaths {
     ) -> AppPaths {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let appSupport = home.appendingPathComponent("Library/Application Support")
-        let claude = environment["MCP_ENABLER_CLAUDE_CONFIG"].map(URL.init(fileURLWithPath:))
+        let claude = environment["CONNECTOR_CONTROL_CLAUDE_CONFIG"].map(URL.init(fileURLWithPath:))
             ?? appSupport.appendingPathComponent("Claude/claude_desktop_config.json")
-        let store = environment["MCP_ENABLER_STORE_DIR"].map(URL.init(fileURLWithPath:))
+        let store = environment["CONNECTOR_CONTROL_STORE_DIR"].map(URL.init(fileURLWithPath:))
             ?? appSupport.appendingPathComponent("Connector Control")
         return AppPaths(claudeConfigURL: claude, storeDirURL: store)
     }

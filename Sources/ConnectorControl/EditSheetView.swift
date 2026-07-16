@@ -1,5 +1,5 @@
 import SwiftUI
-import MCPEnablerCore
+import ConnectorControlCore
 
 struct EditTarget: Identifiable, Codable, Hashable {
     let id: String          // UUID for new, name for existing

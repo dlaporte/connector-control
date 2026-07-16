@@ -1,5 +1,5 @@
 import XCTest
-@testable import MCPEnablerCore
+@testable import ConnectorControlCore
 
 final class ConfigServiceTests: XCTestCase {
     var dir: URL!

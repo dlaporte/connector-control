@@ -3,7 +3,7 @@ import AppKit
 import CoreImage
 import UniformTypeIdentifiers
 import ServiceManagement
-import MCPEnablerCore
+import ConnectorControlCore
 
 struct SettingsView: View {
     @EnvironmentObject var state: AppState

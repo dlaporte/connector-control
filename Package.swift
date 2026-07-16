@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "MCPEnabler",
+    name: "ConnectorControl",
     platforms: [.macOS(.v14)],
     targets: [
-        .target(name: "MCPEnablerCore"),
-        .executableTarget(name: "MCPEnabler", dependencies: ["MCPEnablerCore"]),
-        .testTarget(name: "MCPEnablerCoreTests", dependencies: ["MCPEnablerCore"]),
+        .target(name: "ConnectorControlCore"),
+        .executableTarget(name: "ConnectorControl", dependencies: ["ConnectorControlCore"]),
+        .testTarget(name: "ConnectorControlCoreTests", dependencies: ["ConnectorControlCore"]),
     ]
 )

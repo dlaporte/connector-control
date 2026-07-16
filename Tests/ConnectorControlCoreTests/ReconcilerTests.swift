@@ -1,5 +1,5 @@
 import XCTest
-@testable import MCPEnablerCore
+@testable import ConnectorControlCore
 
 final class ReconcilerTests: XCTestCase {
     private let configA = JSONValue.object(["command": .string("a")])

@@ -1,8 +1,8 @@
 import SwiftUI
-import MCPEnablerCore
+import ConnectorControlCore
 
 @main
-struct MCPEnablerApp: App {
+struct ConnectorControlApp: App {
     @StateObject private var state = AppState()
 
     var body: some Scene {

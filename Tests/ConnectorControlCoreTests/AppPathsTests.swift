@@ -1,8 +1,8 @@
 import XCTest
-@testable import MCPEnablerCore
+@testable import ConnectorControlCore
 
 final class AppPathsTests: XCTestCase {
-    func testLiveDefaultsPointAtClaudeAndMCPEnabler() {
+    func testLiveDefaultsPointAtClaudeAndConnectorControl() {
         let paths = AppPaths.live(environment: [:])
         XCTAssertTrue(paths.claudeConfigURL.path.hasSuffix(
             "Library/Application Support/Claude/claude_desktop_config.json"))
@@ -14,8 +14,8 @@ final class AppPathsTests: XCTestCase {
 
     func testEnvironmentOverrides() {
         let paths = AppPaths.live(environment: [
-            "MCP_ENABLER_CLAUDE_CONFIG": "/tmp/x/claude.json",
-            "MCP_ENABLER_STORE_DIR": "/tmp/x/store",
+            "CONNECTOR_CONTROL_CLAUDE_CONFIG": "/tmp/x/claude.json",
+            "CONNECTOR_CONTROL_STORE_DIR": "/tmp/x/store",
         ])
         XCTAssertEqual(paths.claudeConfigURL.path, "/tmp/x/claude.json")
         XCTAssertEqual(paths.storeDirURL.path, "/tmp/x/store")

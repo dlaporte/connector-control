@@ -7,7 +7,7 @@ swift build -c release
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
-cp .build/release/MCPEnabler "$APP/Contents/MacOS/Connector Control"
+cp .build/release/ConnectorControl "$APP/Contents/MacOS/Connector Control"
 
 mkdir -p "$APP/Contents/Resources"
 swift scripts/generate-icon.swift "$APP/Contents/Resources/AppIcon.icns"

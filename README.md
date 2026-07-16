@@ -13,9 +13,9 @@ everything it touches. See `docs/superpowers/specs/` for the full design.
 ## Development
 
     swift test                      # unit tests (never touch real config)
-    MCP_ENABLER_CLAUDE_CONFIG="$PWD/.sandbox/claude_desktop_config.json" \
-    MCP_ENABLER_STORE_DIR="$PWD/.sandbox/store" \
-    swift run MCPEnabler            # sandboxed dev run
+    CONNECTOR_CONTROL_CLAUDE_CONFIG="$PWD/.sandbox/claude_desktop_config.json" \
+    CONNECTOR_CONTROL_STORE_DIR="$PWD/.sandbox/store" \
+    swift run ConnectorControl            # sandboxed dev run
 
 ## Data & backups
 
