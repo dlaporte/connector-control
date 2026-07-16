@@ -78,6 +78,16 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertTrue(result.notes[0].contains("mcps.corrupt."))
     }
 
+    func testCorruptStoreAndMalformedClaudeConfigBothNotesSurface() throws {
+        _ = try service.loadAndReconcile()
+        try Data("garbage".utf8).write(to: paths.masterStoreURL)
+        try Data("{oops".utf8).write(to: paths.claudeConfigURL)
+        let result = try service.loadAndReconcile()
+        XCTAssertEqual(result.notes.count, 2)
+        XCTAssertTrue(result.notes.contains { $0.contains("mcps.corrupt.") })
+        XCTAssertTrue(result.notes.contains { $0.contains("Backups") })
+    }
+
     func testRestoreClaudeConfigFromBackup() throws {
         var store = try service.loadAndReconcile().store
         store.mcps["aws-mcp"]?.enabled = false
