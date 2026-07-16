@@ -7,10 +7,15 @@ public enum AtomicFile {
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
         let tmp = dir.appendingPathComponent(".\(url.lastPathComponent).tmp-\(UUID().uuidString)")
         try data.write(to: tmp)
+        defer { try? fm.removeItem(at: tmp) }
         if fm.fileExists(atPath: url.path) {
             _ = try fm.replaceItemAt(url, withItemAt: tmp)
         } else {
-            try fm.moveItem(at: tmp, to: url)
+            do {
+                try fm.moveItem(at: tmp, to: url)
+            } catch where fm.fileExists(atPath: url.path) {
+                _ = try fm.replaceItemAt(url, withItemAt: tmp)
+            }
         }
     }
 }
