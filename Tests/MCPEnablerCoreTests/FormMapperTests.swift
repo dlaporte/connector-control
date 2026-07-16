@@ -68,4 +68,14 @@ final class FormMapperTests: XCTestCase {
             FormModel(command: "swift", args: [], env: [:], additional: [:]))
         XCTAssertEqual(value, .object(["command": .string("swift")]))
     }
+
+    func testCommandlessConfigRoundTripsWithoutInjectingCommand() {
+        let original = JSONValue.object([
+            "type": .string("http"),
+            "url": .string("https://example.com/mcp"),
+        ])
+        let analysis = FormMapper.analyze(original)
+        XCTAssertTrue(analysis.isLossless)
+        XCTAssertEqual(FormMapper.serialize(analysis.model), original)
+    }
 }

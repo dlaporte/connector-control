@@ -1,5 +1,3 @@
-import Foundation
-
 public struct FormModel: Equatable {
     public var command: String
     public var args: [String]
@@ -67,7 +65,9 @@ public enum FormMapper {
 
     public static func serialize(_ model: FormModel) -> JSONValue {
         var object = model.additional
-        object["command"] = .string(model.command)
+        if !model.command.isEmpty {
+            object["command"] = .string(model.command)
+        }
         if !model.args.isEmpty {
             object["args"] = .array(model.args.map(JSONValue.string))
         }
