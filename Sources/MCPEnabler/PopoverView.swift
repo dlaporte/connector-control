@@ -63,7 +63,11 @@ struct PopoverView: View {
         // list rendered fully collapsed. The popover now grows with the list.
         VStack(spacing: 0) {
             ForEach(state.sortedNames, id: \.self) { name in
-                MCPRow(name: name)
+                MCPRow(name: name) {
+                    if let entry = state.store.mcps[name] {
+                        openEditor(.existing(name: name, entry: entry))
+                    }
+                }
                 Divider()
             }
             if state.store.mcps.isEmpty {
@@ -76,31 +80,13 @@ struct PopoverView: View {
 
     private var footer: some View {
         HStack {
-            Menu("Add") {
-                Button("Remote Server…") {
-                    openEditor(.newRemote())
-                }
-                Button("Local Server…") {
-                    openEditor(.new(template: .object([
-                        "command": .string("npx"),
-                        "args": .array([.string("-y"), .string("")]),
-                    ])))
-                }
+            Button {
+                openEditor(.newRemote())
+            } label: {
+                Image(systemName: "plus")
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            Menu("Edit") {
-                ForEach(state.sortedNames, id: \.self) { name in
-                    Button(name) {
-                        if let entry = state.store.mcps[name] {
-                            openEditor(.existing(name: name, entry: entry))
-                        }
-                    }
-                }
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .disabled(state.store.mcps.isEmpty)
+            .buttonStyle(.plain)
+            .help("Add MCP")
             Spacer()
             if state.showRestartPrompt {
                 Button("Restart Claude") { state.restartClaude() }
@@ -126,6 +112,7 @@ struct PopoverView: View {
 struct MCPRow: View {
     @EnvironmentObject var state: AppState
     let name: String
+    var onEdit: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
@@ -137,18 +124,13 @@ struct MCPRow: View {
                 .labelsHidden()
             Text(name).fontWeight(.medium)
             Spacer()
-            if let config = state.store.mcps[name]?.config,
-               RemotePattern.detect(config) != nil {
-                Text("REMOTE").font(.caption2).foregroundStyle(.secondary)
-                    .padding(.horizontal, 5).padding(.vertical, 1)
-                    .overlay(RoundedRectangle(cornerRadius: 4)
-                        .stroke(.secondary.opacity(0.4)))
-            } else {
-                Text("LOCAL").font(.caption2).foregroundStyle(.secondary)
-                    .padding(.horizontal, 5).padding(.vertical, 1)
-                    .overlay(RoundedRectangle(cornerRadius: 4)
-                        .stroke(.secondary.opacity(0.4)))
+            Button {
+                onEdit()
+            } label: {
+                Image(systemName: "pencil")
             }
+            .buttonStyle(.plain)
+            .help("Edit")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)

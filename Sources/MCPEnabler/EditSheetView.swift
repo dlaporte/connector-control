@@ -64,6 +64,23 @@ struct EditSheetView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
 
+            if target.isNew {
+                Picker("Type", selection: $isRemote) {
+                    Text("Remote").tag(true)
+                    Text("Local").tag(false)
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: isRemote) { _, nowRemote in
+                    guard view == .form else { return }
+                    if nowRemote {
+                        // switching to remote: keep any URL already typed
+                    } else if form.command.isEmpty {
+                        form.command = "npx"
+                        if form.args.isEmpty { form.args = ["-y", ""] }
+                    }
+                }
+            }
+
             field("Name") {
                 TextField("my-mcp", text: $name).textFieldStyle(.roundedBorder)
             }
