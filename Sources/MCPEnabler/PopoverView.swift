@@ -3,7 +3,6 @@ import MCPEnablerCore
 
 struct PopoverView: View {
     @EnvironmentObject var state: AppState
-    @State private var showRestore = false
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
@@ -17,9 +16,6 @@ struct PopoverView: View {
         }
         .frame(width: 380)
         .onAppear { state.reload() }
-        .sheet(isPresented: $showRestore) {
-            RestoreSheetView().environmentObject(state)
-        }
     }
 
     private func openEditor(_ target: EditTarget) {
@@ -95,15 +91,6 @@ struct PopoverView: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
             .disabled(state.store.mcps.isEmpty)
-            Menu("Backups") {
-                Button("Reveal in Finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting(
-                        [state.service.backups.backupsDir])
-                }
-                Button("Restore…") { showRestore = true }
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
             Spacer()
             if state.showRestartPrompt {
                 Button("Restart Claude") { state.restartClaude() }
