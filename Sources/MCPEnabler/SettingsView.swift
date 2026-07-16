@@ -11,8 +11,25 @@ struct SettingsView: View {
     @AppStorage("restartBehavior") private var restartBehavior: String = "ask"
     @AppStorage("claudeAppPath") private var claudeAppPath: String = "/Applications/Claude.app"
     @AppStorage("backupKeepCount") private var backupKeepCount: Int = 20
+    @AppStorage("notifyExternalChanges") private var notifyExternalChanges: Bool = true
 
     var body: some View {
+        TabView {
+            generalTab
+                .tabItem { Label("General", systemImage: "gearshape") }
+            storageTab
+                .tabItem { Label("Storage", systemImage: "externaldrive") }
+            claudeTab
+                .tabItem { Label("Claude", systemImage: "bubble.left.and.bubble.right") }
+        }
+        .padding(20)
+        .frame(width: 430)
+        .sheet(isPresented: $showRestore) {
+            RestoreSheetView().environmentObject(state)
+        }
+    }
+
+    private var generalTab: some View {
         Form {
             Toggle("Launch at login", isOn: Binding(
                 get: { SMAppService.mainApp.status == .enabled },
@@ -32,7 +49,15 @@ struct SettingsView: View {
                 Text("Do nothing").tag("never")
             }
 
-            Section("Storage") {
+            Toggle("Notify when Claude's config changes externally",
+                   isOn: $notifyExternalChanges)
+        }
+        .padding(.top, 8)
+    }
+
+    private var storageTab: some View {
+        Form {
+            Section("Master List Location") {
                 Text("MCP list location: \(state.service.paths.storeDirURL.path)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -49,19 +74,6 @@ struct SettingsView: View {
                 .onChange(of: backupKeepCount) { _, _ in state.refreshServiceSettings() }
             }
 
-            Section("Claude") {
-                Text("App location: \(claudeAppPath)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.head)
-                HStack {
-                    Button("Choose…") { chooseClaudeApp() }
-                    Button("Use Default") { claudeAppPath = "/Applications/Claude.app" }
-                        .disabled(claudeAppPath == "/Applications/Claude.app")
-                }
-            }
-
             Section("Backups") {
                 Text("Both config files are backed up automatically before every change.")
                     .font(.caption)
@@ -75,11 +87,25 @@ struct SettingsView: View {
                 }
             }
         }
-        .padding(20)
-        .frame(width: 360)
-        .sheet(isPresented: $showRestore) {
-            RestoreSheetView().environmentObject(state)
+        .padding(.top, 8)
+    }
+
+    private var claudeTab: some View {
+        Form {
+            Section("Claude App") {
+                Text("App location: \(claudeAppPath)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.head)
+                HStack {
+                    Button("Choose…") { chooseClaudeApp() }
+                    Button("Use Default") { claudeAppPath = "/Applications/Claude.app" }
+                        .disabled(claudeAppPath == "/Applications/Claude.app")
+                }
+            }
         }
+        .padding(.top, 8)
     }
 
     private func chooseStoreDir() {

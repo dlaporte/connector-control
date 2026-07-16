@@ -1,4 +1,5 @@
 import Foundation
+@preconcurrency import UserNotifications
 import MCPEnablerCore
 
 @MainActor
@@ -90,17 +91,56 @@ final class AppState: ObservableObject {
 
     func reload() {
         do {
+            // Capture "before" state for the notification rules below, computed
+            // BEFORE any state is overwritten.
+            let wasLoaded = hasLoadedOnce
+            let previousMissingWasEmpty = missingEnabled.isEmpty
+            let previousApplied = appliedServers
+
             let result = try service.loadAndReconcile(
                 baseline: hasLoadedOnce ? appliedServers : nil)
             store = result.store
             missingEnabled = result.missingEnabled
+            var firedMissingNotification = false
+            var claudeConfigChangedExternally = false
             if let servers = result.claudeServers {
+                firedMissingNotification =
+                    wasLoaded && previousMissingWasEmpty && !result.missingEnabled.isEmpty
+                claudeConfigChangedExternally = wasLoaded && servers != previousApplied
                 appliedServers = servers
                 hasLoadedOnce = true
             }
             lastError = result.notes.first
+
+            // Fire notifications AFTER all state above has been assigned, and
+            // never on first load. At most one notification per reload.
+            if firedMissingNotification {
+                let names = result.missingEnabled.joined(separator: ", ")
+                notify("MCP Enabler",
+                       "Claude's config is missing \(result.missingEnabled.count) "
+                       + "MCP(s): \(names) — open the menu bar item to restore.")
+            } else if claudeConfigChangedExternally {
+                notify("MCP Enabler", "Claude's config changed outside MCP Enabler.")
+            }
         } catch {
             lastError = friendly(error)
+        }
+    }
+
+    private func notify(_ title: String, _ body: String) {
+        // UNUserNotificationCenter.current() crashes under bare `swift run` (no
+        // app bundle), so bail out first when there is none.
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        guard UserDefaults.standard.object(forKey: "notifyExternalChanges") as? Bool ?? true
+        else { return }
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert]) { granted, _ in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            center.add(UNNotificationRequest(
+                identifier: UUID().uuidString, content: content, trigger: nil))
         }
     }
 
