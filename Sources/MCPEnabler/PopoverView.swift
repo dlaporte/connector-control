@@ -1,0 +1,108 @@
+import SwiftUI
+import MCPEnablerCore
+
+struct PopoverView: View {
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if !state.missingEnabled.isEmpty { missingBanner }
+            if let error = state.lastError { errorBanner(error) }
+            mcpList
+            Divider()
+            footer
+        }
+        .frame(width: 380)
+        .onAppear { state.reload() }
+    }
+
+    private var missingBanner: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Claude's config is missing \(state.missingEnabled.count) MCP(s): "
+                  + state.missingEnabled.joined(separator: ", "),
+                  systemImage: "exclamationmark.triangle.fill")
+                .font(.callout)
+            HStack {
+                Button("Restore") { state.restoreMissing() }
+                Button("Mark Disabled") { state.markMissingDisabled() }
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.yellow.opacity(0.15))
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        Label(message, systemImage: "xmark.octagon.fill")
+            .font(.callout)
+            .foregroundStyle(.red)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var mcpList: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                ForEach(state.sortedNames, id: \.self) { name in
+                    MCPRow(name: name)
+                    Divider()
+                }
+                if state.store.mcps.isEmpty {
+                    Text("No MCPs configured yet — add one below.")
+                        .foregroundStyle(.secondary)
+                        .padding()
+                }
+            }
+        }
+        .frame(maxHeight: 320)
+    }
+
+    private var footer: some View {
+        HStack {
+            // Add / Backups menus arrive in Tasks 12–13.
+            Spacer()
+            if state.showRestartPrompt {
+                Button("Restart Claude") { /* wired in Task 13 */ }
+                Button("Later") { state.showRestartPrompt = false }
+            } else if state.isDirty {
+                Button("Apply") { state.apply() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            Button("Quit") { NSApp.terminate(nil) }
+        }
+        .padding(10)
+    }
+}
+
+struct MCPRow: View {
+    @EnvironmentObject var state: AppState
+    let name: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Toggle("", isOn: Binding(
+                get: { state.store.mcps[name]?.enabled ?? false },
+                set: { state.setEnabled(name, $0) }))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            Text(name).fontWeight(.medium)
+            Spacer()
+            if let config = state.store.mcps[name]?.config,
+               RemotePattern.detect(config) != nil {
+                Text("REMOTE").font(.caption2).foregroundStyle(.secondary)
+                    .padding(.horizontal, 5).padding(.vertical, 1)
+                    .overlay(RoundedRectangle(cornerRadius: 4)
+                        .stroke(.secondary.opacity(0.4)))
+            } else {
+                Text("LOCAL").font(.caption2).foregroundStyle(.secondary)
+                    .padding(.horizontal, 5).padding(.vertical, 1)
+                    .overlay(RoundedRectangle(cornerRadius: 4)
+                        .stroke(.secondary.opacity(0.4)))
+            }
+            // Edit chevron arrives in Task 11.
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+    }
+}
