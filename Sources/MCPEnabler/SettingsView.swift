@@ -169,10 +169,21 @@ struct SettingsView: View {
         return short
     }
 
-    /// The installed Claude app's own icon, desaturated to sit beside the
-    /// grayscale template tab icons (falls back to a generic app icon when
-    /// Claude isn't at the configured path).
+    /// Claude's bare "splat" glyph, taken from the tray template image the
+    /// Claude app ships. As a template it renders exactly like the SF-symbol
+    /// tab icons. Falls back to a desaturated copy of the app icon if a future
+    /// Claude version moves the asset.
     private var claudeTabIcon: NSImage {
+        let resources = URL(fileURLWithPath: claudeAppPath)
+            .appendingPathComponent("Contents/Resources")
+        for name in ["TrayIconTemplate@2x.png", "TrayIconTemplate.png"] {
+            let url = resources.appendingPathComponent(name)
+            if let splat = NSImage(contentsOf: url) {
+                splat.isTemplate = true
+                splat.size = NSSize(width: 18, height: 18)
+                return splat
+            }
+        }
         let icon = NSWorkspace.shared.icon(forFile: claudeAppPath)
         let size = NSSize(width: 22, height: 22)
         guard let tiff = icon.tiffRepresentation,
