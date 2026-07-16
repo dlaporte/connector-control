@@ -10,8 +10,10 @@ struct MCPEnablerApp: App {
             PopoverView()
                 .environmentObject(state)
         } label: {
+            // puzzlepiece: distinctive next to system items — switch.2 was
+            // nearly identical to the Control Center icon.
             Image(systemName: state.missingEnabled.isEmpty
-                ? "switch.2" : "exclamationmark.triangle.fill")
+                ? "puzzlepiece.extension.fill" : "exclamationmark.triangle.fill")
         }
         .menuBarExtraStyle(.window)
     }
