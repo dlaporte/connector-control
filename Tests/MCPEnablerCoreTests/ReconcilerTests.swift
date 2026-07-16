@@ -27,6 +27,22 @@ final class ReconcilerTests: XCTestCase {
         XCTAssertTrue(outcome.storeChanged)
     }
 
+    func testPendingEditSurvivesReloadWhenFileUnchanged() {
+        let outcome = Reconciler.reconcile(
+            store: store(["s": MCPEntry(enabled: true, config: configB)]),
+            claudeServers: ["s": configA], baseline: ["s": configA])
+        XCTAssertEqual(outcome.store.mcps["s"]?.config, configB)
+        XCTAssertFalse(outcome.storeChanged)
+    }
+
+    func testExternalEditWinsWithChangedBaseline() {
+        let outcome = Reconciler.reconcile(
+            store: store(["s": MCPEntry(enabled: true, config: configA)]),
+            claudeServers: ["s": configB], baseline: ["s": configA])
+        XCTAssertEqual(outcome.store.mcps["s"]?.config, configB)
+        XCTAssertTrue(outcome.storeChanged)
+    }
+
     func testDisabledButPresentBecomesEnabled() {
         let outcome = Reconciler.reconcile(
             store: store(["s": MCPEntry(enabled: false, config: configA)]),

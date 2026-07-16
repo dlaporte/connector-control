@@ -18,7 +18,11 @@ public enum Reconciler {
 
         for (name, config) in claudeServers {
             if var entry = result.mcps[name] {
-                if entry.config != config { entry.config = config; changed = true }
+                if entry.config != config
+                    && isExternalChange(name: name, config: config, baseline: baseline) {
+                    entry.config = config
+                    changed = true
+                }
                 if !entry.enabled && isExternalReappearance(
                     name: name, config: config, baseline: baseline) {
                     entry.enabled = true
@@ -48,6 +52,17 @@ public enum Reconciler {
         name: String, config: JSONValue, baseline: [String: JSONValue]?
     ) -> Bool {
         guard let baseline else { return false }
+        return baseline[name] != config
+    }
+
+    /// A store/file config mismatch is a PENDING EDIT (awaiting Apply) when the
+    /// file entry still matches the last-known baseline. The file wins only on
+    /// evidence of an external change — or with no baseline (fresh launch),
+    /// where hand-edits made while the app wasn't running take precedence.
+    private static func isExternalChange(
+        name: String, config: JSONValue, baseline: [String: JSONValue]?
+    ) -> Bool {
+        guard let baseline else { return true }
         return baseline[name] != config
     }
 }

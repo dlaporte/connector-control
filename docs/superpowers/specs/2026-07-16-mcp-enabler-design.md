@@ -106,9 +106,12 @@ launch, on watcher events, and whenever the popover opens:
 
 - **MCP present in Claude's file but unknown to the master store** → import into the
   master store as enabled. (Handles MCPs added by hand or by other tools.)
-- **MCP present in both but with a different config in Claude's file** → Claude's file
-  wins (the user may have hand-edited it); the master store is updated. A backup of
-  `mcps.json` is taken first.
+- **MCP present in both but with a different config in Claude's file** → if the
+  file entry still matches the baseline, the store's version is a pending edit
+  awaiting Apply and is kept; Claude's file wins only when the file entry itself
+  changed vs. the baseline (external hand-edit), or on a fresh launch where no
+  baseline exists. When the file wins, the master store is updated (backup of
+  `mcps.json` taken first).
 - **MCP present in Claude's file but marked disabled in the master store** → if
   the file entry matches the last-known state of Claude's file (baseline), this
   is a pending disable awaiting Apply and is left disabled; it is marked enabled
