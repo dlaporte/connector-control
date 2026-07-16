@@ -34,13 +34,14 @@ public enum RemotePattern {
         strippedArgs(config)?.first == "mcp-remote"
     }
 
-    /// True only for the CANONICAL bridge shape — `npx [-y] mcp-remote <arg>`
-    /// with exactly one trailing argument. Extra flags (e.g. --header) make a
-    /// config non-canonical: still remote-shaped, but save validation must not
+    /// True for a BARE bridge invocation — `npx [-y] mcp-remote` with at most
+    /// one trailing argument (the URL slot, present or missing). These must
+    /// carry a valid URL to be saveable. Extra flags (e.g. --header) make a
+    /// config non-bare: still remote-shaped, but save validation must not
     /// insist the trailing args form a lone URL.
     public static func isCanonicalShape(_ config: JSONValue) -> Bool {
         guard let args = strippedArgs(config) else { return false }
-        return args.count == 2 && args.first == "mcp-remote"
+        return args.count <= 2 && args.first == "mcp-remote"
     }
 
     /// String args with a leading "-y" stripped, or nil when the config isn't

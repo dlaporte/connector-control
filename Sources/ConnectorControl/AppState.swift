@@ -23,9 +23,34 @@ final class AppState: ObservableObject {
         // Migration must run BEFORE the service reads UserDefaults — a default
         // argument would be evaluated at the call site, ahead of this body.
         AppState.migrateFromLegacyNames()
-        self.service = service ?? AppState.makeService()
+        let resolved = service ?? AppState.makeService()
+        self.service = resolved
+        // Sweep the RESOLVED paths (a repointed store lives outside the default
+        // dir) so files written before the 600-permissions fix get corrected.
+        AppState.sweepPermissionsOnce(paths: resolved.paths)
         reload()
         armWatchers()
+    }
+
+    /// One-time repair of files written before owner-only permissions were
+    /// enforced; gated by a done-flag so launches stay cheap.
+    static func sweepPermissionsOnce(paths: AppPaths) {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: "permissionsSweepDone") else { return }
+        let fm = FileManager.default
+        for root in [paths.storeDirURL, paths.backupsDirURL] {
+            try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
+            guard let files = fm.enumerator(
+                at: root, includingPropertiesForKeys: [.isDirectoryKey]) else { continue }
+            for case let file as URL in files {
+                let isDir = (try? file.resourceValues(forKeys: [.isDirectoryKey]))?
+                    .isDirectory ?? false
+                try? fm.setAttributes(
+                    [.posixPermissions: isDir ? 0o700 : 0o600],
+                    ofItemAtPath: file.path)
+            }
+        }
+        defaults.set(true, forKey: "permissionsSweepDone")
     }
 
     /// One-time migration from the app's previous names (newest first).
@@ -38,18 +63,6 @@ final class AppState: ObservableObject {
             let old = appSupport.appendingPathComponent(oldName)
             if fm.fileExists(atPath: old.path), !fm.fileExists(atPath: new.path) {
                 try? fm.moveItem(at: old, to: new)
-            }
-        }
-        // Files written before the 600-permissions fix may still be
-        // world-readable; sweep the whole store dir once per launch (cheap,
-        // idempotent — the store can hold env-var secrets).
-        if let files = fm.enumerator(at: new, includingPropertiesForKeys: [.isDirectoryKey]) {
-            for case let file as URL in files {
-                let isDir = (try? file.resourceValues(forKeys: [.isDirectoryKey]))?
-                    .isDirectory ?? false
-                try? fm.setAttributes(
-                    [.posixPermissions: isDir ? 0o700 : 0o600],
-                    ofItemAtPath: file.path)
             }
         }
         // Settings lived under the old bundle ids' defaults domains.
@@ -177,8 +190,11 @@ final class AppState: ObservableObject {
             // Store-side external change (e.g. a synced mcps.json edited by a
             // sync tool): our own persistStore writes leave the in-memory store
             // already equal, so a mismatch here means an outside writer.
+            // Authoritative reloads are user-initiated adoptions (repoint,
+            // restore) — never notify for those.
             let storeChangedExternally =
-                wasLoaded && result.store.mcps != previousStoreMcps
+                !storeAuthoritative
+                && wasLoaded && result.store.mcps != previousStoreMcps
                 && !claudeConfigChangedExternally
             lastError = result.notes.first
             if !isDirty { applyRetryNeeded = false }
@@ -212,7 +228,10 @@ final class AppState: ObservableObject {
         appliedServers = servers
         hasLoadedOnce = true
         UserDefaults.standard.set(Date(), forKey: "lastApplyDate")
-        reload()
+        // ConfigService already merged and persisted the store; an authoritative
+        // reload adopts it as-is and suppresses the external-change notification
+        // for the user's own restore action.
+        reload(storeAuthoritative: true)
     }
 
     private func notify(_ title: String, _ body: String) {

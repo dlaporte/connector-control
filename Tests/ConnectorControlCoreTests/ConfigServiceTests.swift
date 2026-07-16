@@ -158,6 +158,27 @@ final class ConfigServiceTests: XCTestCase {
                        try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL))
     }
 
+    func testCorruptStoreMidSessionStillReimportsEverything() throws {
+        let first = try service.loadAndReconcile()
+        // Mid-session corruption: the reload carries a baseline (appliedServers).
+        try Data("garbage".utf8).write(to: paths.masterStoreURL)
+        let result = try service.loadAndReconcile(baseline: first.claudeServers)
+        XCTAssertEqual(result.store.mcps.count, 3,
+                       "a corrupt store must rebuild from Claude's config even "
+                       + "when a baseline would classify entries as pending removals")
+    }
+
+    func testRestoreRefusesWrongTypedMCPServersBeforeWriting() throws {
+        _ = try service.loadAndReconcile()
+        let badBackup = dir.appendingPathComponent("bad-servers.json")
+        try Data(#"{"mcpServers": "oops"}"#.utf8).write(to: badBackup)
+        let before = try Data(contentsOf: paths.claudeConfigURL)
+        XCTAssertThrowsError(try service.restoreClaudeConfig(
+            from: badBackup, mergedWith: .empty))
+        XCTAssertEqual(try Data(contentsOf: paths.claudeConfigURL), before,
+                       "live config must be untouched when validation fails")
+    }
+
     func testRestoreRefusesMalformedBackup() throws {
         let store = try service.loadAndReconcile().store
         let badBackup = dir.appendingPathComponent("bad-backup.json")

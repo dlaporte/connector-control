@@ -42,9 +42,21 @@ public struct ConfigService {
                      + "use Backups ▸ Restore… to repair the file."],
                     nil)
         }
+        // A corrupt store is rebuilt with fresh-launch (nil-baseline) import
+        // semantics: reconciling the empty replacement against a baseline would
+        // classify every server as a pending removal, rebuild an empty list,
+        // and set up the next apply to wipe Claude's config.
+        let effectiveBaseline: [String: JSONValue]?
+        if loaded.corruptFileURL != nil {
+            effectiveBaseline = nil
+        } else if storeAuthoritative {
+            effectiveBaseline = servers
+        } else {
+            effectiveBaseline = baseline
+        }
         let outcome = Reconciler.reconcile(
             store: loaded.store, claudeServers: servers,
-            baseline: storeAuthoritative ? servers : baseline)
+            baseline: effectiveBaseline)
         if outcome.storeChanged || loaded.corruptFileURL != nil {
             try saveStore(outcome.store)
         }
@@ -77,9 +89,16 @@ public struct ConfigService {
         -> [String: JSONValue] {
         let data = try Data(contentsOf: backup)
         guard let parsed = try? JSONSerialization.jsonObject(with: data),
-              parsed is [String: Any] else {
+              let root = parsed as? [String: Any] else {
             throw ClaudeConfigError.malformed(
                 "backup \(backup.lastPathComponent) is not a valid config file")
+        }
+        // Validate the section this app depends on BEFORE writing: a wrong-typed
+        // mcpServers would otherwise clobber the live file and only then throw
+        // from the post-write read.
+        if let rawServers = root["mcpServers"], !(rawServers is [String: Any]) {
+            throw ClaudeConfigError.malformed(
+                "backup \(backup.lastPathComponent) has an invalid mcpServers section")
         }
         try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config")
         try AtomicFile.write(data, to: paths.claudeConfigURL)

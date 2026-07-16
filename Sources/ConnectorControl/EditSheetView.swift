@@ -402,15 +402,20 @@ struct EditSheetView: View {
             return
         }
         // The editor works on a snapshot taken at window-open; if the store's
-        // copy moved underneath (external edit reconciled in), don't silently
-        // overwrite it.
+        // copy moved underneath (external edit, delete, or rename reconciled
+        // in), don't silently overwrite or resurrect it. A nil current config
+        // (entry gone) also counts as a conflict.
         if !target.isNew,
-           let current = state.store.mcps[target.name]?.config,
-           current != target.entry.config {
+           state.store.mcps[target.name]?.config != target.entry.config {
+            let missing = state.store.mcps[target.name] == nil
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
-            alert.messageText = "“\(target.name)” changed outside this editor."
-            alert.informativeText = "Saving will overwrite that change with this editor's version."
+            alert.messageText = missing
+                ? "“\(target.name)” was removed outside this editor."
+                : "“\(target.name)” changed outside this editor."
+            alert.informativeText = missing
+                ? "Saving will add it back."
+                : "Saving will overwrite that change with this editor's version."
             alert.addButton(withTitle: "Save Anyway")
             alert.addButton(withTitle: "Cancel")
             guard alert.runModal() == .alertFirstButtonReturn else { return }

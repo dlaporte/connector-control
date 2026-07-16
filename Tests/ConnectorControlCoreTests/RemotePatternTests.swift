@@ -73,11 +73,14 @@ final class RemotePatternTests: XCTestCase {
         XCTAssertTrue(RemotePattern.isRemoteShaped(RemotePattern.make(url: "https://x.dev/mcp")))
     }
 
-    func testIsCanonicalShapeRequiresExactlyOneTrailingArg() {
+    func testIsCanonicalShapeCoversBareInvocations() {
         XCTAssertTrue(RemotePattern.isCanonicalShape(
             config(args: ["-y", "mcp-remote", "not a url"])))
         XCTAssertTrue(RemotePattern.isCanonicalShape(
             RemotePattern.make(url: "https://x.dev/mcp")))
+        XCTAssertTrue(RemotePattern.isCanonicalShape(
+            config(args: ["-y", "mcp-remote"])),
+            "a bridge invocation MISSING its URL must still face URL validation")
         XCTAssertFalse(RemotePattern.isCanonicalShape(
             config(args: ["-y", "mcp-remote", "https://x.dev/mcp", "--header", "A: B"])),
             "extra-args invocations are legitimate and must not be canonical")
