@@ -143,7 +143,9 @@ final class AppState: ObservableObject {
 
     func restartClaude() {
         showRestartPrompt = false
-        ClaudeRestarter.restart { [weak self] errorMessage in
+        let appURL = URL(fileURLWithPath: UserDefaults.standard.string(forKey: "claudeAppPath")
+            ?? "/Applications/Claude.app")
+        ClaudeRestarter.restart(appURL: appURL) { [weak self] errorMessage in
             self?.lastError = errorMessage
             if errorMessage != nil { self?.showRestartPrompt = true }
         }

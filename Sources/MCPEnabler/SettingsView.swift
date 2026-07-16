@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 import ServiceManagement
 import MCPEnablerCore
 
@@ -8,6 +9,7 @@ struct SettingsView: View {
     @State private var showRestore = false
     @AppStorage("masterStoreDir") private var masterStoreDirSetting: String = ""
     @AppStorage("restartBehavior") private var restartBehavior: String = "ask"
+    @AppStorage("claudeAppPath") private var claudeAppPath: String = "/Applications/Claude.app"
 
     var body: some View {
         Form {
@@ -42,6 +44,19 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Claude") {
+                Text("App location: \(claudeAppPath)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.head)
+                HStack {
+                    Button("Choose…") { chooseClaudeApp() }
+                    Button("Use Default") { claudeAppPath = "/Applications/Claude.app" }
+                        .disabled(claudeAppPath == "/Applications/Claude.app")
+                }
+            }
+
             Section("Backups") {
                 Text("Both config files are backed up automatically before every change.")
                     .font(.caption)
@@ -70,6 +85,19 @@ struct SettingsView: View {
         panel.prompt = "Choose"
         if panel.runModal() == .OK, let url = panel.url {
             state.repointStore(to: url)
+        }
+    }
+
+    private func chooseClaudeApp() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.applicationBundle]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.prompt = "Choose"
+        if panel.runModal() == .OK, let url = panel.url {
+            claudeAppPath = url.path
         }
     }
 }

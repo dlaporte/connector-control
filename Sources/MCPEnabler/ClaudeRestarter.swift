@@ -2,11 +2,12 @@ import AppKit
 
 enum ClaudeRestarter {
     static let bundleID = "com.anthropic.claudefordesktop"
-    static let appURL = URL(fileURLWithPath: "/Applications/Claude.app")
 
     /// Gracefully terminate Claude (never force-kill), wait up to 15 s, relaunch.
     /// Calls completion on the main queue with nil on success or an error message.
-    static func restart(completion: @escaping (String?) -> Void) {
+    static func restart(
+        appURL: URL = URL(fileURLWithPath: "/Applications/Claude.app"),
+        completion: @escaping (String?) -> Void) {
         guard FileManager.default.fileExists(atPath: appURL.path) else {
             DispatchQueue.main.async {
                 completion("Claude.app was not found at \(appURL.path).")
