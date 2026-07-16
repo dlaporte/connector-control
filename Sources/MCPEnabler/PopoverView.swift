@@ -4,6 +4,7 @@ import MCPEnablerCore
 struct PopoverView: View {
     @EnvironmentObject var state: AppState
     @State private var editTarget: EditTarget?
+    @State private var showRestore = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -17,6 +18,9 @@ struct PopoverView: View {
         .onAppear { state.reload() }
         .sheet(item: $editTarget) { target in
             EditSheetView(target: target).environmentObject(state)
+        }
+        .sheet(isPresented: $showRestore) {
+            RestoreSheetView().environmentObject(state)
         }
     }
 
@@ -67,7 +71,28 @@ struct PopoverView: View {
 
     private var footer: some View {
         HStack {
-            // Add / Backups menus arrive in Tasks 12–13.
+            Menu("＋ Add") {
+                Button("Remote Server…") {
+                    editTarget = .new(template: RemotePattern.make(url: ""))
+                }
+                Button("Local Server…") {
+                    editTarget = .new(template: .object([
+                        "command": .string("npx"),
+                        "args": .array([.string("-y"), .string("")]),
+                    ]))
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            Menu("Backups") {
+                Button("Reveal in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting(
+                        [state.service.backups.backupsDir])
+                }
+                Button("Restore…") { showRestore = true }
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
             Spacer()
             if state.showRestartPrompt {
                 Button("Restart Claude") { /* wired in Task 13 */ }
