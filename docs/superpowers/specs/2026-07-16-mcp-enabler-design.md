@@ -226,6 +226,11 @@ UI layer is kept thin; manual verification checklist for popover/sheet/restart f
 
 ## Build & run
 
-Xcode project in this repo (`MCPEnabler.xcodeproj`), `xcodebuild` buildable from CLI.
-Output: `MCP Enabler.app`; user copies to `/Applications` or runs from build products.
-Launch-at-login optional via in-app toggle.
+Swift Package (`Package.swift`) with two targets — `MCPEnablerCore` (library, unit
+tests) and `MCPEnabler` (executable app) — buildable and testable from the CLI with
+`swift build` / `swift test`. A `scripts/build-app.sh` script assembles
+`build/MCP Enabler.app` (Info.plist with `LSUIElement` so no Dock icon, ad-hoc
+codesign); user copies it to `/Applications`. During development the app runs via
+`swift run` against a sandboxed config path (env-var override) so the real Claude
+config is never touched by tests or dev runs. Launch-at-login optional via in-app
+toggle (requires running from the built .app bundle).
