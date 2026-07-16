@@ -2,8 +2,8 @@ import Foundation
 
 public struct ReconcileOutcome: Equatable {
     public var store: MasterStore
-    /// Names enabled in the store but absent from Claude's file — the
-    /// "Claude wiped my config" recovery flag. Sorted for stable display.
+    /// Names enabled in the store but absent from Claude's file — surfaced in
+    /// the UI so the user can restore them. Sorted for stable display.
     public var missingEnabled: [String]
     public var storeChanged: Bool
 }

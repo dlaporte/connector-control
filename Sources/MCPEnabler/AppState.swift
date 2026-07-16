@@ -237,7 +237,7 @@ final class AppState: ObservableObject {
         persistStore()
     }
 
-    /// Recovery for externally wiped MCPs: rewrite Claude's config from the store.
+    /// Recovery for externally removed MCPs: rewrite Claude's config from the store.
     func restoreMissing() { apply() }
 
     func quitApp() {
@@ -246,7 +246,7 @@ final class AppState: ObservableObject {
             let alert = NSAlert()
             alert.messageText = "Quit Connector Control?"
             alert.informativeText =
-                "Config monitoring and wipe recovery stop while it isn't running."
+                "Config monitoring stops while it isn't running."
             alert.addButton(withTitle: "Quit")
             alert.addButton(withTitle: "Cancel")
             guard alert.runModal() == .alertFirstButtonReturn else { return }
