@@ -13,6 +13,11 @@ public struct ConfigService {
 
     /// Load master store (handling corruption), read Claude's servers,
     /// reconcile, persist the store if reconciliation changed it.
+    ///
+    /// The master store is loaded FIRST so it is always available: if Claude's
+    /// config turns out to be malformed, reconciliation is skipped entirely
+    /// (nothing is written) and the store just loaded is returned as-is, so the
+    /// UI keeps showing the user's MCP list instead of going blank.
     public func loadAndReconcile(baseline: [String: JSONValue]? = nil) throws
         -> (store: MasterStore, missingEnabled: [String], notes: [String],
             claudeServers: [String: JSONValue]) {
@@ -23,7 +28,15 @@ public struct ConfigService {
                 "The MCP list file was unreadable; it was preserved as "
                 + "\(corrupt.lastPathComponent) and rebuilt from Claude's config.")
         }
-        let servers = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
+        let servers: [String: JSONValue]
+        do {
+            servers = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
+        } catch is ClaudeConfigError {
+            return (loaded.store, [],
+                    ["Claude's config file is not valid JSON. Your MCP list is safe; "
+                     + "use Backups ▸ Restore… to repair the file."],
+                    [:])
+        }
         let outcome = Reconciler.reconcile(
             store: loaded.store, claudeServers: servers, baseline: baseline)
         if outcome.storeChanged || loaded.corruptFileURL != nil {

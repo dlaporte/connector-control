@@ -88,6 +88,22 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL).count, 3)
     }
 
+    func testMalformedClaudeConfigStillReturnsStore() throws {
+        let firstResult = try service.loadAndReconcile()
+        XCTAssertEqual(firstResult.store.mcps.count, 3)
+        let backupCountBefore = try service.backups.backups(series: "mcps").count
+
+        try Data("{oops".utf8).write(to: paths.claudeConfigURL)
+        let result = try service.loadAndReconcile()
+
+        XCTAssertEqual(result.store.mcps.count, 3)
+        XCTAssertEqual(result.missingEnabled, [])
+        XCTAssertEqual(result.notes.count, 1)
+        XCTAssertTrue(result.notes[0].contains("Backups"))
+        XCTAssertEqual(try service.backups.backups(series: "mcps").count, backupCountBefore,
+                       "a failed reconcile pass must not save (and thus back up) the store")
+    }
+
     func testRestoreRefusesMalformedBackup() throws {
         let store = try service.loadAndReconcile().store
         let badBackup = dir.appendingPathComponent("bad-backup.json")
