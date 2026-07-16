@@ -25,8 +25,7 @@ struct SettingsView: View {
             claudeTab
                 .tabItem { Label("Claude", systemImage: "bubble.left.and.bubble.right") }
         }
-        .padding(20)
-        .frame(width: 430)
+        .frame(width: 480)
         .sheet(isPresented: $showRestore) {
             RestoreSheetView().environmentObject(state)
         }
@@ -34,57 +33,61 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         Form {
-            Toggle("Launch at login", isOn: $launchAtLogin)
-                .onChange(of: launchAtLogin) { _, wantOn in
-                    let isOn = SMAppService.mainApp.status == .enabled
-                    guard wantOn != isOn else { return }
-                    do {
-                        if wantOn { try SMAppService.mainApp.register() }
-                        else { try SMAppService.mainApp.unregister() }
-                        loginItemNote = nil
-                    } catch {
-                        launchAtLogin = isOn   // revert the checkbox
-                        loginItemNote = "Couldn't update login item: \(error.localizedDescription)"
+            Section {
+                Toggle("Launch at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, wantOn in
+                        let isOn = SMAppService.mainApp.status == .enabled
+                        guard wantOn != isOn else { return }
+                        do {
+                            if wantOn { try SMAppService.mainApp.register() }
+                            else { try SMAppService.mainApp.unregister() }
+                            loginItemNote = nil
+                        } catch {
+                            launchAtLogin = isOn   // revert the checkbox
+                            loginItemNote = "Couldn't update login item: \(error.localizedDescription)"
+                        }
+                        if wantOn, SMAppService.mainApp.status == .requiresApproval {
+                            loginItemNote = "Approve MCP Enabler under System Settings → General → Login Items."
+                        }
                     }
-                    if wantOn, SMAppService.mainApp.status == .requiresApproval {
-                        loginItemNote = "Approve MCP Enabler under System Settings → General → Login Items."
-                    }
+                if let loginItemNote {
+                    Text(loginItemNote).font(.caption).foregroundStyle(.secondary)
                 }
-            if let loginItemNote {
-                Text(loginItemNote).font(.caption).foregroundStyle(.secondary)
             }
 
-            Picker("After Apply:", selection: $restartBehavior) {
-                Text("Ask to restart Claude").tag("ask")
-                Text("Restart Claude automatically").tag("auto")
-                Text("Do nothing").tag("never")
+            Section {
+                Picker("After Apply:", selection: $restartBehavior) {
+                    Text("Ask to restart Claude").tag("ask")
+                    Text("Restart Claude automatically").tag("auto")
+                    Text("Do nothing").tag("never")
+                }
+
+                Toggle("Confirm before Apply", isOn: $confirmBeforeApply)
             }
 
-            Toggle("Confirm before Apply", isOn: $confirmBeforeApply)
-
-            Toggle("Notify when Claude's config changes externally",
-                   isOn: $notifyExternalChanges)
+            Section {
+                Toggle("Notify when Claude's config changes externally",
+                       isOn: $notifyExternalChanges)
+            }
         }
-        .padding(.top, 8)
+        .formStyle(.grouped)
         .onAppear { launchAtLogin = SMAppService.mainApp.status == .enabled }
     }
 
     private var storageTab: some View {
         Form {
             Section("Master List Location") {
-                Text("MCP list location: \(state.service.paths.storeDirURL.path)")
+                Text(state.service.paths.storeDirURL.path)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.head)
                 HStack {
                     Button("Choose…") { chooseStoreDir() }
                     Button("Use Default") { state.repointStore(to: nil) }
                         .disabled(masterStoreDirSetting.isEmpty)
                 }
-                Stepper(
-                    "Keep last \(backupKeepCount) backups of each file",
-                    value: $backupKeepCount, in: 5...100)
+                Stepper(value: $backupKeepCount, in: 5...100) {
+                    Text("Keep \(backupKeepCount) backups of each file")
+                }
                 .onChange(of: backupKeepCount) { _, _ in state.refreshServiceSettings() }
             }
 
@@ -101,17 +104,15 @@ struct SettingsView: View {
                 }
             }
         }
-        .padding(.top, 8)
+        .formStyle(.grouped)
     }
 
     private var claudeTab: some View {
         Form {
             Section("Claude App") {
-                Text("App location: \(claudeAppPath)")
+                Text(claudeAppPath)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.head)
                 HStack {
                     Button("Choose…") { chooseClaudeApp() }
                     Button("Use Default") { claudeAppPath = "/Applications/Claude.app" }
@@ -119,7 +120,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .padding(.top, 8)
+        .formStyle(.grouped)
     }
 
     private func chooseStoreDir() {
