@@ -16,5 +16,23 @@ struct MCPEnablerApp: App {
                 ? "puzzlepiece.extension.fill" : "exclamationmark.triangle.fill")
         }
         .menuBarExtraStyle(.window)
+
+        WindowGroup("MCP Editor", id: "editor", for: EditTarget.self) { $target in
+            if let target = $target.wrappedValue {
+                EditSheetView(target: target)
+                    .environmentObject(state)
+                    .navigationTitle(target.isNew ? "Add MCP" : "Edit “\(target.name)”")
+            } else {
+                Text("Choose an MCP from the menu bar popover.")
+                    .foregroundStyle(.secondary)
+                    .padding(40)
+            }
+        }
+        .windowResizability(.contentSize)
+
+        Settings {
+            SettingsView()
+                .environmentObject(state)
+        }
     }
 }

@@ -1,11 +1,11 @@
 import SwiftUI
-import ServiceManagement
 import MCPEnablerCore
 
 struct PopoverView: View {
     @EnvironmentObject var state: AppState
-    @State private var editTarget: EditTarget?
     @State private var showRestore = false
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -17,12 +17,14 @@ struct PopoverView: View {
         }
         .frame(width: 380)
         .onAppear { state.reload() }
-        .sheet(item: $editTarget) { target in
-            EditSheetView(target: target).environmentObject(state)
-        }
         .sheet(isPresented: $showRestore) {
             RestoreSheetView().environmentObject(state)
         }
+    }
+
+    private func openEditor(_ target: EditTarget) {
+        openWindow(id: "editor", value: target)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private var missingBanner: some View {
@@ -55,11 +57,7 @@ struct PopoverView: View {
         // list rendered fully collapsed. The popover now grows with the list.
         VStack(spacing: 0) {
             ForEach(state.sortedNames, id: \.self) { name in
-                MCPRow(name: name) {
-                    if let entry = state.store.mcps[name] {
-                        editTarget = .existing(name: name, entry: entry)
-                    }
-                }
+                MCPRow(name: name)
                 Divider()
             }
             if state.store.mcps.isEmpty {
@@ -74,17 +72,29 @@ struct PopoverView: View {
         HStack {
             Menu("＋ Add") {
                 Button("Remote Server…") {
-                    editTarget = .newRemote()
+                    openEditor(.newRemote())
                 }
                 Button("Local Server…") {
-                    editTarget = .new(template: .object([
+                    openEditor(.new(template: .object([
                         "command": .string("npx"),
                         "args": .array([.string("-y"), .string("")]),
-                    ]))
+                    ])))
                 }
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
+            Menu("Edit") {
+                ForEach(state.sortedNames, id: \.self) { name in
+                    Button(name) {
+                        if let entry = state.store.mcps[name] {
+                            openEditor(.existing(name: name, entry: entry))
+                        }
+                    }
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .disabled(state.store.mcps.isEmpty)
             Menu("Backups") {
                 Button("Reveal in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting(
@@ -94,19 +104,6 @@ struct PopoverView: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            Toggle("Launch at login", isOn: Binding(
-                get: { SMAppService.mainApp.status == .enabled },
-                set: { on in
-                    do {
-                        if on { try SMAppService.mainApp.register() }
-                        else { try SMAppService.mainApp.unregister() }
-                    } catch {
-                        state.lastError = "Launch at login needs the built app "
-                            + "bundle (run scripts/build-app.sh): \(error.localizedDescription)"
-                    }
-                }))
-                .font(.caption)
-                .toggleStyle(.checkbox)
             Spacer()
             if state.showRestartPrompt {
                 Button("Restart Claude") { state.restartClaude() }
@@ -115,6 +112,14 @@ struct PopoverView: View {
                 Button("Apply") { state.apply() }
                     .keyboardShortcut(.defaultAction)
             }
+            Button {
+                NSApp.activate(ignoringOtherApps: true)
+                openSettings()
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .buttonStyle(.plain)
+            .help("Settings")
             Button("Quit") { NSApp.terminate(nil) }
         }
         .padding(10)
@@ -124,7 +129,6 @@ struct PopoverView: View {
 struct MCPRow: View {
     @EnvironmentObject var state: AppState
     let name: String
-    let onEdit: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
@@ -148,9 +152,6 @@ struct MCPRow: View {
                     .overlay(RoundedRectangle(cornerRadius: 4)
                         .stroke(.secondary.opacity(0.4)))
             }
-            Button(action: onEdit) {
-                Image(systemName: "chevron.right").foregroundStyle(.secondary)
-            }.buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)

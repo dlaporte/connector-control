@@ -1,7 +1,7 @@
 import SwiftUI
 import MCPEnablerCore
 
-struct EditTarget: Identifiable {
+struct EditTarget: Identifiable, Codable, Hashable {
     let id: String          // UUID for new, name for existing
     var name: String
     var entry: MCPEntry

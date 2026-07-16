@@ -1,10 +1,10 @@
 import Foundation
 
-public enum EditView: String, Codable {
+public enum EditView: String, Codable, Hashable {
     case form, json
 }
 
-public struct MCPEntry: Equatable, Codable {
+public struct MCPEntry: Equatable, Hashable, Codable {
     public var enabled: Bool
     public var config: JSONValue
     public var lastEditView: EditView
