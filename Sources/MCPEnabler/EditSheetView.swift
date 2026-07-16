@@ -72,11 +72,13 @@ struct EditSheetView: View {
                 .pickerStyle(.segmented)
                 .onChange(of: isRemote) { _, nowRemote in
                     guard view == .form else { return }
-                    if nowRemote {
-                        // switching to remote: keep any URL already typed
-                    } else if form.command.isEmpty {
-                        form.command = "npx"
-                        if form.args.isEmpty { form.args = ["-y", ""] }
+                    if !nowRemote {
+                        // Discard the remote template's bridge invocation — a
+                        // local server has nothing to do with mcp-remote.
+                        if form.args.contains("mcp-remote") || form.command.isEmpty {
+                            form.command = "npx"
+                            form.args = ["-y", ""]
+                        }
                     }
                 }
             }

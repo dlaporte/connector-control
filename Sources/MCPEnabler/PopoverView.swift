@@ -8,13 +8,15 @@ struct PopoverView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            header
+            Divider()
             if !state.missingEnabled.isEmpty { missingBanner }
             if let error = state.lastError { errorBanner(error) }
             mcpList
             Divider()
             footer
         }
-        .frame(width: 380)
+        .frame(minWidth: 240, maxWidth: 380)
         .onAppear { state.reload() }
         .confirmationDialog(
             "Apply these changes to Claude's config?\n"
@@ -33,12 +35,36 @@ struct PopoverView: View {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    private var header: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "puzzlepiece.extension.fill")
+                .imageScale(.large)
+                .foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("MCP Enabler").font(.headline)
+                Text(headerSubtitle).font(.caption2).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 20)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quinary)
+    }
+
+    private var headerSubtitle: String {
+        let total = state.store.mcps.count
+        let enabled = state.store.mcps.values.filter(\.enabled).count
+        return total == 0 ? "No MCPs configured" : "\(enabled) of \(total) enabled"
+    }
+
     private var missingBanner: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label("Claude's config is missing \(state.missingEnabled.count) MCP(s): "
                   + state.missingEnabled.joined(separator: ", "),
                   systemImage: "exclamationmark.triangle.fill")
                 .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button("Restore") { state.restoreMissing() }
                 Button("Mark Disabled") { state.markMissingDisabled() }
@@ -53,6 +79,7 @@ struct PopoverView: View {
         Label(message, systemImage: "xmark.octagon.fill")
             .font(.callout)
             .foregroundStyle(.red)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -73,6 +100,7 @@ struct PopoverView: View {
             if state.store.mcps.isEmpty {
                 Text("No MCPs configured yet — add one below.")
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding()
             }
         }
@@ -123,6 +151,8 @@ struct MCPRow: View {
                 .controlSize(.small)
                 .labelsHidden()
             Text(name).fontWeight(.medium)
+                .lineLimit(1)
+                .layoutPriority(1)
             Spacer()
             Button {
                 onEdit()
