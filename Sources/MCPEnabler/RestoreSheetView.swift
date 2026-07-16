@@ -7,6 +7,7 @@ struct RestoreSheetView: View {
     @State private var backups: [URL] = []
     @State private var selection: URL?
     @State private var confirming = false
+    @State private var restoreError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -18,6 +19,9 @@ struct RestoreSheetView: View {
                 Text(url.lastPathComponent).font(.system(.callout, design: .monospaced))
             }
             .frame(height: 180)
+            if let restoreError {
+                Text(restoreError).font(.callout).foregroundStyle(.red)
+            }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
@@ -50,6 +54,7 @@ struct RestoreSheetView: View {
                     state.showRestartPrompt = true
                     dismiss()
                 } catch {
+                    restoreError = error.localizedDescription
                     state.lastError = error.localizedDescription
                 }
             }

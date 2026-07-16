@@ -6,6 +6,7 @@ struct EditTarget: Identifiable {
     var name: String
     var entry: MCPEntry
     var isNew: Bool
+    var forcesRemote: Bool = false
 
     static func existing(name: String, entry: MCPEntry) -> EditTarget {
         EditTarget(id: name, name: name, entry: entry, isNew: false)
@@ -14,6 +15,14 @@ struct EditTarget: Identifiable {
     static func new(template: JSONValue) -> EditTarget {
         EditTarget(id: UUID().uuidString, name: "",
                    entry: MCPEntry(config: template), isNew: true)
+    }
+
+    /// Add-Remote flow: template has an empty URL that detect() can't classify,
+    /// so the remote form is forced explicitly.
+    static func newRemote() -> EditTarget {
+        EditTarget(id: UUID().uuidString, name: "",
+                   entry: MCPEntry(config: RemotePattern.make(url: "")),
+                   isNew: true, forcesRemote: true)
     }
 }
 
@@ -39,7 +48,7 @@ struct EditSheetView: View {
         _name = State(initialValue: target.name)
         _view = State(initialValue: target.entry.lastEditView)
         let detected = RemotePattern.detect(target.entry.config)
-        _isRemote = State(initialValue: detected != nil)
+        _isRemote = State(initialValue: target.forcesRemote || detected != nil)
         _remoteURL = State(initialValue: detected ?? "")
         _form = State(initialValue: FormMapper.analyze(target.entry.config).model)
         let data = (try? target.entry.config.serialized()) ?? Data()

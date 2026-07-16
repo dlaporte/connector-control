@@ -73,7 +73,7 @@ struct PopoverView: View {
         HStack {
             Menu("＋ Add") {
                 Button("Remote Server…") {
-                    editTarget = .new(template: RemotePattern.make(url: ""))
+                    editTarget = .newRemote()
                 }
                 Button("Local Server…") {
                     editTarget = .new(template: .object([
