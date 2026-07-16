@@ -7,6 +7,8 @@ import MCPEnablerCore
 struct SettingsView: View {
     @EnvironmentObject var state: AppState
     @State private var showRestore = false
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var loginItemNote: String?
     @AppStorage("masterStoreDir") private var masterStoreDirSetting: String = ""
     @AppStorage("restartBehavior") private var restartBehavior: String = "ask"
     @AppStorage("claudeAppPath") private var claudeAppPath: String = "/Applications/Claude.app"
@@ -32,17 +34,25 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         Form {
-            Toggle("Launch at login", isOn: Binding(
-                get: { SMAppService.mainApp.status == .enabled },
-                set: { on in
+            Toggle("Launch at login", isOn: $launchAtLogin)
+                .onChange(of: launchAtLogin) { _, wantOn in
+                    let isOn = SMAppService.mainApp.status == .enabled
+                    guard wantOn != isOn else { return }
                     do {
-                        if on { try SMAppService.mainApp.register() }
+                        if wantOn { try SMAppService.mainApp.register() }
                         else { try SMAppService.mainApp.unregister() }
+                        loginItemNote = nil
                     } catch {
-                        state.lastError = "Launch at login needs the built app "
-                            + "bundle (run scripts/build-app.sh): \(error.localizedDescription)"
+                        launchAtLogin = isOn   // revert the checkbox
+                        loginItemNote = "Couldn't update login item: \(error.localizedDescription)"
                     }
-                }))
+                    if wantOn, SMAppService.mainApp.status == .requiresApproval {
+                        loginItemNote = "Approve MCP Enabler under System Settings → General → Login Items."
+                    }
+                }
+            if let loginItemNote {
+                Text(loginItemNote).font(.caption).foregroundStyle(.secondary)
+            }
 
             Picker("After Apply:", selection: $restartBehavior) {
                 Text("Ask to restart Claude").tag("ask")
@@ -56,6 +66,7 @@ struct SettingsView: View {
                    isOn: $notifyExternalChanges)
         }
         .padding(.top, 8)
+        .onAppear { launchAtLogin = SMAppService.mainApp.status == .enabled }
     }
 
     private var storageTab: some View {
