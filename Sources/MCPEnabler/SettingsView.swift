@@ -24,6 +24,8 @@ struct SettingsView: View {
                 .tabItem { Label("Storage", systemImage: "externaldrive") }
             claudeTab
                 .tabItem { Label("Claude", systemImage: "bubble.left.and.bubble.right") }
+            aboutTab
+                .tabItem { Label("About", systemImage: "info.circle") }
         }
         .frame(width: 480)
         .sheet(isPresented: $showRestore) {
@@ -115,6 +117,46 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var aboutTab: some View {
+        VStack(spacing: 8) {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 72, height: 72)
+            Text("Connector Control")
+                .font(.title2.bold())
+            Text("Version \(appVersion)")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Text("Manages the custom MCP connectors in Claude Desktop's "
+                 + "configuration, with automatic backups of every change.")
+                .font(.callout)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
+            Divider()
+                .padding(.vertical, 6)
+            Text("David LaPorte")
+                .font(.caption)
+            Text("Built with Claude Code")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        guard let short = info?["CFBundleShortVersionString"] as? String else {
+            return "development build"
+        }
+        if let build = info?["CFBundleVersion"] as? String, build != short {
+            return "\(short) (\(build))"
+        }
+        return short
     }
 
     private func chooseStoreDir() {
