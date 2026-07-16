@@ -28,6 +28,7 @@ final class ConfigServiceTests: XCTestCase {
                        ["scoutbook", "aws-mcp", "service-now"])
         XCTAssertTrue(result.store.mcps.values.allSatisfy(\.enabled))
         XCTAssertEqual(result.missingEnabled, [])
+        XCTAssertEqual(result.claudeServers.count, 3)
         // reconciled store was persisted
         XCTAssertEqual(MasterStoreIO.load(from: paths.masterStoreURL).store, result.store)
     }

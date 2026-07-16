@@ -28,15 +28,15 @@ final class AppState: ObservableObject {
             let result = try service.loadAndReconcile()
             store = result.store
             missingEnabled = result.missingEnabled
-            appliedServers = try ClaudeConfigIO.readMCPServers(
-                at: service.paths.claudeConfigURL)
-            if let note = result.notes.first { lastError = note }
+            appliedServers = result.claudeServers
+            lastError = result.notes.first
         } catch {
             lastError = friendly(error)
         }
     }
 
     func setEnabled(_ name: String, _ on: Bool) {
+        showRestartPrompt = false
         store.mcps[name]?.enabled = on
         persistStore()
     }
@@ -55,6 +55,7 @@ final class AppState: ObservableObject {
 
     /// Validates and saves an entry. Returns an error message, or nil on success.
     func upsert(name: String, entry: MCPEntry, renamedFrom oldName: String?) -> String? {
+        showRestartPrompt = false
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return "Name must not be empty." }
         if trimmed != oldName, store.mcps[trimmed] != nil {
@@ -67,6 +68,7 @@ final class AppState: ObservableObject {
     }
 
     func remove(name: String) {
+        showRestartPrompt = false
         store.mcps.removeValue(forKey: name)
         persistStore()
     }

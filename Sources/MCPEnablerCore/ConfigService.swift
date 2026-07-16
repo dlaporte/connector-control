@@ -14,7 +14,8 @@ public struct ConfigService {
     /// Load master store (handling corruption), read Claude's servers,
     /// reconcile, persist the store if reconciliation changed it.
     public func loadAndReconcile() throws
-        -> (store: MasterStore, missingEnabled: [String], notes: [String]) {
+        -> (store: MasterStore, missingEnabled: [String], notes: [String],
+            claudeServers: [String: JSONValue]) {
         var notes: [String] = []
         let loaded = MasterStoreIO.load(from: paths.masterStoreURL)
         if let corrupt = loaded.corruptFileURL {
@@ -27,7 +28,7 @@ public struct ConfigService {
         if outcome.storeChanged || loaded.corruptFileURL != nil {
             try saveStore(outcome.store)
         }
-        return (outcome.store, outcome.missingEnabled, notes)
+        return (outcome.store, outcome.missingEnabled, notes, servers)
     }
 
     /// Backup mcps.json (if present), then atomically save the store.
