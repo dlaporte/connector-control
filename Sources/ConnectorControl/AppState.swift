@@ -149,6 +149,9 @@ final class AppState: ObservableObject {
 
     var sortedNames: [String] { store.mcps.keys.sorted() }
 
+    var profileNames: [String] { store.profiles.keys.sorted() }
+    var activeProfile: String { store.activeProfile }
+
     /// Claude needs a restart iff it's running on a config older than our last
     /// write. Derived from the process launch date, so it self-clears however
     /// Claude gets restarted — via us, by hand, or by an update.
@@ -345,6 +348,68 @@ final class AppState: ObservableObject {
         missingEnabled = []
         persistStore()
         performApply()
+    }
+
+    // MARK: - Profiles
+
+    /// Switching profiles applies immediately, like every other change.
+    func switchProfile(to name: String) {
+        guard store.switchProfile(to: name) == nil else { return }
+        persistStore()
+        performApply()
+    }
+
+    func newProfile() {
+        guard let name = promptForName(title: "New Profile", initial: "") else { return }
+        guard let error = store.addProfile(named: name, copyingCurrent: true) else {
+            persistStore()
+            performApply()
+            return
+        }
+        lastError = error
+    }
+
+    func renameProfile() {
+        guard let name = promptForName(
+            title: "Rename Profile", initial: store.activeProfile) else { return }
+        guard let error = store.renameActiveProfile(to: name) else {
+            persistStore()
+            performApply()
+            return
+        }
+        lastError = error
+    }
+
+    func deleteProfile() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Delete Profile \u{201C}\(store.activeProfile)\u{201D}?"
+        alert.informativeText =
+            "Its connector list is removed; backups keep prior states."
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons.first?.hasDestructiveAction = true
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        guard let error = store.deleteActiveProfile() else {
+            persistStore()
+            performApply()
+            return
+        }
+        lastError = error
+    }
+
+    private func promptForName(title: String, initial: String) -> String? {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = title
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
+        field.stringValue = initial
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        return field.stringValue
     }
 
     private func persistStore() {

@@ -37,6 +37,22 @@ wiped or mangled config is always one click from restored.
 - **Careful with secrets** — connector env vars can hold API tokens, so the
   master list and all backups are written owner-only (mode 600).
 
+### Profiles
+
+Profiles are full, independent connector snapshots — each has its own
+complete list of connectors and enabled flags. A chip in the popover header
+(`<profile name> ▾`) shows the active profile and opens a menu to switch
+profiles, or to create, rename, or delete one. Switching applies immediately,
+same as any other change, and raises **Restart Required** just like a toggle
+would. New profiles start as a copy of the active profile's connectors.
+
+The master list file (`mcps.json`) is v2 (profile-aware); older files from a
+pre-Profiles build are simply rebuilt from Claude's current config the same
+way any corrupted file is (see Building from source). **If you sync
+`mcps.json` across machines, every machine must run a Profiles-capable
+version** — an older app can't parse the v2 file and will treat it as
+corrupt.
+
 ## Installation
 
 Requires macOS 14 (Sonoma) or later. The app is a universal binary
@@ -106,7 +122,7 @@ app but cannot run the test suite.
 
     git clone https://github.com/dlaporte/connector-control.git
     cd connector-control
-    swift test                # 83 tests, no network, never touches your real config
+    swift test                # 98 tests, no network, never touches your real config
     ./scripts/build-app.sh    # → build/Connector Control.app (ad-hoc signed)
     cp -R "build/Connector Control.app" /Applications/
 

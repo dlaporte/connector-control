@@ -260,6 +260,95 @@ Notes:
   (used for sandboxed dev runs) always take precedence over the corresponding user
   settings.
 
+## Profiles
+
+Profiles are full, independent snapshots: each profile owns its own complete
+connector list (configs + enabled flags). The **active profile** is what the
+whole app operates on — every existing flow (toggle, edit, add, remove,
+reconcile, apply) reads and writes only the active profile's connectors.
+Switching profiles applies immediately, like any other change, and raises the
+existing Restart Required flow exactly as a toggle would.
+
+### Schema v2 (`mcps.json`)
+
+```json
+{
+  "version": 2,
+  "activeProfile": "Default",
+  "profiles": {
+    "Default": {
+      "mcps": {
+        "scoutbook": {
+          "enabled": true,
+          "config": { "command": "npx", "args": ["-y", "mcp-remote", "https://…/mcp"] },
+          "lastEditView": "form"
+        }
+      }
+    }
+  }
+}
+```
+
+- `profiles` maps profile name → `{ "mcps": { … } }`, the same per-connector
+  shape used in v1.
+- `activeProfile` names the profile the app currently operates on. If it names
+  a profile absent from `profiles` (a hand-edited or corrupted file), the app
+  falls back to an existing profile (sorted first) rather than crashing.
+- `MasterStore.mcps` is a computed property over `profiles[activeProfile]` —
+  every call site that read/wrote `store.mcps` before profiles existed
+  continues to operate correctly, scoped to whichever profile is active.
+
+### No v1 compatibility
+
+The store format is v2 only — there is no migration path from the earlier
+single-profile (`{"version":1,"mcps":{…}}`) shape. `MasterStore`'s `Codable`
+conformance decodes the v2 shape (`version`/`activeProfile`/`profiles`)
+exclusively; an old-format (or otherwise malformed) file simply fails to
+decode and is handled by the existing corrupt-store recovery path in
+`MasterStoreIO.load`: the unreadable file is moved aside as
+`mcps.corrupt.<timestamp>.json` and an empty store is rebuilt fresh from
+Claude's current config (all currently-configured connectors imported
+enabled) — the same recovery behavior any corrupt `mcps.json` has always
+gotten.
+
+A decoded v2 file whose `activeProfile` doesn't match any key in `profiles`
+(hand-edited or corrupted) self-heals in `MasterStoreIO.load`: it falls back
+to an existing profile (sorted first), or a fresh `"Default"` profile if none
+remain — never crashing.
+
+**Cross-machine note:** all machines sharing a synced master list must run a
+profiles-aware (v2) version — an older app reading a v2 `mcps.json` can't
+parse it (`profiles`/`activeProfile` aren't part of its `MasterStore`), hits
+its own corrupt-file path, and rebuilds an empty v1 store from Claude's
+config, discarding the synced profile data (recoverable from that machine's
+local backups, not from the synced file).
+
+### Profile management
+
+Four validated mutating methods on `MasterStore`, exercised directly in
+`ProfileTests` (no UI dependency):
+
+- `addProfile(named:copyingCurrent:)` — trims the name, rejects empty/duplicate
+  names, seeds the new profile from the active profile's connectors (or empty),
+  and switches to it.
+- `renameActiveProfile(to:)` — trims, rejects empty/duplicate names (other than
+  itself).
+- `deleteActiveProfile()` — rejects deleting the last remaining profile;
+  otherwise removes it and switches to the first remaining profile (sorted).
+- `switchProfile(to:)` — rejects unknown names.
+
+Each returns `nil` on success or a user-facing error string, matching the
+existing `upsert(name:entry:renamedFrom:)` convention.
+
+### UI
+
+A compact header chip in the popover (`"<activeProfile> ▾"`) opens a menu:
+one row per profile (checkmark on the active one, tap to switch), then
+**New Profile…**, **Rename "<active>"…**, and **Delete "<active>"…** (disabled
+when only one profile exists). New/Rename prompt for a name via an `NSAlert`
+with a text-field accessory view; Delete confirms via a two-button `NSAlert`
+before removing the profile.
+
 ## Build & run
 
 Swift Package (`Package.swift`) with two targets — `MCPEnablerCore` (library, unit

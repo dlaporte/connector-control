@@ -33,6 +33,7 @@ struct PopoverView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Connector Control").font(.headline)
                 Text(headerSubtitle).font(.caption2).foregroundStyle(.secondary)
+                profileChip
             }
             Spacer(minLength: 20)
             HStack(spacing: 0) {
@@ -64,6 +65,34 @@ struct PopoverView: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quinary)
+    }
+
+    private var profileChip: some View {
+        Menu {
+            ForEach(state.profileNames, id: \.self) { name in
+                Button {
+                    state.switchProfile(to: name)
+                } label: {
+                    if name == state.activeProfile {
+                        Label(name, systemImage: "checkmark")
+                    } else {
+                        Text(name)
+                    }
+                }
+            }
+            Divider()
+            Button("New Profile\u{2026}") { state.newProfile() }
+            Button("Rename \u{201C}\(state.activeProfile)\u{201D}\u{2026}") { state.renameProfile() }
+            Button("Delete \u{201C}\(state.activeProfile)\u{201D}\u{2026}") { state.deleteProfile() }
+                .disabled(state.profileNames.count < 2)
+        } label: {
+            Text("\(state.activeProfile) \u{25BE}")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .padding(.top, 1)
     }
 
     private var headerSubtitle: String {
