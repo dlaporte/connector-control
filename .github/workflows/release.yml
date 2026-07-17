@@ -76,10 +76,14 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           VERSION="${TAG#v}"
           ./scripts/make-dmg.sh "ConnectorControl_${VERSION}.dmg"
-          # Notarize the DMG too, so Gatekeeper trusts the download end-to-end.
+          # Sign and notarize the DMG too, so Gatekeeper trusts the download
+          # end-to-end (hdiutil does not sign what it creates).
+          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" \
+            "ConnectorControl_${VERSION}.dmg"
           xcrun notarytool submit "ConnectorControl_${VERSION}.dmg" \
             --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" --wait
