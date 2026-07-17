@@ -127,26 +127,40 @@ struct PopoverView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Cap before the list scrolls (~12 rows); large catalogs stay usable
+    /// without the popover outgrowing the screen.
+    private static let maxListHeight: CGFloat = 420
+    @State private var listContentHeight: CGFloat = 0
+
     private var mcpList: some View {
-        // A plain VStack, not a ScrollView: the MenuBarExtra window sizes to the
-        // content's IDEAL height, and a ScrollView's ideal height is zero — the
-        // list rendered fully collapsed. The popover now grows with the list.
-        VStack(spacing: 0) {
-            ForEach(state.sortedNames, id: \.self) { name in
-                MCPRow(name: name) {
-                    if let entry = state.store.mcps[name] {
-                        openEditor(.existing(name: name, entry: entry))
+        // A bare ScrollView collapses here: the MenuBarExtra window sizes to
+        // the content's IDEAL height and a ScrollView's ideal is zero. So the
+        // list's natural height is measured and the ScrollView gets an
+        // explicit frame — growing with content up to the cap, scrolling past.
+        ScrollView {
+            VStack(spacing: 0) {
+                ForEach(state.sortedNames, id: \.self) { name in
+                    MCPRow(name: name) {
+                        if let entry = state.store.mcps[name] {
+                            openEditor(.existing(name: name, entry: entry))
+                        }
                     }
+                    Divider()
                 }
-                Divider()
+                if state.store.mcps.isEmpty {
+                    Text("No connectors configured yet — add one below.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding()
+                }
             }
-            if state.store.mcps.isEmpty {
-                Text("No connectors configured yet — add one below.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding()
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.height
+            } action: { height in
+                listContentHeight = height
             }
         }
+        .frame(height: min(max(listContentHeight, 1), Self.maxListHeight))
     }
 
     private var footer: some View {
