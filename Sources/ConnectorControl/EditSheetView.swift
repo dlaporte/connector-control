@@ -184,37 +184,31 @@ struct EditSheetView: View {
         jsonError = nil
     }
 
-    private func parsedJSON() -> JSONValue? {
-        do {
-            let value = try JSONValue.parse(Data(jsonText.utf8))
-            jsonError = nil
-            return value
-        } catch {
-            jsonError = "Not valid JSON: \(error.localizedDescription)"
+    /// Live validity check driving the inline error and Save's enabled state.
+    /// Accepts anything PasteRecovery can interpret — a bare `"name": {…}`
+    /// stanza copied out of an mcpServers block, a full wrapper, etc.
+    @discardableResult
+    private func validateJSON() -> Bool {
+        if PasteRecovery.recover(jsonText) != nil { jsonError = nil; return true }
+        jsonError = "Not valid JSON — check for a stray brace, missing comma, or unquoted value."
+        return false
+    }
+
+    /// Resolves the editor text to a config via PasteRecovery, fills `name`
+    /// from a pasted stanza when the field is blank, and rewrites `jsonText`
+    /// to the canonical config so the user sees exactly what was accepted.
+    private func effectiveJSONConfig() -> JSONValue? {
+        guard let recovered = PasteRecovery.recover(jsonText) else {
+            jsonError = "Not valid JSON — check for a stray brace, missing comma, or unquoted value."
             return nil
         }
-    }
-
-    /// Unwraps a pasted {"mcpServers": {"name": {…}}} single-entry wrapper.
-    private func unwrappedPaste(_ parsed: JSONValue) -> (name: String, config: JSONValue)? {
-        guard case .object(let outer) = parsed, outer.count == 1,
-              case .object(let inner)? = outer["mcpServers"], inner.count == 1,
-              let entry = inner.first else { return nil }
-        return (entry.key, entry.value)
-    }
-
-    /// Parses the current JSON text and, if it's a pasted mcpServers wrapper,
-    /// unwraps it: fills `name` (when blank) and rewrites `jsonText` to the
-    /// inner config so subsequent JSON edits and Form adoption see the real
-    /// config rather than the wrapper. Returns the effective (unwrapped) config,
-    /// or nil if the JSON doesn't parse.
-    private func effectiveJSONConfig() -> JSONValue? {
-        guard let parsed = parsedJSON() else { return nil }
-        guard let paste = unwrappedPaste(parsed) else { return parsed }
-        if name.trimmingCharacters(in: .whitespaces).isEmpty { name = paste.name }
-        let data = (try? paste.config.serialized()) ?? Data()
+        jsonError = nil
+        if let n = recovered.name, name.trimmingCharacters(in: .whitespaces).isEmpty {
+            name = n
+        }
+        let data = (try? recovered.config.serialized()) ?? Data()
         jsonText = String(decoding: data, as: UTF8.self)
-        return paste.config
+        return recovered.config
     }
 
     private func currentFormConfig() -> JSONValue {
@@ -361,11 +355,11 @@ struct EditSheetView: View {
                 .frame(maxHeight: .infinity)
                 .overlay(RoundedRectangle(cornerRadius: 6)
                     .stroke(jsonError == nil ? Color.secondary.opacity(0.3) : .red))
-                .onChange(of: jsonText) { _ = parsedJSON() }
+                .onChange(of: jsonText) { validateJSON() }
             if let error = jsonError {
                 Text(error).font(.caption).foregroundStyle(.red)
             } else {
-                Text("Tip: paste a README snippet — a {\"mcpServers\": {…}} wrapper is unwrapped automatically.")
+                Text("Tip: paste a README snippet or an mcpServers stanza — a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
