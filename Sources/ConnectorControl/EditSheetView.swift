@@ -26,6 +26,20 @@ struct EditTarget: Identifiable, Codable, Hashable {
     }
 }
 
+/// The four ways the Remote form can authenticate an `npx mcp-remote` invocation.
+enum RemoteAuthKind: String, CaseIterable {
+    case automatic, bearer, header, oauthClient
+
+    var title: String {
+        switch self {
+        case .automatic: return "Automatic (OAuth / none)"
+        case .bearer: return "Bearer token"
+        case .header: return "Custom header"
+        case .oauthClient: return "OAuth client ID/secret"
+        }
+    }
+}
+
 struct EditSheetView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.dismiss) private var dismiss
@@ -45,6 +59,16 @@ struct EditSheetView: View {
     @State private var hostWindow: NSWindow?
     @State private var envRevealed: Set<String> = []
 
+    @State private var authKind: RemoteAuthKind = .automatic
+    @State private var bearerToken = ""
+    @State private var headerName = ""
+    @State private var headerValue = ""
+    @State private var oauthClientID = ""
+    @State private var oauthClientSecret = ""
+    @State private var oauthScopes = ""
+    @State private var remoteExtraArgs: [String] = []
+    @State private var remotePassthroughEnv: [String: String] = [:]
+
     init(target: EditTarget) {
         self.target = target
         _name = State(initialValue: target.name)
@@ -54,6 +78,36 @@ struct EditSheetView: View {
         _remoteURL = State(initialValue: detected ?? "")
         _form = State(initialValue: FormMapper.analyze(target.entry.config).model)
         _jsonText = State(initialValue: target.entry.config.editorText())
+
+        if let remote = RemotePattern.decode(target.entry.config) {
+            let fields = EditSheetView.authFields(remote.auth)
+            _authKind = State(initialValue: fields.kind)
+            _bearerToken = State(initialValue: fields.bearerToken)
+            _headerName = State(initialValue: fields.headerName)
+            _headerValue = State(initialValue: fields.headerValue)
+            _oauthClientID = State(initialValue: fields.oauthClientID)
+            _oauthClientSecret = State(initialValue: fields.oauthClientSecret)
+            _oauthScopes = State(initialValue: fields.oauthScopes)
+            _remoteExtraArgs = State(initialValue: remote.extraArgs)
+            _remotePassthroughEnv = State(initialValue: remote.passthroughEnv)
+        }
+    }
+
+    /// Maps a decoded `RemoteAuth` to the form fields that represent it.
+    private static func authFields(_ auth: RemoteAuth) -> (
+        kind: RemoteAuthKind, bearerToken: String, headerName: String, headerValue: String,
+        oauthClientID: String, oauthClientSecret: String, oauthScopes: String
+    ) {
+        switch auth {
+        case .automatic:
+            return (.automatic, "", "", "", "", "", "")
+        case .bearer(let token):
+            return (.bearer, token, "", "", "", "", "")
+        case .header(let name, let value):
+            return (.header, "", name, value, "", "", "")
+        case .oauthClient(let clientID, let clientSecret, let scopes):
+            return (.oauthClient, "", "", "", clientID, clientSecret, scopes)
+        }
     }
 
     var body: some View {
@@ -176,6 +230,29 @@ struct EditSheetView: View {
         isRemote = detected != nil
             || (target.forcesRemote && RemotePattern.isRemoteShaped(config))
         remoteURL = detected ?? ""
+
+        if let remote = RemotePattern.decode(config) {
+            let fields = EditSheetView.authFields(remote.auth)
+            authKind = fields.kind
+            bearerToken = fields.bearerToken
+            headerName = fields.headerName
+            headerValue = fields.headerValue
+            oauthClientID = fields.oauthClientID
+            oauthClientSecret = fields.oauthClientSecret
+            oauthScopes = fields.oauthScopes
+            remoteExtraArgs = remote.extraArgs
+            remotePassthroughEnv = remote.passthroughEnv
+        } else {
+            authKind = .automatic
+            bearerToken = ""
+            headerName = ""
+            headerValue = ""
+            oauthClientID = ""
+            oauthClientSecret = ""
+            oauthScopes = ""
+            remoteExtraArgs = []
+            remotePassthroughEnv = [:]
+        }
     }
 
     private func syncFormIntoJSON() {
@@ -209,16 +286,23 @@ struct EditSheetView: View {
         return recovered.config
     }
 
+    /// Builds the `RemoteAuth` the auth fields currently describe, per `authKind`.
+    private var currentRemoteAuth: RemoteAuth {
+        switch authKind {
+        case .automatic: return .automatic
+        case .bearer: return .bearer(token: bearerToken)
+        case .header: return .header(name: headerName, value: headerValue)
+        case .oauthClient:
+            return .oauthClient(clientID: oauthClientID, clientSecret: oauthClientSecret,
+                                 scopes: oauthScopes)
+        }
+    }
+
     private func currentFormConfig() -> JSONValue {
         if isRemote {
-            guard case .object(var object) = RemotePattern.make(url: remoteURL) else {
-                return RemotePattern.make(url: remoteURL)
-            }
-            for (key, value) in form.additional { object[key] = value }
-            if !form.env.isEmpty {
-                object["env"] = .object(form.env.mapValues(JSONValue.string))
-            }
-            return .object(object)
+            return RemotePattern.encode(RemoteConfig(
+                url: remoteURL, auth: currentRemoteAuth,
+                extraArgs: remoteExtraArgs, passthroughEnv: remotePassthroughEnv))
         }
         return FormMapper.serialize(form)
     }
@@ -262,9 +346,7 @@ struct EditSheetView: View {
                 } footer: {
                     Text("Runs via npx mcp-remote — managed for you.")
                 }
-                if !form.env.isEmpty {
-                    Section("Environment Variables") { envEditor }
-                }
+                Section("Authentication") { authEditor }
             } else {
                 Section {
                     TextField("Command", text: $form.command, prompt: Text("npx"))
@@ -337,6 +419,35 @@ struct EditSheetView: View {
         Binding(get: { form.env[key] ?? "" }, set: { form.env[key] = $0 })
     }
 
+    @ViewBuilder private var authEditor: some View {
+        Picker("Type", selection: $authKind) {
+            ForEach(RemoteAuthKind.allCases, id: \.self) { kind in
+                Text(kind.title).tag(kind)
+            }
+        }
+        .pickerStyle(.menu)
+
+        switch authKind {
+        case .automatic:
+            Text("Uses the server's OAuth (a browser window opens on first use), "
+                + "or no auth if the server is open.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .bearer:
+            SecureField("Token", text: $bearerToken)
+            Text("Sent as Authorization: Bearer …")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .header:
+            TextField("Header name", text: $headerName, prompt: Text("X-API-Key"))
+            SecureField("Header value", text: $headerValue)
+        case .oauthClient:
+            TextField("Client ID", text: $oauthClientID)
+            SecureField("Client Secret", text: $oauthClientSecret)
+            TextField("Scopes (optional)", text: $oauthScopes, prompt: Text("space separated"))
+        }
+    }
+
     // MARK: json body
 
     @ViewBuilder private var jsonBody: some View {
@@ -379,6 +490,25 @@ struct EditSheetView: View {
                       scheme == "http" || scheme == "https", url.host != nil else {
                     validationError = "Server URL must be a valid http(s) URL."
                     return
+                }
+                switch authKind {
+                case .automatic:
+                    break
+                case .bearer:
+                    if bearerToken.trimmingCharacters(in: .whitespaces).isEmpty {
+                        validationError = "Enter a bearer token."
+                        return
+                    }
+                case .header:
+                    if headerName.trimmingCharacters(in: .whitespaces).isEmpty {
+                        validationError = "Enter a header name."
+                        return
+                    }
+                case .oauthClient:
+                    if oauthClientID.trimmingCharacters(in: .whitespaces).isEmpty {
+                        validationError = "Enter a client ID."
+                        return
+                    }
                 }
             } else if form.command.trimmingCharacters(in: .whitespaces).isEmpty {
                 validationError = "Command must not be empty."
