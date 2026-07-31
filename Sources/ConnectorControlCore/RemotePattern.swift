@@ -185,17 +185,19 @@ public extension RemotePattern {
             switch arg {
             case "--header" where i + 1 < args.count:
                 let raw = args[i + 1]
-                if let colon = raw.firstIndex(of: ":") {
+                // Recognize ONLY this app's own indirection sentinel —
+                // `Name:${AUTH_HEADER}` backed by an AUTH_HEADER env var — as the
+                // editable auth header, and only the first one. Every other
+                // --header (literal values, other env vars, additional headers)
+                // is preserved verbatim as an extra arg so nothing is ever lost
+                // or collides with our fixed AUTH_HEADER slot on re-encode.
+                if headerName == nil,
+                   let colon = raw.firstIndex(of: ":"),
+                   raw[raw.index(after: colon)...] == "${AUTH_HEADER}",
+                   let value = env["AUTH_HEADER"] {
                     headerName = String(raw[raw.startIndex..<colon])
-                    var resolved = String(raw[raw.index(after: colon)...])
-                    for (key, value) in env {
-                        let token = "${\(key)}"
-                        if resolved.contains(token) {
-                            resolved = resolved.replacingOccurrences(of: token, with: value)
-                            consumedEnvKeys.insert(key)
-                        }
-                    }
-                    headerValue = resolved
+                    headerValue = value
+                    consumedEnvKeys.insert("AUTH_HEADER")
                 } else {
                     extraArgs.append(arg)
                     extraArgs.append(raw)

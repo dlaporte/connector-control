@@ -98,6 +98,48 @@ final class RemoteAuthTests: XCTestCase {
 
     // MARK: preservation
 
+    func testBearerPlusExtraHeaderPreservesBoth() {
+        // A bearer auth (our sentinel pattern) plus a hand-added literal header.
+        // The bearer must decode as auth; the extra header must survive verbatim
+        // as an extra arg — not clobber the bearer or steal its env var.
+        let config = JSONValue.object([
+            "command": .string("npx"),
+            "args": .array([.string("-y"), .string("mcp-remote"),
+                            .string("https://x.dev/mcp"),
+                            .string("--header"), .string("Authorization:${AUTH_HEADER}"),
+                            .string("--header"), .string("X-Tenant:acme")]),
+            "env": .object(["AUTH_HEADER": .string("Bearer secret-tok")]),
+        ])
+        let decoded = RemotePattern.decode(config)
+        XCTAssertEqual(decoded?.auth, .bearer(token: "secret-tok"))
+        XCTAssertEqual(decoded?.extraArgs, ["--header", "X-Tenant:acme"])
+        XCTAssertTrue(decoded?.passthroughEnv.isEmpty ?? false,
+                      "the bearer's AUTH_HEADER is consumed; nothing else leaks")
+        // Re-encode keeps both headers.
+        let re = RemotePattern.encode(decoded!)
+        let a = args(re) ?? []
+        XCTAssertTrue(a.contains("Authorization:${AUTH_HEADER}"))
+        XCTAssertTrue(a.contains("X-Tenant:acme"))
+        XCTAssertEqual(env(re)["AUTH_HEADER"], "Bearer secret-tok")
+    }
+
+    func testUnrecognizedHeaderEnvVarIsPreservedNotFabricated() {
+        // A header using a NON-sentinel env var must be left as an extra arg and
+        // its env var kept in passthrough — never resolved into the auth slot.
+        let config = JSONValue.object([
+            "command": .string("npx"),
+            "args": .array([.string("-y"), .string("mcp-remote"),
+                            .string("https://x.dev/mcp"),
+                            .string("--header"), .string("X-Key:${MY_KEY}")]),
+            "env": .object(["MY_KEY": .string("abc")]),
+        ])
+        let decoded = RemotePattern.decode(config)
+        XCTAssertEqual(decoded?.auth, .automatic)
+        XCTAssertEqual(decoded?.extraArgs, ["--header", "X-Key:${MY_KEY}"])
+        XCTAssertEqual(decoded?.passthroughEnv["MY_KEY"], "abc")
+        XCTAssertEqual(RemotePattern.encode(decoded!), config)
+    }
+
     func testExtraArgsPreserved() {
         let rc = RemoteConfig(url: url, auth: .automatic, extraArgs: ["--transport", "http-only"])
         let encoded = RemotePattern.encode(rc)

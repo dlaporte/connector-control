@@ -150,8 +150,11 @@ struct EditSheetView: View {
             }
             .padding(16)
         }
-        .frame(minWidth: 480, idealWidth: 480, maxWidth: .infinity,
-               minHeight: 420, idealHeight: 420, maxHeight: .infinity)
+        // Open large enough that the tallest standard form (a remote connector
+        // with OAuth client fields) fits without an inner scroll bar; the user
+        // may grow the window but not shrink it below this.
+        .frame(minWidth: 540, idealWidth: 540, maxWidth: .infinity,
+               minHeight: 620, idealHeight: 620, maxHeight: .infinity)
         .confirmationDialog(
             "Switching to Form view can’t fully represent this configuration. "
             + "These elements would be lost or altered:\n"
@@ -300,9 +303,16 @@ struct EditSheetView: View {
 
     private func currentFormConfig() -> JSONValue {
         if isRemote {
-            return RemotePattern.encode(RemoteConfig(
+            let encoded = RemotePattern.encode(RemoteConfig(
                 url: remoteURL, auth: currentRemoteAuth,
                 extraArgs: remoteExtraArgs, passthroughEnv: remotePassthroughEnv))
+            // Preserve any unmodeled top-level keys (as the local path does):
+            // FormMapper buckets non-command/args/env keys into `additional`.
+            guard case .object(var obj) = encoded, !form.additional.isEmpty else {
+                return encoded
+            }
+            for (key, value) in form.additional { obj[key] = value }
+            return .object(obj)
         }
         return FormMapper.serialize(form)
     }
@@ -502,6 +512,10 @@ struct EditSheetView: View {
                 case .header:
                     if headerName.trimmingCharacters(in: .whitespaces).isEmpty {
                         validationError = "Enter a header name."
+                        return
+                    }
+                    if headerValue.isEmpty {
+                        validationError = "Enter a header value."
                         return
                     }
                 case .oauthClient:
