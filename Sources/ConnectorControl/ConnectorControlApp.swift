@@ -28,7 +28,7 @@ struct ConnectorControlApp: App {
                     .padding(40)
             }
         }
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
 
         Settings {
             SettingsView()

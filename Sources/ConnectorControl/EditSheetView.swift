@@ -97,7 +97,8 @@ struct EditSheetView: View {
             }
             .padding(16)
         }
-        .frame(width: 480, height: 420)
+        .frame(minWidth: 480, idealWidth: 480, maxWidth: .infinity,
+               minHeight: 420, idealHeight: 420, maxHeight: .infinity)
         .confirmationDialog(
             "Switching to Form view can’t fully represent this configuration. "
             + "These elements would be lost or altered:\n"
