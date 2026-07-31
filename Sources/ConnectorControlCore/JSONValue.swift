@@ -55,6 +55,14 @@ public extension JSONValue {
         return try encoder.encode(self)
     }
 
+    /// Pretty JSON for display/editing — like `serialized()` but without
+    /// escaping forward slashes, so URLs read cleanly.
+    func editorText() -> String {
+        let e = JSONEncoder()
+        e.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        return (try? e.encode(self)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+    }
+
     var anyValue: Any {
         switch self {
         case .null: return NSNull()
