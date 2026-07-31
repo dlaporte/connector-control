@@ -43,7 +43,19 @@ public enum PasteRecovery {
             let balanced = trimStrayTrailingBraces(t)
             if balanced != t { out.append("{\(balanced)}") }
         }
+        // Curled quotes (Slack/Notion/Notes) break JSON — retry each candidate
+        // with them normalized to straight quotes.
+        out += out.map(normalizeQuotes).filter { !out.contains($0) }
         return out
+    }
+
+    private static func normalizeQuotes(_ s: String) -> String {
+        var r = s
+        for (curly, straight) in [("\u{201C}","\""),("\u{201D}","\""),
+                                   ("\u{2018}","'"),("\u{2019}","'")] {
+            r = r.replacingOccurrences(of: curly, with: straight)
+        }
+        return r
     }
 
     /// Drops closing braces at the end of a fragment that exceed its own
