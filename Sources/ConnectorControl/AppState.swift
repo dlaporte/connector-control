@@ -103,9 +103,23 @@ final class AppState: ObservableObject {
         }
         watcher?.start()
         storeWatcher = FileWatcher(url: service.paths.masterStoreURL) { [weak self] in
-            self?.reload()
+            self?.adoptExternalStoreChange()
         }
         storeWatcher?.start()
+    }
+
+    /// The master store changed on disk from outside the app — a sync tool, or
+    /// another machine writing the shared mcps.json. The store is the source of
+    /// truth, so adopt it as-is and regenerate Claude's config from it, then
+    /// surface Restart Required — rather than treating the resulting Claude-side
+    /// divergence as "missing connectors" to reconcile.
+    private func adoptExternalStoreChange() {
+        let before = store.mcps
+        reload(storeAuthoritative: true)
+        // Our own persistStore writes also trip this watcher; when the on-disk
+        // store already matches memory there is nothing external to adopt.
+        guard store.mcps != before else { return }
+        if isDirty { performApply() }   // write the adopted enabled set → Restart Required
     }
 
     /// Repoints the master store to a new directory (or back to the default when
@@ -184,8 +198,12 @@ final class AppState: ObservableObject {
             var firedMissingNotification = false
             var claudeConfigChangedExternally = false
             if let servers = result.claudeServers {
+                // Suppress the missing-connectors alarm for authoritative adopts
+                // (repoint / restore / sync): those regenerate Claude's config
+                // immediately, so there is nothing for the user to "restore."
                 firedMissingNotification =
-                    wasLoaded && previousMissingWasEmpty && !result.missingEnabled.isEmpty
+                    !storeAuthoritative
+                    && wasLoaded && previousMissingWasEmpty && !result.missingEnabled.isEmpty
                 claudeConfigChangedExternally = wasLoaded && servers != previousApplied
                 appliedServers = servers
                 hasLoadedOnce = true
