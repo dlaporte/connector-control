@@ -57,7 +57,9 @@ struct EditSheetView: View {
     @State private var validationError: String?
     @State private var confirmRemove = false
     @State private var hostWindow: NSWindow?
-    @State private var envRevealed: Set<String> = []
+    @State private var envRows: [EnvRow]
+    @State private var envRevealed: Set<UUID> = []
+    @FocusState private var envFocus: UUID?
 
     @State private var authKind: RemoteAuthKind = .automatic
     @State private var bearerToken = ""
@@ -76,7 +78,9 @@ struct EditSheetView: View {
         let detected = RemotePattern.detect(target.entry.config)
         _isRemote = State(initialValue: target.forcesRemote || detected != nil)
         _remoteURL = State(initialValue: detected ?? "")
-        _form = State(initialValue: FormMapper.analyze(target.entry.config).model)
+        let model = FormMapper.analyze(target.entry.config).model
+        _form = State(initialValue: model)
+        _envRows = State(initialValue: EditSheetView.envRows(from: model.env))
         _jsonText = State(initialValue: target.entry.config.editorText())
 
         if let remote = RemotePattern.decode(target.entry.config) {
@@ -229,6 +233,8 @@ struct EditSheetView: View {
 
     private func adoptForm(_ model: FormModel, config: JSONValue) {
         form = model
+        envRows = EditSheetView.envRows(from: model.env)
+        envRevealed = []
         let detected = RemotePattern.detect(config)
         isRemote = detected != nil
             || (target.forcesRemote && RemotePattern.isRemoteShaped(config))
@@ -256,6 +262,31 @@ struct EditSheetView: View {
             remoteExtraArgs = []
             remotePassthroughEnv = [:]
         }
+    }
+
+    private static func envRows(from env: [String: String]) -> [EnvRow] {
+        env.sorted { $0.key < $1.key }.map { EnvRow(name: $0.key, value: $0.value) }
+    }
+
+    /// The dictionary the current rows describe: names trimmed, empty-name
+    /// rows dropped, a later duplicate winning (save blocks duplicates).
+    private func collapsedEnv() -> [String: String] {
+        var env: [String: String] = [:]
+        for row in envRows {
+            let name = row.name.trimmingCharacters(in: .whitespaces)
+            if !name.isEmpty { env[name] = row.value }
+        }
+        return env
+    }
+
+    private func duplicateEnvName() -> String? {
+        var seen = Set<String>()
+        for row in envRows {
+            let name = row.name.trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty else { continue }
+            if !seen.insert(name).inserted { return name }
+        }
+        return nil
     }
 
     private func syncFormIntoJSON() {
@@ -381,6 +412,7 @@ struct EditSheetView: View {
             }
         }
         .formStyle(.grouped)
+        .onChange(of: envRows) { form.env = collapsedEnv() }
     }
 
     private var additionalPreview: String {
@@ -403,30 +435,35 @@ struct EditSheetView: View {
     }
 
     @ViewBuilder private var envEditor: some View {
-        ForEach(form.env.keys.sorted(), id: \.self) { key in
+        ForEach($envRows) { $row in
             HStack {
-                Text(key).font(.system(.body, design: .monospaced))
-                    .frame(width: 130, alignment: .leading)
-                if envRevealed.contains(key) {
-                    TextField("value", text: envBinding(key))
+                TextField("NAME", text: $row.name)
+                    .font(.system(.body, design: .monospaced))
+                    .focused($envFocus, equals: row.id)
+                if envRevealed.contains(row.id) {
+                    TextField("value", text: $row.value)
                         .font(.system(.body, design: .monospaced))
                 } else {
-                    SecureField("value", text: envBinding(key))
+                    SecureField("value", text: $row.value)
                 }
                 Button {
-                    if envRevealed.contains(key) { envRevealed.remove(key) }
-                    else { envRevealed.insert(key) }
+                    if envRevealed.contains(row.id) { envRevealed.remove(row.id) }
+                    else { envRevealed.insert(row.id) }
                 } label: { Image(systemName: "eye") }.buttonStyle(.plain)
-                Button { form.env.removeValue(forKey: key) } label: {
+                Button { envRows.removeAll { $0.id == row.id } } label: {
                     Image(systemName: "xmark.circle")
                 }.buttonStyle(.plain)
             }
         }
-        EnvAdder { key, value in form.env[key] = value }
-    }
-
-    private func envBinding(_ key: String) -> Binding<String> {
-        Binding(get: { form.env[key] ?? "" }, set: { form.env[key] = $0 })
+        Button("＋ Add variable") {
+            let row = EnvRow(name: "", value: "")
+            // Reveal a fresh row's value — the user is typing it, not
+            // inspecting a stored secret.
+            envRevealed.insert(row.id)
+            envRows.append(row)
+            DispatchQueue.main.async { envFocus = row.id }
+        }
+        .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)
     }
 
     @ViewBuilder private var authEditor: some View {
@@ -526,6 +563,10 @@ struct EditSheetView: View {
                 }
             } else if form.command.trimmingCharacters(in: .whitespaces).isEmpty {
                 validationError = "Command must not be empty."
+                return
+            }
+            if !isRemote, let dup = duplicateEnvName() {
+                validationError = "Duplicate environment variable name: \(dup)"
                 return
             }
             config = currentFormConfig()
@@ -632,24 +673,11 @@ private struct WindowFinder: NSViewRepresentable {
     }
 }
 
-/// Two fields + button for adding an env var.
-struct EnvAdder: View {
-    var onAdd: (String, String) -> Void
-    @State private var key = ""
-    @State private var value = ""
-
-    var body: some View {
-        HStack {
-            TextField("NAME", text: $key)
-                .frame(width: 130)
-                .font(.system(.body, design: .monospaced))
-            TextField("value", text: $value)
-            Button("＋") {
-                let k = key.trimmingCharacters(in: .whitespaces)
-                guard !k.isEmpty else { return }
-                onAdd(k, value)
-                key = ""; value = ""
-            }.buttonStyle(.plain)
-        }
-    }
+/// One editable environment-variable row. Rows carry a stable identity while
+/// the name is edited — a dictionary key can't, since each keystroke would
+/// re-key `form.env`, re-sort the ForEach, and drop field focus.
+struct EnvRow: Identifiable, Equatable {
+    let id = UUID()
+    var name: String
+    var value: String
 }
