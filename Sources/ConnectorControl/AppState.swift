@@ -17,6 +17,11 @@ final class AppState: ObservableObject {
     private var watcher: FileWatcher?
     private var storeWatcher: FileWatcher?
     private var hasLoadedOnce = false
+    /// The center holds its delegate weakly; AppState retains the bridge.
+    private var notificationHandler: NotificationActionHandler?
+
+    static let restartCategoryID = "restartPending"
+    static let restartActionID = "restartClaude"
 
     init(service: ConfigService? = nil) {
         // Migration must run BEFORE the service reads UserDefaults — a default
@@ -27,8 +32,31 @@ final class AppState: ObservableObject {
         // Sweep the RESOLVED paths (a repointed store lives outside the default
         // dir) so files written before the 600-permissions fix get corrected.
         AppState.sweepPermissionsOnce(paths: resolved.paths)
+        configureNotificationActions()
         reload()
         armWatchers()
+    }
+
+    /// Registers the notification category whose Restart Claude button routes
+    /// back into the app. Skipping the confirm-before-restart alert there is
+    /// deliberate: clicking the explicit action IS the confirmation. Guarded
+    /// like notify() — bare `swift run` has no notification center.
+    private func configureNotificationActions() {
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        let center = UNUserNotificationCenter.current()
+        let restart = UNNotificationAction(
+            identifier: AppState.restartActionID, title: "Restart Claude")
+        center.setNotificationCategories([
+            UNNotificationCategory(identifier: AppState.restartCategoryID,
+                                   actions: [restart], intentIdentifiers: [])])
+        let handler = NotificationActionHandler { [weak self] in
+            // Stale-click guard: an old notification must not restart a Claude
+            // that already picked up the config.
+            guard let self, self.needsClaudeRestart else { return }
+            self.performRestartClaude()
+        }
+        center.delegate = handler
+        notificationHandler = handler
     }
 
     /// One-time repair of files written before owner-only permissions were
@@ -235,9 +263,8 @@ final class AppState: ObservableObject {
                 // was looking and Claude is running on the older config — the
                 // one restart-pending case with no in-app feedback in view.
                 notify("Connector Control",
-                       "Your connector list was updated from sync — "
-                       + "Claude's config was regenerated. "
-                       + "Restart Claude to pick up the changes.")
+                       "Connector list has changed, restart required.",
+                       category: AppState.restartCategoryID)
             } else if claudeConfigChangedExternally {
                 notify("Connector Control", "Claude's config changed outside Connector Control.")
             } else if storeChangedExternally {
@@ -266,7 +293,7 @@ final class AppState: ObservableObject {
         reload(storeAuthoritative: true)
     }
 
-    private func notify(_ title: String, _ body: String) {
+    private func notify(_ title: String, _ body: String, category: String? = nil) {
         // UNUserNotificationCenter.current() crashes under bare `swift run` (no
         // app bundle), so bail out first when there is none.
         guard Bundle.main.bundleIdentifier != nil else { return }
@@ -278,6 +305,7 @@ final class AppState: ObservableObject {
             let content = UNMutableNotificationContent()
             content.title = title
             content.body = body
+            if let category { content.categoryIdentifier = category }
             center.add(UNNotificationRequest(
                 identifier: UUID().uuidString, content: content, trigger: nil))
         }
@@ -357,6 +385,13 @@ final class AppState: ObservableObject {
             alert.addButton(withTitle: "Cancel")
             guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
+        performRestartClaude()
+    }
+
+    /// Restart with no confirmation alert — the in-app button after its
+    /// confirm, and the notification's Restart Claude action, where the
+    /// deliberate action click is the confirmation.
+    private func performRestartClaude() {
         let appURL = URL(fileURLWithPath: UserDefaults.standard.string(forKey: "claudeAppPath")
             ?? "/Applications/Claude.app")
         ClaudeRestarter.restart(appURL: appURL) { [weak self] errorMessage in
@@ -440,5 +475,27 @@ final class AppState: ObservableObject {
                 + "Nothing was written. Use Backups ▸ Restore… to recover it."
         }
         return error.localizedDescription
+    }
+}
+
+/// NSObject bridge for UNUserNotificationCenter's delegate: routes the
+/// Restart Claude notification action back into AppState on the main actor.
+private final class NotificationActionHandler: NSObject, UNUserNotificationCenterDelegate {
+    private let onRestartAction: @MainActor () -> Void
+
+    init(onRestartAction: @escaping @MainActor () -> Void) {
+        self.onRestartAction = onRestartAction
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        if response.actionIdentifier == AppState.restartActionID {
+            let action = onRestartAction
+            Task { @MainActor in action() }
+        }
+        completionHandler()
     }
 }
