@@ -89,10 +89,29 @@ jobs:
             --team-id "$APPLE_TEAM_ID" --wait
           xcrun stapler staple "ConnectorControl_${VERSION}.dmg"
 
+      - name: Generate Sparkle appcast
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          VERSION="${TAG#v}"
+          # Must run AFTER stapling — the EdDSA signature covers the final
+          # DMG bytes. Tools version pinned to match Package.resolved.
+          curl -sL -o sparkle-tools.tar.xz \
+            "https://github.com/sparkle-project/Sparkle/releases/download/2.9.6/Sparkle-2.9.6.tar.xz"
+          mkdir sparkle-tools && tar -xf sparkle-tools.tar.xz -C sparkle-tools
+          mkdir appcast-work
+          cp "ConnectorControl_${VERSION}.dmg" appcast-work/
+          printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | ./sparkle-tools/bin/generate_appcast \
+            --ed-key-file - \
+            --download-url-prefix "https://github.com/dlaporte/connector-control/releases/download/${TAG}/" \
+            --link "https://github.com/dlaporte/connector-control/releases" \
+            -o appcast.xml appcast-work
+          cat appcast.xml
+
       - name: Create GitHub Release
         run: |
           VERSION="${TAG#v}"
           if ! gh release view "$TAG" > /dev/null 2>&1; then
             gh release create "$TAG" --title "Connector Control $VERSION" --generate-notes
           fi
-          gh release upload "$TAG" "ConnectorControl_${VERSION}.dmg" --clobber
+          gh release upload "$TAG" "ConnectorControl_${VERSION}.dmg" appcast.xml --clobber

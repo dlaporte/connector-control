@@ -28,6 +28,16 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp "$BIN" "$APP/Contents/MacOS/Connector Control"
 
+# Embed Sparkle: SwiftPM links it as @rpath but doesn't assemble bundles, so
+# the framework is copied out of the resolved artifact and the executable is
+# pointed at Contents/Frameworks. (cp -R preserves the framework's symlink
+# structure; ditto would flatten it.)
+SPARKLE_FRAMEWORK=".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+mkdir -p "$APP/Contents/Frameworks"
+cp -R "$SPARKLE_FRAMEWORK" "$APP/Contents/Frameworks/"
+install_name_tool -add_rpath "@executable_path/../Frameworks" \
+    "$APP/Contents/MacOS/Connector Control" 2>/dev/null || true
+
 mkdir -p "$APP/Contents/Resources"
 swift scripts/generate-icon.swift "$APP/Contents/Resources/AppIcon.icns"
 
@@ -47,13 +57,33 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHumanReadableCopyright</key><string>© 2026 David LaPorte</string>
+    <key>SUFeedURL</key><string>https://github.com/dlaporte/connector-control/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key><string>UmpM6nLMC8udcgUZ4IYigUgqFHziHPNsYilHc7Nn/3Q=</string>
+    <key>SUEnableAutomaticChecks</key><true/>
+    <key>SUAutomaticallyUpdate</key><true/>
 </dict>
 </plist>
 PLIST
 
 if [ "$SIGNING_IDENTITY" = "-" ]; then
+    # Local dev: Sparkle keeps its own shipped signature; ad-hoc sign the app.
     codesign --force --sign - "$APP"
 else
+    # Notarization requires every nested Mach-O be signed with the same
+    # Developer ID + hardened runtime, inside-out per Sparkle's non-Xcode
+    # signing docs: XPC services, Autoupdate, Updater.app, the framework,
+    # then the app. (No --deep: it mis-signs nested bundles.)
+    FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
+    codesign --force --options runtime --timestamp --preserve-metadata=entitlements \
+        --sign "$SIGNING_IDENTITY" "$FRAMEWORK/Versions/B/XPCServices/Downloader.xpc"
+    codesign --force --options runtime --timestamp --preserve-metadata=entitlements \
+        --sign "$SIGNING_IDENTITY" "$FRAMEWORK/Versions/B/XPCServices/Installer.xpc"
+    codesign --force --options runtime --timestamp \
+        --sign "$SIGNING_IDENTITY" "$FRAMEWORK/Versions/B/Autoupdate"
+    codesign --force --options runtime --timestamp \
+        --sign "$SIGNING_IDENTITY" "$FRAMEWORK/Versions/B/Updater.app"
+    codesign --force --options runtime --timestamp \
+        --sign "$SIGNING_IDENTITY" "$FRAMEWORK"
     # Hardened runtime + timestamp are required for notarization.
     codesign --force --options runtime --timestamp \
         --sign "$SIGNING_IDENTITY" "$APP"

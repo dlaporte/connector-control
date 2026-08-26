@@ -79,9 +79,31 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Updates") {
+                Toggle("Automatically download and install updates", isOn: autoUpdateBinding)
+                    .disabled(!state.updaterRunning)
+                HStack {
+                    Text("Version \(appVersion)")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Check for Updates…") {
+                        state.updaterController.checkForUpdates(nil)
+                    }
+                    .disabled(!state.updaterRunning)
+                }
+            }
         }
         .formStyle(.grouped)
         .onAppear { launchAtLogin = SMAppService.mainApp.status == .enabled }
+    }
+
+    /// Sparkle persists this itself (SUAutomaticallyUpdate in user defaults),
+    /// so the binding goes straight to the updater rather than @AppStorage.
+    private var autoUpdateBinding: Binding<Bool> {
+        Binding(
+            get: { state.updaterController.updater.automaticallyDownloadsUpdates },
+            set: { state.updaterController.updater.automaticallyDownloadsUpdates = $0 })
     }
 
     private var storageTab: some View {

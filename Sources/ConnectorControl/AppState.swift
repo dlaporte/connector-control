@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 @preconcurrency import UserNotifications
+import Sparkle
 import ConnectorControlCore
 
 @MainActor
@@ -19,6 +20,11 @@ final class AppState: ObservableObject {
     private var hasLoadedOnce = false
     /// The center holds its delegate weakly; AppState retains the bridge.
     private var notificationHandler: NotificationActionHandler?
+    /// Sparkle auto-updater. Created not-started; started only from a real
+    /// app bundle — bare `swift run` has none and Sparkle requires one.
+    let updaterController = SPUStandardUpdaterController(
+        startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil)
+    private(set) var updaterRunning = false
 
     static let restartCategoryID = "restartPending"
     static let restartActionID = "restartClaude"
@@ -33,6 +39,10 @@ final class AppState: ObservableObject {
         // dir) so files written before the 600-permissions fix get corrected.
         AppState.sweepPermissionsOnce(paths: resolved.paths)
         configureNotificationActions()
+        if Bundle.main.bundleIdentifier != nil {
+            updaterController.startUpdater()
+            updaterRunning = true
+        }
         reload()
         armWatchers()
     }
