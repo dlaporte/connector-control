@@ -447,18 +447,25 @@ struct EditSheetView: View {
                 }
                 ForEach($envRows) { $row in
                     GridRow {
-                        TextField("NAME", text: $row.name)
+                        // Titles are kept for accessibility but hidden — the
+                        // grouped form would render them as per-field labels,
+                        // duplicating the column headers above.
+                        TextField("Name", text: $row.name)
+                            .labelsHidden()
+                            .multilineTextAlignment(.leading)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(.body, design: .monospaced))
                             .focused($envFocus, equals: row.id)
                         Group {
                             if envRevealed.contains(row.id) {
-                                TextField("value", text: $row.value)
+                                TextField("Value", text: $row.value)
                                     .font(.system(.body, design: .monospaced))
                             } else {
-                                SecureField("value", text: $row.value)
+                                SecureField("Value", text: $row.value)
                             }
                         }
+                        .labelsHidden()
+                        .multilineTextAlignment(.leading)
                         .textFieldStyle(.roundedBorder)
                         HStack(spacing: 6) {
                             Button {

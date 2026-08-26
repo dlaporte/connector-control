@@ -77,6 +77,11 @@ including the SecureField — gets `.roundedBorder` so the click targets are
 visible inside the otherwise-borderless grouped form. Reveal/remove buttons
 share the third column. Add-row behavior, focus, and validation unchanged.
 
+Second pass: field titles are `labelsHidden()` (the grouped form rendered
+them as per-field "NAME"/"value" labels even when filled, duplicating the
+column headers and breaking alignment), and field text is leading-aligned
+instead of the form's trailing default.
+
 ## Verification
 
 Existing tests are unaffected (no Core changes). Verify with a clean
