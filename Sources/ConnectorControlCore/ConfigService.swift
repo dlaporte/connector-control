@@ -50,7 +50,15 @@ public struct ConfigService {
         if loaded.corruptFileURL != nil {
             effectiveBaseline = nil
         } else if storeAuthoritative {
-            effectiveBaseline = servers
+            // The caller's baseline (last-applied servers) still classifies
+            // additions correctly during an adoption: an entry matching it is
+            // this machine's own applied state (never imported into the
+            // adopted store), one differing from it is a genuine external
+            // addition racing the adoption — ingest it rather than letting
+            // the regeneration erase it. Without a baseline (adoption of a
+            // repointed store before any apply), the file itself is the
+            // baseline: nothing is imported, the adopted store wins totally.
+            effectiveBaseline = baseline ?? servers
         } else {
             effectiveBaseline = baseline
         }

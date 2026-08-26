@@ -143,14 +143,27 @@ public enum MasterStoreIO {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try AtomicFile.write(try encoder.encode(store), to: url)
     }
+
+    /// Side-effect-free peek: nil when the file is missing or undecodable.
+    /// Unlike `load`, never moves a corrupt file aside — used by the store
+    /// watcher to classify an on-disk change (own write echo, external edit,
+    /// or a sync tool's mid-write partial) before deciding to adopt it.
+    public static func read(from url: URL) -> MasterStore? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(MasterStore.self, from: data)
+    }
 }
 
 public enum BackupTimestamp {
+    /// UTC, not local time: backup recency is derived from a lexicographic
+    /// sort of these stamps, and local wall-clock repeats an hour every DST
+    /// fall-back — during which newer backups would sort older, breaking
+    /// dedup's newest-snapshot comparison and prune's keep-newest contract.
     public static func string(from date: Date) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd'T'HH-mm-ss-SSS"
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd'T'HH-mm-ss-SSS'Z'"
         return f.string(from: date)
     }
 }

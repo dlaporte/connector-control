@@ -96,7 +96,7 @@ struct PopoverView: View {
 
     private var headerSubtitle: String {
         let total = state.store.mcps.count
-        let enabled = state.store.mcps.values.filter(\.enabled).count
+        let enabled = state.store.enabledServers.count
         return total == 0 ? "No connectors configured" : "\(enabled) of \(total) enabled"
     }
 
@@ -209,6 +209,15 @@ private struct WindowAutoSizer: NSViewRepresentable {
     final class TrackingView: NSView {
         private var anchoredWindow: NSWindow?
         private var anchorTop: CGFloat?
+        /// Tracks visibility TRANSITIONS: the anchor is recorded on the first
+        /// observation after the window becomes visible — by whichever runs
+        /// first, the occlusion notification or a scheduled resize — because
+        /// that is when the system has just positioned the panel under the
+        /// status item (a reopen may be on another display). Anchoring at
+        /// view-attach time recorded a not-yet-positioned frame, and
+        /// re-anchoring on every occlusion event could persist a frame this
+        /// shim had itself already moved.
+        private var wasVisible = false
         private var resizePending = false
         private var visibilityObserver: NSObjectProtocol?
 
@@ -220,7 +229,7 @@ private struct WindowAutoSizer: NSViewRepresentable {
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            reanchorIfNeeded()
+            observeWindowIfNeeded()
         }
 
         override func layout() {
@@ -228,15 +237,11 @@ private struct WindowAutoSizer: NSViewRepresentable {
             scheduleResize()
         }
 
-        /// Records the top-edge anchor when the view lands in a window, and
-        /// re-records it every time the window is shown — the system has just
-        /// positioned the panel under the status item at those moments (a
-        /// reopen may be on another display), so the frame is trustworthy in
-        /// a way mid-content-change frames are not.
-        private func reanchorIfNeeded() {
+        private func observeWindowIfNeeded() {
             guard let window, window !== anchoredWindow else { return }
             anchoredWindow = window
-            anchorTop = window.frame.maxY
+            anchorTop = nil
+            wasVisible = false
             if let visibilityObserver {
                 NotificationCenter.default.removeObserver(visibilityObserver)
             }
@@ -244,10 +249,20 @@ private struct WindowAutoSizer: NSViewRepresentable {
                 forName: NSWindow.didChangeOcclusionStateNotification,
                 object: window, queue: .main
             ) { [weak self, weak window] _ in
-                guard let self, let window, window.isVisible else { return }
-                self.anchorTop = window.frame.maxY
-                self.scheduleResize()
+                guard let self, let window else { return }
+                if window.isVisible {
+                    self.reanchorIfShowTransition()
+                    self.scheduleResize()
+                } else {
+                    self.wasVisible = false
+                }
             }
+        }
+
+        private func reanchorIfShowTransition() {
+            guard let window, window.isVisible, !wasVisible else { return }
+            anchorTop = window.frame.maxY
+            wasVisible = true
         }
 
         /// Coalesces to one setFrame per runloop turn: setFrame is re-entrant
@@ -263,9 +278,9 @@ private struct WindowAutoSizer: NSViewRepresentable {
         }
 
         private func resizeWindowToFit() {
-            reanchorIfNeeded()
-            // Pre-show frames belong to the system's placement pass; the
-            // show-time occlusion notification re-anchors and snaps.
+            observeWindowIfNeeded()
+            reanchorIfShowTransition()
+            // Pre-show frames belong to the system's placement pass.
             guard let window, let anchorTop, window.isVisible else { return }
             // This view is the root VStack's background, so its own laid-out
             // height IS the content's ideal height — even while the window is

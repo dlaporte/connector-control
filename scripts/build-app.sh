@@ -13,8 +13,20 @@ cd "$(dirname "$0")/.."
 
 APP="build/Connector Control.app"
 VERSION="${VERSION:-1.0}"
-BUILD_NUMBER="${BUILD_NUMBER:-1}"
 SIGNING_IDENTITY="${SIGNING_IDENTITY:--}"
+
+# CFBundleVersion is Sparkle's update-comparison key, so it must be derived
+# from the semantic version, not a CI run counter — with a run counter, any
+# later-built release of an OLDER version outranks newer ones in the feed
+# (e.g. re-tagging v1.2.2 after v1.3.0 shipped would auto-"update" users
+# backward). major*10000 + minor*100 + patch is monotonic across versions
+# and, at >=10000, safely above the run numbers releases <=1.2.2 shipped
+# with. A -suffix (1.3.0-beta1) is ignored for the numeric derivation.
+if [ -z "${BUILD_NUMBER:-}" ]; then
+    BASE="${VERSION%%-*}"
+    IFS=. read -r MAJ MIN PAT <<< "$BASE"
+    BUILD_NUMBER=$(( ${MAJ:-0} * 10000 + ${MIN:-0} * 100 + ${PAT:-0} ))
+fi
 
 if [ "${UNIVERSAL:-0}" = "1" ]; then
     swift build -c release --arch arm64 --arch x86_64
@@ -35,8 +47,18 @@ cp "$BIN" "$APP/Contents/MacOS/Connector Control"
 SPARKLE_FRAMEWORK=".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 mkdir -p "$APP/Contents/Frameworks"
 cp -R "$SPARKLE_FRAMEWORK" "$APP/Contents/Frameworks/"
+# This rpath is load-bearing: Sparkle is linked as @rpath/Sparkle.framework
+# and no linker-emitted rpath resolves it in the installed bundle, so a
+# missing entry ships an app that dies at launch with "Library not loaded" —
+# and nothing later in the pipeline (codesign, notarization, spctl) exercises
+# dyld. Fail loudly here, and verify the load command actually landed. (The
+# bundle is assembled fresh each run, so a benign "would duplicate path"
+# failure cannot occur.)
 install_name_tool -add_rpath "@executable_path/../Frameworks" \
-    "$APP/Contents/MacOS/Connector Control" 2>/dev/null || true
+    "$APP/Contents/MacOS/Connector Control"
+otool -l "$APP/Contents/MacOS/Connector Control" \
+    | grep -q "@executable_path/../Frameworks" \
+    || { echo "error: Frameworks rpath missing from executable" >&2; exit 1; }
 
 mkdir -p "$APP/Contents/Resources"
 swift scripts/generate-icon.swift "$APP/Contents/Resources/AppIcon.icns"

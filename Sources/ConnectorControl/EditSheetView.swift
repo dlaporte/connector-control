@@ -205,6 +205,14 @@ struct EditSheetView: View {
         Binding(get: { view }, set: { requested in
             guard requested != view else { return }
             if requested == .json {
+                // The JSON view renders collapsedEnv(), which can't represent
+                // duplicate or nameless rows — switching would silently drop
+                // them, bypassing the same validation Save enforces.
+                if !isRemote, let envError = envValidationError() {
+                    validationError = envError
+                    return
+                }
+                validationError = nil
                 syncFormIntoJSON()
                 view = .json
             } else {
@@ -268,23 +276,36 @@ struct EditSheetView: View {
         env.sorted { $0.key < $1.key }.map { EnvRow(name: $0.key, value: $0.value) }
     }
 
-    /// The dictionary the current rows describe: names trimmed, empty-name
-    /// rows dropped, a later duplicate winning (save blocks duplicates).
+    /// The dictionary the current rows describe. Names are kept VERBATIM —
+    /// loaded configs legitimately contain exotic keys (even ones differing
+    /// only by whitespace), and trimming here once silently renamed keys the
+    /// user never touched. Only rows with a blank name are left out; a later
+    /// verbatim duplicate wins in the dict, but validation blocks both Save
+    /// and the Form → JSON switch before that collapse can lose data.
     private func collapsedEnv() -> [String: String] {
         var env: [String: String] = [:]
-        for row in envRows {
-            let name = row.name.trimmingCharacters(in: .whitespaces)
-            if !name.isEmpty { env[name] = row.value }
+        for row in envRows
+        where !row.name.trimmingCharacters(in: .whitespaces).isEmpty {
+            env[row.name] = row.value
         }
         return env
     }
 
-    private func duplicateEnvName() -> String? {
+    /// nil when the env rows are saveable; else a user-facing error. Shared
+    /// by Save and the Form → JSON switch — both serialize `collapsedEnv()`,
+    /// which silently drops what a dictionary can't represent.
+    private func envValidationError() -> String? {
         var seen = Set<String>()
         for row in envRows {
-            let name = row.name.trimmingCharacters(in: .whitespaces)
-            guard !name.isEmpty else { continue }
-            if !seen.insert(name).inserted { return name }
+            if row.name.trimmingCharacters(in: .whitespaces).isEmpty {
+                if !row.value.isEmpty {
+                    return "An environment variable value is missing its name."
+                }
+                continue  // a fully empty row (unused ＋ row) is just dropped
+            }
+            if !seen.insert(row.name).inserted {
+                return "Duplicate environment variable name: \(row.name)"
+            }
         }
         return nil
     }
@@ -590,8 +611,8 @@ struct EditSheetView: View {
                 validationError = "Command must not be empty."
                 return
             }
-            if !isRemote, let dup = duplicateEnvName() {
-                validationError = "Duplicate environment variable name: \(dup)"
+            if !isRemote, let envError = envValidationError() {
+                validationError = envError
                 return
             }
             config = currentFormConfig()

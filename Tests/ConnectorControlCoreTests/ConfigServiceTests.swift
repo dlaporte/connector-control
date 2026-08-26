@@ -178,6 +178,29 @@ final class ConfigServiceTests: XCTestCase {
                        backupsBefore, "no persist churn when nothing changed")
     }
 
+    func testStoreAuthoritativeIngestsAdditionUnknownToBaseline() throws {
+        // A genuinely external addition (present in Claude's file, absent from
+        // the last-applied baseline) racing a store adoption must be ingested,
+        // not silently erased by the follow-up regeneration.
+        let first = try service.loadAndReconcile()
+        var adopted = MasterStore.empty
+        adopted.mcps["scoutbook"] = first.store.mcps["scoutbook"]
+        try MasterStoreIO.save(adopted, to: paths.masterStoreURL)
+        let baseline = try XCTUnwrap(first.claudeServers)
+        let newcomer = JSONValue.object(["command": .string("installer-added")])
+        var fileServers = baseline
+        fileServers["newcomer"] = newcomer
+        try ClaudeConfigIO.write(mcpServers: fileServers, to: paths.claudeConfigURL)
+
+        let result = try service.loadAndReconcile(
+            baseline: baseline, storeAuthoritative: true)
+        XCTAssertEqual(result.store.mcps["newcomer"]?.config, newcomer,
+                       "external addition must survive the adoption")
+        XCTAssertNil(result.store.mcps["aws-mcp"],
+                     "entries matching the baseline are this machine's own "
+                     + "applied state — never imported into an adopted store")
+    }
+
     func testRestoreReturnsRestoredServers() throws {
         let store = try service.loadAndReconcile().store
         try service.apply(store)

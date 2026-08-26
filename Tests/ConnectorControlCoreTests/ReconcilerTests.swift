@@ -121,4 +121,24 @@ final class ReconcilerTests: XCTestCase {
         XCTAssertEqual(outcome.store, s)
         XCTAssertFalse(outcome.storeChanged)
     }
+
+    // MARK: adoptSnapshot (Backups ▸ Restore)
+
+    func testAdoptSnapshotPreservesViewMemoryAndDisablesAbsent() {
+        let s = store([
+            "kept": MCPEntry(enabled: true, config: configA, lastEditView: .json),
+            "gone": MCPEntry(enabled: true, config: configA),
+            "off": MCPEntry(enabled: false, config: configB)])
+        let outcome = Reconciler.adoptSnapshot(
+            store: s, servers: ["kept": configB, "new": configA])
+        XCTAssertEqual(outcome.store.mcps["kept"],
+                       MCPEntry(enabled: true, config: configB, lastEditView: .json),
+                       "snapshot config adopted; view memory preserved")
+        XCTAssertEqual(outcome.store.mcps["new"],
+                       MCPEntry(enabled: true, config: configA))
+        XCTAssertEqual(outcome.store.mcps["gone"]?.enabled, false,
+                       "absent-from-snapshot entries are disabled, not deleted")
+        XCTAssertEqual(outcome.store.mcps["off"]?.enabled, false)
+        XCTAssertTrue(outcome.storeChanged)
+    }
 }

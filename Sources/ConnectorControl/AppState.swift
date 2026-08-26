@@ -26,8 +26,26 @@ final class AppState: ObservableObject {
         startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil)
     private(set) var updaterRunning = false
 
-    static let restartCategoryID = "restartPending"
-    static let restartActionID = "restartClaude"
+    nonisolated static let restartCategoryID = "restartPending"
+    nonisolated static let restartActionID = "restartClaude"
+
+    /// UNUserNotificationCenter.current() crashes under bare `swift run` (no
+    /// app bundle), and Sparkle requires a bundle too.
+    private static let hasAppBundle = Bundle.main.bundleIdentifier != nil
+
+    /// Why a reload is running — controls reconciliation authority and which
+    /// notifications may fire.
+    enum ReloadTrigger {
+        /// Launch, popover open, or the Claude-config watcher.
+        case routine
+        /// Store adoption with the user watching or on our own write's echo
+        /// (Backups ▸ Restore, store repoint): store wins totally, no
+        /// notifications.
+        case quietStoreAdoption
+        /// The store watcher saw an outside write to mcps.json (sync tool,
+        /// another machine): adopt it and announce the consequences.
+        case externalStoreAdoption
+    }
 
     init(service: ConfigService? = nil) {
         // Migration must run BEFORE the service reads UserDefaults — a default
@@ -39,7 +57,7 @@ final class AppState: ObservableObject {
         // dir) so files written before the 600-permissions fix get corrected.
         AppState.sweepPermissionsOnce(paths: resolved.paths)
         configureNotificationActions()
-        if Bundle.main.bundleIdentifier != nil {
+        if AppState.hasAppBundle {
             updaterController.startUpdater()
             updaterRunning = true
         }
@@ -52,7 +70,7 @@ final class AppState: ObservableObject {
     /// deliberate: clicking the explicit action IS the confirmation. Guarded
     /// like notify() — bare `swift run` has no notification center.
     private func configureNotificationActions() {
-        guard Bundle.main.bundleIdentifier != nil else { return }
+        guard AppState.hasAppBundle else { return }
         let center = UNUserNotificationCenter.current()
         let restart = UNNotificationAction(
             identifier: AppState.restartActionID, title: "Restart Claude")
@@ -145,15 +163,24 @@ final class AppState: ObservableObject {
         storeWatcher?.start()
     }
 
-    /// The master store changed on disk from outside the app — a sync tool, or
-    /// another machine writing the shared mcps.json. The store is the source of
-    /// truth, so adopt it as-is; reload regenerates Claude's config from any
-    /// divergence and arms Restart Required. Our own persistStore writes also
-    /// trip this watcher, but they leave no divergence, so the reload no-ops.
-    /// Unlike the other authoritative reloads (restore, repoint), this one is
-    /// not user-initiated, so a resulting pending restart is worth announcing.
+    /// The store's mtime changed on disk. Classify before adopting: our own
+    /// persistStore writes echo through this watcher (skip — memory already
+    /// matches), a sync tool's mid-write partial parses as garbage (wait for
+    /// the completed write to fire again — adopting it would rebuild the
+    /// store from the local Claude config and clobber the synced list), and
+    /// only a decodable store that differs from memory is a genuine outside
+    /// edit to adopt and announce.
     private func adoptExternalStoreChange() {
-        reload(storeAuthoritative: true, storeChangeIsExternal: true)
+        let storeURL = service.paths.masterStoreURL
+        guard FileManager.default.fileExists(atPath: storeURL.path) else {
+            // Deleted store file: reload's self-heal re-persists the
+            // in-memory truth; nothing external to adopt or announce.
+            reload(trigger: .quietStoreAdoption)
+            return
+        }
+        guard let onDisk = MasterStoreIO.read(from: storeURL) else { return }
+        guard onDisk != store else { return }
+        reload(trigger: .externalStoreAdoption)
     }
 
     /// Repoints the master store to a new directory (or back to the default when
@@ -180,7 +207,7 @@ final class AppState: ObservableObject {
         // An adopted (pre-existing) store is authoritative — reconciling it
         // against the local Claude config with fresh-launch "file wins"
         // semantics would clobber a synced list with local state.
-        reload(storeAuthoritative: true)
+        reload(trigger: .quietStoreAdoption)
     }
 
     /// Rebuilds the service from current settings (e.g. after backup retention
@@ -215,7 +242,7 @@ final class AppState: ObservableObject {
         needsClaudeRestart = launched < lastApply
     }
 
-    func reload(storeAuthoritative: Bool = false, storeChangeIsExternal: Bool = false) {
+    func reload(trigger: ReloadTrigger = .routine) {
         do {
             // Capture "before" state for the notification rules below, computed
             // BEFORE any state is overwritten.
@@ -223,9 +250,18 @@ final class AppState: ObservableObject {
             let previousApplied = appliedServers
             let previousStoreMcps = store.mcps
 
+            // The store file vanished mid-session (deleted store dir, sync
+            // eviction). The in-memory store is the source of truth — persist
+            // it back rather than loading an empty store and regenerating
+            // Claude's config down to nothing.
+            if wasLoaded,
+               !FileManager.default.fileExists(atPath: service.paths.masterStoreURL.path) {
+                try service.saveStore(store)
+            }
+
             let result = try service.loadAndReconcile(
                 baseline: hasLoadedOnce ? appliedServers : nil,
-                storeAuthoritative: storeAuthoritative)
+                storeAuthoritative: trigger != .routine)
             store = result.store
             var claudeConfigChangedExternally = false
             if let servers = result.claudeServers {
@@ -233,13 +269,11 @@ final class AppState: ObservableObject {
                 appliedServers = servers
                 hasLoadedOnce = true
             }
-            // Store-side external change (e.g. a synced mcps.json edited by a
-            // sync tool): our own persistStore writes leave the in-memory store
-            // already equal, so a mismatch here means an outside writer.
-            // Authoritative reloads are user-initiated adoptions (repoint,
-            // restore) — never notify for those.
+            // Store-side external change that needs no regeneration (e.g. a
+            // synced edit to a disabled connector) still deserves a heads-up
+            // on the routine path.
             let storeChangedExternally =
-                !storeAuthoritative
+                trigger == .routine
                 && wasLoaded && result.store.mcps != previousStoreMcps
                 && !claudeConfigChangedExternally
             lastError = result.notes.first
@@ -254,27 +288,43 @@ final class AppState: ObservableObject {
             // definition. No loop: the regenerating write satisfies the
             // watcher-triggered follow-up reload.
             var regenerated = false
+            var regenerationFailed = false
             if let servers = result.claudeServers, servers != store.enabledServers {
+                let alreadyFailing = applyRetryNeeded
                 performApply()
-                regenerated = true
+                regenerated = !applyRetryNeeded
+                // Notify a failure only on the transition into it — retry
+                // reloads (every popover open) must not re-post it.
+                regenerationFailed = applyRetryNeeded && !alreadyFailing
             }
 
             // Fire notifications AFTER all state above has been assigned, and
-            // never on first load or for user-initiated authoritative adopts.
-            // At most one notification per reload.
-            if regenerated && wasLoaded && !storeAuthoritative {
+            // never on first load or for quiet adoptions (restore, repoint —
+            // the user is watching the app). At most one per reload, and the
+            // success branches only claim what actually happened on disk.
+            // Branch 1 claims an external FILE edit, so it also requires the
+            // file to have actually moved since the last read — a routine
+            // reload can regenerate for a store-side divergence too (a
+            // pending apply that failed earlier and succeeds on this retry),
+            // and announcing the user's own change as external would be a lie.
+            if regenerated && wasLoaded && trigger == .routine
+                && claudeConfigChangedExternally {
                 notify("Connector Control",
                        "Claude's config was changed outside Connector Control — "
                        + "regenerated from your connector list. "
                        + "Restart Claude to pick it up.")
-            } else if regenerated && wasLoaded && storeChangeIsExternal
-                        && needsClaudeRestart && !applyRetryNeeded {
+            } else if regenerated && wasLoaded && trigger == .externalStoreAdoption
+                        && needsClaudeRestart {
                 // A remote (synced) connector-list change landed while nobody
                 // was looking and Claude is running on the older config — the
                 // one restart-pending case with no in-app feedback in view.
                 notify("Connector Control",
                        "Connector list has changed, restart required.",
                        category: AppState.restartCategoryID)
+            } else if regenerationFailed && wasLoaded && trigger != .quietStoreAdoption {
+                notify("Connector Control",
+                       "The connector configuration changed, but Claude's config "
+                       + "could not be updated — open Connector Control to retry.")
             } else if claudeConfigChangedExternally {
                 notify("Connector Control", "Claude's config changed outside Connector Control.")
             } else if storeChangedExternally {
@@ -297,16 +347,14 @@ final class AppState: ObservableObject {
         appliedServers = servers
         hasLoadedOnce = true
         UserDefaults.standard.set(Date(), forKey: "lastApplyDate")
-        // ConfigService already merged and persisted the store; an authoritative
-        // reload adopts it as-is and suppresses the external-change notification
-        // for the user's own restore action.
-        reload(storeAuthoritative: true)
+        // ConfigService already merged and persisted the store; a quiet
+        // adoption takes it as-is and suppresses notifications for the
+        // user's own restore action.
+        reload(trigger: .quietStoreAdoption)
     }
 
     private func notify(_ title: String, _ body: String, category: String? = nil) {
-        // UNUserNotificationCenter.current() crashes under bare `swift run` (no
-        // app bundle), so bail out first when there is none.
-        guard Bundle.main.bundleIdentifier != nil else { return }
+        guard AppState.hasAppBundle else { return }
         guard UserDefaults.standard.object(forKey: "notifyExternalChanges") as? Bool ?? true
         else { return }
         let center = UNUserNotificationCenter.current()
@@ -507,5 +555,17 @@ private final class NotificationActionHandler: NSObject, UNUserNotificationCente
             Task { @MainActor in action() }
         }
         completionHandler()
+    }
+
+    /// Without this, notifications are silently discarded while Connector
+    /// Control is the active app (Settings or the editor focused) — exactly
+    /// when a restart-pending banner is still worth showing.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler:
+            @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list])
     }
 }

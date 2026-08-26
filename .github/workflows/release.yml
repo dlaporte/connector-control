@@ -17,7 +17,11 @@ permissions:
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+*'
+      # Exact stable versions only — no trailing wildcard. A suffixed tag
+      # (v1.3.0-beta1) must never build here: the release would be created
+      # without --prerelease, become "latest", and its appcast would be
+      # served from SUFeedURL to every auto-updating install.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
   release:
@@ -26,9 +30,21 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Interpolated once here rather than inside run: blocks (injection hygiene).
       TAG: ${{ github.ref_name }}
-      RUN_NUMBER: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
+
+      # First, before minutes of build/notarization: the changelog is the
+      # single source for the GitHub release notes AND the Sparkle update
+      # dialog, and failing here enforces that every release ships with one.
+      - name: Extract changelog section
+        run: |
+          awk -v ver="## ${TAG}" '$0 == ver {found=1; next}
+               /^## / && found {exit} found {print}' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::CHANGELOG.md has no '## ${TAG}' section — write one before tagging."
+            exit 1
+          fi
+          cat notes.md
 
       - name: Import signing certificate
         env:
@@ -54,7 +70,11 @@ jobs:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" $RUNNER_TEMP/build.keychain-db
-          VERSION="${TAG#v}" BUILD_NUMBER="$RUN_NUMBER" \
+          # BUILD_NUMBER deliberately not set: build-app.sh derives it from
+          # the version (monotonic across releases — Sparkle's comparison
+          # key), where the old run-number scheme let a re-tagged older
+          # version outrank newer ones.
+          VERSION="${TAG#v}" \
             UNIVERSAL=1 SIGNING_IDENTITY="$APPLE_SIGNING_IDENTITY" \
             ./scripts/build-app.sh
 
@@ -89,19 +109,6 @@ jobs:
             --team-id "$APPLE_TEAM_ID" --wait
           xcrun stapler staple "ConnectorControl_${VERSION}.dmg"
 
-      - name: Extract changelog section
-        run: |
-          # The changelog is the single source for the GitHub release notes
-          # AND the Sparkle update dialog. Failing here enforces the rule
-          # that every release ships with one.
-          awk -v ver="## ${TAG}" '$0 == ver {found=1; next}
-               /^## / && found {exit} found {print}' CHANGELOG.md > notes.md
-          if ! grep -q '[^[:space:]]' notes.md; then
-            echo "::error::CHANGELOG.md has no '## ${TAG}' section — write one before tagging."
-            exit 1
-          fi
-          cat notes.md
-
       - name: Generate Sparkle appcast
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
@@ -109,7 +116,9 @@ jobs:
           VERSION="${TAG#v}"
           # Must run AFTER stapling — the EdDSA signature covers the final
           # DMG bytes. Tools version pinned to match Package.resolved.
-          curl -sL -o sparkle-tools.tar.xz \
+          # -f: an HTTP error page must fail here, not reach tar as a bogus
+          # archive with a misleading "Unrecognized archive format" error.
+          curl -sfL --retry 3 --retry-delay 5 -o sparkle-tools.tar.xz \
             "https://github.com/sparkle-project/Sparkle/releases/download/2.9.6/Sparkle-2.9.6.tar.xz"
           mkdir sparkle-tools && tar -xf sparkle-tools.tar.xz -C sparkle-tools
           mkdir appcast-work
@@ -135,7 +144,9 @@ jobs:
       - name: Create GitHub Release
         run: |
           VERSION="${TAG#v}"
-          PREV=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' || true)
+          # Drafts and prereleases must not be the compare base.
+          PREV=$(gh release list --limit 1 --exclude-drafts --exclude-pre-releases \
+            --json tagName --jq '.[0].tagName' || true)
           if [ -n "$PREV" ]; then
             printf '\n**Full changelog**: https://github.com/dlaporte/connector-control/compare/%s...%s\n' \
               "$PREV" "$TAG" >> notes.md

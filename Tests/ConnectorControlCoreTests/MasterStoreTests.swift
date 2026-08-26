@@ -52,6 +52,35 @@ final class MasterStoreTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 
+    func testReadIsSideEffectFree() throws {
+        // Missing file → nil, nothing created.
+        XCTAssertNil(MasterStoreIO.read(from: url))
+        // Corrupt file → nil, file left exactly in place (unlike load, which
+        // moves it aside — the watcher must be able to peek at a sync tool's
+        // mid-write partial without destroying it).
+        try Data("{not json!!".utf8).write(to: url)
+        XCTAssertNil(MasterStoreIO.read(from: url))
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "{not json!!")
+        // Valid file → decoded store.
+        var store = MasterStore.empty
+        store.mcps["s"] = MCPEntry(config: .object(["command": .string("npx")]))
+        try MasterStoreIO.save(store, to: url)
+        XCTAssertEqual(MasterStoreIO.read(from: url), store)
+    }
+
+    func testBackupTimestampsSortChronologicallyAcrossDSTFallBack() {
+        // 2026-11-01 America/New_York repeats 01:00–02:00 wall-clock; UTC
+        // stamps must stay strictly increasing regardless.
+        let start = Date(timeIntervalSince1970: 1_793_500_000)  // hours before
+        var previous = ""
+        for step in 0..<10 {
+            let stamp = BackupTimestamp.string(
+                from: start.addingTimeInterval(Double(step) * 1800))
+            XCTAssertGreaterThan(stamp, previous)
+            previous = stamp
+        }
+    }
+
     func testLoadCorruptFileReportsOriginalPathWhenMoveFails() throws {
         let fixedNow = Date(timeIntervalSince1970: 1_752_600_000)
         let garbage = "{not json!!"

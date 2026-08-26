@@ -17,6 +17,10 @@ struct SettingsView: View {
     @AppStorage("notifyExternalChanges") private var notifyExternalChanges: Bool = true
     @AppStorage("confirmBeforeRestart") private var confirmBeforeRestart: Bool = true
     @AppStorage("confirmBeforeQuit") private var confirmBeforeQuit: Bool = true
+    /// Mirrors SPUUpdater.automaticallyDownloadsUpdates (Sparkle persists it
+    /// itself); kept in sync via KVO so a change made in Sparkle's own dialog
+    /// doesn't leave the toggle stale.
+    @State private var autoUpdate = false
 
     var body: some View {
         TabView {
@@ -80,8 +84,11 @@ struct SettingsView: View {
             }
 
             Section("Updates") {
-                Toggle("Automatically download and install updates", isOn: autoUpdateBinding)
+                Toggle("Automatically download and install updates", isOn: $autoUpdate)
                     .disabled(!state.updaterRunning)
+                    .onChange(of: autoUpdate) { _, wantOn in
+                        state.updaterController.updater.automaticallyDownloadsUpdates = wantOn
+                    }
                 HStack {
                     Text("Version \(appVersion)")
                         .foregroundStyle(.secondary)
@@ -94,15 +101,12 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear { launchAtLogin = SMAppService.mainApp.status == .enabled }
-    }
-
-    /// Sparkle persists this itself (SUAutomaticallyUpdate in user defaults),
-    /// so the binding goes straight to the updater rather than @AppStorage.
-    private var autoUpdateBinding: Binding<Bool> {
-        Binding(
-            get: { state.updaterController.updater.automaticallyDownloadsUpdates },
-            set: { state.updaterController.updater.automaticallyDownloadsUpdates = $0 })
+        .onAppear {
+            launchAtLogin = SMAppService.mainApp.status == .enabled
+            autoUpdate = state.updaterController.updater.automaticallyDownloadsUpdates
+        }
+        .onReceive(state.updaterController.updater
+            .publisher(for: \.automaticallyDownloadsUpdates)) { autoUpdate = $0 }
     }
 
     private var storageTab: some View {
