@@ -189,36 +189,96 @@ struct PopoverView: View {
 /// MenuBarExtra's window grows with its content but doesn't reliably SHRINK
 /// when content gets shorter (footer clearing, banner dismissing, row removal),
 /// leaving dead space above and below the vertically-centered content. This
-/// shim snaps the window frame to the content's fitted height, anchored at the
-/// top edge since the window hangs from the menu bar.
+/// shim snaps the window frame to the content's fitted height, hung from a
+/// recorded top-edge anchor.
+///
+/// The sizing must be IDEMPOTENT: three resize passes race here (SwiftUI's
+/// auto-grow, this shim, the measured scroll-cap feedback), and a violent
+/// content change like a profile switch interleaves them. A delta-based
+/// correction that preserves the current top edge perpetuates whatever
+/// transient frame it happened to read — the frame is therefore always set
+/// to absolutes (anchored top, content-ideal height) computed from stable
+/// facts, so competing passes converge instead of compounding drift.
 private struct WindowAutoSizer: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { TrackingView() }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            (nsView as? TrackingView)?.resizeWindowToFit()
-        }
+        (nsView as? TrackingView)?.scheduleResize()
     }
 
     final class TrackingView: NSView {
-        override func layout() {
-            super.layout()
-            resizeWindowToFit()
+        private var anchoredWindow: NSWindow?
+        private var anchorTop: CGFloat?
+        private var resizePending = false
+        private var visibilityObserver: NSObjectProtocol?
+
+        deinit {
+            if let visibilityObserver {
+                NotificationCenter.default.removeObserver(visibilityObserver)
+            }
         }
 
-        func resizeWindowToFit() {
-            guard let window else { return }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            reanchorIfNeeded()
+        }
+
+        override func layout() {
+            super.layout()
+            scheduleResize()
+        }
+
+        /// Records the top-edge anchor when the view lands in a window, and
+        /// re-records it every time the window is shown — the system has just
+        /// positioned the panel under the status item at those moments (a
+        /// reopen may be on another display), so the frame is trustworthy in
+        /// a way mid-content-change frames are not.
+        private func reanchorIfNeeded() {
+            guard let window, window !== anchoredWindow else { return }
+            anchoredWindow = window
+            anchorTop = window.frame.maxY
+            if let visibilityObserver {
+                NotificationCenter.default.removeObserver(visibilityObserver)
+            }
+            visibilityObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didChangeOcclusionStateNotification,
+                object: window, queue: .main
+            ) { [weak self, weak window] _ in
+                guard let self, let window, window.isVisible else { return }
+                self.anchorTop = window.frame.maxY
+                self.scheduleResize()
+            }
+        }
+
+        /// Coalesces to one setFrame per runloop turn: setFrame is re-entrant
+        /// with layout(), and a profile switch produces several layout passes;
+        /// applying once after SwiftUI has settled avoids the frame fights.
+        func scheduleResize() {
+            guard !resizePending else { return }
+            resizePending = true
+            DispatchQueue.main.async { [weak self] in
+                self?.resizePending = false
+                self?.resizeWindowToFit()
+            }
+        }
+
+        private func resizeWindowToFit() {
+            reanchorIfNeeded()
+            // Pre-show frames belong to the system's placement pass; the
+            // show-time occlusion notification re-anchors and snaps.
+            guard let window, let anchorTop, window.isVisible else { return }
             // This view is the root VStack's background, so its own laid-out
             // height IS the content's ideal height — even while the window is
-            // stuck taller. (contentView.fittingSize just echoes the current
-            // frame for hosting views, which is why it couldn't detect slack.)
+            // stuck at another size. (contentView.fittingSize just echoes the
+            // current frame for hosting views, which is why it can't detect
+            // slack.)
             let ideal = bounds.height
-            let current = window.contentView?.frame.height ?? window.frame.height
-            guard ideal > 1, current - ideal > 1 else { return }
+            guard ideal > 1 else { return }
             var frame = window.frame
-            let delta = current - ideal
-            frame.origin.y += delta
-            frame.size.height -= delta
+            frame.origin.y = anchorTop - ideal
+            frame.size.height = ideal
+            guard abs(frame.maxY - window.frame.maxY) > 1
+                || abs(frame.height - window.frame.height) > 1 else { return }
             window.setFrame(frame, display: true, animate: false)
         }
     }
