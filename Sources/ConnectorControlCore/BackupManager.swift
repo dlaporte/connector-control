@@ -22,10 +22,20 @@ public struct BackupManager {
         try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: dest.path)
     }
 
+    /// Returns the existing newest backup instead of writing a duplicate when
+    /// the file's content is unchanged: regeneration backs up without user
+    /// action, and identical snapshots would only churn real history out of
+    /// the retention window. Dedup is against the newest snapshot only, so an
+    /// A → B → A sequence still records the return to A.
     @discardableResult
     public func backUp(fileAt url: URL, series: String, now: Date = Date()) throws -> URL? {
         let fm = FileManager.default
         guard fm.fileExists(atPath: url.path) else { return nil }
+        if let newest = try backups(series: series).first,
+           let current = try? Data(contentsOf: url),
+           (try? Data(contentsOf: newest)) == current {
+            return newest
+        }
         try fm.createDirectory(at: backupsDir, withIntermediateDirectories: true)
         var dest = backupsDir
             .appendingPathComponent("\(series).\(BackupTimestamp.string(from: now)).json")

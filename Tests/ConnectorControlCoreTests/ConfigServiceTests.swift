@@ -147,14 +147,14 @@ final class ConfigServiceTests: XCTestCase {
 
     func testKeepCountIsHonored() throws {
         let limited = ConfigService(paths: paths, keepCount: 2)
-        let store = try limited.loadAndReconcile().store
-        try MasterStoreIO.save(store, to: paths.masterStoreURL)
+        _ = try limited.loadAndReconcile()
         let base = Date()
-        try limited.backups.backUp(fileAt: paths.masterStoreURL, series: "mcps", now: base)
-        try limited.backups.backUp(
-            fileAt: paths.masterStoreURL, series: "mcps", now: base.addingTimeInterval(1))
-        try limited.backups.backUp(
-            fileAt: paths.masterStoreURL, series: "mcps", now: base.addingTimeInterval(2))
+        // Distinct contents per backup — identical snapshots dedup instead.
+        for i in 0..<3 {
+            try Data("v\(i)".utf8).write(to: paths.masterStoreURL)
+            try limited.backups.backUp(fileAt: paths.masterStoreURL, series: "mcps",
+                                       now: base.addingTimeInterval(Double(i)))
+        }
         XCTAssertEqual(try limited.backups.backups(series: "mcps").count, 2)
     }
 

@@ -28,6 +28,37 @@ final class BackupManagerTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: made), try Data(contentsOf: source))
     }
 
+    func testBackUpSkipsWhenIdenticalToNewest() throws {
+        let first = try XCTUnwrap(manager.backUp(
+            fileAt: source, series: "claude_desktop_config",
+            now: Date(timeIntervalSince1970: 1_752_600_000)))
+        let second = try manager.backUp(
+            fileAt: source, series: "claude_desktop_config",
+            now: Date(timeIntervalSince1970: 1_752_600_001))
+        // resolvingSymlinksInPath: the directory listing returns /private/var
+        // URLs while the write path builds /var ones — same file.
+        XCTAssertEqual(second?.resolvingSymlinksInPath(), first.resolvingSymlinksInPath(),
+                       "identical content returns the existing newest backup")
+        XCTAssertEqual(try manager.backups(series: "claude_desktop_config").count, 1)
+        try Data("changed".utf8).write(to: source)
+        let third = try XCTUnwrap(manager.backUp(
+            fileAt: source, series: "claude_desktop_config",
+            now: Date(timeIntervalSince1970: 1_752_600_002)))
+        XCTAssertNotEqual(third, first)
+        XCTAssertEqual(try manager.backups(series: "claude_desktop_config").count, 2)
+    }
+
+    func testBackUpDedupsOnlyAgainstNewest() throws {
+        // A → B → back to A: the return to A still records — dedup compares
+        // against the newest snapshot only, not the whole history.
+        for (i, content) in ["A", "B", "A"].enumerated() {
+            try Data(content.utf8).write(to: source)
+            try manager.backUp(fileAt: source, series: "claude_desktop_config",
+                               now: Date(timeIntervalSince1970: Double(1_752_600_000 + i)))
+        }
+        XCTAssertEqual(try manager.backups(series: "claude_desktop_config").count, 3)
+    }
+
     func testBackUpMissingSourceReturnsNil() throws {
         let missing = dir.appendingPathComponent("nope.json")
         XCTAssertNil(try manager.backUp(fileAt: missing, series: "claude_desktop_config"))
