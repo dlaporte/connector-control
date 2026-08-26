@@ -69,6 +69,14 @@ struct EnvRow: Identifiable, Equatable {
   unsubmitted adder row being lost today, except a typed name now persists
   in the UI until save.
 
+## Follow-up (2026-08-26, approved)
+
+Rows render inside a `Grid` with caption-style **Name** / **Value** column
+headers (shown only when rows exist), and every field — name and value,
+including the SecureField — gets `.roundedBorder` so the click targets are
+visible inside the otherwise-borderless grouped form. Reveal/remove buttons
+share the third column. Add-row behavior, focus, and validation unchanged.
+
 ## Verification
 
 Existing tests are unaffected (no Core changes). Verify with a clean

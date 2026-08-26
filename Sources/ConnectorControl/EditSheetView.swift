@@ -435,24 +435,42 @@ struct EditSheetView: View {
     }
 
     @ViewBuilder private var envEditor: some View {
-        ForEach($envRows) { $row in
-            HStack {
-                TextField("NAME", text: $row.name)
-                    .font(.system(.body, design: .monospaced))
-                    .focused($envFocus, equals: row.id)
-                if envRevealed.contains(row.id) {
-                    TextField("value", text: $row.value)
-                        .font(.system(.body, design: .monospaced))
-                } else {
-                    SecureField("value", text: $row.value)
+        // A Grid (not per-row HStacks) so the Name/Value column headers stay
+        // aligned with the fields beneath them; bordered fields make the click
+        // targets visible inside the otherwise-borderless grouped form.
+        if !envRows.isEmpty {
+            Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
+                GridRow {
+                    Text("Name").font(.caption).foregroundStyle(.secondary)
+                    Text("Value").font(.caption).foregroundStyle(.secondary)
+                    Text("")
                 }
-                Button {
-                    if envRevealed.contains(row.id) { envRevealed.remove(row.id) }
-                    else { envRevealed.insert(row.id) }
-                } label: { Image(systemName: "eye") }.buttonStyle(.plain)
-                Button { envRows.removeAll { $0.id == row.id } } label: {
-                    Image(systemName: "xmark.circle")
-                }.buttonStyle(.plain)
+                ForEach($envRows) { $row in
+                    GridRow {
+                        TextField("NAME", text: $row.name)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(.body, design: .monospaced))
+                            .focused($envFocus, equals: row.id)
+                        Group {
+                            if envRevealed.contains(row.id) {
+                                TextField("value", text: $row.value)
+                                    .font(.system(.body, design: .monospaced))
+                            } else {
+                                SecureField("value", text: $row.value)
+                            }
+                        }
+                        .textFieldStyle(.roundedBorder)
+                        HStack(spacing: 6) {
+                            Button {
+                                if envRevealed.contains(row.id) { envRevealed.remove(row.id) }
+                                else { envRevealed.insert(row.id) }
+                            } label: { Image(systemName: "eye") }.buttonStyle(.plain)
+                            Button { envRows.removeAll { $0.id == row.id } } label: {
+                                Image(systemName: "xmark.circle")
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                }
             }
         }
         Button("＋ Add variable") {
