@@ -89,6 +89,19 @@ jobs:
             --team-id "$APPLE_TEAM_ID" --wait
           xcrun stapler staple "ConnectorControl_${VERSION}.dmg"
 
+      - name: Extract changelog section
+        run: |
+          # The changelog is the single source for the GitHub release notes
+          # AND the Sparkle update dialog. Failing here enforces the rule
+          # that every release ships with one.
+          awk -v ver="## ${TAG}" '$0 == ver {found=1; next}
+               /^## / && found {exit} found {print}' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::CHANGELOG.md has no '## ${TAG}' section — write one before tagging."
+            exit 1
+          fi
+          cat notes.md
+
       - name: Generate Sparkle appcast
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
@@ -101,8 +114,19 @@ jobs:
           mkdir sparkle-tools && tar -xf sparkle-tools.tar.xz -C sparkle-tools
           mkdir appcast-work
           cp "ConnectorControl_${VERSION}.dmg" appcast-work/
+          # Render the changelog to HTML (GitHub's markdown renderer) and drop
+          # it next to the DMG; --embed-release-notes inlines it into the
+          # appcast item so the update dialog shows it.
+          # Emit an HTML FRAGMENT (no DOCTYPE/body) — that's what
+          # generate_appcast embeds into the item's description CDATA.
+          gh api -X POST /markdown -f mode=markdown -f text="$(cat notes.md)" > notes-body.html
+          {
+            echo '<style>body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; margin: 12px; }</style>'
+            cat notes-body.html
+          } > "appcast-work/ConnectorControl_${VERSION}.html"
           printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | ./sparkle-tools/bin/generate_appcast \
             --ed-key-file - \
+            --embed-release-notes \
             --download-url-prefix "https://github.com/dlaporte/connector-control/releases/download/${TAG}/" \
             --link "https://github.com/dlaporte/connector-control/releases" \
             -o appcast.xml appcast-work
@@ -111,7 +135,12 @@ jobs:
       - name: Create GitHub Release
         run: |
           VERSION="${TAG#v}"
+          PREV=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' || true)
+          if [ -n "$PREV" ]; then
+            printf '\n**Full changelog**: https://github.com/dlaporte/connector-control/compare/%s...%s\n' \
+              "$PREV" "$TAG" >> notes.md
+          fi
           if ! gh release view "$TAG" > /dev/null 2>&1; then
-            gh release create "$TAG" --title "Connector Control $VERSION" --generate-notes
+            gh release create "$TAG" --title "Connector Control $VERSION" --notes-file notes.md
           fi
           gh release upload "$TAG" "ConnectorControl_${VERSION}.dmg" appcast.xml --clobber
