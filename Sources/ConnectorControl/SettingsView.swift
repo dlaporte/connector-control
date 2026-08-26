@@ -32,11 +32,10 @@ struct SettingsView: View {
                         Image(nsImage: claudeTabIcon)
                     }
                 }
-            aboutTab
-                .tabItem { Label("About", systemImage: "info.circle") }
         }
-        // Tall enough that the largest tab (Storage) fits without scrolling.
-        .frame(width: 480, height: 340)
+        // Tall enough that the largest tab (General, with the Updates
+        // section) fits without scrolling.
+        .frame(width: 480, height: 500)
         .sheet(isPresented: $showRestore) {
             RestoreSheetView().environmentObject(state)
         }
@@ -153,35 +152,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-    }
-
-    private var aboutTab: some View {
-        VStack(spacing: 8) {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 72, height: 72)
-            Text("Connector Control")
-                .font(.title2.bold())
-            Text("Version \(appVersion)")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Text("Manages the custom connectors in Claude Desktop’s "
-                 + "configuration, with automatic backups of every change.")
-                .font(.callout)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                // Wrap to the window width instead of laying out at ideal
-                // (single-line) width.
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 4)
-            Divider()
-                .padding(.vertical, 6)
-            Text("David LaPorte")
-                .font(.caption)
-        }
-        .padding(28)
-        .frame(maxWidth: .infinity)
     }
 
     private var appVersion: String {
