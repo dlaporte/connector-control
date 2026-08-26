@@ -112,8 +112,10 @@ final class AppState: ObservableObject {
     /// truth, so adopt it as-is; reload regenerates Claude's config from any
     /// divergence and arms Restart Required. Our own persistStore writes also
     /// trip this watcher, but they leave no divergence, so the reload no-ops.
+    /// Unlike the other authoritative reloads (restore, repoint), this one is
+    /// not user-initiated, so a resulting pending restart is worth announcing.
     private func adoptExternalStoreChange() {
-        reload(storeAuthoritative: true)
+        reload(storeAuthoritative: true, storeChangeIsExternal: true)
     }
 
     /// Repoints the master store to a new directory (or back to the default when
@@ -175,7 +177,7 @@ final class AppState: ObservableObject {
         needsClaudeRestart = launched < lastApply
     }
 
-    func reload(storeAuthoritative: Bool = false) {
+    func reload(storeAuthoritative: Bool = false, storeChangeIsExternal: Bool = false) {
         do {
             // Capture "before" state for the notification rules below, computed
             // BEFORE any state is overwritten.
@@ -227,6 +229,15 @@ final class AppState: ObservableObject {
                        "Claude's config was changed outside Connector Control — "
                        + "regenerated from your connector list. "
                        + "Restart Claude to pick it up.")
+            } else if regenerated && wasLoaded && storeChangeIsExternal
+                        && needsClaudeRestart && !applyRetryNeeded {
+                // A remote (synced) connector-list change landed while nobody
+                // was looking and Claude is running on the older config — the
+                // one restart-pending case with no in-app feedback in view.
+                notify("Connector Control",
+                       "Your connector list was updated from sync — "
+                       + "Claude's config was regenerated. "
+                       + "Restart Claude to pick up the changes.")
             } else if claudeConfigChangedExternally {
                 notify("Connector Control", "Claude's config changed outside Connector Control.")
             } else if storeChangedExternally {

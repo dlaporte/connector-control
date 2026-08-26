@@ -72,8 +72,12 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle("Notify when Claude's config changes externally",
+                Toggle("Notify about changes made outside Connector Control",
                        isOn: $notifyExternalChanges)
+                Text("Covers edits to Claude's config and synced connector-list "
+                     + "changes, including when a remote change needs a Claude restart.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
