@@ -9,12 +9,13 @@ final class ReconcilerTests: XCTestCase {
         MasterStore(version: 1, mcps: mcps)
     }
 
+    // MARK: ingestion — the only file→store flow
+
     func testUnknownServerIsImportedEnabled() {
         let outcome = Reconciler.reconcile(store: .empty, claudeServers: ["new": configA])
         XCTAssertEqual(outcome.store.mcps["new"],
                        MCPEntry(enabled: true, config: configA, lastEditView: .form))
         XCTAssertTrue(outcome.storeChanged)
-        XCTAssertEqual(outcome.missingEnabled, [])
     }
 
     func testPendingRemovalNotResurrected() {
@@ -36,14 +37,24 @@ final class ReconcilerTests: XCTestCase {
         XCTAssertTrue(outcome.storeChanged)
     }
 
-    func testExternalEditWinsOverStore() {
+    // MARK: store is the source of truth — the file never edits known entries
+
+    func testExternalEditDoesNotChangeStore() {
+        // Fresh launch (nil baseline): a hand-edit made while the app was off
+        // still loses — Claude's config is downstream.
         let outcome = Reconciler.reconcile(
-            store: store(["s": MCPEntry(enabled: true, config: configA, lastEditView: .json)]),
+            store: store(["s": MCPEntry(enabled: true, config: configA)]),
             claudeServers: ["s": configB])
-        XCTAssertEqual(outcome.store.mcps["s"]?.config, configB)
-        XCTAssertEqual(outcome.store.mcps["s"]?.lastEditView, .json,
-                       "view memory must survive reconciliation")
-        XCTAssertTrue(outcome.storeChanged)
+        XCTAssertEqual(outcome.store.mcps["s"]?.config, configA)
+        XCTAssertFalse(outcome.storeChanged)
+    }
+
+    func testExternalEditWithChangedBaselineDoesNotChangeStore() {
+        let outcome = Reconciler.reconcile(
+            store: store(["s": MCPEntry(enabled: true, config: configA)]),
+            claudeServers: ["s": configB], baseline: ["s": configA])
+        XCTAssertEqual(outcome.store.mcps["s"]?.config, configA)
+        XCTAssertFalse(outcome.storeChanged)
     }
 
     func testPendingEditSurvivesReloadWhenFileUnchanged() {
@@ -54,20 +65,21 @@ final class ReconcilerTests: XCTestCase {
         XCTAssertFalse(outcome.storeChanged)
     }
 
-    func testExternalEditWinsWithChangedBaseline() {
-        let outcome = Reconciler.reconcile(
-            store: store(["s": MCPEntry(enabled: true, config: configA)]),
-            claudeServers: ["s": configB], baseline: ["s": configA])
-        XCTAssertEqual(outcome.store.mcps["s"]?.config, configB)
-        XCTAssertTrue(outcome.storeChanged)
-    }
-
-    func testDisabledButPresentBecomesEnabled() {
+    func testDisabledEntryStaysDisabledWhenPresentInFile() {
         let outcome = Reconciler.reconcile(
             store: store(["s": MCPEntry(enabled: false, config: configA)]),
             claudeServers: ["s": configA], baseline: [:])
-        XCTAssertEqual(outcome.store.mcps["s"]?.enabled, true)
-        XCTAssertTrue(outcome.storeChanged)
+        XCTAssertEqual(outcome.store.mcps["s"]?.enabled, false)
+        XCTAssertFalse(outcome.storeChanged)
+    }
+
+    func testDisabledEntryStaysDisabledWhenExternallyModified() {
+        let outcome = Reconciler.reconcile(
+            store: store(["s": MCPEntry(enabled: false, config: configA)]),
+            claudeServers: ["s": configB], baseline: ["s": configA])
+        XCTAssertEqual(outcome.store.mcps["s"]?.enabled, false)
+        XCTAssertEqual(outcome.store.mcps["s"]?.config, configA)
+        XCTAssertFalse(outcome.storeChanged)
     }
 
     func testPendingDisableSurvivesReloadWhenFileUnchanged() {
@@ -86,22 +98,13 @@ final class ReconcilerTests: XCTestCase {
         XCTAssertFalse(outcome.storeChanged)
     }
 
-    func testDisabledButExternallyModifiedBecomesEnabled() {
-        let outcome = Reconciler.reconcile(
-            store: store(["s": MCPEntry(enabled: false, config: configA)]),
-            claudeServers: ["s": configB], baseline: ["s": configA])
-        XCTAssertEqual(outcome.store.mcps["s"]?.enabled, true)
-        XCTAssertEqual(outcome.store.mcps["s"]?.config, configB)
-        XCTAssertTrue(outcome.storeChanged)
-    }
-
-    func testEnabledButMissingIsFlaggedNotDeleted() {
-        let outcome = Reconciler.reconcile(
-            store: store(["gone": MCPEntry(enabled: true, config: configA),
-                          "also-gone": MCPEntry(enabled: true, config: configB)]),
-            claudeServers: [:])
-        XCTAssertEqual(outcome.missingEnabled, ["also-gone", "gone"])
-        XCTAssertEqual(outcome.store.mcps.count, 2, "never silently deleted")
+    func testEnabledButMissingLeavesStoreUntouched() {
+        // External removals never delete or disable; the caller regenerates
+        // the file from the store instead.
+        let s = store(["gone": MCPEntry(enabled: true, config: configA),
+                       "also-gone": MCPEntry(enabled: true, config: configB)])
+        let outcome = Reconciler.reconcile(store: s, claudeServers: [:])
+        XCTAssertEqual(outcome.store, s)
         XCTAssertFalse(outcome.storeChanged)
     }
 
@@ -110,7 +113,6 @@ final class ReconcilerTests: XCTestCase {
         let outcome = Reconciler.reconcile(store: s, claudeServers: [:])
         XCTAssertEqual(outcome.store, s)
         XCTAssertFalse(outcome.storeChanged)
-        XCTAssertEqual(outcome.missingEnabled, [])
     }
 
     func testIdenticalStateIsNoChange() {

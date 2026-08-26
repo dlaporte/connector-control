@@ -36,6 +36,13 @@ public struct MasterStore: Equatable, Codable {
         set { profiles[activeProfile, default: Profile()].mcps = newValue }
     }
 
+    /// Claude's `mcpServers` section rendered from this store — the enabled
+    /// subset's configs. The store is the source of truth; Claude's config is
+    /// downstream, and any divergence from this render is regenerated away.
+    public var enabledServers: [String: JSONValue] {
+        mcps.filter(\.value.enabled).mapValues(\.config)
+    }
+
     public static let empty = MasterStore(
         version: 2, activeProfile: "Default",
         profiles: ["Default": Profile()])

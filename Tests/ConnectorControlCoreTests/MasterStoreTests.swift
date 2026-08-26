@@ -15,6 +15,13 @@ final class MasterStoreTests: XCTestCase {
         try? FileManager.default.removeItem(at: dir)
     }
 
+    func testEnabledServersRendersEnabledSubset() {
+        let store = MasterStore(version: 2, mcps: [
+            "on": MCPEntry(enabled: true, config: .object(["command": .string("a")])),
+            "off": MCPEntry(enabled: false, config: .object(["command": .string("b")]))])
+        XCTAssertEqual(store.enabledServers, ["on": .object(["command": .string("a")])])
+    }
+
     func testLoadMissingFileReturnsEmptyStore() {
         let result = MasterStoreIO.load(from: url)
         XCTAssertEqual(result.store, .empty)

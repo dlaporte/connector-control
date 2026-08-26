@@ -10,7 +10,6 @@ struct PopoverView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
-            if !state.missingEnabled.isEmpty { missingBanner }
             if let error = state.lastError { errorBanner(error) }
             mcpList
             if state.needsClaudeRestart || state.applyRetryNeeded {
@@ -99,23 +98,6 @@ struct PopoverView: View {
         let total = state.store.mcps.count
         let enabled = state.store.mcps.values.filter(\.enabled).count
         return total == 0 ? "No connectors configured" : "\(enabled) of \(total) enabled"
-    }
-
-    private var missingBanner: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label("Claude's config is missing \(state.missingEnabled.count) connector(s): "
-                  + state.missingEnabled.joined(separator: ", "),
-                  systemImage: "exclamationmark.triangle.fill")
-                .font(.callout)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Button("Restore") { state.restoreMissing() }
-                Button("Mark Disabled") { state.markMissingDisabled() }
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.yellow.opacity(0.15))
     }
 
     private func errorBanner(_ message: String) -> some View {

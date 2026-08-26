@@ -24,7 +24,7 @@ public struct ConfigService {
     /// by this machine's state.
     public func loadAndReconcile(baseline: [String: JSONValue]? = nil,
                                  storeAuthoritative: Bool = false) throws
-        -> (store: MasterStore, missingEnabled: [String], notes: [String],
+        -> (store: MasterStore, notes: [String],
             claudeServers: [String: JSONValue]?) {
         var notes: [String] = []
         let loaded = MasterStoreIO.load(from: paths.masterStoreURL)
@@ -37,7 +37,7 @@ public struct ConfigService {
         do {
             servers = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
         } catch is ClaudeConfigError {
-            return (loaded.store, [],
+            return (loaded.store,
                     notes + ["Claude's config file is not valid JSON. Your MCP list is safe; "
                      + "use Backups ▸ Restore… to repair the file."],
                     nil)
@@ -60,7 +60,7 @@ public struct ConfigService {
         if outcome.storeChanged || loaded.corruptFileURL != nil {
             try saveStore(outcome.store)
         }
-        return (outcome.store, outcome.missingEnabled, notes, servers)
+        return (outcome.store, notes, servers)
     }
 
     /// Backup mcps.json (if present), then atomically save the store.
@@ -74,12 +74,13 @@ public struct ConfigService {
     public func apply(_ store: MasterStore) throws {
         try backups.ensureOriginalSnapshot(of: paths.claudeConfigURL)
         try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config")
-        let enabled = store.mcps.filter(\.value.enabled).mapValues(\.config)
-        try ClaudeConfigIO.write(mcpServers: enabled, to: paths.claudeConfigURL)
+        try ClaudeConfigIO.write(mcpServers: store.enabledServers, to: paths.claudeConfigURL)
     }
 
-    /// Backup the current file, copy the chosen backup over it, then persist a
-    /// freshly reconciled store so the UI reflects the restored contents.
+    /// Backup the current file, copy the chosen backup over it, then adopt the
+    /// snapshot into the store — a restore is the user deliberately making the
+    /// snapshot the truth, and anything less would leave a divergence for the
+    /// next reload to regenerate away, silently undoing the restore.
     /// The backup's content is validated BEFORE the live file is touched.
     /// Returns the restored file's servers so the caller can sync its
     /// reconciliation baseline to them.
@@ -103,7 +104,7 @@ public struct ConfigService {
         try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config")
         try AtomicFile.write(data, to: paths.claudeConfigURL)
         let servers = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
-        let outcome = Reconciler.reconcile(store: store, claudeServers: servers)
+        let outcome = Reconciler.adoptSnapshot(store: store, servers: servers)
         if outcome.storeChanged { try saveStore(outcome.store) }
         return servers
     }

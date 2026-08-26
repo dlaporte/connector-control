@@ -6,7 +6,6 @@ import ConnectorControlCore
 @MainActor
 final class AppState: ObservableObject {
     @Published var store: MasterStore = .empty
-    @Published var missingEnabled: [String] = []
     @Published var lastError: String?
     @Published var needsClaudeRestart = false
     /// True when the last apply threw; keeps a retry affordance visible even
@@ -110,16 +109,11 @@ final class AppState: ObservableObject {
 
     /// The master store changed on disk from outside the app — a sync tool, or
     /// another machine writing the shared mcps.json. The store is the source of
-    /// truth, so adopt it as-is and regenerate Claude's config from it, then
-    /// surface Restart Required — rather than treating the resulting Claude-side
-    /// divergence as "missing connectors" to reconcile.
+    /// truth, so adopt it as-is; reload regenerates Claude's config from any
+    /// divergence and arms Restart Required. Our own persistStore writes also
+    /// trip this watcher, but they leave no divergence, so the reload no-ops.
     private func adoptExternalStoreChange() {
-        let before = store.mcps
         reload(storeAuthoritative: true)
-        // Our own persistStore writes also trip this watcher; when the on-disk
-        // store already matches memory there is nothing external to adopt.
-        guard store.mcps != before else { return }
-        if isDirty { performApply() }   // write the adopted enabled set → Restart Required
     }
 
     /// Repoints the master store to a new directory (or back to the default when
@@ -158,7 +152,7 @@ final class AppState: ObservableObject {
     }
 
     var isDirty: Bool {
-        store.mcps.filter(\.value.enabled).mapValues(\.config) != appliedServers
+        store.enabledServers != appliedServers
     }
 
     var sortedNames: [String] { store.mcps.keys.sorted() }
@@ -186,7 +180,6 @@ final class AppState: ObservableObject {
             // Capture "before" state for the notification rules below, computed
             // BEFORE any state is overwritten.
             let wasLoaded = hasLoadedOnce
-            let previousMissingWasEmpty = missingEnabled.isEmpty
             let previousApplied = appliedServers
             let previousStoreMcps = store.mcps
 
@@ -194,16 +187,8 @@ final class AppState: ObservableObject {
                 baseline: hasLoadedOnce ? appliedServers : nil,
                 storeAuthoritative: storeAuthoritative)
             store = result.store
-            missingEnabled = result.missingEnabled
-            var firedMissingNotification = false
             var claudeConfigChangedExternally = false
             if let servers = result.claudeServers {
-                // Suppress the missing-connectors alarm for authoritative adopts
-                // (repoint / restore / sync): those regenerate Claude's config
-                // immediately, so there is nothing for the user to "restore."
-                firedMissingNotification =
-                    !storeAuthoritative
-                    && wasLoaded && previousMissingWasEmpty && !result.missingEnabled.isEmpty
                 claudeConfigChangedExternally = wasLoaded && servers != previousApplied
                 appliedServers = servers
                 hasLoadedOnce = true
@@ -220,13 +205,28 @@ final class AppState: ObservableObject {
             lastError = result.notes.first
             if !isDirty { applyRetryNeeded = false }
 
+            // The store is the source of truth; Claude's config is downstream.
+            // Any divergence from the render — an external edit, a re-added
+            // disabled entry, a removal, a wiped file — is regenerated away,
+            // arming the same Restart Required footer as a user-made change.
+            // Post-ingestion the render includes imported unknowns, and our own
+            // applies leave file == render, so divergence here is external by
+            // definition. No loop: the regenerating write satisfies the
+            // watcher-triggered follow-up reload.
+            var regenerated = false
+            if let servers = result.claudeServers, servers != store.enabledServers {
+                performApply()
+                regenerated = true
+            }
+
             // Fire notifications AFTER all state above has been assigned, and
-            // never on first load. At most one notification per reload.
-            if firedMissingNotification {
-                let names = result.missingEnabled.joined(separator: ", ")
+            // never on first load or for user-initiated authoritative adopts.
+            // At most one notification per reload.
+            if regenerated && wasLoaded && !storeAuthoritative {
                 notify("Connector Control",
-                       "Claude's config is missing \(result.missingEnabled.count) "
-                       + "connector(s): \(names) — open the menu bar item to restore.")
+                       "Claude's config was changed outside Connector Control — "
+                       + "regenerated from your connector list. "
+                       + "Restart Claude to pick it up.")
             } else if claudeConfigChangedExternally {
                 notify("Connector Control", "Claude's config changed outside Connector Control.")
             } else if storeChangedExternally {
@@ -295,8 +295,7 @@ final class AppState: ObservableObject {
     private func performApply() {
         do {
             try service.apply(store)
-            appliedServers = store.mcps.filter(\.value.enabled).mapValues(\.config)
-            missingEnabled = []
+            appliedServers = store.enabledServers
             UserDefaults.standard.set(Date(), forKey: "lastApplyDate")
             refreshRestartState()
             lastError = nil
@@ -324,9 +323,6 @@ final class AppState: ObservableObject {
         store.mcps.removeValue(forKey: name)
         persistStore()
     }
-
-    /// Recovery for externally removed MCPs: rewrite Claude's config from the store.
-    func restoreMissing() { apply() }
 
     func quitApp() {
         if UserDefaults.standard.object(forKey: "confirmBeforeQuit") as? Bool ?? true {
@@ -359,13 +355,6 @@ final class AppState: ObservableObject {
                 self?.refreshRestartState()
             }
         }
-    }
-
-    func markMissingDisabled() {
-        for name in missingEnabled { store.mcps[name]?.enabled = false }
-        missingEnabled = []
-        persistStore()
-        performApply()
     }
 
     // MARK: - Profiles

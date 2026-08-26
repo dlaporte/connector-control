@@ -72,6 +72,17 @@ store watcher into a `storeAuthoritative` reload that ingests nothing.
 (note + Backups ▸ Restore…, as today) — regenerating would require reading
 the file to preserve non-MCP keys, which is exactly what can't be done.
 
+## Backups ▸ Restore (Claude series)
+
+A restore is a deliberate user action that makes the snapshot the truth, so
+`ConfigService.restoreClaudeConfig` adopts the snapshot INTO the store
+(previously it leaned on file-wins reconciliation, which store-wins would
+undo on the next reload): entries present in the snapshot are upserted
+(config from the snapshot, enabled, `lastEditView` preserved for known
+names); known entries absent from the snapshot are disabled — not deleted;
+the store is persisted. This guarantees `enabledServers` equals the restored
+servers, so no divergence follows and the restore sticks.
+
 ## Deletions
 
 - `Reconciler.isExternalChange`, `isExternalReappearance`,

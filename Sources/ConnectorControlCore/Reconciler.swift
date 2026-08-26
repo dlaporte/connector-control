@@ -2,12 +2,16 @@ import Foundation
 
 public struct ReconcileOutcome: Equatable {
     public var store: MasterStore
-    /// Names enabled in the store but absent from Claude's file — surfaced in
-    /// the UI so the user can restore them. Sorted for stable display.
-    public var missingEnabled: [String]
     public var storeChanged: Bool
 }
 
+/// The store is the source of truth; Claude's config is downstream of it.
+/// Reconciliation therefore performs exactly one file→store flow: ingesting
+/// entries the store has never heard of (installer scripts and hand-edits
+/// writing straight into claude_desktop_config.json). Known entries are never
+/// modified by the file — edits, re-adds of disabled connectors, and removals
+/// are all resolved by the caller regenerating the file from
+/// `store.enabledServers`.
 public enum Reconciler {
     public static func reconcile(
         store: MasterStore, claudeServers: [String: JSONValue],
@@ -16,21 +20,8 @@ public enum Reconciler {
         var result = store
         var changed = false
 
-        for (name, config) in claudeServers {
-            if var entry = result.mcps[name] {
-                if entry.config != config
-                    && isExternalChange(name: name, config: config, baseline: baseline) {
-                    entry.config = config
-                    changed = true
-                }
-                if !entry.enabled && isExternalReappearance(
-                    name: name, config: config, baseline: baseline) {
-                    entry.enabled = true
-                    changed = true
-                }
-                result.mcps[name] = entry
-            } else if isExternalAddition(name: name, config: config,
-                                         baseline: baseline) {
+        for (name, config) in claudeServers where result.mcps[name] == nil {
+            if isExternalAddition(name: name, config: config, baseline: baseline) {
                 result.mcps[name] = MCPEntry(enabled: true, config: config)
                 changed = true
             }
@@ -39,12 +30,7 @@ public enum Reconciler {
             // silently resurrect a connector the user just deleted.
         }
 
-        let missing = store.mcps
-            .filter { $0.value.enabled && claudeServers[$0.key] == nil }
-            .keys.sorted()
-
-        return ReconcileOutcome(store: result, missingEnabled: missing,
-                                storeChanged: changed)
+        return ReconcileOutcome(store: result, storeChanged: changed)
     }
 
     /// A file entry unknown to the store is imported only when it's genuinely
@@ -58,26 +44,25 @@ public enum Reconciler {
         return baseline[name] != config
     }
 
-    /// A disabled-in-store server found in Claude's file is a PENDING DISABLE
-    /// (awaiting Apply) when the file entry matches what we last knew the file
-    /// to contain. It is an external re-add only when it differs from — or is
-    /// absent from — the last-known baseline. With no baseline (fresh launch),
-    /// the user's disable intent is preserved.
-    private static func isExternalReappearance(
-        name: String, config: JSONValue, baseline: [String: JSONValue]?
-    ) -> Bool {
-        guard let baseline else { return false }
-        return baseline[name] != config
-    }
-
-    /// A store/file config mismatch is a PENDING EDIT (awaiting Apply) when the
-    /// file entry still matches the last-known baseline. The file wins only on
-    /// evidence of an external change — or with no baseline (fresh launch),
-    /// where hand-edits made while the app wasn't running take precedence.
-    private static func isExternalChange(
-        name: String, config: JSONValue, baseline: [String: JSONValue]?
-    ) -> Bool {
-        guard let baseline else { return true }
-        return baseline[name] != config
+    /// Adopts a deliberately restored Claude-config snapshot INTO the store —
+    /// the one case where the file legitimately rewrites store truth, because
+    /// the user chose that snapshot. Entries in the snapshot are upserted
+    /// (snapshot's config, enabled, view memory preserved for known names);
+    /// known entries absent from it are disabled, never deleted. The result
+    /// renders exactly the snapshot, so no divergence survives the restore.
+    public static func adoptSnapshot(
+        store: MasterStore, servers: [String: JSONValue]
+    ) -> ReconcileOutcome {
+        var result = store
+        for (name, entry) in result.mcps where entry.enabled && servers[name] == nil {
+            result.mcps[name]?.enabled = false
+        }
+        for (name, config) in servers {
+            var entry = result.mcps[name] ?? MCPEntry(enabled: true, config: config)
+            entry.config = config
+            entry.enabled = true
+            result.mcps[name] = entry
+        }
+        return ReconcileOutcome(store: result, storeChanged: result != store)
     }
 }

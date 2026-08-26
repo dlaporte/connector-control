@@ -27,7 +27,6 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(Set(result.store.mcps.keys),
                        ["scoutbook", "aws-mcp", "service-now"])
         XCTAssertTrue(result.store.mcps.values.allSatisfy(\.enabled))
-        XCTAssertEqual(result.missingEnabled, [])
         XCTAssertEqual(result.claudeServers?.count, 3)
         // reconciled store was persisted
         XCTAssertEqual(MasterStoreIO.load(from: paths.masterStoreURL).store, result.store)
@@ -62,8 +61,9 @@ final class ConfigServiceTests: XCTestCase {
         // Claude wipes the file to a preferences-only stub (issue #32345 shape)
         try Data(#"{"preferences": {}}"#.utf8).write(to: paths.claudeConfigURL)
         let result = try service.loadAndReconcile()
-        XCTAssertEqual(result.missingEnabled, ["aws-mcp", "scoutbook", "service-now"])
         XCTAssertEqual(result.store.mcps.count, 3, "nothing deleted")
+        XCTAssertNotEqual(result.claudeServers, result.store.enabledServers,
+                          "divergence must be visible to the caller for regeneration")
         // restore: apply the store puts them back, preserving the stub's keys
         try service.apply(store)
         XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL).count, 3)
@@ -98,6 +98,37 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL).count, 3)
     }
 
+    func testRestoreClaudeConfigAdoptsSnapshotIntoStore() throws {
+        var store = try service.loadAndReconcile().store
+        store.mcps["aws-mcp"]?.enabled = false
+        try service.apply(store)  // backup captures the original 3-server file
+        let backup = try XCTUnwrap(
+            try service.backups.backups(series: "claude_desktop_config").first)
+        try service.restoreClaudeConfig(from: backup, mergedWith: store)
+        let persisted = MasterStoreIO.load(from: paths.masterStoreURL).store
+        XCTAssertEqual(persisted.mcps["aws-mcp"]?.enabled, true,
+                       "a restored snapshot becomes the truth — re-enabled in the store")
+        XCTAssertEqual(persisted.enabledServers,
+                       try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL),
+                       "no divergence may remain after a restore, or the next reload undoes it")
+    }
+
+    func testRestoreDisablesEntriesAbsentFromSnapshot() throws {
+        let store = try service.loadAndReconcile().store
+        let snapshot = dir.appendingPathComponent("snap.json")
+        try Data(#"{"mcpServers": {"scoutbook": {"command": "npx"}}}"#.utf8)
+            .write(to: snapshot)
+        try service.restoreClaudeConfig(from: snapshot, mergedWith: store)
+        let persisted = MasterStoreIO.load(from: paths.masterStoreURL).store
+        XCTAssertEqual(persisted.mcps.count, 3, "absent entries are disabled, never deleted")
+        XCTAssertEqual(persisted.mcps["aws-mcp"]?.enabled, false)
+        XCTAssertEqual(persisted.mcps["service-now"]?.enabled, false)
+        XCTAssertEqual(persisted.mcps["scoutbook"]?.enabled, true)
+        XCTAssertEqual(persisted.mcps["scoutbook"]?.config,
+                       .object(["command": .string("npx")]),
+                       "the snapshot's config is adopted")
+    }
+
     func testMalformedClaudeConfigStillReturnsStore() throws {
         let firstResult = try service.loadAndReconcile()
         XCTAssertEqual(firstResult.store.mcps.count, 3)
@@ -107,7 +138,6 @@ final class ConfigServiceTests: XCTestCase {
         let result = try service.loadAndReconcile()
 
         XCTAssertEqual(result.store.mcps.count, 3)
-        XCTAssertEqual(result.missingEnabled, [])
         XCTAssertEqual(result.notes.count, 1)
         XCTAssertTrue(result.notes[0].contains("Backups"))
         XCTAssertNil(result.claudeServers, "no baseline should be recorded from a failed reconcile")

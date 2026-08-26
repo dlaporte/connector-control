@@ -11,9 +11,10 @@ struct ConnectorControlApp: App {
                 .environmentObject(state)
         } label: {
             // A distinctive glyph matters here: switch.2 was nearly identical
-            // to the Control Center icon.
-            Image(systemName: state.missingEnabled.isEmpty
-                ? "powerplug.fill" : "exclamationmark.triangle.fill")
+            // to the Control Center icon. The alarm variant marks the one
+            // persistent problem state: a failed apply awaiting retry.
+            Image(systemName: state.applyRetryNeeded
+                ? "exclamationmark.triangle.fill" : "powerplug.fill")
         }
         .menuBarExtraStyle(.window)
 
