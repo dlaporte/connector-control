@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>ConnectorControl.Core</RootNamespace>
+    <AssemblyName>ConnectorControl.Core</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="ConnectorControl.Core.Tests" />
+  </ItemGroup>
+</Project>
