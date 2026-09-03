@@ -43,7 +43,7 @@ public static class MasterStoreIO
                 File.Move(path, aside, overwrite: false);
                 return (MasterStore.Empty(), aside);
             }
-            catch (IOException)
+            catch (Exception moveEx) when (moveEx is IOException or UnauthorizedAccessException)
             {
                 return (MasterStore.Empty(), path);   // couldn't move it aside; it stays in place
             }

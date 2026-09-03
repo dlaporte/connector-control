@@ -192,4 +192,11 @@ public class ProfileTests : IDisposable
         Assert.NotEqual(store, clone);
         Assert.False(store.Mcps.ContainsKey("z"));
     }
+
+    [Fact]
+    public void VersionBeyondInt32IsAcceptedLikeSwiftInt64()
+    {
+        var store = MasterStore.FromJson(JsonValue.Parse("{\"version\":99999999999,\"activeProfile\":\"D\",\"profiles\":{\"D\":{\"mcps\":{}}}}"));
+        Assert.Equal(99999999999L, store.Version);
+    }
 }

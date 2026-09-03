@@ -7,13 +7,13 @@ namespace ConnectorControl.Core;
 /// </summary>
 public sealed class MasterStore : IEquatable<MasterStore>
 {
-    public const int CurrentVersion = 2;
+    public const long CurrentVersion = 2;
 
-    public int Version { get; set; }
+    public long Version { get; set; }
     public string ActiveProfile { get; set; }
     public Dictionary<string, Profile> Profiles { get; }
 
-    public MasterStore(int version, string activeProfile, IEnumerable<KeyValuePair<string, Profile>> profiles)
+    public MasterStore(long version, string activeProfile, IEnumerable<KeyValuePair<string, Profile>> profiles)
     {
         Version = version;
         ActiveProfile = activeProfile;
@@ -136,11 +136,10 @@ public sealed class MasterStore : IEquatable<MasterStore>
         {
             throw new FormatException("master store: top level is not an object");
         }
-        var version = Require(json, "version", JsonKind.Int).IntValue;
         var active = Require(json, "activeProfile", JsonKind.String).StringValue;
         var profiles = Require(json, "profiles", JsonKind.Object).ObjectProperties
             .Select(p => new KeyValuePair<string, Profile>(p.Key, ProfileFromJson(p.Value)));
-        return new MasterStore(checked((int)version), active, profiles);
+        return new MasterStore(Require(json, "version", JsonKind.Int).IntValue, active, profiles);
     }
 
     private static Profile ProfileFromJson(JsonValue json)
