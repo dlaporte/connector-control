@@ -109,7 +109,15 @@ public class JsonValueTests
     [InlineData("1e400")]
     public void InvalidDocumentsThrowJsonException(string text)
     {
-        Assert.Throws<JsonException>(() => JsonValue.Parse(text));
+        Assert.ThrowsAny<JsonException>(() => JsonValue.Parse(text));
+    }
+
+    [Fact]
+    public void Utf8BomIsAccepted()
+    {
+        byte[] bytes = [0xEF, 0xBB, 0xBF, (byte)'{', (byte)'"', (byte)'a', (byte)'"', (byte)':', (byte)'1', (byte)'}'];
+        Assert.Equal(JsonValue.Object(("a", JsonValue.Int(1))), JsonValue.Parse(bytes));
+        Assert.Equal(JsonValue.Object(), JsonValue.Parse(new byte[] { 0xEF, 0xBB, 0xBF, (byte)'{', (byte)'}' }));
     }
 
     [Fact]

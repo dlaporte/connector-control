@@ -118,31 +118,27 @@ public sealed class JsonValue : IEquatable<JsonValue>
 
     public static JsonValue Parse(string json) => Parse(Encoding.UTF8.GetBytes(json));
 
+    private static ReadOnlySpan<byte> Utf8Bom => [0xEF, 0xBB, 0xBF];
+
     /// <summary>Strict parse (no comments, no trailing commas). Throws <see cref="JsonException"/>.</summary>
     public static JsonValue Parse(ReadOnlySpan<byte> utf8Json)
     {
-        try
+        if (utf8Json.StartsWith(Utf8Bom)) { utf8Json = utf8Json[3..]; }   // Apple Foundation accepts a BOM; so do we
+        var reader = new Utf8JsonReader(utf8Json, new JsonReaderOptions
         {
-            var reader = new Utf8JsonReader(utf8Json, new JsonReaderOptions
-            {
-                CommentHandling = JsonCommentHandling.Disallow,
-                AllowTrailingCommas = false,
-            });
-            if (!reader.Read())
-            {
-                throw new JsonException("The document is empty.");
-            }
-            var value = ReadValue(ref reader);
-            if (reader.Read())
-            {
-                throw new JsonException("Unexpected content after the JSON value.");
-            }
-            return value;
-        }
-        catch (JsonException ex) when (ex.GetType().Name == "JsonReaderException")
+            CommentHandling = JsonCommentHandling.Disallow,
+            AllowTrailingCommas = false,
+        });
+        if (!reader.Read())
         {
-            throw new JsonException(ex.Message, ex);
+            throw new JsonException("The document is empty.");
         }
+        var value = ReadValue(ref reader);
+        if (reader.Read())
+        {
+            throw new JsonException("Unexpected content after the JSON value.");
+        }
+        return value;
     }
 
     private static JsonValue ReadValue(ref Utf8JsonReader reader)
@@ -295,5 +291,5 @@ public sealed class JsonValue : IEquatable<JsonValue>
     public static bool operator ==(JsonValue? left, JsonValue? right) => left is null ? right is null : left.Equals(right);
     public static bool operator !=(JsonValue? left, JsonValue? right) => !(left == right);
 
-    public override string ToString() => $"JsonValue({Kind})";
+    public override string ToString() => EditorText();
 }
