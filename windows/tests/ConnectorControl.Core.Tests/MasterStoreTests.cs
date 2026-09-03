@@ -91,6 +91,13 @@ public class MasterStoreTests : IDisposable
     }
 
     [Fact]
+    public void BackupTimestampTreatsUnspecifiedKindAsUtc()
+    {
+        var unspecified = new DateTime(2025, 7, 15, 17, 20, 0, DateTimeKind.Unspecified);
+        Assert.Equal("2025-07-15T17-20-00-000Z", BackupTimestamp.From(unspecified));
+    }
+
+    [Fact]
     public void LoadCorruptFileReportsOriginalPathWhenMoveFails()
     {
         var fixedNow = DateTime.UnixEpoch.AddSeconds(1_752_600_000);

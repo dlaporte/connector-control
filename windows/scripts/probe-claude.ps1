@@ -14,7 +14,7 @@ Section "Claude packages (Get-AppxPackage)"
 $pkgs = Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'Claude*' -or $_.Name -like 'Anthropic*' }
 if ($pkgs) { $pkgs | Select-Object Name, PackageFamilyName, Version, Architecture, InstallLocation | Format-List } else { "none" }
 
-Section "Start menu entries (Get-StartApps) — the AppID is the AUMID used to relaunch"
+Section "Start menu entries (Get-StartApps) - the AppID is the AUMID used to relaunch"
 $apps = Get-StartApps -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '*Claude*' }
 if ($apps) { $apps | Format-Table Name, AppID -AutoSize } else { "none" }
 

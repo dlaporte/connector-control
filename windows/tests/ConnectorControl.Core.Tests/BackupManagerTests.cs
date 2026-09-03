@@ -122,6 +122,19 @@ public class BackupManagerTests : IDisposable
     }
 
     [Fact]
+    public void BackupsDirectoryAndOriginalSnapshotArePrivate()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows only");
+            return;   // CA1416: the analyzer needs an explicit exit after the guard
+        }
+        manager.EnsureOriginalSnapshot(source);
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(manager.BackupsDir));
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.Combine(manager.BackupsDir, "claude_desktop_config.original.json")));
+    }
+
+    [Fact]
     public void SeriesAreIndependent()
     {
         manager.BackUp(source, Series);

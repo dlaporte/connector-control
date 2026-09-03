@@ -24,7 +24,7 @@ public sealed class BackupManager
         {
             return;
         }
-        Directory.CreateDirectory(BackupsDir);
+        EnsureBackupsDir();
         File.Copy(path, dest);
         OwnerOnlyAcl.TryApply(dest);   // backups can hold env-var secrets
     }
@@ -45,7 +45,7 @@ public sealed class BackupManager
         {
             return newest;
         }
-        Directory.CreateDirectory(BackupsDir);
+        EnsureBackupsDir();
         var stamp = BackupTimestamp.From(now ?? DateTime.UtcNow);
         var dest = Path.Combine(BackupsDir, $"{series}.{stamp}.json");
         int counter = 2;
@@ -81,6 +81,15 @@ public sealed class BackupManager
             })
             .OrderByDescending(Path.GetFileName, StringComparer.Ordinal)
             .ToList();
+    }
+
+    private void EnsureBackupsDir()
+    {
+        if (!Directory.Exists(BackupsDir))
+        {
+            Directory.CreateDirectory(BackupsDir);
+            OwnerOnlyAcl.TryApply(BackupsDir);
+        }
     }
 
     private void Prune(string series)
