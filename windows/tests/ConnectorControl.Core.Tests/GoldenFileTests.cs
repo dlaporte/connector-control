@@ -11,9 +11,6 @@ public class GoldenFileTests
             .Select(p => System.IO.Path.GetFileName(p))
             .OrderBy(n => n, StringComparer.Ordinal));
 
-    /// <summary>Inputs whose keys are plain identifiers, so the collated order is unambiguous.</summary>
-    public static TheoryData<string> SerializationInputs => new("claude_config.json", "master_store_v2.json", "edge_cases.json");
-
     [Theory]
     [MemberData(nameof(AllInputs))]
     public void EncoderFormatMatchesApple(string name)
@@ -31,7 +28,7 @@ public class GoldenFileTests
     }
 
     [Theory]
-    [MemberData(nameof(SerializationInputs))]
+    [MemberData(nameof(AllInputs))]
     public void SerializationFormatMatchesApple(string name)
     {
         var value = JsonValue.Parse(Fixtures.Bytes($"golden/inputs/{name}"));
