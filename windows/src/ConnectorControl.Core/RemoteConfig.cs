@@ -15,9 +15,9 @@ public sealed class RemoteConfig : IEquatable<RemoteConfig>
     public RemoteConfig(
         string url,
         RemoteAuth auth,
+        RemoteLaunchStyle launchStyle,
         IEnumerable<string>? extraArgs = null,
-        IEnumerable<KeyValuePair<string, string>>? passthroughEnv = null,
-        RemoteLaunchStyle launchStyle = RemoteLaunchStyle.Npx)
+        IEnumerable<KeyValuePair<string, string>>? passthroughEnv = null)
     {
         Url = url;
         Auth = auth;

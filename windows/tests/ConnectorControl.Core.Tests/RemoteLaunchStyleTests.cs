@@ -63,13 +63,13 @@ public class RemoteLaunchStyleTests
     [Fact]
     public void BareNpxDecodesAsNpxStyle()
     {
-        var decoded = RemotePattern.Decode(RemotePattern.Make(Url));
+        var decoded = RemotePattern.Decode(RemotePattern.Make(Url, RemoteLaunchStyle.Npx));
         Assert.Equal(RemoteLaunchStyle.Npx, decoded?.LaunchStyle);
     }
 
     [Fact]
     public void StyleIsPartOfEquality()
     {
-        Assert.NotEqual(new RemoteConfig(Url, RemoteAuth.Auto), new RemoteConfig(Url, RemoteAuth.Auto, launchStyle: RemoteLaunchStyle.CmdNpx));
+        Assert.NotEqual(new RemoteConfig(Url, RemoteAuth.Auto, RemoteLaunchStyle.Npx), new RemoteConfig(Url, RemoteAuth.Auto, RemoteLaunchStyle.CmdNpx));
     }
 }

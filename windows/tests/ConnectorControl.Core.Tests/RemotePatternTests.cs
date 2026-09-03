@@ -58,13 +58,13 @@ public class RemotePatternTests
     [Fact]
     public void MakeBuildsCanonicalConfig()
     {
-        Assert.Equal(Config(["-y", "mcp-remote", "https://x.dev/mcp"]), RemotePattern.Make("https://x.dev/mcp"));
+        Assert.Equal(Config(["-y", "mcp-remote", "https://x.dev/mcp"]), RemotePattern.Make("https://x.dev/mcp", RemoteLaunchStyle.Npx));
     }
 
     [Fact]
     public void MakeThenDetectRoundTrips()
     {
-        Assert.Equal("https://x.dev/mcp", RemotePattern.Detect(RemotePattern.Make("https://x.dev/mcp")));
+        Assert.Equal("https://x.dev/mcp", RemotePattern.Detect(RemotePattern.Make("https://x.dev/mcp", RemoteLaunchStyle.Npx)));
     }
 
     [Fact]
@@ -72,14 +72,14 @@ public class RemotePatternTests
     {
         Assert.True(RemotePattern.IsRemoteShaped(Config(["-y", "mcp-remote", ""])));
         Assert.True(RemotePattern.IsRemoteShaped(Config(["mcp-remote", "not a url"])));
-        Assert.True(RemotePattern.IsRemoteShaped(RemotePattern.Make("https://x.dev/mcp")));
+        Assert.True(RemotePattern.IsRemoteShaped(RemotePattern.Make("https://x.dev/mcp", RemoteLaunchStyle.Npx)));
     }
 
     [Fact]
     public void IsCanonicalShapeCoversBareInvocations()
     {
         Assert.True(RemotePattern.IsCanonicalShape(Config(["-y", "mcp-remote", "not a url"])));
-        Assert.True(RemotePattern.IsCanonicalShape(RemotePattern.Make("https://x.dev/mcp")));
+        Assert.True(RemotePattern.IsCanonicalShape(RemotePattern.Make("https://x.dev/mcp", RemoteLaunchStyle.Npx)));
         Assert.True(RemotePattern.IsCanonicalShape(Config(["-y", "mcp-remote"])));
         Assert.False(RemotePattern.IsCanonicalShape(Config(["-y", "mcp-remote", "https://x.dev/mcp", "--header", "A: B"])));
         Assert.False(RemotePattern.IsCanonicalShape(Config(["-y", "pkg"])));

@@ -42,7 +42,7 @@ public class RemoteAuthTests
     [Fact]
     public void AutomaticRoundTrips()
     {
-        var rc = new RemoteConfig(Url, RemoteAuth.Auto);
+        var rc = new RemoteConfig(Url, RemoteAuth.Auto, RemoteLaunchStyle.Npx);
         var encoded = RemotePattern.Encode(rc);
         Assert.Equal(["-y", "mcp-remote", Url], Args(encoded)!);
         Assert.Equal(rc, RemotePattern.Decode(encoded));
@@ -51,7 +51,7 @@ public class RemoteAuthTests
     [Fact]
     public void BearerRoundTrips()
     {
-        var rc = new RemoteConfig(Url, new RemoteAuth.Bearer("secret-tok"));
+        var rc = new RemoteConfig(Url, new RemoteAuth.Bearer("secret-tok"), RemoteLaunchStyle.Npx);
         var encoded = RemotePattern.Encode(rc);
         Assert.Equal(["-y", "mcp-remote", Url, "--header", "Authorization:${AUTH_HEADER}"], Args(encoded)!);
         Assert.Equal(Pairs(("AUTH_HEADER", "Bearer secret-tok")), Env(encoded));
@@ -61,7 +61,7 @@ public class RemoteAuthTests
     [Fact]
     public void HeaderRoundTrips()
     {
-        var rc = new RemoteConfig(Url, new RemoteAuth.Header("X-API-Key", "k123"));
+        var rc = new RemoteConfig(Url, new RemoteAuth.Header("X-API-Key", "k123"), RemoteLaunchStyle.Npx);
         var encoded = RemotePattern.Encode(rc);
         Assert.Equal(["-y", "mcp-remote", Url, "--header", "X-API-Key:${AUTH_HEADER}"], Args(encoded)!);
         Assert.Equal(Pairs(("AUTH_HEADER", "k123")), Env(encoded));
@@ -71,7 +71,7 @@ public class RemoteAuthTests
     [Fact]
     public void OAuthClientRoundTrips()
     {
-        var rc = new RemoteConfig(Url, new RemoteAuth.OAuthClient("cid", "csecret", "read write"));
+        var rc = new RemoteConfig(Url, new RemoteAuth.OAuthClient("cid", "csecret", "read write"), RemoteLaunchStyle.Npx);
         var encoded = RemotePattern.Encode(rc);
         Assert.Equal(
             ["-y", "mcp-remote", Url,
@@ -107,7 +107,7 @@ public class RemoteAuthTests
     [Fact]
     public void OAuthClientWithoutScopes()
     {
-        var rc = new RemoteConfig(Url, new RemoteAuth.OAuthClient("cid", "", ""));
+        var rc = new RemoteConfig(Url, new RemoteAuth.OAuthClient("cid", "", ""), RemoteLaunchStyle.Npx);
         var encoded = RemotePattern.Encode(rc);
         Assert.Equal(["-y", "mcp-remote", Url, "--static-oauth-client-info", "{\"client_id\":\"cid\",\"client_secret\":\"\"}"], Args(encoded)!);
         Assert.Equal(rc, RemotePattern.Decode(encoded));
@@ -148,7 +148,7 @@ public class RemoteAuthTests
     [Fact]
     public void ExtraArgsPreserved()
     {
-        var rc = new RemoteConfig(Url, RemoteAuth.Auto, ["--transport", "http-only"]);
+        var rc = new RemoteConfig(Url, RemoteAuth.Auto, RemoteLaunchStyle.Npx, ["--transport", "http-only"]);
         var encoded = RemotePattern.Encode(rc);
         Assert.Equal(["-y", "mcp-remote", Url, "--transport", "http-only"], Args(encoded)!);
         Assert.Equal(rc, RemotePattern.Decode(encoded));

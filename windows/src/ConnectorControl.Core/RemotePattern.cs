@@ -82,7 +82,7 @@ public static class RemotePattern
         return args[1];
     }
 
-    public static JsonValue Make(string url, RemoteLaunchStyle style = RemoteLaunchStyle.Npx) =>
+    public static JsonValue Make(string url, RemoteLaunchStyle style) =>
         BuildConfig(style, ["-y", "mcp-remote", url], null);
 
     /// <summary>An mcp-remote invocation regardless of URL validity.</summary>
@@ -259,7 +259,7 @@ public static class RemotePattern
         {
             env.Remove(key);
         }
-        return new RemoteConfig(urlString, auth, extraArgs, env, style);
+        return new RemoteConfig(urlString, auth, style, extraArgs, env);
     }
 
     /// <summary>Compact, key-sorted JSON — what mcp-remote expects in a single CLI argument.</summary>
