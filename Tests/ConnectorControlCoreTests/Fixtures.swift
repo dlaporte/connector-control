@@ -1,30 +1,19 @@
 import Foundation
 
+/// Fixtures shared with the Windows test suite live in `Tests/Fixtures/`.
 enum Fixtures {
-    static let realisticClaudeConfig = """
-    {
-      "mcpServers": {
-        "scoutbook": {
-          "command": "npx",
-          "args": ["-y", "mcp-remote", "https://scoutbook.example.com/mcp"]
-        },
-        "aws-mcp": {
-          "command": "npx",
-          "args": ["-y", "mcp-remote", "https://aws-mcp.us-east-1.api.aws/mcp"]
-        },
-        "service-now": {
-          "command": "npx",
-          "args": ["-y", "mcp-remote", "https://snow.example.com/mcp"]
-        }
-      },
-      "coworkUserFilesPath": "/Users/someone/Documents/Claude",
-      "preferences": {
-        "coworkScheduledTasksEnabled": true,
-        "sidebarMode": "epitaxy",
-        "bypassPermissionsGateByAccount": { "024145b7": true },
-        "epitaxyPrefs": { "rowSplit": 0.5, "draftNonce": 0 }
-      },
-      "someFutureKey": [1, 2, {"nested": null}]
+    static func url(_ name: String) -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Tests/ConnectorControlCoreTests
+            .deletingLastPathComponent()   // Tests
+            .appendingPathComponent("Fixtures")
+            .appendingPathComponent(name)
     }
-    """
+
+    static func text(_ name: String) -> String {
+        // A missing fixture is a test-suite bug; crash loudly.
+        try! String(contentsOf: url(name), encoding: .utf8)
+    }
+
+    static var realisticClaudeConfig: String { text("realistic_claude_config.json") }
 }

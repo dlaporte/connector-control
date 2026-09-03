@@ -1,5 +1,3 @@
-using Xunit;
-
 namespace ConnectorControl.App.Tests;
 
 public class SmokeTests
