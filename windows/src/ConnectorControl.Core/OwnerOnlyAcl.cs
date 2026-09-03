@@ -22,10 +22,15 @@ public static class OwnerOnlyAcl
         {
             Apply(path);
         }
-        catch (SystemException)
+        catch (Exception ex) when (ex is IOException
+            or UnauthorizedAccessException            // includes PrivilegeNotHeldException
+            or InvalidOperationException
+            or PlatformNotSupportedException
+            or System.Security.SecurityException
+            or IdentityNotMappedException)
         {
-            // IOException, UnauthorizedAccessException, PrivilegeNotHeldException,
-            // InvalidOperationException, PlatformNotSupportedException — all ignored.
+            // Best effort, like Swift's `try?`: the write itself must never fail
+            // because the ACL could not be tightened. Programming errors still surface.
         }
     }
 
@@ -73,7 +78,7 @@ public static class OwnerOnlyAcl
         }
         foreach (FileSystemAccessRule rule in rules)
         {
-            if (!rule.IdentityReference.Equals(user))
+            if (rule.AccessControlType != AccessControlType.Allow || !rule.IdentityReference.Equals(user))
             {
                 return false;
             }

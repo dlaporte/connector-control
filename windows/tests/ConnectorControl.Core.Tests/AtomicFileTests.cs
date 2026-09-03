@@ -41,6 +41,23 @@ public class AtomicFileTests : IDisposable
     }
 
     [Fact]
+    public void ReplacingAnExistingFileMakesItOwnerOnly()
+    {
+        // ReplaceFile keeps the replaced file's DACL; Write must still end owner-only.
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows only");
+            return;
+        }
+        var path = dir.File("existing.json");
+        File.WriteAllText(path, "{}");   // inherits the temp dir's permissive ACL
+        Assert.False(OwnerOnlyAcl.IsOwnerOnly(path));
+        AtomicFile.Write(Encoding.UTF8.GetBytes("{\"k\":1}"), path);
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(path));
+        Assert.Equal("{\"k\":1}", File.ReadAllText(path));
+    }
+
+    [Fact]
     public void NoTempFilesLeftBehind()
     {
         AtomicFile.Write(Encoding.UTF8.GetBytes("x"), dir.File("file.json"));

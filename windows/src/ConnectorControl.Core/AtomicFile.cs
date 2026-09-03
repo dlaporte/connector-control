@@ -18,7 +18,8 @@ public static class AtomicFile
         try
         {
             File.WriteAllBytes(tmp, data);
-            // Never leave secrets world-readable; the replace keeps the temp file's ACL.
+            // Never leave secrets world-readable, even briefly: lock the temp file
+            // down before it is moved into place.
             OwnerOnlyAcl.TryApply(tmp);
             if (File.Exists(fullPath))
             {
@@ -35,6 +36,9 @@ public static class AtomicFile
                     File.Replace(tmp, fullPath, destinationBackupFileName: null);
                 }
             }
+            // ReplaceFile keeps the REPLACED file's DACL, not the temp file's, so a
+            // pre-existing permissive file would stay permissive: re-apply to the result.
+            OwnerOnlyAcl.TryApply(fullPath);
         }
         finally
         {
