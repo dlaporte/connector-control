@@ -113,7 +113,7 @@ public class ProfileTests : IDisposable
     [Fact]
     public void AddProfileRejectsDuplicateName()
     {
-        Assert.Equal("A profile named \"Default\" already exists.", MasterStore.Empty().AddProfile("Default", false));
+        Assert.Equal("A profile named \u201CDefault\u201D already exists.", MasterStore.Empty().AddProfile("Default", false));
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public class ProfileTests : IDisposable
     public void RenameActiveProfileRejectsCollision()
     {
         var store = new MasterStore(2, "Work", [new("Work", new Profile()), new("Personal", new Profile())]);
-        Assert.Equal("A profile named \"Personal\" already exists.", store.RenameActiveProfile("Personal"));
+        Assert.Equal("A profile named \u201CPersonal\u201D already exists.", store.RenameActiveProfile("Personal"));
         Assert.Equal("Work", store.ActiveProfile);
     }
 
@@ -152,7 +152,7 @@ public class ProfileTests : IDisposable
     public void DeleteActiveProfileRejectsLastProfile()
     {
         var store = MasterStore.Empty();
-        Assert.Equal("Can't delete the last profile.", store.DeleteActiveProfile());
+        Assert.Equal("Can\u2019t delete the last profile.", store.DeleteActiveProfile());
         Assert.Single(store.Profiles);
     }
 
@@ -168,8 +168,18 @@ public class ProfileTests : IDisposable
     public void SwitchProfileRejectsUnknownName()
     {
         var store = MasterStore.Empty();
-        Assert.Equal("No profile named \"Nope\".", store.SwitchProfile("Nope"));
+        Assert.Equal("No profile named \u201CNope\u201D.", store.SwitchProfile("Nope"));
         Assert.Equal("Default", store.ActiveProfile);
+    }
+
+    [Fact]
+    public void ErrorMessagesUseTypographicPunctuationLikeTheMacApp()
+    {
+        var store = MasterStore.Empty();
+        var duplicate = store.AddProfile("Default", false)!;
+        Assert.Equal('\u201C', duplicate[duplicate.IndexOf("Default", StringComparison.Ordinal) - 1]);
+        Assert.Equal('\u201D', duplicate[duplicate.IndexOf("Default", StringComparison.Ordinal) + "Default".Length]);
+        Assert.Contains('\u2019', store.DeleteActiveProfile()!);
     }
 
     [Fact]

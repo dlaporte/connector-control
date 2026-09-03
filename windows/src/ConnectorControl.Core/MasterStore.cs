@@ -58,7 +58,7 @@ public sealed class MasterStore : IEquatable<MasterStore>
         }
         if (Profiles.ContainsKey(trimmed))
         {
-            return $"A profile named \"{trimmed}\" already exists.";
+            return $"A profile named \u201C{trimmed}\u201D already exists.";
         }
         Profiles[trimmed] = copyingCurrent ? new Profile(Mcps) : new Profile();
         ActiveProfile = trimmed;
@@ -74,7 +74,7 @@ public sealed class MasterStore : IEquatable<MasterStore>
         }
         if (trimmed != ActiveProfile && Profiles.ContainsKey(trimmed))
         {
-            return $"A profile named \"{trimmed}\" already exists.";
+            return $"A profile named \u201C{trimmed}\u201D already exists.";
         }
         if (!Profiles.Remove(ActiveProfile, out var current))
         {
@@ -89,7 +89,7 @@ public sealed class MasterStore : IEquatable<MasterStore>
     {
         if (Profiles.Count <= 1)
         {
-            return "Can't delete the last profile.";
+            return "Can\u2019t delete the last profile.";
         }
         Profiles.Remove(ActiveProfile);
         ActiveProfile = Profiles.Keys.Order(StringComparer.Ordinal).First();
@@ -100,7 +100,7 @@ public sealed class MasterStore : IEquatable<MasterStore>
     {
         if (!Profiles.ContainsKey(name))
         {
-            return $"No profile named \"{name}\".";
+            return $"No profile named \u201C{name}\u201D.";
         }
         ActiveProfile = name;
         return null;
