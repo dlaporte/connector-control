@@ -1,0 +1,47 @@
+{
+  "coworkUserFilesPath" : "\/Users\/someone\/Documents\/Claude",
+  "mcpServers" : {
+    "aws-mcp" : {
+      "args" : [
+        "-y",
+        "mcp-remote",
+        "https:\/\/aws-mcp.us-east-1.api.aws\/mcp"
+      ],
+      "command" : "npx"
+    },
+    "scoutbook" : {
+      "args" : [
+        "-y",
+        "mcp-remote",
+        "https:\/\/scoutbook.example.com\/mcp"
+      ],
+      "command" : "npx"
+    },
+    "service-now" : {
+      "args" : [
+        "-y",
+        "mcp-remote",
+        "https:\/\/snow.example.com\/mcp"
+      ],
+      "command" : "npx"
+    }
+  },
+  "preferences" : {
+    "bypassPermissionsGateByAccount" : {
+      "024145b7" : true
+    },
+    "coworkScheduledTasksEnabled" : true,
+    "epitaxyPrefs" : {
+      "draftNonce" : 0,
+      "rowSplit" : 0.5
+    },
+    "sidebarMode" : "epitaxy"
+  },
+  "someFutureKey" : [
+    1,
+    2,
+    {
+      "nested" : null
+    }
+  ]
+}

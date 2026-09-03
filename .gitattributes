@@ -1,0 +1,2 @@
+# Fixtures and goldens are compared byte for byte on Windows: never convert line endings.
+Tests/Fixtures/** -text
