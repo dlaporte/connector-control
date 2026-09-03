@@ -75,7 +75,7 @@ public class AppleJsonWriterTests
             ("esc", JsonValue.String("\u001b")));
         const string expected =
             "{\n  \"bs\" : \"a\\bb\",\n  \"cr\" : \"a\\rb\",\n  \"del\" : \"\u007f\",\n  \"esc\" : \"\\u001b\",\n" +
-            "  \"ff\" : \"a\\fb\",\n  \"lt\" : \"<&>'\",\n  \"ls\" : \"x\u2028y\u2029\",\n  \"nl\" : \"a\\nb\",\n  \"nul\" : \"\\u0000\"\n}";
+            "  \"ff\" : \"a\\fb\",\n  \"ls\" : \"x\u2028y\u2029\",\n  \"lt\" : \"<&>'\",\n  \"nl\" : \"a\\nb\",\n  \"nul\" : \"\\u0000\"\n}";
         Assert.Equal(expected, AppleJsonWriter.Write(value, AppleJsonFormat.Encoder));
     }
 
