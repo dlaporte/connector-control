@@ -54,6 +54,7 @@ public sealed class AppState : ObservableObject, IDisposable
     private bool hasLoadedOnce;
     private FileWatcher? watcher;
     private FileWatcher? storeWatcher;
+    private bool disposed;
 
     /// <summary>Test probe: both watchers are live. Spec §6.3 wants this true after every reload.</summary>
     internal bool WatchersArmed => watcher is { IsArmed: true } && storeWatcher is { IsArmed: true };
@@ -180,7 +181,15 @@ public sealed class AppState : ObservableObject, IDisposable
         catch (Exception ex)
         {
             LastError = Friendly(ex);
-            RefreshRestartState();
+            try
+            {
+                RefreshRestartState();
+            }
+            catch (Exception)
+            {
+                // RefreshRestartState reaches into IClaudeProcess; a throw there must not
+                // escape the guard and leave the watchers disarmed / the banner unset below.
+            }
             ReArm(watcher);
             ReArm(storeWatcher);
             RaiseAll();
@@ -513,17 +522,33 @@ public sealed class AppState : ObservableObject, IDisposable
             // returning a message. Nothing here passes a token, so this is defence only.
             message = null;
         }
+        catch (Exception ex)
+        {
+            // The toast action calls this fire-and-forget, so install probing / process
+            // enumeration outside RestartAsync's own launch guard must not fault silently:
+            // the marshalled completion below always runs with either null or a message,
+            // same guarantee as the Mac's ClaudeRestarter completion handler.
+            message = Friendly(ex);
+        }
         host.Marshal(() =>
         {
             LastError = message;   // null on success clears any prior banner
             RefreshRestartState();
             host.Delay(RestartRecheckDelay, () =>
             {
+                if (disposed)
+                {
+                    return;
+                }
                 RefreshRestartState();
                 RaiseAll();
             });
             host.Delay(RestartRelaunchCheck, () =>
             {
+                if (disposed)
+                {
+                    return;
+                }
                 RefreshRestartState();
                 if (!claude.IsRunning && LastError is null)
                 {
@@ -617,6 +642,7 @@ public sealed class AppState : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        disposed = true;
         notifier.RestartActionActivated -= OnRestartActionActivated;
         watcher?.Dispose();
         storeWatcher?.Dispose();

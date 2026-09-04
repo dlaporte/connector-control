@@ -89,6 +89,21 @@ public class AppStateCommandTests
     }
 
     [Fact]
+    public async Task RestartExceptionOutsideTheLaunchGuardStillCompletesWithAMessage()
+    {
+        using var h = new AppStateHarness();
+        h.Settings.ConfirmBeforeRestart = false;
+        using var state = h.Create();
+        h.Claude.OnRestart = () => throw new InvalidOperationException("boom");
+        await state.RestartClaudeAsync();
+        h.Ui.Pump();
+        Assert.Equal(1, h.Claude.RestartCalls);
+        Assert.Equal("boom", state.LastError);
+        // Same schedule as the success path: the marshalled completion always runs to the end.
+        Assert.Equal([TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(20)], h.Delays.Pending.Select(d => d.Delay).ToArray());
+    }
+
+    [Fact]
     public async Task ARelaunchThatSilentlyFailedIsReportedTwentySecondsLater()
     {
         using var h = new AppStateHarness();
@@ -148,6 +163,41 @@ public class AppStateCommandTests
         h.Notifier.ActivateRestart();
         Assert.Equal(1, h.Claude.RestartCalls);
         Assert.Empty(h.Dialogs.Confirms);   // the explicit action click IS the confirmation
+    }
+
+    [Fact]
+    public void DisposeUnsubscribesTheToastRestartAction()
+    {
+        using var h = new AppStateHarness();
+        var state = h.Create();
+        h.Claude.IsRunning = true;
+        h.Claude.LaunchTime = h.Now.AddHours(-1);
+        state.SetEnabled("aws-mcp", false);
+        Assert.True(state.NeedsClaudeRestart);   // a pending restart, so ActivateRestart would act if still wired up
+        state.Dispose();
+        h.Notifier.ActivateRestart();
+        Assert.Equal(0, h.Claude.RestartCalls);
+    }
+
+    [Fact]
+    public async Task PendingRestartDelaysAreNoOpsAfterDispose()
+    {
+        using var h = new AppStateHarness();
+        h.Settings.ConfirmBeforeRestart = false;
+        h.Settings.LastApplyDate = h.Now;
+        h.Claude.IsRunning = true;
+        h.Claude.LaunchTime = h.Now.AddHours(-1);
+        var state = h.Create();
+        await state.RestartClaudeAsync();
+        h.Ui.Pump();
+        Assert.Equal(2, h.Delays.Pending.Count);
+        var errorBefore = state.LastError;
+        var needsRestartBefore = state.NeedsClaudeRestart;
+        state.Dispose();
+        h.Delays.RunNext();   // 3 s recheck: must be a no-op post-Dispose, not throw
+        h.Delays.RunNext();   // 20 s relaunch check: same
+        Assert.Equal(errorBefore, state.LastError);
+        Assert.Equal(needsRestartBefore, state.NeedsClaudeRestart);
     }
 
     [Fact]
