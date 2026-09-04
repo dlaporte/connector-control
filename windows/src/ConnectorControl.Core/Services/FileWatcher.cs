@@ -114,7 +114,8 @@ public sealed class FileWatcher : IDisposable
     /// whatever debounce timer is pending, so a Schedule()-then-Stop() sequence would
     /// dispose the very timer meant to report this change and the deletion would
     /// never reach the caller (review R2). No generation guard here — Stop() has
-    /// already run, so this is a final, deliberate notification, not a stale check.
+    /// already run, so this is a final, deliberate notification, not a stale check;
+    /// only a Dispose() that raced the error handler suppresses it.
     /// Internal so the deleted-directory path is testable without provoking the OS.
     /// </summary>
     internal void HandleError()
@@ -125,7 +126,17 @@ public sealed class FileWatcher : IDisposable
             return;
         }
         Stop();
-        marshal(onChange);
+        marshal(() =>
+        {
+            lock (gate)
+            {
+                if (disposed)
+                {
+                    return;
+                }
+            }
+            onChange();
+        });
     }
 
     /// <summary>Restart the debounce timer; the check runs once the burst ends.</summary>
