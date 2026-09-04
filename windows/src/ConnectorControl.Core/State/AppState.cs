@@ -17,6 +17,25 @@ public sealed class AppState : ObservableObject, IDisposable
     public const string RegenerationFailedBody = "The connector configuration changed, but Claude's config could not be updated — open Connector Control to retry.";
     public const string ClaudeConfigChangedBody = "Claude's config changed outside Connector Control.";
     public const string StoreChangedBody = "The connector list changed outside Connector Control — review it before your next change is applied.";
+    public const string QuitMessage = "Quit Connector Control?";
+    public const string QuitButton = "Quit";
+    public const string RestartMessage = "Restart Claude Desktop now?";
+    public const string RestartInformative = "Any in-progress Claude conversation will be interrupted.";
+    public const string RestartButton = "Restart";
+    public const string NewProfileTitle = "New Profile";
+    public const string RenameProfileTitle = "Rename Profile";
+    public const string DeleteProfileInformative = "Its connector list is removed; backups keep prior states.";
+    public const string DeleteButton = "Delete";
+    /// <summary>Coined here, not taken from the Mac catalog: on macOS a relaunch cannot fail silently.</summary>
+    public const string RelaunchFailedMessage = "Claude didn’t come back after the restart. Start Claude yourself, then try again.";
+    /// <summary>Catalog §1.17: Claude's launch time is re-read 3 s after the restart completes.</summary>
+    public static readonly TimeSpan RestartRecheckDelay = TimeSpan.FromSeconds(3);
+    /// <summary>
+    /// Spec §6.2 probe: a relaunched Claude is up within 20 s. RestartAsync reports null
+    /// even when the AUMID launch silently did nothing (explorer.exe succeeds for any
+    /// AUMID), so this second look is the only place that failure becomes visible.
+    /// </summary>
+    public static readonly TimeSpan RestartRelaunchCheck = TimeSpan.FromSeconds(20);
 
     private static readonly IReadOnlyDictionary<string, JsonValue> EmptyServers = new Dictionary<string, JsonValue>(StringComparer.Ordinal);
 
@@ -50,6 +69,10 @@ public sealed class AppState : ObservableObject, IDisposable
         service = MakeService(settings, this.paths);
         // Sweep the RESOLVED paths (a repointed store lives outside the default dir).
         AclSweep.RunOnce(settings, service.Paths);
+        // The toast's Restart Claude button routes back here. Skipping the confirm-before-restart
+        // dialog is deliberate: clicking the explicit action IS the confirmation. Stale-click guard:
+        // an old toast must not restart a Claude that already picked up the config.
+        notifier.RestartActionActivated += OnRestartActionActivated;
         Reload();
         ArmWatchers();
     }
@@ -99,9 +122,9 @@ public sealed class AppState : ObservableObject, IDisposable
     {
         watcher?.Dispose();
         storeWatcher?.Dispose();
-        watcher = new FileWatcher(Service.Paths.ClaudeConfigPath, () => SafeReload(), host.Marshal);
+        watcher = new FileWatcher(Service.Paths.ClaudeConfigPath, () => RunWatcherCallback(() => Reload()), host.Marshal);
         watcher.Start();
-        storeWatcher = new FileWatcher(Service.Paths.MasterStorePath, AdoptExternalStoreChange, host.Marshal);
+        storeWatcher = new FileWatcher(Service.Paths.MasterStorePath, () => RunWatcherCallback(AdoptExternalStoreChange), host.Marshal);
         storeWatcher.Start();
     }
 
@@ -126,7 +149,7 @@ public sealed class AppState : ObservableObject, IDisposable
         if (!File.Exists(storePath))
         {
             // Deleted store file: Reload's self-heal re-persists the in-memory truth; nothing external to adopt or announce.
-            SafeReload(ReloadTrigger.QuietStoreAdoption);
+            Reload(ReloadTrigger.QuietStoreAdoption);
             return;
         }
         var onDisk = MasterStoreIO.Read(storePath);
@@ -134,26 +157,32 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return;
         }
-        SafeReload(ReloadTrigger.ExternalStoreAdoption);
+        Reload(ReloadTrigger.ExternalStoreAdoption);
     }
 
     /// <summary>
-    /// Runs a watcher-triggered Reload with a catch-all around it. Reload's own catch filter is
-    /// narrower than the Mac's catch-all (Task 3 review); anything it doesn't cover would otherwise
-    /// escape through a marshalled FileWatcher callback and take the whole app down instead of showing
-    /// a banner. Not used for a Reload called directly from a public method — those are already on the
-    /// caller's stack, not a marshalled callback, so their exceptions propagate as before.
+    /// Runs a watcher-triggered callback with a catch-all around its ENTIRE body, not only Reload's
+    /// own narrower catch filter (Task 3 review). This also covers <see cref="AdoptExternalStoreChange"/>'s
+    /// File.Exists/MasterStoreIO.Read/equality work, which runs before any Reload is reached (Task 5
+    /// review of Task 4's controller) — without this, an exception there would escape through a
+    /// marshalled FileWatcher callback and take the whole app down instead of showing a banner.
+    /// Also re-arms both watchers here: an exception means the ReArm at the bottom of Reload never
+    /// ran, so without this a watcher could stay disarmed until the next reload. Not used for a Reload
+    /// called directly from a public method — those are already on the caller's stack, not a marshalled
+    /// callback, so their exceptions propagate as before.
     /// </summary>
-    private void SafeReload(ReloadTrigger trigger = ReloadTrigger.Routine)
+    private void RunWatcherCallback(Action work)
     {
         try
         {
-            Reload(trigger);
+            work();
         }
         catch (Exception ex)
         {
             LastError = Friendly(ex);
             RefreshRestartState();
+            ReArm(watcher);
+            ReArm(storeWatcher);
             RaiseAll();
         }
     }
@@ -444,6 +473,132 @@ public sealed class AppState : ObservableObject, IDisposable
             && launchTime.ToUniversalTime() < applied.ToUniversalTime();
     }
 
+    // MARK: quit (catalog §1.16)
+
+    /// <summary>Raised when the app should terminate (after the optional confirmation).</summary>
+    public event Action? QuitRequested;
+
+    public void QuitApp()
+    {
+        if (settings.ConfirmBeforeQuit && !Dialogs.Confirm(QuitMessage, null, QuitButton))
+        {
+            return;
+        }
+        QuitRequested?.Invoke();
+    }
+
+    // MARK: restart Claude (catalog §1.17)
+
+    /// <summary>The in-app button: confirm (unless disabled), then restart.</summary>
+    public Task RestartClaudeAsync()
+    {
+        if (settings.ConfirmBeforeRestart && !Dialogs.Confirm(RestartMessage, RestartInformative, RestartButton))
+        {
+            return Task.CompletedTask;
+        }
+        return PerformRestartClaudeAsync();
+    }
+
+    /// <summary>Restart with no confirmation: after the in-app confirm, or from the toast action where the click is the confirmation.</summary>
+    public async Task PerformRestartClaudeAsync()
+    {
+        string? message;
+        try
+        {
+            message = await claude.RestartAsync().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // IClaudeProcess documents that a cancelled 15 s wait throws rather than
+            // returning a message. Nothing here passes a token, so this is defence only.
+            message = null;
+        }
+        host.Marshal(() =>
+        {
+            LastError = message;   // null on success clears any prior banner
+            RefreshRestartState();
+            host.Delay(RestartRecheckDelay, () =>
+            {
+                RefreshRestartState();
+                RaiseAll();
+            });
+            host.Delay(RestartRelaunchCheck, () =>
+            {
+                RefreshRestartState();
+                if (!claude.IsRunning && LastError is null)
+                {
+                    LastError = RelaunchFailedMessage;
+                }
+                RaiseAll();
+            });
+            RaiseAll();
+        });
+    }
+
+    private void OnRestartActionActivated()
+    {
+        if (!NeedsClaudeRestart)
+        {
+            return;
+        }
+        _ = PerformRestartClaudeAsync();
+    }
+
+    // MARK: profiles (catalog §1.18)
+
+    /// <summary>Switching profiles applies immediately, like every other change. An unknown name is silently ignored.</summary>
+    public void SwitchProfile(string name)
+    {
+        if (Store.SwitchProfile(name) is not null)
+        {
+            return;
+        }
+        PersistStore();
+        PerformApply();
+        RaiseAll();
+    }
+
+    public void NewProfile()
+    {
+        if (Dialogs.PromptForName(NewProfileTitle, "") is not { } name)
+        {
+            return;
+        }
+        FinishProfileChange(Store.AddProfile(name, copyingCurrent: true));
+    }
+
+    public void RenameProfile()
+    {
+        if (Dialogs.PromptForName(RenameProfileTitle, Store.ActiveProfile) is not { } name)
+        {
+            return;
+        }
+        FinishProfileChange(Store.RenameActiveProfile(name));
+    }
+
+    public void DeleteProfile()
+    {
+        if (!Dialogs.Confirm($"Delete Profile “{Store.ActiveProfile}”?", DeleteProfileInformative, DeleteButton, destructive: true))
+        {
+            return;
+        }
+        FinishProfileChange(Store.DeleteActiveProfile());
+    }
+
+    private void FinishProfileChange(string? error)
+    {
+        if (error is null)
+        {
+            PersistStore();
+            PerformApply();
+        }
+        else
+        {
+            LastError = error;
+        }
+        RaiseAll();
+    }
+
     // MARK: notifications (catalog §1.8)
 
     private void Notify(string body, string? category = null)
@@ -462,6 +617,7 @@ public sealed class AppState : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        notifier.RestartActionActivated -= OnRestartActionActivated;
         watcher?.Dispose();
         storeWatcher?.Dispose();
         watcher = null;

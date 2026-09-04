@@ -24,6 +24,21 @@ public class AppStateWatcherTests
         Assert.Single(h.Notifier.Sent);
     }
 
+    // Controller addition (Task 5 review of Task 4): Notify()'s settings.NotifyExternalChanges
+    // gate had no direct coverage — only that the reload/regeneration it would announce still happens.
+    [Fact]
+    public void ExternalEditIsSilentWhenNotifyExternalChangesIsDisabledButStillReloads()
+    {
+        using var h = new AppStateHarness();
+        h.Settings.NotifyExternalChanges = false;
+        using var state = h.Create();
+        Thread.Sleep(300);
+        h.WriteClaudeServers(("scoutbook", state.Store.Mcps["scoutbook"].Config));
+        Assert.True(h.Ui.PumpUntil(() => AppStateHarness.Keys(h.ClaudeServers().Keys).SequenceEqual(Fixture), Wait));
+        h.Ui.PumpUntil(() => false, Settle);   // give the regenerating write's own echo a chance to fire too
+        Assert.Empty(h.Notifier.Sent);
+    }
+
     [Fact]
     public void StoreWatcherAdoptsAnExternalStoreAndAnnouncesTheRestart()
     {
