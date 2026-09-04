@@ -50,16 +50,50 @@ public class ClaudeInstallTests
         Assert.Equal(exe, info.LaunchTarget);
         Assert.Null(info.PackageFamilyName);
         Assert.Equal("claude", info.ProcessName);
+        Assert.Equal(Path.GetDirectoryName(exe), info.InstallDirectory);
     }
 
     [Fact]
-    public void FolderScanWinsOverLegacyExe()
+    public void LegacyExeWinsWhenWinRtReportsNoPackage()
     {
         var probe = new FakePathProbe()
             .AddDirectory(Path.Combine(Local, "Packages", "Claude_pzs8sxrjxfjjc"))
             .AddFile(Path.Combine(Local, "AnthropicClaude", "claude.exe"));
-        // The CI runner has no Claude package, so the WinRT step yields nothing and the scan decides.
-        Assert.Equal(ClaudeInstallKind.Msix, new ClaudeInstall(Folders, probe).Detect().Kind);
+        // The CI runner has no Claude package, so WinRT succeeds with no match. A leftover
+        // package folder must not shadow the legacy install (spec §6.1).
+        Assert.Equal(ClaudeInstallKind.Legacy, new ClaudeInstall(Folders, probe).Detect().Kind);
+    }
+
+    [Fact]
+    public void FolderScanIsUsedOnlyWhenTheWinRtQueryFails()
+    {
+        var probe = new FakePathProbe()
+            .AddDirectory(Path.Combine(Local, "Packages", "Claude_pzs8sxrjxfjjc"))
+            .AddFile(Path.Combine(Local, "AnthropicClaude", "claude.exe"));
+        var install = new ClaudeInstall(Folders, probe);
+        var scanned = install.Detect(() => ClaudeInstall.MsixLookup.Unavailable);
+        Assert.Equal(ClaudeInstallKind.Msix, scanned.Kind);
+        Assert.Equal("Claude_pzs8sxrjxfjjc!Claude", scanned.LaunchTarget);
+        Assert.Null(scanned.InstallDirectory);   // not derivable from the family name
+        Assert.Equal(ClaudeInstallKind.Legacy, install.Detect(() => ClaudeInstall.MsixLookup.NotInstalled).Kind);
+    }
+
+    [Fact]
+    public void WinRtResultWinsOverEverythingElse()
+    {
+        var probe = new FakePathProbe()
+            .AddDirectory(Path.Combine(Local, "Packages", "Claude_scanned"))
+            .AddFile(Path.Combine(Local, "AnthropicClaude", "claude.exe"));
+        var found = new ClaudeInstallInfo(ClaudeInstallKind.Msix, "Claude_winrt", "Claude_winrt!Claude", "claude", @"C:\Program Files\WindowsApps\Claude_winrt");
+        var info = new ClaudeInstall(Folders, probe).Detect(() => ClaudeInstall.MsixLookup.Found(found));
+        Assert.Same(found, info);
+    }
+
+    [Fact]
+    public void NothingFoundWhenWinRtFailsAndNothingIsInstalled()
+    {
+        var install = new ClaudeInstall(Folders, new FakePathProbe());
+        Assert.Equal(ClaudeInstallInfo.NotFound, install.Detect(() => ClaudeInstall.MsixLookup.Unavailable));
     }
 
     [Fact]

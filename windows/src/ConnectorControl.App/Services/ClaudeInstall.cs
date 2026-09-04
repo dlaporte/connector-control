@@ -6,10 +6,11 @@ using Windows.Management.Deployment;
 namespace ConnectorControl.App.Services;
 
 /// <summary>
-/// Detects how Claude Desktop is installed (spec §6.1). Order: the WinRT
-/// package manager (authoritative, gives the AUMID), then a scan of
-/// %LOCALAPPDATA%\Packages (the folder name IS the package family name), then
-/// the legacy Squirrel exe.
+/// Detects how Claude Desktop is installed (spec §6.1). The WinRT package
+/// manager is authoritative (it gives the AUMID and the install location); a
+/// scan of %LOCALAPPDATA%\Packages (the folder name IS the package family
+/// name) stands in only when that API throws, never when it simply reports no
+/// Claude package. Otherwise the legacy Squirrel exe decides.
 /// </summary>
 public sealed class ClaudeInstall : IClaudeInstall
 {
@@ -23,12 +24,19 @@ public sealed class ClaudeInstall : IClaudeInstall
         this.probe = probe;
     }
 
-    public ClaudeInstallInfo Detect()
+    public ClaudeInstallInfo Detect() => Detect(DetectMsixViaPackageManager);
+
+    /// <param name="lookUpMsix">The WinRT package query; the tests substitute its three outcomes.</param>
+    internal ClaudeInstallInfo Detect(Func<MsixLookup> lookUpMsix)
     {
-        var msix = DetectMsixViaPackageManager() ?? DetectMsixByFolderScan();
-        if (msix is not null)
+        var msix = lookUpMsix();
+        if (msix.Info is not null)
         {
-            return msix;
+            return msix.Info;
+        }
+        if (!msix.Available && DetectMsixByFolderScan() is { } scanned)
+        {
+            return scanned;   // spec §6.1: scan only when the API itself failed
         }
         var legacyExe = Path.Combine(folders.LocalAppData, "AnthropicClaude", "claude.exe");
         if (probe.FileExists(legacyExe))
@@ -38,11 +46,27 @@ public sealed class ClaudeInstall : IClaudeInstall
         return ClaudeInstallInfo.NotFound;
     }
 
+    /// <summary>
+    /// The outcome of the WinRT package query. <c>Available</c> is false only when
+    /// the API itself failed: spec §6.1 falls back to the folder scan on that alone,
+    /// because a %LOCALAPPDATA%\Packages folder left behind by an uninstalled MSIX
+    /// Claude would otherwise shadow a working legacy install with a launch target
+    /// nothing can open.
+    /// </summary>
+    internal readonly record struct MsixLookup(bool Available, ClaudeInstallInfo? Info)
+    {
+        internal static MsixLookup Unavailable => new(false, null);
+
+        internal static MsixLookup NotInstalled => new(true, null);
+
+        internal static MsixLookup Found(ClaudeInstallInfo info) => new(true, info);
+    }
+
     internal static bool IsClaudeFamily(string family) =>
         family.StartsWith("Claude_", StringComparison.Ordinal)
         || family.StartsWith("Anthropic.Claude", StringComparison.Ordinal);
 
-    private static ClaudeInstallInfo? DetectMsixViaPackageManager()
+    private static MsixLookup DetectMsixViaPackageManager()
     {
         try
         {
@@ -83,14 +107,14 @@ public sealed class ClaudeInstall : IClaudeInstall
                         // process matching falls back to the name alone
                     }
                 }
-                return new ClaudeInstallInfo(ClaudeInstallKind.Msix, family, aumid ?? family + AppIdSuffix, ClaudeInstallInfo.DefaultProcessName, installDirectory);
+                return MsixLookup.Found(new ClaudeInstallInfo(ClaudeInstallKind.Msix, family, aumid ?? family + AppIdSuffix, ClaudeInstallInfo.DefaultProcessName, installDirectory));
             }
-            return null;
+            return MsixLookup.NotInstalled;   // the query worked: there is no MSIX Claude
         }
         catch (Exception ex) when (ex is COMException or UnauthorizedAccessException or InvalidOperationException
             or TypeLoadException or FileNotFoundException or PlatformNotSupportedException)
         {
-            return null;   // WinRT unavailable in this environment: the folder scan decides
+            return MsixLookup.Unavailable;   // WinRT unusable here: the folder scan decides
         }
     }
 
