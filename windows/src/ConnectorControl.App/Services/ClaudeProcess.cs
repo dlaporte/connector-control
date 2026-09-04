@@ -15,6 +15,7 @@ public sealed class ClaudeProcess : IClaudeProcess
     public const string DidNotQuitMessage = "Claude didn’t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again.";
     public const string NotInstalledMessage = "Claude Desktop was not found on this PC.";
 
+    private static readonly int? CurrentSessionId = CurrentSession();
     private static readonly TimeSpan DefaultQuitTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan DefaultPollInterval = TimeSpan.FromMilliseconds(250);
 
@@ -119,12 +120,52 @@ public sealed class ClaudeProcess : IClaudeProcess
         }
     }
 
-    private T WithProcesses<T>(Func<Process[], T> use)
+    /// <summary>
+    /// Claude's processes: the right image name, in this logon session, and —
+    /// when the install location is known — running from it. Without the
+    /// location filter the Claude Code CLI (also <c>claude.exe</c>) and another
+    /// logged-on user's Claude Desktop would both count as ours (spec §6.2).
+    /// </summary>
+    private bool IsClaude(Process process, ClaudeInstallInfo info)
     {
-        var processes = Process.GetProcessesByName(install().ProcessName);
         try
         {
-            return use(processes);
+            if (CurrentSessionId is int session && process.SessionId != session)
+            {
+                return false;
+            }
+            if (info.InstallDirectory is not { Length: > 0 } directory)
+            {
+                return true;   // location unknown: the name is all we have
+            }
+            return ProcessImage.IsUnder(ProcessImage.ImagePath(process.Id), directory);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception)
+        {
+            return false;   // exited between enumeration and query, or not ours to inspect
+        }
+    }
+
+    private static int? CurrentSession()
+    {
+        try
+        {
+            using var self = Process.GetCurrentProcess();
+            return self.SessionId;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or PlatformNotSupportedException)
+        {
+            return null;   // unknown: do not filter by session
+        }
+    }
+
+    private T WithProcesses<T>(Func<Process[], T> use)
+    {
+        var info = install();
+        var processes = Process.GetProcessesByName(info.ProcessName);
+        try
+        {
+            return use(processes.Where(process => IsClaude(process, info)).ToArray());
         }
         finally
         {

@@ -33,7 +33,7 @@ public sealed class ClaudeInstall : IClaudeInstall
         var legacyExe = Path.Combine(folders.LocalAppData, "AnthropicClaude", "claude.exe");
         if (probe.FileExists(legacyExe))
         {
-            return new ClaudeInstallInfo(ClaudeInstallKind.Legacy, null, legacyExe, ClaudeInstallInfo.DefaultProcessName);
+            return new ClaudeInstallInfo(ClaudeInstallKind.Legacy, null, legacyExe, ClaudeInstallInfo.DefaultProcessName, Path.GetDirectoryName(legacyExe));
         }
         return ClaudeInstallInfo.NotFound;
     }
@@ -55,11 +55,13 @@ public sealed class ClaudeInstall : IClaudeInstall
                     continue;
                 }
                 string? aumid = null;
-                try
+                string? installDirectory = null;
+                // Package.GetAppListEntries() and Package.InstalledPath require Windows
+                // 10.0.19041.0+; the app's SupportedOSPlatformVersion (10.0.17763.0) is
+                // lower, so both must be guarded.
+                if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
                 {
-                    // Package.GetAppListEntries() requires Windows 10.0.19041.0+; the app's
-                    // SupportedOSPlatformVersion (10.0.17763.0) is lower, so this must be guarded.
-                    if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
+                    try
                     {
                         var entries = package.GetAppListEntries();
                         if (entries.Count > 0)
@@ -67,12 +69,21 @@ public sealed class ClaudeInstall : IClaudeInstall
                             aumid = entries[0].AppUserModelId;
                         }
                     }
+                    catch (COMException)
+                    {
+                        // fall back to the conventional id below
+                    }
+                    try
+                    {
+                        installDirectory = package.InstalledPath;
+                    }
+                    catch (Exception ex) when (ex is COMException or InvalidOperationException)
+                    {
+                        // location unavailable (a staged or partly installed package):
+                        // process matching falls back to the name alone
+                    }
                 }
-                catch (COMException)
-                {
-                    // fall back to the conventional id below
-                }
-                return new ClaudeInstallInfo(ClaudeInstallKind.Msix, family, aumid ?? family + AppIdSuffix, ClaudeInstallInfo.DefaultProcessName);
+                return new ClaudeInstallInfo(ClaudeInstallKind.Msix, family, aumid ?? family + AppIdSuffix, ClaudeInstallInfo.DefaultProcessName, installDirectory);
             }
             return null;
         }
@@ -83,7 +94,11 @@ public sealed class ClaudeInstall : IClaudeInstall
         }
     }
 
-    /// <summary>Fallback when WinRT is unavailable: package folders are named by family name.</summary>
+    /// <summary>
+    /// Fallback when WinRT is unavailable: package folders are named by family name.
+    /// The install directory cannot be derived from the family name, so it is left
+    /// unknown and Claude's processes are matched by name alone.
+    /// </summary>
     internal ClaudeInstallInfo? DetectMsixByFolderScan()
     {
         var packages = Path.Combine(folders.LocalAppData, "Packages");

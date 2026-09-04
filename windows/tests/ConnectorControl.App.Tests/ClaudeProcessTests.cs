@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ConnectorControl.App.Services;
 using ConnectorControl.Core.Services;
 
@@ -56,6 +57,41 @@ public class ClaudeProcessTests
     public void AumidRecognition(string target, bool expected)
     {
         Assert.Equal(expected, ClaudeProcess.IsAumid(target));
+    }
+
+    [Fact]
+    public void RunningIsTrueForAProcessInsideTheInstallDirectory()
+    {
+        // This test process stands in for Claude: same name, same session, and it
+        // does live under the directory we claim as the install.
+        using var self = Process.GetCurrentProcess();
+        var exe = Environment.ProcessPath!;
+        var info = new ClaudeInstallInfo(ClaudeInstallKind.Legacy, null, exe, self.ProcessName, Path.GetDirectoryName(exe));
+        var p = new ClaudeProcess(() => info, () => null);
+        Assert.True(p.IsRunning);
+        Assert.NotNull(p.LaunchTime);
+    }
+
+    [Fact]
+    public void ProcessesOutsideTheInstallDirectoryAreNotClaude()
+    {
+        // The Claude Code CLI's binary is also called claude.exe: same name, wrong place.
+        using var self = Process.GetCurrentProcess();
+        var elsewhere = Path.Combine(Path.GetTempPath(), "cc-not-the-install");
+        var info = new ClaudeInstallInfo(ClaudeInstallKind.Msix, "Claude_x", "Claude_x!Claude", self.ProcessName, elsewhere);
+        var p = new ClaudeProcess(() => info, () => null);
+        Assert.False(p.IsRunning);
+        Assert.Null(p.LaunchTime);
+    }
+
+    [Fact]
+    public void UnknownInstallDirectoryStillMatchesByName()
+    {
+        using var self = Process.GetCurrentProcess();
+        var info = new ClaudeInstallInfo(ClaudeInstallKind.Msix, "Claude_x", "Claude_x!Claude", self.ProcessName);
+        var p = new ClaudeProcess(() => info, () => null);
+        Assert.Null(info.InstallDirectory);
+        Assert.True(p.IsRunning);
     }
 
     [Fact]
