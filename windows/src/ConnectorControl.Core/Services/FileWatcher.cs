@@ -103,7 +103,23 @@ public sealed class FileWatcher : IDisposable
 
     private void OnEvent(object sender, FileSystemEventArgs e) => Schedule();
 
-    private void OnError(object sender, ErrorEventArgs e) => Schedule();   // buffer overflow: re-check rather than miss a change
+    private void OnError(object sender, ErrorEventArgs e) => HandleError();
+
+    /// <summary>
+    /// A watcher error. Usually a buffer overflow, so re-check rather than miss a
+    /// change; but deleting the watched directory also raises it and leaves the
+    /// FileSystemWatcher permanently silent, so disarm in that case and let the
+    /// caller's next Start() (§6.3 re-arms on each reload) build a fresh one.
+    /// Internal so the deleted-directory path is testable without provoking the OS.
+    /// </summary>
+    internal void HandleError()
+    {
+        Schedule();
+        if (!Directory.Exists(directory))
+        {
+            Stop();
+        }
+    }
 
     /// <summary>Restart the debounce timer; the check runs once the burst ends.</summary>
     private void Schedule()

@@ -170,6 +170,42 @@ public class FileWatcherTests : IDisposable
     }
 
     [Fact]
+    public void ADeletedDirectoryDisarmsTheWatcherSoTheNextStartReArms()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        watcher.Start();
+        Assert.True(watcher.IsArmed);
+        var parent = System.IO.Path.GetDirectoryName(path)!;
+        Directory.Delete(parent, recursive: true);
+        watcher.HandleError();      // what the FileSystemWatcher raises when its directory goes
+        Assert.False(watcher.IsArmed);
+        watcher.Start();            // AppState retries on each reload; the directory is still gone
+        Assert.False(watcher.IsArmed);
+        Directory.CreateDirectory(parent);
+        watcher.Start();
+        Assert.True(watcher.IsArmed);
+        Thread.Sleep(300);
+        File.WriteAllText(path, "two");
+        Assert.True(counter.WaitFor(1, Wait), "the re-armed watcher must still report changes");
+    }
+
+    [Fact]
+    public void AnErrorWithTheDirectoryStillThereKeepsTheWatcherArmed()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        watcher.Start();
+        watcher.HandleError();      // a buffer overflow: re-check, but stay armed
+        Assert.True(watcher.IsArmed);
+        Thread.Sleep(1100);
+        File.WriteAllText(path, "two");
+        Assert.True(counter.WaitFor(1, Wait));
+    }
+
+    [Fact]
     public void CallbackGoesThroughMarshal()
     {
         File.WriteAllText(path, "one");

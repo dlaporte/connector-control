@@ -33,8 +33,10 @@ jobs:
       - name: Build
         run: dotnet build windows/ConnectorControl.slnx --no-restore -c Release
 
+      # ci.runsettings sets xUnit FailSkips, so a test that silently skips on the
+      # runner (a Windows-only test that did not run) fails the build.
       - name: Test
-        run: dotnet test windows/ConnectorControl.slnx --no-build -c Release --logger "trx;LogFileName=results.trx" --results-directory TestResults
+        run: dotnet test windows/ConnectorControl.slnx --no-build -c Release --settings windows/ci.runsettings --logger "trx;LogFileName=results.trx" --results-directory TestResults
 
       - name: Upload test results
         if: always()

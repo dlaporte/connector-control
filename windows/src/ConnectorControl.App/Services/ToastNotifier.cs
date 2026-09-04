@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Security;
 using ConnectorControl.Core.Services;
 using Microsoft.Toolkit.Uwp.Notifications;
 
@@ -25,9 +26,13 @@ public sealed class ToastNotifier : INotifier, IDisposable
             ToastNotificationManagerCompat.OnActivated += OnActivated;
             hooked = true;
         }
-        catch (Exception ex) when (ex is COMException or InvalidOperationException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is COMException or InvalidOperationException or UnauthorizedAccessException
+            or IOException or SecurityException)
         {
-            hooked = false;   // activation unavailable; Notify still tries to show toasts
+            // Subscribing registers a COM server under HKCU\Software\Classes for this
+            // unpackaged app, so the registry's failures count too. Activation is then
+            // unavailable; Notify still tries to show toasts. Never block startup.
+            hooked = false;
         }
     }
 
@@ -37,19 +42,30 @@ public sealed class ToastNotifier : INotifier, IDisposable
     {
         try
         {
-            var builder = new ToastContentBuilder().AddText(title).AddText(body);
-            if (category == Notifications.RestartCategory)
-            {
-                builder.AddButton(new ToastButton()
-                    .SetContent(Notifications.RestartButton)
-                    .AddArgument(ActionKey, Notifications.RestartAction));
-            }
-            builder.Show();
+            Build(title, body, category).Show();
         }
-        catch (Exception ex) when (ex is COMException or InvalidOperationException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is COMException or InvalidOperationException or UnauthorizedAccessException
+            or IOException or SecurityException)
         {
             // toast platform unavailable: stay silent
         }
+    }
+
+    /// <summary>
+    /// The toast itself: title, body, and — for the restart category only — the
+    /// Restart Claude button carrying the action this class routes back
+    /// (spec §6.4). Separate from Show() so the content is testable.
+    /// </summary>
+    internal static ToastContentBuilder Build(string title, string body, string? category)
+    {
+        var builder = new ToastContentBuilder().AddText(title).AddText(body);
+        if (category == Notifications.RestartCategory)
+        {
+            builder.AddButton(new ToastButton()
+                .SetContent(Notifications.RestartButton)
+                .AddArgument(ActionKey, Notifications.RestartAction));
+        }
+        return builder;
     }
 
     internal static bool IsRestartActivation(string argument)
@@ -62,7 +78,7 @@ public sealed class ToastNotifier : INotifier, IDisposable
         return args.TryGetValue(ActionKey, out var action) && action == Notifications.RestartAction;
     }
 
-    /// <summary>Routes a toast activation argument string; public for tests.</summary>
+    /// <summary>Routes a toast activation argument string; internal so the tests can raise it.</summary>
     internal void HandleActivation(string argument)
     {
         if (IsRestartActivation(argument))
