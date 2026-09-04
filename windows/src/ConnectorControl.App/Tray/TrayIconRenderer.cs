@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -12,6 +13,19 @@ namespace ConnectorControl.App.Tray;
 /// </summary>
 public static class TrayIconRenderer
 {
+    /// <summary>
+    /// Forces software rendering before the first Visual is ever created.
+    /// A GPU-less host (a CI runner, a headless VM, an RDP session with no
+    /// hardware acceleration) makes WPF's automatic hardware-tier probe on
+    /// first render unreliable; observed on Windows CI as the whole test
+    /// process being killed with STATUS_STACK_OVERFLOW (0xC00000FD) on the
+    /// very first DrawingVisual render. Skipping that probe avoids it.
+    /// </summary>
+    static TrayIconRenderer()
+    {
+        RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
+    }
+
     /// <summary>A plug seen from the front (two prongs up, body, cable stub) in a 24×24 box.</summary>
     public const string PlugPathData = "F1 M7,1 h2 v6 h-2 z M15,1 h2 v6 h-2 z M4,7 h16 v5 a5,5 0 0 1 -5,5 h-6 a5,5 0 0 1 -5,-5 z M10.5,17 h3 v6 h-3 z";
 
