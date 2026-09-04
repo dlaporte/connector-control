@@ -36,20 +36,53 @@ public static class TrayIconRenderer
 
     public static BitmapSource Render(TrayGlyph glyph, bool lightTaskbar, int pixelSize)
     {
+        Diag("start");
         var geometry = Geometry.Parse(glyph == TrayGlyph.Plug ? PlugPathData : WarningPathData);
+        Diag("after Geometry.Parse");
         var brush = lightTaskbar ? Brushes.Black : Brushes.White;
+        Diag("after brush select");
         var visual = new DrawingVisual();
+        Diag("after new DrawingVisual");
         using (var context = visual.RenderOpen())
         {
+            Diag("after RenderOpen");
             var scale = pixelSize / DesignSize;
             context.PushTransform(new ScaleTransform(scale, scale));
+            Diag("after PushTransform");
             context.DrawGeometry(brush, null, geometry);
+            Diag("after DrawGeometry");
             context.Pop();
+            Diag("after Pop");
         }
+        Diag("after using block disposed");
         var bitmap = new RenderTargetBitmap(pixelSize, pixelSize, 96, 96, PixelFormats.Pbgra32);
+        Diag("after new RenderTargetBitmap");
         bitmap.Render(visual);
+        Diag("after bitmap.Render(visual)");
         bitmap.Freeze();
+        Diag("after Freeze");
         return bitmap;
+    }
+
+    // TEMPORARY diagnostic instrumentation (task 1 debugging only, removed before
+    // this task's final commit): a real STATUS_STACK_OVERFLOW crash cannot be
+    // caught by managed code, so we localize it by writing a durable, immediately
+    // flushed marker before/after each step to a file under TestResults, which
+    // the CI workflow uploads via `if: always()` even when the process is killed.
+    private static void Diag(string message)
+    {
+        try
+        {
+            var dir = Environment.GetEnvironmentVariable("GITHUB_WORKSPACE") is { } ws
+                ? Path.Combine(ws, "TestResults")
+                : Path.GetTempPath();
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(Path.Combine(dir, "diag.log"), $"{DateTime.UtcNow:O} [{Environment.CurrentManagedThreadId}] {message}{Environment.NewLine}");
+        }
+        catch
+        {
+            // Diagnostics must never break the thing they're diagnosing.
+        }
     }
 
     /// <summary>16 px at 100 % scaling, 24 at 150 %, 32 at 200 %.</summary>
