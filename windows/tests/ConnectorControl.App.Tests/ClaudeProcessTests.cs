@@ -142,4 +142,53 @@ public class ClaudeProcessTests
     {
         Assert.Equal("Claude didn\u2019t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again.", ClaudeProcess.DidNotQuitMessage);
     }
+
+    // Package folders look like <Name>_<Version>_<Arch>_<ResourceId>__<PublisherId>;
+    // the family name is <Name>_<PublisherId>. Msix cases below all use the family
+    // "Claude_pzs8sxrjxfjjc" against install directory
+    // C:\Program Files\WindowsApps\Claude_1.37937.0.0_x64__pzs8sxrjxfjjc (an older,
+    // cached version) to prove the match survives Claude's own update (review R1).
+    [Theory]
+    [InlineData(
+        ClaudeInstallKind.Msix,
+        @"C:\Program Files\WindowsApps\Claude_1.38001.0.0_x64__pzs8sxrjxfjjc\app\Claude.exe",
+        true)]   // same family, newer version: Claude updated itself
+    [InlineData(
+        ClaudeInstallKind.Msix,
+        @"C:\Program Files\WindowsApps\Claude_1.37937.0.0_x64__otherpublisher\app\Claude.exe",
+        false)]   // different publisher id: not the same family
+    [InlineData(
+        ClaudeInstallKind.Msix,
+        @"c:\program files\windowsapps\claude_1.38001.0.0_x64__pzs8sxrjxfjjc\app\claude.exe",
+        true)]   // Windows paths are case-insensitive
+    [InlineData(
+        ClaudeInstallKind.Msix,
+        @"C:\Users\me\.local\bin\claude.exe",
+        false)]   // the Claude Code CLI: same name, wrong root entirely
+    public void BelongsToInstallMatchesMsixByPackageFamily(ClaudeInstallKind kind, string imagePath, bool expected)
+    {
+        var info = new ClaudeInstallInfo(kind, "Claude_pzs8sxrjxfjjc", "Claude_pzs8sxrjxfjjc!Claude", "claude",
+            @"C:\Program Files\WindowsApps\Claude_1.37937.0.0_x64__pzs8sxrjxfjjc");
+        Assert.Equal(expected, ClaudeProcess.BelongsToInstall(imagePath, info));
+    }
+
+    [Theory]
+    [InlineData(@"C:\Users\me\AppData\Local\AnthropicClaude\claude.exe", true)]   // exact install folder
+    [InlineData(@"C:\USERS\ME\APPDATA\LOCAL\ANTHROPICCLAUDE\claude.exe", true)]   // case-insensitive
+    [InlineData(@"C:\Users\me\.local\bin\claude.exe", false)]   // the Claude Code CLI: same name, wrong folder
+    public void BelongsToInstallMatchesLegacyByExactFolder(string imagePath, bool expected)
+    {
+        var info = new ClaudeInstallInfo(ClaudeInstallKind.Legacy, null, @"C:\Users\me\AppData\Local\AnthropicClaude\claude.exe",
+            "claude", @"C:\Users\me\AppData\Local\AnthropicClaude");
+        Assert.Equal(expected, ClaudeProcess.BelongsToInstall(imagePath, info));
+    }
+
+    [Fact]
+    public void BelongsToInstallIsNameOnlyWhenInstallDirectoryIsUnknown()
+    {
+        var info = new ClaudeInstallInfo(ClaudeInstallKind.Msix, "Claude_x", "Claude_x!Claude", "claude");
+        Assert.Null(info.InstallDirectory);
+        Assert.True(ClaudeProcess.BelongsToInstall(@"C:\anywhere\claude.exe", info));
+        Assert.True(ClaudeProcess.BelongsToInstall(null, info));
+    }
 }

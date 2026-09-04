@@ -18,6 +18,7 @@ public sealed class ClaudeProcess : IClaudeProcess
     private static readonly int? CurrentSessionId = CurrentSession();
     private static readonly TimeSpan DefaultQuitTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan DefaultPollInterval = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan InstallCacheTtl = TimeSpan.FromMinutes(1);
 
     private readonly Func<ClaudeInstallInfo> install;
     private readonly Func<string?> launchTargetOverride;
@@ -26,6 +27,7 @@ public sealed class ClaudeProcess : IClaudeProcess
     private readonly object gate = new();
 
     private ClaudeInstallInfo? cachedInstall;
+    private DateTime cachedAt;
 
     public ClaudeProcess(Func<ClaudeInstallInfo> install, Func<string?> launchTargetOverride, TimeSpan? quitTimeout = null, TimeSpan? pollInterval = null)
     {
@@ -69,15 +71,20 @@ public sealed class ClaudeProcess : IClaudeProcess
     /// package registered for the user, and RefreshRestartState plus the 250 ms
     /// quit poll read IsRunning and LaunchTime far too often to pay for that on
     /// each read (review I3). A NotFound result is never cached, and RestartAsync
-    /// re-resolves, so a Claude installed while the app runs is still found.
+    /// re-resolves, so a Claude installed while the app runs is still found. The
+    /// cache also expires on a TTL: BelongsToInstall already tolerates Claude's own
+    /// MSIX update relocating its versioned folder (review R1), but the TTL is a
+    /// cheap second line of defence against any other way the cached info could
+    /// go stale (e.g. a package reinstalled under a new publisher id).
     /// </summary>
     private ClaudeInstallInfo CurrentInstall()
     {
         lock (gate)
         {
-            if (cachedInstall is null || cachedInstall.Kind == ClaudeInstallKind.NotFound)
+            if (cachedInstall is null || cachedInstall.Kind == ClaudeInstallKind.NotFound || DateTime.UtcNow - cachedAt > InstallCacheTtl)
             {
                 cachedInstall = install();
+                cachedAt = DateTime.UtcNow;
             }
             return cachedInstall;
         }
@@ -89,6 +96,7 @@ public sealed class ClaudeProcess : IClaudeProcess
         lock (gate)
         {
             cachedInstall = info;
+            cachedAt = DateTime.UtcNow;
         }
         return info;
     }
@@ -171,16 +179,66 @@ public sealed class ClaudeProcess : IClaudeProcess
             {
                 return false;
             }
-            if (info.InstallDirectory is not { Length: > 0 } directory)
+            if (info.InstallDirectory is not { Length: > 0 })
             {
-                return true;   // location unknown: the name is all we have
+                return true;   // location unknown: the name is all we have; skip the image-path read
             }
-            return ProcessImage.IsUnder(ProcessImage.ImagePath(process.Id), directory);
+            return BelongsToInstall(ProcessImage.ImagePath(process.Id), info);
         }
         catch (Exception ex) when (ex is InvalidOperationException or Win32Exception)
         {
             return false;   // exited between enumeration and query, or not ours to inspect
         }
+    }
+
+    /// <summary>
+    /// True when a process image path belongs to <paramref name="info"/>. MSIX
+    /// installs match by package family (name + publisher id from
+    /// <c>PackageFamilyName</c>), not the exact installed folder: Claude updates
+    /// itself roughly weekly and each update relocates every process to a new
+    /// versioned WindowsApps folder, so an exact-folder match goes stale until
+    /// the next Restart click (review R1). Legacy installs match the exact
+    /// folder, which the Squirrel updater never moves. A null
+    /// <c>InstallDirectory</c> means the location is unknown, so the caller's
+    /// name-only match is all there is.
+    /// </summary>
+    internal static bool BelongsToInstall(string? imagePath, ClaudeInstallInfo info)
+    {
+        if (info.InstallDirectory is not { Length: > 0 } directory)
+        {
+            return true;
+        }
+        if (info.Kind != ClaudeInstallKind.Msix || info.PackageFamilyName is not { Length: > 0 } family)
+        {
+            return ProcessImage.IsUnder(imagePath, directory);   // legacy: exact folder never moves
+        }
+        return BelongsToPackageFamily(imagePath, directory, family);
+    }
+
+    /// <summary>
+    /// True when <paramref name="imagePath"/> sits directly under the same
+    /// WindowsApps root as <paramref name="installDirectory"/>, in a package
+    /// folder for the same family: <c>&lt;Name&gt;_&lt;version&gt;_&lt;arch&gt;_&lt;resourceId&gt;__&lt;PublisherId&gt;</c>
+    /// for a family name <c>&lt;Name&gt;_&lt;PublisherId&gt;</c>. Version-independent by
+    /// design, so it survives Claude's own update relocating the folder.
+    /// </summary>
+    internal static bool BelongsToPackageFamily(string? imagePath, string installDirectory, string familyName)
+    {
+        var separator = familyName.LastIndexOf('_');
+        if (string.IsNullOrEmpty(imagePath) || separator < 0)
+        {
+            return false;
+        }
+        var root = Path.GetDirectoryName(installDirectory.TrimEnd('\\', '/'));
+        if (string.IsNullOrEmpty(root) || !ProcessImage.IsUnder(imagePath, root))
+        {
+            return false;
+        }
+        var packageFolder = imagePath[(root.Length + 1)..].Split(['\\', '/'], 2)[0];
+        var name = familyName[..separator];
+        var publisherId = familyName[(separator + 1)..];
+        return packageFolder.StartsWith(name + "_", StringComparison.OrdinalIgnoreCase)
+            && packageFolder.EndsWith("__" + publisherId, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int? CurrentSession()
