@@ -13,18 +13,12 @@ namespace ConnectorControl.App.Tray;
 /// </summary>
 public static class TrayIconRenderer
 {
-    /// <summary>
-    /// Forces software rendering before the first Visual is ever created.
-    /// A GPU-less host (a CI runner, a headless VM, an RDP session with no
-    /// hardware acceleration) makes WPF's automatic hardware-tier probe on
-    /// first render unreliable; observed on Windows CI as the whole test
-    /// process being killed with STATUS_STACK_OVERFLOW (0xC00000FD) on the
-    /// very first DrawingVisual render. Skipping that probe avoids it.
-    /// </summary>
-    static TrayIconRenderer()
-    {
-        RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
-    }
+    // TEMPORARILY REMOVED for diagnosis: the static cctor that set
+    // RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly ran BEFORE
+    // Diag("start") in Render() below, and diag.log never appeared in the
+    // previous CI run's uploaded artifact at all -- meaning the crash may be
+    // happening in that cctor itself, before Render()'s body ever starts.
+    // Pulling it out isolates that question for this round.
 
     /// <summary>A plug seen from the front (two prongs up, body, cable stub) in a 24×24 box.</summary>
     public const string PlugPathData = "F1 M7,1 h2 v6 h-2 z M15,1 h2 v6 h-2 z M4,7 h16 v5 a5,5 0 0 1 -5,5 h-6 a5,5 0 0 1 -5,-5 z M10.5,17 h3 v6 h-3 z";
