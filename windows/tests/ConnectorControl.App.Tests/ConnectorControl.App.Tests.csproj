@@ -17,4 +17,14 @@
   <ItemGroup>
     <ProjectReference Include="../../src/ConnectorControl.App/ConnectorControl.App.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Shared with the Core tests; linked, not copied. -->
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/TempDir.cs" Link="TestSupport/TempDir.cs" />
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/FakePathProbe.cs" Link="TestSupport/FakePathProbe.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The WPF SDK removes System.IO from ImplicitUsings; this test project and the
+         linked TestSupport files need it (Path, Directory, IOException). -->
+    <Using Include="System.IO" />
+  </ItemGroup>
 </Project>

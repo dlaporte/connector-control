@@ -11,4 +11,16 @@
   <ItemGroup>
     <ProjectReference Include="../ConnectorControl.Core/ConnectorControl.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Velopack" Version="1.2.0" />
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="ConnectorControl.App.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The WPF SDK removes System.IO from ImplicitUsings (it collides with
+         System.Windows.Shapes.Path); restore it for non-XAML code such as Services/. -->
+    <Using Include="System.IO" />
+  </ItemGroup>
 </Project>
