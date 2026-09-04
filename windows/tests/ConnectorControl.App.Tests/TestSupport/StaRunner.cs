@@ -28,7 +28,11 @@ public static class StaRunner
     public static T Run<T>(Func<T> func)
     {
         T result = default!;
-        Run(() => result = func());
+        // The braces matter. `Run(() => result = func())` is an expression-bodied lambda whose
+        // body has a value, so overload resolution prefers Func<T> over Action and it binds to
+        // *this* method — infinite recursion that overflows the stack and kills the whole test
+        // process. A statement body has no value, so only Run(Action) is applicable.
+        Run(() => { result = func(); });
         return result;
     }
 }
