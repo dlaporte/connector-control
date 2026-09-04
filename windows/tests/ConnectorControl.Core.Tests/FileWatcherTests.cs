@@ -90,6 +90,39 @@ public class FileWatcherTests : IDisposable
     }
 
     [Fact]
+    public void DoesNotFireWhenStoppedWhileAnEventIsInFlight()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        using var watcher = new FileWatcher(path, counter.Hit, a => a(), debounce: TimeSpan.FromMilliseconds(500));
+        watcher.Start();
+        Thread.Sleep(1100);
+        File.WriteAllText(path, "two");   // the debounce timer is now armed
+        Thread.Sleep(100);
+        watcher.Stop();                   // before the 500 ms debounce elapses
+        Thread.Sleep(1500);
+        Assert.Equal(0, counter.Count);
+    }
+
+    [Fact]
+    public void RestartDropsCallbacksScheduledBeforeTheRestart()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        using var watcher = new FileWatcher(path, counter.Hit, a => a(), debounce: TimeSpan.FromMilliseconds(500));
+        watcher.Start();
+        Thread.Sleep(1100);
+        File.WriteAllText(path, "two");
+        Thread.Sleep(100);
+        watcher.Stop();
+        watcher.Start();                  // new generation; the old timer's work must not leak through
+        Thread.Sleep(1500);
+        Assert.Equal(0, counter.Count);
+        File.WriteAllText(path, "three"); // the re-armed watcher still works
+        Assert.True(counter.WaitFor(1, Wait));
+    }
+
+    [Fact]
     public void CoalescesBurstsIntoOneCallback()
     {
         File.WriteAllText(path, "0");

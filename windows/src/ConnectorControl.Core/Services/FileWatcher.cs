@@ -5,7 +5,8 @@ namespace ConnectorControl.Core.Services;
 /// contract): the parent directory is watched with a name filter, so atomic
 /// replaces, in-place writes, deletes and creates are all seen; events are
 /// debounced and confirmed against the last-seen mtime; the callback is
-/// delivered through <c>marshal</c> (the UI thread in the app).
+/// delivered through <c>marshal</c> (the UI thread in the app) and is dropped
+/// if the watcher was stopped or restarted in the meantime.
 /// </summary>
 public sealed class FileWatcher : IDisposable
 {
@@ -23,6 +24,7 @@ public sealed class FileWatcher : IDisposable
     private Timer? timer;
     private DateTime? lastModified;
     private bool disposed;
+    private int generation;
 
     public FileWatcher(string path, Action onChange, Action<Action> marshal, TimeSpan? debounce = null)
     {
@@ -68,6 +70,7 @@ public sealed class FileWatcher : IDisposable
             fsw.Renamed += OnEvent;
             fsw.Error += OnError;
             fsw.EnableRaisingEvents = true;
+            generation++;
             watcher = fsw;
         }
     }
@@ -80,6 +83,7 @@ public sealed class FileWatcher : IDisposable
         {
             fsw = watcher;
             watcher = null;
+            generation++;
             t = timer;
             timer = null;
         }
@@ -118,6 +122,7 @@ public sealed class FileWatcher : IDisposable
     private void CheckForChange()
     {
         bool changed;
+        int observed;
         lock (gate)
         {
             if (watcher is null)
@@ -127,11 +132,25 @@ public sealed class FileWatcher : IDisposable
             var current = ModificationTime();
             changed = current != lastModified;
             lastModified = current;
+            observed = generation;
         }
-        if (changed)
+        if (!changed)
         {
-            marshal(onChange);
+            return;
         }
+        // The callback re-checks on the thread `marshal` delivers to (the UI thread in
+        // the app, where Stop/Start also run), so a Stop() that raced this check wins.
+        marshal(() =>
+        {
+            lock (gate)
+            {
+                if (watcher is null || generation != observed)
+                {
+                    return;
+                }
+            }
+            onChange();
+        });
     }
 
     private DateTime? ModificationTime()
