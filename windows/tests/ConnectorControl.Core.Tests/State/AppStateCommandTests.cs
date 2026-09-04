@@ -193,6 +193,7 @@ public class AppStateCommandTests
         Assert.Equal(2, h.Delays.Pending.Count);
         var errorBefore = state.LastError;
         var needsRestartBefore = state.NeedsClaudeRestart;
+        h.Claude.IsRunning = false;   // without the guard the 20 s check would now report a failed relaunch
         state.Dispose();
         h.Delays.RunNext();   // 3 s recheck: must be a no-op post-Dispose, not throw
         h.Delays.RunNext();   // 20 s relaunch check: same
