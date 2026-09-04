@@ -48,8 +48,9 @@ public static class AppPathsResolver
     }
 
     /// <summary>
-    /// The config file an MSIX-installed Claude actually reads, or null when no
-    /// Claude package folder exists under <c>%LOCALAPPDATA%\Packages</c>.
+    /// The config file a virtualized MSIX Claude actually reads, when that file
+    /// exists (it shadows the real AppData file); null otherwise — current
+    /// Claude builds write the real AppData path.
     /// </summary>
     public static string? ResolveMsixClaudeConfig(KnownFolders folders, IPathProbe probe)
     {
@@ -68,6 +69,6 @@ public static class AppPathsResolver
             .OrderBy(dir => dir, StringComparer.Ordinal)
             .Select(dir => Path.Combine(dir, "LocalCache", "Roaming", "Claude", "claude_desktop_config.json"))
             .ToList();
-        return candidates.FirstOrDefault(probe.FileExists) ?? candidates.FirstOrDefault();
+        return candidates.FirstOrDefault(probe.FileExists);
     }
 }

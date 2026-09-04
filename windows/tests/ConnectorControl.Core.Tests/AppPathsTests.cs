@@ -68,10 +68,12 @@ public class AppPathsTests
     }
 
     [Fact]
-    public void MsixPackageWithoutConfigStillResolvesToItsLocalCache()
+    public void MsixPackageWithoutConfigFallsBackToRoaming()
     {
         var probe = new FakePathProbe().AddDirectory(Pkg("Claude_pzs8sxrjxfjjc"));
-        Assert.Equal(PkgConfig("Claude_pzs8sxrjxfjjc"), AppPathsResolver.ResolveMsixClaudeConfig(Folders, probe));
+        Assert.Null(AppPathsResolver.ResolveMsixClaudeConfig(Folders, probe));
+        var paths = AppPathsResolver.Resolve(NoEnv, NoOverrides, Folders, probe);
+        Assert.Equal(Path.Combine(Roaming, "Claude", "claude_desktop_config.json"), paths.ClaudeConfigPath);
     }
 
     [Fact]
