@@ -15,6 +15,10 @@ public interface IClaudeProcess
     /// <summary>
     /// Gracefully quit Claude (never force-kill), wait up to 15 s, relaunch.
     /// Completes with null on success or the user-facing error message.
+    /// Cancelling <paramref name="cancellationToken"/> while the 15 s wait is
+    /// in progress throws <see cref="OperationCanceledException"/> (or the
+    /// <see cref="TaskCanceledException"/> subclass) rather than returning a
+    /// message; callers that pass a token must be ready to catch it.
     /// </summary>
     Task<string?> RestartAsync(CancellationToken cancellationToken = default);
 }

@@ -48,6 +48,8 @@ public sealed class SettingsStore : ISettings
     public bool AutoUpdate { get => GetBool("autoUpdate", true); set => Set("autoUpdate", JsonValue.Bool(value)); }
     public bool TrayTipShown { get => GetBool("trayTipShown", false); set => Set("trayTipShown", JsonValue.Bool(value)); }
 
+    public string? LastSaveError { get; private set; }
+
     public DateTime? LastApplyDate
     {
         get
@@ -88,5 +90,22 @@ public sealed class SettingsStore : ISettings
         Save();
     }
 
-    private void Save() => AtomicFile.Write(root.Serialize(), path);
+    /// <summary>
+    /// Best-effort: a write failure (unwritable directory, locked file, …)
+    /// must not surface as an exception, because the Mac's UserDefaults
+    /// setters never fail and callers (e.g. recording a successful apply)
+    /// rely on that. The in-memory value is kept either way.
+    /// </summary>
+    private void Save()
+    {
+        try
+        {
+            AtomicFile.Write(root.Serialize(), path);
+            LastSaveError = null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LastSaveError = ex.Message;
+        }
+    }
 }

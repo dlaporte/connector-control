@@ -104,6 +104,30 @@ public class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void FailedSaveIsBestEffortAndSetsLastSaveError()
+    {
+        // A path whose parent is a file (not a directory) fails Directory.CreateDirectory
+        // with IOException on every OS, before AtomicFile ever touches a temp file.
+        var blocker = dir.File("blocker");
+        File.WriteAllText(blocker, "not a directory");
+        var s = new SettingsStore(System.IO.Path.Combine(blocker, "settings.json"));
+        Assert.Null(s.LastSaveError);
+
+        s.TrayTipShown = true;
+
+        Assert.True(s.TrayTipShown);   // in-memory value kept despite the failed save
+        Assert.False(string.IsNullOrEmpty(s.LastSaveError));
+    }
+
+    [Fact]
+    public void SuccessfulSaveReportsNoLastSaveError()
+    {
+        var s = new SettingsStore(Path);
+        s.TrayTipShown = true;
+        Assert.Null(s.LastSaveError);
+    }
+
+    [Fact]
     public void FileIsOwnerOnlyOnWindows()
     {
         if (!OperatingSystem.IsWindows())

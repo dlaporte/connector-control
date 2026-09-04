@@ -15,6 +15,14 @@ public interface ISettings
     bool AutoUpdate { get; set; }
     bool TrayTipShown { get; set; }
 
+    /// <summary>
+    /// Setters never throw. When persisting a change fails (e.g. the store
+    /// directory is unwritable), the in-memory value is kept regardless, and
+    /// this holds the OS error message from that failure; the next
+    /// successful save clears it back to null.
+    /// </summary>
+    string? LastSaveError { get; }
+
     /// <summary>Re-read the file (external edits).</summary>
     void Reload();
 }
