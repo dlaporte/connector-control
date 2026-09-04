@@ -93,6 +93,29 @@ public class AppPathsTests
     }
 
     [Fact]
+    public void WhenBothConfigsExistTheNewerOneWins()
+    {
+        var roaming = Path.Combine(Roaming, "Claude", "claude_desktop_config.json");
+        var older = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc);
+        var newer = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        var staleLocalCache = new FakePathProbe().AddFile(PkgConfig("Claude_pzs8sxrjxfjjc"), older).AddFile(roaming, newer);
+        Assert.Equal(roaming, AppPathsResolver.Resolve(NoEnv, NoOverrides, Folders, staleLocalCache).ClaudeConfigPath);
+
+        var liveLocalCache = new FakePathProbe().AddFile(PkgConfig("Claude_pzs8sxrjxfjjc"), newer).AddFile(roaming, older);
+        Assert.Equal(PkgConfig("Claude_pzs8sxrjxfjjc"), AppPathsResolver.Resolve(NoEnv, NoOverrides, Folders, liveLocalCache).ClaudeConfigPath);
+    }
+
+    [Fact]
+    public void TieBetweenBothConfigsPrefersRoaming()
+    {
+        var roaming = Path.Combine(Roaming, "Claude", "claude_desktop_config.json");
+        var same = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        var probe = new FakePathProbe().AddFile(PkgConfig("Claude_pzs8sxrjxfjjc"), same).AddFile(roaming, same);
+        Assert.Equal(roaming, AppPathsResolver.Resolve(NoEnv, NoOverrides, Folders, probe).ClaudeConfigPath);
+    }
+
+    [Fact]
     public void SettingsOverrideBeatsMsixAndEnvBeatsSettings()
     {
         var probe = new FakePathProbe().AddFile(PkgConfig("Claude_pzs8sxrjxfjjc"));
@@ -126,5 +149,7 @@ public class AppPathsTests
         Assert.True(probe.FileExists(dir.File("f.txt")));
         Assert.Equal([dir.File("a")], probe.EnumerateDirectories(dir.Path).ToArray());
         Assert.Empty(probe.EnumerateDirectories(dir.File("missing")));
+        Assert.NotNull(probe.LastWriteTimeUtc(dir.File("f.txt")));
+        Assert.Null(probe.LastWriteTimeUtc(dir.File("missing.txt")));
     }
 }

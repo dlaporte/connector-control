@@ -17,11 +17,11 @@ Add-Type @"
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
+using FT = System.Runtime.InteropServices.ComTypes.FILETIME;
 using System.Text;
 public static class Rm {
   [StructLayout(LayoutKind.Sequential)]
-  public struct RM_UNIQUE_PROCESS { public int dwProcessId; public FILETIME ProcessStartTime; }
+  public struct RM_UNIQUE_PROCESS { public int dwProcessId; public FT ProcessStartTime; }
   [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)]
   public static extern int RmStartSession(out uint pSessionHandle, int dwSessionFlags, StringBuilder strSessionKey);
   [DllImport("rstrtmgr.dll")]
@@ -33,7 +33,7 @@ public static class Rm {
   [DllImport("kernel32.dll", SetLastError = true)]
   public static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
   [DllImport("kernel32.dll", SetLastError = true)]
-  public static extern bool GetProcessTimes(IntPtr h, out FILETIME c, out FILETIME e, out FILETIME k, out FILETIME u);
+  public static extern bool GetProcessTimes(IntPtr h, out FT c, out FT e, out FT k, out FT u);
   [DllImport("kernel32.dll")]
   public static extern bool CloseHandle(IntPtr h);
   // Asks the Restart Manager to shut the given processes down gracefully (no force flag).
@@ -47,7 +47,7 @@ public static class Rm {
       foreach (int pid in pids) {
         IntPtr h = OpenProcess(0x1000, false, pid);   // PROCESS_QUERY_LIMITED_INFORMATION
         if (h == IntPtr.Zero) continue;
-        FILETIME c, e, k, u;
+        FT c, e, k, u;
         if (GetProcessTimes(h, out c, out e, out k, out u)) {
           RM_UNIQUE_PROCESS p = new RM_UNIQUE_PROCESS();
           p.dwProcessId = pid;
@@ -81,6 +81,7 @@ public static class Win {
   public static string Title(IntPtr h) { StringBuilder sb = new StringBuilder(256); GetWindowText(h, sb, 256); return sb.ToString(); }
 }
 "@
+if (-not ([System.Management.Automation.PSTypeName]'Rm').Type) { Write-Host "The helper types failed to compile; aborting." -ForegroundColor Red; exit 1 }
 
 Section "Claude processes before"
 $procs = ClaudeProcs

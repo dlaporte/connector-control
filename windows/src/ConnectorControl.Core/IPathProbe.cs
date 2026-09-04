@@ -6,4 +6,5 @@ public interface IPathProbe
     bool FileExists(string path);
     bool DirectoryExists(string path);
     IEnumerable<string> EnumerateDirectories(string path);
+    DateTime? LastWriteTimeUtc(string path);
 }
