@@ -33,6 +33,11 @@ public sealed class AppState : ObservableObject, IDisposable
     private IReadOnlyDictionary<string, JsonValue> appliedServers = EmptyServers;
     private ConfigService service;
     private bool hasLoadedOnce;
+    private FileWatcher? watcher;
+    private FileWatcher? storeWatcher;
+
+    /// <summary>Test probe: both watchers are live. Spec §6.3 wants this true after every reload.</summary>
+    internal bool WatchersArmed => watcher is { IsArmed: true } && storeWatcher is { IsArmed: true };
 
     public AppState(ISettings settings, IClaudeProcess claude, INotifier notifier, IDialogs dialogs, PathContext paths, AppHost host)
     {
@@ -46,6 +51,7 @@ public sealed class AppState : ObservableObject, IDisposable
         // Sweep the RESOLVED paths (a repointed store lives outside the default dir).
         AclSweep.RunOnce(settings, service.Paths);
         Reload();
+        ArmWatchers();
     }
 
     /// <summary>The prompts AppState itself raises (quit, restart, profiles); editor/settings windows own their own.</summary>
@@ -84,6 +90,141 @@ public sealed class AppState : ObservableObject, IDisposable
             var total = Store.Mcps.Count;
             return total == 0 ? NoConnectorsSubtitle : $"{Store.EnabledServers.Count} of {total} enabled";
         }
+    }
+
+    // MARK: watchers (catalog §1.4, §1.5; spec §6.3)
+
+    /// <summary>Replaces both watchers. Re-run on every repoint.</summary>
+    private void ArmWatchers()
+    {
+        watcher?.Dispose();
+        storeWatcher?.Dispose();
+        watcher = new FileWatcher(Service.Paths.ClaudeConfigPath, () => SafeReload(), host.Marshal);
+        watcher.Start();
+        storeWatcher = new FileWatcher(Service.Paths.MasterStorePath, AdoptExternalStoreChange, host.Marshal);
+        storeWatcher.Start();
+    }
+
+    private static void ReArm(FileWatcher? watcher)
+    {
+        if (watcher is { IsArmed: false })
+        {
+            watcher.Start();
+        }
+    }
+
+    /// <summary>
+    /// The store's mtime changed on disk. Classify before adopting: our own PersistStore writes echo
+    /// through this watcher (skip — memory already matches), a sync tool's mid-write partial parses as
+    /// garbage (wait for the completed write to fire again — adopting it would rebuild the store from
+    /// the local Claude config and clobber the synced list), and only a decodable store that differs
+    /// from memory is a genuine outside edit to adopt and announce.
+    /// </summary>
+    private void AdoptExternalStoreChange()
+    {
+        var storePath = Service.Paths.MasterStorePath;
+        if (!File.Exists(storePath))
+        {
+            // Deleted store file: Reload's self-heal re-persists the in-memory truth; nothing external to adopt or announce.
+            SafeReload(ReloadTrigger.QuietStoreAdoption);
+            return;
+        }
+        var onDisk = MasterStoreIO.Read(storePath);
+        if (onDisk is null || onDisk.Equals(Store))
+        {
+            return;
+        }
+        SafeReload(ReloadTrigger.ExternalStoreAdoption);
+    }
+
+    /// <summary>
+    /// Runs a watcher-triggered Reload with a catch-all around it. Reload's own catch filter is
+    /// narrower than the Mac's catch-all (Task 3 review); anything it doesn't cover would otherwise
+    /// escape through a marshalled FileWatcher callback and take the whole app down instead of showing
+    /// a banner. Not used for a Reload called directly from a public method — those are already on the
+    /// caller's stack, not a marshalled callback, so their exceptions propagate as before.
+    /// </summary>
+    private void SafeReload(ReloadTrigger trigger = ReloadTrigger.Routine)
+    {
+        try
+        {
+            Reload(trigger);
+        }
+        catch (Exception ex)
+        {
+            LastError = Friendly(ex);
+            RefreshRestartState();
+            RaiseAll();
+        }
+    }
+
+    // MARK: repointing (catalog §1.12) and restore (catalog §1.13)
+
+    /// <summary>
+    /// Repoints the master store to a new directory (or back to the default when <paramref name="dir"/>
+    /// is null). Seeds the new location from the current store if it has no mcps.json yet, rebuilds the
+    /// service, re-arms both watchers, and adopts the store quietly (a pre-existing store is authoritative).
+    /// </summary>
+    public void RepointStore(string? dir)
+    {
+        var previousStorePath = Service.Paths.MasterStorePath;
+        settings.MasterStoreDir = dir;
+        var rebuilt = MakeService(settings, paths);
+        var newStorePath = rebuilt.Paths.MasterStorePath;
+        if (!File.Exists(newStorePath) && File.Exists(previousStorePath))
+        {
+            try
+            {
+                Directory.CreateDirectory(rebuilt.Paths.StoreDir);
+                File.Copy(previousStorePath, newStorePath);
+                OwnerOnlyAcl.TryApply(rebuilt.Paths.StoreDir);
+                OwnerOnlyAcl.TryApply(newStorePath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // like the Mac's try?: adopt whatever is (or isn't) there
+            }
+        }
+        Service = rebuilt;
+        ArmWatchers();
+        Reload(ReloadTrigger.QuietStoreAdoption);
+    }
+
+    /// <summary>
+    /// Settings ▸ Claude ▸ config path. A different Claude file is a fresh start against that file:
+    /// first-launch import semantics (null baseline), no notifications, the store still wins any divergence.
+    /// </summary>
+    public void RepointClaudeConfig(string? path)
+    {
+        settings.ClaudeConfigPath = path;
+        Service = MakeService(settings, paths);
+        hasLoadedOnce = false;
+        AppliedServers = EmptyServers;
+        ArmWatchers();
+        Reload();
+    }
+
+    /// <summary>Rebuilds the service from current settings (backup retention) without moving the store or resetting the baseline.</summary>
+    public void RefreshServiceSettings()
+    {
+        Service = MakeService(settings, paths);
+        ArmWatchers();
+        RaiseAll();
+    }
+
+    /// <summary>
+    /// Restores Claude's config from a backup and syncs the reconciliation baseline to the restored
+    /// contents BEFORE reloading, so the app's own restore isn't misread as an external change or a re-add.
+    /// Throws on a bad backup; nothing is written then.
+    /// </summary>
+    public void RestoreClaudeConfig(string backupPath)
+    {
+        var servers = Service.RestoreClaudeConfig(backupPath, Store);
+        AppliedServers = servers;
+        hasLoadedOnce = true;
+        settings.LastApplyDate = host.UtcNow();
+        // ConfigService already merged and persisted the store; a quiet adoption takes it as-is.
+        Reload(ReloadTrigger.QuietStoreAdoption);
     }
 
     // MARK: service construction (catalog §1.3, spec §5.6)
@@ -186,6 +327,15 @@ public sealed class AppState : ObservableObject, IDisposable
             LastError = Friendly(ex);
             RefreshRestartState();
         }
+        // Only when arming previously failed — the parent directory did not exist, or
+        // FileWatcher.HandleError disarmed itself because the directory was deleted.
+        // Never a blanket re-arm: a flyout open reloads (catalog §2.1), and tearing two
+        // FileSystemWatchers down and rebuilding them each time would re-baseline the
+        // last-seen write time and open a gap where an external write is simply lost.
+        // (FileWatcher.Start() is itself a no-op while armed; the IsArmed test states the
+        // intent at the call site rather than relying on that.)
+        ReArm(watcher);
+        ReArm(storeWatcher);
         RaiseAll();
     }
 
@@ -312,6 +462,9 @@ public sealed class AppState : ObservableObject, IDisposable
 
     public void Dispose()
     {
-        // Watchers (Task 4) and the notifier subscription (Task 5) are released here.
+        watcher?.Dispose();
+        storeWatcher?.Dispose();
+        watcher = null;
+        storeWatcher = null;
     }
 }
