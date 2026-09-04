@@ -109,16 +109,23 @@ public sealed class FileWatcher : IDisposable
     /// A watcher error. Usually a buffer overflow, so re-check rather than miss a
     /// change; but deleting the watched directory also raises it and leaves the
     /// FileSystemWatcher permanently silent, so disarm in that case and let the
-    /// caller's next Start() (§6.3 re-arms on each reload) build a fresh one.
+    /// caller's next Start() (§6.3 re-arms on each reload) build a fresh one. The
+    /// deletion is delivered directly rather than through Schedule(): Stop() disposes
+    /// whatever debounce timer is pending, so a Schedule()-then-Stop() sequence would
+    /// dispose the very timer meant to report this change and the deletion would
+    /// never reach the caller (review R2). No generation guard here — Stop() has
+    /// already run, so this is a final, deliberate notification, not a stale check.
     /// Internal so the deleted-directory path is testable without provoking the OS.
     /// </summary>
     internal void HandleError()
     {
-        Schedule();
-        if (!Directory.Exists(directory))
+        if (Directory.Exists(directory))
         {
-            Stop();
+            Schedule();
+            return;
         }
+        Stop();
+        marshal(onChange);
     }
 
     /// <summary>Restart the debounce timer; the check runs once the burst ends.</summary>

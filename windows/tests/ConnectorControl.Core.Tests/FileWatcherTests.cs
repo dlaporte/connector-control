@@ -181,6 +181,7 @@ public class FileWatcherTests : IDisposable
         Directory.Delete(parent, recursive: true);
         watcher.HandleError();      // what the FileSystemWatcher raises when its directory goes
         Assert.False(watcher.IsArmed);
+        Assert.Equal(1, counter.Count);   // the deletion itself must be delivered, not swallowed by Stop() (R2)
         watcher.Start();            // AppState retries on each reload; the directory is still gone
         Assert.False(watcher.IsArmed);
         Directory.CreateDirectory(parent);
@@ -188,7 +189,7 @@ public class FileWatcherTests : IDisposable
         Assert.True(watcher.IsArmed);
         Thread.Sleep(300);
         File.WriteAllText(path, "two");
-        Assert.True(counter.WaitFor(1, Wait), "the re-armed watcher must still report changes");
+        Assert.True(counter.WaitFor(2, Wait), "the re-armed watcher must still report changes");
     }
 
     [Fact]
