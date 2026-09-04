@@ -70,6 +70,8 @@ public class ClaudeProcessTests
         var p = new ClaudeProcess(() => info, () => null);
         Assert.True(p.IsRunning);
         Assert.NotNull(p.LaunchTime);
+        Assert.Equal(DateTimeKind.Utc, p.LaunchTime.Value.Kind);
+        Assert.Equal(self.StartTime.ToUniversalTime(), p.LaunchTime.Value, TimeSpan.FromSeconds(1));
     }
 
     [Fact]
@@ -92,6 +94,47 @@ public class ClaudeProcessTests
         var p = new ClaudeProcess(() => info, () => null);
         Assert.Null(info.InstallDirectory);
         Assert.True(p.IsRunning);
+    }
+
+    [Fact]
+    public void TheInstallIsDetectedOnceAcrossManyReads()
+    {
+        // Detect() enumerates every package registered for the user; RefreshRestartState
+        // and the quit poll must not pay for that on every read.
+        var detections = 0;
+        var p = new ClaudeProcess(
+            () => { detections++; return Legacy(Path.Combine(Path.GetTempPath(), "cc-missing", "claude.exe")); },
+            () => null);
+        _ = p.IsRunning;
+        _ = p.LaunchTime;
+        _ = p.IsRunning;
+        Assert.Equal(1, detections);
+    }
+
+    [Fact]
+    public async Task RestartReResolvesTheInstall()
+    {
+        var detections = 0;
+        var exe = Path.Combine(Path.GetTempPath(), "cc-missing", "claude.exe");
+        var p = new ClaudeProcess(() => { detections++; return Legacy(exe); }, () => null);
+        _ = p.IsRunning;
+        Assert.Equal(1, detections);
+        await p.RestartAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, detections);   // Claude may have been installed or updated since
+        _ = p.IsRunning;
+        Assert.Equal(2, detections);   // and the fresh result is cached again
+    }
+
+    [Fact]
+    public void ANotFoundInstallIsReResolvedOnEveryRead()
+    {
+        var detections = 0;
+        var p = new ClaudeProcess(
+            () => { detections++; return ClaudeInstallInfo.NotFound with { ProcessName = NoSuchProcess }; },
+            () => null);
+        _ = p.IsRunning;
+        _ = p.IsRunning;
+        Assert.Equal(2, detections);   // so a Claude installed after we started is picked up
     }
 
     [Fact]

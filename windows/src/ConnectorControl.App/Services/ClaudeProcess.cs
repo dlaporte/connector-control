@@ -23,6 +23,9 @@ public sealed class ClaudeProcess : IClaudeProcess
     private readonly Func<string?> launchTargetOverride;
     private readonly TimeSpan quitTimeout;
     private readonly TimeSpan pollInterval;
+    private readonly object gate = new();
+
+    private ClaudeInstallInfo? cachedInstall;
 
     public ClaudeProcess(Func<ClaudeInstallInfo> install, Func<string?> launchTargetOverride, TimeSpan? quitTimeout = null, TimeSpan? pollInterval = null)
     {
@@ -32,17 +35,22 @@ public sealed class ClaudeProcess : IClaudeProcess
         this.pollInterval = pollInterval ?? DefaultPollInterval;
     }
 
-    public bool IsRunning => WithProcesses(processes => processes.Length > 0);
+    public bool IsRunning => IsRunningFor(CurrentInstall());
 
-    /// <summary>Earliest StartTime across Claude's processes (Electron spawns several within a couple of seconds).</summary>
-    public DateTime? LaunchTime => WithProcesses(processes =>
+    /// <summary>
+    /// Earliest start time across Claude's processes (Electron spawns several
+    /// within a couple of seconds), in UTC, or null when Claude is not running.
+    /// </summary>
+    public DateTime? LaunchTime => WithProcesses(CurrentInstall(), processes =>
     {
         DateTime? earliest = null;
         foreach (var process in processes)
         {
             try
             {
-                var started = process.StartTime;
+                // Process.StartTime is local; the contract (and ISettings.LastApplyDate,
+                // which it is compared with) is UTC.
+                var started = process.StartTime.ToUniversalTime();
                 if (earliest is null || started < earliest)
                 {
                     earliest = started;
@@ -56,9 +64,38 @@ public sealed class ClaudeProcess : IClaudeProcess
         return earliest;
     });
 
-    public async Task<string?> RestartAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// The install, resolved on first use and then cached. Detect() walks every
+    /// package registered for the user, and RefreshRestartState plus the 250 ms
+    /// quit poll read IsRunning and LaunchTime far too often to pay for that on
+    /// each read (review I3). A NotFound result is never cached, and RestartAsync
+    /// re-resolves, so a Claude installed while the app runs is still found.
+    /// </summary>
+    private ClaudeInstallInfo CurrentInstall()
+    {
+        lock (gate)
+        {
+            if (cachedInstall is null || cachedInstall.Kind == ClaudeInstallKind.NotFound)
+            {
+                cachedInstall = install();
+            }
+            return cachedInstall;
+        }
+    }
+
+    private ClaudeInstallInfo RefreshInstall()
     {
         var info = install();
+        lock (gate)
+        {
+            cachedInstall = info;
+        }
+        return info;
+    }
+
+    public async Task<string?> RestartAsync(CancellationToken cancellationToken = default)
+    {
+        var info = RefreshInstall();   // the user may have installed or updated Claude since we started
         var target = launchTargetOverride() is { Length: > 0 } overridden ? overridden : info.LaunchTarget;
         if (target is null)
         {
@@ -69,9 +106,9 @@ public sealed class ClaudeProcess : IClaudeProcess
         {
             return $"Claude was not found at {target}.";
         }
-        if (IsRunning)
+        if (IsRunningFor(info))
         {
-            var quit = await Task.Run(() => QuitAndWait(cancellationToken), cancellationToken).ConfigureAwait(false);
+            var quit = await Task.Run(() => QuitAndWait(info, cancellationToken), cancellationToken).ConfigureAwait(false);
             if (!quit)
             {
                 return DidNotQuitMessage;
@@ -83,9 +120,9 @@ public sealed class ClaudeProcess : IClaudeProcess
     /// <summary>An app user model id looks like <c>Family_hash!App</c>; an exe path is rooted.</summary>
     internal static bool IsAumid(string target) => target.Contains('!') && !Path.IsPathRooted(target);
 
-    private bool QuitAndWait(CancellationToken cancellationToken)
+    private bool QuitAndWait(ClaudeInstallInfo info, CancellationToken cancellationToken)
     {
-        var pids = WithProcesses(processes => processes.Select(p => p.Id).ToHashSet());
+        var pids = WithProcesses(info, processes => processes.Select(p => p.Id).ToHashSet());
         var windows = SessionEnd.FindCandidateWindows(pids, MainWindowTitle);
         if (windows.Count == 0 || !SessionEnd.RequestQuit(windows))
         {
@@ -95,13 +132,13 @@ public sealed class ClaudeProcess : IClaudeProcess
         while (DateTime.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!IsRunning)
+            if (!IsRunningFor(info))
             {
                 return true;
             }
             Thread.Sleep(pollInterval);
         }
-        return !IsRunning;
+        return !IsRunningFor(info);
     }
 
     private static string? Launch(string target, bool aumid)
@@ -159,9 +196,10 @@ public sealed class ClaudeProcess : IClaudeProcess
         }
     }
 
-    private T WithProcesses<T>(Func<Process[], T> use)
+    private bool IsRunningFor(ClaudeInstallInfo info) => WithProcesses(info, processes => processes.Length > 0);
+
+    private T WithProcesses<T>(ClaudeInstallInfo info, Func<Process[], T> use)
     {
-        var info = install();
         var processes = Process.GetProcessesByName(info.ProcessName);
         try
         {

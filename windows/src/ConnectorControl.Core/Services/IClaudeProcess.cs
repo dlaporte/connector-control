@@ -5,7 +5,11 @@ public interface IClaudeProcess
 {
     bool IsRunning { get; }
 
-    /// <summary>Earliest start time across Claude's processes, or null when not running.</summary>
+    /// <summary>
+    /// Earliest start time across Claude's processes, always UTC
+    /// (<see cref="DateTimeKind.Utc"/>), or null when not running. It is compared
+    /// with <see cref="ISettings.LastApplyDate"/>, which is UTC too.
+    /// </summary>
     DateTime? LaunchTime { get; }
 
     /// <summary>
