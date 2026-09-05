@@ -13,14 +13,19 @@ public class TrayIconRendererTests
     [InlineData(TrayGlyph.Warning, false, 16)]
     public void RendersVisiblePixelsAtTheRequestedSize(TrayGlyph glyph, bool light, int size)
     {
-        var (width, height, visible) = StaRunner.Run(() =>
+        var (width, height, visible, iconHandle) = StaRunner.Run(() =>
         {
             var bitmap = TrayIconRenderer.Render(glyph, light, size);
-            return (bitmap.PixelWidth, bitmap.PixelHeight, TrayIconRenderer.CountVisiblePixels(bitmap));
+            // The tray takes a System.Drawing.Icon and RenderIcon is the only conversion that
+            // works, so it is exercised here at every size: assigning the bitmap to
+            // TaskbarIcon.IconSource instead threw NotImplementedException at startup.
+            using var icon = TrayIconRenderer.RenderIcon(glyph, light, size);
+            return (bitmap.PixelWidth, bitmap.PixelHeight, TrayIconRenderer.CountVisiblePixels(bitmap), icon.Handle);
         });
         Assert.Equal(size, width);
         Assert.Equal(size, height);
         Assert.True(visible > size * size / 10);   // a glyph, not a blank square
+        Assert.True(iconHandle != nint.Zero, "RenderIcon produced a usable tray icon");
     }
 
     [Fact]

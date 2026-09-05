@@ -84,7 +84,7 @@ public sealed class TrayController : IDisposable
         currentGlyph = glyph;
         currentLight = light;
         currentSize = size;
-        icon.IconSource = TrayIconRenderer.Render(glyph, light, size);
+        icon.Icon = TrayIconRenderer.RenderIcon(glyph, light, size);
     }
 
     public void Dispose()

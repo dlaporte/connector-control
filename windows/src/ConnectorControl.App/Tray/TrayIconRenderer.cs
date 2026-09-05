@@ -18,6 +18,8 @@ public static class TrayIconRenderer
     public const string WarningPathData = "F0 M12,2 L22.5,21 H1.5 Z M10.9,8 h2.2 v6.5 h-2.2 z M10.9,16.2 h2.2 v2.3 h-2.2 z";
 
     private const double DesignSize = 24.0;
+    private const int IconDirSize = 6;
+    private const int IconDirEntrySize = 16;
 
     public static BitmapSource Render(TrayGlyph glyph, bool lightTaskbar, int pixelSize)
     {
@@ -35,6 +37,51 @@ public static class TrayIconRenderer
         bitmap.Render(visual);
         bitmap.Freeze();
         return bitmap;
+    }
+
+    /// <summary>
+    /// The same glyph as a <see cref="System.Drawing.Icon"/>, which is what the tray shows.
+    /// H.NotifyIcon's <c>TaskbarIcon.IconSource</c> cannot carry this: its ImageSource-to-icon
+    /// conversion only resolves a <c>BitmapImage</c>'s <c>UriSource</c> or a <c>BitmapFrame</c>'s
+    /// URI and throws <c>NotImplementedException</c> for anything rendered at runtime, so the
+    /// icon goes through <c>TaskbarIcon.Icon</c> instead (which disposes the one it replaces).
+    /// </summary>
+    public static System.Drawing.Icon RenderIcon(TrayGlyph glyph, bool lightTaskbar, int pixelSize)
+    {
+        using var ico = new MemoryStream(IconBytes(Render(glyph, lightTaskbar, pixelSize)));
+        return new System.Drawing.Icon(ico, pixelSize, pixelSize);
+    }
+
+    /// <summary>
+    /// A one-image .ico wrapping a PNG frame — the PNG-compressed icon entry Windows has
+    /// accepted since Vista, and the only .ico shape needed for a single-size tray glyph.
+    /// Building the bytes (rather than handing over a raw HICON) keeps the Icon the owner of
+    /// its own handle, so disposing it really frees it.
+    /// </summary>
+    internal static byte[] IconBytes(BitmapSource bitmap)
+    {
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var png = new MemoryStream();
+        encoder.Save(png);
+        var image = png.ToArray();
+
+        using var ico = new MemoryStream();
+        var writer = new BinaryWriter(ico);
+        writer.Write((short)0);                                                     // ICONDIR.idReserved
+        writer.Write((short)1);                                                     // idType: 1 = icon
+        writer.Write((short)1);                                                     // idCount: one image
+        writer.Write((byte)(bitmap.PixelWidth >= 256 ? 0 : bitmap.PixelWidth));     // 0 means 256
+        writer.Write((byte)(bitmap.PixelHeight >= 256 ? 0 : bitmap.PixelHeight));
+        writer.Write((byte)0);                                                      // palette entries: none
+        writer.Write((byte)0);                                                      // bReserved
+        writer.Write((short)1);                                                     // wPlanes
+        writer.Write((short)32);                                                    // wBitCount: BGRA
+        writer.Write(image.Length);                                                 // dwBytesInRes
+        writer.Write(IconDirSize + IconDirEntrySize);                               // dwImageOffset
+        writer.Write(image);
+        writer.Flush();
+        return ico.ToArray();
     }
 
     /// <summary>16 px at 100 % scaling, 24 at 150 %, 32 at 200 %.</summary>
