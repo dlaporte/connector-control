@@ -25,6 +25,13 @@ final class AppState: ObservableObject {
     let updaterController = SPUStandardUpdaterController(
         startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil)
     private(set) var updaterRunning = false
+    /// Which of the four launchers Claude Desktop can start (spec
+    /// 2026-09-05-tool-probe §3.6): probed on demand — Settings ▸ Claude, the
+    /// editor — and cached for the rest of the run. A tool absent here has
+    /// not been probed yet.
+    @Published private(set) var toolStatuses: [Tool: ToolStatus] = [:]
+    private let toolProbe = ToolProbe.live()
+    private var toolsInFlight: Set<Tool> = []
 
     nonisolated static let restartCategoryID = "restartPending"
     nonisolated static let restartActionID = "restartClaude"
@@ -216,6 +223,27 @@ final class AppState: ObservableObject {
     func refreshServiceSettings() {
         service = AppState.makeService()
         armWatchers()
+    }
+
+    // MARK: - Tools
+
+    /// Probes `tools` off the main thread and publishes the results; a tool
+    /// already in flight is not probed twice. Callers: the Claude tab on
+    /// appear (all four), the editor when its required tool is unknown or
+    /// changes to a different one.
+    func refreshTools(_ tools: [Tool] = Tool.allCases) {
+        let wanted = tools.filter { toolsInFlight.insert($0).inserted }
+        guard !wanted.isEmpty else { return }
+        let probe = toolProbe
+        Task.detached(priority: .utility) {
+            let results = probe.probe(wanted)
+            await self.publishToolStatuses(results, probed: wanted)
+        }
+    }
+
+    private func publishToolStatuses(_ results: [Tool: ToolStatus], probed: [Tool]) {
+        toolStatuses.merge(results) { _, new in new }
+        toolsInFlight.subtract(probed)
     }
 
     var isDirty: Bool {

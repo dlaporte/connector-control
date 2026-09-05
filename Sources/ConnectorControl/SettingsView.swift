@@ -154,8 +154,19 @@ struct SettingsView: View {
                         .disabled(claudeAppPath == "/Applications/Claude.app")
                 }
             }
+
+            Section(ToolNote.settingsHeader) {
+                Text(ToolNote.settingsCaption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ForEach(Tool.allCases, id: \.self) { tool in
+                    ToolRowView(tool: tool, status: state.toolStatuses[tool])
+                }
+            }
         }
         .formStyle(.grouped)
+        // Spec §6 D4: the Mac refreshes when this tab appears.
+        .onAppear { state.refreshTools() }
     }
 
     private var appVersion: String {
