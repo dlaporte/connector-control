@@ -1,2 +1,4 @@
 # Fixtures and goldens are compared byte for byte on Windows: never convert line endings.
 Tests/Fixtures/** -text
+# The Windows app icon is generated binary data.
+windows/assets/*.ico binary

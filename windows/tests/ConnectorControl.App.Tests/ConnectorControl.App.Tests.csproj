@@ -36,6 +36,8 @@
   <ItemGroup>
     <!-- The harness seeds Claude's config from the shared fixtures. -->
     <Content Include="../../../Tests/Fixtures/**/*" Link="Fixtures/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The app icon, for AppIconTests. -->
+    <Content Include="../../assets/ConnectorControl.ico" Link="Assets/ConnectorControl.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <!-- The WPF SDK removes System.IO from ImplicitUsings; this test project and the

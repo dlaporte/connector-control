@@ -7,6 +7,12 @@
     <RootNamespace>ConnectorControl.App</RootNamespace>
     <AssemblyName>ConnectorControl</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Exe icon (Explorer, taskbar, Alt-Tab, Velopack's Setup.exe and stub copy it from here).
+         Generated on the Mac by scripts/generate-ico.swift; regenerate rather than edit. -->
+    <ApplicationIcon>../../assets/ConnectorControl.ico</ApplicationIcon>
+    <!-- WPF ships resource satellites for a dozen languages; the app has only English strings.
+         Verified 2026-09-04: a self-contained win-x64 publish drops from 268 files/13 folders to 255/0. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../ConnectorControl.Core/ConnectorControl.Core.csproj" />
