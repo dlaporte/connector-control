@@ -21,6 +21,7 @@ public sealed class TrayController : IDisposable
     private readonly AppState state;
     private TrayGlyph? currentGlyph;
     private bool currentLight;
+    private int currentSize;
 
     public TrayController(AppState state, FlyoutWindow flyout, WindowRegistry windows)
     {
@@ -73,13 +74,17 @@ public sealed class TrayController : IDisposable
     {
         var glyph = state.ApplyRetryNeeded ? TrayGlyph.Warning : TrayGlyph.Plug;
         var light = TaskbarTheme.IsLight();
-        if (glyph == currentGlyph && light == currentLight)
+        // The pixel size is part of the key: a display-scaling change must re-render, or the
+        // shell keeps upscaling a stale 16 px bitmap (Task 13 review).
+        var size = TrayIconRenderer.SystemIconPixelSize();
+        if (glyph == currentGlyph && light == currentLight && size == currentSize)
         {
             return;
         }
         currentGlyph = glyph;
         currentLight = light;
-        icon.IconSource = TrayIconRenderer.Render(glyph, light, TrayIconRenderer.SystemIconPixelSize());
+        currentSize = size;
+        icon.IconSource = TrayIconRenderer.Render(glyph, light, size);
     }
 
     public void Dispose()

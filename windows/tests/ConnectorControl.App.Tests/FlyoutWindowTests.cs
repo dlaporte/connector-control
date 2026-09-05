@@ -86,12 +86,15 @@ public class FlyoutWindowTests
 
             var withMenu = new FlyoutWindow(model, registry) { TrayAnchor = () => null };
             withMenu.Show();
-            withMenu.OpenProfileMenu();
+            var menu = withMenu.OpenProfileMenu();
             Assert.True(withMenu.HasOpenPopup);
             withMenu.HandleDeactivated();                    // the menu's own window took the focus
             Assert.True(withMenu.IsVisible);                 // …which is not a dismissal
             Assert.Equal(DateTime.MinValue, withMenu.LastHiddenUtc);
             withMenu.HideFlyout();
+            menu.IsOpen = false;   // leave nothing behind in the shared WPF host
+            withMenu.Close();
+            plain.Close();
         });
     }
 

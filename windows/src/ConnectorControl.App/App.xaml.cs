@@ -28,6 +28,7 @@ public partial class App : Application
     {
         VelopackUpdater.RunStartupHook();   // must run before anything else (install/update/uninstall callbacks)
         base.OnStartup(e);
+        DispatcherUnhandledException += OnUnhandledException;   // before the second-instance path too, so it leaves a crash.log
         instance = new SingleInstance();
         if (!instance.IsFirstInstance)
         {
@@ -41,7 +42,6 @@ public partial class App : Application
             Shutdown();
             return;
         }
-        DispatcherUnhandledException += OnUnhandledException;
 
         var host = UiThread.Host();
         // CreateDefault performs the toast COM registration, so it must precede any Notify.
@@ -52,12 +52,12 @@ public partial class App : Application
         state = new AppState(services.Settings, services.ClaudeProcess, services.Notifier, dialogs, PathContext.Live(), host);
         state.QuitRequested += () => Shutdown();
         updates = new UpdateCoordinator(services.Updater, services.Settings, services.Notifier, dialogs, host);
+        updates.Start();   // only arms the delayed first check through host.Delay
         var windows = new WindowRegistry(state, services, updates);
         flyoutModel = new FlyoutModel(state);
         flyout = new FlyoutWindow(flyoutModel, windows);
         tray = new TrayController(state, flyout, windows);
         instance.OnShowRequested(() => host.Marshal(() => flyout.ShowFlyout()));
-        updates.Start();
         FirstRunTip.ShowIfNeeded(services.Settings, services.Notifier);
     }
 
