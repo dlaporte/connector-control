@@ -4,6 +4,13 @@ Release notes for Connector Control. The section matching the tagged version
 is embedded into the Sparkle update dialog and used as the GitHub release
 notes — the release build fails if the section is missing.
 
+## v1.3.0
+
+- Windows: first preview builds (Velopack installer, tray app).
+- Windows: a native system-tray port of the Mac app for Windows 10 (build
+  17763 and later) and Windows 11, x64 and arm64, sharing the `mcps.json`
+  master list format so one synced list serves both platforms.
+
 ## v1.2.3
 
 Reliability release: fixes from a full code review of 1.1.4–1.2.2.

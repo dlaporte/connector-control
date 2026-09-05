@@ -1,0 +1,266 @@
+# Windows preview builds (design spec §3, §8.3): a GitHub PRERELEASE carrying Velopack
+# packages for win-x64 and win-arm64, versioned <next>-preview.<n>, where <next> is the top
+# "## vX.Y.Z" heading of CHANGELOG.md and <n> comes from the tag that started the run.
+#
+# TRIGGER: tag pushes, and nothing else. GitHub offers workflow_dispatch only for workflow
+# files that exist on the repository's DEFAULT branch (master here); this file lives on branch
+# `windows`. A tag push runs the workflow file as it exists AT THE TAGGED COMMIT, so it works
+# from any branch. Two tag shapes:
+#
+#   windows-preview-<n>       real preview:  prepare -> test -> package -> smoke -> publish
+#   windows-preview-dry-<n>   dry run:       the same, with publish skipped
+#
+# Both build version <next>-preview.<n>; pick <n> with `git tag -l 'windows-preview-*'`.
+# Neither shape matches release.yml's 'v[0-9]+.[0-9]+.[0-9]+' trigger, so no tag here can ever
+# start a Mac release build; and windows-ci.yml triggers on branch pushes only, so one preview
+# tag starts exactly one workflow run.
+#
+# A prerelease is never releases/latest, so the Mac app's Sparkle appcast at
+# releases/latest/download/appcast.xml is untouched, and a preview install
+# (prerelease version) only follows prereleases (VelopackUpdater).
+#
+# Optional code signing (spec §8.4, Azure Artifact Signing) when ALL of these repository
+# secrets exist — otherwise the build is unsigned and the package job emits a ::warning::
+#   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET   service principal with the
+#                                                          "Trusted Signing Certificate Profile Signer"
+#                                                          role (DefaultAzureCredential, Azure.Identity)
+#   AZURE_SIGNING_ENDPOINT                                 e.g. https://eus.codesigning.azure.net
+#   AZURE_SIGNING_ACCOUNT                                  the signing account name
+#   AZURE_SIGNING_PROFILE                                  the certificate profile name
+name: Windows Preview
+
+on:
+  push:
+    tags:
+      - 'windows-preview-*'
+
+# Read-only by default; only the publish job raises this to contents: write.
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-preview
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Version and notes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.derive.outputs.tag }}
+      version: ${{ steps.derive.outputs.version }}
+      next: ${{ steps.derive.outputs.next }}
+      number: ${{ steps.derive.outputs.number }}
+      dry: ${{ steps.derive.outputs.dry }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      HAS_SIGNING: ${{ secrets.AZURE_CLIENT_SECRET != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      # origin/master is the fallback compare base for the release notes. Create the
+      # remote-tracking ref explicitly rather than relying on what a tag checkout fetched.
+      - name: Fetch master
+        run: git fetch --no-tags origin master:refs/remotes/origin/master
+
+      - name: Derive version from the tag
+        id: derive
+        run: |
+          # The tag is the only input. windows-preview-dry-<n> is a dry run (publish skipped),
+          # windows-preview-<n> is a real preview; both build <next>-preview.<n>.
+          case "$GITHUB_REF_NAME" in
+            windows-preview-dry-*) N="${GITHUB_REF_NAME#windows-preview-dry-}"; DRY=true ;;
+            windows-preview-*)     N="${GITHUB_REF_NAME#windows-preview-}";     DRY=false ;;
+            *) echo "::error::Tag '$GITHUB_REF_NAME' is neither windows-preview-<n> nor windows-preview-dry-<n>."; exit 1 ;;
+          esac
+          case "$N" in ''|*[!0-9]*) echo "::error::preview number must be digits; tag '$GITHUB_REF_NAME' gave '$N'"; exit 1;; esac
+          # The next Mac+Windows version is the top "## vX.Y.Z" heading of CHANGELOG.md (spec §8.3).
+          NEXT=$(sed -n 's/^## v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$/\1/p' CHANGELOG.md | head -1)
+          if [ -z "$NEXT" ]; then
+            echo "::error::CHANGELOG.md has no '## vX.Y.Z' heading."
+            exit 1
+          fi
+          if gh release view "v$NEXT" >/dev/null 2>&1; then
+            echo "::error::CHANGELOG.md's top heading v$NEXT is already released; add the next version's section at the top first."
+            exit 1
+          fi
+          {
+            echo "tag=$GITHUB_REF_NAME"
+            echo "version=$NEXT-preview.$N"
+            echo "next=$NEXT"
+            echo "number=$N"
+            echo "dry=$DRY"
+          } >> "$GITHUB_OUTPUT"
+          echo "$GITHUB_REF_NAME -> $NEXT-preview.$N (dry_run=$DRY)"
+
+      - name: Write release notes
+        env:
+          TAG: ${{ steps.derive.outputs.tag }}
+          VERSION: ${{ steps.derive.outputs.version }}
+          NEXT: ${{ steps.derive.outputs.next }}
+          NUMBER: ${{ steps.derive.outputs.number }}
+        run: |
+          # Commits since the highest REAL preview below this one (a windows-preview-dry-<n>
+          # tag is never a comparison point), or since the branch left master.
+          PREV=$(git tag -l 'windows-preview-[0-9]*' \
+            | sed -n 's/^windows-preview-\([0-9][0-9]*\)$/\1/p' \
+            | sort -n | awk -v n="$NUMBER" '$1 + 0 < n + 0' | tail -1)
+          if [ -n "$PREV" ]; then
+            BASE="windows-preview-$PREV"; BASE_LABEL="windows-preview-$PREV"
+          else
+            BASE=$(git merge-base origin/master HEAD); BASE_LABEL="master (${BASE:0:7})"
+          fi
+          if [ "$HAS_SIGNING" = "true" ]; then
+            SIGNING="This build is code-signed (Azure Artifact Signing)."
+          else
+            SIGNING="This build is **unsigned**: Windows SmartScreen will warn (\"Windows protected your PC\") — click **More info**, then **Run anyway**."
+          fi
+          {
+            echo "Windows **preview** build \`$VERSION\` of Connector Control, from branch \`windows\` at ${GITHUB_SHA:0:7}."
+            echo
+            echo "> Preview builds are GitHub prereleases for Windows testers. They never touch the Mac app's update feed, and a preview install only updates to later previews (and to the final release). $SIGNING"
+            echo
+            echo "### Install"
+            echo
+            echo "1. Download \`ConnectorControl-win-x64-Setup.exe\` (Intel/AMD PCs) or \`ConnectorControl-win-arm64-Setup.exe\` (ARM PCs) from the assets below."
+            echo "2. Run it. It installs for the current user under \`%LOCALAPPDATA%\\ConnectorControl\`, adds a Start menu entry, and launches the app: look for the plug icon in the system tray (open the \`^\` overflow if it is hidden)."
+            echo "3. On first run the app imports the connectors from Claude Desktop's \`claude_desktop_config.json\` into its master list. The first change you make snapshots the original file under \`%LOCALAPPDATA%\\Connector Control\\backups\`."
+            echo "4. Uninstall from Settings ▸ Apps ▸ Installed apps; app data in \`%LOCALAPPDATA%\\Connector Control\` is left in place."
+            echo
+            echo "### Changes planned for v$NEXT (CHANGELOG.md)"
+            echo
+            awk -v ver="## v$NEXT" '$0 == ver {found=1; next} /^## / && found {exit} found {print}' CHANGELOG.md
+            echo
+            echo "### Commits since $BASE_LABEL"
+            echo
+            git log --format='- %s (%h)' "$BASE..HEAD"
+          } > notes.md
+          cat notes.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notes
+          path: notes.md
+          if-no-files-found: error
+
+  test:
+    name: Build and test
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: windows/global.json
+
+      - name: Restore
+        run: dotnet restore windows/ConnectorControl.slnx
+
+      - name: Build
+        run: dotnet build windows/ConnectorControl.slnx --no-restore -c Release
+
+      # Same gate as windows-ci.yml: FailSkips makes a skipped Windows-only test a failure.
+      - name: Test
+        run: dotnet test windows/ConnectorControl.slnx --no-build -c Release --settings windows/ci.runsettings
+
+  package:
+    name: Package ${{ matrix.rid }}
+    needs: [prepare, test]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        rid: [win-x64, win-arm64]
+    env:
+      HAS_SIGNING: ${{ secrets.AZURE_CLIENT_SECRET != '' }}
+      VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: windows/global.json
+
+      - name: Install vpk 1.2.0
+        run: |
+          dotnet tool install --global vpk --version 1.2.0
+          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: notes
+          path: notes
+
+      - name: Write Azure Artifact Signing metadata
+        if: env.HAS_SIGNING == 'true'
+        env:
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+        run: |
+          foreach ($name in 'AZURE_SIGNING_ENDPOINT', 'AZURE_SIGNING_ACCOUNT', 'AZURE_SIGNING_PROFILE') {
+            if (-not [Environment]::GetEnvironmentVariable($name)) { throw "AZURE_CLIENT_SECRET is set but the $name secret is missing" }
+          }
+          $file = Join-Path $env:RUNNER_TEMP 'azure-signing.json'
+          @{ Endpoint = $env:AZURE_SIGNING_ENDPOINT; CodeSigningAccountName = $env:AZURE_SIGNING_ACCOUNT; CertificateProfileName = $env:AZURE_SIGNING_PROFILE } |
+            ConvertTo-Json | Set-Content -Path $file -Encoding utf8NoBOM
+          "SIGN_FILE=$file" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Unsigned build
+        if: env.HAS_SIGNING != 'true'
+        run: Write-Host "::warning::No signing secrets configured (AZURE_CLIENT_SECRET is empty); this preview is unsigned and SmartScreen will warn."
+
+      - name: Publish and pack
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          RID: ${{ matrix.rid }}
+        run: |
+          $signing = @{}
+          if ($env:SIGN_FILE) { $signing['AzureTrustedSignFile'] = $env:SIGN_FILE }
+          ./windows/scripts/package.ps1 -Version $env:VERSION -Runtime $env:RID -ReleaseNotes notes/notes.md -DownloadPrevious -Prerelease @signing
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: velopack-${{ matrix.rid }}
+          path: windows/artifacts/${{ matrix.rid }}
+          if-no-files-found: error
+
+  smoke:
+    name: Install and launch (win-x64)
+    needs: [prepare, package]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      HAS_SIGNING: ${{ secrets.AZURE_CLIENT_SECRET != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: velopack-win-x64
+          path: artifacts
+
+      - name: Silent install, launch, first-run checks
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $signed = @{}
+          if ($env:HAS_SIGNING -eq 'true') { $signed['ExpectSigned'] = $true }
+          ./windows/scripts/smoke-test.ps1 -SetupExe (Resolve-Path artifacts/ConnectorControl-win-x64-Setup.exe).Path -Version $env:VERSION -Channel win-x64 -Seconds 20 -LogDir "$env:RUNNER_TEMP/smoke-logs" @signed
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-logs
+          path: ${{ runner.temp }}/smoke-logs
+          if-no-files-found: ignore
