@@ -121,7 +121,7 @@
                       <ColumnDefinition />
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="Token" Style="{StaticResource FieldLabel}" />
-                    <PasswordBox Grid.Column="1" views:PasswordBoxHelper.BoundPassword="{Binding BearerToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <PasswordBox x:Name="BearerTokenBox" Grid.Column="1" views:PasswordBoxHelper.BoundPassword="{Binding BearerToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                   </Grid>
                   <TextBlock Text="{x:Static state:EditorModel.BearerCaption}" Style="{StaticResource CaptionText}" Margin="0,6,0,0" />
                 </StackPanel>

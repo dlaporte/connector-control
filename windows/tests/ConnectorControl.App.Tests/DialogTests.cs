@@ -1,8 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
 using ConnectorControl.Core.State;
+using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.App.Tests;
 
@@ -75,6 +77,45 @@ public class DialogTests
             Assert.Equal("secret", box.Password);
             box.Password = "typed";
             Assert.Equal("typed", PasswordBoxHelper.GetBoundPassword(box));
+        });
+    }
+
+    /// <summary>
+    /// The regression that made every secret on a NEW connector inert: the bridge used to hook
+    /// PasswordChanged from the BoundPassword changed callback, which WPF never raises when the
+    /// first binding transfer equals the property's default — and a new connector's token,
+    /// header value and client secret all start "". The subscription is a class handler now, so
+    /// the empty first transfer is irrelevant.
+    /// </summary>
+    [Fact]
+    public void PasswordBoxPushesTypedTextWhenTheBoundValueStartedEmpty()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        WpfApp.Invoke(() =>
+        {
+            var model = new EditorModel(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle), h.Dialogs, EditorWindow.NewRemoteStyle);
+            Assert.Equal("", model.BearerToken);
+            var box = new PasswordBox();
+            BindingOperations.SetBinding(box, PasswordBoxHelper.BoundPasswordProperty,
+                new Binding(nameof(EditorModel.BearerToken)) { Source = model, Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged });
+
+            box.Password = "secret";   // the user typing into a box whose model value was ""
+            Assert.Equal("secret", model.BearerToken);
+
+            model.BearerToken = "from the model";   // and the model → box direction still works
+            Assert.Equal("from the model", box.Password);
+        });
+    }
+
+    /// <summary>A PasswordBox nobody attached the bridge to keeps its text to itself.</summary>
+    [Fact]
+    public void PasswordBoxWithoutTheAttachedBindingIsLeftAlone()
+    {
+        WpfApp.Invoke(() =>
+        {
+            var box = new PasswordBox { Password = "untouched" };
+            Assert.Equal("", PasswordBoxHelper.GetBoundPassword(box));
         });
     }
 

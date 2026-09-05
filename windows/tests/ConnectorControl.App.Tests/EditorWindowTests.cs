@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
@@ -79,6 +81,89 @@ public class EditorWindowTests
             Assert.True(window.Model.CanSave);
             Assert.True(window.Model.CanRemove);
         });
+    }
+
+    /// <summary>
+    /// The C1 regression, end to end: Add Connector ▸ Bearer token ▸ type a token used to leave
+    /// EditorModel.BearerToken empty, so Save answered "Enter a bearer token." and the app's
+    /// headline feature was unusable on a first run.
+    /// </summary>
+    [Fact]
+    public void TypingABearerTokenOnANewConnectorReachesTheModelAndSaves()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        WpfApp.Invoke(() =>
+        {
+            var window = new EditorWindow(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle));
+            Layout(window);
+            window.Model.Name = "example";
+            window.Model.RemoteUrl = "https://example.com/mcp";
+            window.Model.AuthKindIndex = 1;   // Bearer token
+            Layout(window);
+            Assert.Equal("", window.BearerTokenBox.Password);
+
+            window.BearerTokenBox.Password = "sk-typed-in-the-box";
+            window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
+
+            Assert.Equal("sk-typed-in-the-box", window.Model.BearerToken);
+            Assert.True(window.Model.CanSave);
+            Assert.True(window.Model.Save());
+            Assert.Null(window.Model.ValidationError);
+            // Save queues the window's Close; run it inside this guarded body rather than
+            // leaving it to fire on the shared host during some later test.
+            window.Dispatcher.Invoke(() => { }, DispatcherPriority.Background);
+        });
+        Assert.Contains("sk-typed-in-the-box", h.StoreOnDisk().Mcps["example"].Config.EditorText(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// M16, the same bridge from a DataTemplate: a masked env value that is empty on disk. The
+    /// template-created PasswordBox has no local value for the attached property, so the bridge
+    /// recognises it by the property having a value at all, whatever its precedence.
+    /// </summary>
+    [Fact]
+    public void TypingIntoAMaskedEnvRowThatWasEmptyOnDiskReachesTheRow()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var config = JsonValue.Object(("command", JsonValue.String("node")), ("env", JsonValue.Object(("TOKEN", JsonValue.String("")))));
+        var target = EditTarget.Existing("local", new McpEntry(true, config, EditView.Form));
+        WpfApp.Invoke(() =>
+        {
+            var window = new EditorWindow(state, target);
+            Layout(window);
+            var row = Assert.Single(window.Model.EnvRows);
+            Assert.False(row.Revealed);   // a stored value is masked until revealed
+            Assert.Equal("", row.Value);
+
+            var container = window.EnvList.ItemContainerGenerator.ContainerFromItem(row);
+            Assert.NotNull(container);
+            var box = FindDescendant<PasswordBox>(container);
+            Assert.NotNull(box);
+
+            box.Password = "typed-into-the-mask";
+            window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
+            Assert.Equal("typed-into-the-mask", row.Value);
+        });
+    }
+
+    private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+            {
+                return match;
+            }
+            if (FindDescendant<T>(child) is { } deeper)
+            {
+                return deeper;
+            }
+        }
+        return null;
     }
 
     /// <summary>
