@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Tray;
 using ConnectorControl.App.Views;
@@ -11,6 +12,17 @@ namespace ConnectorControl.App.Tests;
 
 public class FlyoutWindowTests
 {
+    private static void Layout(Window window)
+    {
+        // WPF defers a binding's first target update to DataBind priority; the test host runs
+        // the body synchronously, so pump that queue before reading any bound state (the
+        // pattern in EditorWindowTests.Layout).
+        window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
+        window.Measure(new Size(380, 800));
+        window.Arrange(new Rect(0, 0, 380, 800));
+        window.UpdateLayout();
+    }
+
     [Fact]
     public void FlyoutShowsHeaderRowsAndNoFooterWhenNothingIsPending()
     {
@@ -22,9 +34,7 @@ public class FlyoutWindowTests
         {
             using var model = new FlyoutModel(state);
             var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates));
-            window.Measure(new Size(380, 800));
-            window.Arrange(new Rect(0, 0, 380, 800));
-            window.UpdateLayout();
+            Layout(window);
             Assert.Equal(3, window.RowList.Items.Count);
             Assert.Equal(Visibility.Collapsed, window.FooterPanel.Visibility);
             Assert.Equal(Visibility.Collapsed, window.ErrorBanner.Visibility);
@@ -50,9 +60,7 @@ public class FlyoutWindowTests
         {
             using var model = new FlyoutModel(state);
             var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates));
-            window.Measure(new Size(380, 800));
-            window.Arrange(new Rect(0, 0, 380, 800));
-            window.UpdateLayout();
+            Layout(window);
             Assert.Equal(Visibility.Visible, window.FooterPanel.Visibility);
             Assert.Equal("Apply Failed — Retry", window.FooterTitle.Text);
             Assert.Equal(Visibility.Visible, window.ErrorBanner.Visibility);
