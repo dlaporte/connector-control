@@ -113,6 +113,90 @@ public class EditorModelTests
     }
 
     [Fact]
+    public void SettingIsJsonViewSwitchesToJsonAndClearsIsFormView()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var editor = Editor(h, state, EditTarget.New(Local("node", ["x.js"])));
+        Assert.True(editor.IsFormView);
+        Assert.False(editor.IsJsonView);
+        editor.IsJsonView = true;
+        Assert.Equal(EditView.Json, editor.View);
+        Assert.True(editor.IsJsonView);
+        Assert.False(editor.IsFormView);
+    }
+
+    [Fact]
+    public void SettingIsFormViewFromValidJsonSwitchesBack()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var editor = Editor(h, state, EditTarget.New(Local("node", ["x.js"])));
+        editor.RequestView(EditView.Json);
+        editor.JsonText = "{\"command\": \"node\", \"args\": [\"y.js\"]}";
+        editor.IsFormView = true;
+        Assert.Equal(EditView.Form, editor.View);
+        Assert.True(editor.IsFormView);
+        Assert.False(editor.IsJsonView);
+        Assert.Equal(["y.js"], editor.Args.Select(a => a.Value).ToArray());
+    }
+
+    /// <summary>Finding 1c: an unparseable JSON text refuses the switch and snaps the segmented control back
+    /// via PropertyChanged, without ever reaching the loss-warning dialog (finding 4's second case).</summary>
+    [Fact]
+    public void SettingIsFormViewWithUnrecoverableJsonIsRefusedAndSnapsBack()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var editor = Editor(h, state, EditTarget.New(Local("node", ["x.js"])));
+        editor.RequestView(EditView.Json);
+        editor.JsonText = "{\"command\": ";
+        var raised = new List<string?>();
+        editor.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        editor.IsFormView = true;
+        Assert.Equal(EditView.Json, editor.View);
+        Assert.True(editor.IsJsonView);
+        Assert.False(editor.IsFormView);
+        Assert.Equal(EditorModel.NotValidJson, editor.JsonError);
+        Assert.Contains(nameof(EditorModel.IsFormView), raised);
+        Assert.Contains(nameof(EditorModel.IsJsonView), raised);
+        Assert.Empty(h.Dialogs.Confirms);
+    }
+
+    /// <summary>Finding 4: Save() with unrecoverable JSON returns false and writes nothing.</summary>
+    [Fact]
+    public void SaveWithUnrecoverableJsonWritesNothing()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var editor = Editor(h, state, EditTarget.New(Local("node", ["x.js"])));
+        editor.Name = "broken";
+        editor.RequestView(EditView.Json);
+        editor.JsonText = "{\"command\": ";
+        Assert.False(editor.Save());
+        Assert.False(state.Store.Mcps.ContainsKey("broken"));
+        Assert.Empty(h.Dialogs.Confirms);
+        Assert.Empty(h.Dialogs.Informs);
+    }
+
+    /// <summary>Finding 2: the reset-to-bridge-invocation branch is new-target-only, so an existing connector's
+    /// command/args survive a switch to Local.</summary>
+    [Fact]
+    public void SwitchingAnExistingTargetToLocalDoesNotResetTheBridgeInvocation()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var config = Local("npx", ["-y", "mcp-remote", Url]);
+        var editor = Editor(h, state, EditTarget.Existing("scoutbook", new McpEntry(config)));
+        Assert.Equal(EditView.Form, editor.View);
+        Assert.True(editor.IsRemote);
+        editor.IsRemote = false;
+        Assert.False(editor.IsRemote);
+        Assert.Equal("npx", editor.Command);
+        Assert.Equal(["-y", "mcp-remote", Url], editor.Args.Select(a => a.Value).ToArray());
+    }
+
+    [Fact]
     public void FormToJsonSyncsTheTextAndJsonToFormAdoptsIt()
     {
         using var h = new AppStateHarness();
@@ -304,6 +388,22 @@ public class EditorModelTests
             _ => new RemoteAuth.OAuthClient("id", "sec", "a b"),
         };
         Assert.Equal(RemotePattern.Encode(new RemoteConfig(Url, expected, RemoteLaunchStyle.CmdNpx)), state.Store.Mcps["auth"].Config);
+    }
+
+    /// <summary>Finding 3: an out-of-range index (a ComboBox cleared to -1) leaves AuthKind untouched but
+    /// still raises PropertyChanged so the control snaps back to the current selection.</summary>
+    [Fact]
+    public void AuthKindIndexOutOfRangeLeavesAuthKindAndSnapsBack()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var editor = Editor(h, state, EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        editor.AuthKindIndex = EditorModel.AuthKinds.ToList().IndexOf(RemoteAuthKind.Bearer);
+        var raised = new List<string?>();
+        editor.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        editor.AuthKindIndex = -1;
+        Assert.Equal(RemoteAuthKind.Bearer, editor.AuthKind);
+        Assert.Contains(nameof(EditorModel.AuthKindIndex), raised);
     }
 
     [Fact]

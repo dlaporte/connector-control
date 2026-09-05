@@ -164,7 +164,7 @@ public sealed class EditorModel : ObservableObject
             }
             Raise(nameof(IsLocal));
             Raise(nameof(CanSave));
-            if (!value && View == EditView.Form && (Args.Any(a => a.Value == "mcp-remote") || Command.Length == 0))
+            if (Target.IsNew && !value && View == EditView.Form && (Args.Any(a => a.Value == "mcp-remote") || Command.Length == 0))
             {
                 Command = "npx";
                 Args.Clear();
@@ -220,6 +220,10 @@ public sealed class EditorModel : ObservableObject
             if (value >= 0 && value < AuthKinds.Count)
             {
                 AuthKind = AuthKinds[value];
+            }
+            else
+            {
+                Raise(nameof(AuthKindIndex));   // a ComboBox cleared to -1 snaps back to the current kind
             }
         }
     }
