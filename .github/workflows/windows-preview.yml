@@ -308,6 +308,7 @@ jobs:
 
       - name: Create the prerelease
         run: |
+          set -o pipefail
           # --prerelease is the whole point: a prerelease is never releases/latest, so the Mac
           # appcast at releases/latest/download/appcast.xml keeps resolving to the last Mac
           # release. --latest is NEVER passed here, in any form. The tag already exists (it is
@@ -316,7 +317,7 @@ jobs:
           # A stale DRAFT with this tag (a leftover of an earlier failed run) would make GitHub
           # refuse to publish anything else under the tag, so drafts are removed first; they are
           # invisible to users and carry nothing a fresh run does not rebuild.
-          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
             --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" | while read -r id; do
             echo "Deleting stale draft release $id for $TAG"
             gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
@@ -337,14 +338,23 @@ jobs:
       # release), creates its OWN draft with the same tag and then cannot publish it:
       #   Validation Failed: {"resource":"Release","code":"already_exists","field":"tag_name"}
       # gh targets the tag directly and --clobber makes a re-run idempotent, so a partial upload
-      # recovers by re-running the failed job (`gh run rerun <run-id> --failed`). The set is
-      # exactly what vpk uploaded for windows-preview-1: the installer, the full package, the
-      # delta package when a previous release existed, and the channel index GithubSource reads.
-      # RELEASES-<rid> and assets.<rid>.json are pack-time by-products and stay out.
+      # recovers by re-running the failed job (`gh run rerun <run-id> --failed`); if the release
+      # itself is wrong, `gh release delete <tag> --yes --cleanup-tag`, `git tag -d <tag>`, re-tag
+      # and re-push for a fresh run. The file set is the one vpk uploaded for windows-preview-1:
+      # the installer, the full package, the delta package when a previous release existed, and
+      # the channel index GithubSource reads. RELEASES-<rid> and assets.<rid>.json are pack-time
+      # by-products and stay out. One difference from vpk is corrected below: the pack-time
+      # releases.<rid>.json also lists the PREVIOUS release's package (downloaded for the delta,
+      # then pruned), and vpk rebuilt the index from this build's Full and Delta only; the same
+      # filter is applied here so no entry points at a file this release does not carry.
       - name: Upload Velopack assets
         run: |
+          set -o pipefail
           for rid in win-x64 win-arm64; do
             dir="artifacts/$rid"
+            jq --arg v "$VERSION" '.Assets |= map(select(.Version == $v))' "$dir/releases.$rid.json" > idx.json \
+              && mv idx.json "$dir/releases.$rid.json"
+            echo "releases.$rid.json now lists: $(jq -r '.Assets[] | "\(.Type) \(.Version)"' "$dir/releases.$rid.json" | paste -sd, -)"
             files=("$dir/ConnectorControl-$rid-Setup.exe" "$dir/ConnectorControl-$VERSION-$rid-full.nupkg" "$dir/releases.$rid.json")
             for f in "${files[@]}"; do [ -f "$f" ] || { echo "::error::expected asset $f is missing"; exit 1; }; done
             delta="$dir/ConnectorControl-$VERSION-$rid-delta.nupkg"
