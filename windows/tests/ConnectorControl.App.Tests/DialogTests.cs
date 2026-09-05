@@ -1,0 +1,109 @@
+using System.Windows;
+using System.Windows.Controls;
+using ConnectorControl.App.Tests.TestSupport;
+using ConnectorControl.App.Views;
+using ConnectorControl.Core.State;
+
+namespace ConnectorControl.App.Tests;
+
+public class DialogTests
+{
+    [Fact]
+    public void ConfirmDialogShowsTheMacTextsAndButtons()
+    {
+        WpfApp.Invoke(() =>
+        {
+            var dialog = new ConfirmDialog("Restart Claude Desktop now?", "Any in-progress Claude conversation will be interrupted.", "Restart", "Cancel", destructive: false);
+            Assert.Equal("Restart Claude Desktop now?", dialog.MessageText.Text);
+            Assert.Equal("Any in-progress Claude conversation will be interrupted.", dialog.InformativeText.Text);
+            Assert.Equal(Visibility.Visible, dialog.InformativeText.Visibility);
+            Assert.Equal("Restart", dialog.PrimaryButton.Content);
+            Assert.Equal("Cancel", dialog.CancelButton.Content);
+            Assert.True(dialog.PrimaryButton.IsDefault);
+            Assert.True(dialog.CancelButton.IsCancel);
+            Assert.False(dialog.Result);
+        });
+    }
+
+    [Fact]
+    public void ConfirmDialogWithoutInformativeTextOrCancelHidesThem()
+    {
+        WpfApp.Invoke(() =>
+        {
+            var dialog = new ConfirmDialog("You're up to date.", null, "OK", null, destructive: false);
+            Assert.Equal(Visibility.Collapsed, dialog.InformativeText.Visibility);
+            Assert.Equal(Visibility.Collapsed, dialog.CancelButton.Visibility);
+            var destructive = new ConfirmDialog("Delete Profile “Work”?", "Its connector list is removed; backups keep prior states.", "Delete", "Cancel", destructive: true);
+            Assert.Same(destructive.TryFindResource("DestructiveButton"), destructive.PrimaryButton.Style);
+        });
+    }
+
+    [Fact]
+    public void NamePromptDialogPrefillsAndSelectsTheText()
+    {
+        WpfApp.Invoke(() =>
+        {
+            var dialog = new NamePromptDialog("Rename Profile", "Default");
+            Assert.Equal("Rename Profile", dialog.Title);
+            Assert.Equal("Default", dialog.NameBox.Text);
+            Assert.Null(dialog.Result);
+        });
+    }
+
+    [Fact]
+    public void UpdateDialogRendersTheReleaseNotes()
+    {
+        WpfApp.Invoke(() =>
+        {
+            var dialog = new UpdateDialog("1.3.0", "1.2.2", "## Fixes\n- one\n- two");
+            Assert.Equal(UpdateCoordinator.AvailableHeadline, dialog.Headline.Text);
+            Assert.Equal("Connector Control 1.3.0 is now available — you have 1.2.2. Would you like to install it now?", dialog.Detail.Text);
+            Assert.NotNull(dialog.Notes.Document);
+            Assert.True(dialog.Notes.Document.Blocks.Count >= 2);   // a heading and a list
+            Assert.Equal("Install and Relaunch", dialog.InstallButton.Content);
+            Assert.Equal("Later", dialog.LaterButton.Content);
+        });
+    }
+
+    [Fact]
+    public void PasswordBoxHelperSyncsBothWays()
+    {
+        WpfApp.Invoke(() =>
+        {
+            var box = new PasswordBox();
+            PasswordBoxHelper.SetBoundPassword(box, "secret");
+            Assert.Equal("secret", box.Password);
+            box.Password = "typed";
+            Assert.Equal("typed", PasswordBoxHelper.GetBoundPassword(box));
+        });
+    }
+
+    [Fact]
+    public void WpfDialogsMatchesTheSeamTheFakeMirrors()
+    {
+        // The fake in Core.Tests supplies the same defaults; if these drift apart, a call
+        // site compiles against one shape and is tested against another.
+        var confirm = typeof(WpfDialogs).GetMethod(nameof(IDialogs.Confirm))!;
+        Assert.Equal("Cancel", confirm.GetParameters()[3].DefaultValue);
+        Assert.Equal(false, confirm.GetParameters()[4].DefaultValue);
+        Assert.True(typeof(WpfDialogs).IsSealed);
+        Assert.True(typeof(IDialogs).IsAssignableFrom(typeof(WpfDialogs)));
+    }
+
+    [Fact]
+    public void WpfDialogsFallsBackToTheActiveWindowWhenNoOwnerWasGiven()
+    {
+        WpfApp.Invoke(() =>
+        {
+            var dialogs = new WpfDialogs(() => null);
+            Assert.Null(dialogs.ResolveOwner());   // nothing of ours is up: centred on screen, topmost
+            var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
+            window.Show();
+            window.Activate();
+            // Settings ▸ Check for Updates… reaches the coordinator's ownerless WpfDialogs;
+            // the dialog must still centre on Settings rather than on the screen.
+            Assert.Same(window, dialogs.ResolveOwner());
+            window.Close();
+        });
+    }
+}
