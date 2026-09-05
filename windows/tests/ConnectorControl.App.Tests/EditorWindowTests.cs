@@ -132,7 +132,9 @@ public class EditorWindowTests
         WpfApp.Invoke(() =>
         {
             var window = new EditorWindow(state, target);
+            window.Show();   // an ItemsControl generates no containers until the window has a real layout pass
             Layout(window);
+            window.EnvList.UpdateLayout();
             var row = Assert.Single(window.Model.EnvRows);
             Assert.False(row.Revealed);   // a stored value is masked until revealed
             Assert.Equal("", row.Value);
@@ -145,6 +147,7 @@ public class EditorWindowTests
             box.Password = "typed-into-the-mask";
             window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
             Assert.Equal("typed-into-the-mask", row.Value);
+            window.Close();
         });
     }
 
