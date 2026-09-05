@@ -217,7 +217,12 @@ jobs:
         if: env.HAS_SIGNING != 'true'
         run: Write-Host "::warning::No signing secrets configured (AZURE_CLIENT_SECRET is empty); this preview is unsigned and SmartScreen will warn."
 
+      # package.ps1 does the dotnet publish, the `vpk download github` of the previous release
+      # and the `vpk pack` in ONE invocation, so the download cannot carry a tighter timeout of
+      # its own without splitting the script. 12 minutes covers publish + download + pack (the
+      # step takes ~4 on a green run) while still failing fast if the download stalls.
       - name: Publish and pack
+        timeout-minutes: 12
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -264,3 +269,99 @@ jobs:
           name: smoke-logs
           path: ${{ runner.temp }}/smoke-logs
           if-no-files-found: ignore
+
+  publish:
+    name: Publish prerelease
+    needs: [prepare, package, smoke]
+    # The only job that writes anything. A windows-preview-dry-<n> tag skips it entirely, so a
+    # dry run creates no release and uploads no assets.
+    if: ${{ !contains(github.ref_name, '-dry-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      REPO_URL: https://github.com/dlaporte/connector-control
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: windows/global.json
+
+      - name: Install vpk 1.2.0
+        run: |
+          dotnet tool install --global vpk --version 1.2.0
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: notes
+          path: notes
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: velopack-win-x64
+          path: artifacts/win-x64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: velopack-win-arm64
+          path: artifacts/win-arm64
+
+      - name: Create the prerelease
+        run: |
+          # --prerelease is the whole point: a prerelease is never releases/latest, so the Mac
+          # appcast at releases/latest/download/appcast.xml keeps resolving to the last Mac
+          # release. --latest is NEVER passed here, in any form. The tag already exists (it is
+          # what started this run), so no --target is needed either.
+          if EXISTING=$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease 2>/dev/null); then
+            if [ "$EXISTING" != "true" ]; then
+              echo "::error::Release $TAG exists and is NOT a prerelease; refusing to touch it."
+              exit 1
+            fi
+            echo "Release $TAG already exists (re-run); reusing it."
+          else
+            gh release create "$TAG" --prerelease \
+              --title "Connector Control $VERSION (Windows preview)" --notes-file notes/notes.md
+          fi
+
+      - name: Upload Velopack assets
+        run: |
+          for rid in win-x64 win-arm64; do
+            # --merge: into the release created above; --pre only matters if vpk had to create it.
+            vpk --skip-updates --yes upload github --repoUrl "$REPO_URL" --channel "$rid" \
+              --outputDir "artifacts/$rid" --tag "$TAG" --merge --pre --publish
+          done
+
+      - name: Verify the release
+        run: |
+          gh release view "$TAG" --json isPrerelease,isDraft,assets --jq '{prerelease: .isPrerelease, draft: .isDraft, assets: [.assets[].name]}' | tee release.json
+          [ "$(jq -r .prerelease release.json)" = "true" ] || { echo "::error::$TAG is not a prerelease"; exit 1; }
+          [ "$(jq -r .draft release.json)" = "false" ] || { echo "::error::$TAG is still a draft; vpk upload --publish should have un-drafted it"; exit 1; }
+          for a in ConnectorControl-win-x64-Setup.exe ConnectorControl-win-arm64-Setup.exe \
+                   "ConnectorControl-$VERSION-win-x64-full.nupkg" "ConnectorControl-$VERSION-win-arm64-full.nupkg" \
+                   releases.win-x64.json releases.win-arm64.json; do
+            jq -e --arg a "$a" '.assets | index($a) != null' release.json >/dev/null || { echo "::error::asset $a missing from $TAG"; exit 1; }
+          done
+          # `gh release view --json isLatest` does not exist (gh 2.99.0: "Unknown JSON field"),
+          # and "Latest" is a repository-level pointer anyway. This endpoint IS what the Mac
+          # appcast URL resolves through, so asking it is the real check.
+          LATEST=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          [ "$LATEST" != "$TAG" ] || { echo "::error::$TAG became releases/latest — the Mac appcast would break"; exit 1; }
+          case "$LATEST" in
+            v[0-9]*) echo "releases/latest is still $LATEST (a Mac release)" ;;
+            *) echo "::error::releases/latest is '$LATEST', which is not a Mac v* release"; exit 1 ;;
+          esac
+          {
+            echo "## Windows preview $TAG ($VERSION)"
+            echo
+            echo "- Release: $REPO_URL/releases/tag/$TAG"
+            echo "- releases/latest unchanged: $LATEST"
+            echo "- Assets:"
+            jq -r '.assets[] | "  - " + .' release.json
+          } >> "$GITHUB_STEP_SUMMARY"
