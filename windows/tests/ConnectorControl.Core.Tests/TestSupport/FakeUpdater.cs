@@ -14,14 +14,22 @@ public sealed class FakeUpdater : IUpdater
     public int AppliedOnQuit { get; private set; }
     public int AppliedAndRestarted { get; private set; }
 
-    public Task<UpdateCheck?> CheckAsync(CancellationToken cancellationToken = default)
+    /// <summary>When set, CheckAsync awaits this before returning — lets a test hold a
+    /// check in flight to race a second caller against it.</summary>
+    public TaskCompletionSource<bool>? CheckGate { get; set; }
+
+    public async Task<UpdateCheck?> CheckAsync(CancellationToken cancellationToken = default)
     {
         Checks++;
+        if (CheckGate is not null)
+        {
+            await CheckGate.Task;
+        }
         if (CheckFailure is not null)
         {
             throw CheckFailure;
         }
-        return Task.FromResult(Next);
+        return Next;
     }
 
     public Task DownloadAsync(UpdateCheck update, IProgress<int>? progress = null, CancellationToken cancellationToken = default)

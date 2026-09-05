@@ -32,6 +32,7 @@ public sealed class UpdateCoordinator : IDisposable
     private readonly AppHost host;
     private bool started;
     private bool disposed;
+    private Task<UpdateOutcome>? inFlightCheck;
 
     public UpdateCoordinator(IUpdater updater, ISettings settings, INotifier notifier, IDialogs dialogs, AppHost host)
     {
@@ -69,12 +70,48 @@ public sealed class UpdateCoordinator : IDisposable
     }
 
     /// <summary><paramref name="interactive"/>: Settings ▸ Check for Updates… (always shows a result); false for scheduled checks.</summary>
-    public async Task<UpdateOutcome> CheckAsync(bool interactive)
+    public Task<UpdateOutcome> CheckAsync(bool interactive)
     {
         if (!updater.IsAvailable)
         {
-            return UpdateOutcome.Unavailable;
+            return Task.FromResult(UpdateOutcome.Unavailable);
         }
+        // A manual "Check for Updates…" can race the scheduled 24 h tick. Join whichever
+        // check is already in flight instead of hitting the feed (and possibly the
+        // download) a second time; both callers see the same outcome.
+        if (inFlightCheck is { } running)
+        {
+            return running;
+        }
+        // The completion is reserved in inFlightCheck before RunOutcomeAsync starts (not
+        // after RunCheckAsync returns): every fake in this test suite completes
+        // synchronously, so a "call it, then store what it returned" ordering would let
+        // RunCheckAsync's own finally clear the field before this method's assignment
+        // ever ran, resurrecting a stale, already-completed task for the next caller.
+        var completion = new TaskCompletionSource<UpdateOutcome>(TaskCreationOptions.RunContinuationsAsynchronously);
+        inFlightCheck = completion.Task;
+        _ = RunCheckAsync(interactive, completion);
+        return completion.Task;
+    }
+
+    private async Task RunCheckAsync(bool interactive, TaskCompletionSource<UpdateOutcome> completion)
+    {
+        try
+        {
+            completion.SetResult(await RunOutcomeAsync(interactive).ConfigureAwait(false));
+        }
+        catch (Exception ex)
+        {
+            completion.SetException(ex);
+        }
+        finally
+        {
+            inFlightCheck = null;
+        }
+    }
+
+    private async Task<UpdateOutcome> RunOutcomeAsync(bool interactive)
+    {
         UpdateCheck? update;
         try
         {
@@ -109,7 +146,6 @@ public sealed class UpdateCoordinator : IDisposable
             try
             {
                 await updater.DownloadAsync(update).ConfigureAwait(false);
-                updater.ApplyOnQuit(update);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -118,17 +154,38 @@ public sealed class UpdateCoordinator : IDisposable
                 // and must stay silent; the next check retries.
                 return UpdateOutcome.Failed;
             }
-            StagedVersion = update.Version;
-            if (NotifiedVersion != update.Version)
+            // Everything from here on reads/writes state the UI thread owns, so it runs
+            // as one marshalled action: on a non-inline AppHost, StagedVersion and
+            // NotifiedVersion only change once the host's queue is pumped, same as every
+            // other AppState mutation reached from off the UI thread.
+            await host.MarshalAsync(() =>
             {
-                NotifiedVersion = update.Version;
-                host.Marshal(() => notifier.Notify(Notifications.Title, ReadyToastBody));
-            }
+                updater.ApplyOnQuit(update);
+                StagedVersion = update.Version;
+                if (NotifiedVersion != update.Version)
+                {
+                    NotifiedVersion = update.Version;
+                    notifier.Notify(Notifications.Title, ReadyToastBody);
+                }
+                return true;
+            }).ConfigureAwait(false);
             return UpdateOutcome.StagedForQuit;
         }
         // MarshalAsync, not Marshal-then-read-a-captured-local: AppHost.Marshal only POSTS,
         // so the answer is not there when it returns.
-        var install = await host.MarshalAsync(() => dialogs.OfferUpdate(update.Version, updater.VersionDisplay, update.NotesMarkdown)).ConfigureAwait(false);
+        bool install;
+        try
+        {
+            install = await host.MarshalAsync(() => dialogs.OfferUpdate(update.Version, updater.VersionDisplay, update.NotesMarkdown)).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            if (interactive)
+            {
+                host.Marshal(() => dialogs.Inform(CheckFailedMessage, ex.Message));
+            }
+            return UpdateOutcome.Failed;
+        }
         if (!install)
         {
             return UpdateOutcome.Deferred;

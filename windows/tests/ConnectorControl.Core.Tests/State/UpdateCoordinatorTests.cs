@@ -172,6 +172,91 @@ public class UpdateCoordinatorTests
     }
 
     [Fact]
+    public async Task StateWritesOnlyHappenWhenTheMarshalQueueIsPumped()
+    {
+        var ui = new MarshalQueue();
+        var host = new AppHost(ui.Post, delays.Add, () => DateTime.UtcNow);
+        updater.Next = Update();
+        using var coordinator = new UpdateCoordinator(updater, settings, notifier, dialogs, host);
+
+        // FakeUpdater and settings.AutoUpdate resolve synchronously, so the coordinator
+        // runs right up to the marshalled action and suspends there, still without having
+        // touched StagedVersion/NotifiedVersion.
+        var checkTask = coordinator.CheckAsync(interactive: false);
+        Assert.False(checkTask.IsCompleted);
+        Assert.Null(coordinator.StagedVersion);
+        Assert.Null(coordinator.NotifiedVersion);
+        Assert.Empty(notifier.Sent);
+
+        ui.Pump();
+
+        Assert.Equal(UpdateOutcome.StagedForQuit, await checkTask);
+        Assert.Equal("1.3.0", coordinator.StagedVersion);
+        Assert.Equal("1.3.0", coordinator.NotifiedVersion);
+        Assert.Single(notifier.Sent);
+    }
+
+    [Fact]
+    public async Task OverlappingChecksShareTheSameInFlightCheckInsteadOfHittingTheFeedTwice()
+    {
+        updater.Next = Update();
+        updater.CheckGate = new TaskCompletionSource<bool>();
+        using var coordinator = Coordinator();
+
+        var scheduled = coordinator.CheckAsync(interactive: false);
+        var manual = coordinator.CheckAsync(interactive: true);
+        Assert.Equal(1, updater.Checks);   // the manual check joined the in-flight one
+
+        updater.CheckGate.SetResult(true);
+
+        var scheduledOutcome = await scheduled;
+        var manualOutcome = await manual;
+        Assert.Equal(scheduledOutcome, manualOutcome);
+        Assert.Equal(UpdateOutcome.StagedForQuit, scheduledOutcome);
+        Assert.Equal(1, updater.Downloads);
+    }
+
+    [Fact]
+    public void DisposeBeforeTheFirstTickSkipsThePendingCheck()
+    {
+        var coordinator = Coordinator();
+        coordinator.Start();
+        coordinator.Dispose();
+        delays.RunNext();
+        Assert.Equal(0, updater.Checks);
+    }
+
+    [Fact]
+    public async Task ADownloadFailureAfterAVersionIsAlreadyStagedLeavesTheOlderVersionInPlace()
+    {
+        updater.Next = Update();
+        using var coordinator = Coordinator();
+        Assert.Equal(UpdateOutcome.StagedForQuit, await coordinator.CheckAsync(interactive: false));
+        Assert.Equal("1.3.0", coordinator.StagedVersion);
+
+        updater.Next = Update("1.4.0");
+        updater.DownloadFailure = new HttpRequestException("connection reset");
+        Assert.Equal(UpdateOutcome.Failed, await coordinator.CheckAsync(interactive: false));
+        Assert.Equal("1.3.0", coordinator.StagedVersion);   // the failed 1.4.0 download never replaced it
+    }
+
+    [Fact]
+    public async Task AFailedOfferDialogIsHandledLikeTheOtherGuardedCalls()
+    {
+        updater.Next = Update();
+        dialogs.OfferFailure = new InvalidOperationException("dialog owner window was closed");
+        using var coordinator = Coordinator();
+
+        Assert.Equal(UpdateOutcome.Failed, await coordinator.CheckAsync(interactive: true));
+        Assert.Equal(new FakeDialogs.InformCall("Couldn’t check for updates.", "dialog owner window was closed"), dialogs.Informs[0]);
+
+        settings.AutoUpdate = false;
+        Assert.Equal(UpdateOutcome.Failed, await coordinator.CheckAsync(interactive: false));
+        Assert.Single(dialogs.Informs);   // background: swallowed, same as the other guarded calls
+        Assert.Equal(0, updater.Downloads);
+    }
+
+    [Fact]
     public void DialogStringsMatchTheSpec()
     {
         Assert.Equal("A new version of Connector Control is available!", UpdateCoordinator.AvailableHeadline);

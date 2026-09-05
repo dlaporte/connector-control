@@ -12,6 +12,7 @@ public sealed class FakeDialogs : IDialogs
     public bool NextConfirm { get; set; } = true;
     public string? NextPromptAnswer { get; set; }
     public bool NextOffer { get; set; }
+    public Exception? OfferFailure { get; set; }
     public List<ConfirmCall> Confirms { get; } = [];
     public List<PromptCall> Prompts { get; } = [];
     public List<InformCall> Informs { get; } = [];
@@ -34,6 +35,10 @@ public sealed class FakeDialogs : IDialogs
     public bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown)
     {
         Offers.Add(new OfferCall(newVersion, currentVersion, notesMarkdown));
+        if (OfferFailure is not null)
+        {
+            throw OfferFailure;
+        }
         return NextOffer;
     }
 }
