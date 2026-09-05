@@ -12,6 +12,9 @@ public class EditorWindowTests
 {
     private static void Layout(Window window)
     {
+        // WPF defers a binding's first target update to DataBind priority; the test host runs
+        // the body synchronously, so pump that queue before reading any bound state.
+        window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
         window.Measure(new Size(540, 620));
         window.Arrange(new Rect(0, 0, 540, 620));
         window.UpdateLayout();
@@ -102,6 +105,7 @@ public class EditorWindowTests
             window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);   // pump the queued refresh
 
             Assert.False(window.FormToggle.IsChecked);
+            Assert.True(window.JsonToggle.IsChecked);
             Assert.True(window.Model.IsJsonView);
         });
     }
