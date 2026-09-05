@@ -672,7 +672,10 @@ public class EditorModelTests
         h.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound;
         using var state = h.Create();
         var warm = state.RefreshToolsAsync();
-        Assert.True(h.Ui.PumpUntil(() => warm.IsCompleted, TimeSpan.FromSeconds(5)));
+        // The task completes once the probe batch is posted, not once it is published (Task 4 review):
+        // pump until the cache the editor reads from is actually populated.
+        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.ContainsKey(Tool.Npx), TimeSpan.FromSeconds(5)));
+        Assert.True(warm.IsCompleted);
         var batches = h.Tools.Batches;
         using var remote = Editor(h, state, EditTarget.Existing("scoutbook", state.Store.Mcps["scoutbook"]));   // bare npx mcp-remote
         Assert.True(remote.HasToolNote);          // straight from the cache, no wait
@@ -684,5 +687,55 @@ public class EditorModelTests
         remote.Dispose();
         state.RefreshToolsAsync([Tool.Npx]);      // a disposed editor no longer listens
         Assert.True(h.Ui.PumpUntil(() => h.Tools.Batches == batches + 1, TimeSpan.FromSeconds(5)));
+    }
+
+    [Fact]
+    public void DisposeStopsRelayingAppStateToolStatusChanges()
+    {
+        using var h = new AppStateHarness();
+        h.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound;
+        using var state = h.Create();
+        using var editor = Editor(h, state, EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        Assert.True(h.Ui.PumpUntil(() => editor.HasToolNote, TimeSpan.FromSeconds(5)));
+
+        editor.Dispose();
+        // Simulate a bound view: it only re-reads ToolNote when told to by a PropertyChanged event.
+        var lastSeenNote = editor.ToolNote;
+        var beforeChange = lastSeenNote;
+        var raised = new List<string?>();
+        editor.PropertyChanged += (_, e) =>
+        {
+            raised.Add(e.PropertyName);
+            lastSeenNote = editor.ToolNote;
+        };
+
+        // Publish a change that would clear the note on a live (not disposed) editor.
+        h.Tools.Statuses[Tool.Npx] = new ToolStatus(@"C:\fake\npx.cmd", "1.0.0");
+        state.RefreshToolsAsync([Tool.Npx]);
+        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses[Tool.Npx].Found, TimeSpan.FromSeconds(5)));
+
+        Assert.Empty(raised);
+        Assert.Equal(beforeChange, lastSeenNote);   // never re-read: Dispose stopped the AppState.PropertyChanged relay
+    }
+
+    [Fact]
+    public void DisposeStopsRelayingArgsChanges()
+    {
+        using var h = new AppStateHarness();
+        h.Tools.Statuses[Tool.Uvx] = ToolStatus.NotFound;
+        using var state = h.Create();
+        // "cmd /c" alone recognizes no tool; adding a second arg would flip RequiredTool to uvx
+        // on a live editor (ToolRequirement unwraps one cmd /c and reads the next token).
+        using var editor = Editor(h, state, EditTarget.New(Local("cmd", ["/c"])));
+        Assert.Null(editor.RequiredTool);
+
+        editor.Dispose();
+        var raised = new List<string?>();
+        editor.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        editor.Args.Add(new ArgRow("uvx"));
+
+        Assert.Empty(raised);
+        Assert.Null(editor.RequiredTool);   // RequiredTool is a cached field, never recomputed: Dispose stopped the Args.CollectionChanged relay
     }
 }

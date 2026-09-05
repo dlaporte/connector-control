@@ -330,8 +330,10 @@ public class AppStateTests
         var raised = new List<string?>();
         state.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
         var task = state.RefreshToolsAsync();
-        Assert.True(h.Ui.PumpUntil(() => task.IsCompleted, TimeSpan.FromSeconds(5)));
-        Assert.Equal(4, state.ToolStatuses.Count);
+        // The task completes once the probe batch is posted, not once it is applied (Task 4 review),
+        // so pump until the actual publication (the observable ToolStatuses count) rather than task.IsCompleted.
+        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 4, TimeSpan.FromSeconds(5)));
+        Assert.True(task.IsCompleted);
         Assert.False(state.ToolStatuses[Tool.Uvx].Found);
         Assert.Equal("1.0.0", state.ToolStatuses[Tool.Npx].Version);
         Assert.Contains(nameof(AppState.ToolStatuses), raised);
@@ -346,13 +348,15 @@ public class AppStateTests
         using var state = h.Create();
         var first = state.RefreshToolsAsync([Tool.Npx]);
         var second = state.RefreshToolsAsync([Tool.Npx, Tool.Node]);   // npx joins the flight already in the air; node starts one
-        Assert.True(h.Ui.PumpUntil(() => first.IsCompleted && second.IsCompleted, TimeSpan.FromSeconds(5)));
+        // Pump on the observable publication, not task completion (Task 4 review): the task
+        // completes once the batch is posted, before the marshalled queue has run it.
+        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 2, TimeSpan.FromSeconds(5)));
+        Assert.True(first.IsCompleted && second.IsCompleted);
         Assert.Equal([Tool.Npx, Tool.Node], h.Tools.Probed.Order().ToArray());
-        Assert.Equal(2, state.ToolStatuses.Count);
         Assert.True(state.RefreshToolsAsync([]).IsCompleted);   // nothing wanted: completes synchronously
         // Once published, the same tool can be probed again (the editor asks when the command changes).
         var third = state.RefreshToolsAsync([Tool.Npx]);
-        Assert.True(h.Ui.PumpUntil(() => third.IsCompleted, TimeSpan.FromSeconds(5)));
-        Assert.Equal(3, h.Tools.Probed.Count);
+        Assert.True(h.Ui.PumpUntil(() => h.Tools.Probed.Count == 3, TimeSpan.FromSeconds(5)));
+        Assert.True(third.IsCompleted);
     }
 }

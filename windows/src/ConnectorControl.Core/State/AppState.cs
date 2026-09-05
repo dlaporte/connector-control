@@ -129,9 +129,10 @@ public sealed class AppState : ObservableObject, IDisposable
     public IReadOnlyDictionary<Tool, ToolStatus> ToolStatuses => toolStatuses;
 
     /// <summary>
-    /// Probes <paramref name="tools"/> (all four when null) off the UI thread and publishes the
-    /// results through the host; a tool already in flight is not probed twice. The task completes
-    /// once the results are published — on a queued host, after the queue is pumped.
+    /// Probes <paramref name="tools"/> (all four when null) off the UI thread and posts the
+    /// results to the host for publication; a tool already in flight is not probed twice. The
+    /// returned task completes once the probe batch has been posted, not once the results are
+    /// applied — when every requested tool is already in flight, it returns already completed.
     /// </summary>
     public Task RefreshToolsAsync(IReadOnlyList<Tool>? tools = null)
     {
@@ -151,8 +152,11 @@ public sealed class AppState : ObservableObject, IDisposable
             // IToolProbe promises never to throw; if one does anyway, "Not found" beats a dead tray app.
             results = wanted.ToDictionary(t => t, _ => ToolStatus.NotFound);
         }
-        // Everything below touches state the UI thread owns, so it is one marshalled action.
-        await host.MarshalAsync(() =>
+        // Everything below touches state the UI thread owns, so it is posted like every other
+        // marshalled state callback (fire-and-post) rather than awaited: an exception raised inside
+        // (e.g. by a throwing PropertyChanged handler) must surface as an unhandled dispatcher
+        // exception on the UI thread, not get captured into this fire-and-forget task and swallowed.
+        host.Marshal(() =>
         {
             foreach (var tool in wanted)
             {
@@ -160,15 +164,14 @@ public sealed class AppState : ObservableObject, IDisposable
             }
             if (disposed)
             {
-                return false;
+                return;
             }
             foreach (var (tool, status) in results)
             {
                 toolStatuses[tool] = status;
             }
             Raise(nameof(ToolStatuses));
-            return true;
-        }).ConfigureAwait(false);
+        });
     }
 
     // MARK: watchers (catalog §1.4, §1.5; spec §6.3)

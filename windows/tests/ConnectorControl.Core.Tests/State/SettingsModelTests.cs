@@ -242,6 +242,34 @@ public class SettingsModelTests
     }
 
     [Fact]
+    public void DisposeStopsRelayingAppStateToolStatusChanges()
+    {
+        using var rig = new Rig();
+        rig.H.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound;
+        rig.Model.RefreshTools();
+        Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses.Count == 4, TimeSpan.FromSeconds(5)));
+
+        rig.Model.Dispose();
+        // Simulate a bound view: it only re-reads ToolRows when told to by a PropertyChanged event.
+        var lastSeenRows = rig.Model.ToolRows;
+        var beforeChange = lastSeenRows;
+        var raised = new List<string?>();
+        rig.Model.PropertyChanged += (_, e) =>
+        {
+            raised.Add(e.PropertyName);
+            lastSeenRows = rig.Model.ToolRows;
+        };
+
+        // Publish a change that would flip npx's row on a live (not disposed) model.
+        rig.H.Tools.Statuses[Tool.Npx] = new ToolStatus(@"C:\fake\npx.cmd", "1.0.0");
+        rig.State.RefreshToolsAsync([Tool.Npx]);
+        Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses[Tool.Npx].Found, TimeSpan.FromSeconds(5)));
+
+        Assert.Empty(raised);
+        Assert.Equal(beforeChange, lastSeenRows);   // never re-read: Dispose stopped the AppState.PropertyChanged relay
+    }
+
+    [Fact]
     public void ToolStringsMatchTheSpec()
     {
         Assert.Equal("Tools", SettingsModel.ToolsHeader);
