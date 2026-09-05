@@ -51,8 +51,15 @@ public sealed class ToolProbe : IToolProbe
     /// </summary>
     public static string? Resolve(string name, string searchPath, string? pathExt)
     {
-        foreach (var dir in searchPath.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        foreach (var raw in searchPath.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
+            // Windows strips surrounding quotes from PATH entries ("C:\Program Files\nodejs");
+            // Path.Combine would keep them and the directory would never match.
+            var dir = raw.Trim('"');
+            if (dir.Length == 0)
+            {
+                continue;
+            }
             if (pathExt is null)
             {
                 var candidate = Path.Combine(dir, name);
@@ -152,6 +159,7 @@ public sealed class ToolProbe : IToolProbe
             {
                 return null;
             }
+            process.StandardInput.Close();   // a tool that reads stdin must see EOF, not a pipe that never closes
             var stdout = process.StandardOutput.ReadToEndAsync();
             _ = process.StandardError.ReadToEndAsync();   // drain, or a chatty launcher could block on a full pipe
             if (!process.WaitForExit((int)versionTimeout.TotalMilliseconds))

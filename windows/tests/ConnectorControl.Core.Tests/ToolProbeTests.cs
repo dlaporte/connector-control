@@ -68,6 +68,8 @@ public class ToolProbeTests : IDisposable
         Assert.Null(ToolProbe.Resolve("uvx", search, PathExt));
         Assert.Null(ToolProbe.Resolve("uv", search, PathExt));
         Assert.Null(ToolProbe.Resolve("npx", "", PathExt));
+        // Windows strips quotes from PATH entries; a quoted directory must still resolve.
+        Assert.Equal(Path.Combine(Bin, "npx.cmd"), ToolProbe.Resolve("npx", "\"" + Bin + "\"", PathExt));
     }
 
     [Fact]
