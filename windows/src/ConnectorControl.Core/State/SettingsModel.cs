@@ -88,7 +88,19 @@ public sealed class SettingsModel : ObservableObject
         }
     }
 
-    public string? LoginItemNote { get => loginItemNote; private set => Set(ref loginItemNote, value); }
+    public string? LoginItemNote
+    {
+        get => loginItemNote;
+        private set
+        {
+            if (Set(ref loginItemNote, value))
+            {
+                Raise(nameof(HasLoginItemNote));
+            }
+        }
+    }
+
+    public bool HasLoginItemNote => loginItemNote is not null;
 
     public bool ConfirmBeforeRestart
     {
