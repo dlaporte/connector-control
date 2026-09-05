@@ -30,6 +30,15 @@ public partial class EditorWindow : Window
         Model.FocusEnvRowRequested += row => Dispatcher.BeginInvoke(new Action(() => FocusEnvRow(row)), DispatcherPriority.Loaded);
         Model.PropertyChanged += OnModelPropertyChanged;
         PreviewKeyDown += OnPreviewKeyDown;
+        // WPF defers a binding's very first target-update — the initial pull triggered by
+        // setting DataContext above — to DispatcherPriority.DataBind rather than applying it
+        // synchronously. A window that is shown normally picks this up for free before the
+        // next render; a caller that inspects a freshly constructed, never-shown window (as
+        // the smoke tests do, and as WpfDialogs' owner-resolution briefly can) would otherwise
+        // see every bound property at its CLR default (Visibility.Visible, IsChecked == false)
+        // instead of what EditorModel actually computed. Flush that one pass here so the
+        // window is fully bound-consistent the moment construction returns.
+        Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
     }
 
     public EditorModel Model { get; }
