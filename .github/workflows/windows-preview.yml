@@ -285,21 +285,11 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ needs.prepare.outputs.tag }}
       VERSION: ${{ needs.prepare.outputs.version }}
       REPO_URL: https://github.com/dlaporte/connector-control
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: windows/global.json
-
-      - name: Install vpk 1.2.0
-        run: |
-          dotnet tool install --global vpk --version 1.2.0
-          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - uses: actions/download-artifact@v4
         with:
@@ -322,6 +312,15 @@ jobs:
           # appcast at releases/latest/download/appcast.xml keeps resolving to the last Mac
           # release. --latest is NEVER passed here, in any form. The tag already exists (it is
           # what started this run), so no --target is needed either.
+          #
+          # A stale DRAFT with this tag (a leftover of an earlier failed run) would make GitHub
+          # refuse to publish anything else under the tag, so drafts are removed first; they are
+          # invisible to users and carry nothing a fresh run does not rebuild.
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" | while read -r id; do
+            echo "Deleting stale draft release $id for $TAG"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
+          done
           if EXISTING=$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease 2>/dev/null); then
             if [ "$EXISTING" != "true" ]; then
               echo "::error::Release $TAG exists and is NOT a prerelease; refusing to touch it."
@@ -333,32 +332,31 @@ jobs:
               --title "Connector Control $VERSION (Windows preview)" --notes-file notes/notes.md
           fi
 
-      # RECOVERY FROM A PARTIAL UPLOAD. `vpk upload github` has no overwrite flag (its whole
-      # option set is --merge --pre --publish --tag --channel --outputDir --repoUrl), so a
-      # re-run against a release that already carries assets dies with
-      #   There is already a remote asset named '...', and merging release files on GitHub is not supported.
-      # Recovery is manual, from the Mac. If the release is otherwise right, empty it and re-run
-      # the failed job, which reuses the artifacts this run already built:
-      #   for a in $(gh release view <tag> --json assets --jq '.assets[].name'); do \
-      #     gh release delete-asset <tag> "$a" --yes; done
-      #   gh run rerun <run-id> --failed && gh run watch <run-id> --exit-status
-      # If the release itself is wrong (wrong commit, not a prerelease), delete release and tag
-      # and re-push the tag for a completely fresh run:
-      #   gh release delete <tag> --yes --cleanup-tag && git tag -d <tag> \
-      #     && git tag <tag> && git push origin <tag>
+      # The assets go up with gh, not `vpk upload github`. vpk looks the release up by tag and,
+      # when that lookup misses (it did for windows-preview-2, moments after gh had created the
+      # release), creates its OWN draft with the same tag and then cannot publish it:
+      #   Validation Failed: {"resource":"Release","code":"already_exists","field":"tag_name"}
+      # gh targets the tag directly and --clobber makes a re-run idempotent, so a partial upload
+      # recovers by re-running the failed job (`gh run rerun <run-id> --failed`). The set is
+      # exactly what vpk uploaded for windows-preview-1: the installer, the full package, the
+      # delta package when a previous release existed, and the channel index GithubSource reads.
+      # RELEASES-<rid> and assets.<rid>.json are pack-time by-products and stay out.
       - name: Upload Velopack assets
         run: |
           for rid in win-x64 win-arm64; do
-            # --merge: into the release created above; --pre only matters if vpk had to create it.
-            vpk --skip-updates --yes upload github --repoUrl "$REPO_URL" --channel "$rid" \
-              --outputDir "artifacts/$rid" --tag "$TAG" --merge --pre --publish
+            dir="artifacts/$rid"
+            files=("$dir/ConnectorControl-$rid-Setup.exe" "$dir/ConnectorControl-$VERSION-$rid-full.nupkg" "$dir/releases.$rid.json")
+            for f in "${files[@]}"; do [ -f "$f" ] || { echo "::error::expected asset $f is missing"; exit 1; }; done
+            delta="$dir/ConnectorControl-$VERSION-$rid-delta.nupkg"
+            [ -f "$delta" ] && files+=("$delta")
+            gh release upload "$TAG" "${files[@]}" --clobber
           done
 
       - name: Verify the release
         run: |
           gh release view "$TAG" --json isPrerelease,isDraft,assets --jq '{prerelease: .isPrerelease, draft: .isDraft, assets: [.assets[].name]}' | tee release.json
           [ "$(jq -r .prerelease release.json)" = "true" ] || { echo "::error::$TAG is not a prerelease"; exit 1; }
-          [ "$(jq -r .draft release.json)" = "false" ] || { echo "::error::$TAG is still a draft; vpk upload --publish should have un-drafted it"; exit 1; }
+          [ "$(jq -r .draft release.json)" = "false" ] || { echo "::error::$TAG is a draft; gh release create must publish it"; exit 1; }
           for a in ConnectorControl-win-x64-Setup.exe ConnectorControl-win-arm64-Setup.exe \
                    "ConnectorControl-$VERSION-win-x64-full.nupkg" "ConnectorControl-$VERSION-win-arm64-full.nupkg" \
                    releases.win-x64.json releases.win-arm64.json; do
