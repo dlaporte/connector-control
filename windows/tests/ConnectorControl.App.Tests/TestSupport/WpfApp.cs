@@ -34,7 +34,10 @@ public static class WpfApp
     public static T Invoke<T>(Func<T> func)
     {
         T result = default!;
-        Invoke(() => result = func());
+        // Statement body: an expression-bodied lambda (() => result = func()) is also
+        // convertible to Func<T> and binds to this very overload instead of Invoke(Action),
+        // recursing into itself until the stack overflows.
+        Invoke(() => { result = func(); });
         return result;
     }
 
