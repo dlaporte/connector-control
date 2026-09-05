@@ -65,7 +65,16 @@ public partial class SettingsWindow : Window
     {
         var dir = Model.BackupsDir;
         var arguments = Directory.Exists(dir) ? $"/select,\"{dir}\"" : $"\"{Path.GetDirectoryName(dir) ?? dir}\"";
-        Process.Start(new ProcessStartInfo("explorer.exe", arguments) { UseShellExecute = true });
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", arguments) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            // This window has no dialogs seam (unlike ConfirmDialog/NamePromptDialog/UpdateDialog,
+            // it never surfaces failures through IDialogs); explorer.exe failing to launch isn't
+            // worth inventing one for, so it's a silent no-op rather than a crash.
+        }
     }
 
     private void OnRestore(object sender, RoutedEventArgs e)

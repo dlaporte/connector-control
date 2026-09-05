@@ -59,13 +59,19 @@ public class SettingsModelTests
     public void LaunchAtStartupFailureRevertsAndNotes()
     {
         using var rig = new Rig();
+        Assert.False(rig.Model.HasLoginItemNote);
         rig.Autostart.FailWith = "Access is denied.";
+        var raised = new List<string?>();
+        rig.Model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
         rig.Model.LaunchAtStartup = true;
         Assert.False(rig.Model.LaunchAtStartup);
         Assert.Equal("Couldn't update login item: Access is denied.", rig.Model.LoginItemNote);
+        Assert.True(rig.Model.HasLoginItemNote);
+        Assert.Contains(nameof(SettingsModel.HasLoginItemNote), raised);
         rig.Autostart.FailWith = null;
         rig.Model.LaunchAtStartup = true;
         Assert.Null(rig.Model.LoginItemNote);
+        Assert.False(rig.Model.HasLoginItemNote);
     }
 
     [Fact]

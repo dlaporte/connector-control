@@ -169,6 +169,58 @@ public class FileWatcherTests : IDisposable
         Assert.True(counter.WaitFor(1, Wait));
     }
 
+    /// <summary>
+    /// Drives HandleError's "directory is gone" branch entirely through the internal
+    /// seam (no Start(), no live FileSystemWatcher at all). That branch is pure
+    /// internal logic — Stop() plus exactly one marshalled callback — and doesn't
+    /// need a real OS watcher to prove it. This used to be folded into the
+    /// real-file-system test below, alongside a genuinely-armed watcher and a real
+    /// Directory.Delete; that combination was flaky on Windows CI (never on the
+    /// Mac): once Start() has wired up a live FileSystemWatcher, the OS can
+    /// independently raise its own Error event for the same deletion on a
+    /// background thread, racing this manual call and occasionally delivering the
+    /// callback twice before the very next assertion ran. Never arming a real
+    /// watcher here removes that race entirely, so the "exactly once" guarantee
+    /// (R2: the deletion must be delivered, not swallowed by Stop()) can be
+    /// asserted deterministically. The real-armed-watcher scenario (Stop() tearing
+    /// down a genuinely live FileSystemWatcher) is still covered by DoesNotFireAfterStop
+    /// and RestartDropsCallbacksScheduledBeforeTheRestart above, and by the
+    /// tolerant, real-file-system test below.
+    /// </summary>
+    [Fact]
+    public void HandleErrorWithTheDirectoryGoneDisarmsAndDeliversExactlyOnce()
+    {
+        var missing = dir.File(System.IO.Path.Combine("gone", "watched.json"));
+        var counter = new Counter();
+        using var watcher = new FileWatcher(missing, counter.Hit, a => a());
+        Assert.False(watcher.IsArmed);
+        watcher.HandleError();      // what the FileSystemWatcher raises when its directory goes
+        Assert.False(watcher.IsArmed);
+        Assert.Equal(1, counter.Count);   // the deletion itself must be delivered, not swallowed by Stop() (R2)
+    }
+
+    /// <summary>Retries past the Windows quirk where deleting a directory a live
+    /// FileSystemWatcher still holds a handle on can transiently fail/need a retry.</summary>
+    private static void DeleteDirectoryWithRetry(string path)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                Directory.Delete(path, recursive: true);
+                return;
+            }
+            catch (IOException) when (attempt < 5)
+            {
+                Thread.Sleep(50);
+            }
+            catch (UnauthorizedAccessException) when (attempt < 5)
+            {
+                Thread.Sleep(50);
+            }
+        }
+    }
+
     [Fact]
     public void ADeletedDirectoryDisarmsTheWatcherSoTheNextStartReArms()
     {
@@ -178,18 +230,25 @@ public class FileWatcherTests : IDisposable
         watcher.Start();
         Assert.True(watcher.IsArmed);
         var parent = System.IO.Path.GetDirectoryName(path)!;
-        Directory.Delete(parent, recursive: true);
+        DeleteDirectoryWithRetry(parent);
         watcher.HandleError();      // what the FileSystemWatcher raises when its directory goes
         Assert.False(watcher.IsArmed);
-        Assert.Equal(1, counter.Count);   // the deletion itself must be delivered, not swallowed by Stop() (R2)
+        // The real, now-disposed FileSystemWatcher can independently raise its own
+        // Error event for this same deletion on a background thread (the Windows CI
+        // flake this test used to hit): tolerate a possible extra delivery here with
+        // a condition-based wait rather than an exact synchronous count.
+        // HandleErrorWithTheDirectoryGoneDisarmsAndDeliversExactlyOnce above is the
+        // deterministic proof that exactly one callback fires.
+        Assert.True(counter.WaitFor(1, Wait), "expected the deletion to be delivered, not swallowed by Stop() (R2)");
         watcher.Start();            // AppState retries on each reload; the directory is still gone
         Assert.False(watcher.IsArmed);
         Directory.CreateDirectory(parent);
         watcher.Start();
         Assert.True(watcher.IsArmed);
         Thread.Sleep(300);
+        var before = counter.Count;   // a possible earlier extra delivery must not mask a missing one here
         File.WriteAllText(path, "two");
-        Assert.True(counter.WaitFor(2, Wait), "the re-armed watcher must still report changes");
+        Assert.True(counter.WaitFor(before + 1, Wait), "the re-armed watcher must still report changes");
     }
 
     [Fact]
