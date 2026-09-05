@@ -187,7 +187,11 @@ public partial class FlyoutWindow : Window
         foreach (var item in model.ProfileItems)
         {
             var name = item.Name;
-            var entry = new MenuItem { Header = new TextBlock { Text = name }, IsChecked = item.IsActive };
+            // IsCheckable, not just IsChecked: the Fluent MenuItem template gives an item its check
+            // column only when it is checkable, so the active profile's mark would not be drawn.
+            // Clicking toggles the mark before Click runs, which is harmless — the menu closes and
+            // the next open rebuilds every item from ProfileItems.
+            var entry = new MenuItem { Header = new TextBlock { Text = name }, IsCheckable = true, IsChecked = item.IsActive };
             entry.Click += (_, _) => model.SwitchProfile(name);
             menu.Items.Add(entry);
         }

@@ -5,6 +5,7 @@ using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
 using ConnectorControl.Core.State;
 using ConnectorControl.Core.Tests.TestSupport;
+using AppServices = ConnectorControl.App.Services.Services;
 
 namespace ConnectorControl.App.Tests;
 
@@ -134,10 +135,25 @@ public class DialogTests
     [Fact]
     public void WpfDialogsFallsBackToTheActiveWindowWhenNoOwnerWasGiven()
     {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var services = new AppServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
             var dialogs = new WpfDialogs(() => null);
             Assert.Null(dialogs.ResolveOwner());   // nothing of ours is up: centred on screen, topmost
+
+            // The flyout hides itself the moment something takes the focus, which is exactly what
+            // showing a modal does — so Quit / Restart Required / the profile prompts must never
+            // be owned by it, however visible and active it is when they are raised.
+            using var model = new FlyoutModel(state);
+            var flyout = new FlyoutWindow(model, new WindowRegistry(state, services, updates)) { TrayAnchor = () => null };
+            flyout.Show();
+            flyout.Activate();
+            Assert.True(flyout.IsVisible);
+            Assert.Null(dialogs.ResolveOwner());
+
             var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
             window.Show();
             window.Activate();
@@ -145,6 +161,8 @@ public class DialogTests
             // the dialog must still centre on Settings rather than on the screen.
             Assert.Same(window, dialogs.ResolveOwner());
             window.Close();
+            flyout.HideFlyout();
+            flyout.Close();
         });
     }
 }

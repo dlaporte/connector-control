@@ -22,9 +22,12 @@ public sealed class WpfDialogs : IDialogs
     /// instance that passes none — whichever of our windows is active, so
     /// Settings ▸ Check for Updates… centres on Settings and not on the screen.
     /// Null means there is nothing of ours on screen: centre and force to front.
+    /// Never the flyout: it hides itself on Deactivated, which is exactly what
+    /// showing a modal over it does, so Quit / Restart Required / the profile
+    /// prompts would end up owned by a hidden window (spec §7.5 path instead).
     /// </summary>
     internal Window? ResolveOwner() =>
-        owner() ?? Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsVisible && w.IsActive);
+        owner() ?? Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsVisible && w.IsActive && w is not FlyoutWindow);
 
     public bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle = "Cancel", bool destructive = false) =>
         ConfirmDialog.Show(ResolveOwner(), message, informativeText, primaryTitle, cancelTitle, destructive);

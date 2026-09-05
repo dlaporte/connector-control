@@ -98,6 +98,41 @@ public class FlyoutWindowTests
         });
     }
 
+    /// <summary>
+    /// Catalog §2.2 puts a check mark on the active profile. The Fluent MenuItem template only
+    /// gives an item a check column when it is checkable, so IsChecked alone drew nothing.
+    /// </summary>
+    [Fact]
+    public void TheProfileMenuChecksTheActiveProfileAndNothingElse()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Dialogs.NextPromptAnswer = "Work";
+        state.NewProfile();   // Default + Work, with Work active
+        var services = new AppServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            using var model = new FlyoutModel(state);
+            var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates)) { TrayAnchor = () => null };
+            window.Show();
+            var menu = window.OpenProfileMenu();
+
+            var profiles = menu.Items.OfType<MenuItem>().Take(model.ProfileItems.Count).ToList();
+            Assert.Equal(["Default", "Work"], profiles.Select(i => ((TextBlock)i.Header).Text).ToArray());
+            foreach (var (item, expected) in profiles.Zip(model.ProfileItems))
+            {
+                Assert.True(item.IsCheckable);
+                Assert.Equal(expected.IsActive, item.IsChecked);
+            }
+            Assert.Equal(["Work"], profiles.Where(i => i.IsChecked).Select(i => ((TextBlock)i.Header).Text).ToArray());
+
+            menu.IsOpen = false;   // leave nothing behind in the shared WPF host
+            window.HideFlyout();
+            window.Close();
+        });
+    }
+
     [Fact]
     public void TrayMenuHasOpenSettingsAndQuit()
     {
