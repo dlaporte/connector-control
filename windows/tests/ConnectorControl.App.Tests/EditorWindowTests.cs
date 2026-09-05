@@ -197,4 +197,33 @@ public class EditorWindowTests
             Assert.True(window.Model.IsJsonView);
         });
     }
+
+    /// <summary>
+    /// Spec 2026-09-05-tool-probe §3.4: a missing npx puts the caution note under Server URL and
+    /// leaves Save alone.
+    /// </summary>
+    [Fact]
+    public void MissingNpxShowsTheToolNoteUnderTheServerUrlField()
+    {
+        using var h = new AppStateHarness();
+        h.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound;
+        using var state = h.Create();
+        WpfApp.Invoke(() =>
+        {
+            var window = new EditorWindow(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle));
+            Layout(window);
+            Assert.Equal(Visibility.Collapsed, window.RemoteToolNote.Visibility);   // not probed yet
+            Assert.True(h.Ui.PumpUntil(() => window.Model.HasToolNote, TimeSpan.FromSeconds(5)));
+            Layout(window);
+            Assert.Equal(Visibility.Visible, window.RemoteToolNote.Visibility);
+            Assert.NotNull(window.RemoteToolNote.Note);
+            Assert.Equal("npx wasn’t found, so Claude Desktop won’t be able to start this connector.", window.RemoteToolNote.Note.Text);
+            Assert.Equal("winget install OpenJS.NodeJS.LTS", window.RemoteToolNote.Note.InstallCommand);
+            Assert.Equal(Visibility.Visible, window.RemoteToolNote.TextLine.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.LocalSection.Visibility);
+            window.Model.RemoteUrl = "https://example.com/mcp";
+            Assert.True(window.Model.CanSave);   // the note never blocks Save
+            window.Close();
+        });
+    }
 }

@@ -99,6 +99,7 @@
                   <TextBox Grid.Column="1" Text="{Binding RemoteUrl, UpdateSourceTrigger=PropertyChanged}" views:Placeholder.Text="https://example.com/mcp" />
                 </Grid>
                 <TextBlock Text="{x:Static state:EditorModel.UrlHint}" Style="{StaticResource ErrorText}" FontSize="12" Margin="110,4,0,0" Visibility="{Binding ShowUrlHint, Converter={StaticResource Vis}}" />
+                <views:ToolNoteBlock x:Name="RemoteToolNote" Note="{Binding ToolNote}" Margin="110,6,0,0" />
                 <TextBlock Text="{x:Static state:EditorModel.RemoteFooter}" Style="{StaticResource CaptionText}" Margin="0,8,0,0" />
               </StackPanel>
             </Border>
@@ -175,14 +176,17 @@
 
           <StackPanel x:Name="LocalSection" Visibility="{Binding IsLocal, Converter={StaticResource Vis}}">
             <Border Style="{StaticResource Card}">
-              <Grid>
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="110" />
-                  <ColumnDefinition />
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="Command" Style="{StaticResource FieldLabel}" />
-                <TextBox Grid.Column="1" Text="{Binding Command, UpdateSourceTrigger=PropertyChanged}" views:Placeholder.Text="npx" />
-              </Grid>
+              <StackPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="110" />
+                    <ColumnDefinition />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="Command" Style="{StaticResource FieldLabel}" />
+                  <TextBox Grid.Column="1" Text="{Binding Command, UpdateSourceTrigger=PropertyChanged}" views:Placeholder.Text="npx" />
+                </Grid>
+                <views:ToolNoteBlock x:Name="LocalToolNote" Note="{Binding ToolNote}" Margin="110,6,0,0" />
+              </StackPanel>
             </Border>
             <Border Style="{StaticResource Card}">
               <StackPanel>
@@ -270,6 +274,7 @@
           <RowDefinition Height="Auto" />
           <RowDefinition />
           <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid Margin="0,0,0,8">
           <Grid.ColumnDefinitions>
@@ -292,6 +297,7 @@
             </Style>
           </TextBlock.Style>
         </TextBlock>
+        <views:ToolNoteBlock x:Name="JsonToolNote" Grid.Row="3" Note="{Binding ToolNote}" Margin="0,6,0,0" />
       </Grid>
     </Grid>
   </DockPanel>

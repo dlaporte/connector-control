@@ -17,6 +17,13 @@
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
+  <!-- The tool note's first line (spec 2026-09-05-tool-probe §3.4): a warning, not an error. -->
+  <Style x:Key="CautionText" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
   <!-- Mac .accessoryBar / .plain button: no chrome until hovered. -->
   <Style x:Key="SubtleButton" TargetType="Button">
     <Setter Property="Background" Value="Transparent" />

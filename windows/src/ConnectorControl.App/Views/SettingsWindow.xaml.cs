@@ -23,6 +23,8 @@ public partial class SettingsWindow : Window
         StorageTabItem.Header = TabHeader("", null, SettingsModel.StorageTab);
         ClaudeTabItem.Header = TabHeader("", ClaudeIconLoader.Load(services.ClaudeInstall.Detect()), SettingsModel.ClaudeTab);
         Activated += (_, _) => Model.Refresh();
+        Closed += (_, _) => Model.Dispose();
+        Model.RefreshTools();   // spec §6 D4: probe all four when the window opens
     }
 
     public SettingsModel Model { get; }

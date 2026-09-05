@@ -30,6 +30,7 @@ public partial class EditorWindow : Window
         Model.FocusEnvRowRequested += row => Dispatcher.BeginInvoke(new Action(() => FocusEnvRow(row)), DispatcherPriority.Loaded);
         Model.PropertyChanged += OnModelPropertyChanged;
         PreviewKeyDown += OnPreviewKeyDown;
+        Closed += (_, _) => Model.Dispose();   // stop listening to AppState.ToolStatuses
     }
 
     public EditorModel Model { get; }
