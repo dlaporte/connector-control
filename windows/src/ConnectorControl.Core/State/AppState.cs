@@ -44,6 +44,9 @@ public sealed class AppState : ObservableObject, IDisposable
     private readonly INotifier notifier;
     private readonly PathContext paths;
     private readonly AppHost host;
+    private readonly IToolProbe toolProbe;
+    private readonly Dictionary<Tool, ToolStatus> toolStatuses = [];
+    private readonly HashSet<Tool> toolsInFlight = [];
 
     private MasterStore store = MasterStore.Empty();
     private string? lastError;
@@ -59,7 +62,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>Test probe: both watchers are live. Spec §6.3 wants this true after every reload.</summary>
     internal bool WatchersArmed => watcher is { IsArmed: true } && storeWatcher is { IsArmed: true };
 
-    public AppState(ISettings settings, IClaudeProcess claude, INotifier notifier, IDialogs dialogs, PathContext paths, AppHost host)
+    public AppState(ISettings settings, IClaudeProcess claude, INotifier notifier, IDialogs dialogs, PathContext paths, AppHost host, IToolProbe tools)
     {
         this.settings = settings;
         this.claude = claude;
@@ -67,6 +70,7 @@ public sealed class AppState : ObservableObject, IDisposable
         Dialogs = dialogs;
         this.paths = paths;
         this.host = host;
+        toolProbe = tools;
         service = MakeService(settings, this.paths);
         // Sweep the RESOLVED paths (a repointed store lives outside the default dir).
         AclSweep.RunOnce(settings, service.Paths);
@@ -114,6 +118,57 @@ public sealed class AppState : ObservableObject, IDisposable
             var total = Store.Mcps.Count;
             return total == 0 ? NoConnectorsSubtitle : $"{Store.EnabledServers.Count} of {total} enabled";
         }
+    }
+
+    // MARK: tools (spec 2026-09-05-tool-probe §3.6)
+
+    /// <summary>
+    /// Which of the four launchers Claude Desktop can start: probed on demand — Settings ▸ Claude,
+    /// the editor — and cached for the rest of the run. A tool absent here has not been probed yet.
+    /// </summary>
+    public IReadOnlyDictionary<Tool, ToolStatus> ToolStatuses => toolStatuses;
+
+    /// <summary>
+    /// Probes <paramref name="tools"/> (all four when null) off the UI thread and publishes the
+    /// results through the host; a tool already in flight is not probed twice. The task completes
+    /// once the results are published — on a queued host, after the queue is pumped.
+    /// </summary>
+    public Task RefreshToolsAsync(IReadOnlyList<Tool>? tools = null)
+    {
+        var wanted = (tools ?? ToolInfo.All).Where(toolsInFlight.Add).ToArray();
+        return wanted.Length == 0 ? Task.CompletedTask : ProbeToolsAsync(wanted);
+    }
+
+    private async Task ProbeToolsAsync(Tool[] wanted)
+    {
+        IReadOnlyDictionary<Tool, ToolStatus> results;
+        try
+        {
+            results = await Task.Run(() => toolProbe.Probe(wanted)).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // IToolProbe promises never to throw; if one does anyway, "Not found" beats a dead tray app.
+            results = wanted.ToDictionary(t => t, _ => ToolStatus.NotFound);
+        }
+        // Everything below touches state the UI thread owns, so it is one marshalled action.
+        await host.MarshalAsync(() =>
+        {
+            foreach (var tool in wanted)
+            {
+                toolsInFlight.Remove(tool);
+            }
+            if (disposed)
+            {
+                return false;
+            }
+            foreach (var (tool, status) in results)
+            {
+                toolStatuses[tool] = status;
+            }
+            Raise(nameof(ToolStatuses));
+            return true;
+        }).ConfigureAwait(false);
     }
 
     // MARK: watchers (catalog §1.4, §1.5; spec §6.3)

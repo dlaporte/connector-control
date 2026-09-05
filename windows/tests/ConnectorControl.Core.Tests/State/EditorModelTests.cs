@@ -590,4 +590,99 @@ public class EditorModelTests
         Assert.True(editor.Save());
         Assert.Equal(JsonValue.Bool(true), state.Store.Mcps["scoutbook"].Config["disabled"]);
     }
+
+    [Fact]
+    public void NewRemoteConnectorNotesAMissingNpx()
+    {
+        using var h = new AppStateHarness();
+        h.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound;
+        using var state = h.Create();
+        using var editor = Editor(h, state, EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        Assert.Equal(Tool.Npx, editor.RequiredTool);
+        Assert.Null(editor.ToolNote);   // not probed yet: no note, and nothing blocks
+        Assert.False(editor.HasToolNote);
+        Assert.True(h.Ui.PumpUntil(() => editor.HasToolNote, TimeSpan.FromSeconds(5)));
+        Assert.Equal("npx wasn’t found, so Claude Desktop won’t be able to start this connector.", editor.ToolNote!.Text);
+        Assert.Equal("Install Node.js", editor.ToolNote.LinkTitle);
+        Assert.Equal("https://nodejs.org/en/download", editor.ToolNote.LinkUrl);
+        Assert.Equal("winget install OpenJS.NodeJS.LTS", editor.ToolNote.InstallCommand);
+        editor.Name = "example";
+        editor.RemoteUrl = Url;
+        Assert.True(editor.CanSave);   // the note never blocks Save
+        Assert.True(editor.Save());
+        Assert.Null(editor.ValidationError);
+    }
+
+    [Fact]
+    public void LocalCommandChangesReEvaluateAndReProbeTheTool()
+    {
+        using var h = new AppStateHarness();
+        h.Tools.Statuses[Tool.Uvx] = ToolStatus.NotFound;
+        using var state = h.Create();
+        using var editor = Editor(h, state, EditTarget.New(Local("node", ["server.js"])));
+        Assert.Equal(Tool.Node, editor.RequiredTool);
+        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.ContainsKey(Tool.Node), TimeSpan.FromSeconds(5)));
+        Assert.False(editor.HasToolNote);   // node is installed on this (fake) machine
+        var raised = new List<string?>();
+        editor.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        editor.Command = "uvx";
+        Assert.Equal(Tool.Uvx, editor.RequiredTool);
+        Assert.Contains(nameof(EditorModel.RequiredTool), raised);
+        Assert.True(h.Ui.PumpUntil(() => editor.HasToolNote, TimeSpan.FromSeconds(5)));
+        Assert.Contains(nameof(EditorModel.HasToolNote), raised);
+        Assert.StartsWith("uvx wasn’t found", editor.ToolNote!.Text, StringComparison.Ordinal);
+        editor.Command = "/usr/local/bin/uvx";   // a path is the user's deliberate choice: no PATH lookup, no note
+        Assert.Null(editor.RequiredTool);
+        Assert.False(editor.HasToolNote);
+        editor.Command = "python";
+        Assert.Null(editor.RequiredTool);
+        Assert.Equal(2, h.Tools.Probed.Count);   // node once, uvx once — the non-tools cost nothing
+        editor.Command = "uvx";
+        // Back to a tool that is cached: probed again anyway — it may have been installed meanwhile.
+        Assert.True(h.Ui.PumpUntil(() => h.Tools.Probed.Count == 3, TimeSpan.FromSeconds(5)));
+        Assert.True(editor.HasToolNote);
+    }
+
+    [Fact]
+    public void JsonViewEvaluatesTheParsedConfig()
+    {
+        using var h = new AppStateHarness();
+        h.Tools.Statuses[Tool.Uv] = ToolStatus.NotFound;
+        using var state = h.Create();
+        using var editor = Editor(h, state, EditTarget.New(Local("node", ["x.js"])));
+        editor.RequestView(EditView.Json);
+        Assert.Equal(Tool.Node, editor.RequiredTool);   // the same config, now read from the text
+        editor.JsonText = "{\"command\": \"uv\", \"args\": [\"run\", \"server.py\"]}";
+        Assert.Equal(Tool.Uv, editor.RequiredTool);
+        Assert.True(h.Ui.PumpUntil(() => editor.HasToolNote, TimeSpan.FromSeconds(5)));
+        editor.JsonText = "{ not json";
+        Assert.Null(editor.RequiredTool);   // unparseable: nothing to evaluate
+        Assert.False(editor.HasToolNote);
+        editor.JsonText = "{\"command\": \"cmd\", \"args\": [\"/c\", \"npx\", \"-y\", \"mcp-remote\", \"" + Url + "\"]}";
+        Assert.Equal(Tool.Npx, editor.RequiredTool);
+        editor.RequestView(EditView.Form);   // a bare bridge invocation: the remote form, still npx
+        Assert.True(editor.IsRemote);
+        Assert.Equal(Tool.Npx, editor.RequiredTool);
+    }
+
+    [Fact]
+    public void ACachedStatusShowsTheNoteAtOnceAndAFoundToolShowsNone()
+    {
+        using var h = new AppStateHarness();
+        h.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound;
+        using var state = h.Create();
+        var warm = state.RefreshToolsAsync();
+        Assert.True(h.Ui.PumpUntil(() => warm.IsCompleted, TimeSpan.FromSeconds(5)));
+        var batches = h.Tools.Batches;
+        using var remote = Editor(h, state, EditTarget.Existing("scoutbook", state.Store.Mcps["scoutbook"]));   // bare npx mcp-remote
+        Assert.True(remote.HasToolNote);          // straight from the cache, no wait
+        Assert.Equal(batches, h.Tools.Batches);   // and no re-probe on open
+        using var local = Editor(h, state, EditTarget.Existing("local", new McpEntry(Local("node", ["x.js"]))));
+        Assert.Equal(Tool.Node, local.RequiredTool);
+        Assert.False(local.HasToolNote);
+        Assert.Equal(batches, h.Tools.Batches);
+        remote.Dispose();
+        state.RefreshToolsAsync([Tool.Npx]);      // a disposed editor no longer listens
+        Assert.True(h.Ui.PumpUntil(() => h.Tools.Batches == batches + 1, TimeSpan.FromSeconds(5)));
+    }
 }

@@ -3,6 +3,7 @@ using System.Windows.Threading;
 using ConnectorControl.App.Services;
 using ConnectorControl.App.Tray;
 using ConnectorControl.App.Views;
+using ConnectorControl.Core;
 using ConnectorControl.Core.State;
 using AppServices = ConnectorControl.App.Services.Services;
 
@@ -49,7 +50,8 @@ public partial class App : Application
         // No owner: WpfDialogs falls back to whichever of our windows is active, so a dialog
         // raised from Settings still centres on Settings.
         var dialogs = new WpfDialogs(() => null);
-        state = new AppState(services.Settings, services.ClaudeProcess, services.Notifier, dialogs, PathContext.Live(), host);
+        var paths = PathContext.Live();
+        state = new AppState(services.Settings, services.ClaudeProcess, services.Notifier, dialogs, paths, host, new ToolProbe(paths.Environment));
         state.QuitRequested += () => Shutdown();
         updates = new UpdateCoordinator(services.Updater, services.Settings, services.Notifier, dialogs, host);
         updates.Start();   // only arms the delayed first check through host.Delay

@@ -22,6 +22,7 @@ public sealed class AppStateHarness : IDisposable
     public FakeClaudeProcess Claude { get; } = new();
     public FakeNotifier Notifier { get; } = new();
     public FakeDialogs Dialogs { get; } = new();
+    public FakeToolProbe Tools { get; } = new();
     public DelayQueue Delays { get; } = new();
     public MarshalQueue Ui { get; } = new();
     public DateTime Now { get; set; } = new(2026, 9, 4, 12, 0, 0, DateTimeKind.Utc);
@@ -40,7 +41,7 @@ public sealed class AppStateHarness : IDisposable
         Host = new AppHost(Ui.Post, Delays.Add, () => Now);
     }
 
-    public AppState Create() => new(Settings, Claude, Notifier, Dialogs, Context, Host);
+    public AppState Create() => new(Settings, Claude, Notifier, Dialogs, Context, Host, Tools);
 
     public IReadOnlyDictionary<string, JsonValue> ClaudeServers() => ClaudeConfigIO.ReadMcpServers(ClaudeConfigPath);
 

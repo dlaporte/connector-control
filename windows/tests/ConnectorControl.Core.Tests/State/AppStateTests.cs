@@ -319,4 +319,40 @@ public class AppStateTests
         Assert.Equal(h.ClaudeConfigPath, service.Paths.ClaudeConfigPath);
         Assert.Equal(7, service.Backups.KeepCount);
     }
+
+    [Fact]
+    public void RefreshToolsProbesOffTheUiThreadAndPublishesThroughTheHost()
+    {
+        using var h = new AppStateHarness();
+        h.Tools.Statuses[Tool.Uvx] = ToolStatus.NotFound;
+        using var state = h.Create();
+        Assert.Empty(state.ToolStatuses);   // nothing is probed until the editor or Settings asks
+        var raised = new List<string?>();
+        state.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        var task = state.RefreshToolsAsync();
+        Assert.True(h.Ui.PumpUntil(() => task.IsCompleted, TimeSpan.FromSeconds(5)));
+        Assert.Equal(4, state.ToolStatuses.Count);
+        Assert.False(state.ToolStatuses[Tool.Uvx].Found);
+        Assert.Equal("1.0.0", state.ToolStatuses[Tool.Npx].Version);
+        Assert.Contains(nameof(AppState.ToolStatuses), raised);
+        Assert.Equal(ToolInfo.All.ToArray(), h.Tools.Probed.ToArray());
+        Assert.Equal(1, h.Tools.Batches);
+    }
+
+    [Fact]
+    public void RefreshToolsDoesNotProbeAToolAlreadyInFlight()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var first = state.RefreshToolsAsync([Tool.Npx]);
+        var second = state.RefreshToolsAsync([Tool.Npx, Tool.Node]);   // npx joins the flight already in the air; node starts one
+        Assert.True(h.Ui.PumpUntil(() => first.IsCompleted && second.IsCompleted, TimeSpan.FromSeconds(5)));
+        Assert.Equal([Tool.Npx, Tool.Node], h.Tools.Probed.Order().ToArray());
+        Assert.Equal(2, state.ToolStatuses.Count);
+        Assert.True(state.RefreshToolsAsync([]).IsCompleted);   // nothing wanted: completes synchronously
+        // Once published, the same tool can be probed again (the editor asks when the command changes).
+        var third = state.RefreshToolsAsync([Tool.Npx]);
+        Assert.True(h.Ui.PumpUntil(() => third.IsCompleted, TimeSpan.FromSeconds(5)));
+        Assert.Equal(3, h.Tools.Probed.Count);
+    }
 }

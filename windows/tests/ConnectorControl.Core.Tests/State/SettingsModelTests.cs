@@ -25,6 +25,7 @@ public class SettingsModelTests
 
         public void Dispose()
         {
+            Model.Dispose();
             Updates.Dispose();
             State.Dispose();
             H.Dispose();
@@ -203,5 +204,48 @@ public class SettingsModelTests
         Assert.Equal("Show in Explorer", SettingsModel.ShowInExplorerTitle);
         Assert.Equal("Restore…", SettingsModel.RestoreTitle);
         Assert.Equal("Claude App", SettingsModel.ClaudeAppHeader);
+    }
+
+    [Fact]
+    public void ToolRowsStartAsCheckingAndFillInAfterARefresh()
+    {
+        using var rig = new Rig();
+        rig.H.Tools.Statuses[Tool.Npx] = new ToolStatus(@"C:\Program Files\nodejs\npx.cmd", "10.9.2");
+        rig.H.Tools.Statuses[Tool.Node] = new ToolStatus(@"C:\Program Files\nodejs\node.exe", null);
+        rig.H.Tools.Statuses[Tool.Uvx] = ToolStatus.NotFound;
+        rig.H.Tools.Statuses[Tool.Uv] = ToolStatus.NotFound;
+        Assert.Equal(["npx", "node", "uvx", "uv"], rig.Model.ToolRows.Select(r => r.Name).ToArray());
+        Assert.All(rig.Model.ToolRows, r => Assert.Equal("Checking…", r.StatusText));
+        Assert.All(rig.Model.ToolRows, r => Assert.False(r.IsProblem));
+        Assert.All(rig.Model.ToolRows, r => Assert.False(r.HasNote));
+        rig.Model.RefreshTools();
+        Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses.Count == 4, TimeSpan.FromSeconds(5)));
+        var rows = rig.Model.ToolRows;
+        Assert.Equal(["10.9.2", "Found", "Not found", "Not found"], rows.Select(r => r.StatusText).ToArray());
+        Assert.Equal([false, false, true, true], rows.Select(r => r.IsProblem).ToArray());
+        Assert.Null(rows[0].Note);
+        Assert.Null(rows[1].Note);
+        Assert.Equal("Install uv", rows[2].Note!.LinkTitle);
+        Assert.Equal("winget install astral-sh.uv", rows[3].Note!.InstallCommand);
+    }
+
+    [Fact]
+    public void ToolRowsRaiseWhenStatusesArrive()
+    {
+        using var rig = new Rig();
+        var raised = new List<string?>();
+        rig.Model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        rig.Model.RefreshTools();
+        Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses.Count == 4, TimeSpan.FromSeconds(5)));
+        Assert.Contains(nameof(SettingsModel.ToolRows), raised);
+        Assert.Equal(1, rig.H.Tools.Batches);
+    }
+
+    [Fact]
+    public void ToolStringsMatchTheSpec()
+    {
+        Assert.Equal("Tools", SettingsModel.ToolsHeader);
+        Assert.Equal("Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them.", SettingsModel.ToolsCaption);
+        Assert.Equal(ToolRow.For(Tool.Npx, ToolStatus.NotFound), new ToolRow("npx", "Not found", true, ToolNote.For(Tool.Npx, ToolStatus.NotFound)));
     }
 }

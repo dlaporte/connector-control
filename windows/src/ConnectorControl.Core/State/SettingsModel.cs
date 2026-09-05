@@ -1,9 +1,10 @@
+using System.ComponentModel;
 using ConnectorControl.Core.Services;
 
 namespace ConnectorControl.Core.State;
 
 /// <summary>Catalog §4 SettingsView state: three tabs, every toggle, path, and button.</summary>
-public sealed class SettingsModel : ObservableObject
+public sealed class SettingsModel : ObservableObject, IDisposable
 {
     public const string GeneralTab = "General";
     public const string StorageTab = "Storage";
@@ -27,6 +28,8 @@ public sealed class SettingsModel : ObservableObject
     public const string ConfigPathLabel = "Config file";
     public const string LaunchTargetLabel = "Launch target";
     public const string NotFoundText = "Not found";
+    public const string ToolsHeader = ToolNote.SettingsHeader;
+    public const string ToolsCaption = ToolNote.SettingsCaption;
     public const int MinKeepCount = 5;
     public const int MaxKeepCount = 100;
 
@@ -38,6 +41,7 @@ public sealed class SettingsModel : ObservableObject
     private readonly UpdateCoordinator updates;
     private bool launchAtStartup;
     private string? loginItemNote;
+    private readonly PropertyChangedEventHandler onStateChanged;
 
     public SettingsModel(AppState state, ISettings settings, IAutostart autostart, IClaudeInstall install, IUpdater updater, UpdateCoordinator updates)
     {
@@ -48,6 +52,8 @@ public sealed class SettingsModel : ObservableObject
         this.updater = updater;
         this.updates = updates;
         launchAtStartup = autostart.IsEnabled;
+        onStateChanged = OnStateChanged;
+        state.PropertyChanged += onStateChanged;
     }
 
     /// <summary>Called whenever the window opens: autostart is read fresh (the user may have changed it in Windows Settings).</summary>
@@ -218,4 +224,22 @@ public sealed class SettingsModel : ObservableObject
         settings.ClaudeLaunchTarget = null;
         RaiseAll();
     }
+
+    // MARK: Tools (spec 2026-09-05-tool-probe §3.5)
+
+    public IReadOnlyList<ToolRow> ToolRows =>
+        ToolInfo.All.Select(tool => ToolRow.For(tool, state.ToolStatuses.TryGetValue(tool, out var status) ? status : null)).ToList();
+
+    /// <summary>Spec §6 D4: Windows probes all four when the window opens.</summary>
+    public void RefreshTools() => _ = state.RefreshToolsAsync();
+
+    private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(AppState.ToolStatuses) or null or "")
+        {
+            Raise(nameof(ToolRows));
+        }
+    }
+
+    public void Dispose() => state.PropertyChanged -= onStateChanged;
 }

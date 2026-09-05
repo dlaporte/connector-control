@@ -1,10 +1,12 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Text;
 
 namespace ConnectorControl.Core.State;
 
 /// <summary>Catalog §3 EditSheetView without the pixels: every field, switch rule, validation string, and save/remove flow.</summary>
-public sealed class EditorModel : ObservableObject
+public sealed class EditorModel : ObservableObject, IDisposable
 {
     public const string NotValidJson = "Not valid JSON — check for a stray brace, missing comma, or unquoted value.";
     public const string JsonTip = "Tip: paste a README snippet or an mcpServers stanza — a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in.";
@@ -67,6 +69,9 @@ public sealed class EditorModel : ObservableObject
     private string jsonText;
     private string? jsonError;
     private string? validationError;
+    private readonly PropertyChangedEventHandler onStateChanged;
+    private Tool? requiredTool;
+    private bool suppressToolEvaluation;
 
     public EditorModel(AppState state, EditTarget target, IDialogs dialogs, RemoteLaunchStyle newRemoteStyle)
     {
@@ -90,6 +95,16 @@ public sealed class EditorModel : ObservableObject
         {
             ApplyRemoteFields(remote);
         }
+        // Spec 2026-09-05-tool-probe §3.4: on open, a cached status shows its note at once; an
+        // unknown one is probed now. Later changes go through EvaluateRequiredTool.
+        onStateChanged = OnStateChanged;
+        state.PropertyChanged += onStateChanged;
+        Args.CollectionChanged += OnArgsChanged;
+        requiredTool = ComputeRequiredTool();
+        if (requiredTool is { } initial && !state.ToolStatuses.ContainsKey(initial))
+        {
+            _ = state.RefreshToolsAsync([initial]);
+        }
     }
 
     public EditTarget Target { get; }
@@ -111,6 +126,7 @@ public sealed class EditorModel : ObservableObject
             if (Set(ref view, value))
             {
                 RaiseViewFlags();
+                EvaluateRequiredTool();
             }
         }
     }
@@ -174,6 +190,7 @@ public sealed class EditorModel : ObservableObject
                 Args.Add(new ArgRow("-y"));
                 Args.Add(new ArgRow(""));
             }
+            EvaluateRequiredTool();
         }
     }
 
@@ -243,7 +260,17 @@ public sealed class EditorModel : ObservableObject
     public string OAuthClientSecret { get => oauthClientSecret; set => Set(ref oauthClientSecret, value); }
     public string OAuthScopes { get => oauthScopes; set => Set(ref oauthScopes, value); }
 
-    public string Command { get => command; set => Set(ref command, value); }
+    public string Command
+    {
+        get => command;
+        set
+        {
+            if (Set(ref command, value))
+            {
+                EvaluateRequiredTool();
+            }
+        }
+    }
 
     public ObservableCollection<ArgRow> Args { get; }
 
@@ -266,6 +293,7 @@ public sealed class EditorModel : ObservableObject
             if (Set(ref jsonText, value))
             {
                 ValidateJson();
+                EvaluateRequiredTool();
             }
         }
     }
@@ -306,6 +334,70 @@ public sealed class EditorModel : ObservableObject
     public bool CanSave => !((view == EditView.Json && jsonError is not null) || (view == EditView.Form && isRemote && !RemoteUrlValid));
 
     public bool CanRemove => !Target.IsNew;
+
+    // MARK: tool note (spec 2026-09-05-tool-probe §3.3–§3.4)
+
+    /// <summary>
+    /// The launcher this connector needs: npx in the remote form, the Command field (through one
+    /// <c>cmd /c</c>) in the local form, the parsed config in the JSON view; null for none, a
+    /// path, or unparseable JSON.
+    /// </summary>
+    public Tool? RequiredTool => requiredTool;
+
+    /// <summary>Null while the tool is unknown (not probed yet) or found. Never blocks Save.</summary>
+    public ToolNote? ToolNote =>
+        requiredTool is { } tool && state.ToolStatuses.TryGetValue(tool, out var status) ? Core.ToolNote.For(tool, status) : null;
+
+    public bool HasToolNote => ToolNote is not null;
+
+    private Tool? ComputeRequiredTool()
+    {
+        if (view == EditView.Json)
+        {
+            return PasteRecovery.Recover(jsonText) is { } recovered ? ToolRequirement.RequiredTool(recovered.Config) : null;
+        }
+        return isRemote ? Tool.Npx : ToolRequirement.RequiredTool(command, Args.Select(a => a.Value).ToList());
+    }
+
+    /// <summary>A change to a different tool re-probes it even if cached — the user may have just installed it.</summary>
+    private void EvaluateRequiredTool()
+    {
+        if (suppressToolEvaluation)
+        {
+            return;
+        }
+        var tool = ComputeRequiredTool();
+        if (tool == requiredTool)
+        {
+            return;
+        }
+        requiredTool = tool;
+        Raise(nameof(RequiredTool));
+        Raise(nameof(ToolNote));
+        Raise(nameof(HasToolNote));
+        if (tool is { } changed)
+        {
+            _ = state.RefreshToolsAsync([changed]);
+        }
+    }
+
+    private void OnArgsChanged(object? sender, NotifyCollectionChangedEventArgs e) => EvaluateRequiredTool();
+
+    private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(AppState.ToolStatuses) or null or "")
+        {
+            Raise(nameof(ToolNote));
+            Raise(nameof(HasToolNote));
+        }
+    }
+
+    /// <summary>Stops listening to AppState; the window calls this from Closed.</summary>
+    public void Dispose()
+    {
+        state.PropertyChanged -= onStateChanged;
+        Args.CollectionChanged -= OnArgsChanged;
+    }
 
     // MARK: list editing (catalog §3.6)
 
@@ -390,37 +482,46 @@ public sealed class EditorModel : ObservableObject
 
     private void AdoptForm(FormModel model, JsonValue config)
     {
-        Command = model.Command;
-        Args.Clear();
-        foreach (var arg in model.Args)
+        suppressToolEvaluation = true;
+        try
         {
-            Args.Add(new ArgRow(arg));
+            Command = model.Command;
+            Args.Clear();
+            foreach (var arg in model.Args)
+            {
+                Args.Add(new ArgRow(arg));
+            }
+            EnvRows.Clear();
+            foreach (var row in EnvRowsFrom(model.Env))
+            {
+                EnvRows.Add(row);   // all values re-masked
+            }
+            additional = model.Additional;
+            var detected = RemotePattern.Detect(config);
+            isRemote = detected is not null || (Target.ForcesRemote && RemotePattern.IsRemoteShaped(config));
+            remoteUrl = detected ?? "";
+            if (RemotePattern.Decode(config) is { } remote)
+            {
+                ApplyRemoteFields(remote);
+            }
+            else
+            {
+                AuthKind = RemoteAuthKind.Automatic;
+                BearerToken = "";
+                HeaderName = "";
+                HeaderValue = "";
+                OAuthClientId = "";
+                OAuthClientSecret = "";
+                OAuthScopes = "";
+                remoteExtraArgs = [];
+                remotePassthroughEnv = new Dictionary<string, string>(StringComparer.Ordinal);
+            }
         }
-        EnvRows.Clear();
-        foreach (var row in EnvRowsFrom(model.Env))
+        finally
         {
-            EnvRows.Add(row);   // all values re-masked
+            suppressToolEvaluation = false;
         }
-        additional = model.Additional;
-        var detected = RemotePattern.Detect(config);
-        isRemote = detected is not null || (Target.ForcesRemote && RemotePattern.IsRemoteShaped(config));
-        remoteUrl = detected ?? "";
-        if (RemotePattern.Decode(config) is { } remote)
-        {
-            ApplyRemoteFields(remote);
-        }
-        else
-        {
-            AuthKind = RemoteAuthKind.Automatic;
-            BearerToken = "";
-            HeaderName = "";
-            HeaderValue = "";
-            OAuthClientId = "";
-            OAuthClientSecret = "";
-            OAuthScopes = "";
-            remoteExtraArgs = [];
-            remotePassthroughEnv = new Dictionary<string, string>(StringComparer.Ordinal);
-        }
+        EvaluateRequiredTool();
         RaiseAll();
     }
 

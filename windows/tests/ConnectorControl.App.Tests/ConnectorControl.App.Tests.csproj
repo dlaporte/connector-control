@@ -32,6 +32,7 @@
     <Compile Include="../ConnectorControl.Core.Tests/TestSupport/DelayQueue.cs" Link="TestSupport/DelayQueue.cs" />
     <Compile Include="../ConnectorControl.Core.Tests/TestSupport/MarshalQueue.cs" Link="TestSupport/MarshalQueue.cs" />
     <Compile Include="../ConnectorControl.Core.Tests/TestSupport/AppStateHarness.cs" Link="TestSupport/AppStateHarness.cs" />
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/FakeToolProbe.cs" Link="TestSupport/FakeToolProbe.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- The harness seeds Claude's config from the shared fixtures. -->
