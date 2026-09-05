@@ -28,8 +28,11 @@ public sealed class EditorModel : ObservableObject
     public const string AddArgumentTitle = "＋ Add argument";
     public const string AddVariableTitle = "＋ Add variable";
 
-    public static readonly IReadOnlyList<RemoteAuthKind> AuthKinds =
+    /// <summary>The picker's order, as an array so <see cref="AuthKindIndex"/> can search it without allocating.</summary>
+    private static readonly RemoteAuthKind[] AuthKindOrder =
         [RemoteAuthKind.Automatic, RemoteAuthKind.Bearer, RemoteAuthKind.Header, RemoteAuthKind.OAuthClient];
+
+    public static readonly IReadOnlyList<RemoteAuthKind> AuthKinds = AuthKindOrder;
 
     public static readonly IReadOnlyList<string> AuthKindTitles = AuthKinds.Select(AuthKindTitle).ToList();
 
@@ -214,7 +217,7 @@ public sealed class EditorModel : ObservableObject
     /// <summary>ComboBox binding over <see cref="AuthKindTitles"/>.</summary>
     public int AuthKindIndex
     {
-        get => AuthKinds.ToList().IndexOf(authKind);
+        get => Array.IndexOf(AuthKindOrder, authKind);
         set
         {
             if (value >= 0 && value < AuthKinds.Count)
