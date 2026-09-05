@@ -37,9 +37,10 @@ struct SettingsView: View {
                     }
                 }
         }
-        // Tall enough that the largest tab (General, with the Updates
-        // section) fits without scrolling.
-        .frame(width: 480, height: 500)
+        // Tall enough that the largest tab (Claude, with the Tools section
+        // in its worst case: every tool found only in the shell) fits
+        // without scrolling; the Windows Settings window uses the same size.
+        .frame(width: 480, height: 560)
         .sheet(isPresented: $showRestore) {
             RestoreSheetView().environmentObject(state)
         }
