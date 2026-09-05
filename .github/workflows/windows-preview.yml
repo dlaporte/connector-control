@@ -239,6 +239,9 @@ jobs:
           name: velopack-${{ matrix.rid }}
           path: windows/artifacts/${{ matrix.rid }}
           if-no-files-found: error
+          # ~145 MB per RID. The published prerelease is the durable copy of these files;
+          # the artifact only has to outlive the smoke and publish jobs and any re-run.
+          retention-days: 14
 
   smoke:
     name: Install and launch (win-x64)
@@ -330,6 +333,19 @@ jobs:
               --title "Connector Control $VERSION (Windows preview)" --notes-file notes/notes.md
           fi
 
+      # RECOVERY FROM A PARTIAL UPLOAD. `vpk upload github` has no overwrite flag (its whole
+      # option set is --merge --pre --publish --tag --channel --outputDir --repoUrl), so a
+      # re-run against a release that already carries assets dies with
+      #   There is already a remote asset named '...', and merging release files on GitHub is not supported.
+      # Recovery is manual, from the Mac. If the release is otherwise right, empty it and re-run
+      # the failed job, which reuses the artifacts this run already built:
+      #   for a in $(gh release view <tag> --json assets --jq '.assets[].name'); do \
+      #     gh release delete-asset <tag> "$a" --yes; done
+      #   gh run rerun <run-id> --failed && gh run watch <run-id> --exit-status
+      # If the release itself is wrong (wrong commit, not a prerelease), delete release and tag
+      # and re-push the tag for a completely fresh run:
+      #   gh release delete <tag> --yes --cleanup-tag && git tag -d <tag> \
+      #     && git tag <tag> && git push origin <tag>
       - name: Upload Velopack assets
         run: |
           for rid in win-x64 win-arm64; do
