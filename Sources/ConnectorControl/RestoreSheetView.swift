@@ -25,8 +25,14 @@ struct RestoreSheetView: View {
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
-                Button("Restore…") { confirming = true }
-                    .disabled(selection == nil)
+                Button("Restore…") {
+                    // A fresh attempt starts with a clean sheet, as RestoreModel
+                    // does on Windows: the previous attempt's error must not
+                    // outlive a new selection or a cancelled confirmation.
+                    restoreError = nil
+                    confirming = true
+                }
+                .disabled(selection == nil)
             }
         }
         .padding(16)
