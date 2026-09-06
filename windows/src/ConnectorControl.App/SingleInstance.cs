@@ -20,10 +20,19 @@ public sealed class SingleInstance : IDisposable
     private RegisteredWaitHandle? registration;
     private bool owned;
 
-    public SingleInstance()
+    public SingleInstance() : this(nameSuffix: "")
     {
-        mutex = new Mutex(initiallyOwned: true, MutexName, out owned);
-        showRequested = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
+    }
+
+    /// <summary>
+    /// Tests only: a suffix keeps a test's mutex and event apart from the shipped app's, which
+    /// may well be running on the same machine (the developer's PC, a reused runner) — with the
+    /// production names, the test would find "another instance" that is simply the real app.
+    /// </summary>
+    internal SingleInstance(string nameSuffix)
+    {
+        mutex = new Mutex(initiallyOwned: true, MutexName + nameSuffix, out owned);
+        showRequested = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName + nameSuffix);
     }
 
     /// <summary>False when another instance already owns the session.</summary>
