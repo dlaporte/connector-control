@@ -39,6 +39,11 @@
 
 name: Release
 
+# A rehearsal dispatch and a tag push must never build side by side; runs queue instead.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 on:
   push:
     tags:
@@ -460,6 +465,8 @@ jobs:
             # Re-run path: the release is already published and already "latest", so the Mac
             # assets are put back the only way left, with --clobber. That deletes and re-uploads
             # appcast.xml, which reopens the 404 window for about a second on a 2 KB file.
+            # The body is not refreshed on a re-run: notes.md came from the same CHANGELOG
+            # section, and only the assets can have been left incomplete.
             echo "Release $TAG already exists (re-run); reusing it and re-uploading the Mac assets."
             gh release upload "$TAG" "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml --clobber
           else
