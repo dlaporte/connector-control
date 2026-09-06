@@ -1,0 +1,218 @@
+# The Windows half of every build in this repo, in one place: restore/build/test, and — for a
+# release or a preview — the Velopack packaging and the install smoke test. release.yml,
+# windows-preview.yml and windows-ci.yml all call this, so the three cannot drift apart again
+# (they had: one verify step without `set -o pipefail`, one smoke job without the arm64
+# signature check, two spellings of the same signing decision).
+#
+# Inputs
+#   version          the version stamped into the assemblies and the Velopack package
+#                    (X.Y.Z for a release, X.Y.Z-preview.N for a preview). Unused when
+#                    package is false.
+#   prerelease       passes -Prerelease to package.ps1, which decides WHICH previous release
+#                    the delta package is built against: with it, the newest prerelease of the
+#                    channel (a preview follows previews); without it, the newest full release
+#                    carrying releases.<rid>.json — none before v1.3.0, so v1.3.0 shipped
+#                    without a delta package and v1.3.1 gets one against v1.3.0.
+#   require-signing  signing is mandatory: the package job writes the Azure Artifact Signing
+#                    metadata and passes -AzureTrustedSignFile, and the smoke job demands a
+#                    valid Authenticode signature on both RIDs. This is an explicit decision by
+#                    the caller — never inferred from whether a secret happens to be set. The
+#                    caller's prepare job is what proves the six AZURE_* secrets exist, and it
+#                    fails the run before any build minutes are spent when they do not.
+#   package          false runs the test job alone (windows-ci.yml's per-push build).
+#
+# The caller passes `secrets: inherit`; GITHUB_TOKEN and the AZURE_* secrets are read here.
+# Every job carries its own timeout-minutes: a `uses:` job in the caller cannot set one.
+#
+# The `notes` artifact is an INPUT to the package job: the caller's prepare job uploads it, and
+# its text is embedded in the package and shown by the in-app update dialog.
+# Artifacts produced: test-results, velopack-win-x64, velopack-win-arm64, smoke-logs.
+name: Windows build
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to stamp into the packages (X.Y.Z or X.Y.Z-preview.N).'
+        required: true
+        type: string
+      prerelease:
+        description: 'Build the delta against the previous PRERELEASE of the channel (-Prerelease).'
+        required: false
+        default: false
+        type: boolean
+      require-signing:
+        description: 'Signing is mandatory: sign the packages and require a valid signature in the smoke test.'
+        required: true
+        type: boolean
+      package:
+        description: 'Run the package and smoke jobs. false = test only.'
+        required: false
+        default: true
+        type: boolean
+
+# No permissions block: a called workflow never holds more than its caller, and nothing here
+# writes to the repository. The callers stay read-only; only their publish jobs raise that.
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: windows/global.json
+
+      - name: Restore
+        run: dotnet restore windows/ConnectorControl.slnx
+
+      - name: Build
+        run: dotnet build windows/ConnectorControl.slnx --no-restore -c Release
+
+      # ci.runsettings sets xUnit FailSkips, so a test that silently skips on the
+      # runner (a Windows-only test that did not run) fails the build.
+      - name: Test
+        run: dotnet test windows/ConnectorControl.slnx --no-build -c Release --settings windows/ci.runsettings --logger "trx;LogFileName=results.trx" --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+          retention-days: 14
+
+  package:
+    name: Package ${{ matrix.rid }}
+    needs: test
+    if: inputs.package
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        rid: [win-x64, win-arm64]
+    env:
+      VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: windows/global.json
+
+      - name: Install vpk 1.2.0
+        run: |
+          dotnet tool install --global vpk --version 1.2.0
+          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: notes
+          path: notes
+
+      - name: Write Azure Artifact Signing metadata
+        if: inputs.require-signing
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+        run: |
+          foreach ($name in 'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_SIGNING_ENDPOINT', 'AZURE_SIGNING_ACCOUNT', 'AZURE_SIGNING_PROFILE') {
+            if (-not [Environment]::GetEnvironmentVariable($name)) { throw "require-signing is set but the $name secret is missing" }
+          }
+          $file = Join-Path $env:RUNNER_TEMP 'azure-signing.json'
+          @{ Endpoint = $env:AZURE_SIGNING_ENDPOINT; CodeSigningAccountName = $env:AZURE_SIGNING_ACCOUNT; CertificateProfileName = $env:AZURE_SIGNING_PROFILE } |
+            ConvertTo-Json | Set-Content -Path $file -Encoding utf8NoBOM
+          "SIGN_FILE=$file" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Unsigned build
+        if: ${{ !inputs.require-signing }}
+        run: Write-Host "::warning::require-signing is false; this build is unsigned and SmartScreen will warn."
+
+      # package.ps1 does the dotnet publish, the `vpk download github` of the previous release
+      # and the `vpk pack` in ONE invocation, so the download cannot carry a tighter timeout of
+      # its own without splitting the script. 12 minutes covers publish + download + pack (the
+      # step takes ~4 on a green run) while still failing fast if the download stalls.
+      - name: Publish and pack
+        timeout-minutes: 12
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          VERSION: ${{ inputs.version }}
+          RID: ${{ matrix.rid }}
+          PRERELEASE: ${{ inputs.prerelease }}
+          REQUIRE_SIGNING: ${{ inputs.require-signing }}
+        run: |
+          $extra = @{}
+          if ($env:PRERELEASE -eq 'true') { $extra['Prerelease'] = $true }
+          if ($env:REQUIRE_SIGNING -eq 'true') {
+            # An empty -AzureTrustedSignFile packs UNSIGNED with nothing but a vpk warning, and
+            # the run would not fail until the smoke job two jobs later. Assert it here instead.
+            if (-not $env:SIGN_FILE) { throw 'require-signing is set but SIGN_FILE is empty' }
+            $extra['AzureTrustedSignFile'] = $env:SIGN_FILE
+          }
+          ./windows/scripts/package.ps1 -Version $env:VERSION -Runtime $env:RID -ReleaseNotes notes/notes.md -DownloadPrevious @extra
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: velopack-${{ matrix.rid }}
+          path: windows/artifacts/${{ matrix.rid }}
+          if-no-files-found: error
+          # ~145 MB per RID. The published release is the durable copy of these files;
+          # the artifact only has to outlive the smoke and publish jobs and any re-run.
+          retention-days: 14
+
+  smoke:
+    name: Install and launch (win-x64)
+    needs: package
+    if: inputs.package
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: velopack-win-x64
+          path: artifacts
+
+      # Only the signature check below reads the arm64 package; skip the ~145 MB otherwise.
+      - uses: actions/download-artifact@v4
+        if: inputs.require-signing
+        with:
+          name: velopack-win-arm64
+          path: artifacts-arm64
+
+      # With require-signing, -ExpectSigned demands that Setup.exe and the installed exe carry a
+      # valid Authenticode signature, or this job — and therefore the release — fails.
+      - name: Silent install, launch, first-run checks
+        env:
+          VERSION: ${{ inputs.version }}
+          REQUIRE_SIGNING: ${{ inputs.require-signing }}
+        run: |
+          $signed = @{}
+          if ($env:REQUIRE_SIGNING -eq 'true') { $signed['ExpectSigned'] = $true }
+          ./windows/scripts/smoke-test.ps1 -SetupExe (Resolve-Path artifacts/ConnectorControl-win-x64-Setup.exe).Path -Version $env:VERSION -Channel win-x64 -Seconds 20 -LogDir "$env:RUNNER_TEMP/smoke-logs" @signed
+
+      # The arm64 package cannot be installed on this x64 runner; its signature can be checked.
+      - name: arm64 Setup.exe signature
+        if: inputs.require-signing
+        run: |
+          $sig = Get-AuthenticodeSignature -FilePath artifacts-arm64/ConnectorControl-win-arm64-Setup.exe
+          $subject = if ($null -ne $sig.SignerCertificate) { $sig.SignerCertificate.Subject } else { '(no certificate)' }
+          Write-Host "ConnectorControl-win-arm64-Setup.exe: $($sig.Status) $subject"
+          if ($sig.Status -ne 'Valid') { throw "arm64 Setup.exe is not validly signed ($($sig.Status))" }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-logs
+          path: ${{ runner.temp }}/smoke-logs
+          if-no-files-found: ignore
