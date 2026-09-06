@@ -1,6 +1,9 @@
 # Build and test the Windows app on every push/PR that touches it. Sources/ConnectorControlCore
 # is watched too: the Core tests assert Apple Foundation's JSON output byte for byte against
 # the goldens under Tests/Fixtures, so a Mac serialization change must re-run them here.
+#
+# The build itself is .github/workflows/windows-build.yml with package: false — the same
+# restore/build/test release.yml and windows-preview.yml run, without the packaging.
 name: Windows CI
 
 on:
@@ -11,12 +14,14 @@ on:
       - 'Tests/Fixtures/**'
       - 'Sources/ConnectorControlCore/**'
       - '.github/workflows/windows-ci.yml'
+      - '.github/workflows/windows-build.yml'
   pull_request:
     paths:
       - 'windows/**'
       - 'Tests/Fixtures/**'
       - 'Sources/ConnectorControlCore/**'
       - '.github/workflows/windows-ci.yml'
+      - '.github/workflows/windows-build.yml'
 
 permissions:
   contents: read
@@ -28,31 +33,12 @@ concurrency:
 
 jobs:
   test:
-    name: Build and test
-    runs-on: windows-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: windows/global.json
-
-      - name: Restore
-        run: dotnet restore windows/ConnectorControl.slnx
-
-      - name: Build
-        run: dotnet build windows/ConnectorControl.slnx --no-restore -c Release
-
-      # ci.runsettings sets xUnit FailSkips, so a test that silently skips on the
-      # runner (a Windows-only test that did not run) fails the build.
-      - name: Test
-        run: dotnet test windows/ConnectorControl.slnx --no-build -c Release --settings windows/ci.runsettings --logger "trx;LogFileName=results.trx" --results-directory TestResults
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: TestResults
-          retention-days: 14
+    name: Windows
+    # version is required by the reusable workflow but unused with package: false — nothing here
+    # is stamped or packed; require-signing: false for the same reason (no packages to sign).
+    uses: ./.github/workflows/windows-build.yml
+    with:
+      version: 0.0.0-ci
+      require-signing: false
+      package: false
+    secrets: inherit
