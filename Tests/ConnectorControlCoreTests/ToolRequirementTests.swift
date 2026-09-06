@@ -48,4 +48,22 @@ final class ToolRequirementTests: XCTestCase {
             "a non-string arg empties the args")
         XCTAssertNil(ToolRequirement.requiredTool(for: .string("npx")))
     }
+
+    func testRequiredToolsAcrossConfigsIsDedupedAndOrdered() {
+        let configs: [JSONValue] = [
+            RemotePattern.make(url: "https://a.dev/mcp"),                                   // npx
+            RemotePattern.make(url: "https://b.dev/mcp"),                                   // npx again
+            .object(["command": .string("uvx"), "args": .array([.string("some-server")])]),
+            .object(["command": .string("/usr/local/bin/node")]),                           // a path: no tool
+            .object(["command": .string("python")]),                                        // not one of the four
+            .string("not an object"),
+        ]
+        XCTAssertEqual(ToolRequirement.requiredTools(for: configs), [.npx, .uvx])
+        XCTAssertEqual(ToolRequirement.requiredTools(for: []), [])
+        XCTAssertEqual(ToolRequirement.requiredTools(for: [.object(["command": .string("python")])]), [])
+        XCTAssertEqual(ToolRequirement.requiredTools(for: [
+            .object(["command": .string("uv")]),
+            .object(["command": .string("node")]),
+        ]), [.node, .uv], "Tool.allCases order, not the configs' order")
+    }
 }

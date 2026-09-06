@@ -19,12 +19,26 @@ struct PopoverView: View {
         }
         .frame(minWidth: 240, maxWidth: 380)
         .background(WindowAutoSizer())
-        .onAppear { state.reload() }
+        .onAppear {
+            state.reload()
+            probeRowTools()
+        }
     }
 
     private func openEditor(_ target: EditTarget) {
         openWindow(id: "editor", value: target)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// The rows' launchers, asked about once per open (addendum 2026-09-06-row-glyph
+    /// §3): only the tools the listed connectors need and the cache does not have
+    /// yet. Nothing required, or everything cached, spawns no process; `refreshTools`
+    /// coalesces a tool already in flight.
+    private func probeRowTools() {
+        let needed = ToolRequirement.requiredTools(for: state.store.mcps.values.map(\.config))
+            .filter { state.toolStatuses[$0] == nil }
+        guard !needed.isEmpty else { return }
+        state.refreshTools(needed)
     }
 
     private var header: some View {
@@ -304,6 +318,16 @@ struct MCPRow: View {
     let name: String
     var onEdit: () -> Void
 
+    /// The same rule the editor and Settings use (addendum 2026-09-06-row-glyph §2):
+    /// the entry's required tool, then that tool's cached status. nil while the
+    /// status is unknown or the tool is where Claude Desktop looks — so the three
+    /// surfaces cannot disagree.
+    private var toolWarning: String? {
+        guard let entry = state.store.mcps[name],
+              let tool = ToolRequirement.requiredTool(for: entry.config) else { return nil }
+        return ToolNote.rowWarning(tool: tool, status: state.toolStatuses[tool])
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             Toggle("", isOn: Binding(
@@ -315,6 +339,15 @@ struct MCPRow: View {
             Text(name).fontWeight(.medium)
                 .lineLimit(1)
                 .layoutPriority(1)
+            if let warning = toolWarning {
+                // Advisory only: the switch above stays live and the row height is
+                // unchanged. The tooltip sends the user to the editor's full note.
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .imageScale(.small)
+                    .foregroundStyle(.orange)
+                    .help(warning)
+                    .accessibilityLabel(warning)
+            }
             Spacer()
             Button {
                 onEdit()

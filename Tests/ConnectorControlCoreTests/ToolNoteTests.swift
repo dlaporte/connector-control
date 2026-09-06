@@ -51,4 +51,22 @@ final class ToolNoteTests: XCTestCase {
         XCTAssertEqual(ToolNote.settingsHeader, "Tools")
         XCTAssertEqual(ToolNote.settingsCaption, "Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them.")
     }
+
+    func testRowWarningIsTheRowTooltipForEachStatus() {
+        XCTAssertNil(ToolNote.rowWarning(tool: .npx, status: nil),
+                     "unknown must never flash a glyph before the probe has answered")
+        XCTAssertNil(ToolNote.rowWarning(tool: .npx, status: .found(path: "/opt/homebrew/bin/npx", version: "10.9.2")))
+        XCTAssertNil(ToolNote.rowWarning(tool: .npx, status: .found(path: "/opt/homebrew/bin/npx", version: nil)))
+        XCTAssertEqual(ToolNote.rowWarning(tool: .npx, status: .notFound),
+                       "Needs npx, which wasn’t found. Edit to see how to install it.")
+        XCTAssertEqual(ToolNote.rowWarning(tool: .uvx, status: .notFound),
+                       "Needs uvx, which wasn’t found. Edit to see how to install it.")
+        XCTAssertEqual(ToolNote.rowWarning(tool: .node,
+                                           status: .foundInShellOnly(path: "/Users/me/.nvm/bin/node", version: "22.11.0")),
+                       "Needs node, which Claude Desktop may not see. Edit to see how to fix it.")
+        XCTAssertEqual(ToolNote.rowMissingText(.uv),
+                       "Needs uv, which wasn’t found. Edit to see how to install it.")
+        XCTAssertEqual(ToolNote.rowShellOnlyText(.uv),
+                       "Needs uv, which Claude Desktop may not see. Edit to see how to fix it.")
+    }
 }

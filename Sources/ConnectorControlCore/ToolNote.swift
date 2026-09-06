@@ -55,6 +55,32 @@ public struct ToolNote: Equatable, Sendable {
         }
     }
 
+    /// The row glyph's tooltip in the popover (addendum 2026-09-06-row-glyph §2).
+    /// Short on purpose: it names the launcher and sends the user to the editor,
+    /// where the full note (spec §3.4) and the install line live.
+    public static func rowMissingText(_ tool: Tool) -> String {
+        "Needs \(tool.name), which wasn’t found. Edit to see how to install it."
+    }
+
+    /// macOS only: the tool is on the login shell's PATH but not where Claude
+    /// Desktop looks (spec §3.2.3 state B). Windows has no such state (§6 D1).
+    public static func rowShellOnlyText(_ tool: Tool) -> String {
+        "Needs \(tool.name), which Claude Desktop may not see. Edit to see how to fix it."
+    }
+
+    /// The row's tooltip, or nil for no glyph. Unknown returns nil: a row must
+    /// not warn before the probe has answered.
+    public static func rowWarning(tool: Tool, status: ToolStatus?) -> String? {
+        switch status {
+        case nil, .found?:
+            return nil
+        case .notFound?:
+            return rowMissingText(tool)
+        case .foundInShellOnly?:
+            return rowShellOnlyText(tool)
+        }
+    }
+
     /// The Settings row's right-hand text.
     public static func statusText(_ status: ToolStatus?) -> String {
         switch status {

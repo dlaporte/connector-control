@@ -29,6 +29,14 @@ public enum ToolRequirement {
         return requiredTool(command: command, args: args)
     }
 
+    /// Every tool the given configs need, deduplicated and in `Tool.allCases`
+    /// order — what the popover must have probed before it can decide which rows
+    /// carry a warning (addendum 2026-09-06-row-glyph §3).
+    public static func requiredTools(for configs: [JSONValue]) -> [Tool] {
+        let needed = Set(configs.compactMap { requiredTool(for: $0) })
+        return Tool.allCases.filter(needed.contains)
+    }
+
     /// Lower-cased basename without one trailing `.cmd`/`.exe`; nil for blank
     /// or path-like tokens.
     static func normalized(_ token: String) -> String? {
