@@ -1,0 +1,54 @@
+# Build and test the Mac app on every push/PR that touches it. This is where `swift test`
+# runs in CI: the release build (scripts/build-app.sh) runs `swift build` alone, and
+# GoldenFileTests.testGoldensAreCurrent — the Mac half of the JSON byte contract the
+# Windows suite asserts against — has no other gate.
+name: Mac CI
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - 'scripts/**'
+      - '.github/workflows/mac-ci.yml'
+  pull_request:
+    paths:
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - 'scripts/**'
+      - '.github/workflows/mac-ci.yml'
+
+permissions:
+  contents: read
+
+# A newer push to the same branch supersedes a run still going.
+concurrency:
+  group: mac-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      # test-mac.sh fails on any failure and on any skip other than the deliberate one.
+      - name: Test
+        run: ./scripts/test-mac.sh
+
+      # The same assembly the release performs, ad-hoc signed: a broken build-app.sh,
+      # generate-icon.swift or Sparkle embedding fails here instead of on a tag.
+      - name: Build the app bundle
+        run: ./scripts/build-app.sh

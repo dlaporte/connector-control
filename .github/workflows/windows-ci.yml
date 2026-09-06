@@ -1,4 +1,6 @@
-# Build and test the Windows app on every push/PR that touches it.
+# Build and test the Windows app on every push/PR that touches it. Sources/ConnectorControlCore
+# is watched too: the Core tests assert Apple Foundation's JSON output byte for byte against
+# the goldens under Tests/Fixtures, so a Mac serialization change must re-run them here.
 name: Windows CI
 
 on:
@@ -7,19 +9,28 @@ on:
     paths:
       - 'windows/**'
       - 'Tests/Fixtures/**'
+      - 'Sources/ConnectorControlCore/**'
       - '.github/workflows/windows-ci.yml'
   pull_request:
     paths:
       - 'windows/**'
       - 'Tests/Fixtures/**'
+      - 'Sources/ConnectorControlCore/**'
       - '.github/workflows/windows-ci.yml'
 
 permissions:
   contents: read
 
+# A newer push to the same branch supersedes a run still going.
+concurrency:
+  group: windows-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: Build and test
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -44,3 +55,4 @@ jobs:
         with:
           name: test-results
           path: TestResults
+          retention-days: 14

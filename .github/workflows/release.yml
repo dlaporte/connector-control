@@ -5,6 +5,8 @@
 #   prepare          (ubuntu)   version from the tag; CHANGELOG section -> notes.md (gate 1);
 #                               the tagged commit is on master (gate 2); all six Windows
 #                               signing secrets exist (gate 3) — a release is never unsigned
+#   mac-test         (macos-15) swift test; a failed test, or a skipped one other than the
+#                               deliberate goldens-regeneration skip, stops the run here
 #   mac              (macos-15) build, sign, notarize, DMG, appcast   -> artifact "mac"
 #   windows-test     (windows)  restore / build / test; a skipped test fails the run
 #   windows-package  (windows)  matrix win-x64, win-arm64: publish + signed vpk pack -> "velopack-<rid>"
@@ -149,9 +151,22 @@ jobs:
           path: notes.md
           if-no-files-found: error
 
+  mac-test:
+    name: macOS build and test
+    needs: prepare
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same gate as mac-ci.yml (scripts/test-mac.sh): the suite must pass with exactly the
+      # one deliberate skip before any signing or notarization minutes are spent.
+      - name: Test
+        run: ./scripts/test-mac.sh
+
   mac:
     name: macOS build, sign, notarize
-    needs: prepare
+    needs: [prepare, mac-test]
     runs-on: macos-15
     # Longest job on the slowest runner: `notarytool submit --wait` blocks on Apple's
     # service twice (app, then DMG). 12-20 min is normal; 60 is a hang, not a queue.
