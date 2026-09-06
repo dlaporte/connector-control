@@ -1,0 +1,16 @@
+<Project>
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Lets the WPF project compile on macOS/Linux (reference packs are downloaded). -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- CI overrides with -p:Version=<tag version>. -->
+    <Version>0.0.0</Version>
+    <Company>David LaPorte</Company>
+    <Product>Connector Control</Product>
+    <Copyright>© 2026 David LaPorte</Copyright>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+</Project>

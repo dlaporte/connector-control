@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <!-- xunit.v3 supplies the entry point; stop Microsoft.NET.Test.Sdk from generating a second one. -->
+    <GenerateProgramFile>false</GenerateProgramFile>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>ConnectorControl.App.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/ConnectorControl.App/ConnectorControl.App.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Shared with the Core tests; linked, not copied. -->
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/TempDir.cs" Link="TestSupport/TempDir.cs" />
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/FakePathProbe.cs" Link="TestSupport/FakePathProbe.cs" />
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/Fixtures.cs" Link="TestSupport/Fixtures.cs" />
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/FakeSettings.cs" Link="TestSupport/FakeSettings.cs" />
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/FakeClaudeProcess.cs" Link="TestSupport/FakeClaudeProcess.cs" />
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/FakeNotifier.cs" Link="TestSupport/FakeNotifier.cs" />
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/FakeDialogs.cs" Link="TestSupport/FakeDialogs.cs" />
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/FakeAutostart.cs" Link="TestSupport/FakeAutostart.cs" />
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/FakeClaudeInstall.cs" Link="TestSupport/FakeClaudeInstall.cs" />
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/FakeUpdater.cs" Link="TestSupport/FakeUpdater.cs" />
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/DelayQueue.cs" Link="TestSupport/DelayQueue.cs" />
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/MarshalQueue.cs" Link="TestSupport/MarshalQueue.cs" />
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/AppStateHarness.cs" Link="TestSupport/AppStateHarness.cs" />
+    <Compile Include="../ConnectorControl.Core.Tests/TestSupport/FakeToolProbe.cs" Link="TestSupport/FakeToolProbe.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The harness seeds Claude's config from the shared fixtures. -->
+    <Content Include="../../../Tests/Fixtures/**/*" Link="Fixtures/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The app icon, for AppIconTests. -->
+    <Content Include="../../assets/ConnectorControl.ico" Link="Assets/ConnectorControl.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The WPF SDK removes System.IO from ImplicitUsings; this test project and the
+         linked TestSupport files need it (Path, Directory, IOException). -->
+    <Using Include="System.IO" />
+  </ItemGroup>
+</Project>

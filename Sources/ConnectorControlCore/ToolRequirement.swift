@@ -1,0 +1,52 @@
+import Foundation
+
+/// Which of the four tools a connector's command needs (spec §3.3): the first
+/// token by basename, case-insensitive, `.cmd`/`.exe` stripped, one `cmd /c`
+/// unwrapped. A command written as a path (`/usr/local/bin/npx`) is left
+/// alone — the user chose it deliberately and PATH lookup does not apply.
+public enum ToolRequirement {
+    public static func requiredTool(command: String, args: [String]) -> Tool? {
+        guard let first = normalized(command) else { return nil }
+        if first == "cmd", args.count >= 2, args[0].lowercased() == "/c" {
+            guard let inner = normalized(args[1]) else { return nil }
+            return Tool(name: inner)
+        }
+        return Tool(name: first)
+    }
+
+    /// The rule applied to a config object's `command` and string `args`
+    /// (any non-string arg empties the list). Non-objects → nil.
+    public static func requiredTool(for config: JSONValue) -> Tool? {
+        guard case .object(let object) = config,
+              case .string(let command)? = object["command"] else { return nil }
+        var args: [String] = []
+        if case .array(let raw)? = object["args"] {
+            for item in raw {
+                guard case .string(let s) = item else { args = []; break }
+                args.append(s)
+            }
+        }
+        return requiredTool(command: command, args: args)
+    }
+
+    /// Every tool the given configs need, deduplicated and in `Tool.allCases`
+    /// order — what the popover must have probed before it can decide which rows
+    /// carry a warning (addendum 2026-09-06-row-glyph §3).
+    public static func requiredTools(for configs: [JSONValue]) -> [Tool] {
+        let needed = Set(configs.compactMap { requiredTool(for: $0) })
+        return Tool.allCases.filter(needed.contains)
+    }
+
+    /// Lower-cased basename without one trailing `.cmd`/`.exe`; nil for blank
+    /// or path-like tokens.
+    static func normalized(_ token: String) -> String? {
+        let trimmed = token.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, !trimmed.contains("/"), !trimmed.contains("\\") else { return nil }
+        var name = trimmed.lowercased()
+        for ext in [".cmd", ".exe"] where name.hasSuffix(ext) {
+            name.removeLast(ext.count)
+            break
+        }
+        return name
+    }
+}

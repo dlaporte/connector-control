@@ -1,6 +1,26 @@
-# Build, sign, notarize, and publish Connector Control.dmg on version tags.
+# Build, sign, and publish one Connector Control release — the Mac DMG with its
+# Sparkle appcast AND the Windows installers — from a single version tag.
 #
-# Required repository secrets (same names as the trailcache repo):
+# Jobs:
+#   prepare          (ubuntu)   version from the tag; CHANGELOG section -> notes.md (gate 1);
+#                               the tagged commit is on master (gate 2); all six Windows
+#                               signing secrets exist (gate 3) — a release is never unsigned
+#   mac              (macos-15) build, sign, notarize, DMG, appcast   -> artifact "mac"
+#   windows-test     (windows)  restore / build / test; a skipped test fails the run
+#   windows-package  (windows)  matrix win-x64, win-arm64: publish + signed vpk pack -> "velopack-<rid>"
+#   windows-smoke    (windows)  silent install + launch of the x64 package, signature required;
+#                               arm64 Setup.exe signature checked
+#   publish          (ubuntu)   the ONLY writer: creates the release WITH the DMG and appcast
+#                               attached (so it is never "latest" without its feed), uploads the
+#                               Windows assets with gh --clobber, verifies releases/latest and
+#                               the served appcast (version, build, enclosure, EdDSA signature)
+#
+# Trigger: exact vX.Y.Z tags only (see below). workflow_dispatch runs everything EXCEPT
+# publish — a rehearsal that cannot create a release (its version input names the
+# CHANGELOG section and stamps the packages; the artifacts are the only output).
+#
+# Required repository secrets
+#   Mac (same names as the trailcache repo):
 #   APPLE_CERTIFICATE          base64-encoded Developer ID Application .p12
 #   APPLE_CERTIFICATE_PASSWORD password for the .p12
 #   APPLE_SIGNING_IDENTITY     e.g. "Developer ID Application: David LaPorte (TEAMID)"
@@ -8,11 +28,21 @@
 #   APPLE_PASSWORD             app-specific password for that Apple ID
 #   APPLE_TEAM_ID              10-character team identifier
 #   KEYCHAIN_PASSWORD          any string; protects the throwaway CI keychain
+#   SPARKLE_ED_PRIVATE_KEY     EdDSA private key that signs the appcast (backup: login Keychain)
+#   Windows (Azure Artifact Signing, design spec §8.4) — ALL SIX are required:
+#   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET   service principal with the
+#                                                          "Trusted Signing Certificate Profile Signer"
+#                                                          role (DefaultAzureCredential, Azure.Identity)
+#   AZURE_SIGNING_ENDPOINT                                 e.g. https://eus.codesigning.azure.net
+#   AZURE_SIGNING_ACCOUNT                                  the signing account name
+#   AZURE_SIGNING_PROFILE                                  the certificate profile name
 
 name: Release
 
-permissions:
-  contents: write
+# A rehearsal dispatch and a tag push must never build side by side; runs queue instead.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 on:
   push:
@@ -22,21 +52,57 @@ on:
       # without --prerelease, become "latest", and its appcast would be
       # served from SUFeedURL to every auto-updating install.
       - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to rehearse, X.Y.Z (needs a "## vX.Y.Z" section in CHANGELOG.md). Nothing is published.'
+        required: true
+        type: string
+
+# Read-only by default; only the publish job raises this to contents: write.
+permissions:
+  contents: read
 
 jobs:
-  release:
-    runs-on: macos-15
+  prepare:
+    name: Version, notes, and gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.derive.outputs.tag }}
+      version: ${{ steps.derive.outputs.version }}
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Interpolated once here rather than inside run: blocks (injection hygiene).
-      TAG: ${{ github.ref_name }}
+      INPUT_VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Derive version
+        id: derive
+        run: |
+          # A tag push is the real thing; a dispatch rehearses version X.Y.Z from the input.
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "$INPUT_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+              || { echo "::error::version input '$INPUT_VERSION' is not X.Y.Z"; exit 1; }
+            TAG="v$INPUT_VERSION"
+          else
+            TAG="$GITHUB_REF_NAME"
+          fi
+          {
+            echo "tag=$TAG"
+            echo "version=${TAG#v}"
+          } >> "$GITHUB_OUTPUT"
+          echo "$GITHUB_EVENT_NAME -> $TAG (${TAG#v})"
 
       # First, before minutes of build/notarization: the changelog is the
-      # single source for the GitHub release notes AND the Sparkle update
-      # dialog, and failing here enforces that every release ships with one.
+      # single source for the GitHub release notes, the Sparkle update
+      # dialog AND the Windows update dialog, and failing here enforces that
+      # every release ships with one.
       - name: Extract changelog section
+        env:
+          TAG: ${{ steps.derive.outputs.tag }}
         run: |
           awk -v ver="## ${TAG}" '$0 == ver {found=1; next}
                /^## / && found {exit} found {print}' CHANGELOG.md > notes.md
@@ -45,6 +111,64 @@ jobs:
             exit 1
           fi
           cat notes.md
+
+      # Releases build from master only. A v* tag pushed from another branch would
+      # otherwise ship that branch as THE Mac release at releases/latest.
+      - name: Require the tagged commit to be on master
+        run: |
+          git fetch --no-tags origin master:refs/remotes/origin/master
+          git merge-base --is-ancestor HEAD origin/master \
+            || { echo "::error::$(git rev-parse --short HEAD) is not on master — tag releases from master only."; exit 1; }
+          echo "$(git rev-parse --short HEAD) is on master"
+
+      # A release is never built unsigned. windows-preview.yml warns and continues
+      # without these secrets; here their absence fails the run before any build starts.
+      - name: Require the Windows signing secrets
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+        run: |
+          missing=""
+          for name in AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET \
+                      AZURE_SIGNING_ENDPOINT AZURE_SIGNING_ACCOUNT AZURE_SIGNING_PROFILE; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Windows signing secrets missing:$missing. A release is never built unsigned — add them under Settings ▸ Secrets and variables ▸ Actions, then re-run."
+            exit 1
+          fi
+          echo "All six AZURE_* signing secrets are present."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notes
+          path: notes.md
+          if-no-files-found: error
+
+  mac:
+    name: macOS build, sign, notarize
+    needs: prepare
+    runs-on: macos-15
+    # Longest job on the slowest runner: `notarytool submit --wait` blocks on Apple's
+    # service twice (app, then DMG). 12-20 min is normal; 60 is a hang, not a queue.
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Interpolated once here rather than inside run: blocks (injection hygiene).
+      TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # notes.md lands in the working directory so the appcast step reads it
+      # exactly as it always has.
+      - uses: actions/download-artifact@v4
+        with:
+          name: notes
+          path: .
 
       - name: Import signing certificate
         env:
@@ -141,17 +265,288 @@ jobs:
             -o appcast.xml appcast-work
           cat appcast.xml
 
-      - name: Create GitHub Release
+      # The publish job posts these; nothing is uploaded to GitHub from here.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: |
+            ConnectorControl_*.dmg
+            appcast.xml
+          if-no-files-found: error
+          retention-days: 14
+
+  windows-test:
+    name: Windows build and test
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: windows/global.json
+
+      - name: Restore
+        run: dotnet restore windows/ConnectorControl.slnx
+
+      - name: Build
+        run: dotnet build windows/ConnectorControl.slnx --no-restore -c Release
+
+      # Same gate as windows-ci.yml: FailSkips makes a skipped Windows-only test a failure.
+      - name: Test
+        run: dotnet test windows/ConnectorControl.slnx --no-build -c Release --settings windows/ci.runsettings
+
+  windows-package:
+    name: Windows package ${{ matrix.rid }}
+    needs: [prepare, windows-test]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        rid: [win-x64, win-arm64]
+    env:
+      VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: windows/global.json
+
+      - name: Install vpk 1.2.0
         run: |
-          VERSION="${TAG#v}"
+          dotnet tool install --global vpk --version 1.2.0
+          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: notes
+          path: notes
+
+      # Unconditional: prepare has already failed the run if any signing secret is missing.
+      - name: Write Azure Artifact Signing metadata
+        env:
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+        run: |
+          $file = Join-Path $env:RUNNER_TEMP 'azure-signing.json'
+          @{ Endpoint = $env:AZURE_SIGNING_ENDPOINT; CodeSigningAccountName = $env:AZURE_SIGNING_ACCOUNT; CertificateProfileName = $env:AZURE_SIGNING_PROFILE } |
+            ConvertTo-Json | Set-Content -Path $file -Encoding utf8NoBOM
+          "SIGN_FILE=$file" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      # package.ps1 does the dotnet publish, the `vpk download github` of the previous
+      # release and the `vpk pack` in ONE invocation (windows-preview.yml explains the
+      # 12-minute step timeout). No -Prerelease here: "previous" is the newest full v*
+      # release carrying releases.<rid>.json — none before v1.3.0, so the first release
+      # ships without a delta package and v1.3.1 gets one against v1.3.0.
+      - name: Publish and pack (signed)
+        timeout-minutes: 12
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          RID: ${{ matrix.rid }}
+        run: |
+          ./windows/scripts/package.ps1 -Version $env:VERSION -Runtime $env:RID -ReleaseNotes notes/notes.md -DownloadPrevious -AzureTrustedSignFile $env:SIGN_FILE
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: velopack-${{ matrix.rid }}
+          path: windows/artifacts/${{ matrix.rid }}
+          if-no-files-found: error
+          # ~145 MB per RID. The published release is the durable copy of these files;
+          # the artifact only has to outlive the smoke and publish jobs and any re-run.
+          retention-days: 14
+
+  windows-smoke:
+    name: Windows install and launch (win-x64)
+    needs: [prepare, windows-package]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: velopack-win-x64
+          path: artifacts
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: velopack-win-arm64
+          path: artifacts-arm64
+
+      # -ExpectSigned is unconditional: Setup.exe and the installed exe must carry a
+      # valid Authenticode signature, or this job — and therefore the release — fails.
+      - name: Silent install, launch, first-run checks (signature required)
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          ./windows/scripts/smoke-test.ps1 -SetupExe (Resolve-Path artifacts/ConnectorControl-win-x64-Setup.exe).Path -Version $env:VERSION -Channel win-x64 -Seconds 20 -LogDir "$env:RUNNER_TEMP/smoke-logs" -ExpectSigned
+
+      # The arm64 package cannot be installed on this x64 runner; its signature can be checked.
+      - name: arm64 Setup.exe signature
+        run: |
+          $sig = Get-AuthenticodeSignature -FilePath artifacts-arm64/ConnectorControl-win-arm64-Setup.exe
+          $subject = if ($null -ne $sig.SignerCertificate) { $sig.SignerCertificate.Subject } else { '(no certificate)' }
+          Write-Host "ConnectorControl-win-arm64-Setup.exe: $($sig.Status) $subject"
+          if ($sig.Status -ne 'Valid') { throw "arm64 Setup.exe is not validly signed ($($sig.Status))" }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-logs
+          path: ${{ runner.temp }}/smoke-logs
+          if-no-files-found: ignore
+
+  publish:
+    name: Publish release
+    needs: [prepare, mac, windows-package, windows-smoke]
+    # The only job that writes anything. A workflow_dispatch rehearsal never reaches it.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      REPO_URL: https://github.com/dlaporte/connector-control
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: notes
+          path: notes
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: mac
+          path: mac
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: velopack-win-x64
+          path: artifacts/win-x64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: velopack-win-arm64
+          path: artifacts/win-arm64
+
+      - name: Create the release, with the Mac assets already attached
+        run: |
+          set -o pipefail
           # Drafts and prereleases must not be the compare base.
           PREV=$(gh release list --limit 1 --exclude-drafts --exclude-pre-releases \
             --json tagName --jq '.[0].tagName' || true)
-          if [ -n "$PREV" ]; then
-            printf '\n**Full changelog**: https://github.com/dlaporte/connector-control/compare/%s...%s\n' \
-              "$PREV" "$TAG" >> notes.md
+          if [ -n "$PREV" ] && [ "$PREV" != "$TAG" ]; then
+            printf '\n**Full changelog**: %s/compare/%s...%s\n' "$REPO_URL" "$PREV" "$TAG" >> notes/notes.md
           fi
-          if ! gh release view "$TAG" > /dev/null 2>&1; then
-            gh release create "$TAG" --title "Connector Control $VERSION" --notes-file notes.md
+          # A stale DRAFT with this tag (a leftover of an earlier failed run) would make GitHub
+          # refuse to publish anything else under the tag, so drafts are removed first; they are
+          # invisible to users and carry nothing a fresh run does not rebuild.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" | while read -r id; do
+            echo "Deleting stale draft release $id for $TAG"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
+          done
+          if EXISTING=$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease 2>/dev/null); then
+            if [ "$EXISTING" != "false" ]; then
+              echo "::error::Release $TAG exists and IS a prerelease; a v* tag must be a full release. Delete it and re-run."
+              exit 1
+            fi
+            # Re-run path: the release is already published and already "latest", so the Mac
+            # assets are put back the only way left, with --clobber. That deletes and re-uploads
+            # appcast.xml, which reopens the 404 window for about a second on a 2 KB file.
+            # The body is not refreshed on a re-run: notes.md came from the same CHANGELOG
+            # section, and only the assets can have been left incomplete.
+            echo "Release $TAG already exists (re-run); reusing it and re-uploading the Mac assets."
+            gh release upload "$TAG" "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml --clobber
+          else
+            # The DMG and the appcast are positional arguments to `gh release create`, NOT a
+            # follow-up upload: with assets to attach, gh creates the release as a draft, uploads
+            # them, and only then publishes it. That matters because SUFeedURL is
+            # releases/latest/download/appcast.xml, GitHub moves releases/latest the instant a
+            # full release is published, and a missing asset under that path is a hard 404 — not
+            # a fall-back to the previous release. Creating the release first and uploading after
+            # would leave every polling Mac with a broken feed for the length of the upload, and
+            # forever if the job died in between.
+            # No --prerelease and no --latest: GitHub marks the newest full release
+            # "latest" on its own, which is exactly what SUFeedURL relies on.
+            gh release create "$TAG" --title "Connector Control $VERSION" --notes-file notes/notes.md \
+              "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml
           fi
-          gh release upload "$TAG" "ConnectorControl_${VERSION}.dmg" appcast.xml --clobber
+
+      # gh, not vpk, uploads everything (windows-preview.yml explains why); --clobber makes a
+      # re-run idempotent, so a partial upload recovers with `gh run rerun <run-id> --failed`.
+      # The pack-time releases.<rid>.json also lists the previous release's package (downloaded
+      # for the delta, then pruned); it is filtered to this build's own packages, as in previews.
+      - name: Upload the Windows assets
+        run: |
+          set -o pipefail
+          for rid in win-x64 win-arm64; do
+            dir="artifacts/$rid"
+            jq --arg v "$VERSION" '.Assets |= map(select(.Version == $v))' "$dir/releases.$rid.json" > idx.json \
+              && mv idx.json "$dir/releases.$rid.json"
+            echo "releases.$rid.json now lists: $(jq -r '.Assets[] | "\(.Type) \(.Version)"' "$dir/releases.$rid.json" | paste -sd, -)"
+            files=("$dir/ConnectorControl-$rid-Setup.exe" "$dir/ConnectorControl-$VERSION-$rid-full.nupkg" "$dir/releases.$rid.json")
+            for f in "${files[@]}"; do [ -f "$f" ] || { echo "::error::expected asset $f is missing"; exit 1; }; done
+            delta="$dir/ConnectorControl-$VERSION-$rid-delta.nupkg"
+            [ -f "$delta" ] && files+=("$delta")
+            gh release upload "$TAG" "${files[@]}" --clobber
+          done
+
+      - name: Verify the release
+        run: |
+          set -o pipefail
+          gh release view "$TAG" --json isPrerelease,isDraft,assets --jq '{prerelease: .isPrerelease, draft: .isDraft, assets: [.assets[].name]}' | tee release.json
+          [ "$(jq -r .prerelease release.json)" = "false" ] || { echo "::error::$TAG is a prerelease"; exit 1; }
+          [ "$(jq -r .draft release.json)" = "false" ] || { echo "::error::$TAG is a draft"; exit 1; }
+          for a in "ConnectorControl_$VERSION.dmg" appcast.xml \
+                   ConnectorControl-win-x64-Setup.exe ConnectorControl-win-arm64-Setup.exe \
+                   "ConnectorControl-$VERSION-win-x64-full.nupkg" "ConnectorControl-$VERSION-win-arm64-full.nupkg" \
+                   releases.win-x64.json releases.win-arm64.json; do
+            jq -e --arg a "$a" '.assets | index($a) != null' release.json >/dev/null || { echo "::error::asset $a missing from $TAG"; exit 1; }
+          done
+          # This release must now be releases/latest: the Mac appcast URL
+          # (releases/latest/download/appcast.xml) resolves through it. GitHub can take a few
+          # seconds to move the pointer and the download redirect, hence the retry.
+          # `|| true` on both probes: this loop exists to ride out a slow or flaky API, and
+          # the step runs under `bash -e`, so an unguarded assignment would exit on the first
+          # 5xx instead of retrying. The assertions after the loop still decide the outcome.
+          for i in $(seq 1 12); do
+            LATEST=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name || true)
+            REDIRECT=$(curl -s -o /dev/null -w '%{redirect_url}' "$REPO_URL/releases/latest/download/appcast.xml" || true)
+            [ "$LATEST" = "$TAG" ] && [ "$REDIRECT" = "$REPO_URL/releases/download/$TAG/appcast.xml" ] && break
+            echo "waiting for releases/latest ($LATEST) and the appcast redirect ($REDIRECT) to reach $TAG ($i/12)"
+            sleep 10
+          done
+          [ "$LATEST" = "$TAG" ] || { echo "::error::releases/latest is $LATEST, not $TAG"; exit 1; }
+          [ "$REDIRECT" = "$REPO_URL/releases/download/$TAG/appcast.xml" ] || { echo "::error::appcast redirect is '$REDIRECT'"; exit 1; }
+          # The served appcast must announce THIS version, carry the monotonic build number
+          # build-app.sh derives (major*10000 + minor*100 + patch), and point at this
+          # release's DMG.
+          IFS=. read -r MAJ MIN PAT <<< "$VERSION"
+          BUILD=$(( MAJ * 10000 + MIN * 100 + PAT ))
+          curl -sfL --retry 5 --retry-delay 5 --retry-all-errors "$REPO_URL/releases/latest/download/appcast.xml" > served-appcast.xml
+          grep -q "<sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>" served-appcast.xml || { echo "::error::served appcast does not announce $VERSION"; exit 1; }
+          grep -q "<sparkle:version>$BUILD</sparkle:version>" served-appcast.xml || { echo "::error::served appcast build number is not $BUILD"; exit 1; }
+          grep -q "url=\"$REPO_URL/releases/download/$TAG/ConnectorControl_$VERSION.dmg\"" served-appcast.xml || { echo "::error::served appcast enclosure is not this release's DMG"; exit 1; }
+          # An unsigned item is refused by Sparkle at update time and looks perfectly fine on
+          # the release page — the failure mode is "1.3.0 is live, nobody's Mac updates".
+          grep -q 'sparkle:edSignature="[^"][^"]*"' served-appcast.xml || { echo "::error::served appcast item carries no EdDSA signature"; exit 1; }
+          {
+            echo "## Release $TAG ($VERSION)"
+            echo
+            echo "- Release: $REPO_URL/releases/tag/$TAG"
+            echo "- releases/latest: $LATEST; appcast redirect: $REDIRECT; build $BUILD"
+            echo "- Assets:"
+            jq -r '.assets[] | "  - " + .' release.json
+          } >> "$GITHUB_STEP_SUMMARY"

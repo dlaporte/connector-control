@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ConnectorControl.App/ConnectorControl.App.csproj" />
+    <Project Path="src/ConnectorControl.Core/ConnectorControl.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ConnectorControl.App.Tests/ConnectorControl.App.Tests.csproj" />
+    <Project Path="tests/ConnectorControl.Core.Tests/ConnectorControl.Core.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -4,6 +4,27 @@ Release notes for Connector Control. The section matching the tagged version
 is embedded into the Sparkle update dialog and used as the GitHub release
 notes — the release build fails if the section is missing.
 
+## v1.3.0
+
+- Connector Control now runs on Windows. The new app lives in the system
+  tray and brings the same connector list, editor, profiles, backups,
+  self-healing and syncing to Windows 10 (build 17763 and later) and
+  Windows 11, on x64 and Arm64 PCs. Install it from
+  ConnectorControl-win-x64-Setup.exe (or the win-arm64 one) on the release
+  page; it keeps itself up to date from then on. Both apps read and write
+  the same mcps.json, so a master list synced between a Mac and a PC
+  serves both — local-server commands stay OS-specific, see the README.
+- Missing-tool warnings: a connector that starts through npx, node,
+  uvx or uv now shows a caution glyph in the connector list when that
+  tool isn't installed where Claude Desktop can find it. The editor explains
+  what to install, with a download link and the brew (or winget)
+  command, and Settings ▸ Claude ▸ Tools lists all four tools with their
+  versions. On a Mac, a tool that only your shell can see (an nvm install,
+  say) is flagged too, since Claude Desktop launches connectors with its own
+  PATH.
+- macOS: the Settings window is taller so the Claude tab fits without
+  scrolling.
+
 ## v1.2.3
 
 Reliability release: fixes from a full code review of 1.1.4–1.2.2.

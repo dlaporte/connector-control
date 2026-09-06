@@ -188,6 +188,17 @@ struct EditSheetView: View {
             }
         }
         .background(WindowFinder { hostWindow = $0 })
+        .onAppear {
+            // A cached status shows its note at once; an unknown one is probed now.
+            if let tool = requiredTool, state.toolStatuses[tool] == nil {
+                state.refreshTools([tool])
+            }
+        }
+        .onChange(of: requiredTool) { _, tool in
+            // A different tool is probed again even if cached — the user may
+            // have installed it since the last look.
+            if let tool { state.refreshTools([tool]) }
+        }
     }
 
     /// Basic URL syntax check for the remote form: http(s) scheme and a host.
@@ -197,6 +208,23 @@ struct EditSheetView: View {
               scheme == "http" || scheme == "https",
               url.host != nil else { return false }
         return true
+    }
+
+    /// The launcher this connector needs (spec §3.3): npx in the remote form,
+    /// the Command field (through one `cmd /c`) in the local form, the parsed
+    /// config in the JSON view; nil for none, a path, or unparseable JSON.
+    private var requiredTool: Tool? {
+        if view == .json {
+            return PasteRecovery.recover(jsonText)
+                .flatMap { ToolRequirement.requiredTool(for: $0.config) }
+        }
+        return isRemote ? .npx : ToolRequirement.requiredTool(command: form.command, args: form.args)
+    }
+
+    /// nil while the tool is unknown (not probed yet) or found where Claude looks.
+    private var toolNote: ToolNote? {
+        guard let tool = requiredTool else { return nil }
+        return ToolNote.make(tool: tool, status: state.toolStatuses[tool])
     }
 
     // MARK: view switching
@@ -405,6 +433,9 @@ struct EditSheetView: View {
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
+                    if let note = toolNote {
+                        ToolNoteView(note: note)
+                    }
                 } footer: {
                     Text("Runs via npx mcp-remote — managed for you.")
                 }
@@ -412,6 +443,9 @@ struct EditSheetView: View {
             } else {
                 Section {
                     TextField("Command", text: $form.command, prompt: Text("npx"))
+                    if let note = toolNote {
+                        ToolNoteView(note: note)
+                    }
                 }
                 Section("Arguments") { argsEditor }
                 Section("Environment Variables") { envEditor }
@@ -562,6 +596,9 @@ struct EditSheetView: View {
             } else {
                 Text("Tip: paste a README snippet or an mcpServers stanza — a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in.")
                     .font(.caption).foregroundStyle(.secondary)
+            }
+            if let note = toolNote {
+                ToolNoteView(note: note)
             }
         }
         .padding(.horizontal, 16)

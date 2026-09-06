@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Windows CI only: passed to `dotnet test` by .github/workflows/windows-ci.yml and
+  never picked up by a local run. The phase constraint is "both test DLLs Passed!
+  with Skipped: 0": every test in ConnectorControl.App.Tests, and the Windows-only
+  tests in ConnectorControl.Core.Tests that skip on a Mac, must really run on the
+  runner. FailSkips turns any skipped test into a failure, so the run enforces that
+  constraint instead of a human reading the log.
+-->
+<RunSettings>
+  <xUnit>
+    <FailSkips>true</FailSkips>
+  </xUnit>
+</RunSettings>

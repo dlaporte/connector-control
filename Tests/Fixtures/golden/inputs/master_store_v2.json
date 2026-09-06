@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "activeProfile": "Work",
+  "profiles": {
+    "Default": {"mcps": {}},
+    "Work": {
+      "mcps": {
+        "scoutbook": {
+          "enabled": true,
+          "lastEditView": "form",
+          "config": {"command": "npx", "args": ["-y", "mcp-remote", "https://scoutbook.example.com/mcp"]}
+        },
+        "local-fs": {
+          "enabled": false,
+          "lastEditView": "json",
+          "config": {
+            "command": "/usr/local/bin/node",
+            "args": ["server.js", "--root", "/Users/me/Documents"],
+            "env": {"API_TOKEN": "s3cr3t/with/slashes", "DEBUG": "1"}
+          }
+        },
+        "bearer-remote": {
+          "enabled": true,
+          "lastEditView": "form",
+          "config": {
+            "command": "npx",
+            "args": ["-y", "mcp-remote", "https://api.example.com/mcp", "--header", "Authorization:${AUTH_HEADER}"],
+            "env": {"AUTH_HEADER": "Bearer abc123"}
+          }
+        }
+      }
+    }
+  }
+}
