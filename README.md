@@ -4,7 +4,7 @@ Native menu bar (macOS) and system tray (Windows) apps for managing the
 custom MCP connectors in Claude Desktop's configuration — with automatic
 backups of every change they make.
 
-Claude Desktop reads its MCP servers from `claude_desktop_config.json`
+Claude Desktop reads its MCP servers from claude_desktop_config.json
 (`~/Library/Application Support/Claude/` on a Mac, `%APPDATA%\Claude\` on
 Windows), a file you otherwise maintain by hand and that Claude itself has
 been known to overwrite or wipe
@@ -37,10 +37,10 @@ wiped or mangled config is always one click from restored.
 - **Syncable** — point the master list at a folder synced by git, iCloud, or
   Dropbox and share one connector catalog across machines; backups always
   stay machine-local so they never pollute the synced folder.
-- **Missing-tool warnings** — a connector that starts through `npx`, `node`,
-  `uvx` or `uv` shows a caution glyph when that tool isn't installed where
+- **Missing-tool warnings** — a connector that starts through npx, node,
+  uvx or uv shows a caution glyph when that tool isn't installed where
   Claude Desktop can find it; the editor and Settings ▸ Claude ▸ Tools say
-  what to install, with a download link and the `brew` or `winget` command.
+  what to install, with a download link and the brew or winget command.
 - **Careful with secrets** — connector env vars can hold API tokens, so the
   master list and all backups are written owner-only (mode 600 on macOS, an
   owner-only ACL on Windows).
@@ -54,10 +54,10 @@ profiles, or to create, rename, or delete one. Switching applies immediately,
 same as any other change, and raises **Restart Required** just like a toggle
 would. New profiles start as a copy of the active profile's connectors.
 
-The master list file (`mcps.json`) is v2 (profile-aware); older files from a
+The master list file (mcps.json) is v2 (profile-aware); older files from a
 pre-Profiles build are simply rebuilt from Claude's current config the same
 way any corrupted file is (see Building from source). **If you sync
-`mcps.json` across machines, every machine must run a Profiles-capable
+mcps.json across machines, every machine must run a Profiles-capable
 version** — an older app can't parse the v2 file and will treat it as
 corrupt.
 
@@ -86,7 +86,7 @@ Quit the app, then remove:
     /Applications/Connector Control.app
     ~/Library/Application Support/Connector Control/   # master list + backups
 
-Your `claude_desktop_config.json` keeps whatever connectors were enabled at
+Your claude_desktop_config.json keeps whatever connectors were enabled at
 the time — the app leaves Claude's config valid on the way out.
 
 ### Windows
@@ -123,7 +123,7 @@ delete it yourself for a clean slate:
 
     %LOCALAPPDATA%\Connector Control\    # master list, backups, settings
 
-Your `claude_desktop_config.json` keeps whatever connectors were enabled at
+Your claude_desktop_config.json keeps whatever connectors were enabled at
 the time — the app leaves Claude's config valid on the way out.
 
 ## How it works
@@ -172,7 +172,7 @@ you point it at any file.
 
 Settings → Storage → **Master List Location** → choose a folder inside your
 synced location (a git repo, iCloud Drive, Dropbox). The app adopts an
-`mcps.json` already there, or seeds the folder with your current list. Other
+mcps.json already there, or seeds the folder with your current list. Other
 machines running Connector Control point at the same folder and pick up
 changes live (the file is watched). Notes:
 
