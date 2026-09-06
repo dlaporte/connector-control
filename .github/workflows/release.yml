@@ -8,10 +8,11 @@
 #   mac-test         (macos-15) swift test; a failed test, or a skipped one other than the
 #                               deliberate goldens-regeneration skip, stops the run here
 #   mac              (macos-15) build, sign, notarize, DMG, appcast   -> artifact "mac"
-#   windows-test     (windows)  restore / build / test; a skipped test fails the run
-#   windows-package  (windows)  matrix win-x64, win-arm64: publish + signed vpk pack -> "velopack-<rid>"
-#   windows-smoke    (windows)  silent install + launch of the x64 package, signature required;
-#                               arm64 Setup.exe signature checked
+#   windows          (windows)  .github/workflows/windows-build.yml with require-signing: true —
+#                               test, then matrix win-x64/win-arm64 publish + signed vpk pack
+#                               -> "velopack-<rid>", then silent install + launch of the x64
+#                               package with the signature required and the arm64 Setup.exe
+#                               signature checked. windows-preview.yml calls the same file.
 #   publish          (ubuntu)   the ONLY writer: creates the release WITH the DMG and appcast
 #                               attached (so it is never "latest" without its feed), uploads the
 #                               Windows assets with gh --clobber, verifies releases/latest and
@@ -123,8 +124,9 @@ jobs:
             || { echo "::error::$(git rev-parse --short HEAD) is not on master — tag releases from master only."; exit 1; }
           echo "$(git rev-parse --short HEAD) is on master"
 
-      # A release is never built unsigned. windows-preview.yml warns and continues
-      # without these secrets; here their absence fails the run before any build starts.
+      # A release is never built unsigned, and neither is a preview: both workflows call
+      # windows-build.yml with require-signing: true, and both prove the secrets are there
+      # first, so their absence fails the run before any build starts.
       - name: Require the Windows signing secrets
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -290,137 +292,26 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  windows-test:
-    name: Windows build and test
+  windows:
+    name: Windows
     needs: prepare
-    runs-on: windows-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: windows/global.json
-
-      - name: Restore
-        run: dotnet restore windows/ConnectorControl.slnx
-
-      - name: Build
-        run: dotnet build windows/ConnectorControl.slnx --no-restore -c Release
-
-      # Same gate as windows-ci.yml: FailSkips makes a skipped Windows-only test a failure.
-      - name: Test
-        run: dotnet test windows/ConnectorControl.slnx --no-build -c Release --settings windows/ci.runsettings
-
-  windows-package:
-    name: Windows package ${{ matrix.rid }}
-    needs: [prepare, windows-test]
-    runs-on: windows-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: true
-      matrix:
-        rid: [win-x64, win-arm64]
-    env:
-      VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: windows/global.json
-
-      - name: Install vpk 1.2.0
-        run: |
-          dotnet tool install --global vpk --version 1.2.0
-          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: notes
-          path: notes
-
-      # Unconditional: prepare has already failed the run if any signing secret is missing.
-      - name: Write Azure Artifact Signing metadata
-        env:
-          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
-          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
-          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
-        run: |
-          $file = Join-Path $env:RUNNER_TEMP 'azure-signing.json'
-          @{ Endpoint = $env:AZURE_SIGNING_ENDPOINT; CodeSigningAccountName = $env:AZURE_SIGNING_ACCOUNT; CertificateProfileName = $env:AZURE_SIGNING_PROFILE } |
-            ConvertTo-Json | Set-Content -Path $file -Encoding utf8NoBOM
-          "SIGN_FILE=$file" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      # package.ps1 does the dotnet publish, the `vpk download github` of the previous
-      # release and the `vpk pack` in ONE invocation (windows-preview.yml explains the
-      # 12-minute step timeout). No -Prerelease here: "previous" is the newest full v*
-      # release carrying releases.<rid>.json — none before v1.3.0, so the first release
-      # ships without a delta package and v1.3.1 gets one against v1.3.0.
-      - name: Publish and pack (signed)
-        timeout-minutes: 12
-        env:
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-          RID: ${{ matrix.rid }}
-        run: |
-          ./windows/scripts/package.ps1 -Version $env:VERSION -Runtime $env:RID -ReleaseNotes notes/notes.md -DownloadPrevious -AzureTrustedSignFile $env:SIGN_FILE
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: velopack-${{ matrix.rid }}
-          path: windows/artifacts/${{ matrix.rid }}
-          if-no-files-found: error
-          # ~145 MB per RID. The published release is the durable copy of these files;
-          # the artifact only has to outlive the smoke and publish jobs and any re-run.
-          retention-days: 14
-
-  windows-smoke:
-    name: Windows install and launch (win-x64)
-    needs: [prepare, windows-package]
-    runs-on: windows-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: velopack-win-x64
-          path: artifacts
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: velopack-win-arm64
-          path: artifacts-arm64
-
-      # -ExpectSigned is unconditional: Setup.exe and the installed exe must carry a
-      # valid Authenticode signature, or this job — and therefore the release — fails.
-      - name: Silent install, launch, first-run checks (signature required)
-        env:
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          ./windows/scripts/smoke-test.ps1 -SetupExe (Resolve-Path artifacts/ConnectorControl-win-x64-Setup.exe).Path -Version $env:VERSION -Channel win-x64 -Seconds 20 -LogDir "$env:RUNNER_TEMP/smoke-logs" -ExpectSigned
-
-      # The arm64 package cannot be installed on this x64 runner; its signature can be checked.
-      - name: arm64 Setup.exe signature
-        run: |
-          $sig = Get-AuthenticodeSignature -FilePath artifacts-arm64/ConnectorControl-win-arm64-Setup.exe
-          $subject = if ($null -ne $sig.SignerCertificate) { $sig.SignerCertificate.Subject } else { '(no certificate)' }
-          Write-Host "ConnectorControl-win-arm64-Setup.exe: $($sig.Status) $subject"
-          if ($sig.Status -ne 'Valid') { throw "arm64 Setup.exe is not validly signed ($($sig.Status))" }
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: smoke-logs
-          path: ${{ runner.temp }}/smoke-logs
-          if-no-files-found: ignore
+    # test -> package (win-x64, win-arm64) -> smoke, the same file windows-preview.yml and
+    # windows-ci.yml call. require-signing is stated here rather than derived from a secret:
+    # prepare has already failed the run if any of the six AZURE_* secrets is missing, and the
+    # smoke job therefore installs with -ExpectSigned and checks the arm64 Setup.exe signature.
+    # prerelease: false — "previous", for the delta package, is the newest full v* release
+    # carrying releases.<rid>.json (none before v1.3.0, so the first release shipped without a
+    # delta package and v1.3.1 gets one against v1.3.0).
+    uses: ./.github/workflows/windows-build.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      prerelease: false
+      require-signing: true
+    secrets: inherit
 
   publish:
     name: Publish release
-    needs: [prepare, mac, windows-package, windows-smoke]
+    needs: [prepare, mac, windows]
     # The only job that writes anything. A workflow_dispatch rehearsal never reaches it.
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -464,14 +355,9 @@ jobs:
           if [ -n "$PREV" ] && [ "$PREV" != "$TAG" ]; then
             printf '\n**Full changelog**: %s/compare/%s...%s\n' "$REPO_URL" "$PREV" "$TAG" >> notes/notes.md
           fi
-          # A stale DRAFT with this tag (a leftover of an earlier failed run) would make GitHub
-          # refuse to publish anything else under the tag, so drafts are removed first; they are
-          # invisible to users and carry nothing a fresh run does not rebuild.
-          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-            --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" | while read -r id; do
-            echo "Deleting stale draft release $id for $TAG"
-            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
-          done
+          # Stale drafts under this tag would make GitHub refuse to publish anything else under
+          # it; the script explains why they can go.
+          ./windows/scripts/delete-stale-drafts.sh "$TAG"
           if EXISTING=$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease 2>/dev/null); then
             if [ "$EXISTING" != "false" ]; then
               echo "::error::Release $TAG exists and IS a prerelease; a v* tag must be a full release. Delete it and re-run."
@@ -499,24 +385,11 @@ jobs:
               "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml
           fi
 
-      # gh, not vpk, uploads everything (windows-preview.yml explains why); --clobber makes a
-      # re-run idempotent, so a partial upload recovers with `gh run rerun <run-id> --failed`.
-      # The pack-time releases.<rid>.json also lists the previous release's package (downloaded
-      # for the delta, then pruned); it is filtered to this build's own packages, as in previews.
+      # gh, not vpk, uploads everything, --clobber makes a re-run idempotent, and the pack-time
+      # releases.<rid>.json is filtered to this build's own packages first — all of it, with the
+      # reasons, in the script windows-preview.yml calls too.
       - name: Upload the Windows assets
-        run: |
-          set -o pipefail
-          for rid in win-x64 win-arm64; do
-            dir="artifacts/$rid"
-            jq --arg v "$VERSION" '.Assets |= map(select(.Version == $v))' "$dir/releases.$rid.json" > idx.json \
-              && mv idx.json "$dir/releases.$rid.json"
-            echo "releases.$rid.json now lists: $(jq -r '.Assets[] | "\(.Type) \(.Version)"' "$dir/releases.$rid.json" | paste -sd, -)"
-            files=("$dir/ConnectorControl-$rid-Setup.exe" "$dir/ConnectorControl-$VERSION-$rid-full.nupkg" "$dir/releases.$rid.json")
-            for f in "${files[@]}"; do [ -f "$f" ] || { echo "::error::expected asset $f is missing"; exit 1; }; done
-            delta="$dir/ConnectorControl-$VERSION-$rid-delta.nupkg"
-            [ -f "$delta" ] && files+=("$delta")
-            gh release upload "$TAG" "${files[@]}" --clobber
-          done
+        run: ./windows/scripts/upload-release-assets.sh "$TAG" "$VERSION" artifacts
 
       - name: Verify the release
         run: |
