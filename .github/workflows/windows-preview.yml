@@ -1,26 +1,33 @@
 # Windows preview builds (design spec §3, §8.3): a GitHub PRERELEASE carrying Velopack
 # packages for win-x64 and win-arm64, versioned <next>-preview.<n>, where <next> is the top
-# "## vX.Y.Z" heading of CHANGELOG.md and <n> comes from the tag that started the run.
+# "## vX.Y.Z" heading of CHANGELOG.md and <n> names the preview.
 #
-# TRIGGER: tag pushes, and nothing else. A tag push runs the workflow file as it exists AT THE
-# TAGGED COMMIT, so a preview can be cut from any branch (the Windows port was built on branch
-# `windows`; since the v1.3.0 merge previews are cut from master like everything else). Two tag
-# shapes:
+# TRIGGERS — two tag shapes and a manual dispatch:
 #
-#   windows-preview-<n>       real preview:  prepare -> test -> package -> smoke -> publish
-#   windows-preview-dry-<n>   dry run:       the same, with publish skipped
+#   windows-preview-<n>       tag push:  real preview:  prepare -> build -> publish
+#   windows-preview-dry-<n>   tag push:  dry run:       the same, with publish skipped
+#   workflow_dispatch         number=<n>, dry_run (default true): the same two, from the Actions
+#                             tab, with no tag to push or clean up
+#
+# A tag push runs the workflow file AS IT EXISTS AT THE TAGGED COMMIT, so a preview can be cut
+# from any branch and a change to this workflow can be proved from a branch with a
+# windows-preview-dry-<n> tag before it reaches master. A dispatch runs the file from the ref
+# you choose, but the dispatch menu only lists workflow files that exist on the default branch —
+# which is why both shapes are kept.
 #
 # Both build version <next>-preview.<n>; pick <n> with `git tag -l 'windows-preview-*'`.
-# Neither shape matches release.yml's 'v[0-9]+.[0-9]+.[0-9]+' trigger, so no tag here can ever
-# start a Mac release build; and windows-ci.yml triggers on branch pushes only, so one preview
-# tag starts exactly one workflow run.
+# Neither tag shape matches release.yml's 'v[0-9]+.[0-9]+.[0-9]+' trigger, so no tag here can
+# ever start a Mac release build; and windows-ci.yml triggers on branch pushes only, so one
+# preview tag starts exactly one workflow run.
 #
 # A prerelease is never releases/latest, so the Mac app's Sparkle appcast at
 # releases/latest/download/appcast.xml is untouched, and a preview install
 # (prerelease version) only follows prereleases (VelopackUpdater).
 #
-# Optional code signing (spec §8.4, Azure Artifact Signing) when ALL of these repository
-# secrets exist — otherwise the build is unsigned and the package job emits a ::warning::
+# The build itself — test, package (win-x64, win-arm64), smoke — is
+# .github/workflows/windows-build.yml, the same file release.yml calls. A preview is signed
+# exactly like a release: prepare proves all six Azure Artifact Signing secrets (spec §8.4) are
+# there, and the build is called with require-signing: true, so nothing here is ever unsigned.
 #   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET   service principal with the
 #                                                          "Trusted Signing Certificate Profile Signer"
 #                                                          role (DefaultAzureCredential, Azure.Identity)
@@ -33,6 +40,17 @@ on:
   push:
     tags:
       - 'windows-preview-*'
+  workflow_dispatch:
+    inputs:
+      number:
+        description: 'Preview number <n>: builds <next>-preview.<n> and, unless this is a dry run, publishes it as windows-preview-<n>.'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run: build and smoke-test everything, publish nothing.'
+        required: false
+        default: true
+        type: boolean
 
 # Read-only by default; only the publish job raises this to contents: write.
 permissions:
@@ -55,7 +73,6 @@ jobs:
       dry: ${{ steps.derive.outputs.dry }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      HAS_SIGNING: ${{ secrets.AZURE_CLIENT_SECRET != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -67,17 +84,26 @@ jobs:
       - name: Fetch master
         run: git fetch --no-tags origin master:refs/remotes/origin/master
 
-      - name: Derive version from the tag
+      - name: Derive version
         id: derive
+        env:
+          INPUT_NUMBER: ${{ inputs.number }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          # The tag is the only input. windows-preview-dry-<n> is a dry run (publish skipped),
-          # windows-preview-<n> is a real preview; both build <next>-preview.<n>.
-          case "$GITHUB_REF_NAME" in
-            windows-preview-dry-*) N="${GITHUB_REF_NAME#windows-preview-dry-}"; DRY=true ;;
-            windows-preview-*)     N="${GITHUB_REF_NAME#windows-preview-}";     DRY=false ;;
-            *) echo "::error::Tag '$GITHUB_REF_NAME' is neither windows-preview-<n> nor windows-preview-dry-<n>."; exit 1 ;;
-          esac
-          case "$N" in ''|*[!0-9]*) echo "::error::preview number must be digits; tag '$GITHUB_REF_NAME' gave '$N'"; exit 1;; esac
+          # Three sources, one result: a dispatch takes <n> and dry_run from its inputs;
+          # windows-preview-dry-<n> is a dry run (publish skipped); windows-preview-<n> is a real
+          # preview. All three build <next>-preview.<n> under the tag windows-preview-<n>.
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            N="$INPUT_NUMBER"; DRY="$INPUT_DRY_RUN"; TAG="windows-preview-$N"
+          else
+            case "$GITHUB_REF_NAME" in
+              windows-preview-dry-*) N="${GITHUB_REF_NAME#windows-preview-dry-}"; DRY=true ;;
+              windows-preview-*)     N="${GITHUB_REF_NAME#windows-preview-}";     DRY=false ;;
+              *) echo "::error::Tag '$GITHUB_REF_NAME' is neither windows-preview-<n> nor windows-preview-dry-<n>."; exit 1 ;;
+            esac
+            TAG="$GITHUB_REF_NAME"
+          fi
+          case "$N" in ''|*[!0-9]*) echo "::error::preview number must be digits; got '$N'"; exit 1;; esac
           # The next Mac+Windows version is the top "## vX.Y.Z" heading of CHANGELOG.md (spec §8.3).
           NEXT=$(sed -n 's/^## v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$/\1/p' CHANGELOG.md | head -1)
           if [ -z "$NEXT" ]; then
@@ -89,13 +115,36 @@ jobs:
             exit 1
           fi
           {
-            echo "tag=$GITHUB_REF_NAME"
+            echo "tag=$TAG"
             echo "version=$NEXT-preview.$N"
             echo "next=$NEXT"
             echo "number=$N"
             echo "dry=$DRY"
           } >> "$GITHUB_OUTPUT"
-          echo "$GITHUB_REF_NAME -> $NEXT-preview.$N (dry_run=$DRY)"
+          echo "$GITHUB_EVENT_NAME -> $TAG: $NEXT-preview.$N (dry_run=$DRY)"
+
+      # A preview is never built unsigned either: the same gate as release.yml's prepare, run
+      # here before any build minutes are spent, because windows-build.yml is called with
+      # require-signing: true and would fail in the package job without these.
+      - name: Require the Windows signing secrets
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+        run: |
+          missing=""
+          for name in AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET \
+                      AZURE_SIGNING_ENDPOINT AZURE_SIGNING_ACCOUNT AZURE_SIGNING_PROFILE; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Windows signing secrets missing:$missing. A release is never built unsigned — add them under Settings ▸ Secrets and variables ▸ Actions, then re-run."
+            exit 1
+          fi
+          echo "All six AZURE_* signing secrets are present."
 
       - name: Write release notes
         env:
@@ -114,15 +163,10 @@ jobs:
           else
             BASE=$(git merge-base origin/master HEAD); BASE_LABEL="master (${BASE:0:7})"
           fi
-          if [ "$HAS_SIGNING" = "true" ]; then
-            SIGNING="This build is code-signed (Azure Artifact Signing)."
-          else
-            SIGNING="This build is **unsigned**: Windows SmartScreen will warn (\"Windows protected your PC\") — click **More info**, then **Run anyway**."
-          fi
           {
             echo "Windows **preview** build \`$VERSION\` of Connector Control, from commit ${GITHUB_SHA:0:7} (tag \`$TAG\`)."
             echo
-            echo "> Preview builds are GitHub prereleases for Windows testers. They never touch the Mac app's update feed, and a preview install only updates to later previews (and to the final release). $SIGNING"
+            echo "> Preview builds are GitHub prereleases for Windows testers. They never touch the Mac app's update feed, and a preview install only updates to later previews (and to the final release). This build is code-signed (Azure Artifact Signing)."
             echo
             echo "### Install"
             echo
@@ -147,140 +191,25 @@ jobs:
           path: notes.md
           if-no-files-found: error
 
-  test:
-    name: Build and test
+  windows:
+    name: Windows
     needs: prepare
-    runs-on: windows-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: windows/global.json
-
-      - name: Restore
-        run: dotnet restore windows/ConnectorControl.slnx
-
-      - name: Build
-        run: dotnet build windows/ConnectorControl.slnx --no-restore -c Release
-
-      # Same gate as windows-ci.yml: FailSkips makes a skipped Windows-only test a failure.
-      - name: Test
-        run: dotnet test windows/ConnectorControl.slnx --no-build -c Release --settings windows/ci.runsettings
-
-  package:
-    name: Package ${{ matrix.rid }}
-    needs: [prepare, test]
-    runs-on: windows-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: true
-      matrix:
-        rid: [win-x64, win-arm64]
-    env:
-      HAS_SIGNING: ${{ secrets.AZURE_CLIENT_SECRET != '' }}
-      VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: windows/global.json
-
-      - name: Install vpk 1.2.0
-        run: |
-          dotnet tool install --global vpk --version 1.2.0
-          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: notes
-          path: notes
-
-      - name: Write Azure Artifact Signing metadata
-        if: env.HAS_SIGNING == 'true'
-        env:
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
-          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
-          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
-        run: |
-          foreach ($name in 'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_SIGNING_ENDPOINT', 'AZURE_SIGNING_ACCOUNT', 'AZURE_SIGNING_PROFILE') {
-            if (-not [Environment]::GetEnvironmentVariable($name)) { throw "AZURE_CLIENT_SECRET is set but the $name secret is missing" }
-          }
-          $file = Join-Path $env:RUNNER_TEMP 'azure-signing.json'
-          @{ Endpoint = $env:AZURE_SIGNING_ENDPOINT; CodeSigningAccountName = $env:AZURE_SIGNING_ACCOUNT; CertificateProfileName = $env:AZURE_SIGNING_PROFILE } |
-            ConvertTo-Json | Set-Content -Path $file -Encoding utf8NoBOM
-          "SIGN_FILE=$file" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Unsigned build
-        if: env.HAS_SIGNING != 'true'
-        run: Write-Host "::warning::No signing secrets configured (AZURE_CLIENT_SECRET is empty); this preview is unsigned and SmartScreen will warn."
-
-      # package.ps1 does the dotnet publish, the `vpk download github` of the previous release
-      # and the `vpk pack` in ONE invocation, so the download cannot carry a tighter timeout of
-      # its own without splitting the script. 12 minutes covers publish + download + pack (the
-      # step takes ~4 on a green run) while still failing fast if the download stalls.
-      - name: Publish and pack
-        timeout-minutes: 12
-        env:
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-          RID: ${{ matrix.rid }}
-        run: |
-          $signing = @{}
-          if ($env:SIGN_FILE) { $signing['AzureTrustedSignFile'] = $env:SIGN_FILE }
-          ./windows/scripts/package.ps1 -Version $env:VERSION -Runtime $env:RID -ReleaseNotes notes/notes.md -DownloadPrevious -Prerelease @signing
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: velopack-${{ matrix.rid }}
-          path: windows/artifacts/${{ matrix.rid }}
-          if-no-files-found: error
-          # ~145 MB per RID. The published prerelease is the durable copy of these files;
-          # the artifact only has to outlive the smoke and publish jobs and any re-run.
-          retention-days: 14
-
-  smoke:
-    name: Install and launch (win-x64)
-    needs: [prepare, package]
-    runs-on: windows-latest
-    timeout-minutes: 15
-    env:
-      HAS_SIGNING: ${{ secrets.AZURE_CLIENT_SECRET != '' }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: velopack-win-x64
-          path: artifacts
-
-      - name: Silent install, launch, first-run checks
-        env:
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          $signed = @{}
-          if ($env:HAS_SIGNING -eq 'true') { $signed['ExpectSigned'] = $true }
-          ./windows/scripts/smoke-test.ps1 -SetupExe (Resolve-Path artifacts/ConnectorControl-win-x64-Setup.exe).Path -Version $env:VERSION -Channel win-x64 -Seconds 20 -LogDir "$env:RUNNER_TEMP/smoke-logs" @signed
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: smoke-logs
-          path: ${{ runner.temp }}/smoke-logs
-          if-no-files-found: ignore
+    # test -> package (win-x64, win-arm64) -> smoke, the same file release.yml calls.
+    # prerelease: true — the previous release the delta package is built against is the newest
+    # PRERELEASE of the channel, i.e. the preview before this one.
+    uses: ./.github/workflows/windows-build.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      prerelease: true
+      require-signing: true
+    secrets: inherit
 
   publish:
     name: Publish prerelease
-    needs: [prepare, package, smoke]
-    # The only job that writes anything. A windows-preview-dry-<n> tag skips it entirely, so a
-    # dry run creates no release and uploads no assets.
-    if: ${{ !contains(github.ref_name, '-dry-') }}
+    needs: [prepare, windows]
+    # The only job that writes anything. A dry run — a windows-preview-dry-<n> tag or a dispatch
+    # with dry_run — skips it entirely, so it creates no release and uploads no assets.
+    if: needs.prepare.outputs.dry != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -313,17 +242,14 @@ jobs:
           set -o pipefail
           # --prerelease is the whole point: a prerelease is never releases/latest, so the Mac
           # appcast at releases/latest/download/appcast.xml keeps resolving to the last Mac
-          # release. --latest is NEVER passed here, in any form. The tag already exists (it is
-          # what started this run), so no --target is needed either.
+          # release. --latest is NEVER passed here, in any form. --target pins the tag to the
+          # commit that is being built: on a tag push the tag already exists and GitHub ignores
+          # it, and on a dispatch it is what stops gh from creating the tag on the default
+          # branch instead of on the ref that was dispatched.
           #
-          # A stale DRAFT with this tag (a leftover of an earlier failed run) would make GitHub
-          # refuse to publish anything else under the tag, so drafts are removed first; they are
-          # invisible to users and carry nothing a fresh run does not rebuild.
-          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-            --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" | while read -r id; do
-            echo "Deleting stale draft release $id for $TAG"
-            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
-          done
+          # Stale drafts under this tag would make GitHub refuse to publish anything else under
+          # it; the script explains why they can go.
+          ./windows/scripts/delete-stale-drafts.sh "$TAG"
           if EXISTING=$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease 2>/dev/null); then
             if [ "$EXISTING" != "true" ]; then
               echo "::error::Release $TAG exists and is NOT a prerelease; refusing to touch it."
@@ -331,41 +257,19 @@ jobs:
             fi
             echo "Release $TAG already exists (re-run); reusing it."
           else
-            gh release create "$TAG" --prerelease \
+            gh release create "$TAG" --prerelease --target "$GITHUB_SHA" \
               --title "Connector Control $VERSION (Windows preview)" --notes-file notes/notes.md
           fi
 
-      # The assets go up with gh, not `vpk upload github`. vpk looks the release up by tag and,
-      # when that lookup misses (it did for windows-preview-2, moments after gh had created the
-      # release), creates its OWN draft with the same tag and then cannot publish it:
-      #   Validation Failed: {"resource":"Release","code":"already_exists","field":"tag_name"}
-      # gh targets the tag directly and --clobber makes a re-run idempotent, so a partial upload
-      # recovers by re-running the failed job (`gh run rerun <run-id> --failed`); if the release
-      # itself is wrong, `gh release delete <tag> --yes --cleanup-tag`, `git tag -d <tag>`, re-tag
-      # and re-push for a fresh run. The file set is the one vpk uploaded for windows-preview-1:
-      # the installer, the full package, the delta package when a previous release existed, and
-      # the channel index GithubSource reads. RELEASES-<rid> and assets.<rid>.json are pack-time
-      # by-products and stay out. One difference from vpk is corrected below: the pack-time
-      # releases.<rid>.json also lists the PREVIOUS release's package (downloaded for the delta,
-      # then pruned), and vpk rebuilt the index from this build's Full and Delta only; the same
-      # filter is applied here so no entry points at a file this release does not carry.
+      # gh, not vpk, uploads everything, --clobber makes a re-run idempotent, and the pack-time
+      # releases.<rid>.json is filtered to this build's own packages first — all of it, with the
+      # reasons, in the script release.yml calls too.
       - name: Upload Velopack assets
-        run: |
-          set -o pipefail
-          for rid in win-x64 win-arm64; do
-            dir="artifacts/$rid"
-            jq --arg v "$VERSION" '.Assets |= map(select(.Version == $v))' "$dir/releases.$rid.json" > idx.json \
-              && mv idx.json "$dir/releases.$rid.json"
-            echo "releases.$rid.json now lists: $(jq -r '.Assets[] | "\(.Type) \(.Version)"' "$dir/releases.$rid.json" | paste -sd, -)"
-            files=("$dir/ConnectorControl-$rid-Setup.exe" "$dir/ConnectorControl-$VERSION-$rid-full.nupkg" "$dir/releases.$rid.json")
-            for f in "${files[@]}"; do [ -f "$f" ] || { echo "::error::expected asset $f is missing"; exit 1; }; done
-            delta="$dir/ConnectorControl-$VERSION-$rid-delta.nupkg"
-            [ -f "$delta" ] && files+=("$delta")
-            gh release upload "$TAG" "${files[@]}" --clobber
-          done
+        run: ./windows/scripts/upload-release-assets.sh "$TAG" "$VERSION" artifacts
 
       - name: Verify the release
         run: |
+          set -o pipefail
           gh release view "$TAG" --json isPrerelease,isDraft,assets --jq '{prerelease: .isPrerelease, draft: .isDraft, assets: [.assets[].name]}' | tee release.json
           [ "$(jq -r .prerelease release.json)" = "true" ] || { echo "::error::$TAG is not a prerelease"; exit 1; }
           [ "$(jq -r .draft release.json)" = "false" ] || { echo "::error::$TAG is a draft; gh release create must publish it"; exit 1; }
