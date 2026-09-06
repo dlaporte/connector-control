@@ -16,8 +16,8 @@ final class DefaultsKeyTests: XCTestCase {
         UserDefaults.standard.removePersistentDomain(forName: targetName)
     }
 
-    /// The regression: a "Quit without asking" choice made under one of the
-    /// app's earlier names must survive the rename like every other setting.
+    /// Every setting a legacy domain holds moves — confirmBeforeQuit included,
+    /// the one the hand-written list used to leave out.
     func testEverySettingIsMigratedAndAnExistingValueIsKept() throws {
         let legacy = try XCTUnwrap(UserDefaults(suiteName: legacyName))
         let target = try XCTUnwrap(UserDefaults(suiteName: targetName))

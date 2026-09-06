@@ -28,7 +28,8 @@ struct RestoreSheetView: View {
                 Button("Restore…") {
                     // A fresh attempt starts with a clean sheet, as RestoreModel
                     // does on Windows: the previous attempt's error must not
-                    // outlive a new selection or a cancelled confirmation.
+                    // outlive the next attempt, even one whose confirmation is
+                    // then cancelled.
                     restoreError = nil
                     confirming = true
                 }

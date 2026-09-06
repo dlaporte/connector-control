@@ -202,7 +202,8 @@ public class UpdateCoordinatorTests
     public async Task TheInFlightCheckIsClearedOnTheUiThreadBeforeItsOutcomeIsPublished()
     {
         var ui = new MarshalQueue();
-        var host = new AppHost(ui.Post, delays.Add, () => DateTime.UtcNow);
+        var posted = 0;
+        var host = new AppHost(a => { Interlocked.Increment(ref posted); ui.Post(a); }, delays.Add, () => DateTime.UtcNow);
         updater.Next = Update();
         using var coordinator = new UpdateCoordinator(updater, settings, notifier, dialogs, host);
 
@@ -212,16 +213,34 @@ public class UpdateCoordinatorTests
         Assert.True(ui.PumpUntil(() => first.IsCompleted, TimeSpan.FromSeconds(5)));
         Assert.Equal(UpdateOutcome.StagedForQuit, await first);
 
-        // The clear ran on the (pumped) UI thread before the outcome was published, so a
-        // caller that sees the outcome and asks again starts a fresh check instead of joining
-        // the finished one. Nothing else was left on the queue to make that happen.
+        // Two marshalled actions reached the UI thread: the staging block, then the in-flight
+        // clear — and the task completed only after the pump ran the second one. (A clear on
+        // the pool thread posts nothing, so this count is what tells the two apart.)
+        Assert.Equal(2, Volatile.Read(ref posted));
         Assert.Equal(0, ui.Pending);
+
+        // So a caller that sees the outcome and asks again starts a fresh check.
         var second = coordinator.CheckAsync(interactive: false);
         Assert.NotSame(first, second);
         Assert.Equal(2, updater.Checks);
         Assert.True(ui.PumpUntil(() => second.IsCompleted, TimeSpan.FromSeconds(5)));
         Assert.Equal(UpdateOutcome.StagedForQuit, await second);   // already staged: no second download
         Assert.Equal(1, updater.Downloads);
+        Assert.Equal(3, Volatile.Read(ref posted));   // only the clear this time
+    }
+
+    [Fact]
+    public async Task AMarshalFailureStillPublishesTheOutcomeAndFreesTheNextCheck()
+    {
+        // The dispatcher is gone (shutdown): Marshal throws. The outcome already computed must
+        // still reach the caller and the in-flight slot must be freed, or every later
+        // CheckAsync would return the same finished task for the rest of the process.
+        var host = new AppHost(_ => throw new InvalidOperationException("dispatcher shut down"), delays.Add, () => DateTime.UtcNow);
+        using var coordinator = new UpdateCoordinator(updater, settings, notifier, dialogs, host);
+
+        Assert.Equal(UpdateOutcome.UpToDate, await coordinator.CheckAsync(interactive: false));   // no update: nothing else to marshal
+        Assert.Equal(UpdateOutcome.UpToDate, await coordinator.CheckAsync(interactive: false));
+        Assert.Equal(2, updater.Checks);
     }
 
     [Fact]

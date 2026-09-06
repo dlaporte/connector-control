@@ -3,8 +3,10 @@ import Foundation
 /// The UserDefaults keys the Mac app stores its settings under — one list,
 /// so the Settings window, AppState and the legacy-domain migration cannot
 /// disagree about what a setting is called or which ones exist. (Before this
-/// list, confirmBeforeQuit was added to the app but not to the migration, and
-/// a user who had turned it off got it back after upgrading.)
+/// list, confirmBeforeQuit was added to the app but not to the migration. No
+/// shipped build could hit that — the legacy domains predate the setting —
+/// but the next such omission would be live.) It lives in Core rather than
+/// the app because Core is the target with tests.
 public enum DefaultsKey: String, CaseIterable {
     case masterStoreDir
     case claudeAppPath

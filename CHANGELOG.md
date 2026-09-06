@@ -11,15 +11,13 @@ one ships.
 
 ## v1.3.1
 
-- macOS: every write to Claude's config file now leaves it readable by
-  you alone, even when Claude Desktop created it world-readable. Earlier
-  builds set the private mode on the file they wrote and then let the
-  replace restore the old, wider mode.
-- macOS: a "Quit without asking" choice made under the app's earlier names
-  (MCP Enabler, Custom Connector Control) now survives the upgrade instead
-  of being switched back on.
+- macOS: every file the app writes — Claude's config and the master list —
+  now ends up readable by you alone, even when it already existed with
+  wider permissions (a config Claude Desktop created, a master list checked
+  out of a repo). Earlier builds set the private mode on the file they
+  wrote and then let the replace restore the old, wider mode.
 - macOS: the Restore Claude config sheet no longer keeps showing a
-  previous attempt's error after you pick another backup.
+  previous attempt's error once you start another restore.
 - Both platforms: when the master list was unreadable and Claude's config
   was malformed at the same time, the banner now reports both, including
   the Backups ▸ Restore… way out; before, only the first note was shown.

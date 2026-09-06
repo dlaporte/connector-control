@@ -110,7 +110,10 @@ public sealed class UpdateCoordinator : IDisposable
         // continuation is on a pool thread, so the clear goes through the host like every
         // other state write in this class — and the outcome is published only AFTER it has
         // run, so a caller resuming on the UI thread never finds the finished task still
-        // parked in the field and joins it instead of checking afresh.
+        // parked in the field and joins it instead of checking afresh. Installing is the one
+        // outcome this never delivers on a real install: ApplyAndRestart, posted just before,
+        // exits the process from inside the dispatcher, and both production callers discard
+        // the task anyway.
         try
         {
             await host.MarshalAsync(() =>
@@ -119,9 +122,11 @@ public sealed class UpdateCoordinator : IDisposable
                 return true;
             }).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            failure ??= ex;
+            // The dispatcher is gone (app shutdown): nothing can race this clear any more, and
+            // leaving the field set would hand every later caller the same finished task.
+            inFlightCheck = null;
         }
         if (failure is null)
         {

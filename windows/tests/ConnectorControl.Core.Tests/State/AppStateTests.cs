@@ -361,15 +361,14 @@ public class AppStateTests
         using var state = h.Create();
         var first = state.RefreshToolsAsync([Tool.Npx]);
         var second = state.RefreshToolsAsync([Tool.Npx, Tool.Node]);   // npx joins the flight already in the air; node starts one
-        // Pump on the observable publication, not task completion (Task 4 review): the task
-        // completes once the batch is posted, before the marshalled queue has run it.
-        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 2, TimeSpan.FromSeconds(5)));
-        Assert.True(first.IsCompleted && second.IsCompleted);
+        // Pump on the observable publication AND task completion: the task completes on a pool
+        // thread once the batch is posted, which can be a moment after the marshalled queue
+        // has run it — asserting completion right after the publication is a race.
+        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 2 && first.IsCompleted && second.IsCompleted, TimeSpan.FromSeconds(5)));
         Assert.Equal([Tool.Npx, Tool.Node], h.Tools.Probed.Order().ToArray());
         Assert.True(state.RefreshToolsAsync([]).IsCompleted);   // nothing wanted: completes synchronously
         // Once published, the same tool can be probed again (the editor asks when the command changes).
         var third = state.RefreshToolsAsync([Tool.Npx]);
-        Assert.True(h.Ui.PumpUntil(() => h.Tools.Probed.Count == 3, TimeSpan.FromSeconds(5)));
-        Assert.True(third.IsCompleted);
+        Assert.True(h.Ui.PumpUntil(() => h.Tools.Probed.Count == 3 && third.IsCompleted, TimeSpan.FromSeconds(5)));
     }
 }
