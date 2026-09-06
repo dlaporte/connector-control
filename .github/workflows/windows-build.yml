@@ -21,7 +21,8 @@
 #                    fails the run before any build minutes are spent when they do not.
 #   package          false runs the test job alone (windows-ci.yml's per-push build).
 #
-# The caller passes `secrets: inherit`; GITHUB_TOKEN and the AZURE_* secrets are read here.
+# A caller that packages passes `secrets: inherit` (the AZURE_* secrets are read here).
+# GITHUB_TOKEN reaches a called workflow on its own, so windows-ci.yml passes nothing.
 # Every job carries its own timeout-minutes: a `uses:` job in the caller cannot set one.
 #
 # The `notes` artifact is an INPUT to the package job: the caller's prepare job uploads it, and
@@ -119,11 +120,12 @@ jobs:
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
           AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
           AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
         run: |
-          foreach ($name in 'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_SIGNING_ENDPOINT', 'AZURE_SIGNING_ACCOUNT', 'AZURE_SIGNING_PROFILE') {
+          foreach ($name in 'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET', 'AZURE_SIGNING_ENDPOINT', 'AZURE_SIGNING_ACCOUNT', 'AZURE_SIGNING_PROFILE') {
             if (-not [Environment]::GetEnvironmentVariable($name)) { throw "require-signing is set but the $name secret is missing" }
           }
           $file = Join-Path $env:RUNNER_TEMP 'azure-signing.json'
@@ -131,6 +133,9 @@ jobs:
             ConvertTo-Json | Set-Content -Path $file -Encoding utf8NoBOM
           "SIGN_FILE=$file" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      # The degrade path for a caller that packages with require-signing: false (a fork
+      # without signing secrets). No workflow in this repository takes it: both callers that
+      # package require signing, so on this repository the step never runs.
       - name: Unsigned build
         if: ${{ !inputs.require-signing }}
         run: Write-Host "::warning::require-signing is false; this build is unsigned and SmartScreen will warn."

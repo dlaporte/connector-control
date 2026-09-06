@@ -36,9 +36,10 @@ jobs:
     name: Windows
     # version is required by the reusable workflow but unused with package: false — nothing here
     # is stamped or packed; require-signing: false for the same reason (no packages to sign).
+    # No `secrets: inherit`: the test job needs only GITHUB_TOKEN, which a called workflow
+    # receives anyway, and a per-push workflow has no business holding the signing secrets.
     uses: ./.github/workflows/windows-build.yml
     with:
       version: 0.0.0-ci
       require-signing: false
       package: false
-    secrets: inherit

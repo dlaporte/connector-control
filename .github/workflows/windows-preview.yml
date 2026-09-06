@@ -95,6 +95,12 @@ jobs:
           # preview. All three build <next>-preview.<n> under the tag windows-preview-<n>.
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             N="$INPUT_NUMBER"; DRY="$INPUT_DRY_RUN"; TAG="windows-preview-$N"
+            # GitHub ignores `gh release create --target` when the tag already exists, so a
+            # reused number would publish THIS run's installers under an OLD tag's commit.
+            if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+              echo "::error::tag $TAG already exists; pick an unused preview number (git tag -l 'windows-preview-*')."
+              exit 1
+            fi
           else
             case "$GITHUB_REF_NAME" in
               windows-preview-dry-*) N="${GITHUB_REF_NAME#windows-preview-dry-}"; DRY=true ;;
@@ -141,7 +147,7 @@ jobs:
             [ -n "${!name}" ] || missing="$missing $name"
           done
           if [ -n "$missing" ]; then
-            echo "::error::Windows signing secrets missing:$missing. A release is never built unsigned — add them under Settings ▸ Secrets and variables ▸ Actions, then re-run."
+            echo "::error::Windows signing secrets missing:$missing. A preview is never built unsigned — add them under Settings ▸ Secrets and variables ▸ Actions, then re-run."
             exit 1
           fi
           echo "All six AZURE_* signing secrets are present."
@@ -153,13 +159,23 @@ jobs:
           NEXT: ${{ steps.derive.outputs.next }}
           NUMBER: ${{ steps.derive.outputs.number }}
         run: |
-          # Commits since the highest REAL preview below this one (a windows-preview-dry-<n>
-          # tag is never a comparison point), or since the branch left master.
+          # Commits since the more recent of two points: the highest REAL preview below this
+          # one (a windows-preview-dry-<n> tag is never a comparison point) and the newest v*
+          # release reachable from here — previews are cut from master after a release, so
+          # "since the last preview" alone would re-list a whole release. With neither (a
+          # first preview on a fresh branch), since the branch left master.
           PREV=$(git tag -l 'windows-preview-[0-9]*' \
             | sed -n 's/^windows-preview-\([0-9][0-9]*\)$/\1/p' \
             | sort -n | awk -v n="$NUMBER" '$1 + 0 < n + 0' | tail -1)
-          if [ -n "$PREV" ]; then
-            BASE="windows-preview-$PREV"; BASE_LABEL="windows-preview-$PREV"
+          LAST=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD 2>/dev/null || true)
+          BASE=""
+          for candidate in ${PREV:+windows-preview-$PREV} $LAST; do
+            if [ -z "$BASE" ] || git merge-base --is-ancestor "$BASE" "$candidate"; then
+              BASE="$candidate"
+            fi
+          done
+          if [ -n "$BASE" ]; then
+            BASE_LABEL="$BASE"
           else
             BASE=$(git merge-base origin/master HEAD); BASE_LABEL="master (${BASE:0:7})"
           fi

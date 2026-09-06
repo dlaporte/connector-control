@@ -229,8 +229,12 @@ notarization of both the app and the DMG, stapling, and the Sparkle
 appcast; and the Windows installers for x64 and Arm64, code-signed with
 Azure Artifact Signing and checked by a silent install on a Windows runner.
 Windows preview builds for testers (GitHub prereleases, which never touch
-the Mac update feed) come from `windows-preview-<n>` tags via
-[`windows-preview.yml`](.github/workflows/windows-preview.yml).
+the Mac update feed) come from
+[`windows-preview.yml`](.github/workflows/windows-preview.yml), started
+either by a `windows-preview-<n>` tag or by hand from the Actions tab
+(Run workflow, with the preview number; a dry run by default). All three
+Windows workflows share one build definition,
+[`windows-build.yml`](.github/workflows/windows-build.yml).
 
 ## Scope and caveats
 
