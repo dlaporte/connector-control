@@ -289,6 +289,19 @@ public class AppStateTests
     }
 
     [Fact]
+    public void CorruptStoreAndMalformedClaudeConfigSurfaceBothNotes()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        File.WriteAllText(h.MasterStorePath, "garbage");
+        File.WriteAllText(h.ClaudeConfigPath, "{oops");
+        state.Reload();
+        // Both sentences, in reconcile order; the second is the one that says what to do.
+        Assert.StartsWith("The MCP list file was unreadable; it was preserved as mcps.corrupt.", state.LastError, StringComparison.Ordinal);
+        Assert.EndsWith(" Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore… to repair the file.", state.LastError, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ReloadOverwritesLastError()
     {
         using var h = new AppStateHarness();

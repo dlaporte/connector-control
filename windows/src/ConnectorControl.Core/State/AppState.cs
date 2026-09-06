@@ -372,7 +372,9 @@ public sealed class AppState : ObservableObject, IDisposable
                 && wasLoaded
                 && !DictionaryEquality.Equal(result.Store.Mcps, previousStoreMcps)
                 && !claudeConfigChangedExternally;
-            LastError = result.Notes.Count > 0 ? result.Notes[0] : null;
+            // Every note, not just the first: with a corrupt store AND a malformed Claude config,
+            // the second one is the actionable one (Backups ▸ Restore… is the way out).
+            LastError = result.Notes.Count > 0 ? string.Join(" ", result.Notes) : null;
             if (!IsDirty)
             {
                 ApplyRetryNeeded = false;

@@ -299,7 +299,10 @@ final class AppState: ObservableObject {
                 trigger == .routine
                 && wasLoaded && result.store.mcps != previousStoreMcps
                 && !claudeConfigChangedExternally
-            lastError = result.notes.first
+            // Every note, not just the first: with a corrupt store AND a
+            // malformed Claude config, the second one is the actionable one
+            // (Backups ▸ Restore… is the way out).
+            lastError = result.notes.isEmpty ? nil : result.notes.joined(separator: " ")
             if !isDirty { applyRetryNeeded = false }
 
             // The store is the source of truth; Claude's config is downstream.
