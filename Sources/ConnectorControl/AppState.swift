@@ -98,7 +98,7 @@ final class AppState: ObservableObject {
     /// enforced; gated by a done-flag so launches stay cheap.
     static func sweepPermissionsOnce(paths: AppPaths) {
         let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: "permissionsSweepDone") else { return }
+        guard !defaults.bool(forKey: DefaultsKey.permissionsSweepDone.rawValue) else { return }
         let fm = FileManager.default
         for root in [paths.storeDirURL, paths.backupsDirURL] {
             try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
@@ -112,7 +112,7 @@ final class AppState: ObservableObject {
                     ofItemAtPath: file.path)
             }
         }
-        defaults.set(true, forKey: "permissionsSweepDone")
+        defaults.set(true, forKey: DefaultsKey.permissionsSweepDone.rawValue)
     }
 
     /// One-time migration from the app's previous names (newest first).
@@ -127,18 +127,13 @@ final class AppState: ObservableObject {
                 try? fm.moveItem(at: old, to: new)
             }
         }
-        // Settings lived under the old bundle ids' defaults domains.
+        // Settings lived under the old bundle ids' defaults domains. Every
+        // key in DefaultsKey moves, so a setting added later cannot be left
+        // out of this list again.
         for oldDomain in ["com.dlaporte.custom-connector-control",
                           "com.dlaporte.mcp-enabler"] {
             guard let oldDefaults = UserDefaults(suiteName: oldDomain) else { continue }
-            for key in ["masterStoreDir", "claudeAppPath",
-                        "backupKeepCount", "notifyExternalChanges",
-                        "confirmBeforeRestart", "lastApplyDate"] {
-                if let value = oldDefaults.object(forKey: key),
-                   UserDefaults.standard.object(forKey: key) == nil {
-                    UserDefaults.standard.set(value, forKey: key)
-                }
-            }
+            DefaultsKey.migrate(from: oldDefaults, into: .standard)
         }
     }
 
@@ -147,7 +142,7 @@ final class AppState: ObservableObject {
         var paths = AppPaths.live()
         // Env override (dev sandboxing) beats the user setting.
         if env["CONNECTOR_CONTROL_STORE_DIR"] == nil,
-           let custom = UserDefaults.standard.string(forKey: "masterStoreDir") {
+           let custom = UserDefaults.standard.string(forKey: DefaultsKey.masterStoreDir.rawValue) {
             // Backups always stay machine-local: a synced store directory must
             // not fill the user's repo/cloud folder with rotating backups.
             paths = AppPaths(
@@ -155,7 +150,7 @@ final class AppState: ObservableObject {
                 storeDirURL: URL(fileURLWithPath: custom),
                 backupsDirURL: AppPaths.live(environment: [:]).backupsDirURL)
         }
-        let keep = UserDefaults.standard.object(forKey: "backupKeepCount") as? Int ?? 20
+        let keep = UserDefaults.standard.object(forKey: DefaultsKey.backupKeepCount.rawValue) as? Int ?? 20
         return ConfigService(paths: paths, keepCount: keep)
     }
 
@@ -197,9 +192,9 @@ final class AppState: ObservableObject {
         let defaults = UserDefaults.standard
         let previousStoreURL = service.paths.masterStoreURL
         if let dir {
-            defaults.set(dir.path, forKey: "masterStoreDir")
+            defaults.set(dir.path, forKey: DefaultsKey.masterStoreDir.rawValue)
         } else {
-            defaults.removeObject(forKey: "masterStoreDir")
+            defaults.removeObject(forKey: DefaultsKey.masterStoreDir.rawValue)
         }
         let rebuilt = AppState.makeService()
         let newStoreURL = rebuilt.paths.masterStoreURL
@@ -259,7 +254,7 @@ final class AppState: ObservableObject {
     /// write. Derived from the process launch date, so it self-clears however
     /// Claude gets restarted — via us, by hand, or by an update.
     func refreshRestartState() {
-        guard let lastApply = UserDefaults.standard.object(forKey: "lastApplyDate") as? Date,
+        guard let lastApply = UserDefaults.standard.object(forKey: DefaultsKey.lastApplyDate.rawValue) as? Date,
               let claude = NSRunningApplication.runningApplications(
                 withBundleIdentifier: ClaudeRestarter.bundleID).first,
               let launched = claude.launchDate
@@ -374,7 +369,7 @@ final class AppState: ObservableObject {
         let servers = try service.restoreClaudeConfig(from: backup, mergedWith: store)
         appliedServers = servers
         hasLoadedOnce = true
-        UserDefaults.standard.set(Date(), forKey: "lastApplyDate")
+        UserDefaults.standard.set(Date(), forKey: DefaultsKey.lastApplyDate.rawValue)
         // ConfigService already merged and persisted the store; a quiet
         // adoption takes it as-is and suppresses notifications for the
         // user's own restore action.
@@ -383,7 +378,7 @@ final class AppState: ObservableObject {
 
     private func notify(_ title: String, _ body: String, category: String? = nil) {
         guard AppState.hasAppBundle else { return }
-        guard UserDefaults.standard.object(forKey: "notifyExternalChanges") as? Bool ?? true
+        guard UserDefaults.standard.object(forKey: DefaultsKey.notifyExternalChanges.rawValue) as? Bool ?? true
         else { return }
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert]) { granted, _ in
@@ -421,7 +416,7 @@ final class AppState: ObservableObject {
         do {
             try service.apply(store)
             appliedServers = store.enabledServers
-            UserDefaults.standard.set(Date(), forKey: "lastApplyDate")
+            UserDefaults.standard.set(Date(), forKey: DefaultsKey.lastApplyDate.rawValue)
             refreshRestartState()
             lastError = nil
             applyRetryNeeded = false
@@ -450,7 +445,7 @@ final class AppState: ObservableObject {
     }
 
     func quitApp() {
-        if UserDefaults.standard.object(forKey: "confirmBeforeQuit") as? Bool ?? true {
+        if UserDefaults.standard.object(forKey: DefaultsKey.confirmBeforeQuit.rawValue) as? Bool ?? true {
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
             alert.messageText = "Quit Connector Control?"
@@ -462,7 +457,7 @@ final class AppState: ObservableObject {
     }
 
     func restartClaude() {
-        if UserDefaults.standard.object(forKey: "confirmBeforeRestart") as? Bool ?? true {
+        if UserDefaults.standard.object(forKey: DefaultsKey.confirmBeforeRestart.rawValue) as? Bool ?? true {
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
             alert.messageText = "Restart Claude Desktop now?"
@@ -478,7 +473,7 @@ final class AppState: ObservableObject {
     /// confirm, and the notification's Restart Claude action, where the
     /// deliberate action click is the confirmation.
     private func performRestartClaude() {
-        let appURL = URL(fileURLWithPath: UserDefaults.standard.string(forKey: "claudeAppPath")
+        let appURL = URL(fileURLWithPath: UserDefaults.standard.string(forKey: DefaultsKey.claudeAppPath.rawValue)
             ?? "/Applications/Claude.app")
         ClaudeRestarter.restart(appURL: appURL) { [weak self] errorMessage in
             self?.lastError = errorMessage

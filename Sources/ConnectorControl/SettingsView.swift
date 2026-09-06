@@ -10,13 +10,13 @@ struct SettingsView: View {
     @State private var showRestore = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginItemNote: String?
-    @AppStorage("masterStoreDir") private var masterStoreDirSetting: String = ""
+    @AppStorage(DefaultsKey.masterStoreDir.rawValue) private var masterStoreDirSetting: String = ""
     
-    @AppStorage("claudeAppPath") private var claudeAppPath: String = "/Applications/Claude.app"
-    @AppStorage("backupKeepCount") private var backupKeepCount: Int = 20
-    @AppStorage("notifyExternalChanges") private var notifyExternalChanges: Bool = true
-    @AppStorage("confirmBeforeRestart") private var confirmBeforeRestart: Bool = true
-    @AppStorage("confirmBeforeQuit") private var confirmBeforeQuit: Bool = true
+    @AppStorage(DefaultsKey.claudeAppPath.rawValue) private var claudeAppPath: String = "/Applications/Claude.app"
+    @AppStorage(DefaultsKey.backupKeepCount.rawValue) private var backupKeepCount: Int = 20
+    @AppStorage(DefaultsKey.notifyExternalChanges.rawValue) private var notifyExternalChanges: Bool = true
+    @AppStorage(DefaultsKey.confirmBeforeRestart.rawValue) private var confirmBeforeRestart: Bool = true
+    @AppStorage(DefaultsKey.confirmBeforeQuit.rawValue) private var confirmBeforeQuit: Bool = true
     /// Mirrors SPUUpdater.automaticallyDownloadsUpdates (Sparkle persists it
     /// itself); kept in sync via KVO so a change made in Sparkle's own dialog
     /// doesn't leave the toggle stale.
