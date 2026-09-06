@@ -1,8 +1,9 @@
 # Changelog
 
-Release notes for Connector Control. The section matching the tagged version
-is embedded into the Sparkle update dialog and used as the GitHub release
-notes — the release build fails if the section is missing.
+Release notes for Connector Control on macOS and Windows. The section
+matching the tagged version becomes the GitHub release notes and the text
+both apps show in their update dialogs — the release build fails if the
+section is missing.
 
 ## v1.3.0
 

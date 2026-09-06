@@ -30,7 +30,7 @@ wiped or mangled config is always one click from restored.
 - **Self-healing** — the app watches Claude's config; if connectors vanish
   from it (Claude update, cloud sync, crash), a banner offers one-click
   restore from the master list, and a notification fires even when the
-  popover is closed.
+  app's window is closed.
 - **Automatic backups** — timestamped copies of both files before every
   write (configurable retention, plus a permanent first-run snapshot), with
   in-app restore.
@@ -48,8 +48,8 @@ wiped or mangled config is always one click from restored.
 ### Profiles
 
 Profiles are full, independent connector snapshots — each has its own
-complete list of connectors and enabled flags. A chip in the popover header
-(`<profile name> ▾`) shows the active profile and opens a menu to switch
+complete list of connectors and enabled flags. A chip in the header of the
+popover (Mac) or flyout (Windows) (`<profile name> ▾`) shows the active profile and opens a menu to switch
 profiles, or to create, rename, or delete one. Switching applies immediately,
 same as any other change, and raises **Restart Required** just like a toggle
 would. New profiles start as a copy of the active profile's connectors.
@@ -154,8 +154,8 @@ profile, so backups stay on the machine that made them):
 
 Every change (toggle, edit, add, remove, restore) writes the master list and
 regenerates the `mcpServers` section of Claude's config — atomically, after
-backing both up. A reconciliation pass runs at launch, on every popover open,
-and whenever either file changes on disk: connectors added outside the app
+backing both up. A reconciliation pass runs at launch, every time the popover or flyout
+opens, and whenever either file changes on disk: connectors added outside the app
 are imported, external edits are detected (and you're notified), and
 connectors missing from Claude's config are flagged for restore rather than
 ever being silently dropped. Claude only reads its config at startup, hence
@@ -171,7 +171,7 @@ you point it at any file.
 ### Syncing across machines
 
 Settings → Storage → **Master List Location** → choose a folder inside your
-synced location (a git repo, iCloud Drive, Dropbox). The app adopts an
+synced location (a git repo, iCloud Drive, OneDrive, Dropbox). The app adopts an
 mcps.json already there, or seeds the folder with your current list. Other
 machines running Connector Control point at the same folder and pick up
 changes live (the file is watched). Notes:
@@ -237,8 +237,8 @@ the Mac update feed) come from `windows-preview-<n>` tags via
 - Manages the `mcpServers` section of Claude **Desktop**'s config only — not
   claude.ai web connectors, Claude Desktop extensions, or Claude Code's MCP
   configuration.
-- The app is not sandboxed: it needs to read/write another app's
-  Application Support directory and to quit/relaunch Claude.
+- Neither app is sandboxed: each needs to read and write Claude Desktop's
+  config file and to quit and relaunch Claude.
 - Restarting Claude interrupts any in-progress conversation; the app asks
   first by default (Settings → General).
 - Windows: Claude Desktop is found by its app package (`Claude_pzs8sxrjxfjjc`)
