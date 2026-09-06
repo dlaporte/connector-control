@@ -45,3 +45,14 @@ public enum ClaudeConfigIO {
         return root
     }
 }
+
+/// `localizedDescription` is the detail, not Foundation's generic "The
+/// operation couldn’t be completed": the restore sheet shows it verbatim
+/// (catalog §5), and the Windows port shows the same detail as `Message`.
+extension ClaudeConfigError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .malformed(let detail): return detail
+        }
+    }
+}

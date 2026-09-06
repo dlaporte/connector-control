@@ -31,4 +31,18 @@ final class AppPathsTests: XCTestCase {
         XCTAssertEqual(paths.backupsDirURL.path, "/tmp/machine-local/backups")
         XCTAssertEqual(paths.masterStoreURL.path, "/tmp/x/store/mcps.json")
     }
+
+    func testLiveHonoursTheAppSupportDirectory() {
+        let home = URL(fileURLWithPath: "/tmp/fake-home/Library/Application Support")
+        let paths = AppPaths.live(environment: [:], appSupport: home)
+        XCTAssertEqual(paths.claudeConfigURL.path,
+                       "/tmp/fake-home/Library/Application Support/Claude/claude_desktop_config.json")
+        XCTAssertEqual(paths.storeDirURL.path, "/tmp/fake-home/Library/Application Support/Connector Control")
+        XCTAssertEqual(paths.backupsDirURL.path,
+                       "/tmp/fake-home/Library/Application Support/Connector Control/backups")
+        let overridden = AppPaths.live(environment: ["CONNECTOR_CONTROL_STORE_DIR": "/tmp/x/store"], appSupport: home)
+        XCTAssertEqual(overridden.storeDirURL.path, "/tmp/x/store", "the env override still beats the home directory")
+        XCTAssertEqual(overridden.claudeConfigURL.path,
+                       "/tmp/fake-home/Library/Application Support/Claude/claude_desktop_config.json")
+    }
 }

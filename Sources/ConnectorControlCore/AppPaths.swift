@@ -13,11 +13,14 @@ public struct AppPaths {
         self.backupsDirURL = backupsDirURL ?? storeDirURL.appendingPathComponent("backups")
     }
 
+    /// `appSupport` is `~/Library/Application Support` in the app; the state
+    /// tests point it at a temp directory so the whole path rule runs against
+    /// a throwaway home (the Windows port injects `KnownFolders` the same way).
     public static func live(
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        appSupport: URL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support")
     ) -> AppPaths {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let appSupport = home.appendingPathComponent("Library/Application Support")
         let claude = environment["CONNECTOR_CONTROL_CLAUDE_CONFIG"].map(URL.init(fileURLWithPath:))
             ?? appSupport.appendingPathComponent("Claude/claude_desktop_config.json")
         let store = environment["CONNECTOR_CONTROL_STORE_DIR"].map(URL.init(fileURLWithPath:))
