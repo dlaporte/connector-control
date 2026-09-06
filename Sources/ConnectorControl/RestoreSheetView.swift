@@ -1,5 +1,6 @@
 import SwiftUI
 import ConnectorControlCore
+import ConnectorControlState
 
 struct RestoreSheetView: View {
     @EnvironmentObject var state: AppState

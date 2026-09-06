@@ -1,9 +1,11 @@
 import SwiftUI
 import ConnectorControlCore
+import ConnectorControlState
 
 @main
 struct ConnectorControlApp: App {
-    @StateObject private var state = AppState()
+    private let services = LiveServices.shared
+    @StateObject private var state = LiveServices.shared.state
 
     var body: some Scene {
         MenuBarExtra {
@@ -32,7 +34,7 @@ struct ConnectorControlApp: App {
         .windowResizability(.contentMinSize)
 
         Settings {
-            SettingsView()
+            SettingsView(updater: services.updater)
                 .environmentObject(state)
         }
     }

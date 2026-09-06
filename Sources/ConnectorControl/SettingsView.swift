@@ -4,9 +4,11 @@ import CoreImage
 import UniformTypeIdentifiers
 import ServiceManagement
 import ConnectorControlCore
+import ConnectorControlState
 
 struct SettingsView: View {
     @EnvironmentObject var state: AppState
+    let updater: Updater
     @State private var showRestore = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginItemNote: String?
@@ -86,28 +88,27 @@ struct SettingsView: View {
 
             Section("Updates") {
                 Toggle("Automatically download and install updates", isOn: $autoUpdate)
-                    .disabled(!state.updaterRunning)
+                    .disabled(!updater.isAvailable)
                     .onChange(of: autoUpdate) { _, wantOn in
-                        state.updaterController.updater.automaticallyDownloadsUpdates = wantOn
+                        updater.automaticallyDownloadsUpdates = wantOn
                     }
                 HStack {
-                    Text("Version \(appVersion)")
+                    Text("Version \(updater.versionDisplay)")
                         .foregroundStyle(.secondary)
                     Spacer()
                     Button("Check for Updates…") {
-                        state.updaterController.checkForUpdates(nil)
+                        updater.checkForUpdates()
                     }
-                    .disabled(!state.updaterRunning)
+                    .disabled(!updater.isAvailable)
                 }
             }
         }
         .formStyle(.grouped)
         .onAppear {
             launchAtLogin = SMAppService.mainApp.status == .enabled
-            autoUpdate = state.updaterController.updater.automaticallyDownloadsUpdates
+            autoUpdate = updater.automaticallyDownloadsUpdates
         }
-        .onReceive(state.updaterController.updater
-            .publisher(for: \.automaticallyDownloadsUpdates)) { autoUpdate = $0 }
+        .onReceive(updater.automaticallyDownloadsUpdatesPublisher) { autoUpdate = $0 }
     }
 
     private var storageTab: some View {
@@ -168,17 +169,6 @@ struct SettingsView: View {
         .formStyle(.grouped)
         // Spec §6 D4: the Mac refreshes when this tab appears.
         .onAppear { state.refreshTools() }
-    }
-
-    private var appVersion: String {
-        let info = Bundle.main.infoDictionary
-        guard let short = info?["CFBundleShortVersionString"] as? String else {
-            return "development build"
-        }
-        if let build = info?["CFBundleVersion"] as? String, build != short {
-            return "\(short) (\(build))"
-        }
-        return short
     }
 
     /// Claude's bare "splat" glyph, taken from the tray template image the

@@ -1,5 +1,6 @@
 import SwiftUI
 import ConnectorControlCore
+import ConnectorControlState
 
 struct EditTarget: Identifiable, Codable, Hashable {
     let id: String          // UUID for new, name for existing

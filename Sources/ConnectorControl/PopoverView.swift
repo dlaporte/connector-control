@@ -1,5 +1,6 @@
 import SwiftUI
 import ConnectorControlCore
+import ConnectorControlState
 
 struct PopoverView: View {
     @EnvironmentObject var state: AppState
