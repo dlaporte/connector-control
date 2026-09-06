@@ -3,7 +3,26 @@
 Release notes for Connector Control on macOS and Windows. The section
 matching the tagged version becomes the GitHub release notes and the text
 both apps show in their update dialogs — the release build fails if the
-section is missing.
+section is missing. The top section also names the version a Windows
+preview build is cut from (a preview is versioned as that number followed
+by -preview.N, and the preview build fails if that version has already
+been released), so open the next version's section as soon as the previous
+one ships.
+
+## v1.3.1
+
+- macOS: every write to Claude's config file now leaves it readable by
+  you alone, even when Claude Desktop created it world-readable. Earlier
+  builds set the private mode on the file they wrote and then let the
+  replace restore the old, wider mode.
+- macOS: a "Quit without asking" choice made under the app's earlier names
+  (MCP Enabler, Custom Connector Control) now survives the upgrade instead
+  of being switched back on.
+- macOS: the Restore Claude config sheet no longer keeps showing a
+  previous attempt's error after you pick another backup.
+- Both platforms: when the master list was unreadable and Claude's config
+  was malformed at the same time, the banner now reports both, including
+  the Backups ▸ Restore… way out; before, only the first note was shown.
 
 ## v1.3.0
 

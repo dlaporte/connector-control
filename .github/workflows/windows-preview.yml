@@ -2,10 +2,10 @@
 # packages for win-x64 and win-arm64, versioned <next>-preview.<n>, where <next> is the top
 # "## vX.Y.Z" heading of CHANGELOG.md and <n> comes from the tag that started the run.
 #
-# TRIGGER: tag pushes, and nothing else. GitHub offers workflow_dispatch only for workflow
-# files that exist on the repository's DEFAULT branch (master here); this file lives on branch
-# `windows`. A tag push runs the workflow file as it exists AT THE TAGGED COMMIT, so it works
-# from any branch. Two tag shapes:
+# TRIGGER: tag pushes, and nothing else. A tag push runs the workflow file as it exists AT THE
+# TAGGED COMMIT, so a preview can be cut from any branch (the Windows port was built on branch
+# `windows`; since the v1.3.0 merge previews are cut from master like everything else). Two tag
+# shapes:
 #
 #   windows-preview-<n>       real preview:  prepare -> test -> package -> smoke -> publish
 #   windows-preview-dry-<n>   dry run:       the same, with publish skipped
@@ -120,7 +120,7 @@ jobs:
             SIGNING="This build is **unsigned**: Windows SmartScreen will warn (\"Windows protected your PC\") — click **More info**, then **Run anyway**."
           fi
           {
-            echo "Windows **preview** build \`$VERSION\` of Connector Control, from branch \`windows\` at ${GITHUB_SHA:0:7}."
+            echo "Windows **preview** build \`$VERSION\` of Connector Control, from commit ${GITHUB_SHA:0:7} (tag \`$TAG\`)."
             echo
             echo "> Preview builds are GitHub prereleases for Windows testers. They never touch the Mac app's update feed, and a preview install only updates to later previews (and to the final release). $SIGNING"
             echo
