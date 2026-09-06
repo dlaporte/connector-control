@@ -34,6 +34,21 @@ final class AtomicFileTests: XCTestCase {
         XCTAssertEqual(mode, 0o600)
     }
 
+    /// Claude's own config file is created by Claude Desktop with the default
+    /// umask (0644). Every write over it must end owner-only, not inherit the
+    /// old mode — that is the whole point of the 0600 set on the temp file.
+    func testWriteOverExistingWorldReadableFileIsPrivate() throws {
+        let fm = FileManager.default
+        let url = dir.appendingPathComponent("claude_desktop_config.json")
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data("old".utf8).write(to: url)
+        try fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+        try AtomicFile.write(Data("new".utf8), to: url)
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "new")
+        let mode = try XCTUnwrap(fm.attributesOfItem(atPath: url.path)[.posixPermissions] as? Int)
+        XCTAssertEqual(mode, 0o600)
+    }
+
     func testNoTempFilesLeftBehind() throws {
         let url = dir.appendingPathComponent("file.json")
         try AtomicFile.write(Data("x".utf8), to: url)
