@@ -64,10 +64,19 @@
                       <ColumnDefinition Width="Auto" />
                       <ColumnDefinition Width="*" />
                       <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <ToggleButton Style="{StaticResource Switch}" IsChecked="{Binding Enabled}" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="10,0" />
-                    <Button Grid.Column="2" Style="{StaticResource IconButton}" Content="&#xE70F;" ToolTip="{Binding EditTooltip}" Click="OnEdit" />
+                    <!-- Caution glyph (addendum 2026-09-06-row-glyph, divergence D8): its own Auto
+                         column, so the name column stays a star column and keeps trimming. -->
+                    <TextBlock Grid.Column="2" Style="{StaticResource CautionText}"
+                               FontFamily="{StaticResource IconFont}"
+                               Text="{x:Static state:FlyoutModel.ToolWarningGlyph}"
+                               ToolTip="{Binding ToolWarning}"
+                               Visibility="{Binding HasToolWarning, Converter={StaticResource Vis}}"
+                               VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="&#xE70F;" ToolTip="{Binding EditTooltip}" Click="OnEdit" />
                   </Grid>
                   <Separator Margin="0" />
                 </StackPanel>

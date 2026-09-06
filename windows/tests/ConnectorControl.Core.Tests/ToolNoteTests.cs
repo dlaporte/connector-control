@@ -46,4 +46,16 @@ public class ToolNoteTests
         Assert.Equal("Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them.", ToolNote.SettingsCaption);
         Assert.Equal(".COM;.EXE;.BAT;.CMD", ToolProbe.DefaultPathExt);
     }
+
+    [Fact]
+    public void RowWarningIsTheRowTooltipForEachStatus()
+    {
+        Assert.Null(ToolNote.RowWarning(Tool.Npx, null));   // unknown must never flash a glyph before the probe has answered
+        Assert.Null(ToolNote.RowWarning(Tool.Npx, new ToolStatus(@"C:\Program Files\nodejs\npx.cmd", "10.9.2")));
+        Assert.Null(ToolNote.RowWarning(Tool.Npx, new ToolStatus(@"C:\Program Files\nodejs\npx.cmd", null)));
+        Assert.Equal("Needs npx, which wasn’t found. Edit to see how to install it.", ToolNote.RowWarning(Tool.Npx, ToolStatus.NotFound));
+        Assert.Equal("Needs uvx, which wasn’t found. Edit to see how to install it.", ToolNote.RowWarning(Tool.Uvx, ToolStatus.NotFound));
+        Assert.Equal("Needs uv, which wasn’t found. Edit to see how to install it.", ToolNote.RowMissingText(Tool.Uv));
+        Assert.Equal("Needs node, which wasn’t found. Edit to see how to install it.", ToolNote.RowMissingText(Tool.Node));
+    }
 }

@@ -17,6 +17,8 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     /// <summary>Segoe Fluent Icons: Warning (exclamationmark.arrow.circlepath's nearest) and Refresh (arrow.clockwise).</summary>
     public const string RetryGlyph = "";
     public const string RestartGlyph = "";
+    /// <summary>Segoe Fluent Icons: Warning, on a row whose launcher is missing. The same code point the retry footer uses, named separately so changing one does not move the other.</summary>
+    public const string ToolWarningGlyph = "\ue7ba";
 
     private readonly AppState state;
     private IReadOnlyList<ProfileMenuItem> profileItems = [];
@@ -59,8 +61,42 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public string FooterGlyph => Footer == FooterKind.RetryApply ? RetryGlyph : RestartGlyph;
 
-    /// <summary>The Mac popover's onAppear: a routine reload on every open.</summary>
-    public void Opened() => state.Reload();
+    /// <summary>The Mac popover's onAppear: a routine reload on every open, then the rows' launchers.</summary>
+    public void Opened()
+    {
+        state.Reload();
+        ProbeRowTools();
+    }
+
+    /// <summary>
+    /// The tools the listed connectors need that are not cached yet (addendum
+    /// 2026-09-06-row-glyph §3). Nothing required, or everything cached, spawns no process;
+    /// AppState coalesces a tool already in flight.
+    /// </summary>
+    private void ProbeRowTools()
+    {
+        var needed = ToolRequirement.RequiredTools(state.Store.Mcps.Values.Select(e => e.Config))
+            .Where(t => !state.ToolStatuses.ContainsKey(t))
+            .ToArray();
+        if (needed.Length > 0)
+        {
+            _ = state.RefreshToolsAsync(needed);
+        }
+    }
+
+    /// <summary>
+    /// One row's caution-glyph tooltip, by the rule the editor and Settings also use: the
+    /// entry's required tool, then that tool's cached status (addendum §2).
+    /// </summary>
+    private string? WarningFor(McpEntry entry)
+    {
+        if (ToolRequirement.RequiredTool(entry.Config) is not { } tool)
+        {
+            return null;
+        }
+        state.ToolStatuses.TryGetValue(tool, out var status);
+        return ToolNote.RowWarning(tool, status);
+    }
 
     public void SwitchProfile(string name) => state.SwitchProfile(name);
 
@@ -104,10 +140,12 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
         for (int i = 0; i < names.Count; i++)
         {
             var name = names[i];
-            var enabled = state.Store.Mcps[name].Enabled;
+            var entry = state.Store.Mcps[name];
+            var enabled = entry.Enabled;
+            var warning = WarningFor(entry);
             if (i < Rows.Count && Rows[i].Name == name)
             {
-                Rows[i].Sync(enabled);
+                Rows[i].Sync(enabled, warning);
             }
             else
             {
@@ -115,12 +153,12 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
                 if (existing is not null)
                 {
                     Rows.Remove(existing);
-                    existing.Sync(enabled);
+                    existing.Sync(enabled, warning);
                     Rows.Insert(i, existing);
                 }
                 else
                 {
-                    Rows.Insert(i, new ConnectorRow(state, name, enabled));
+                    Rows.Insert(i, new ConnectorRow(state, name, enabled, warning));
                 }
             }
         }

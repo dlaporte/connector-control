@@ -147,4 +147,73 @@ public class FlyoutModelTests
         Assert.Equal(state.Store.Mcps["scoutbook"], flyout.EntryFor("scoutbook"));
         Assert.Null(flyout.EntryFor("gone"));
     }
+
+    [Fact]
+    public void RowsCarryTheToolWarningAndFollowLaterProbeResults()
+    {
+        using var h = new AppStateHarness();
+        h.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound;
+        using var state = h.Create();
+        using var flyout = new FlyoutModel(state);
+        Assert.All(flyout.Rows, r => Assert.False(r.HasToolWarning));   // nothing probed yet: no glyph
+        Assert.All(flyout.Rows, r => Assert.Null(r.ToolWarning));
+
+        state.RefreshToolsAsync([Tool.Npx]);
+        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.ContainsKey(Tool.Npx), TimeSpan.FromSeconds(5)));
+        // All three seeded connectors run `npx -y mcp-remote`.
+        Assert.All(flyout.Rows, r => Assert.True(r.HasToolWarning));
+        Assert.All(flyout.Rows, r => Assert.Equal("Needs npx, which wasn’t found. Edit to see how to install it.", r.ToolWarning));
+
+        // A connector whose command is a full path needs no PATH lookup, so it never warns.
+        state.Upsert("pathed", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String(@"C:\Program Files\nodejs\node.exe")))), null);
+        var pathed = flyout.Rows.Single(r => r.Name == "pathed");
+        Assert.False(pathed.HasToolWarning);
+        Assert.Null(pathed.ToolWarning);
+        Assert.True(flyout.Rows.Single(r => r.Name == "aws-mcp").HasToolWarning);   // the others are unchanged
+
+        // Installing npx: the next probe publishes Found and every glyph clears.
+        h.Tools.Statuses[Tool.Npx] = new ToolStatus(@"C:\Program Files\nodejs\npx.cmd", "10.9.2");
+        state.RefreshToolsAsync([Tool.Npx]);
+        Assert.True(h.Ui.PumpUntil(() => flyout.Rows.All(r => !r.HasToolWarning), TimeSpan.FromSeconds(5)));
+        Assert.All(flyout.Rows, r => Assert.True(r.Enabled));   // the glyph never touched the switch
+    }
+
+    [Fact]
+    public void OpenedProbesOnlyTheToolsTheRowsNeedAndOnlyOnce()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        using var flyout = new FlyoutModel(state);
+        Assert.Equal(0, h.Tools.Batches);   // building the model probes nothing
+
+        flyout.Opened();
+        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.ContainsKey(Tool.Npx), TimeSpan.FromSeconds(5)));
+        // Three npx connectors: one tool, one batch — not one probe per row.
+        Assert.Equal([Tool.Npx], h.Tools.Probed.ToArray());
+        Assert.Equal(1, h.Tools.Batches);
+
+        flyout.Opened();   // everything the rows need is cached now
+        Assert.Equal(1, h.Tools.Batches);
+        Assert.Equal([Tool.Npx], h.Tools.Probed.ToArray());
+    }
+
+    [Fact]
+    public void OpenedProbesNothingWhenNoRowNeedsATool()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        using var flyout = new FlyoutModel(state);
+        flyout.Opened();   // an empty catalog
+        Assert.Equal(0, h.Tools.Batches);
+
+        state.Upsert("pathed", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String(@"C:\tools\node.exe")))), null);
+        state.Upsert("stranger", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("python")))), null);
+        flyout.Opened();   // a full path and an unknown launcher both need no PATH lookup
+        Assert.Equal(0, h.Tools.Batches);
+        Assert.Empty(h.Tools.Probed);
+        Assert.All(flyout.Rows, r => Assert.False(r.HasToolWarning));
+    }
 }

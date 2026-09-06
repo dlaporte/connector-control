@@ -44,6 +44,24 @@ public static class ToolRequirement
         return RequiredTool(command.StringValue, args);
     }
 
+    /// <summary>
+    /// Every tool the given configs need, deduplicated and in <see cref="ToolInfo.All"/> order —
+    /// what the flyout must have probed before it can decide which rows carry a warning
+    /// (addendum 2026-09-06-row-glyph §3).
+    /// </summary>
+    public static IReadOnlyList<Tool> RequiredTools(IEnumerable<JsonValue> configs)
+    {
+        var needed = new HashSet<Tool>();
+        foreach (var config in configs)
+        {
+            if (RequiredTool(config) is { } tool)
+            {
+                needed.Add(tool);
+            }
+        }
+        return ToolInfo.All.Where(needed.Contains).ToArray();
+    }
+
     /// <summary>Lower-cased basename without one trailing <c>.cmd</c>/<c>.exe</c>; null for blank or path-like tokens.</summary>
     internal static string? Normalized(string token)
     {

@@ -1,9 +1,11 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Tray;
 using ConnectorControl.App.Views;
+using ConnectorControl.Core;
 using ConnectorControl.Core.State;
 using ConnectorControl.Core.Tests.TestSupport;
 using AppServices = ConnectorControl.App.Services.Services;
@@ -150,5 +152,63 @@ public class FlyoutWindowTests
         });
         Assert.Equal(["Open", "Settings…", "Quit Connector Control"], headers);
         Assert.Equal(["open", "settings", "quit"], clicks);
+    }
+
+    [Fact]
+    public void ARowWhoseLauncherIsMissingShowsTheCautionGlyphAndAnInstalledOneDoesNot()
+    {
+        using var h = new AppStateHarness();
+        h.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound;
+        h.Tools.Statuses[Tool.Node] = new ToolStatus(@"C:\Program Files\nodejs\node.exe", "22.11.0");
+        using var state = h.Create();
+        state.Upsert("local-node", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String("server.js")])))), null);
+        state.RefreshToolsAsync([Tool.Npx, Tool.Node]);
+        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 2, TimeSpan.FromSeconds(5)));
+        var services = new AppServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            using var model = new FlyoutModel(state);
+            var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates)) { TrayAnchor = () => null };
+            window.Show();   // an ItemsControl generates no containers until the window has a real layout pass
+            Layout(window);
+            window.RowList.UpdateLayout();
+
+            var missing = model.Rows.Single(r => r.Name == "aws-mcp");        // npx, not found
+            var installed = model.Rows.Single(r => r.Name == "local-node");   // node, found
+            Assert.Equal(Visibility.Visible, Glyph(window, missing).Visibility);
+            Assert.Equal("Needs npx, which wasn’t found. Edit to see how to install it.", (string?)Glyph(window, missing).ToolTip);
+            Assert.Equal(Visibility.Collapsed, Glyph(window, installed).Visibility);
+            Assert.True(missing.Enabled);   // the glyph changes nothing about the switch
+
+            window.HideFlyout();
+            window.Close();
+        });
+    }
+
+    /// <summary>The row's caution glyph: the one TextBlock in its container carrying the Warning code point.</summary>
+    private static TextBlock Glyph(FlyoutWindow window, ConnectorRow row)
+    {
+        var container = window.RowList.ItemContainerGenerator.ContainerFromItem(row);
+        Assert.NotNull(container);
+        var blocks = new List<TextBlock>();
+        Collect(container, blocks);
+        return Assert.Single(blocks.Where(t => t.Text == FlyoutModel.ToolWarningGlyph).ToArray());
+    }
+
+    private static void Collect(DependencyObject root, List<TextBlock> found)
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is TextBlock text)
+            {
+                found.Add(text);
+            }
+            Collect(child, found);
+        }
     }
 }

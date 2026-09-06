@@ -17,6 +17,21 @@ public sealed record ToolNote(string Text, string LinkTitle, string LinkUrl, str
     public static string MissingText(Tool tool) =>
         $"{ToolInfo.Name(tool)} wasn’t found, so Claude Desktop won’t be able to start this connector.";
 
+    /// <summary>
+    /// The row glyph's tooltip in the flyout (addendum 2026-09-06-row-glyph §2). Short on
+    /// purpose: it names the launcher and sends the user to the editor, where the full note
+    /// and the install line live.
+    /// </summary>
+    public static string RowMissingText(Tool tool) =>
+        $"Needs {ToolInfo.Name(tool)}, which wasn’t found. Edit to see how to install it.";
+
+    /// <summary>
+    /// The row's tooltip, or null for no glyph. Unknown returns null: a row must not warn
+    /// before the probe has answered.
+    /// </summary>
+    public static string? RowWarning(Tool tool, ToolStatus? status) =>
+        status is null || status.Found ? null : RowMissingText(tool);
+
     /// <summary>Null while the status is unknown or the tool is found.</summary>
     public static ToolNote? For(Tool tool, ToolStatus? status)
     {

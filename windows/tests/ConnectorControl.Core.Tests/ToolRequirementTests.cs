@@ -48,4 +48,27 @@ public class ToolRequirementTests
         Assert.Null(ToolRequirement.RequiredTool(JsonValue.Object(("command", JsonValue.String("cmd")), ("args", JsonValue.Array([JsonValue.String("/c"), JsonValue.Int(42)])))));
         Assert.Null(ToolRequirement.RequiredTool(JsonValue.String("npx")));
     }
+
+    [Fact]
+    public void RequiredToolsAcrossConfigsIsDedupedAndOrdered()
+    {
+        static JsonValue Cmd(string command, params string[] args) => JsonValue.Object(
+            ("command", JsonValue.String(command)),
+            ("args", JsonValue.Array(args.Select(JsonValue.String))));
+
+        JsonValue[] configs =
+        [
+            Cmd("npx", "-y", "mcp-remote", "https://a.dev/mcp"),
+            Cmd("cmd", "/c", "npx", "-y", "mcp-remote", "https://b.dev/mcp"),   // the same tool, wrapped
+            Cmd("uvx", "some-server"),
+            Cmd(@"C:\Program Files\nodejs\node.exe"),                            // a path: no tool
+            Cmd("python"),                                                       // not one of the four
+            JsonValue.String("not an object"),
+        ];
+        Assert.Equal([Tool.Npx, Tool.Uvx], ToolRequirement.RequiredTools(configs).ToArray());
+        Assert.Empty(ToolRequirement.RequiredTools([]));
+        Assert.Empty(ToolRequirement.RequiredTools([Cmd("python")]));
+        // ToolInfo.All order (npx, node, uvx, uv), not the configs' order:
+        Assert.Equal([Tool.Node, Tool.Uv], ToolRequirement.RequiredTools([Cmd("uv"), Cmd("node")]).ToArray());
+    }
 }
