@@ -96,17 +96,40 @@ public sealed class UpdateCoordinator : IDisposable
 
     private async Task RunCheckAsync(bool interactive, TaskCompletionSource<UpdateOutcome> completion)
     {
+        UpdateOutcome outcome = default;
+        Exception? failure = null;
         try
         {
-            completion.SetResult(await RunOutcomeAsync(interactive).ConfigureAwait(false));
+            outcome = await RunOutcomeAsync(interactive).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            completion.SetException(ex);
+            failure = ex;
         }
-        finally
+        // inFlightCheck is UI-thread state (CheckAsync reads and writes it there) and this
+        // continuation is on a pool thread, so the clear goes through the host like every
+        // other state write in this class — and the outcome is published only AFTER it has
+        // run, so a caller resuming on the UI thread never finds the finished task still
+        // parked in the field and joins it instead of checking afresh.
+        try
         {
-            inFlightCheck = null;
+            await host.MarshalAsync(() =>
+            {
+                inFlightCheck = null;
+                return true;
+            }).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            failure ??= ex;
+        }
+        if (failure is null)
+        {
+            completion.SetResult(outcome);
+        }
+        else
+        {
+            completion.SetException(failure);
         }
     }
 

@@ -189,11 +189,39 @@ public class UpdateCoordinatorTests
         Assert.Empty(notifier.Sent);
 
         ui.Pump();
-
-        Assert.Equal(UpdateOutcome.StagedForQuit, await checkTask);
         Assert.Equal("1.3.0", coordinator.StagedVersion);
         Assert.Equal("1.3.0", coordinator.NotifiedVersion);
         Assert.Single(notifier.Sent);
+
+        // The outcome lands one marshalled action later (the in-flight clear), so keep pumping.
+        Assert.True(ui.PumpUntil(() => checkTask.IsCompleted, TimeSpan.FromSeconds(5)));
+        Assert.Equal(UpdateOutcome.StagedForQuit, await checkTask);
+    }
+
+    [Fact]
+    public async Task TheInFlightCheckIsClearedOnTheUiThreadBeforeItsOutcomeIsPublished()
+    {
+        var ui = new MarshalQueue();
+        var host = new AppHost(ui.Post, delays.Add, () => DateTime.UtcNow);
+        updater.Next = Update();
+        using var coordinator = new UpdateCoordinator(updater, settings, notifier, dialogs, host);
+
+        var first = coordinator.CheckAsync(interactive: false);
+        Assert.Same(first, coordinator.CheckAsync(interactive: false));   // joined while in flight
+        Assert.Equal(1, updater.Checks);
+        Assert.True(ui.PumpUntil(() => first.IsCompleted, TimeSpan.FromSeconds(5)));
+        Assert.Equal(UpdateOutcome.StagedForQuit, await first);
+
+        // The clear ran on the (pumped) UI thread before the outcome was published, so a
+        // caller that sees the outcome and asks again starts a fresh check instead of joining
+        // the finished one. Nothing else was left on the queue to make that happen.
+        Assert.Equal(0, ui.Pending);
+        var second = coordinator.CheckAsync(interactive: false);
+        Assert.NotSame(first, second);
+        Assert.Equal(2, updater.Checks);
+        Assert.True(ui.PumpUntil(() => second.IsCompleted, TimeSpan.FromSeconds(5)));
+        Assert.Equal(UpdateOutcome.StagedForQuit, await second);   // already staged: no second download
+        Assert.Equal(1, updater.Downloads);
     }
 
     [Fact]
