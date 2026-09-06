@@ -92,8 +92,10 @@ the time — the app leaves Claude's config valid on the way out.
 ### Windows
 
 Requires Windows 10 version 1809 (build 17763) or later, or Windows 11, on
-an x64 or Arm64 PC. The installer and the app are code-signed, so Windows
-names the publisher instead of warning about an unknown one.
+an x64 or Arm64 PC. The installer and the app are code-signed. While the
+publisher is new to Microsoft's SmartScreen, Windows may still show
+"Windows protected your PC" with the publisher named; choose **More info**,
+then **Run anyway**. The warning goes away as the signature earns reputation.
 
 1. Download `ConnectorControl-win-x64-Setup.exe` (Intel and AMD PCs) or
    `ConnectorControl-win-arm64-Setup.exe` (Arm PCs) from the
