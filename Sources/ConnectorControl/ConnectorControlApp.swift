@@ -9,7 +9,7 @@ struct ConnectorControlApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            PopoverView()
+            PopoverView(state: state)
                 .environmentObject(state)
         } label: {
             // A distinctive glyph matters here: switch.2 was nearly identical
