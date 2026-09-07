@@ -10,10 +10,16 @@ struct SettingsView: View {
     @StateObject private var model: SettingsModel
     private let state: AppState
     @State private var showRestore = false
+    /// Decoded once here and again only when the app path changes: the tab
+    /// bar re-renders on every model change, and the icon comes from disk
+    /// (or a Core Image pass over the app icon).
+    @State private var claudeTabIcon: NSImage
 
     init(state: AppState, settings: AppSettings, autostart: Autostart, updater: Updater) {
         self.state = state
         _model = StateObject(wrappedValue: SettingsModel(state: state, settings: settings, autostart: autostart, updater: updater))
+        _claudeTabIcon = State(initialValue: SettingsView.makeClaudeTabIcon(
+            appPath: settings.claudeAppPath ?? AppState.defaultClaudeAppPath))
     }
 
     var body: some View {
@@ -37,6 +43,9 @@ struct SettingsView: View {
         .frame(width: 480, height: 560)
         .sheet(isPresented: $showRestore) {
             RestoreSheetView(state: state)
+        }
+        .onChange(of: model.claudeAppPath) {
+            claudeTabIcon = SettingsView.makeClaudeTabIcon(appPath: model.claudeAppPath)
         }
     }
 
@@ -140,8 +149,8 @@ struct SettingsView: View {
     /// Claude app ships. As a template it renders exactly like the SF-symbol
     /// tab icons. Falls back to a desaturated copy of the app icon if a future
     /// Claude version moves the asset.
-    private var claudeTabIcon: NSImage {
-        let resources = URL(fileURLWithPath: model.claudeAppPath)
+    private static func makeClaudeTabIcon(appPath: String) -> NSImage {
+        let resources = URL(fileURLWithPath: appPath)
             .appendingPathComponent("Contents/Resources")
         for name in ["TrayIconTemplate@2x.png", "TrayIconTemplate.png"] {
             let url = resources.appendingPathComponent(name)
@@ -151,7 +160,7 @@ struct SettingsView: View {
                 return splat
             }
         }
-        let icon = NSWorkspace.shared.icon(forFile: model.claudeAppPath)
+        let icon = NSWorkspace.shared.icon(forFile: appPath)
         let size = NSSize(width: 22, height: 22)
         guard let tiff = icon.tiffRepresentation,
               let ciImage = CIImage(data: tiff),
