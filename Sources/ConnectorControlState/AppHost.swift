@@ -9,6 +9,11 @@ public typealias MainActorAction = @MainActor () -> Void
 /// wherever it lands), `delay` schedules one there later, `now` is the clock.
 /// The app uses `live()`; tests hand in a `MarshalQueue`, a `DelayQueue` and
 /// a fixed date, and decide themselves when "later" and "now" are.
+///
+/// `marshal` must POST, never run its closure inline: `FileWatcher` reads its
+/// own state with `queue.sync` from inside the marshalled closure, so an
+/// inline marshal called from the watcher's queue would deadlock. That is why
+/// there is no `inline()` host here, unlike the C# `AppHost.Inline()`.
 public struct AppHost: Sendable {
     public let marshal: @Sendable (@escaping MainActorAction) -> Void
     public let delay: @Sendable (TimeInterval, @escaping MainActorAction) -> Void

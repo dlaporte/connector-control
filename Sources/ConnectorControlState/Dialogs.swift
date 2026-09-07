@@ -12,8 +12,11 @@ public protocol Dialogs: AnyObject {
 public extension Dialogs {
     static var cancelTitle: String { "Cancel" }
 
-    func confirm(message: String, informative: String?, primary: String,
-                 cancel: String = "Cancel", destructive: Bool = false) -> Bool {
-        confirm(message: message, informative: informative, primary: primary, cancel: cancel, destructive: destructive)
+    /// The usual shape: a Cancel button. Deliberately NOT the requirement's
+    /// label set — an overload with the same labels would double as the
+    /// requirement's default implementation, and a conformer that forgot the
+    /// method would compile clean and recurse forever at runtime.
+    func confirm(message: String, informative: String?, primary: String, destructive: Bool = false) -> Bool {
+        confirm(message: message, informative: informative, primary: primary, cancel: Self.cancelTitle, destructive: destructive)
     }
 }

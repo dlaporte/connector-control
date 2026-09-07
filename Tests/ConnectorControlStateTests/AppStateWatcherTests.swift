@@ -103,6 +103,13 @@ final class AppStateWatcherTests: XCTestCase {
         XCTAssertFalse(state.watchersArmed, "an apply is not a reload: nothing re-arms yet")
         state.reload()
         XCTAssertTrue(state.watchersArmed, "the re-arm at the end of reload caught up")
+        // The "only" half: a further reload leaves the now-armed watchers alone
+        // instead of tearing them down and re-baselining their mtimes.
+        let armed = state.watcherIdentities
+        state.reload()
+        XCTAssertTrue(state.watchersArmed)
+        XCTAssertEqual(state.watcherIdentities.claude, armed.claude, "an armed watcher is not replaced by reload")
+        XCTAssertEqual(state.watcherIdentities.store, armed.store, "an armed watcher is not replaced by reload")
 
         Thread.sleep(forTimeInterval: 0.3)
         try h.writeClaudeServers([("only", AppStateHarness.remote("https://moved.example/mcp"))])

@@ -3,10 +3,13 @@ import ConnectorControlCore
 @testable import ConnectorControlState
 
 final class UserDefaultsSettingsTests: XCTestCase {
-    private var suiteName = ""
+    // One fixed throwaway domain, cleared before and after: cfprefsd keeps an
+    // empty plist per suite name in ~/Library/Preferences, so a fresh UUID per
+    // run would leave one file behind every time.
+    private let suiteName = "com.dlaporte.connector-control.tests.settings"
 
     override func setUp() {
-        suiteName = "com.dlaporte.connector-control.tests.settings.\(UUID().uuidString)"
+        UserDefaults.standard.removePersistentDomain(forName: suiteName)
     }
 
     override func tearDown() {

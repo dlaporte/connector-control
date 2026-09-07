@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 import ConnectorControlCore
 @testable import ConnectorControlState
@@ -54,12 +55,24 @@ final class PopoverModelTests: XCTestCase {
         let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
+        // The rows read through to AppState; the republish in init is what makes
+        // the popover repaint, and it is the one line a passthrough cannot prove.
+        var repaints = 0
+        let sink = popover.objectWillChange.sink { _ in repaints += 1 }
+        defer { sink.cancel() }
         state.setEnabled("aws-mcp", false)
         XCTAssertEqual(popover.rows.first { $0.name == "aws-mcp" }?.enabled, false)
+        XCTAssertGreaterThan(repaints, 0, "an AppState change is republished to the view")
         state.remove(name: "scoutbook")
         XCTAssertEqual(popover.rows.map(\.name), ["aws-mcp", "service-now"])
         XCTAssertNil(state.upsert(name: "alpha", entry: MCPEntry(config: AppStateHarness.remote("https://alpha.example/mcp")), renamedFrom: nil))
         XCTAssertEqual(popover.rows.map(\.name), ["alpha", "aws-mcp", "service-now"])
+        // dispose() cuts the republish: the rows still read through, nothing repaints.
+        popover.dispose()
+        let before = repaints
+        state.setEnabled("alpha", false)
+        XCTAssertEqual(popover.rows.first { $0.name == "alpha" }?.enabled, false)
+        XCTAssertEqual(repaints, before)
     }
 
     func testProfileMenuItemsAndTitles() {

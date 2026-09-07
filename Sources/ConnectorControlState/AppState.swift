@@ -10,9 +10,9 @@ import ConnectorControlCore
 @MainActor
 public final class AppState: ObservableObject {
     // MARK: - Strings (catalog §1.8, §1.10, §1.16–§1.18, §2.2)
-    // nonisolated, like today's restartCategoryID: LiveClaudeProcess reads
-    // defaultClaudeAppPath off the main actor. Every constant is one line so
-    // Task 12's string check can find it on its `static let`/`static func` line.
+    // nonisolated, like today's restartCategoryID: LiveClaudeProcess, a
+    // non-isolated type, reads defaultClaudeAppPath. Every constant is one
+    // line so the string check can find it on its `static let`/`static func` line.
 
     nonisolated public static let noConnectorsSubtitle = "No connectors configured"
     nonisolated public static let claudeConfigRegeneratedBody = "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up."
@@ -78,6 +78,14 @@ public final class AppState: ObservableObject {
 
     /// Test probe: both watchers are live. Spec §6.3 wants this true after every reload.
     var watchersArmed: Bool { (watcher?.isArmed ?? false) && (storeWatcher?.isArmed ?? false) }
+
+    /// Test probe: the watcher objects themselves, so a test can assert that a
+    /// reload re-arms a dead watcher without replacing a live one (a
+    /// replacement would re-baseline the last-seen mtime and lose an external
+    /// write that lands in between).
+    var watcherIdentities: (claude: ObjectIdentifier?, store: ObjectIdentifier?) {
+        (watcher.map { ObjectIdentifier($0) }, storeWatcher.map { ObjectIdentifier($0) })
+    }
 
     public init(settings: AppSettings, claude: ClaudeProcess, notifier: Notifier, dialogs: Dialogs,
                 paths: PathContext, host: AppHost, toolProbe: ToolProbing) {
