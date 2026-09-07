@@ -34,7 +34,8 @@ struct ConnectorControlApp: App {
         .windowResizability(.contentMinSize)
 
         Settings {
-            SettingsView(updater: services.updater)
+            SettingsView(state: state, settings: services.settings,
+                         autostart: services.autostart, updater: services.updater)
                 .environmentObject(state)
         }
     }
