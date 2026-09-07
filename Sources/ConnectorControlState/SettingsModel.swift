@@ -51,6 +51,11 @@ public final class SettingsModel: ObservableObject {
         self.autostart = autostart
         self.updater = updater
         launchAtLogin = autostart.isEnabled
+        // Only the tool statuses are relayed from AppState. The Storage tab's
+        // path and keep count derive from state.service, whose only writers
+        // (repointStore, refreshServiceSettings) are called from this model,
+        // which raises objectWillChange itself first. An AppState-side repoint
+        // added later would need a relay of state.objectWillChange here.
         state.$toolStatuses.dropFirst()
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &subscriptions)
