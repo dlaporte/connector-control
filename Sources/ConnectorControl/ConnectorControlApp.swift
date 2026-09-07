@@ -22,9 +22,9 @@ struct ConnectorControlApp: App {
 
         WindowGroup("Connector Editor", id: "editor", for: EditTarget.self) { $target in
             if let target = $target.wrappedValue {
-                EditSheetView(target: target)
+                EditSheetView(state: state, target: target)
                     .environmentObject(state)
-                    .navigationTitle(target.isNew ? "Add Connector" : "Edit “\(target.name)”")
+                    .navigationTitle(target.windowTitle)
             } else {
                 Text("Choose a connector from the menu bar popover.")
                     .foregroundStyle(.secondary)
