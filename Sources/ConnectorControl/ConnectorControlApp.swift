@@ -10,7 +10,6 @@ struct ConnectorControlApp: App {
     var body: some Scene {
         MenuBarExtra {
             PopoverView(state: state)
-                .environmentObject(state)
         } label: {
             // A distinctive glyph matters here: switch.2 was nearly identical
             // to the Control Center icon. The alarm variant marks the one
@@ -23,7 +22,6 @@ struct ConnectorControlApp: App {
         WindowGroup("Connector Editor", id: "editor", for: EditTarget.self) { $target in
             if let target = $target.wrappedValue {
                 EditSheetView(state: state, target: target)
-                    .environmentObject(state)
                     .navigationTitle(target.windowTitle)
             } else {
                 Text("Choose a connector from the menu bar popover.")
@@ -36,7 +34,6 @@ struct ConnectorControlApp: App {
         Settings {
             SettingsView(state: state, settings: services.settings,
                          autostart: services.autostart, updater: services.updater)
-                .environmentObject(state)
         }
     }
 }
