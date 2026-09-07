@@ -328,4 +328,367 @@ final class EditorModelTests: XCTestCase {
         editor.removeArg(id: editor.args[0].id)
         XCTAssertTrue(editor.args.isEmpty)
     }
+
+    // MARK: save (catalog §3.8–§3.9)
+
+    func testSaveValidatesTheRemoteForm() {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        let rows: [(kind: RemoteAuthKind, url: String, token: String, headerName: String, headerValue: String, expected: String)] = [
+            (.automatic, "", "", "", "", "Server URL must be a valid http(s) URL."),
+            (.bearer, url, "", "", "", "Enter a bearer token."),
+            (.header, url, "", "", "", "Enter a header name."),
+            (.header, url, "", "X-API-Key", "", "Enter a header value."),
+            (.oauthClient, url, "", "", "", "Enter a client ID."),
+        ]
+        for row in rows {
+            let editor = editor(h, state, .newRemote())
+            editor.name = "r"
+            editor.remoteURL = row.url
+            editor.authKind = row.kind
+            editor.bearerToken = row.token
+            editor.headerName = row.headerName
+            editor.headerValue = row.headerValue
+            XCTAssertFalse(editor.save(), row.expected)
+            XCTAssertEqual(editor.validationError, row.expected)
+            XCTAssertNil(state.store.mcps["r"])
+        }
+    }
+
+    func testSaveValidatesTheLocalForm() {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        let editor = editor(h, state, .new(template: local("", [])))
+        editor.name = "l"
+        XCTAssertFalse(editor.save())
+        XCTAssertEqual(editor.validationError, "Command must not be empty.")
+
+        editor.command = "node"
+        editor.addEnvRow()
+        editor.envRows[0].name = "K"
+        editor.addEnvRow()
+        editor.envRows[1].name = "K"
+        XCTAssertFalse(editor.save())
+        XCTAssertEqual(editor.validationError, "Duplicate environment variable name: K")
+    }
+
+    func testSaveRejectsACanonicalBridgeShapeWithAnInvalidUrl() {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        let editor = editor(h, state, .new(template: local("node", [])))
+        editor.requestView(.json)
+        editor.jsonText = "{\"command\": \"npx\", \"args\": [\"-y\", \"mcp-remote\", \"nope\"]}"
+        editor.name = "bad"
+        XCTAssertFalse(editor.save())
+        XCTAssertEqual(editor.validationError, "Server URL must be a valid http(s) URL.")
+    }
+
+    func testSaveNewRemoteWritesTheNpxShapeAndAppliesImmediately() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        let editor = editor(h, state, .newRemote())
+        editor.name = "new-remote"
+        editor.remoteURL = "https://new.example/mcp"
+        XCTAssertTrue(editor.save())
+        let entry = try XCTUnwrap(state.store.mcps["new-remote"])
+        XCTAssertTrue(entry.enabled)
+        XCTAssertEqual(entry.lastEditView, .form)
+        XCTAssertEqual(entry.config, local("npx", ["-y", "mcp-remote", "https://new.example/mcp"]))
+        XCTAssertNotNil(try h.claudeServers()["new-remote"])
+        XCTAssertEqual(h.settings.lastApplyDate, h.now)
+    }
+
+    func testSaveEncodesEachAuthKind() {
+        let cases: [(kind: RemoteAuthKind, expected: RemoteAuth)] = [
+            (.bearer, .bearer(token: "tok")),
+            (.header, .header(name: "X-API-Key", value: "v")),
+            (.oauthClient, .oauthClient(clientID: "id", clientSecret: "sec", scopes: "a b")),
+        ]
+        for row in cases {
+            let h = AppStateHarness()
+            defer { h.dispose() }
+            let state = h.create()
+            let editor = editor(h, state, .newRemote())
+            editor.name = "auth"
+            editor.remoteURL = url
+            editor.authKind = row.kind
+            editor.bearerToken = "tok"
+            editor.headerName = "X-API-Key"
+            editor.headerValue = "v"
+            editor.oauthClientID = "id"
+            editor.oauthClientSecret = "sec"
+            editor.oauthScopes = "a b"
+            XCTAssertTrue(editor.save())
+            XCTAssertEqual(state.store.mcps["auth"]?.config, RemotePattern.encode(RemoteConfig(url: url, auth: row.expected)))
+        }
+    }
+
+    func testSaveExistingPreservesTheEnabledStateAndRecordsTheView() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        state.setEnabled("scoutbook", false)
+        let editor = editor(h, state, .existing(name: "scoutbook", entry: try XCTUnwrap(state.store.mcps["scoutbook"])))
+        editor.remoteURL = "https://moved.example/mcp"
+        editor.requestView(.json)
+        XCTAssertTrue(editor.save())
+        let entry = try XCTUnwrap(state.store.mcps["scoutbook"])
+        XCTAssertFalse(entry.enabled)
+        XCTAssertEqual(entry.lastEditView, .json)
+        XCTAssertEqual(entry.config, local("npx", ["-y", "mcp-remote", "https://moved.example/mcp"]))   // decoded as bare npx, re-encoded as bare npx
+        XCTAssertNil(try h.claudeServers()["scoutbook"])   // disabled: not applied to Claude
+    }
+
+    func testSaveRenameRemovesTheOldKeyAndNameErrorsSurface() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        let editor = editor(h, state, .existing(name: "scoutbook", entry: try XCTUnwrap(state.store.mcps["scoutbook"])))
+        editor.name = "aws-mcp"
+        XCTAssertFalse(editor.save())
+        XCTAssertEqual(editor.validationError, "A connector named “aws-mcp” already exists.")
+        editor.name = " "
+        XCTAssertFalse(editor.save())
+        XCTAssertEqual(editor.validationError, "Name must not be empty.")
+        editor.name = "scoutbook2"
+        XCTAssertTrue(editor.save())
+        XCTAssertNil(state.store.mcps["scoutbook"])
+        XCTAssertNotNil(state.store.mcps["scoutbook2"])
+        XCTAssertNotNil(try h.claudeServers()["scoutbook2"])
+    }
+
+    func testSaveConflictWhenTheEntryChangedOutsideTheEditor() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        let editor = editor(h, state, .existing(name: "scoutbook", entry: try XCTUnwrap(state.store.mcps["scoutbook"])))
+        XCTAssertNil(state.upsert(name: "scoutbook", entry: MCPEntry(config: AppStateHarness.remote("https://elsewhere.example/mcp")), renamedFrom: "scoutbook"))
+        editor.remoteURL = "https://mine.example/mcp"
+        h.dialogs.nextConfirm = false
+        XCTAssertFalse(editor.save())
+        XCTAssertEqual(h.dialogs.confirms, [FakeDialogs.ConfirmCall(
+            message: "“scoutbook” changed outside this editor.",
+            informative: "Saving will overwrite that change with this editor's version.",
+            primary: "Save Anyway", cancel: "Cancel", destructive: false)])
+        XCTAssertEqual(state.store.mcps["scoutbook"]?.config, AppStateHarness.remote("https://elsewhere.example/mcp"))
+
+        h.dialogs.nextConfirm = true
+        XCTAssertTrue(editor.save())
+        XCTAssertEqual(state.store.mcps["scoutbook"]?.config, local("npx", ["-y", "mcp-remote", "https://mine.example/mcp"]))
+    }
+
+    func testSaveConflictWhenTheEntryWasRemovedOutsideTheEditor() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        let editor = editor(h, state, .existing(name: "scoutbook", entry: try XCTUnwrap(state.store.mcps["scoutbook"])))
+        state.remove(name: "scoutbook")
+        XCTAssertTrue(editor.save())
+        XCTAssertEqual(h.dialogs.confirms[0], FakeDialogs.ConfirmCall(
+            message: "“scoutbook” was removed outside this editor.",
+            informative: "Saving will add it back.",
+            primary: "Save Anyway", cancel: "Cancel", destructive: false))
+        XCTAssertEqual(state.store.mcps["scoutbook"]?.enabled, true)   // a re-added entry takes the editor's snapshot enabled state
+    }
+
+    // MARK: remove (catalog §3.10)
+
+    func testRemoveConfirmsThenRemovesAndAppliesInOneTurn() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        let editor = editor(h, state, .existing(name: "scoutbook", entry: try XCTUnwrap(state.store.mcps["scoutbook"])))
+        XCTAssertFalse(editor.removeConfirmationPending)
+        editor.requestRemove()
+        XCTAssertTrue(editor.removeConfirmationPending)
+        XCTAssertEqual(editor.removeConfirmationMessage, "Remove “scoutbook”? A copy remains in Backups.")
+        XCTAssertEqual(EditorModel.removeButton, "Remove")
+        editor.cancelRemove()
+        XCTAssertFalse(editor.removeConfirmationPending)
+        XCTAssertNotNil(state.store.mcps["scoutbook"])
+
+        editor.requestRemove()
+        editor.confirmRemove()
+        XCTAssertFalse(editor.removeConfirmationPending)
+        XCTAssertNil(state.store.mcps["scoutbook"])
+        XCTAssertNil(try h.claudeServers()["scoutbook"])
+        XCTAssertTrue(h.dialogs.confirms.isEmpty)   // a sheet, not an NSAlert
+    }
+
+    func testPastedAuthConfigOnANewRemoteTargetKeepsItsAuthAndExtraArgs() {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        let editor = editor(h, state, .newRemote())
+        editor.requestView(.json)
+        let pasted = RemotePattern.encode(RemoteConfig(
+            url: url, auth: .header(name: "X-API-Key", value: "v"), extraArgs: ["--transport", "sse-only"]))
+        editor.jsonText = pasted.editorText()
+        editor.name = "pasted"
+        editor.requestView(.form)
+        XCTAssertTrue(editor.isRemote)            // forcesRemote + isRemoteShaped
+        XCTAssertEqual(editor.remoteURL, "")      // catalog §3.5 quirk: adoptForm only takes the URL from detect()
+        XCTAssertEqual(editor.authKind, .header)
+        XCTAssertEqual(editor.headerName, "X-API-Key")
+        editor.remoteURL = url
+        XCTAssertTrue(editor.save())
+        XCTAssertEqual(state.store.mcps["pasted"]?.config, pasted)   // the extra args survive
+    }
+
+    func testAdditionalKeysAreMergedOnARemoteSave() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        let config = local("npx", ["-y", "mcp-remote", url], extra: [("disabled", .bool(true))])
+        let editor = editor(h, state, .existing(name: "scoutbook", entry: MCPEntry(config: config)))
+        XCTAssertTrue(editor.isRemote)
+        XCTAssertTrue(editor.hasAdditional)
+        editor.remoteURL = "https://moved.example/mcp"
+        XCTAssertTrue(editor.save())
+        guard case .object(let saved)? = state.store.mcps["scoutbook"]?.config else {
+            return XCTFail("expected an object config")
+        }
+        XCTAssertEqual(saved["disabled"], .bool(true))
+        XCTAssertEqual(saved["args"], .array([.string("-y"), .string("mcp-remote"), .string("https://moved.example/mcp")]))
+    }
+
+    // MARK: tool note (spec 2026-09-05-tool-probe §3.3–§3.4)
+
+    func testNewRemoteConnectorNotesAMissingNpx() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        h.tools.statuses[.npx] = .notFound
+        let state = h.create()
+        let editor = editor(h, state, .newRemote())
+        defer { editor.dispose() }
+        XCTAssertEqual(editor.requiredTool, .npx)
+        XCTAssertNil(editor.toolNote)   // not probed yet: no note, and nothing blocks
+        XCTAssertFalse(editor.hasToolNote)
+        XCTAssertTrue(h.ui.pumpUntil({ editor.hasToolNote }, timeout: 5))
+        let note = try XCTUnwrap(editor.toolNote)
+        XCTAssertEqual(note.text, "npx wasn’t found, so Claude Desktop won’t be able to start this connector.")
+        XCTAssertEqual(note.linkTitle, "Install Node.js")
+        XCTAssertEqual(note.linkURL.absoluteString, "https://nodejs.org/en/download")
+        XCTAssertEqual(note.installCommand, "brew install node")
+        editor.name = "example"
+        editor.remoteURL = url
+        XCTAssertTrue(editor.canSave)   // the note never blocks Save
+        XCTAssertTrue(editor.save())
+        XCTAssertNil(editor.validationError)
+    }
+
+    func testLocalCommandChangesReEvaluateAndReProbeTheTool() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        h.tools.statuses[.uvx] = .notFound
+        let state = h.create()
+        let editor = editor(h, state, .new(template: local("node", ["server.js"])))
+        defer { editor.dispose() }
+        XCTAssertEqual(editor.requiredTool, .node)
+        XCTAssertTrue(h.ui.pumpUntil({ state.toolStatuses[.node] != nil }, timeout: 5))
+        XCTAssertFalse(editor.hasToolNote)   // node is installed on this (fake) machine
+        var raised = 0
+        let subscription = editor.objectWillChange.sink { _ in raised += 1 }
+        defer { subscription.cancel() }
+        editor.command = "uvx"
+        XCTAssertEqual(editor.requiredTool, .uvx)
+        XCTAssertGreaterThan(raised, 0)
+        XCTAssertTrue(h.ui.pumpUntil({ editor.hasToolNote }, timeout: 5))
+        XCTAssertTrue(try XCTUnwrap(editor.toolNote).text.hasPrefix("uvx wasn’t found"))
+        editor.command = "/usr/local/bin/uvx"   // a path is the user's deliberate choice: no PATH lookup, no note
+        XCTAssertNil(editor.requiredTool)
+        XCTAssertFalse(editor.hasToolNote)
+        editor.command = "python"
+        XCTAssertNil(editor.requiredTool)
+        XCTAssertEqual(h.tools.probed.count, 2)   // node once, uvx once — the non-tools cost nothing
+        editor.command = "uvx"
+        // Back to a tool that is cached: probed again anyway — it may have been installed meanwhile.
+        XCTAssertTrue(h.ui.pumpUntil({ h.tools.probed.count == 3 }, timeout: 5))
+        XCTAssertTrue(editor.hasToolNote)
+    }
+
+    func testJsonViewEvaluatesTheParsedConfig() {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        h.tools.statuses[.uv] = .notFound
+        let state = h.create()
+        let editor = editor(h, state, .new(template: local("node", ["x.js"])))
+        defer { editor.dispose() }
+        editor.requestView(.json)
+        XCTAssertEqual(editor.requiredTool, .node)   // the same config, now read from the text
+        editor.jsonText = "{\"command\": \"uv\", \"args\": [\"run\", \"server.py\"]}"
+        XCTAssertEqual(editor.requiredTool, .uv)
+        XCTAssertTrue(h.ui.pumpUntil({ editor.hasToolNote }, timeout: 5))
+        editor.jsonText = "{ not json"
+        XCTAssertNil(editor.requiredTool)   // unparseable: nothing to evaluate
+        XCTAssertFalse(editor.hasToolNote)
+        editor.jsonText = "{\"command\": \"npx\", \"args\": [\"-y\", \"mcp-remote\", \"" + url + "\"]}"
+        XCTAssertEqual(editor.requiredTool, .npx)
+        editor.requestView(.form)   // a bare bridge invocation: the remote form, still npx
+        XCTAssertTrue(editor.isRemote)
+        XCTAssertEqual(editor.requiredTool, .npx)
+    }
+
+    func testACachedStatusShowsTheNoteAtOnceAndAFoundToolShowsNone() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        h.tools.statuses[.npx] = .notFound
+        let state = h.create()
+        state.refreshTools()
+        XCTAssertTrue(h.ui.pumpUntil({ state.toolStatuses[.npx] != nil }, timeout: 5))
+        let batches = h.tools.batches
+        let remote = editor(h, state, .existing(name: "scoutbook", entry: try XCTUnwrap(state.store.mcps["scoutbook"])))   // bare npx mcp-remote
+        XCTAssertTrue(remote.hasToolNote)          // straight from the cache, no wait
+        XCTAssertEqual(h.tools.batches, batches)   // and no re-probe on open
+        let localEditor = editor(h, state, .existing(name: "local", entry: MCPEntry(config: local("node", ["x.js"]))))
+        defer { localEditor.dispose() }
+        XCTAssertEqual(localEditor.requiredTool, .node)
+        XCTAssertFalse(localEditor.hasToolNote)
+        XCTAssertEqual(h.tools.batches, batches)
+        remote.dispose()
+        state.refreshTools([.npx])   // a disposed editor no longer listens
+        XCTAssertTrue(h.ui.pumpUntil({ h.tools.batches == batches + 1 }, timeout: 5))
+    }
+
+    func testDisposeStopsRelayingAppStateToolStatusChanges() {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        h.tools.statuses[.npx] = .notFound
+        let state = h.create()
+        let editor = editor(h, state, .newRemote())
+        XCTAssertTrue(h.ui.pumpUntil({ editor.hasToolNote }, timeout: 5))
+
+        editor.dispose()
+        var raised = 0
+        let subscription = editor.objectWillChange.sink { _ in raised += 1 }
+        defer { subscription.cancel() }
+
+        // Publish a change that would clear the note on a live (not disposed) editor.
+        h.tools.statuses[.npx] = .found(path: "/opt/homebrew/bin/npx", version: "1.0.0")
+        state.refreshTools([.npx])
+        XCTAssertTrue(h.ui.pumpUntil({ state.toolStatuses[.npx] == .found(path: "/opt/homebrew/bin/npx", version: "1.0.0") }, timeout: 5))
+        XCTAssertEqual(raised, 0)   // the view was never told to re-read: dispose stopped the relay
+    }
+
+    /// macOS only (catalog §3.13): a launcher only the login shell can see gets the advice line.
+    func testAShellOnlyToolShowsTheAdviceLine() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        h.tools.statuses[.npx] = .foundInShellOnly(path: "/Users/me/.nvm/versions/node/v22/bin/npx", version: "10.9.2")
+        let state = h.create()
+        let editor = editor(h, state, .newRemote())
+        defer { editor.dispose() }
+        XCTAssertTrue(h.ui.pumpUntil({ editor.hasToolNote }, timeout: 5))
+        let note = try XCTUnwrap(editor.toolNote)
+        XCTAssertEqual(note.text, "npx is at /Users/me/.nvm/versions/node/v22/bin/npx in your shell, but Claude Desktop launches connectors with its own PATH and may not see it there.")
+        XCTAssertEqual(note.advice, ToolNote.shellOnlyAdvice)
+        XCTAssertEqual(note.installCommand, "brew install node")
+        editor.name = "example"
+        editor.remoteURL = url
+        XCTAssertTrue(editor.canSave)   // advisory: never blocks Save
+    }
 }
