@@ -202,7 +202,8 @@ public final class AppState: ObservableObject {
         let newStoreURL = rebuilt.paths.masterStoreURL
         let fm = FileManager.default
         if !fm.fileExists(atPath: newStoreURL.path), fm.fileExists(atPath: previousStoreURL.path) {
-            try? fm.createDirectory(at: rebuilt.paths.storeDirURL, withIntermediateDirectories: true)
+            try? fm.createDirectory(at: rebuilt.paths.storeDirURL, withIntermediateDirectories: true,
+                                    attributes: [.posixPermissions: 0o700])
             try? fm.copyItem(at: previousStoreURL, to: newStoreURL)
         }
         service = rebuilt

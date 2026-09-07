@@ -15,7 +15,9 @@ one ships.
   now ends up readable by you alone, even when it already existed with
   wider permissions (a config Claude Desktop created, a master list checked
   out of a repo). Earlier builds set the private mode on the file they
-  wrote and then let the replace restore the old, wider mode.
+  wrote and then let the replace restore the old, wider mode. The folders
+  the app creates for the master list and backups are private from the
+  start too, not only after the next launch's repair pass.
 - macOS: the Restore Claude config sheet no longer keeps showing a
   previous attempt's error once you start another restore, and a restore
   that fails on an unreadable backup now says what was wrong with the file

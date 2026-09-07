@@ -49,6 +49,19 @@ final class AtomicFileTests: XCTestCase {
         XCTAssertEqual(mode, 0o600)
     }
 
+    /// A fresh install: the store directory does not exist until the first
+    /// save creates it, and it must be private from that moment, not from the
+    /// next launch's sweep.
+    func testCreatedDirectoriesArePrivate() throws {
+        let fm = FileManager.default
+        let url = dir.appendingPathComponent("nested/mcps.json")
+        try AtomicFile.write(Data("{}".utf8), to: url)
+        for directory in [dir!, dir.appendingPathComponent("nested")] {
+            let mode = try XCTUnwrap(fm.attributesOfItem(atPath: directory.path)[.posixPermissions] as? Int)
+            XCTAssertEqual(mode, 0o700, directory.lastPathComponent)
+        }
+    }
+
     func testNoTempFilesLeftBehind() throws {
         let url = dir.appendingPathComponent("file.json")
         try AtomicFile.write(Data("x".utf8), to: url)

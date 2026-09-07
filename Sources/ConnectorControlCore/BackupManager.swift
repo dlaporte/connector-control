@@ -16,7 +16,8 @@ public struct BackupManager {
         let base = url.deletingPathExtension().lastPathComponent
         let dest = backupsDir.appendingPathComponent("\(base).original.json")
         guard !fm.fileExists(atPath: dest.path) else { return }
-        try fm.createDirectory(at: backupsDir, withIntermediateDirectories: true)
+        try fm.createDirectory(at: backupsDir, withIntermediateDirectories: true,
+                               attributes: [.posixPermissions: 0o700])   // backups hold secrets
         try fm.copyItem(at: url, to: dest)
         // Backups can hold env-var secrets — keep them owner-only.
         try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: dest.path)
@@ -36,7 +37,8 @@ public struct BackupManager {
            (try? Data(contentsOf: newest)) == current {
             return newest
         }
-        try fm.createDirectory(at: backupsDir, withIntermediateDirectories: true)
+        try fm.createDirectory(at: backupsDir, withIntermediateDirectories: true,
+                               attributes: [.posixPermissions: 0o700])   // backups hold secrets
         var dest = backupsDir
             .appendingPathComponent("\(series).\(BackupTimestamp.string(from: now)).json")
         var counter = 2

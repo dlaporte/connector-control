@@ -4,7 +4,12 @@ public enum AtomicFile {
     public static func write(_ data: Data, to url: URL) throws {
         let fm = FileManager.default
         let dir = url.deletingLastPathComponent()
-        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        // A directory this call has to create holds a private file, so it is
+        // owner-only from the start (the sweep would only catch it on the
+        // next launch; Windows applies its ACL the same way). Directories that
+        // already exist — a synced folder the user chose — are left alone.
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true,
+                               attributes: [.posixPermissions: 0o700])
         let tmp = dir.appendingPathComponent(".\(url.lastPathComponent).tmp-\(UUID().uuidString)")
         try data.write(to: tmp)
         // Connector configs can hold env-var secrets; never leave them

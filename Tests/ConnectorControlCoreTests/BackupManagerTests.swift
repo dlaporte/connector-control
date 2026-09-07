@@ -19,6 +19,13 @@ final class BackupManagerTests: XCTestCase {
         try? FileManager.default.removeItem(at: dir)
     }
 
+    func testBackupsDirectoryIsCreatedPrivate() throws {
+        _ = try manager.backUp(fileAt: source, series: "claude_desktop_config")
+        let mode = try XCTUnwrap(FileManager.default
+            .attributesOfItem(atPath: manager.backupsDir.path)[.posixPermissions] as? Int)
+        XCTAssertEqual(mode, 0o700)
+    }
+
     func testBackUpCreatesTimestampedCopy() throws {
         let made = try XCTUnwrap(manager.backUp(
             fileAt: source, series: "claude_desktop_config",
