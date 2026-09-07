@@ -349,11 +349,20 @@ jobs:
       - name: Create the release, with the Mac assets already attached
         run: |
           set -o pipefail
+          # The GitHub release body is the changelog section between a download paragraph and
+          # the compare link. Only the body gets the paragraph: the appcast and the Windows
+          # packages embedded notes.md as it was, and their update dialogs must not tell the
+          # user which file to download. GitHub lists every asset, updater packages included,
+          # so the body says which two files a person actually wants.
+          {
+            printf '**Download:** on a Mac, **ConnectorControl_%s.dmg**; on a Windows PC, **ConnectorControl-win-x64-Setup.exe** (Intel and AMD) or **ConnectorControl-win-arm64-Setup.exe** (Arm). Everything else listed below (appcast.xml, the .nupkg packages, releases.*.json) is read by the apps'\'' built-in updaters and never needs downloading.\n\n' "$VERSION"
+            cat notes/notes.md
+          } > body.md
           # Drafts and prereleases must not be the compare base.
           PREV=$(gh release list --limit 1 --exclude-drafts --exclude-pre-releases \
             --json tagName --jq '.[0].tagName' || true)
           if [ -n "$PREV" ] && [ "$PREV" != "$TAG" ]; then
-            printf '\n**Full changelog**: %s/compare/%s...%s\n' "$REPO_URL" "$PREV" "$TAG" >> notes/notes.md
+            printf '\n**Full changelog**: %s/compare/%s...%s\n' "$REPO_URL" "$PREV" "$TAG" >> body.md
           fi
           # Stale drafts under this tag would make GitHub refuse to publish anything else under
           # it; the script explains why they can go.
@@ -381,7 +390,7 @@ jobs:
             # forever if the job died in between.
             # No --prerelease and no --latest: GitHub marks the newest full release
             # "latest" on its own, which is exactly what SUFeedURL relies on.
-            gh release create "$TAG" --title "Connector Control $VERSION" --notes-file notes/notes.md \
+            gh release create "$TAG" --title "Connector Control $VERSION" --notes-file body.md \
               "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml
           fi
 
