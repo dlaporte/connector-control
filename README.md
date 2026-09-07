@@ -196,7 +196,7 @@ app but cannot run the test suite.
 
     git clone https://github.com/dlaporte/connector-control.git
     cd connector-control
-    swift test                # 154 tests, no network, never touches your real config
+    swift test                # 302 tests, no network, never touches your real config
     ./scripts/build-app.sh    # → build/Connector Control.app (ad-hoc signed)
     cp -R "build/Connector Control.app" /Applications/
 

@@ -17,7 +17,9 @@ one ships.
   out of a repo). Earlier builds set the private mode on the file they
   wrote and then let the replace restore the old, wider mode.
 - macOS: the Restore Claude config sheet no longer keeps showing a
-  previous attempt's error once you start another restore.
+  previous attempt's error once you start another restore, and a restore
+  that fails on an unreadable backup now says what was wrong with the file
+  instead of showing a generic error code.
 - Both platforms: when the master list was unreadable and Claude's config
   was malformed at the same time, the banner now reports both, including
   the Backups ▸ Restore… way out; before, only the first note was shown.
