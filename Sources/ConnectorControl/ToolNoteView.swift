@@ -1,5 +1,6 @@
 import SwiftUI
 import ConnectorControlCore
+import ConnectorControlState
 
 /// The tool note (spec §3.4): what is wrong, the advice line when there is one
 /// (the shell-only state), then the install line.
@@ -42,29 +43,21 @@ struct ToolNoteInstallLine: View {
 
 /// One Settings ▸ Claude ▸ Tools row (spec §3.5): name, status, and — when
 /// there is something to do — the install line (and, for a tool only the
-/// shell can see, the sentence that says so).
+/// shell can see, the sentence that says so). Layout only: the facts are the ToolRow's.
 struct ToolRowView: View {
-    let tool: Tool
-    let status: ToolStatus?
-
-    private var isProblem: Bool {
-        switch status {
-        case .notFound?, .foundInShellOnly?: return true
-        default: return false
-        }
-    }
+    let row: ToolRow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(tool.name)
+                Text(row.name)
                     .font(.system(.body, design: .monospaced))
                 Spacer()
-                Text(ToolNote.statusText(status))
-                    .foregroundStyle(isProblem ? Color.orange : Color.secondary)
+                Text(row.statusText)
+                    .foregroundStyle(row.isProblem ? Color.orange : Color.secondary)
             }
-            if let note = ToolNote.make(tool: tool, status: status) {
-                if case .foundInShellOnly? = status {
+            if let note = row.note {
+                if row.isShellOnly {
                     Text(note.text)
                         .font(.caption)
                         .foregroundStyle(.secondary)

@@ -92,4 +92,13 @@ final class RemotePatternTests: XCTestCase {
         XCTAssertFalse(RemotePattern.isRemoteShaped(config(command: "node", args: ["mcp-remote", "https://x.dev"])))
         XCTAssertFalse(RemotePattern.isRemoteShaped(.object(["command": .string("npx")])))
     }
+
+    func testIsValidHTTPURLNeedsAnHTTPSchemeAndAHost() {
+        XCTAssertTrue(RemotePattern.isValidHTTPURL("https://example.com/mcp"))
+        XCTAssertTrue(RemotePattern.isValidHTTPURL("HTTP://example.com"), "scheme case does not matter")
+        XCTAssertFalse(RemotePattern.isValidHTTPURL(""))
+        XCTAssertFalse(RemotePattern.isValidHTTPURL("ftp://x"))
+        XCTAssertFalse(RemotePattern.isValidHTTPURL("https://"), "a scheme with no host")
+        XCTAssertFalse(RemotePattern.isValidHTTPURL("nope"))
+    }
 }

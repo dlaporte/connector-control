@@ -2,36 +2,30 @@ import SwiftUI
 import AppKit
 import CoreImage
 import UniformTypeIdentifiers
-import ServiceManagement
 import ConnectorControlCore
+import ConnectorControlState
 
+/// Catalog §4: three tabs of bindings; every rule and string is SettingsModel's.
 struct SettingsView: View {
-    @EnvironmentObject var state: AppState
+    @StateObject private var model: SettingsModel
+    private let state: AppState
     @State private var showRestore = false
-    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-    @State private var loginItemNote: String?
-    @AppStorage(DefaultsKey.masterStoreDir.rawValue) private var masterStoreDirSetting: String = ""
-    
-    @AppStorage(DefaultsKey.claudeAppPath.rawValue) private var claudeAppPath: String = "/Applications/Claude.app"
-    @AppStorage(DefaultsKey.backupKeepCount.rawValue) private var backupKeepCount: Int = 20
-    @AppStorage(DefaultsKey.notifyExternalChanges.rawValue) private var notifyExternalChanges: Bool = true
-    @AppStorage(DefaultsKey.confirmBeforeRestart.rawValue) private var confirmBeforeRestart: Bool = true
-    @AppStorage(DefaultsKey.confirmBeforeQuit.rawValue) private var confirmBeforeQuit: Bool = true
-    /// Mirrors SPUUpdater.automaticallyDownloadsUpdates (Sparkle persists it
-    /// itself); kept in sync via KVO so a change made in Sparkle's own dialog
-    /// doesn't leave the toggle stale.
-    @State private var autoUpdate = false
+
+    init(state: AppState, settings: AppSettings, autostart: Autostart, updater: Updater) {
+        self.state = state
+        _model = StateObject(wrappedValue: SettingsModel(state: state, settings: settings, autostart: autostart, updater: updater))
+    }
 
     var body: some View {
         TabView {
             generalTab
-                .tabItem { Label("General", systemImage: "gearshape") }
+                .tabItem { Label(SettingsModel.generalTab, systemImage: "gearshape") }
             storageTab
-                .tabItem { Label("Storage", systemImage: "externaldrive") }
+                .tabItem { Label(SettingsModel.storageTab, systemImage: "externaldrive") }
             claudeTab
                 .tabItem {
                     Label {
-                        Text("Claude")
+                        Text(SettingsModel.claudeTab)
                     } icon: {
                         Image(nsImage: claudeTabIcon)
                     }
@@ -42,101 +36,73 @@ struct SettingsView: View {
         // without scrolling; the Windows Settings window uses the same size.
         .frame(width: 480, height: 560)
         .sheet(isPresented: $showRestore) {
-            RestoreSheetView().environmentObject(state)
+            RestoreSheetView(state: state)
         }
     }
 
     private var generalTab: some View {
         Form {
             Section {
-                Toggle("Launch at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, wantOn in
-                        let isOn = SMAppService.mainApp.status == .enabled
-                        guard wantOn != isOn else { return }
-                        do {
-                            if wantOn { try SMAppService.mainApp.register() }
-                            else { try SMAppService.mainApp.unregister() }
-                            loginItemNote = nil
-                        } catch {
-                            launchAtLogin = isOn   // revert the checkbox
-                            loginItemNote = "Couldn't update login item: \(error.localizedDescription)"
-                        }
-                        if wantOn, SMAppService.mainApp.status == .requiresApproval {
-                            loginItemNote = "Approve Connector Control under System Settings → General → Login Items."
-                        }
-                    }
-                if let loginItemNote {
-                    Text(loginItemNote).font(.caption).foregroundStyle(.secondary)
+                Toggle(SettingsModel.launchAtLoginTitle, isOn: $model.launchAtLogin)
+                if let note = model.loginItemNote {
+                    Text(note).font(.caption).foregroundStyle(.secondary)
                 }
             }
 
             Section {
-                Toggle("Confirm before restarting Claude", isOn: $confirmBeforeRestart)
-                Toggle("Confirm before quitting", isOn: $confirmBeforeQuit)
+                Toggle(SettingsModel.confirmRestartTitle, isOn: $model.confirmBeforeRestart)
+                Toggle(SettingsModel.confirmQuitTitle, isOn: $model.confirmBeforeQuit)
             }
 
             Section {
-                Toggle("Notify about changes made outside Connector Control",
-                       isOn: $notifyExternalChanges)
-                Text("Covers edits to Claude's config and synced connector-list "
-                     + "changes, including when a remote change needs a Claude restart.")
+                Toggle(SettingsModel.notifyTitle, isOn: $model.notifyExternalChanges)
+                Text(SettingsModel.notifyCaption)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("Updates") {
-                Toggle("Automatically download and install updates", isOn: $autoUpdate)
-                    .disabled(!state.updaterRunning)
-                    .onChange(of: autoUpdate) { _, wantOn in
-                        state.updaterController.updater.automaticallyDownloadsUpdates = wantOn
-                    }
+            Section(SettingsModel.updatesHeader) {
+                Toggle(SettingsModel.autoUpdateTitle, isOn: $model.autoUpdate)
+                    .disabled(!model.updatesEnabled)
                 HStack {
-                    Text("Version \(appVersion)")
+                    Text(model.versionText)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Check for Updates…") {
-                        state.updaterController.checkForUpdates(nil)
-                    }
-                    .disabled(!state.updaterRunning)
+                    Button(SettingsModel.checkForUpdatesTitle) { model.checkForUpdates() }
+                        .disabled(!model.updatesEnabled)
                 }
             }
         }
         .formStyle(.grouped)
-        .onAppear {
-            launchAtLogin = SMAppService.mainApp.status == .enabled
-            autoUpdate = state.updaterController.updater.automaticallyDownloadsUpdates
-        }
-        .onReceive(state.updaterController.updater
-            .publisher(for: \.automaticallyDownloadsUpdates)) { autoUpdate = $0 }
+        .onAppear { model.refresh() }
     }
 
     private var storageTab: some View {
         Form {
-            Section("Master List Location") {
-                Text(state.service.paths.storeDirURL.path)
+            Section(SettingsModel.masterListHeader) {
+                Text(model.storeDirPath)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack {
-                    Button("Choose…") { chooseStoreDir() }
-                    Button("Use Default") { state.repointStore(to: nil) }
-                        .disabled(masterStoreDirSetting.isEmpty)
+                    Button(SettingsModel.chooseTitle) { chooseStoreDir() }
+                    Button(SettingsModel.useDefaultTitle) { model.useDefaultStoreDir() }
+                        .disabled(!model.canUseDefaultStore)
                 }
             }
 
-            Section("Backups") {
-                Text("Both config files are backed up automatically before every change.")
+            Section(SettingsModel.backupsHeader) {
+                Text(SettingsModel.backupsCaption)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Stepper(value: $backupKeepCount, in: 5...100) {
-                    Text("Keep \(backupKeepCount) backups of each file")
+                Stepper(value: $model.backupKeepCount,
+                        in: SettingsModel.minKeepCount...SettingsModel.maxKeepCount) {
+                    Text(model.keepCountLabel)
                 }
-                .onChange(of: backupKeepCount) { _, _ in state.refreshServiceSettings() }
                 HStack {
-                    Button("Reveal in Finder") {
-                        NSWorkspace.shared.activateFileViewerSelecting(
-                            [state.service.backups.backupsDir])
+                    Button(SettingsModel.revealInFinderTitle) {
+                        NSWorkspace.shared.activateFileViewerSelecting([model.backupsDir])
                     }
-                    Button("Restore…") { showRestore = true }
+                    Button(SettingsModel.restoreTitle) { showRestore = true }
                 }
             }
         }
@@ -145,40 +111,29 @@ struct SettingsView: View {
 
     private var claudeTab: some View {
         Form {
-            Section("Claude App") {
-                Text(claudeAppPath)
+            Section(SettingsModel.claudeAppHeader) {
+                Text(model.claudeAppPath)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack {
-                    Button("Choose…") { chooseClaudeApp() }
-                    Button("Use Default") { claudeAppPath = "/Applications/Claude.app" }
-                        .disabled(claudeAppPath == "/Applications/Claude.app")
+                    Button(SettingsModel.chooseTitle) { chooseClaudeApp() }
+                    Button(SettingsModel.useDefaultTitle) { model.useDefaultClaudeApp() }
+                        .disabled(!model.canUseDefaultClaudeApp)
                 }
             }
 
-            Section(ToolNote.settingsHeader) {
-                Text(ToolNote.settingsCaption)
+            Section(SettingsModel.toolsHeader) {
+                Text(SettingsModel.toolsCaption)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                ForEach(Tool.allCases, id: \.self) { tool in
-                    ToolRowView(tool: tool, status: state.toolStatuses[tool])
+                ForEach(model.toolRows, id: \.name) { row in
+                    ToolRowView(row: row)
                 }
             }
         }
         .formStyle(.grouped)
         // Spec §6 D4: the Mac refreshes when this tab appears.
-        .onAppear { state.refreshTools() }
-    }
-
-    private var appVersion: String {
-        let info = Bundle.main.infoDictionary
-        guard let short = info?["CFBundleShortVersionString"] as? String else {
-            return "development build"
-        }
-        if let build = info?["CFBundleVersion"] as? String, build != short {
-            return "\(short) (\(build))"
-        }
-        return short
+        .onAppear { model.refreshTools() }
     }
 
     /// Claude's bare "splat" glyph, taken from the tray template image the
@@ -186,7 +141,7 @@ struct SettingsView: View {
     /// tab icons. Falls back to a desaturated copy of the app icon if a future
     /// Claude version moves the asset.
     private var claudeTabIcon: NSImage {
-        let resources = URL(fileURLWithPath: claudeAppPath)
+        let resources = URL(fileURLWithPath: model.claudeAppPath)
             .appendingPathComponent("Contents/Resources")
         for name in ["TrayIconTemplate@2x.png", "TrayIconTemplate.png"] {
             let url = resources.appendingPathComponent(name)
@@ -196,7 +151,7 @@ struct SettingsView: View {
                 return splat
             }
         }
-        let icon = NSWorkspace.shared.icon(forFile: claudeAppPath)
+        let icon = NSWorkspace.shared.icon(forFile: model.claudeAppPath)
         let size = NSSize(width: 22, height: 22)
         guard let tiff = icon.tiffRepresentation,
               let ciImage = CIImage(data: tiff),
@@ -225,7 +180,7 @@ struct SettingsView: View {
         panel.allowsMultipleSelection = false
         panel.prompt = "Choose"
         if panel.runModal() == .OK, let url = panel.url {
-            state.repointStore(to: url)
+            model.chooseStoreDir(url)
         }
     }
 
@@ -238,7 +193,7 @@ struct SettingsView: View {
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         panel.prompt = "Choose"
         if panel.runModal() == .OK, let url = panel.url {
-            claudeAppPath = url.path
+            model.chooseClaudeApp(url)
         }
     }
 }

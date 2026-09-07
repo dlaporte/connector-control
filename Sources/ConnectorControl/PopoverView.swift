@@ -1,28 +1,30 @@
 import SwiftUI
 import ConnectorControlCore
+import ConnectorControlState
 
 struct PopoverView: View {
-    @EnvironmentObject var state: AppState
+    @StateObject private var model: PopoverModel
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
+
+    init(state: AppState) {
+        _model = StateObject(wrappedValue: PopoverModel(state: state))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
-            if let error = state.lastError { errorBanner(error) }
+            if let error = model.errorMessage { errorBanner(error) }
             mcpList
-            if state.needsClaudeRestart || state.applyRetryNeeded {
+            if model.showFooter {
                 Divider()
                 footer
             }
         }
         .frame(minWidth: 240, maxWidth: 380)
         .background(WindowAutoSizer())
-        .onAppear {
-            state.reload()
-            probeRowTools()
-        }
+        .onAppear { model.opened() }
     }
 
     private func openEditor(_ target: EditTarget) {
@@ -30,22 +32,11 @@ struct PopoverView: View {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// The rows' launchers, asked about once per open (addendum 2026-09-06-row-glyph
-    /// §3): only the tools the listed connectors need and the cache does not have
-    /// yet. Nothing required, or everything cached, spawns no process; `refreshTools`
-    /// coalesces a tool already in flight.
-    private func probeRowTools() {
-        let needed = ToolRequirement.requiredTools(for: state.store.mcps.values.map(\.config))
-            .filter { state.toolStatuses[$0] == nil }
-        guard !needed.isEmpty else { return }
-        state.refreshTools(needed)
-    }
-
     private var header: some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
-                Text("Connector Control").font(.headline)
-                Text(headerSubtitle).font(.caption2).foregroundStyle(.secondary)
+                Text(PopoverModel.title).font(.headline)
+                Text(model.subtitle).font(.caption2).foregroundStyle(.secondary)
                 profileChip
             }
             Spacer(minLength: 20)
@@ -56,7 +47,7 @@ struct PopoverView: View {
                     headerIcon("plus")
                 }
                 .buttonStyle(.accessoryBar)
-                .help("Add Connector")
+                .help(PopoverModel.addTooltip)
                 Button {
                     NSApp.activate(ignoringOtherApps: true)
                     openSettings()
@@ -64,14 +55,14 @@ struct PopoverView: View {
                     headerIcon("gearshape")
                 }
                 .buttonStyle(.accessoryBar)
-                .help("Settings")
+                .help(PopoverModel.settingsTooltip)
                 Button {
-                    state.quitApp()
+                    model.quit()
                 } label: {
                     headerIcon("power")
                 }
                 .buttonStyle(.accessoryBar)
-                .help("Quit Connector Control")
+                .help(PopoverModel.quitTooltip)
             }
         }
         .padding(.horizontal, 12)
@@ -82,36 +73,30 @@ struct PopoverView: View {
 
     private var profileChip: some View {
         Menu {
-            ForEach(state.profileNames, id: \.self) { name in
+            ForEach(model.profileItems) { item in
                 Button {
-                    state.switchProfile(to: name)
+                    model.switchProfile(item.name)
                 } label: {
-                    if name == state.activeProfile {
-                        Label(name, systemImage: "checkmark")
+                    if item.isActive {
+                        Label(item.name, systemImage: "checkmark")
                     } else {
-                        Text(name)
+                        Text(item.name)
                     }
                 }
             }
             Divider()
-            Button("New Profile\u{2026}") { state.newProfile() }
-            Button("Rename \u{201C}\(state.activeProfile)\u{201D}\u{2026}") { state.renameProfile() }
-            Button("Delete \u{201C}\(state.activeProfile)\u{201D}\u{2026}") { state.deleteProfile() }
-                .disabled(state.profileNames.count < 2)
+            Button(PopoverModel.newProfileTitle) { model.newProfile() }
+            Button(model.renameProfileTitle) { model.renameProfile() }
+            Button(model.deleteProfileTitle) { model.deleteProfile() }
+                .disabled(!model.canDeleteProfile)
         } label: {
-            Text("\(state.activeProfile) \u{25BE}")
+            Text(model.profileChipText)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
         .padding(.top, 1)
-    }
-
-    private var headerSubtitle: String {
-        let total = state.store.mcps.count
-        let enabled = state.store.enabledServers.count
-        return total == 0 ? "No connectors configured" : "\(enabled) of \(total) enabled"
     }
 
     private func errorBanner(_ message: String) -> some View {
@@ -135,16 +120,18 @@ struct PopoverView: View {
         // explicit frame — growing with content up to the cap, scrolling past.
         ScrollView {
             VStack(spacing: 0) {
-                ForEach(state.sortedNames, id: \.self) { name in
-                    MCPRow(name: name) {
-                        if let entry = state.store.mcps[name] {
-                            openEditor(.existing(name: name, entry: entry))
-                        }
-                    }
+                ForEach(model.rows) { row in
+                    MCPRow(row: row,
+                           onToggle: { model.setEnabled(row.name, $0) },
+                           onEdit: {
+                               if let entry = model.entryFor(row.name) {
+                                   openEditor(.existing(name: row.name, entry: entry))
+                               }
+                           })
                     Divider()
                 }
-                if state.store.mcps.isEmpty {
-                    Text("No connectors configured yet — add one below.")
+                if model.isEmpty {
+                    Text(PopoverModel.emptyText)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding()
@@ -162,26 +149,14 @@ struct PopoverView: View {
     private var footer: some View {
         HStack {
             Spacer()
-            if state.applyRetryNeeded {
-                Button {
-                    state.apply()
-                } label: {
-                    Label("Apply Failed — Retry",
-                          systemImage: "exclamationmark.arrow.circlepath")
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-                .controlSize(.small)
-            } else if state.needsClaudeRestart {
-                Button {
-                    state.restartClaude()
-                } label: {
-                    Label("Restart Required", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
-                .controlSize(.small)
+            Button {
+                model.footerAction()
+            } label: {
+                Label(model.footerTitle, systemImage: model.footerGlyph)
             }
+            .buttonStyle(.borderedProminent)
+            .tint(model.footer == .retryApply ? .red : .orange)
+            .controlSize(.small)
         }
         .padding(10)
     }
@@ -197,169 +172,5 @@ struct PopoverView: View {
             .foregroundStyle(.secondary)
             .frame(width: 12, height: 12)
             .frame(width: 17, height: 17)
-    }
-}
-
-/// MenuBarExtra's window grows with its content but doesn't reliably SHRINK
-/// when content gets shorter (footer clearing, banner dismissing, row removal),
-/// leaving dead space above and below the vertically-centered content. This
-/// shim snaps the window frame to the content's fitted height, hung from a
-/// recorded top-edge anchor.
-///
-/// The sizing must be IDEMPOTENT: three resize passes race here (SwiftUI's
-/// auto-grow, this shim, the measured scroll-cap feedback), and a violent
-/// content change like a profile switch interleaves them. A delta-based
-/// correction that preserves the current top edge perpetuates whatever
-/// transient frame it happened to read — the frame is therefore always set
-/// to absolutes (anchored top, content-ideal height) computed from stable
-/// facts, so competing passes converge instead of compounding drift.
-private struct WindowAutoSizer: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { TrackingView() }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        (nsView as? TrackingView)?.scheduleResize()
-    }
-
-    final class TrackingView: NSView {
-        private var anchoredWindow: NSWindow?
-        private var anchorTop: CGFloat?
-        /// Tracks visibility TRANSITIONS: the anchor is recorded on the first
-        /// observation after the window becomes visible — by whichever runs
-        /// first, the occlusion notification or a scheduled resize — because
-        /// that is when the system has just positioned the panel under the
-        /// status item (a reopen may be on another display). Anchoring at
-        /// view-attach time recorded a not-yet-positioned frame, and
-        /// re-anchoring on every occlusion event could persist a frame this
-        /// shim had itself already moved.
-        private var wasVisible = false
-        private var resizePending = false
-        private var visibilityObserver: NSObjectProtocol?
-
-        deinit {
-            if let visibilityObserver {
-                NotificationCenter.default.removeObserver(visibilityObserver)
-            }
-        }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            observeWindowIfNeeded()
-        }
-
-        override func layout() {
-            super.layout()
-            scheduleResize()
-        }
-
-        private func observeWindowIfNeeded() {
-            guard let window, window !== anchoredWindow else { return }
-            anchoredWindow = window
-            anchorTop = nil
-            wasVisible = false
-            if let visibilityObserver {
-                NotificationCenter.default.removeObserver(visibilityObserver)
-            }
-            visibilityObserver = NotificationCenter.default.addObserver(
-                forName: NSWindow.didChangeOcclusionStateNotification,
-                object: window, queue: .main
-            ) { [weak self, weak window] _ in
-                guard let self, let window else { return }
-                if window.isVisible {
-                    self.reanchorIfShowTransition()
-                    self.scheduleResize()
-                } else {
-                    self.wasVisible = false
-                }
-            }
-        }
-
-        private func reanchorIfShowTransition() {
-            guard let window, window.isVisible, !wasVisible else { return }
-            anchorTop = window.frame.maxY
-            wasVisible = true
-        }
-
-        /// Coalesces to one setFrame per runloop turn: setFrame is re-entrant
-        /// with layout(), and a profile switch produces several layout passes;
-        /// applying once after SwiftUI has settled avoids the frame fights.
-        func scheduleResize() {
-            guard !resizePending else { return }
-            resizePending = true
-            DispatchQueue.main.async { [weak self] in
-                self?.resizePending = false
-                self?.resizeWindowToFit()
-            }
-        }
-
-        private func resizeWindowToFit() {
-            observeWindowIfNeeded()
-            reanchorIfShowTransition()
-            // Pre-show frames belong to the system's placement pass.
-            guard let window, let anchorTop, window.isVisible else { return }
-            // This view is the root VStack's background, so its own laid-out
-            // height IS the content's ideal height — even while the window is
-            // stuck at another size. (contentView.fittingSize just echoes the
-            // current frame for hosting views, which is why it can't detect
-            // slack.)
-            let ideal = bounds.height
-            guard ideal > 1 else { return }
-            var frame = window.frame
-            frame.origin.y = anchorTop - ideal
-            frame.size.height = ideal
-            guard abs(frame.maxY - window.frame.maxY) > 1
-                || abs(frame.height - window.frame.height) > 1 else { return }
-            window.setFrame(frame, display: true, animate: false)
-        }
-    }
-}
-
-struct MCPRow: View {
-    @EnvironmentObject var state: AppState
-    let name: String
-    var onEdit: () -> Void
-
-    /// The same rule the editor and Settings use (addendum 2026-09-06-row-glyph §2):
-    /// the entry's required tool, then that tool's cached status. nil while the
-    /// status is unknown or the tool is where Claude Desktop looks — so the three
-    /// surfaces cannot disagree.
-    private var toolWarning: String? {
-        guard let entry = state.store.mcps[name],
-              let tool = ToolRequirement.requiredTool(for: entry.config) else { return nil }
-        return ToolNote.rowWarning(tool: tool, status: state.toolStatuses[tool])
-    }
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Toggle("", isOn: Binding(
-                get: { state.store.mcps[name]?.enabled ?? false },
-                set: { state.setEnabled(name, $0) }))
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .labelsHidden()
-            Text(name).fontWeight(.medium)
-                .lineLimit(1)
-                .layoutPriority(1)
-            if let warning = toolWarning {
-                // Advisory only: the switch above stays live and the row height is
-                // unchanged. The tooltip sends the user to the editor's full note.
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .imageScale(.small)
-                    .foregroundStyle(.orange)
-                    .help(warning)
-                    .accessibilityLabel(warning)
-            }
-            Spacer()
-            Button {
-                onEdit()
-            } label: {
-                Image(systemName: "pencil")
-                    .imageScale(.medium)
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.accessoryBar)
-            .help("Edit “\(name)”")
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
     }
 }

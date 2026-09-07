@@ -1,14 +1,15 @@
 import SwiftUI
 import ConnectorControlCore
+import ConnectorControlState
 
 @main
 struct ConnectorControlApp: App {
-    @StateObject private var state = AppState()
+    private let services = LiveServices.shared
+    @StateObject private var state = LiveServices.shared.state
 
     var body: some Scene {
         MenuBarExtra {
-            PopoverView()
-                .environmentObject(state)
+            PopoverView(state: state)
         } label: {
             // A distinctive glyph matters here: switch.2 was nearly identical
             // to the Control Center icon. The alarm variant marks the one
@@ -20,9 +21,8 @@ struct ConnectorControlApp: App {
 
         WindowGroup("Connector Editor", id: "editor", for: EditTarget.self) { $target in
             if let target = $target.wrappedValue {
-                EditSheetView(target: target)
-                    .environmentObject(state)
-                    .navigationTitle(target.isNew ? "Add Connector" : "Edit “\(target.name)”")
+                EditSheetView(state: state, target: target)
+                    .navigationTitle(target.windowTitle)
             } else {
                 Text("Choose a connector from the menu bar popover.")
                     .foregroundStyle(.secondary)
@@ -32,8 +32,8 @@ struct ConnectorControlApp: App {
         .windowResizability(.contentMinSize)
 
         Settings {
-            SettingsView()
-                .environmentObject(state)
+            SettingsView(state: state, settings: services.settings,
+                         autostart: services.autostart, updater: services.updater)
         }
     }
 }

@@ -11,6 +11,15 @@ public enum RemotePattern {
         s == "mcp-remote" || s.hasPrefix("mcp-remote@")
     }
 
+    /// The rule the URL argument must meet (catalog §3.4 remoteURLValid): an
+    /// http or https scheme and a host. `detect` applies it to the bridge's
+    /// URL; the editor applies it to the Server URL field.
+    public static func isValidHTTPURL(_ text: String) -> Bool {
+        guard let url = URL(string: text), let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https", url.host != nil else { return false }
+        return true
+    }
+
     public static func detect(_ config: JSONValue) -> String? {
         guard case .object(let object) = config,
               case .string("npx") = object["command"] ?? .null,
@@ -23,9 +32,7 @@ public enum RemotePattern {
         }
         if args.first == "-y" { args.removeFirst() }
         guard args.count == 2, isMarker(args[0]) else { return nil }
-        guard let url = URL(string: args[1]), let scheme = url.scheme?.lowercased(),
-              scheme == "http" || scheme == "https", url.host != nil
-        else { return nil }
+        guard isValidHTTPURL(args[1]) else { return nil }
         return args[1]
     }
 

@@ -5,11 +5,26 @@
 # counterpart of windows/ci.runsettings' FailSkips. Called by mac-ci.yml and
 # release.yml; runs locally too (set DEVELOPER_DIR when the default toolchain
 # cannot run tests).
+#
+# How the two test targets report depends on the toolchain: one .xctest bundle
+# per target with its own summary (Xcode-beta locally) or one combined
+# ConnectorControlPackageTests bundle (the CI runner's Xcode). The checks
+# therefore count per-test lines across the whole log and look only for the
+# toolchain-independent suite lines.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 mkdir -p .build
 LOG=.build/swift-test.log
 swift test 2>&1 | tee "$LOG"
-grep -Eq 'Executed [0-9]+ tests, with 1 test skipped and 0 failures' "$LOG" \
-    || { echo "error: expected exactly one skipped test (testRegenerateGoldens) and no failures" >&2; exit 1; }
+
+SKIPPED=$(grep -cE "^Test Case '[^']*' skipped" "$LOG" || true)
+FAILED=$(grep -cE "^Test Case '[^']*' failed" "$LOG" || true)
+FAILED_SUITES=$(grep -cE "^Test Suite '[^']*' failed" "$LOG" || true)
+PASSED_ALL=$(grep -cE "^Test Suite 'All tests' passed" "$LOG" || true)
+[ "$FAILED" = "0" ] && [ "$FAILED_SUITES" = "0" ] \
+    || { echo "error: $FAILED test(s) and $FAILED_SUITES suite(s) failed" >&2; exit 1; }
+[ "$SKIPPED" = "1" ] \
+    || { echo "error: expected exactly one skipped test (testRegenerateGoldens), found $SKIPPED" >&2; exit 1; }
+[ "$PASSED_ALL" -ge 1 ] \
+    || { echo "error: no 'All tests' suite passed — did the run finish?" >&2; exit 1; }

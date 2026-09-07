@@ -2,13 +2,15 @@ import XCTest
 @testable import ConnectorControlCore
 
 final class DefaultsKeyTests: XCTestCase {
-    private var legacyName = ""
-    private var targetName = ""
+    // Fixed throwaway domains, cleared before and after: cfprefsd keeps an
+    // empty plist per suite name in ~/Library/Preferences, so a fresh UUID per
+    // run would leave two files behind every time.
+    private let legacyName = "com.dlaporte.connector-control.tests.legacy"
+    private let targetName = "com.dlaporte.connector-control.tests.target"
 
     override func setUp() {
-        let id = UUID().uuidString
-        legacyName = "com.dlaporte.connector-control.tests.legacy.\(id)"
-        targetName = "com.dlaporte.connector-control.tests.target.\(id)"
+        UserDefaults.standard.removePersistentDomain(forName: legacyName)
+        UserDefaults.standard.removePersistentDomain(forName: targetName)
     }
 
     override func tearDown() {
