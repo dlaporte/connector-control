@@ -2,68 +2,45 @@ import SwiftUI
 import ConnectorControlCore
 import ConnectorControlState
 
+/// Catalog §5: layout only; every rule and string is RestoreModel's.
 struct RestoreSheetView: View {
-    @EnvironmentObject var state: AppState
+    @StateObject private var model: RestoreModel
     @Environment(\.dismiss) private var dismiss
-    @State private var backups: [URL] = []
-    @State private var selection: URL?
-    @State private var confirming = false
-    @State private var restoreError: String?
+
+    init(state: AppState) {
+        _model = StateObject(wrappedValue: RestoreModel(state: state))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Restore Claude config from a backup").font(.headline)
-            Text("The current file is backed up first, then replaced by the "
-                 + "selected backup.")
+            Text(RestoreModel.headline).font(.headline)
+            Text(RestoreModel.caption)
                 .font(.caption).foregroundStyle(.secondary)
-            List(backups, id: \.self, selection: $selection) { url in
+            List(model.backups, id: \.self, selection: $model.selection) { url in
                 Text(url.lastPathComponent).font(.system(.callout, design: .monospaced))
             }
             .frame(height: 180)
-            if let restoreError {
+            if let restoreError = model.restoreError {
                 Text(restoreError).font(.callout).foregroundStyle(.red)
             }
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
-                Button("Restore…") {
-                    // A fresh attempt starts with a clean sheet, as RestoreModel
-                    // does on Windows: the previous attempt's error must not
-                    // outlive the next attempt, even one whose confirmation is
-                    // then cancelled.
-                    restoreError = nil
-                    confirming = true
-                }
-                .disabled(selection == nil)
+                Button(RestoreModel.cancelTitle) { dismiss() }
+                Button(RestoreModel.restoreTitle) { model.requestRestore() }
+                    .disabled(!model.canRestore)
             }
         }
         .padding(16)
         .frame(width: 460)
-        .onAppear {
-            var found = (try? state.service.backups.backups(
-                series: "claude_desktop_config")) ?? []
-            let original = state.service.backups.backupsDir
-                .appendingPathComponent("claude_desktop_config.original.json")
-            if FileManager.default.fileExists(atPath: original.path) {
-                found.append(original)
-            }
-            backups = found
-        }
+        .onAppear { model.load() }
         .confirmationDialog(
-            "Replace Claude's config with \(selection?.lastPathComponent ?? "")?",
-            isPresented: $confirming, titleVisibility: .visible
+            model.confirmMessage,
+            isPresented: Binding(get: { model.confirming },
+                                 set: { if !$0 { model.cancelRestore() } }),
+            titleVisibility: .visible
         ) {
-            Button("Restore", role: .destructive) {
-                guard let backup = selection else { return }
-                do {
-                    // AppState owns the full flow: it syncs the reconciliation
-                    // baseline to the restored file before reloading.
-                    try state.restoreClaudeConfig(from: backup)
-                    dismiss()
-                } catch {
-                    restoreError = error.localizedDescription
-                    state.lastError = error.localizedDescription
-                }
+            Button(RestoreModel.restoreButton, role: .destructive) {
+                if model.confirmRestore() { dismiss() }
             }
         }
     }

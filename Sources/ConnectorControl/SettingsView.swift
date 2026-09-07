@@ -44,7 +44,7 @@ struct SettingsView: View {
         // without scrolling; the Windows Settings window uses the same size.
         .frame(width: 480, height: 560)
         .sheet(isPresented: $showRestore) {
-            RestoreSheetView().environmentObject(state)
+            RestoreSheetView(state: state)
         }
     }
 
