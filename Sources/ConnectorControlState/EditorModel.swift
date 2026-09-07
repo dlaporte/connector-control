@@ -200,6 +200,11 @@ public final class EditorModel: ObservableObject {
         if let tool { state.refreshTools([tool]) }
     }
 
+    /// Only a user's picker tap reaches the re-seed below: adoptForm assigns
+    /// isRemote while `view` is still `.json`, so the guard skips it — the same
+    /// outcome as the old view (its Type picker was out of the hierarchy while
+    /// the JSON view showed) and as EditorModel.cs (which bypasses the setter).
+    /// Quality review Q54 asked; both directions are tested.
     private func isRemoteChanged(from oldValue: Bool) {
         guard oldValue != isRemote else { return }
         if target.isNew, !isRemote, view == .form,
@@ -473,6 +478,9 @@ public final class EditorModel: ObservableObject {
             validationError = error
             return false
         }
+        // Apply, then let the view dismiss on `true`. The old view dismissed first
+        // and applied after (and EditorModel.cs raises CloseRequested before it
+        // applies); performApply shows no UI, so the order is not observable.
         state.applyInteractively()
         return true
     }
@@ -490,7 +498,10 @@ public final class EditorModel: ObservableObject {
         state.applyInteractively()
     }
 
-    /// Stops listening to AppState; the window is going away.
+    /// Stops listening to AppState. The app does not call this: the
+    /// subscription holds `self` weakly and dies with the `@StateObject`, and a
+    /// re-shown view keeps its object. Tests call it to prove the republish is
+    /// what repaints the view (EditorModel.cs disposes from the window's Closed).
     public func dispose() {
         subscription?.cancel()
         subscription = nil

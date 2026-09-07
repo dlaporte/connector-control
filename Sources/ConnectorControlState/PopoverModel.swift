@@ -132,6 +132,11 @@ public final class PopoverModel: ObservableObject {
     /// The pencil button opens the editor only if the entry still exists in the store (catalog §2.4).
     public func entryFor(_ name: String) -> MCPEntry? { state.store.mcps[name] }
 
+    /// Stops listening to AppState. The app does not call this: the
+    /// subscription holds `self` weakly and dies with the `@StateObject`, and
+    /// the popover's object survives a close and re-open, so calling it from
+    /// onDisappear would freeze the second opening. Tests call it to prove the
+    /// republish is what repaints the view.
     public func dispose() {
         subscription?.cancel()
         subscription = nil

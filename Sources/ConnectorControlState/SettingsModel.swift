@@ -204,5 +204,9 @@ public final class SettingsModel: ObservableObject {
     /// Spec §6 D4: the Mac probes all four when the Claude tab appears.
     public func refreshTools() { state.refreshTools() }
 
+    /// Stops listening to AppState and the updater. The app does not call
+    /// this: the subscriptions hold `self` weakly and die with the
+    /// `@StateObject`. Tests call it to prove the relays are what repaint
+    /// the view.
     public func dispose() { subscriptions.removeAll() }
 }

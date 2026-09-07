@@ -331,6 +331,46 @@ final class EditorModelTests: XCTestCase {
 
     // MARK: save (catalog §3.8–§3.9)
 
+    func testEnvNamesReachTheStoreVerbatim() throws {
+        // Names are kept as typed: trimming once silently renamed a user's keys.
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        let editor = editor(h, state, .new(template: local("node", ["server.js"])))
+        editor.name = "spaced"
+        editor.addEnvRow()
+        editor.envRows[0].name = " K "
+        editor.envRows[0].value = "v"
+        XCTAssertTrue(editor.save())
+        XCTAssertEqual(try XCTUnwrap(state.store.mcps["spaced"]).config,
+                       local("node", ["server.js"], env: [(" K ", "v")]))
+    }
+
+    func testAdoptingAFormFromJsonEvaluatesTheToolOnceAtTheEnd() {
+        // adoptForm assigns command, args and isRemote one after another; with
+        // evaluation suppressed until the end, a config whose tool is unchanged
+        // costs no probe at all, and a changed one costs exactly one batch.
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        let editor = editor(h, state, .new(template: local("node", ["server.js"])))
+        defer { editor.dispose() }
+        XCTAssertTrue(h.ui.pumpUntil({ state.toolStatuses[.node] != nil }, timeout: 5))
+        let batches = h.tools.batches
+        editor.requestView(.json)
+        editor.jsonText = "{\"command\": \"node\", \"args\": [\"other.js\"]}"
+        editor.requestView(.form)
+        XCTAssertEqual(editor.view, .form)
+        XCTAssertEqual(editor.requiredTool, .node)
+        XCTAssertEqual(h.tools.batches, batches, "same tool after adoption: nothing to probe")
+        editor.requestView(.json)
+        editor.jsonText = "{\"command\": \"uvx\", \"args\": [\"tool\"]}"
+        XCTAssertTrue(h.ui.pumpUntil({ h.tools.batches == batches + 1 }, timeout: 5))   // the JSON view evaluates as it parses
+        editor.requestView(.form)
+        XCTAssertEqual(editor.requiredTool, .uvx)
+        XCTAssertEqual(h.tools.batches, batches + 1, "adoption of an already-evaluated config probes nothing more")
+    }
+
     func testSaveValidatesTheRemoteForm() {
         let h = AppStateHarness()
         defer { h.dispose() }
