@@ -82,10 +82,15 @@ Hardening from a security review of the app and its release pipeline.
   strips inherited entries from files written by earlier builds.
 - Windows: a downloaded update is installed only if the updater it carries
   and every program and library inside it are signed by the same publisher
-  as the running app. A package that fails that check is discarded and a
-  notification says so, even for a background update. Before, the update
-  feed's checksum was the only thing standing between a GitHub release and
-  code running on your PC.
+  as the running app, and only if the app inside it carries the version the
+  update feed advertises, so an older signed release cannot be replayed as
+  new. Programs are recognized by their content, not their file name. A
+  package that fails these checks is discarded, the previous updater is put
+  back, and a notification says so, even for a background update. Updates
+  now always download the full package rather than a delta, so nothing from
+  the feed is processed before it is checked. Before, the feed's checksum was
+  the only thing standing between a GitHub release and code running on your
+  PC.
 - macOS: Sparkle now verifies an update's signature before unpacking it and
   requires the update feed itself to be signed.
 - Release pipeline: Dependabot now also watches the Windows NuGet packages
