@@ -99,7 +99,7 @@ public class VelopackUpdaterTests
         File.WriteAllText(updateExe, "stub");
         (string Package, string? UpdateExe, string Running)? seen = null;
         var locator = new TestVelopackLocator("ConnectorControl", "1.3.1", packages.Path, appDir: null, rootDir: null, updateExe: updateExe, channel: "win-x64");
-        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (p, u, r) => { seen = (p, u, r); return "refused by the test verifier"; });
+        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (p, u, r, running, feed) => { seen = (p, u, r); return "refused by the test verifier"; });
         var asset = new VelopackAsset { PackageId = "ConnectorControl", Version = new SemanticVersion(1, 3, 2), Type = VelopackAssetType.Full, FileName = "ConnectorControl-1.3.2-win-x64-full.nupkg", SHA1 = "", SHA256 = "", Size = 0 };
         var packagePath = packages.File(asset.FileName);
         File.WriteAllText(packagePath, "not really a package");
@@ -117,7 +117,7 @@ public class VelopackUpdaterTests
         var updateExe = packages.File("Update.exe");
         File.WriteAllText(updateExe, "stub");
         var locator = new TestVelopackLocator("ConnectorControl", "1.3.1", packages.Path, appDir: null, rootDir: null, updateExe: updateExe, channel: "win-x64");
-        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (_, _, _) => null);
+        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (_, _, _, _, _) => null);
         var asset = new VelopackAsset { PackageId = "ConnectorControl", Version = new SemanticVersion(1, 3, 2), Type = VelopackAssetType.Full, FileName = "ConnectorControl-1.3.2-win-x64-full.nupkg", SHA1 = "", SHA256 = "", Size = 0 };
         File.WriteAllText(packages.File(asset.FileName), "package");
         updater.VerifyDownloaded(new UpdateInfo(asset, isDowngrade: false));

@@ -30,13 +30,22 @@ public static class AuthenticodeVerifier
             return null;
         }
         var name = Path.GetFileName(exePath);
-        var (subject, problem) = SignerSubject(exePath);
-        if (problem is not null)
+        var signer = SignerSubject(exePath);
+        if (signer.Problem is not null)
         {
-            return problem + " Choose Claude Desktop's own claude.exe under Settings ▸ Claude.";
+            return signer.Problem + " Choose Claude Desktop's own claude.exe under Settings ▸ Claude.";
         }
-        return ClaudePublisher.SubjectProblem(subject!, name);
+        return ClaudePublisher.SubjectProblem(signer.Subject!, name);
     }
+
+    /// <summary>
+    /// <see cref="Unsigned"/> is TRUST_E_NOSIGNATURE — the file carries no Authenticode signature at
+    /// all (a dev build). Every other failure (untrusted root, tampered file, unreadable signer)
+    /// is a <see cref="Problem"/> with a null <see cref="Subject"/>.
+    /// </summary>
+    public sealed record SignerResult(string? Subject, string? Problem, bool Unsigned);
+
+    private const int TrustENoSignature = unchecked((int)0x800B0100);
 
     /// <summary>
     /// The subject DN of <paramref name="exePath"/>'s signer once WinVerifyTrust has accepted the
@@ -44,13 +53,13 @@ public static class AuthenticodeVerifier
     /// Claude launch check and the update-package check.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    public static (string? Subject, string? Problem) SignerSubject(string exePath)
+    public static SignerResult SignerSubject(string exePath)
     {
         var name = Path.GetFileName(exePath);
         var status = VerifyTrust(exePath);
         if (status != 0)
         {
-            return (null, $"{name} does not carry a valid code signature (0x{status:X8}).");
+            return new SignerResult(null, $"{name} does not carry a valid code signature (0x{status:X8}).", status == TrustENoSignature);
         }
         try
         {
@@ -60,11 +69,11 @@ public static class AuthenticodeVerifier
 #pragma warning disable SYSLIB0057
             using var certificate = X509Certificate.CreateFromSignedFile(exePath);
 #pragma warning restore SYSLIB0057
-            return (certificate.Subject, null);
+            return new SignerResult(certificate.Subject, null, false);
         }
         catch (CryptographicException ex)
         {
-            return (null, $"{name}'s signer could not be read ({ex.Message}).");
+            return new SignerResult(null, $"{name}'s signer could not be read ({ex.Message}).", false);
         }
     }
 

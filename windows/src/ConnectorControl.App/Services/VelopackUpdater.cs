@@ -22,7 +22,7 @@ public sealed class VelopackUpdater : IUpdater
     }
 
     private readonly LocatingUpdateManager? manager;
-    private readonly Func<string, string?, string, string?> verify;
+    private readonly Func<string, string?, string, Version, Version, string?> verify;
 
     public VelopackUpdater() : this(RepoUrl)
     {
@@ -39,7 +39,7 @@ public sealed class VelopackUpdater : IUpdater
     /// (Velopack's TestVelopackLocator in tests; null = inspect the real install layout);
     /// <paramref name="verify"/> replaces <see cref="UpdateVerifier.Verify"/> in tests.
     /// </summary>
-    internal VelopackUpdater(Func<bool, IUpdateSource> source, IVelopackLocator? locator, Func<string, string?, string, string?>? verify = null)
+    internal VelopackUpdater(Func<bool, IUpdateSource> source, IVelopackLocator? locator, Func<string, string?, string, Version, Version, string?>? verify = null)
     {
         LocatingUpdateManager? resolved = null;
         var followsPrereleases = false;
@@ -115,12 +115,17 @@ public sealed class VelopackUpdater : IUpdater
         }
         var location = manager.Location;
         var packagePath = Path.Combine(location.PackagesDir ?? "", info.TargetFullRelease.FileName);
-        if (verify(packagePath, location.UpdateExePath, Environment.ProcessPath ?? "") is { } problem)
+        var running = Numeric(manager.CurrentVersion);
+        var feed = Numeric(info.TargetFullRelease.Version);
+        if (verify(packagePath, location.UpdateExePath, Environment.ProcessPath ?? "", running, feed) is { } problem)
         {
             try { File.Delete(packagePath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             throw new UpdateVerificationException(problem);
         }
     }
+
+    private static Version Numeric(SemanticVersion? version) =>
+        version is null ? new Version(0, 0, 0) : new Version(version.Major, version.Minor, version.Patch);
 
     public void ApplyOnQuit(UpdateCheck update)
     {
