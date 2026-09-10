@@ -145,6 +145,24 @@ public class UpdateVerifierTests : IDisposable
         Assert.Contains("installed Update.exe", problem);
     }
 
+    [Fact]
+    public void ADuplicateMainExecutableIsRefused()
+    {
+        // Two copies (say, an old signed one and the advertised one) would leave the version check bound to whichever came last.
+        RequireSignedFramework();
+        var problem = UpdateVerifier.Verify(Package(("lib/app/ConnectorControl.exe", RunningExe), ("lib/other/ConnectorControl.exe", RunningExe)), updateExePath: null, RunningExe, Older, FrameworkVersion);
+        Assert.NotNull(problem);
+        Assert.Contains("more than once", problem);
+    }
+
+    [Fact]
+    public void NonExecutableEntriesAreUnpackedAndLeftAlone()
+    {
+        // sq.version and friends are extracted for the size check but never fail signature verification.
+        RequireSignedFramework();
+        Assert.Null(UpdateVerifier.Verify(PackageWithBytes("lib/app/readme.txt", "hello"u8.ToArray()), updateExePath: null, RunningExe, Older, FrameworkVersion));
+    }
+
     [Theory]
     [InlineData("lib/app/ConnectorControl.exe.", true)]
     [InlineData("lib/app/ConnectorControl.exe ", true)]

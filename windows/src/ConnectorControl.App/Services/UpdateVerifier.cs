@@ -14,7 +14,9 @@ namespace ConnectorControl.App.Services;
 /// executable inside the package (found by content, not by name) must be validly signed by
 /// the same organization as the running app, and the package's own ConnectorControl.exe must
 /// carry the version the feed advertises, so an old signed release cannot be replayed as new.
-/// Sparkle's pinned EdDSA key plays this role on the Mac.
+/// Sparkle's pinned EdDSA key plays this role on the Mac. Known residual: any library this
+/// publisher ever signed is interchangeable with any other inside a package; only the main
+/// executable is bound to a version.
 /// </summary>
 public static class UpdateVerifier
 {
@@ -58,7 +60,7 @@ public static class UpdateVerifier
         try
         {
             using var zip = ZipFile.OpenRead(packagePath);
-            var verified = 0;
+            var index = 0;
             string? mainExecutable = null;
             foreach (var entry in zip.Entries)
             {
@@ -66,20 +68,35 @@ public static class UpdateVerifier
                 {
                     return $"The update package contains an entry named \"{entry.FullName}\", which Windows would rename on extraction{NotInstalledSuffix}";
                 }
-                if (!IsPortableExecutable(entry))
+                if (entry.FullName.EndsWith('/'))
+                {
+                    continue;   // a directory entry
+                }
+                // Every entry is unpacked in full: the declared size in the zip's directory is the
+                // attacker's to write, so a program hidden behind a declared size of zero is found
+                // by what actually inflates, not by what the directory claims.
+                var name = Path.GetFileName(entry.FullName);
+                var extracted = Path.Combine(scratch.FullName, $"{index++}-{name}");
+                entry.ExtractToFile(extracted, overwrite: true);
+                var actual = new FileInfo(extracted).Length;
+                if (actual != entry.Length)
+                {
+                    return $"The update package entry \"{entry.FullName}\" declares {entry.Length} bytes but holds {actual}{NotInstalledSuffix}";
+                }
+                if (!IsPortableExecutable(extracted))
                 {
                     continue;
                 }
-                var name = Path.GetFileName(entry.FullName);
-                var extracted = Path.Combine(scratch.FullName, $"{verified}-{name}");
-                entry.ExtractToFile(extracted, overwrite: true);
                 if (VerifyFile(extracted, expected, name + " inside the update") is { } problem)
                 {
                     return problem;
                 }
-                verified++;
                 if (string.Equals(name, MainExecutable, StringComparison.OrdinalIgnoreCase))
                 {
+                    if (mainExecutable is not null)
+                    {
+                        return $"The update package contains {MainExecutable} more than once{NotInstalledSuffix}";
+                    }
                     mainExecutable = extracted;
                 }
             }
@@ -205,11 +222,19 @@ public static class UpdateVerifier
     /// </summary>
     internal static bool IsPortableExecutable(ZipArchiveEntry entry)
     {
-        if (entry.Length < 2)
-        {
-            return false;
-        }
-        using var stream = entry.Open();
+        using var stream = entry.Open();   // the inflated bytes, whatever the directory declares
+        return StartsWithMZ(stream);
+    }
+
+    /// <summary>The extracted-file form of <see cref="IsPortableExecutable(ZipArchiveEntry)"/>.</summary>
+    internal static bool IsPortableExecutable(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return StartsWithMZ(stream);
+    }
+
+    private static bool StartsWithMZ(Stream stream)
+    {
         var header = new byte[2];
         var read = stream.ReadAtLeast(header, 2, throwOnEndOfStream: false);
         return read == 2 && header[0] == (byte)'M' && header[1] == (byte)'Z';

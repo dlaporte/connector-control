@@ -114,7 +114,7 @@ public sealed class VelopackUpdater : IUpdater
         }
         var knownGoodUpdater = location.UpdateExePath is { } updateExe && File.Exists(updateExe) ? File.ReadAllBytes(updateExe) : null;
         await manager.DownloadUpdatesAsync(info, percent => progress?.Report(percent), cancellationToken).ConfigureAwait(false);
-        VerifyDownloaded(info, knownGoodUpdater);
+        VerifyDownloaded(info, knownGoodUpdater, runningExe);
     }
 
     /// <summary>
@@ -123,7 +123,7 @@ public sealed class VelopackUpdater : IUpdater
     /// this app's own publisher and carry the advertised version. A refused package is deleted and
     /// the previous Update.exe put back, so neither can be picked up by a later apply or uninstall.
     /// </summary>
-    internal void VerifyDownloaded(UpdateInfo info, byte[]? knownGoodUpdater)
+    internal void VerifyDownloaded(UpdateInfo info, byte[]? knownGoodUpdater, string? runningExe = null)
     {
         if (manager is null)
         {
@@ -133,12 +133,20 @@ public sealed class VelopackUpdater : IUpdater
         var packagePath = Path.Combine(location.PackagesDir ?? "", info.TargetFullRelease.FileName);
         var running = Numeric(manager.CurrentVersion);
         var feed = Numeric(info.TargetFullRelease.Version);
-        if (verify(packagePath, location.UpdateExePath, Environment.ProcessPath ?? "", running, feed) is { } problem)
+        if (verify(packagePath, location.UpdateExePath, runningExe ?? Environment.ProcessPath ?? "", running, feed) is { } problem)
         {
             try { File.Delete(packagePath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
-            if (knownGoodUpdater is not null && location.UpdateExePath is { } updateExe)
+            if (location.UpdateExePath is { } updateExe)
             {
-                try { File.WriteAllBytes(updateExe, knownGoodUpdater); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                // Put back the updater that was there before the download; when there was none,
+                // the one there now came from the refused package and goes too.
+                try
+                {
+                    if (knownGoodUpdater is not null) { File.WriteAllBytes(updateExe, knownGoodUpdater); }
+                    else if (File.Exists(updateExe)) { File.Delete(updateExe); }
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
             }
             throw new UpdateVerificationException(problem);
         }

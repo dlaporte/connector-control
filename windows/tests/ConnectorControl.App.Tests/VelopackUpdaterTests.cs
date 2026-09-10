@@ -139,6 +139,20 @@ public class VelopackUpdaterTests
     }
 
     [Fact]
+    public void ARefusedPackageRemovesAnUpdaterThatWasNotThereBefore()
+    {
+        using var packages = new TempDir("vpk");
+        var updateExe = packages.File("Update.exe");
+        File.WriteAllText(updateExe, "from the refused package");
+        var locator = new TestVelopackLocator("ConnectorControl", "1.3.1", packages.Path, appDir: null, rootDir: null, updateExe: updateExe, channel: "win-x64");
+        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (_, _, _, _, _) => "refused", verifyInstalled: (_, _) => null);
+        var asset = new VelopackAsset { PackageId = "ConnectorControl", Version = new SemanticVersion(1, 3, 2), Type = VelopackAssetType.Full, FileName = "ConnectorControl-1.3.2-win-x64-full.nupkg", SHA1 = "", SHA256 = "", Size = 0 };
+        File.WriteAllText(packages.File(asset.FileName), "package");
+        Assert.Throws<UpdateVerificationException>(() => updater.VerifyDownloaded(new UpdateInfo(asset, isDowngrade: false), knownGoodUpdater: null));
+        Assert.False(File.Exists(updateExe));
+    }
+
+    [Fact]
     public async Task AForeignInstalledUpdaterStopsTheDownloadBeforeItStarts()
     {
         using var packages = new TempDir("vpk");
