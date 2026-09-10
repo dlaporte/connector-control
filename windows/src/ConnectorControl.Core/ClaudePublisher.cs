@@ -50,7 +50,7 @@ public static class ClaudePublisher
     }
 
     /// <summary>The value of the O= (id-at-organizationName, 2.5.4.10) attribute — exactly one, or null. Two organizations is nobody's identity.</summary>
-    internal static string? OrganizationOf(string subject)
+    public static string? OrganizationOf(string subject)
     {
         var name = new X500DistinguishedName(subject);
         string? organization = null;
@@ -69,7 +69,7 @@ public static class ClaudePublisher
     }
 
     /// <summary>Lower-case, punctuation dropped, whitespace collapsed: "Anthropic, PBC" and "ANTHROPIC P.B.C." compare equal.</summary>
-    internal static string NormalizeOrganization(string organization)
+    public static string NormalizeOrganization(string organization)
     {
         var normalized = new StringBuilder(organization.Length);
         var pendingSpace = false;
