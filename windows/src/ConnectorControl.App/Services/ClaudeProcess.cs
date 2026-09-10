@@ -166,7 +166,7 @@ public sealed class ClaudeProcess : IClaudeProcess
     /// <c>Name_publisherhash!AppId</c> and nothing else: the string is concatenated into explorer's
     /// arguments, so a quote, a space or a second token must never get that far.
     /// </summary>
-    private static readonly Regex AumidGrammar = new(@"^(?<family>[A-Za-z0-9][A-Za-z0-9.\-]*_[a-z0-9]{13})![A-Za-z0-9][A-Za-z0-9.\-]*$", RegexOptions.CultureInvariant);
+    private static readonly Regex AumidGrammar = new(@"^(?<family>[A-Za-z0-9][A-Za-z0-9.\-]*_[a-z0-9]{13})![A-Za-z0-9][A-Za-z0-9.\-]*\z", RegexOptions.CultureInvariant);
 
     /// <summary>
     /// settings.json is the user's to edit, so an AUMID there is a string like any other. Only a
