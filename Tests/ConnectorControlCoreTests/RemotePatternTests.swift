@@ -101,4 +101,11 @@ final class RemotePatternTests: XCTestCase {
         XCTAssertFalse(RemotePattern.isValidHTTPURL("https://"), "a scheme with no host")
         XCTAssertFalse(RemotePattern.isValidHTTPURL("nope"))
     }
+
+    func testIsValidHTTPURLAcceptsCmdMetacharactersBecauseTheMacNeverSpawnsAShell() {
+        // The Windows editor refuses these under its cmd /c launcher (RemotePattern.CmdUnsafeCharacter);
+        // here npx is spawned directly and its arguments are never re-parsed by a shell.
+        XCTAssertTrue(RemotePattern.isValidHTTPURL("https://x.dev/mcp?a=b&c=d"))
+        XCTAssertTrue(RemotePattern.isValidHTTPURL("https://127.0.0.1:1/mcp&ver"))
+    }
 }
