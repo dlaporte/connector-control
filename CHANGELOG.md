@@ -9,6 +9,49 @@ by -preview.N, and the preview build fails if that version has already
 been released), so open the next version's section as soon as the previous
 one ships.
 
+## v1.3.2
+
+Hardening from a security review of the app and its release pipeline.
+
+- macOS: updates are offered, not installed silently. The app still checks
+  for new releases on its own; installing one is now a click in the update
+  window. Settings ▸ General ▸ **Automatically download and install
+  updates** turns silent installs back on.
+- Both platforms: a connector-list change that arrives through a synced
+  master list is always announced once it has been written into Claude's
+  config, whether or not Claude is running, and the notification names the
+  connectors it added, removed or changed. Before, a change that landed
+  while Claude was closed was applied with no notification at all.
+- Both platforms: **Restart Claude** now checks that the app it is about to
+  launch really is Claude Desktop signed by Anthropic (a code-signature
+  check on macOS, an Authenticode check on Windows) before quitting the
+  running Claude, and Settings ▸ Claude refuses a chosen app or program
+  that fails it, saying why.
+- macOS: every file the app writes is private from the instant it is
+  created (the mode is set by the create call, not applied afterwards), and
+  backups of a config file are snapshots of its bytes, so a Claude config
+  symlinked into a dotfiles folder is backed up, restored and written
+  through correctly instead of the link itself being copied or replaced.
+- Both platforms: the one-time permissions repair at launch now touches only
+  the app's own files in the master-list folder — mcps.json and any
+  corrupt-file copies beside it — and never the folder's other contents.
+  On Windows it also refuses to run on a drive root or a shell folder such
+  as Documents or OneDrive, and no longer records itself as done when every
+  step failed. Earlier builds rewrote the permissions of everything under a
+  chosen master-list folder.
+- Both platforms: the OAuth **Client Secret** field in the connector editor
+  says that mcp-remote receives this value on its command line, where other
+  programs running as you can read it, unlike the token and header fields.
+- Windows: the app manifest declares that it runs as the signed-in user,
+  which keeps Windows from ever treating it as an installer that wants
+  elevation.
+- Release pipeline: the Sparkle tools that sign the Mac update feed are
+  verified against a pinned checksum before use; the Windows build receives
+  only the six signing secrets it needs rather than every repository
+  secret; a re-run never replaces an asset already published under a
+  version; every GitHub Action is pinned to a commit, with Dependabot
+  keeping the pins current.
+
 ## v1.3.1
 
 - macOS: every file the app writes — Claude's config and the master list —
