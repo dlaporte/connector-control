@@ -70,17 +70,59 @@ public class AclSweepTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// A store directory that IS a shell folder (the user pointed the master list at Documents
+    /// itself) is refused outright — not even mcps.json inside it is touched. The refusal is
+    /// per directory, by exact match: the app's own backups directory, which the path rule keeps
+    /// under LocalAppData rather than under the chosen folder, is still repaired, and so is the
+    /// default store location, which sits one level below LocalAppData.
+    /// </summary>
     [Fact]
-    public void ADriveRootOrShellFolderIsNeverSwept()
+    public void AStoreDirectoryThatIsAShellFolderIsRefusedWhileTheBackupsDirectoryIsStillRepaired()
+    {
+        var shellFolder = dir.File("Documents");
+        var backups = dir.File(Path.Combine("Local", "Connector Control", "backups"));
+        var paths = new AppPaths(dir.File("claude.json"), shellFolder, backups);
+        Directory.CreateDirectory(shellFolder);
+        Directory.CreateDirectory(backups);
+        File.WriteAllText(paths.MasterStorePath, "{}");
+        var backup = Path.Combine(backups, "mcps.2026-09-10T00-00-00-000Z.json");
+        File.WriteAllText(backup, "{}");
+        var settings = new FakeSettings { MasterStoreDir = shellFolder };
+
+        Assert.True(AclSweep.RunOnce(settings, paths, [shellFolder]));
+        Assert.True(settings.AclSweepDone);
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.False(OwnerOnlyAcl.IsOwnerOnly(shellFolder), "a shell folder is never rewritten");
+            Assert.False(OwnerOnlyAcl.IsOwnerOnly(paths.MasterStorePath), "nor is anything inside it, the app's own file included");
+            Assert.True(OwnerOnlyAcl.IsOwnerOnly(backups), "the app-owned backups directory is still repaired");
+            Assert.True(OwnerOnlyAcl.IsOwnerOnly(backup));
+        }
+    }
+
+    [Fact]
+    public void DriveRootsAndListedFoldersAreProtectedByExactMatchOnly()
+    {
+        var shellFolder = dir.File("Documents");
+        Assert.True(AclSweep.IsProtected(Path.GetPathRoot(dir.File("x"))!, []));
+        Assert.True(AclSweep.IsProtected(shellFolder, [shellFolder]));
+        Assert.True(AclSweep.IsProtected(shellFolder + Path.DirectorySeparatorChar, [shellFolder]), "a trailing separator is the same folder");
+        Assert.False(AclSweep.IsProtected(Path.Combine(shellFolder, "Connector Control"), [shellFolder]), "a folder below a protected one is the app's to judge on its own");
+        Assert.False(AclSweep.IsProtected(dir.File("elsewhere"), [shellFolder]));
+    }
+
+    [Fact]
+    public void NothingToAttemptStillMarksTheSweepDone()
     {
         var shellFolder = dir.File("Documents");
         var paths = new AppPaths(dir.File("claude.json"), shellFolder, Path.Combine(shellFolder, "backups"));
         Directory.CreateDirectory(paths.BackupsDir);
         File.WriteAllText(paths.MasterStorePath, "{}");
-        File.WriteAllText(Path.Combine(paths.BackupsDir, "mcps.2026-09-10T00-00-00-000Z.json"), "{}");
-        var settings = new FakeSettings();
+        var settings = new FakeSettings { MasterStoreDir = shellFolder };
 
-        Assert.True(AclSweep.RunOnce(settings, paths, [shellFolder]));
+        // Both roots refused: the store directory is the shell folder, the backups directory is listed too.
+        Assert.True(AclSweep.RunOnce(settings, paths, [shellFolder, paths.BackupsDir]));
         Assert.True(settings.AclSweepDone, "nothing was attempted, so there is nothing left to retry");
         if (OperatingSystem.IsWindows())
         {
@@ -88,9 +130,6 @@ public class AclSweepTests : IDisposable
             Assert.False(OwnerOnlyAcl.IsOwnerOnly(paths.MasterStorePath));
             Assert.False(OwnerOnlyAcl.IsOwnerOnly(paths.BackupsDir));
         }
-        Assert.True(AclSweep.IsProtected(Path.GetPathRoot(dir.File("x"))!, []));
-        Assert.True(AclSweep.IsProtected(shellFolder + Path.DirectorySeparatorChar, [shellFolder]));
-        Assert.False(AclSweep.IsProtected(paths.BackupsDir, [shellFolder]));
     }
 
     [Fact]
