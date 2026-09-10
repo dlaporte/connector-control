@@ -154,7 +154,7 @@ public static class RemotePattern
     /// <summary>Builds the full mcp-remote config for a <see cref="RemoteConfig"/>, encoding auth into the flags/env mcp-remote expects.</summary>
     public static JsonValue Encode(RemoteConfig r)
     {
-        var args = new List<string> { "-y", "mcp-remote", r.Url };
+        var args = new List<string> { "-y", r.Package, r.Url };
         args.AddRange(r.ExtraArgs);
         var env = new Dictionary<string, string>(r.PassthroughEnv, StringComparer.Ordinal);
         switch (r.Auth)
@@ -200,6 +200,7 @@ public static class RemotePattern
         {
             return null;
         }
+        var package = args[i];
         i++;
         if (i >= args.Count)
         {
@@ -291,7 +292,7 @@ public static class RemotePattern
         {
             env.Remove(key);
         }
-        return new RemoteConfig(urlString, auth, style, extraArgs, env);
+        return new RemoteConfig(urlString, auth, style, extraArgs, env, package);
     }
 
     /// <summary>Compact, key-sorted JSON — what mcp-remote expects in a single CLI argument.</summary>

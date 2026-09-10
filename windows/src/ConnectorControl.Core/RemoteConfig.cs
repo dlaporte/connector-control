@@ -12,12 +12,19 @@ public sealed class RemoteConfig : IEquatable<RemoteConfig>
     /// <summary>Which launcher the config was decoded from; re-encoded in the same style.</summary>
     public RemoteLaunchStyle LaunchStyle { get; }
 
+    /// <summary>
+    /// The bridge package specifier as written — <c>mcp-remote</c>, or <c>mcp-remote@0.1.16</c> when the
+    /// user pinned a version. A pin is a supply-chain control: it survives every edit.
+    /// </summary>
+    public string Package { get; }
+
     public RemoteConfig(
         string url,
         RemoteAuth auth,
         RemoteLaunchStyle launchStyle,
         IEnumerable<string>? extraArgs = null,
-        IEnumerable<KeyValuePair<string, string>>? passthroughEnv = null)
+        IEnumerable<KeyValuePair<string, string>>? passthroughEnv = null,
+        string package = "mcp-remote")
     {
         Url = url;
         Auth = auth;
@@ -26,6 +33,7 @@ public sealed class RemoteConfig : IEquatable<RemoteConfig>
             ? new Dictionary<string, string>(StringComparer.Ordinal)
             : new Dictionary<string, string>(passthroughEnv, StringComparer.Ordinal);
         LaunchStyle = launchStyle;
+        Package = package;
     }
 
     public bool Equals(RemoteConfig? other) =>
@@ -34,7 +42,8 @@ public sealed class RemoteConfig : IEquatable<RemoteConfig>
         && Auth.Equals(other.Auth)
         && ExtraArgs.SequenceEqual(other.ExtraArgs, StringComparer.Ordinal)
         && DictionaryEquality.Equal(PassthroughEnv, other.PassthroughEnv)
-        && LaunchStyle == other.LaunchStyle;
+        && LaunchStyle == other.LaunchStyle
+        && string.Equals(Package, other.Package, StringComparison.Ordinal);
 
     public override bool Equals(object? obj) => Equals(obj as RemoteConfig);
 
@@ -46,8 +55,9 @@ public sealed class RemoteConfig : IEquatable<RemoteConfig>
         foreach (var arg in ExtraArgs) { hash.Add(arg, StringComparer.Ordinal); }
         hash.Add(DictionaryEquality.Hash(PassthroughEnv));
         hash.Add(LaunchStyle);
+        hash.Add(Package, StringComparer.Ordinal);
         return hash.ToHashCode();
     }
 
-    public override string ToString() => $"RemoteConfig({Url}, {Auth}, style={LaunchStyle})";
+    public override string ToString() => $"RemoteConfig({Package} {Url}, {Auth}, style={LaunchStyle})";
 }

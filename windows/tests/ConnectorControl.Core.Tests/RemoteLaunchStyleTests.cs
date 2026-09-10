@@ -68,6 +68,15 @@ public class RemoteLaunchStyleTests
     }
 
     [Fact]
+    public void PinnedMarkerRoundTripsUnderCmd()
+    {
+        var config = CmdConfig("-y", "mcp-remote@0.1.16", Url);
+        var decoded = RemotePattern.Decode(config);
+        Assert.Equal("mcp-remote@0.1.16", decoded?.Package);
+        Assert.Equal(config, RemotePattern.Encode(decoded!));
+    }
+
+    [Fact]
     public void StyleIsPartOfEquality()
     {
         Assert.NotEqual(new RemoteConfig(Url, RemoteAuth.Auto, RemoteLaunchStyle.Npx), new RemoteConfig(Url, RemoteAuth.Auto, RemoteLaunchStyle.CmdNpx));
