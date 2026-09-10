@@ -10,10 +10,16 @@ public class UpdateVerifierTests : IDisposable
 
     public void Dispose() => dir.Dispose();
 
-    /// <summary>The test host (testhost.exe) is Microsoft-signed on the CI runner; the test assembly is not signed at all.</summary>
-    private static string RunningExe => Environment.ProcessPath!;
+    /// <summary>
+    /// Stand-ins with known signatures. The .NET shared framework's DLLs carry an embedded
+    /// Microsoft Authenticode signature on every official install (the test host does not, and
+    /// Windows system files are catalog-signed, which is not what an update package carries);
+    /// the test assembly is not signed at all. CI forbids skips, so a runner whose framework is
+    /// unsigned fails loudly with the signer problem in the message.
+    /// </summary>
+    private static string RunningExe => typeof(object).Assembly.Location;   // System.Private.CoreLib.dll
+    private static string MicrosoftSignedBinary => Path.Combine(Path.GetDirectoryName(typeof(object).Assembly.Location)!, "System.Runtime.dll");
     private static string UnsignedBinary => typeof(UpdateVerifierTests).Assembly.Location;
-    private static string MicrosoftSignedBinary => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "notepad.exe");
 
     private string Package(params (string Entry, string Source)[] files)
     {
@@ -27,18 +33,16 @@ public class UpdateVerifierTests : IDisposable
         return path;
     }
 
-    private static void SkipUnlessHostIsSigned()
+    private static void RequireSignedFramework()
     {
-        if (UpdateVerifier.ExpectedOrganization(RunningExe) is null)
-        {
-            Assert.Skip("the test host is not Authenticode-signed here");
-        }
+        var (_, problem) = AuthenticodeVerifier.SignerSubject(RunningExe);
+        Assert.True(UpdateVerifier.ExpectedOrganization(RunningExe) is not null, $"the shared framework must be Authenticode-signed for these tests: {problem ?? "no organization in the subject"}");
     }
 
     [Fact]
     public void ABinaryFromAnotherPublisherIsRefused()
     {
-        SkipUnlessHostIsSigned();
+        RequireSignedFramework();
         var problem = UpdateVerifier.Verify(Package(("lib/app/ConnectorControl.dll", UnsignedBinary)), updateExePath: null, RunningExe);
         Assert.NotNull(problem);
         Assert.Contains("ConnectorControl.dll", problem);
@@ -47,14 +51,14 @@ public class UpdateVerifierTests : IDisposable
     [Fact]
     public void BinariesFromTheSamePublisherPass()
     {
-        SkipUnlessHostIsSigned();
+        RequireSignedFramework();
         Assert.Null(UpdateVerifier.Verify(Package(("lib/app/notepad.exe", MicrosoftSignedBinary), ("lib/app/Squirrel.exe", MicrosoftSignedBinary)), updateExePath: MicrosoftSignedBinary, RunningExe));
     }
 
     [Fact]
     public void AReplacedUpdateExeFromAnotherPublisherIsRefused()
     {
-        SkipUnlessHostIsSigned();
+        RequireSignedFramework();
         var problem = UpdateVerifier.Verify(Package(("lib/app/notepad.exe", MicrosoftSignedBinary)), updateExePath: UnsignedBinary, RunningExe);
         Assert.NotNull(problem);
         Assert.Contains("Update.exe", problem);
@@ -72,7 +76,7 @@ public class UpdateVerifierTests : IDisposable
     public void APackageWithNoBinariesIsRefused()
     {
         // "Nothing failed" is not "everything passed": a package stripped of every checkable file is refused.
-        SkipUnlessHostIsSigned();
+        RequireSignedFramework();
         var problem = UpdateVerifier.Verify(Package(), updateExePath: null, RunningExe);
         Assert.NotNull(problem);
         Assert.Contains("no programs", problem);
