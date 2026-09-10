@@ -84,18 +84,19 @@ public enum AtomicFile {
 
     /// Removes every ACL entry from the object `fd` refers to. `open(…, 0600)` cannot refuse
     /// the ACEs a parent folder hands down, and macOS consults ACEs before the mode bits, so
-    /// a file in a shared folder is only private once its ACL is gone.
+    /// a file in a shared folder is only private once its ACL is gone. A volume without ACLs
+    /// at all (exFAT, some network shares) answers ENOTSUP: nothing to strip, so success.
     public static func stripACL(fd: Int32) throws {
         guard let empty = acl_init(0) else { throw posixError() }
         defer { acl_free(UnsafeMutableRawPointer(empty)) }
-        guard acl_set_fd_np(fd, empty, ACL_TYPE_EXTENDED) == 0 else { throw posixError() }
+        guard acl_set_fd_np(fd, empty, ACL_TYPE_EXTENDED) == 0 || errno == ENOTSUP else { throw posixError() }
     }
 
     /// `stripACL(fd:)` for a path: directories, and the sweep's repair of existing files.
     public static func stripACL(atPath path: String) throws {
         guard let empty = acl_init(0) else { throw posixError() }
         defer { acl_free(UnsafeMutableRawPointer(empty)) }
-        guard acl_set_link_np(path, ACL_TYPE_EXTENDED, empty) == 0 else { throw posixError() }
+        guard acl_set_link_np(path, ACL_TYPE_EXTENDED, empty) == 0 || errno == ENOTSUP else { throw posixError() }
     }
 
     /// True when the object carries any ACL entry (inherited or explicit).
