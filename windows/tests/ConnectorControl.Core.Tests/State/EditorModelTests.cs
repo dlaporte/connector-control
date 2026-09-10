@@ -738,4 +738,92 @@ public class EditorModelTests
         Assert.Empty(raised);
         Assert.Null(editor.RequiredTool);   // RequiredTool is a cached field, never recomputed: Dispose stopped the Args.CollectionChanged relay
     }
+
+    [Fact]
+    public void CmdLauncherRefusesAUrlCmdWouldSplit()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var editor = Editor(h, state, EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        editor.Name = "r";
+        editor.RemoteUrl = "https://127.0.0.1:1/mcp&ver";
+        Assert.True(editor.RemoteUrlValid, "URL syntax alone does not catch it");
+        Assert.False(editor.RemoteUrlCmdSafe);
+        Assert.False(editor.CanSave);
+        Assert.Equal(EditorModel.CmdUnsafeError("Server URL"), editor.UrlCaution);
+        Assert.True(editor.ShowUrlCaution);
+        Assert.False(editor.Save());
+        Assert.Equal(EditorModel.CmdUnsafeError("Server URL"), editor.ValidationError);
+        Assert.False(state.Store.Mcps.ContainsKey("r"));
+    }
+
+    [Fact]
+    public void CmdLauncherCautionsAboutPercentExpansionButSaves()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var editor = Editor(h, state, EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        editor.Name = "r";
+        editor.RemoteUrl = "https://x.dev/%41%42";
+        Assert.True(editor.RemoteUrlCmdSafe);
+        Assert.True(editor.CanSave);
+        Assert.Equal(EditorModel.CmdPercentCaution, editor.UrlCaution);
+        Assert.True(editor.Save());
+        Assert.True(state.Store.Mcps.ContainsKey("r"));
+    }
+
+    [Fact]
+    public void BareNpxLauncherAcceptsTheSameUrl()
+    {
+        // A synced Mac entry keeps its bare-npx style; cross-spawn escapes npx.cmd's own arguments.
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var editor = Editor(h, state, EditTarget.Existing("scoutbook", state.Store.Mcps["scoutbook"]));
+        editor.RemoteUrl = "https://x.dev/mcp?a=b&c=d";
+        Assert.True(editor.RemoteUrlCmdSafe);
+        Assert.True(editor.CanSave);
+        Assert.Null(editor.UrlCaution);
+        Assert.False(editor.ShowUrlCaution);
+        Assert.True(editor.Save());
+        Assert.Equal(RemotePattern.Make("https://x.dev/mcp?a=b&c=d", RemoteLaunchStyle.Npx), state.Store.Mcps["scoutbook"].Config);
+    }
+
+    [Theory]
+    [InlineData(RemoteAuthKind.Header, "X-Key&calc", "v", "", "", "", "Header name")]
+    [InlineData(RemoteAuthKind.OAuthClient, "", "", "id|calc", "s", "", "Client ID")]
+    [InlineData(RemoteAuthKind.OAuthClient, "", "", "id", "s^calc", "", "Client Secret")]
+    [InlineData(RemoteAuthKind.OAuthClient, "", "", "id", "s", "openid&calc", "Scopes")]
+    public void CmdLauncherRefusesAuthFieldsCmdWouldReparse(RemoteAuthKind kind, string headerName, string headerValue, string clientId, string clientSecret, string scopes, string field)
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var editor = Editor(h, state, EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        editor.Name = "r";
+        editor.RemoteUrl = Url;
+        editor.AuthKindIndex = EditorModel.AuthKinds.ToList().IndexOf(kind);
+        editor.HeaderName = headerName;
+        editor.HeaderValue = headerValue;
+        editor.OAuthClientId = clientId;
+        editor.OAuthClientSecret = clientSecret;
+        editor.OAuthScopes = scopes;
+        Assert.False(editor.Save());
+        Assert.Equal(EditorModel.CmdUnsafeError(field), editor.ValidationError);
+        Assert.False(state.Store.Mcps.ContainsKey("r"));
+    }
+
+    [Fact]
+    public void CmdLauncherLeavesEnvOnlyFieldsAlone()
+    {
+        // Bearer tokens and header VALUES travel in env (AUTH_HEADER), which cmd.exe never parses.
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var editor = Editor(h, state, EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        editor.Name = "r";
+        editor.RemoteUrl = Url;
+        editor.AuthKindIndex = EditorModel.AuthKinds.ToList().IndexOf(RemoteAuthKind.Header);
+        editor.HeaderName = "X-API-Key";
+        editor.HeaderValue = "a&b|c";
+        Assert.True(editor.Save());
+        Assert.Equal("a&b|c", state.Store.Mcps["r"].Config["env"]!["AUTH_HEADER"]!.StringValue);
+    }
 }

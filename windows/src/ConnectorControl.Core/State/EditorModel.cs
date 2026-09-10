@@ -21,6 +21,10 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// </summary>
     public const string OAuthSecretCaption = "Passed to mcp-remote on its command line, which other programs running on this PC can read.";
     public const string InvalidUrlError = "Server URL must be a valid http(s) URL.";
+    /// <summary>Security review 2026-09-10: under the cmd /c launcher cmd.exe re-parses every argument.</summary>
+    public const string CmdUnsafeSuffix = " must not contain & | < > ^ \" or spaces: on Windows the cmd /c launcher hands it to cmd.exe, which treats those as commands.";
+    public static string CmdUnsafeError(string field) => field + CmdUnsafeSuffix;
+    public const string CmdPercentCaution = "This URL has more than one %, which cmd.exe can expand as a variable. If the connector fails to start, check its JSON view.";
     public const string BearerTokenError = "Enter a bearer token.";
     public const string HeaderNameError = "Enter a header name.";
     public const string HeaderValueError = "Enter a header value.";
@@ -210,7 +214,10 @@ public sealed class EditorModel : ObservableObject, IDisposable
             if (Set(ref remoteUrl, value))
             {
                 Raise(nameof(RemoteUrlValid));
+                Raise(nameof(RemoteUrlCmdSafe));
                 Raise(nameof(ShowUrlHint));
+                Raise(nameof(UrlCaution));
+                Raise(nameof(ShowUrlCaution));
                 Raise(nameof(CanSave));
             }
         }
@@ -220,6 +227,21 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public bool RemoteUrlValid => RemotePattern.IsValidHttpUrl(remoteUrl);
 
     public bool ShowUrlHint => remoteUrl.Length > 0 && !RemoteUrlValid;
+
+    /// <summary>
+    /// True unless this connector is launched through <c>cmd /c</c> and the URL carries a character
+    /// cmd.exe would act on (<see cref="RemotePattern.CmdUnsafeCharacters"/> or whitespace).
+    /// </summary>
+    public bool RemoteUrlCmdSafe => remoteLaunchStyle != RemoteLaunchStyle.CmdNpx || RemotePattern.CmdUnsafeCharacter(remoteUrl) is null;
+
+    /// <summary>Under the URL field: the hard reason Save is disabled, a soft caution about % expansion, or null.</summary>
+    public string? UrlCaution =>
+        remoteUrl.Length == 0 || !RemoteUrlValid ? null
+        : !RemoteUrlCmdSafe ? CmdUnsafeError("Server URL")
+        : remoteLaunchStyle == RemoteLaunchStyle.CmdNpx && RemotePattern.HasCmdExpansionRisk(remoteUrl) ? CmdPercentCaution
+        : null;
+
+    public bool ShowUrlCaution => UrlCaution is not null;
 
     public RemoteAuthKind AuthKind
     {
@@ -336,8 +358,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public bool HasValidationError => validationError is not null;
 
-    /// <summary>Catalog §3.4: Save is disabled with a JSON error, or in the remote form without a valid URL.</summary>
-    public bool CanSave => !((view == EditView.Json && jsonError is not null) || (view == EditView.Form && isRemote && !RemoteUrlValid));
+    /// <summary>Catalog §3.4: Save is disabled with a JSON error, or in the remote form without a valid, cmd-safe URL.</summary>
+    public bool CanSave => !((view == EditView.Json && jsonError is not null) || (view == EditView.Form && isRemote && !(RemoteUrlValid && RemoteUrlCmdSafe)));
 
     public bool CanRemove => !Target.IsNew;
 
@@ -594,6 +616,31 @@ public sealed class EditorModel : ObservableObject, IDisposable
         _ => RemoteAuth.Auto,
     };
 
+    /// <summary>
+    /// The remote-form field cmd.exe would re-parse under the cmd /c launcher, or null. Only fields that
+    /// land in <c>args</c> count: the URL, a header NAME, and the OAuth client JSON; bearer tokens and
+    /// header VALUES travel in env, which cmd.exe never parses.
+    /// </summary>
+    private string? CmdUnsafeField()
+    {
+        if (remoteLaunchStyle != RemoteLaunchStyle.CmdNpx)
+        {
+            return null;
+        }
+        if (RemotePattern.CmdUnsafeCharacter(remoteUrl) is not null)
+        {
+            return "Server URL";
+        }
+        return authKind switch
+        {
+            RemoteAuthKind.Header when RemotePattern.CmdUnsafeCharacter(headerName) is not null => "Header name",
+            RemoteAuthKind.OAuthClient when RemotePattern.CmdUnsafeCharacter(oauthClientId) is not null => "Client ID",
+            RemoteAuthKind.OAuthClient when RemotePattern.CmdUnsafeCharacter(oauthClientSecret) is not null => "Client Secret",
+            RemoteAuthKind.OAuthClient when RemotePattern.CmdUnsafeCharacter(oauthScopes, allowWhitespace: true) is not null => "Scopes",
+            _ => null,
+        };
+    }
+
     private JsonValue CurrentFormConfig()
     {
         if (isRemote)
@@ -682,6 +729,11 @@ public sealed class EditorModel : ObservableObject, IDisposable
                     case RemoteAuthKind.OAuthClient when oauthClientId.TrimSpaces().Length == 0:
                         ValidationError = ClientIdError;
                         return false;
+                }
+                if (CmdUnsafeField() is { } unsafeField)
+                {
+                    ValidationError = CmdUnsafeError(unsafeField);
+                    return false;
                 }
             }
             else if (command.TrimSpaces().Length == 0)
