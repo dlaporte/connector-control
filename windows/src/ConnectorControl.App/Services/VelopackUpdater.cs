@@ -15,7 +15,14 @@ public sealed class VelopackUpdater : IUpdater
     public const string RepoUrl = "https://github.com/dlaporte/connector-control";
     private const string DevelopmentBuild = "development build";
 
-    private readonly UpdateManager? manager;
+    /// <summary>UpdateManager keeps its locator protected; the verifier needs PackagesDir and UpdateExePath.</summary>
+    private sealed class LocatingUpdateManager(IUpdateSource source, IVelopackLocator? locator) : UpdateManager(source, null, locator)
+    {
+        public IVelopackLocator Location => Locator;
+    }
+
+    private readonly LocatingUpdateManager? manager;
+    private readonly Func<string, string?, string, string?> verify;
 
     public VelopackUpdater() : this(RepoUrl)
     {
@@ -29,21 +36,22 @@ public sealed class VelopackUpdater : IUpdater
     /// <summary>
     /// Test seam. <paramref name="source"/> builds the feed for a given "include prereleases"
     /// flag (GithubSource in the app); <paramref name="locator"/> describes the install
-    /// (Velopack's TestVelopackLocator in tests; null = inspect the real install layout).
+    /// (Velopack's TestVelopackLocator in tests; null = inspect the real install layout);
+    /// <paramref name="verify"/> replaces <see cref="UpdateVerifier.Verify"/> in tests.
     /// </summary>
-    internal VelopackUpdater(Func<bool, IUpdateSource> source, IVelopackLocator? locator)
+    internal VelopackUpdater(Func<bool, IUpdateSource> source, IVelopackLocator? locator, Func<string, string?, string, string?>? verify = null)
     {
-        UpdateManager? resolved = null;
+        LocatingUpdateManager? resolved = null;
         var followsPrereleases = false;
         try
         {
-            var stable = new UpdateManager(source(false), null, locator);
+            var stable = new LocatingUpdateManager(source(false), locator);
             if (stable.IsInstalled)
             {
                 // The version comes from current\sq.version, i.e. from `vpk pack --packVersion`:
                 // a preview (1.3.0-preview.N) follows prereleases, a release (1.3.0) does not.
                 followsPrereleases = stable.CurrentVersion?.IsPrerelease ?? false;
-                resolved = followsPrereleases ? new UpdateManager(source(true), null, locator) : stable;
+                resolved = followsPrereleases ? new LocatingUpdateManager(source(true), locator) : stable;
             }
         }
         catch (Exception)
@@ -56,6 +64,7 @@ public sealed class VelopackUpdater : IUpdater
         manager = resolved;
         FollowsPrereleases = followsPrereleases;
         VersionDisplay = manager?.CurrentVersion?.ToString() ?? DevelopmentBuild;
+        this.verify = verify ?? UpdateVerifier.Verify;
     }
 
     /// <summary>Spec §6.7: true for a preview install (prerelease version), so update checks include prereleases.</summary>
@@ -83,13 +92,34 @@ public sealed class VelopackUpdater : IUpdater
         return new UpdateCheck(target.Version.ToString(), target.NotesMarkdown, info);
     }
 
-    public Task DownloadAsync(UpdateCheck update, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
+    public async Task DownloadAsync(UpdateCheck update, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
     {
         if (manager is null || update.Token is not UpdateInfo info)
         {
-            return Task.CompletedTask;
+            return;
         }
-        return manager.DownloadUpdatesAsync(info, percent => progress?.Report(percent), cancellationToken);
+        await manager.DownloadUpdatesAsync(info, percent => progress?.Report(percent), cancellationToken).ConfigureAwait(false);
+        VerifyDownloaded(info);
+    }
+
+    /// <summary>
+    /// Velopack has checked the feed checksum and already overwritten Update.exe from the package.
+    /// Before anything is staged, that Update.exe and every binary in the package must be signed by
+    /// this app's own publisher; a refused package is deleted so no later apply can pick it up.
+    /// </summary>
+    internal void VerifyDownloaded(UpdateInfo info)
+    {
+        if (manager is null)
+        {
+            return;
+        }
+        var location = manager.Location;
+        var packagePath = Path.Combine(location.PackagesDir ?? "", info.TargetFullRelease.FileName);
+        if (verify(packagePath, location.UpdateExePath, Environment.ProcessPath ?? "") is { } problem)
+        {
+            try { File.Delete(packagePath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            throw new UpdateVerificationException(problem);
+        }
     }
 
     public void ApplyOnQuit(UpdateCheck update)
