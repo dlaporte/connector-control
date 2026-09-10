@@ -34,9 +34,10 @@ public enum AtomicFile {
                           userInfo: [NSFilePathErrorKey: tmp.path])
         }
         defer { try? fm.removeItem(at: tmp) }
-        // Before the first byte lands: an inherited ACE grants read regardless of the 0600.
-        try stripACL(fd: fd)
+        // The handle owns the descriptor from here, so a throw below closes it.
         let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        // Before the first byte lands: an inherited ACE grants read regardless of the 0600.
+        try stripACL(fd: handle.fileDescriptor)
         try handle.write(contentsOf: data)
         try handle.close()
         // The umask can only clear bits, so the mode is already 0600 or
