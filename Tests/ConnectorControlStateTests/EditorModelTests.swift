@@ -483,6 +483,22 @@ final class EditorModelTests: XCTestCase {
         XCTAssertNil(try h.claudeServers()["scoutbook"])   // disabled: not applied to Claude
     }
 
+    func testEditingAPinnedConnectorKeepsItsPin() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        let pinned = local("npx", ["-y", "mcp-remote@0.1.16", url])
+        XCTAssertNil(state.upsert(name: "pinned", entry: MCPEntry(config: pinned), renamedFrom: nil))
+        let editor = editor(h, state, .existing(name: "pinned", entry: try XCTUnwrap(state.store.mcps["pinned"])))
+        editor.remoteURL = "https://moved.example/mcp"
+        XCTAssertTrue(editor.save())
+        XCTAssertEqual(state.store.mcps["pinned"]?.config, local("npx", ["-y", "mcp-remote@0.1.16", "https://moved.example/mcp"]))
+
+        let again = self.editor(h, state, .existing(name: "pinned", entry: try XCTUnwrap(state.store.mcps["pinned"])))
+        again.requestView(.json)
+        XCTAssertTrue(again.jsonText.contains("mcp-remote@0.1.16"), "the JSON view shows the pin too")
+    }
+
     func testSaveRenameRemovesTheOldKeyAndNameErrorsSurface() throws {
         let h = AppStateHarness()
         defer { h.dispose() }

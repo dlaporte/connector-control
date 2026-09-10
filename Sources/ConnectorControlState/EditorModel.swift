@@ -73,6 +73,7 @@ public final class EditorModel: ObservableObject {
     @Published public var oauthScopes = ""
     private var remoteExtraArgs: [String] = []
     private var remotePassthroughEnv: [String: String] = [:]
+    private var remotePackage = "mcp-remote"
     @Published public var command: String {
         didSet { if oldValue != command { evaluateRequiredTool() } }
     }
@@ -301,6 +302,7 @@ public final class EditorModel: ObservableObject {
             resetRemoteFields()
             remoteExtraArgs = []
             remotePassthroughEnv = [:]
+            remotePackage = "mcp-remote"
         }
         suppressToolEvaluation = false
         evaluateRequiredTool()
@@ -337,6 +339,7 @@ public final class EditorModel: ObservableObject {
         }
         remoteExtraArgs = remote.extraArgs
         remotePassthroughEnv = remote.passthroughEnv
+        remotePackage = remote.package
     }
 
     private static func envRows(from env: [String: String]) -> [EnvRow] {
@@ -380,7 +383,8 @@ public final class EditorModel: ObservableObject {
         if isRemote {
             let encoded = RemotePattern.encode(RemoteConfig(
                 url: remoteURL, auth: currentRemoteAuth,
-                extraArgs: remoteExtraArgs, passthroughEnv: remotePassthroughEnv))
+                extraArgs: remoteExtraArgs, passthroughEnv: remotePassthroughEnv,
+                package: remotePackage))
             // Preserve any unmodeled top-level keys (they can never collide with command/args/env).
             guard case .object(var object) = encoded, !additional.isEmpty else { return encoded }
             for (key, value) in additional { object[key] = value }
