@@ -28,6 +28,7 @@ final class PermissionsSweepTests: XCTestCase {
 
         XCTAssertTrue(PermissionsSweep.runOnce(settings: settings, paths: paths))
         XCTAssertTrue(settings.permissionsSweepDone)
+        XCTAssertTrue(settings.aclSweepDone)
         XCTAssertEqual(try mode(paths.storeDirURL), 0o700)
         XCTAssertEqual(try mode(paths.masterStoreURL), 0o600)
         XCTAssertEqual(try mode(paths.backupsDirURL), 0o700)
@@ -73,6 +74,34 @@ final class PermissionsSweepTests: XCTestCase {
         XCTAssertEqual(try mode(corrupt), 0o600)
         XCTAssertEqual(try mode(backups), 0o700)
         XCTAssertEqual(try mode(backup), 0o600)
+    }
+
+    /// An install swept for modes before ACL stripping existed runs once more for the ACLs,
+    /// and only for the app's own files.
+    func testAnInstallSweptForModesStripsACLsOnceMore() throws {
+        let dir = TempDir(prefix: "sweep")
+        defer { dir.dispose() }
+        let paths = AppPaths(claudeConfigURL: dir.file("claude.json"), storeDirURL: dir.file("store"))
+        let fm = FileManager.default
+        try fm.createDirectory(at: paths.backupsDirURL, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: paths.masterStoreURL)
+        let backup = paths.backupsDirURL.appendingPathComponent("mcps.2026-09-10T00-00-00-000Z.json")
+        try Data("{}".utf8).write(to: backup)
+        for url in [paths.masterStoreURL, backup] {
+            let chmod = Process()
+            chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+            chmod.arguments = ["+a", "group:everyone allow read", url.path]
+            try chmod.run(); chmod.waitUntilExit()
+            XCTAssertTrue(AtomicFile.hasACL(atPath: url.path))
+        }
+        let settings = FakeSettings()
+        settings.permissionsSweepDone = true   // a pre-ACL build already did the modes
+
+        XCTAssertTrue(PermissionsSweep.runOnce(settings: settings, paths: paths))
+        XCTAssertTrue(settings.aclSweepDone)
+        XCTAssertFalse(AtomicFile.hasACL(atPath: paths.masterStoreURL.path))
+        XCTAssertFalse(AtomicFile.hasACL(atPath: backup.path))
+        XCTAssertFalse(PermissionsSweep.runOnce(settings: settings, paths: paths), "both flags set: gated")
     }
 
     func testMissingDirectoriesAreToleratedAndStillMarkTheSweepDone() {

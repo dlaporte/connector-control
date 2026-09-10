@@ -10,4 +10,5 @@ final class FakeSettings: AppSettings {
     var confirmBeforeQuit = true
     var lastApplyDate: Date?
     var permissionsSweepDone = false
+    var aclSweepDone = false
 }

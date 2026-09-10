@@ -212,9 +212,11 @@ public final class AppState: ObservableObject {
         let newStoreURL = rebuilt.paths.masterStoreURL
         let fm = FileManager.default
         if !fm.fileExists(atPath: newStoreURL.path), fm.fileExists(atPath: previousStoreURL.path) {
-            try? fm.createDirectory(at: rebuilt.paths.storeDirURL, withIntermediateDirectories: true,
-                                    attributes: [.posixPermissions: 0o700])
-            try? fm.copyItem(at: previousStoreURL, to: newStoreURL)
+            // copyItem into a shared folder would inherit its ACEs; AtomicFile creates the
+            // directory and the file private from the first instant.
+            if let bytes = try? Data(contentsOf: previousStoreURL) {
+                try? AtomicFile.write(bytes, to: newStoreURL)
+            }
         }
         service = rebuilt
         armWatchers()

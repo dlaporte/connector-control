@@ -20,6 +20,10 @@ public enum DefaultsKey: String, CaseIterable {
     /// enforced. Migrated with the rest: the directory moves across with the
     /// rename, so what the old app already swept stays swept.
     case permissionsSweepDone
+    /// One-time strip of inherited ACL entries from files written before AtomicFile did it
+    /// at creation. Separate from permissionsSweepDone so an install swept for modes still
+    /// gets this pass once.
+    case aclSweepDone
 
     /// Copies every key `legacy` holds into `target`, never overwriting a
     /// value `target` already has — a setting changed since the upgrade wins
