@@ -77,4 +77,33 @@ public class AtomicFileTests : IDisposable
         var tmpFiles = Directory.GetFiles(dir.Path).Where(p => p.Contains(".tmp-", StringComparison.Ordinal)).ToArray();
         Assert.Empty(tmpFiles);
     }
+
+    [Fact]
+    public void WriteReportsWhetherTheFileIsPrivate()
+    {
+        // Off Windows there is nothing to do; on Windows the temp dir is on an ACL-capable volume.
+        var result = AtomicFile.Write(Encoding.UTF8.GetBytes("x"), dir.File("file.json"));
+        Assert.True(result.Protected);
+    }
+
+    [Fact]
+    public void ADirectoryWriteCreatesIsOwnerOnlyWhileAnExistingParentIsUntouched()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows only");
+            return;
+        }
+        var path = dir.File(Path.Combine("fresh", "settings.json"));
+        AtomicFile.Write(Encoding.UTF8.GetBytes("{}"), path);
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.GetDirectoryName(path)!), "the app's own directory is private from the start, like the Mac's 0700");
+        Assert.False(OwnerOnlyAcl.IsOwnerOnly(dir.Path), "a directory that already existed is left as it was");
+    }
+
+    [Fact]
+    public void SaveStoreReportsTheOutcome()
+    {
+        var store = new MasterStore([]);
+        Assert.True(MasterStoreIO.Save(store, dir.File("mcps.json")).Protected);
+    }
 }
