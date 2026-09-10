@@ -42,6 +42,7 @@ public static class UpdateVerifier
         try
         {
             using var zip = ZipFile.OpenRead(packagePath);
+            var verified = 0;
             foreach (var entry in zip.Entries)
             {
                 if (!IsPortableExecutable(entry.FullName))
@@ -54,8 +55,10 @@ public static class UpdateVerifier
                 {
                     return problem;
                 }
+                verified++;
             }
-            return null;
+            // A package with nothing checkable is not "all signed": a real one always carries the app.
+            return verified == 0 ? $"The update package contains no programs to verify{NotInstalledSuffix}" : null;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
         {

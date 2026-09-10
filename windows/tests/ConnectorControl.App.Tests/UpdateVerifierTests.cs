@@ -68,6 +68,16 @@ public class UpdateVerifierTests : IDisposable
         Assert.Null(UpdateVerifier.Verify(Package(("lib/app/x.dll", UnsignedBinary)), updateExePath: UnsignedBinary, UnsignedBinary));
     }
 
+    [Fact]
+    public void APackageWithNoBinariesIsRefused()
+    {
+        // "Nothing failed" is not "everything passed": a package stripped of every checkable file is refused.
+        SkipUnlessHostIsSigned();
+        var problem = UpdateVerifier.Verify(Package(), updateExePath: null, RunningExe);
+        Assert.NotNull(problem);
+        Assert.Contains("no programs", problem);
+    }
+
     [Theory]
     [InlineData("lib/app/ConnectorControl.exe", true)]
     [InlineData("lib/app/ConnectorControl.dll", true)]
