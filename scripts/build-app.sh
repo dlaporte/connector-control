@@ -70,6 +70,11 @@ swift scripts/generate-icon.swift "$APP/Contents/Resources/AppIcon.icns"
 # (Sparkle persists that choice itself). Signed updates are only as safe as
 # the signing key, and a prompt is what turns a compromised key into a dialog
 # a person can refuse instead of code that runs everywhere.
+# SUVerifyUpdateBeforeExtraction: the DMG's EdDSA signature is checked before anything is
+# unpacked, not after. SURequireSignedFeed (Sparkle 2.9+): the appcast and its release notes
+# must be signed too; generate_appcast signs them when it sees this key in the app it is
+# publishing. Both keys bind the whole update path to SUPublicEDKey, whose private half
+# lives only in the release job.
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -90,6 +95,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>SUPublicEDKey</key><string>UmpM6nLMC8udcgUZ4IYigUgqFHziHPNsYilHc7Nn/3Q=</string>
     <key>SUEnableAutomaticChecks</key><true/>
     <key>SUAutomaticallyUpdate</key><false/>
+    <key>SUVerifyUpdateBeforeExtraction</key><true/>
+    <key>SURequireSignedFeed</key><true/>
 </dict>
 </plist>
 PLIST

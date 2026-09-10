@@ -1,7 +1,4 @@
-# Keeps the SHA-pinned actions in .github/workflows current. Every `uses:` is pinned to a
-# commit (with the version in a trailing comment, which Dependabot updates too), so a
-# floating major tag can never pull a changed action into the job that holds the signing
-# keys; this is what turns those pins over.
+# Keeps the SHA-pinned actions, the Windows NuGet packages and the Swift package (Sparkle) current.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -10,4 +7,18 @@ updates:
       interval: weekly
     groups:
       actions:
+        patterns: ["*"]
+  - package-ecosystem: nuget
+    directory: /windows
+    schedule:
+      interval: weekly
+    groups:
+      nuget:
+        patterns: ["*"]
+  - package-ecosystem: swift
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      swift:
         patterns: ["*"]
