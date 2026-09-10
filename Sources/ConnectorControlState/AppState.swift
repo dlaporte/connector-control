@@ -102,6 +102,10 @@ public final class AppState: ObservableObject {
         self.paths = paths
         self.host = host
         self.toolProbe = toolProbe
+        // Temp files for every write are born in the app's own folder (same volume permitting),
+        // never beside a synced/shared target — see AtomicFile.privateStagingDirectory.
+        AtomicFile.privateStagingDirectory = AppPaths.live(environment: paths.environment, appSupport: paths.appSupport)
+            .storeDirURL.appendingPathComponent(".staging")
         let resolved = AppState.makeService(settings: settings, paths: paths)
         service = resolved
         // Sweep the RESOLVED paths (a repointed store lives outside the default dir).

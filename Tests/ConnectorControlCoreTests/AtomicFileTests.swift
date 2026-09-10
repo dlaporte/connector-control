@@ -11,6 +11,7 @@ final class AtomicFileTests: XCTestCase {
 
     override func tearDownWithError() throws {
         try? FileManager.default.removeItem(at: dir)
+        AtomicFile.privateStagingDirectory = nil
     }
 
     func testWriteCreatesFileAndIntermediateDirectories() throws {
@@ -148,5 +149,29 @@ final class AtomicFileTests: XCTestCase {
         XCTAssertFalse(AtomicFile.hasACL(atPath: url.path))
         XCTAssertFalse(AtomicFile.hasACL(atPath: dir.appendingPathComponent("nested").path))
         XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "token")
+    }
+
+    /// The temp file is born in the app's own private folder and renamed into the target
+    /// folder: a rename does not re-inherit ACEs, so there is no instant — not even a
+    /// zero-byte one — at which a shared folder's principal can open it.
+    func testStagingIsUsedOnTheSameVolumeAndSkippedAcrossVolumes() throws {
+        let staging = dir.appendingPathComponent("staging")
+        let target = dir.appendingPathComponent("shared")
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+        XCTAssertEqual(AtomicFile.stagingLocation(for: target, staging: staging), staging)
+        XCTAssertEqual(try XCTUnwrap(FileManager.default.attributesOfItem(atPath: staging.path)[.posixPermissions] as? Int), 0o700, "created on demand, private")
+        XCTAssertNil(AtomicFile.stagingLocation(for: URL(fileURLWithPath: "/dev"), staging: staging), "devfs is another device")
+        XCTAssertNil(AtomicFile.stagingLocation(for: target, staging: nil))
+    }
+
+    func testWriteThroughStagingLeavesNothingBehind() throws {
+        AtomicFile.privateStagingDirectory = dir.appendingPathComponent("staging")
+        let url = dir.appendingPathComponent("shared/secret.json")
+        try AtomicFile.write(Data("one".utf8), to: url)
+        try AtomicFile.write(Data("two".utf8), to: url)
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "two")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("staging").path), [])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("shared").path), ["secret.json"])
+        XCTAssertFalse(AtomicFile.hasACL(atPath: url.path))
     }
 }
