@@ -19,6 +19,8 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public const string RestartGlyph = "";
     /// <summary>Segoe Fluent Icons: Warning, on a row whose launcher is missing. The same code point the retry footer uses, named separately so changing one does not move the other.</summary>
     public const string ToolWarningGlyph = "\ue7ba";
+    /// <summary>Shown in the error banner when nothing worse is: the store's folder refused the owner-only permission.</summary>
+    public const string StoreNotPrivateCaution = "The master list could not be made private: its folder refused the permission change, so connector secrets in it are readable by anyone who can read that folder.";
 
     private readonly AppState state;
     private IReadOnlyList<ProfileMenuItem> profileItems = [];
@@ -43,9 +45,9 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public bool CanDeleteProfile => state.ProfileNames.Count >= 2;
 
-    public string? ErrorMessage => state.LastError;
+    public string? ErrorMessage => state.LastError ?? (state.StoreNotPrivate ? StoreNotPrivateCaution : null);
 
-    public bool HasError => state.LastError is not null;
+    public bool HasError => ErrorMessage is not null;
 
     public ObservableCollection<ConnectorRow> Rows { get; }
 

@@ -269,4 +269,34 @@ public class AppStateWatcherTests
         Assert.Empty(h.Notifier.Sent);
         Assert.Equal(["scoutbook"], AppStateHarness.Keys(h.ClaudeServers().Keys));   // nobody regenerated it
     }
+
+    [Fact]
+    public void RepointStoreSeedsPrivatelyAndLeavesAChosenFolderAsItWas()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var fresh = h.Dir.File("fresh");
+        state.RepointStore(fresh);
+        var chosen = h.Dir.File("chosen");
+        Directory.CreateDirectory(chosen);   // pre-existing, inherits the temp dir's permissive ACL
+        state.RepointStore(chosen);
+        Assert.True(File.Exists(Path.Combine(chosen, "mcps.json")));
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.True(OwnerOnlyAcl.IsOwnerOnly(fresh), "a folder the app created is private from the start");
+            Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.Combine(fresh, "mcps.json")));
+            Assert.False(OwnerOnlyAcl.IsOwnerOnly(chosen), "a folder the user chose keeps its own permissions, as the sweep's rule says");
+            Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.Combine(chosen, "mcps.json")), "the seeded copy inside it is still private");
+        }
+    }
+
+    [Fact]
+    public void ASuccessfulSaveClearsStoreNotPrivate()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        state.StoreNotPrivate = true;   // as if an earlier save on a refusing folder had set it
+        state.SetEnabled("aws-mcp", false);
+        Assert.False(state.StoreNotPrivate);
+    }
 }
