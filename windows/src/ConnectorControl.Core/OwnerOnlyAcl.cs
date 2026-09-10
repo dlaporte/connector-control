@@ -7,7 +7,10 @@ namespace ConnectorControl.Core;
 /// <summary>
 /// Windows counterpart of the Mac app's mode 0600 / 0700: a protected DACL
 /// granting the current user full control and nobody else. Connector configs
-/// can hold env-var secrets, so every file this app writes gets this.
+/// can hold env-var secrets, so every file this app writes gets this — in the
+/// create call itself where possible (<see cref="WriteNewProtectedFile"/>,
+/// <see cref="CreateDirectoryProtected"/>), after the fact only as a repair
+/// (<see cref="TryApply"/>).
 /// </summary>
 public static class OwnerOnlyAcl
 {
@@ -27,12 +30,7 @@ public static class OwnerOnlyAcl
             Apply(path);
             return true;
         }
-        catch (Exception ex) when (ex is IOException
-            or UnauthorizedAccessException            // includes PrivilegeNotHeldException
-            or InvalidOperationException
-            or PlatformNotSupportedException
-            or System.Security.SecurityException
-            or IdentityNotMappedException)
+        catch (Exception ex) when (IsAclFailure(ex))
         {
             // Best effort, like Swift's `try?`: the write itself must never fail
             // because the ACL could not be tightened. Programming errors still surface.
@@ -40,36 +38,133 @@ public static class OwnerOnlyAcl
         }
     }
 
+    /// <summary>
+    /// Creates <paramref name="path"/>, which must not exist yet, with the owner-only DACL in the
+    /// create call itself — the Windows counterpart of <c>open(O_CREAT|O_EXCL, 0600)</c> — and
+    /// writes <paramref name="data"/> into it. Nothing else ever sees the file with the parent
+    /// folder's inherited permissions. When the ACL machinery itself fails (no SID, an unsupported
+    /// object) the file is created plainly and <see cref="TryApply"/> repairs it. Returns whether
+    /// the file ended up owner-only; file errors throw as they would from File.WriteAllBytes.
+    /// </summary>
+    public static bool WriteNewProtectedFile(string path, byte[] data)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            FileStream? protectedStream = null;
+            try
+            {
+                protectedStream = new FileInfo(path).Create(FileMode.CreateNew, FileSystemRights.Write, FileShare.None, 4096, FileOptions.None, FileSecurityForCurrentUser());
+            }
+            catch (Exception ex) when (IsAclMachineryFailure(ex))
+            {
+                // fall through to the plain create below
+            }
+            if (protectedStream is not null)
+            {
+                using (protectedStream)
+                {
+                    protectedStream.Write(data);
+                }
+                return true;
+            }
+        }
+        using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            stream.Write(data);
+        }
+        return TryApply(path);
+    }
+
+    /// <summary>
+    /// Creates <paramref name="dir"/> owner-only when it does not exist yet, missing parents
+    /// included — the Mac's <c>createDirectory(attributes: 0o700)</c>. A directory that already
+    /// exists — a folder the user chose — is never rewritten (the sweep's rule too). Throws
+    /// IOException when a file sits where the directory should be.
+    /// </summary>
+    public static void CreateDirectoryProtected(string dir)
+    {
+        if (Directory.Exists(dir))
+        {
+            return;
+        }
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                new DirectoryInfo(dir).Create(DirectorySecurityForCurrentUser());
+                return;
+            }
+            catch (Exception ex) when (IsAclMachineryFailure(ex))
+            {
+                // fall through to the plain create below
+            }
+        }
+        Directory.CreateDirectory(dir);
+        TryApply(dir);
+    }
+
+    /// <summary>A protected DACL (no inheritance) granting the current user full control and nobody else.</summary>
+    [SupportedOSPlatform("windows")]
+    public static FileSecurity FileSecurityForCurrentUser()
+    {
+        var security = new FileSecurity();
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        security.AddAccessRule(new FileSystemAccessRule(CurrentUser(), FileSystemRights.FullControl, AccessControlType.Allow));
+        return security;
+    }
+
+    /// <summary>The directory form of <see cref="FileSecurityForCurrentUser"/>: the rule inherits to what is created inside.</summary>
+    [SupportedOSPlatform("windows")]
+    public static DirectorySecurity DirectorySecurityForCurrentUser()
+    {
+        var security = new DirectorySecurity();
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        security.AddAccessRule(new FileSystemAccessRule(
+            CurrentUser(), FileSystemRights.FullControl,
+            InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+            PropagationFlags.None, AccessControlType.Allow));
+        return security;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static SecurityIdentifier CurrentUser() =>
+        WindowsIdentity.GetCurrent().User
+            ?? throw new InvalidOperationException("The current Windows identity has no SID.");
+
     [SupportedOSPlatform("windows")]
     private static void Apply(string path)
     {
-        var user = WindowsIdentity.GetCurrent().User
-            ?? throw new InvalidOperationException("The current Windows identity has no SID.");
         if (Directory.Exists(path))
         {
-            var security = new DirectorySecurity();
-            security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-            security.AddAccessRule(new FileSystemAccessRule(
-                user, FileSystemRights.FullControl,
-                InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
-                PropagationFlags.None, AccessControlType.Allow));
-            new DirectoryInfo(path).SetAccessControl(security);
+            new DirectoryInfo(path).SetAccessControl(DirectorySecurityForCurrentUser());
         }
         else if (File.Exists(path))
         {
-            var security = new FileSecurity();
-            security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-            security.AddAccessRule(new FileSystemAccessRule(user, FileSystemRights.FullControl, AccessControlType.Allow));
-            new FileInfo(path).SetAccessControl(security);
+            new FileInfo(path).SetAccessControl(FileSecurityForCurrentUser());
         }
     }
+
+    /// <summary>
+    /// The ACL machinery failing on its own terms — no SID, an object or volume without security
+    /// (NotSupportedException is what .NET raises for ERROR_NO_SECURITY_ON_OBJECT on FAT/exFAT and
+    /// some shares) — as opposed to the file operation it was attached to failing.
+    /// </summary>
+    private static bool IsAclMachineryFailure(Exception ex) => ex is InvalidOperationException
+        or PlatformNotSupportedException
+        or NotSupportedException
+        or System.Security.SecurityException
+        or IdentityNotMappedException;
+
+    /// <summary>Everything <see cref="TryApply"/> swallows: the machinery, plus the file being gone or locked.</summary>
+    private static bool IsAclFailure(Exception ex) => ex is IOException
+        or UnauthorizedAccessException            // includes PrivilegeNotHeldException
+        || IsAclMachineryFailure(ex);
 
     /// <summary>True when the DACL is protected and every rule names the current user.</summary>
     [SupportedOSPlatform("windows")]
     public static bool IsOwnerOnly(string path)
     {
-        var user = WindowsIdentity.GetCurrent().User
-            ?? throw new InvalidOperationException("The current Windows identity has no SID.");
+        var user = CurrentUser();
         FileSystemSecurity security = Directory.Exists(path)
             ? new DirectoryInfo(path).GetAccessControl()
             : new FileInfo(path).GetAccessControl();
