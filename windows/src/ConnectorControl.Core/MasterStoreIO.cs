@@ -50,7 +50,7 @@ public static class MasterStoreIO
         }
     }
 
-    public static void Save(MasterStore store, string path) => AtomicFile.Write(store.ToJson().Serialize(), path);
+    public static AtomicWriteResult Save(MasterStore store, string path) => AtomicFile.Write(store.ToJson().Serialize(), path);
 
     /// <summary>Side-effect-free peek: null when missing or undecodable. Never moves a corrupt file.</summary>
     public static MasterStore? Read(string path)

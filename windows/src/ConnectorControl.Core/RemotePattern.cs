@@ -18,6 +18,38 @@ public static class RemotePattern
         && uri.Host.Length > 0;
 
     /// <summary>
+    /// Characters cmd.exe acts on wherever they appear on its command line — separators, redirections,
+    /// its escape and its quote. Claude Desktop starts the <c>cmd /c npx …</c> shape through cross-spawn,
+    /// which escapes arguments only for batch-file commands; cmd.exe itself is an .exe, so every argument
+    /// reaches it verbatim and a URL such as <c>https://host/mcp&amp;calc</c> runs <c>calc</c>. Bare
+    /// <c>npx</c> resolves to npx.cmd, which cross-spawn wraps and caret-escapes itself, so the Npx
+    /// style needs no such rule.
+    /// </summary>
+    public const string CmdUnsafeCharacters = "&|<>^\"";
+
+    /// <summary>
+    /// The first character of <paramref name="value"/> cmd.exe would act on — one of
+    /// <see cref="CmdUnsafeCharacters"/>, or whitespace unless <paramref name="allowWhitespace"/> — or null.
+    /// </summary>
+    public static char? CmdUnsafeCharacter(string value, bool allowWhitespace = false)
+    {
+        foreach (var c in value)
+        {
+            if (CmdUnsafeCharacters.Contains(c) || (!allowWhitespace && char.IsWhiteSpace(c)))
+            {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// True when cmd.exe could expand part of <paramref name="value"/> as a <c>%NAME%</c> variable:
+    /// two or more percent signs. A lone <c>%20</c> is left alone; <c>%41x%42</c> is not.
+    /// </summary>
+    public static bool HasCmdExpansionRisk(string value) => value.Count(c => c == '%') >= 2;
+
+    /// <summary>
     /// Strips the launcher — <c>npx</c> or <c>cmd /c npx</c> — and returns the style
     /// plus the remaining args (before "-y" handling). Null when the config is not an
     /// all-string-args npx invocation.

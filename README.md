@@ -194,6 +194,9 @@ changes live (the file is watched). Notes:
   as `cmd /c npx mcp-remote …`, and local servers carry their own paths.
   Each app preserves the other platform's entries untouched — an entry may
   simply fail to start in Claude on the other OS until you edit it there.
+  Because cmd.exe re-parses everything after `cmd /c`, the Windows editor
+  refuses a URL, header name or OAuth client field containing `& | < > ^ "`
+  or a space for such a connector; use the JSON view if you really need one.
 
 ## Building from source
 

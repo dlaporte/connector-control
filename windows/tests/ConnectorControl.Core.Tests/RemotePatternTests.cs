@@ -105,4 +105,57 @@ public class RemotePatternTests
     {
         Assert.Equal(expected, RemotePattern.IsValidHttpUrl(url));
     }
+
+    [Fact]
+    public void UrlSyntaxAloneDoesNotCatchCmdMetacharacters()
+    {
+        // The security-review case: valid by Uri.TryCreate, split by cmd.exe at the &.
+        Assert.True(RemotePattern.IsValidHttpUrl("https://127.0.0.1:1/mcp&ver"));
+        Assert.True(RemotePattern.IsValidHttpUrl("https://x.dev/mcp?a=b&c=d"));
+    }
+
+    [Theory]
+    [InlineData("https://127.0.0.1:1/mcp&ver", '&')]
+    [InlineData("https://x.dev/mcp?a=b&c=d", '&')]
+    [InlineData("https://x.dev/mcp|calc", '|')]
+    [InlineData("https://x.dev/mcp<x", '<')]
+    [InlineData("https://x.dev/mcp>x", '>')]
+    [InlineData("https://x.dev/mcp^x", '^')]
+    [InlineData("https://x.dev/mcp\"x", '"')]
+    [InlineData("https://x.dev/mcp x", ' ')]
+    [InlineData("X-Key\tcalc", '\t')]
+    public void CmdUnsafeCharacterFindsTheFirstOffender(string value, char expected)
+    {
+        Assert.Equal(expected, RemotePattern.CmdUnsafeCharacter(value));
+    }
+
+    [Theory]
+    [InlineData("https://x.dev/mcp")]
+    [InlineData("https://x.dev/mcp?a=b")]
+    [InlineData("https://x.dev/a%20b")]
+    [InlineData("X-API-Key")]
+    [InlineData("client-id_123.ABC~")]
+    [InlineData("")]
+    public void CmdUnsafeCharacterIsNullForPlainValues(string value)
+    {
+        Assert.Null(RemotePattern.CmdUnsafeCharacter(value));
+    }
+
+    [Fact]
+    public void WhitespaceCanBeAllowedForSpaceSeparatedFields()
+    {
+        // OAuth scopes are space-separated by definition; the metacharacters still count.
+        Assert.Null(RemotePattern.CmdUnsafeCharacter("openid profile", allowWhitespace: true));
+        Assert.Equal('&', RemotePattern.CmdUnsafeCharacter("openid&calc", allowWhitespace: true));
+    }
+
+    [Theory]
+    [InlineData("https://x.dev/a%20b", false)]
+    [InlineData("https://x.dev/%41%42", true)]
+    [InlineData("https://x.dev/%COMSPEC%", true)]
+    [InlineData("plain", false)]
+    public void HasCmdExpansionRiskNeedsTwoPercentSigns(string value, bool expected)
+    {
+        Assert.Equal(expected, RemotePattern.HasCmdExpansionRisk(value));
+    }
 }

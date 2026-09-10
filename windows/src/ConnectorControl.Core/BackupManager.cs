@@ -25,8 +25,8 @@ public sealed class BackupManager
             return;
         }
         EnsureBackupsDir();
-        File.Copy(path, dest);
-        OwnerOnlyAcl.TryApply(dest);   // backups can hold env-var secrets
+        // Backups hold the same secrets as the file they copy: private from the create call.
+        OwnerOnlyAcl.WriteNewProtectedFile(dest, File.ReadAllBytes(path));
     }
 
     /// <summary>
@@ -58,8 +58,7 @@ public sealed class BackupManager
         {
             File.Delete(dest);   // bound exhausted: overwrite rather than throw
         }
-        File.Copy(path, dest);
-        OwnerOnlyAcl.TryApply(dest);
+        OwnerOnlyAcl.WriteNewProtectedFile(dest, File.ReadAllBytes(path));
         Prune(series);
         return dest;
     }
@@ -83,14 +82,12 @@ public sealed class BackupManager
             .ToList();
     }
 
-    private void EnsureBackupsDir()
-    {
-        if (!Directory.Exists(BackupsDir))
-        {
-            Directory.CreateDirectory(BackupsDir);
-            OwnerOnlyAcl.TryApply(BackupsDir);
-        }
-    }
+    /// <summary>
+    /// The backups tree is always the app's own (never the synced folder), so every directory this
+    /// creates — the default store dir included, when this is the first write of a fresh install — is
+    /// private from the create call, like the Mac's 0700.
+    /// </summary>
+    private void EnsureBackupsDir() => OwnerOnlyAcl.CreateDirectoryProtected(BackupsDir);
 
     private void Prune(string series)
     {

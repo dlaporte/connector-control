@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using ConnectorControl.Core;
 
 namespace ConnectorControl.App.Services;
 
@@ -11,15 +12,12 @@ namespace ConnectorControl.App.Services;
 /// Settings ▸ Claude, which lives in settings.json — is launched by this app
 /// as a child process. Before Claude is quit and that path started, the file
 /// has to carry a valid Authenticode signature chained to a trusted root
-/// (WinVerifyTrust, no UI, no network) AND be signed by Anthropic. An MSIX
-/// launch target is an app identity that Windows itself verified at install,
-/// so it never comes here.
+/// (WinVerifyTrust, no UI, no network) AND name Anthropic as the signing
+/// organization (<see cref="ClaudePublisher"/>). An MSIX launch target is an
+/// app identity that Windows itself verified at install, so it never comes here.
 /// </summary>
 public static class AuthenticodeVerifier
 {
-    /// <summary>Matched case-insensitively against the signer's subject (CN / O).</summary>
-    public const string ExpectedPublisher = "Anthropic";
-
     /// <summary>
     /// Null when <paramref name="exePath"/> is validly signed by Anthropic; otherwise the
     /// user-facing reason it must not be launched. Reads the whole file: call it off the UI thread
@@ -52,9 +50,9 @@ public static class AuthenticodeVerifier
         {
             return $"{name}'s signer could not be read ({ex.Message}).";
         }
-        if (!subject.Contains(ExpectedPublisher, StringComparison.OrdinalIgnoreCase))
+        if (ClaudePublisher.SubjectProblem(subject, name) is { } problem)
         {
-            return $"{name} is signed by \"{subject}\", not by Anthropic. Choose Claude Desktop's own claude.exe under Settings ▸ Claude.";
+            return problem;
         }
         return null;
     }

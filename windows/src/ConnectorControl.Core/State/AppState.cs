@@ -91,6 +91,14 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>Settable: the restore dialog reports its failure here (catalog §5).</summary>
     public string? LastError { get => lastError; set => Set(ref lastError, value); }
 
+    private bool storeNotPrivate;
+    /// <summary>
+    /// Windows: the last master-list save could not make mcps.json owner-only — the folder refused
+    /// the permission change — so the connector secrets in it are readable by whoever can read that
+    /// folder. Cleared by the next save that succeeds. Always false off Windows.
+    /// </summary>
+    public bool StoreNotPrivate { get => storeNotPrivate; internal set => Set(ref storeNotPrivate, value); }
+
     public bool NeedsClaudeRestart { get => needsClaudeRestart; private set => Set(ref needsClaudeRestart, value); }
 
     /// <summary>True when the last apply threw; keeps a retry affordance visible even after Reload refreshes LastError.</summary>
@@ -270,10 +278,10 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             try
             {
-                Directory.CreateDirectory(rebuilt.Paths.StoreDir);
-                File.Copy(previousStorePath, newStorePath);
-                OwnerOnlyAcl.TryApply(rebuilt.Paths.StoreDir);
-                OwnerOnlyAcl.TryApply(newStorePath);
+                // A directory this app creates is private from the start; one the user chose is
+                // left as it is (the sweep's rule). The seeded copy is owner-only from its create call.
+                OwnerOnlyAcl.CreateDirectoryProtected(rebuilt.Paths.StoreDir);
+                OwnerOnlyAcl.WriteNewProtectedFile(newStorePath, File.ReadAllBytes(previousStorePath));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -471,7 +479,7 @@ public sealed class AppState : ObservableObject, IDisposable
     {
         try
         {
-            Service.SaveStore(Store);
+            StoreNotPrivate = !Service.SaveStore(Store).Protected;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

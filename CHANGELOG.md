@@ -51,6 +51,24 @@ Hardening from a security review of the app and its release pipeline.
   secret; a re-run never replaces an asset already published under a
   version; every GitHub Action is pinned to a commit, with Dependabot
   keeping the pins current.
+- Windows: the connector editor refuses a Server URL, header name or OAuth
+  client field that contains `& | < > ^ "` or a space when the connector
+  uses the `cmd /c npx` launcher, and says why: Claude Desktop hands that
+  launcher's arguments to cmd.exe unescaped, so a pasted URL such as
+  `https://host/mcp&<command>` would run the command. A URL with more than
+  one `%` shows a caution instead. Connectors written as bare `npx` — the
+  Mac's shape — are unaffected, because Claude escapes npx's arguments
+  itself.
+- Windows: every file the app writes is private from the instant it is
+  created — the permissions travel with the create call rather than being
+  applied afterwards — the folders it creates are private too, and
+  replacing an existing file carries the new file's permissions instead of
+  keeping the old file's. If the master-list folder refuses the permission
+  change, the flyout says so instead of staying silent.
+- Windows: **Restart Claude** checks the signer's organization rather than
+  whether the word "Anthropic" appears anywhere in the certificate, and a
+  Store-app launch target set by hand in settings.json must name a Claude
+  Desktop package.
 
 ## v1.3.1
 

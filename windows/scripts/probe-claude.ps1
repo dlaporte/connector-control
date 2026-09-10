@@ -52,6 +52,20 @@ Section "Legacy (Squirrel) install"
 $legacy = "$env:LOCALAPPDATA\AnthropicClaude\claude.exe"
 if (Test-Path $legacy) { "EXISTS  $legacy" } else { "missing $legacy" }
 
+Section "Signer of claude.exe (what Connector Control's Restart Claude check compares: the O= attribute)"
+$exes = @($legacy)
+if ($pkgs) { $pkgs | ForEach-Object { $exes += Join-Path $_.InstallLocation 'claude.exe' } }
+foreach ($exe in $exes | Where-Object { Test-Path $_ }) {
+  $sig = Get-AuthenticodeSignature $exe
+  "{0}" -f $exe
+  "  status:     {0}" -f $sig.Status
+  "  subject:    {0}" -f $sig.SignerCertificate.Subject
+  "  issuer:     {0}" -f $sig.SignerCertificate.Issuer
+  "  thumbprint: {0}" -f $sig.SignerCertificate.Thumbprint
+}
+if ($pkgs) { $pkgs | ForEach-Object { "package {0}: Publisher={1}  PublisherId={2}" -f $_.Name, $_.Publisher, $_.PublisherId } }
+"Paste the subject line into ClaudePublisher.ExpectedOrganizations (windows/src/ConnectorControl.Core/ClaudePublisher.cs) if its O= is spelt differently."
+
 Section "Claude processes"
 $procs = Get-Process | Where-Object { $_.ProcessName -like 'claude*' }
 if ($procs) { $procs | Select-Object Id, ProcessName, StartTime, MainWindowTitle, Path | Format-Table -AutoSize } else { "none running" }

@@ -68,11 +68,11 @@ public sealed class ConfigService
         return new LoadResult(outcome.Store, notes, servers);
     }
 
-    /// <summary>Backup mcps.json (if present), then atomically save the store.</summary>
-    public void SaveStore(MasterStore store)
+    /// <summary>Backup mcps.json (if present), then atomically save the store. Reports whether the file is owner-only.</summary>
+    public AtomicWriteResult SaveStore(MasterStore store)
     {
         Backups.BackUp(Paths.MasterStorePath, "mcps");
-        MasterStoreIO.Save(store, Paths.MasterStorePath);
+        return MasterStoreIO.Save(store, Paths.MasterStorePath);
     }
 
     /// <summary>Snapshot original (first run), backup Claude's config, then write the enabled subset into it.</summary>

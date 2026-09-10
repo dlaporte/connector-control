@@ -191,4 +191,47 @@ public class ClaudeProcessTests
         Assert.True(ClaudeProcess.BelongsToInstall(@"C:\anywhere\claude.exe", info));
         Assert.True(ClaudeProcess.BelongsToInstall(null, info));
     }
+
+    [Fact]
+    public async Task AnAumidOverrideMustNameAClaudePackage()
+    {
+        // settings.json can hold any string; a package that is not Claude's must not be launched in Claude's place.
+        var p = new ClaudeProcess(() => ClaudeInstallInfo.NotFound with { ProcessName = NoSuchProcess }, () => "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App");
+        Assert.Equal("Microsoft.WindowsTerminal_8wekyb3d8bbwe!App" + ClaudeProcess.NotAClaudePackageSuffix, await p.RestartAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("Claude_pzs8sxrjxfjjc!Claude", true)]
+    [InlineData("Anthropic.ClaudeDesktop_8wekyb3d8bbwe!App", true)]
+    [InlineData("Claude_abcdefghjkmnp!Claude", false)]                 // a sideloaded "Claude" from another publisher
+    [InlineData("Microsoft.WindowsTerminal_8wekyb3d8bbwe!App", false)]
+    [InlineData("Claude_pzs8sxrjxfjjc!Claude\" --evil", false)]        // anything after the app id
+    [InlineData("Claude_pzs8sxrjxfjjc!Claude App", false)]             // whitespace
+    [InlineData("Claude_pzs8sxrjxfjjc", false)]                        // no app id
+    [InlineData("Claude_pzs8sxrjxfjjc!Claude\n", false)]              // a trailing newline: $ would accept it, \z does not
+    [InlineData("claude_pzs8sxrjxfjjc!Claude", false)]                 // family names are case-sensitive
+    public void IsClaudeAumidRequiresTheGrammarAndTheKnownFamily(string target, bool expected)
+    {
+        Assert.Equal(expected, ClaudeProcess.IsClaudeAumid(target));
+    }
+
+    [Fact]
+    public async Task AnExeTargetIsVerifiedBeforeAnythingIsQuit()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), $"cc-verify-{Guid.NewGuid():N}");
+        var exe = Path.Combine(folder, "claude.exe");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(exe, "not really an exe");
+        try
+        {
+            string? seen = null;
+            var p = new ClaudeProcess(() => Legacy(exe), () => null, verifyExe: path => { seen = path; return "refused by the test verifier"; });
+            Assert.Equal("refused by the test verifier", await p.RestartAsync(TestContext.Current.CancellationToken));
+            Assert.Equal(exe, seen);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }

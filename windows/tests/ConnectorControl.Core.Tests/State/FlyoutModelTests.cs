@@ -216,4 +216,18 @@ public class FlyoutModelTests
         Assert.Empty(h.Tools.Probed);
         Assert.All(flyout.Rows, r => Assert.False(r.HasToolWarning));
     }
+
+    [Fact]
+    public void ANotPrivateStoreShowsInTheBannerUntilAnErrorTakesPrecedence()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        using var flyout = new FlyoutModel(state);
+        Assert.False(flyout.HasError);
+        state.StoreNotPrivate = true;
+        Assert.True(flyout.HasError);
+        Assert.Equal(FlyoutModel.StoreNotPrivateCaution, flyout.ErrorMessage);
+        state.LastError = "apply failed";
+        Assert.Equal("apply failed", flyout.ErrorMessage);
+    }
 }
