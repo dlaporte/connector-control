@@ -102,6 +102,10 @@ public final class AppState: ObservableObject {
         self.paths = paths
         self.host = host
         self.toolProbe = toolProbe
+        // Temp files for every write are born in the app's own folder (same volume permitting),
+        // never beside a synced/shared target — see AtomicFile.privateStagingDirectory.
+        AtomicFile.privateStagingDirectory = AppPaths.live(environment: paths.environment, appSupport: paths.appSupport)
+            .storeDirURL.appendingPathComponent(".staging")
         let resolved = AppState.makeService(settings: settings, paths: paths)
         service = resolved
         // Sweep the RESOLVED paths (a repointed store lives outside the default dir).
@@ -208,9 +212,11 @@ public final class AppState: ObservableObject {
         let newStoreURL = rebuilt.paths.masterStoreURL
         let fm = FileManager.default
         if !fm.fileExists(atPath: newStoreURL.path), fm.fileExists(atPath: previousStoreURL.path) {
-            try? fm.createDirectory(at: rebuilt.paths.storeDirURL, withIntermediateDirectories: true,
-                                    attributes: [.posixPermissions: 0o700])
-            try? fm.copyItem(at: previousStoreURL, to: newStoreURL)
+            // copyItem into a shared folder would inherit its ACEs; AtomicFile creates the
+            // directory and the file private from the first instant.
+            if let bytes = try? Data(contentsOf: previousStoreURL) {
+                try? AtomicFile.write(bytes, to: newStoreURL)
+            }
         }
         service = rebuilt
         armWatchers()

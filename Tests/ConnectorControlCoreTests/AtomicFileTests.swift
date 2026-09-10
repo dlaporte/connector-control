@@ -11,6 +11,7 @@ final class AtomicFileTests: XCTestCase {
 
     override func tearDownWithError() throws {
         try? FileManager.default.removeItem(at: dir)
+        AtomicFile.privateStagingDirectory = nil
     }
 
     func testWriteCreatesFileAndIntermediateDirectories() throws {
@@ -124,5 +125,99 @@ final class AtomicFileTests: XCTestCase {
         let parentContents = try fm.contentsOfDirectory(atPath: dir.path)
         let tmpFiles = parentContents.filter { $0.contains(".tmp-") }
         XCTAssert(tmpFiles.isEmpty, "Found orphaned tmp files: \(tmpFiles)")
+    }
+
+    /// Mode 0600 is not private on a folder that carries an inheritable allow ACE: the new
+    /// file inherits the ACE and macOS evaluates ACEs before mode bits. The file and any
+    /// directory this call creates must end with no ACL at all.
+    func testInheritedACLEntriesAreStrippedFromTheFileAndCreatedDirectories() throws {
+        let fm = FileManager.default
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let chmod = Process()
+        chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+        chmod.arguments = ["+a", "group:everyone allow read,file_inherit,directory_inherit", dir.path]
+        try chmod.run()
+        chmod.waitUntilExit()
+        XCTAssertEqual(chmod.terminationStatus, 0)
+        // Control: a plain write DOES inherit, so the assertions below cannot pass vacuously.
+        let control = dir.appendingPathComponent("control.json")
+        try Data("{}".utf8).write(to: control)
+        XCTAssertTrue(AtomicFile.hasACL(atPath: control.path), "the folder's ACE is inheritable")
+
+        let url = dir.appendingPathComponent("nested/secret.json")
+        try AtomicFile.write(Data("token".utf8), to: url)
+        XCTAssertFalse(AtomicFile.hasACL(atPath: url.path))
+        XCTAssertFalse(AtomicFile.hasACL(atPath: dir.appendingPathComponent("nested").path))
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "token")
+    }
+
+    /// The temp file is born in the app's own private folder and renamed into the target
+    /// folder: a rename does not re-inherit ACEs, so there is no instant — not even a
+    /// zero-byte one — at which a shared folder's principal can open it.
+    func testStagingIsUsedOnTheSameVolumeAndSkippedAcrossVolumes() throws {
+        let staging = dir.appendingPathComponent("staging")
+        let target = dir.appendingPathComponent("shared")
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+        XCTAssertEqual(AtomicFile.stagingLocation(for: target, staging: staging), staging)
+        XCTAssertEqual(try XCTUnwrap(FileManager.default.attributesOfItem(atPath: staging.path)[.posixPermissions] as? Int), 0o700, "created on demand, private")
+        XCTAssertNil(AtomicFile.stagingLocation(for: URL(fileURLWithPath: "/dev"), staging: staging), "devfs is another device")
+        XCTAssertNil(AtomicFile.stagingLocation(for: target, staging: nil))
+    }
+
+    func testWriteThroughStagingLeavesNothingBehind() throws {
+        AtomicFile.privateStagingDirectory = dir.appendingPathComponent("staging")
+        let shared = dir.appendingPathComponent("shared")
+        try FileManager.default.createDirectory(at: shared, withIntermediateDirectories: true)
+        let chmod = Process()
+        chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+        chmod.arguments = ["+a", "group:everyone allow read,file_inherit,directory_inherit", shared.path]
+        try chmod.run()
+        chmod.waitUntilExit()
+        XCTAssertEqual(chmod.terminationStatus, 0)
+        let url = shared.appendingPathComponent("secret.json")
+        try AtomicFile.write(Data("one".utf8), to: url)
+        try AtomicFile.write(Data("two".utf8), to: url)
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "two")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("staging").path), [])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("shared").path), ["secret.json"])
+        XCTAssertFalse(AtomicFile.hasACL(atPath: url.path))
+    }
+
+    /// exFAT and other ACL-less volumes have nothing to strip: ENOTSUP from the ACL calls is
+    /// success there, and a master list on a USB stick must keep saving.
+    func testWritesSucceedOnAVolumeWithoutACLSupport() throws {
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let image = dir.appendingPathComponent("exfat.dmg")
+        let create = Process()
+        create.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+        create.arguments = ["create", "-quiet", "-size", "8m", "-fs", "ExFAT", "-volname", "CCTEST", image.path]
+        try create.run()
+        create.waitUntilExit()
+        try XCTSkipUnless(create.terminationStatus == 0, "hdiutil could not create an exFAT image here")
+
+        let attach = Process()
+        attach.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+        attach.arguments = ["attach", "-nobrowse", "-readwrite", "-plist", image.path]
+        let output = Pipe()
+        attach.standardOutput = output
+        try attach.run()
+        attach.waitUntilExit()
+        try XCTSkipUnless(attach.terminationStatus == 0, "hdiutil could not attach the image here")
+        let plist = try PropertyListSerialization.propertyList(from: output.fileHandleForReading.readDataToEndOfFile(), format: nil) as? [String: Any]
+        let entities = plist?["system-entities"] as? [[String: Any]] ?? []
+        let mountPoint = try XCTUnwrap(entities.compactMap { $0["mount-point"] as? String }.first)
+        defer {
+            let detach = Process()
+            detach.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+            detach.arguments = ["detach", "-quiet", "-force", mountPoint]
+            try? detach.run()
+            detach.waitUntilExit()
+        }
+
+        let url = URL(fileURLWithPath: mountPoint).appendingPathComponent("store/mcps.json")
+        try AtomicFile.write(Data("{}".utf8), to: url)
+        try AtomicFile.write(Data("{\"v\":2}".utf8), to: url)
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "{\"v\":2}")
+        XCTAssertFalse(AtomicFile.hasACL(atPath: url.path))
     }
 }

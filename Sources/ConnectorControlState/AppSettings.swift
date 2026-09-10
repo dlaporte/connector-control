@@ -16,6 +16,7 @@ public protocol AppSettings: AnyObject {
     var confirmBeforeQuit: Bool { get set }
     var lastApplyDate: Date? { get set }
     var permissionsSweepDone: Bool { get set }
+    var aclSweepDone: Bool { get set }
 }
 
 /// `UserDefaults.standard` in the app; a suite in tests. Every key name comes
@@ -65,6 +66,11 @@ public final class UserDefaultsSettings: AppSettings {
     public var permissionsSweepDone: Bool {
         get { bool(DefaultsKey.permissionsSweepDone, default: false) }
         set { defaults.set(newValue, forKey: DefaultsKey.permissionsSweepDone.rawValue) }
+    }
+
+    public var aclSweepDone: Bool {
+        get { bool(DefaultsKey.aclSweepDone, default: false) }
+        set { defaults.set(newValue, forKey: DefaultsKey.aclSweepDone.rawValue) }
     }
 
     private func bool(_ key: DefaultsKey, default fallback: Bool) -> Bool {

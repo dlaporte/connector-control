@@ -71,6 +71,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     private string oauthClientId = "";
     private string oauthClientSecret = "";
     private string oauthScopes = "";
+    private string remotePackage = "mcp-remote";
     private IReadOnlyList<string> remoteExtraArgs = [];
     private IReadOnlyDictionary<string, string> remotePassthroughEnv = new Dictionary<string, string>(StringComparer.Ordinal);
     private RemoteLaunchStyle remoteLaunchStyle;
@@ -543,6 +544,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
                 OAuthScopes = "";
                 remoteExtraArgs = [];
                 remotePassthroughEnv = new Dictionary<string, string>(StringComparer.Ordinal);
+                remotePackage = "mcp-remote";
             }
         }
         finally
@@ -579,6 +581,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         remoteExtraArgs = remote.ExtraArgs;
         remotePassthroughEnv = remote.PassthroughEnv;
         remoteLaunchStyle = remote.LaunchStyle;   // a synced Mac entry stays bare npx when edited here
+        remotePackage = remote.Package;
     }
 
     private static IEnumerable<EnvRow> EnvRowsFrom(IReadOnlyDictionary<string, string> env) =>
@@ -645,7 +648,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     {
         if (isRemote)
         {
-            var encoded = RemotePattern.Encode(new RemoteConfig(remoteUrl, CurrentRemoteAuth(), remoteLaunchStyle, remoteExtraArgs, remotePassthroughEnv));
+            var encoded = RemotePattern.Encode(new RemoteConfig(remoteUrl, CurrentRemoteAuth(), remoteLaunchStyle, remoteExtraArgs, remotePassthroughEnv, remotePackage));
             // Preserve any unmodeled top-level keys (they can never collide with command/args/env).
             foreach (var (key, value) in additional)
             {

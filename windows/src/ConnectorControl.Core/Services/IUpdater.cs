@@ -23,6 +23,7 @@ public interface IUpdater
     /// <see cref="IOException"/>, or <see cref="OperationCanceledException"/> when
     /// <paramref name="cancellationToken"/> fires) while fetching or staging the
     /// release; callers must catch broadly and treat any exception as a failed download.
+    /// Throws <see cref="UpdateVerificationException"/> when the downloaded package fails authenticity verification; nothing is staged in that case.
     /// </summary>
     Task DownloadAsync(UpdateCheck update, IProgress<int>? progress = null, CancellationToken cancellationToken = default);
 

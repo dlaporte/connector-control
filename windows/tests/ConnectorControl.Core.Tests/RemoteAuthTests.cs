@@ -175,6 +175,17 @@ public class RemoteAuthTests
         Assert.Equal(RemoteAuth.Auto, decoded?.Auth);
     }
 
+    [Fact]
+    public void PinnedMarkerRoundTrips()
+    {
+        // A version pin is a supply-chain control the user set; an unrelated edit must not drop it.
+        var config = NpxConfig(["-y", "mcp-remote@0.1.16", Url]);
+        var decoded = RemotePattern.Decode(config);
+        Assert.Equal("mcp-remote@0.1.16", decoded?.Package);
+        Assert.Equal(config, RemotePattern.Encode(decoded!));
+        Assert.Equal(["-y", "mcp-remote", Url], Args(RemotePattern.Encode(new RemoteConfig(Url, RemoteAuth.Auto, RemoteLaunchStyle.Npx)))!);
+    }
+
     // rejection
 
     [Fact]

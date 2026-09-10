@@ -12,31 +12,40 @@ import ConnectorControlCore
 /// own mode is tightened only while it is the app's default location. The
 /// backups directory is always the app's own (machine-local, never the synced
 /// folder), so everything under it is the app's to repair.
+///
+/// Two one-shot passes share this: the mode repair (permissionsSweepDone) and the later ACL
+/// strip (aclSweepDone); an install that already had the first gets only the second.
 public enum PermissionsSweep {
     /// True when the sweep ran (first time only).
     @discardableResult
     public static func runOnce(settings: AppSettings, paths: AppPaths) -> Bool {
-        guard !settings.permissionsSweepDone else { return false }
+        let modes = !settings.permissionsSweepDone
+        let acls = !settings.aclSweepDone
+        guard modes || acls else { return false }
         let fm = FileManager.default
+        func repair(_ url: URL, mode: Int) {
+            if modes { try? fm.setAttributes([.posixPermissions: mode], ofItemAtPath: url.path) }
+            if acls { try? AtomicFile.stripACL(atPath: url.path) }
+        }
         let storeDir = paths.storeDirURL
         if settings.masterStoreDir == nil {
-            try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: storeDir.path)
+            repair(storeDir, mode: 0o700)
         }
         if let names = try? fm.contentsOfDirectory(atPath: storeDir.path) {
             for name in names where isStoreFile(name) {
-                try? fm.setAttributes([.posixPermissions: 0o600],
-                                      ofItemAtPath: storeDir.appendingPathComponent(name).path)
+                repair(storeDir.appendingPathComponent(name), mode: 0o600)
             }
         }
         let backups = paths.backupsDirURL
-        try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: backups.path)
+        repair(backups, mode: 0o700)
         if let files = fm.enumerator(at: backups, includingPropertiesForKeys: [.isDirectoryKey]) {
             for case let file as URL in files {
                 let isDir = (try? file.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-                try? fm.setAttributes([.posixPermissions: isDir ? 0o700 : 0o600], ofItemAtPath: file.path)
+                repair(file, mode: isDir ? 0o700 : 0o600)
             }
         }
         settings.permissionsSweepDone = true
+        settings.aclSweepDone = true
         return true
     }
 

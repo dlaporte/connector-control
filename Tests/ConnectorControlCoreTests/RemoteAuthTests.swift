@@ -171,6 +171,18 @@ final class RemoteAuthTests: XCTestCase {
         XCTAssertEqual(decoded?.auth, .automatic)
     }
 
+    func testPinnedMarkerRoundTrips() {
+        // A version pin is a supply-chain control the user set; an unrelated edit must not drop it.
+        let config = JSONValue.object([
+            "command": .string("npx"),
+            "args": .array([.string("-y"), .string("mcp-remote@0.1.16"), .string(url)]),
+        ])
+        let decoded = RemotePattern.decode(config)
+        XCTAssertEqual(decoded?.package, "mcp-remote@0.1.16")
+        XCTAssertEqual(decoded.map(RemotePattern.encode), config)
+        XCTAssertEqual(args(RemotePattern.encode(RemoteConfig(url: url, auth: .automatic))), ["-y", "mcp-remote", url], "the default is still unpinned")
+    }
+
     // MARK: rejection
 
     func testDecodeReturnsNilForNonNpxCommand() {

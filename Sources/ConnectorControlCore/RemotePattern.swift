@@ -98,13 +98,18 @@ public struct RemoteConfig: Equatable {
     public var extraArgs: [String]
     /// Env vars other than the one auth uses to indirect a header value.
     public var passthroughEnv: [String: String]
+    /// The bridge package specifier as written — `mcp-remote`, or `mcp-remote@0.1.16` when
+    /// the user pinned a version. A pin is a supply-chain control: it survives every edit.
+    public var package: String
 
     public init(url: String, auth: RemoteAuth,
-                extraArgs: [String] = [], passthroughEnv: [String: String] = [:]) {
+                extraArgs: [String] = [], passthroughEnv: [String: String] = [:],
+                package: String = "mcp-remote") {
         self.url = url
         self.auth = auth
         self.extraArgs = extraArgs
         self.passthroughEnv = passthroughEnv
+        self.package = package
     }
 }
 
@@ -112,7 +117,7 @@ public extension RemotePattern {
     /// Builds the full `npx mcp-remote` config for a `RemoteConfig`, encoding
     /// `auth` into the flags/env mcp-remote expects.
     static func encode(_ r: RemoteConfig) -> JSONValue {
-        var args: [String] = ["-y", "mcp-remote", r.url]
+        var args: [String] = ["-y", r.package, r.url]
         args.append(contentsOf: r.extraArgs)
         var env = r.passthroughEnv
 
@@ -164,6 +169,7 @@ public extension RemotePattern {
         var i = 0
         if args.first == "-y" { i = 1 }
         guard i < args.count, isMarker(args[i]) else { return nil }
+        let package = args[i]
         i += 1
         guard i < args.count else { return nil }
         let urlString = args[i]
@@ -242,7 +248,7 @@ public extension RemotePattern {
         for key in consumedEnvKeys { env.removeValue(forKey: key) }
 
         return RemoteConfig(url: urlString, auth: auth,
-                             extraArgs: extraArgs, passthroughEnv: env)
+                             extraArgs: extraArgs, passthroughEnv: env, package: package)
     }
 
     /// Compact (no whitespace), key-sorted JSON — matches what mcp-remote

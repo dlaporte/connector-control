@@ -844,4 +844,21 @@ public class EditorModelTests
         var args = state.Store.Mcps["r"].Config["args"]!.ArrayItems.Select(a => a.StringValue).ToArray();
         Assert.Contains("{\"scope\":\"openid profile\"}", args);
     }
+
+    [Fact]
+    public void EditingAPinnedConnectorKeepsItsPin()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var pinned = Local("npx", ["-y", "mcp-remote@0.1.16", Url]);
+        Assert.Null(state.Upsert("pinned", new McpEntry(pinned), null));
+        var editor = Editor(h, state, EditTarget.Existing("pinned", state.Store.Mcps["pinned"]));
+        editor.RemoteUrl = "https://moved.example/mcp";
+        Assert.True(editor.Save());
+        Assert.Equal(Local("npx", ["-y", "mcp-remote@0.1.16", "https://moved.example/mcp"]), state.Store.Mcps["pinned"].Config);
+
+        var again = Editor(h, state, EditTarget.Existing("pinned", state.Store.Mcps["pinned"]));
+        again.RequestView(EditView.Json);
+        Assert.Contains("mcp-remote@0.1.16", again.JsonText);
+    }
 }
