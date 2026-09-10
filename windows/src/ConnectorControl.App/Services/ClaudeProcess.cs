@@ -117,6 +117,12 @@ public sealed class ClaudeProcess : IClaudeProcess
             return NotInstalledMessage;
         }
         var aumid = IsAumid(target);
+        if (aumid && !ClaudeInstall.IsClaudeFamily(FamilyOf(target)))
+        {
+            // settings.json is the user's to edit, so an AUMID there is a string like any other:
+            // only a Claude package family may be started in Claude's place.
+            return target + NotAClaudePackageSuffix;
+        }
         if (!aumid && !File.Exists(target))
         {
             return $"Claude was not found at {target}.";
@@ -124,7 +130,8 @@ public sealed class ClaudeProcess : IClaudeProcess
         if (!aumid)
         {
             // Verified BEFORE anything is quit: a target that fails the check must not cost the
-            // user the Claude they have running. An AUMID names a package Windows verified itself.
+            // user the Claude they have running. An AUMID names a package Windows verified at
+            // install; its family is checked above.
             var problem = await Task.Run(() => verifyExe(target), cancellationToken).ConfigureAwait(false);
             if (problem is not null)
             {
@@ -144,6 +151,11 @@ public sealed class ClaudeProcess : IClaudeProcess
 
     /// <summary>An app user model id looks like <c>Family_hash!App</c>; an exe path is rooted.</summary>
     internal static bool IsAumid(string target) => target.Contains('!') && !Path.IsPathRooted(target);
+
+    public const string NotAClaudePackageSuffix = " is not a Claude Desktop package. Choose Claude Desktop under Settings ▸ Claude.";
+
+    /// <summary>The package family name of an AUMID: everything before the <c>!</c>.</summary>
+    internal static string FamilyOf(string aumid) => aumid[..aumid.IndexOf('!')];
 
     private bool QuitAndWait(ClaudeInstallInfo info, CancellationToken cancellationToken)
     {

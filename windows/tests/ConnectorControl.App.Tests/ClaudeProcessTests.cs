@@ -191,4 +191,40 @@ public class ClaudeProcessTests
         Assert.True(ClaudeProcess.BelongsToInstall(@"C:\anywhere\claude.exe", info));
         Assert.True(ClaudeProcess.BelongsToInstall(null, info));
     }
+
+    [Fact]
+    public async Task AnAumidOverrideMustNameAClaudePackage()
+    {
+        // settings.json can hold any string; a package that is not Claude's must not be launched in Claude's place.
+        var p = new ClaudeProcess(() => ClaudeInstallInfo.NotFound with { ProcessName = NoSuchProcess }, () => "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App");
+        Assert.Equal("Microsoft.WindowsTerminal_8wekyb3d8bbwe!App" + ClaudeProcess.NotAClaudePackageSuffix, await p.RestartAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("Claude_pzs8sxrjxfjjc!Claude", "Claude_pzs8sxrjxfjjc")]
+    [InlineData("Anthropic.ClaudeDesktop_h6f0761!App", "Anthropic.ClaudeDesktop_h6f0761")]
+    public void FamilyOfIsThePartBeforeTheBang(string aumid, string expected)
+    {
+        Assert.Equal(expected, ClaudeProcess.FamilyOf(aumid));
+    }
+
+    [Fact]
+    public async Task AnExeTargetIsVerifiedBeforeAnythingIsQuit()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), $"cc-verify-{Guid.NewGuid():N}");
+        var exe = Path.Combine(folder, "claude.exe");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(exe, "not really an exe");
+        try
+        {
+            string? seen = null;
+            var p = new ClaudeProcess(() => Legacy(exe), () => null, verifyExe: path => { seen = path; return "refused by the test verifier"; });
+            Assert.Equal("refused by the test verifier", await p.RestartAsync(TestContext.Current.CancellationToken));
+            Assert.Equal(exe, seen);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }
