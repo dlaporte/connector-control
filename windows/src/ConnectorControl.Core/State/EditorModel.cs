@@ -14,6 +14,12 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public const string RemoteFooter = "Runs via npx mcp-remote — managed for you.";
     public const string AutomaticCaption = "Uses the server's OAuth (a browser window opens on first use), or no auth if the server is open.";
     public const string BearerCaption = "Sent as Authorization: Bearer …";
+    /// <summary>
+    /// mcp-remote reads --static-oauth-client-info literally (or from an @file); it has no env-var
+    /// indirection for it the way the header flags do, so unlike the token and header fields this
+    /// value ends up on the process command line.
+    /// </summary>
+    public const string OAuthSecretCaption = "Passed to mcp-remote on its command line, which other programs running on this PC can read.";
     public const string InvalidUrlError = "Server URL must be a valid http(s) URL.";
     public const string BearerTokenError = "Enter a bearer token.";
     public const string HeaderNameError = "Enter a header name.";

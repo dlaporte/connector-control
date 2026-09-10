@@ -13,7 +13,6 @@ public sealed class AppState : ObservableObject, IDisposable
 {
     public const string NoConnectorsSubtitle = "No connectors configured";
     public const string ClaudeConfigRegeneratedBody = "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up.";
-    public const string ConnectorListChangedRestartBody = "Connector list has changed, restart required.";
     public const string RegenerationFailedBody = "The connector configuration changed, but Claude's config could not be updated — open Connector Control to retry.";
     public const string ClaudeConfigChangedBody = "Claude's config changed outside Connector Control.";
     public const string StoreChangedBody = "The connector list changed outside Connector Control — review it before your next change is applied.";
@@ -400,11 +399,22 @@ public sealed class AppState : ObservableObject, IDisposable
             {
                 Notify(ClaudeConfigRegeneratedBody);
             }
-            else if (regenerated && wasLoaded && trigger == ReloadTrigger.ExternalStoreAdoption && NeedsClaudeRestart)
+            else if (regenerated && wasLoaded && trigger == ReloadTrigger.ExternalStoreAdoption)
             {
-                // A remote (synced) connector-list change landed while nobody was looking and Claude
-                // is running on the older config — the one restart-pending case with no in-app feedback.
-                Notify(ConnectorListChangedRestartBody, Notifications.RestartCategory);
+                // A remote (synced) connector-list change landed while nobody was looking and has just
+                // been written into Claude's config. Every mcpServers entry is a command Claude runs, so
+                // this is announced every time, naming what changed: with Claude running on the older
+                // config the toast offers the restart; with Claude not running there is no restart to
+                // offer, but the user still learns what starts next launch.
+                var delta = ServerDelta.Between(previousApplied, Store.EnabledServers);
+                if (NeedsClaudeRestart)
+                {
+                    Notify(ConnectorListChangedBody(delta, restartRequired: true), Notifications.RestartCategory);
+                }
+                else
+                {
+                    Notify(ConnectorListChangedBody(delta, restartRequired: false));
+                }
             }
             else if (regenerationFailed && wasLoaded && trigger != ReloadTrigger.QuietStoreAdoption)
             {
@@ -696,6 +706,14 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>Catalog §1.10 friendly(): the malformed-config case gets the guided message; everything else its own text.</summary>
+    /// <summary>A synced connector-list change was adopted and written into Claude's config: say what it runs now.</summary>
+    public static string ConnectorListChangedBody(ServerDelta delta, bool restartRequired)
+    {
+        var what = delta.IsEmpty ? "was regenerated" : "now " + delta.Summary();
+        var then = restartRequired ? "Restart Claude to pick it up." : "Claude will use it the next time it starts.";
+        return $"The connector list changed outside Connector Control — Claude's config {what}. {then}";
+    }
+
     public static string Friendly(Exception error) => error is ClaudeConfigException malformed
         ? $"Claude's config file is not valid JSON ({malformed.Detail}). Nothing was written. Use Backups ▸ Restore… to recover it."
         : error.Message;

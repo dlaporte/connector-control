@@ -11,16 +11,21 @@ namespace ConnectorControl.Core;
 /// </summary>
 public static class OwnerOnlyAcl
 {
-    /// <summary>Best effort, like Swift's <c>try?</c>: no-op off Windows, errors swallowed.</summary>
-    public static void TryApply(string path)
+    /// <summary>
+    /// Best effort, like Swift's <c>try?</c>: errors swallowed. Returns true when the ACL was
+    /// applied (or there was nothing to do: off Windows), false when the attempt failed, so a
+    /// caller that sweeps many paths can tell a working sweep from one that achieved nothing.
+    /// </summary>
+    public static bool TryApply(string path)
     {
         if (!OperatingSystem.IsWindows())
         {
-            return;
+            return true;
         }
         try
         {
             Apply(path);
+            return true;
         }
         catch (Exception ex) when (ex is IOException
             or UnauthorizedAccessException            // includes PrivilegeNotHeldException
@@ -31,6 +36,7 @@ public static class OwnerOnlyAcl
         {
             // Best effort, like Swift's `try?`: the write itself must never fail
             // because the ACL could not be tightened. Programming errors still surface.
+            return false;
         }
     }
 

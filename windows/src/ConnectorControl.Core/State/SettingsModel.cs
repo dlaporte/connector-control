@@ -28,6 +28,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string ConfigPathLabel = "Config file";
     public const string LaunchTargetLabel = "Launch target";
     public const string NotFoundText = "Not found";
+    public const string LaunchTargetRejectedTitle = "That program can’t be used as Claude Desktop";
     public const string ToolsHeader = ToolNote.SettingsHeader;
     public const string ToolsCaption = ToolNote.SettingsCaption;
     public const int MinKeepCount = 5;

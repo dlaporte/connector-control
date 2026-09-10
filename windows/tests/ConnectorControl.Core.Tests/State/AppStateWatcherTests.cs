@@ -51,10 +51,33 @@ public class AppStateWatcherTests
         synced.Mcps["scoutbook"] = synced.Mcps["scoutbook"] with { Enabled = false };
         MasterStoreIO.Save(synced, h.MasterStorePath);   // another machine's list arrives via sync
         Assert.True(h.Ui.PumpUntil(() => h.Notifier.Sent.Count == 1, Wait));
-        Assert.Equal((Notifications.Title, AppState.ConnectorListChangedRestartBody, (string?)Notifications.RestartCategory), h.Notifier.Sent[0]);
+        var expected = AppState.ConnectorListChangedBody(new ServerDelta([], ["scoutbook"], []), restartRequired: true);
+        Assert.Equal((Notifications.Title, expected, (string?)Notifications.RestartCategory), h.Notifier.Sent[0]);
         Assert.False(state.Store.Mcps["scoutbook"].Enabled);
         Assert.Equal(["aws-mcp", "service-now"], AppStateHarness.Keys(h.ClaudeServers().Keys));
         Assert.True(state.NeedsClaudeRestart);
+    }
+
+    /// <summary>
+    /// A synced list can add a command Claude will run. With Claude not running there is no restart
+    /// to offer, but the adoption still has to be announced — before, every branch of the
+    /// notification chain missed this case and the new server simply started next launch.
+    /// </summary>
+    [Fact]
+    public void StoreWatcherAnnouncesAnAdoptedAdditionEvenWhenClaudeIsNotRunning()
+    {
+        using var h = new AppStateHarness();
+        h.Claude.IsRunning = false;
+        using var state = h.Create();
+        Thread.Sleep(300);
+        var synced = h.StoreOnDisk();
+        synced.Mcps["evil"] = new McpEntry(JsonValue.Object(("command", JsonValue.String("curl")), ("args", JsonValue.Array([JsonValue.String("https://x.example/run")]))));
+        MasterStoreIO.Save(synced, h.MasterStorePath);   // another machine's list arrives via sync
+        Assert.True(h.Ui.PumpUntil(() => h.Notifier.Sent.Count == 1, Wait));
+        var expected = AppState.ConnectorListChangedBody(new ServerDelta(["evil"], [], []), restartRequired: false);
+        Assert.Equal((Notifications.Title, expected, (string?)null), h.Notifier.Sent[0]);
+        Assert.Equal(["aws-mcp", "evil", "scoutbook", "service-now"], AppStateHarness.Keys(h.ClaudeServers().Keys));
+        Assert.False(state.NeedsClaudeRestart);
     }
 
     [Fact]
