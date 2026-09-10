@@ -201,11 +201,17 @@ public class ClaudeProcessTests
     }
 
     [Theory]
-    [InlineData("Claude_pzs8sxrjxfjjc!Claude", "Claude_pzs8sxrjxfjjc")]
-    [InlineData("Anthropic.ClaudeDesktop_h6f0761!App", "Anthropic.ClaudeDesktop_h6f0761")]
-    public void FamilyOfIsThePartBeforeTheBang(string aumid, string expected)
+    [InlineData("Claude_pzs8sxrjxfjjc!Claude", true)]
+    [InlineData("Anthropic.ClaudeDesktop_8wekyb3d8bbwe!App", true)]
+    [InlineData("Claude_abcdefghjkmnp!Claude", false)]                 // a sideloaded "Claude" from another publisher
+    [InlineData("Microsoft.WindowsTerminal_8wekyb3d8bbwe!App", false)]
+    [InlineData("Claude_pzs8sxrjxfjjc!Claude\" --evil", false)]        // anything after the app id
+    [InlineData("Claude_pzs8sxrjxfjjc!Claude App", false)]             // whitespace
+    [InlineData("Claude_pzs8sxrjxfjjc", false)]                        // no app id
+    [InlineData("claude_pzs8sxrjxfjjc!Claude", false)]                 // family names are case-sensitive
+    public void IsClaudeAumidRequiresTheGrammarAndTheKnownFamily(string target, bool expected)
     {
-        Assert.Equal(expected, ClaudeProcess.FamilyOf(aumid));
+        Assert.Equal(expected, ClaudeProcess.IsClaudeAumid(target));
     }
 
     [Fact]

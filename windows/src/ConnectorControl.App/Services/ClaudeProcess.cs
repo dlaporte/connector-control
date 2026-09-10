@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using ConnectorControl.Core.Services;
 
 namespace ConnectorControl.App.Services;
@@ -117,7 +118,7 @@ public sealed class ClaudeProcess : IClaudeProcess
             return NotInstalledMessage;
         }
         var aumid = IsAumid(target);
-        if (aumid && !ClaudeInstall.IsClaudeFamily(FamilyOf(target)))
+        if (aumid && !IsClaudeAumid(target))
         {
             // settings.json is the user's to edit, so an AUMID there is a string like any other:
             // only a Claude package family may be started in Claude's place.
@@ -131,7 +132,7 @@ public sealed class ClaudeProcess : IClaudeProcess
         {
             // Verified BEFORE anything is quit: a target that fails the check must not cost the
             // user the Claude they have running. An AUMID names a package Windows verified at
-            // install; its family is checked above.
+            // install; its shape and family are checked above.
             var problem = await Task.Run(() => verifyExe(target), cancellationToken).ConfigureAwait(false);
             if (problem is not null)
             {
@@ -152,10 +153,37 @@ public sealed class ClaudeProcess : IClaudeProcess
     /// <summary>An app user model id looks like <c>Family_hash!App</c>; an exe path is rooted.</summary>
     internal static bool IsAumid(string target) => target.Contains('!') && !Path.IsPathRooted(target);
 
+    /// <summary>
+    /// The reason a settings.json AUMID is refused. Phrased for the user who typed it: the fix is the
+    /// Settings ▸ Claude picker, not the file.
+    /// </summary>
     public const string NotAClaudePackageSuffix = " is not a Claude Desktop package. Choose Claude Desktop under Settings ▸ Claude.";
 
-    /// <summary>The package family name of an AUMID: everything before the <c>!</c>.</summary>
-    internal static string FamilyOf(string aumid) => aumid[..aumid.IndexOf('!')];
+    /// <summary>Claude Desktop's Microsoft Store package family; the publisher hash pins Anthropic.</summary>
+    public const string StoreFamily = "Claude_pzs8sxrjxfjjc";
+
+    /// <summary>
+    /// <c>Name_publisherhash!AppId</c> and nothing else: the string is concatenated into explorer's
+    /// arguments, so a quote, a space or a second token must never get that far.
+    /// </summary>
+    private static readonly Regex AumidGrammar = new(@"^(?<family>[A-Za-z0-9][A-Za-z0-9.\-]*_[a-z0-9]{13})![A-Za-z0-9][A-Za-z0-9.\-]*$", RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// settings.json is the user's to edit, so an AUMID there is a string like any other. Only a
+    /// well-formed AUMID naming Claude's own package family may be started in Claude's place: the
+    /// Store family exactly (its hash is Anthropic's publisher), or an <c>Anthropic.Claude…</c> family
+    /// until its publisher is recorded too. Any other publisher's package called "Claude" is refused.
+    /// </summary>
+    internal static bool IsClaudeAumid(string target)
+    {
+        var match = AumidGrammar.Match(target);
+        if (!match.Success)
+        {
+            return false;
+        }
+        var family = match.Groups["family"].Value;
+        return family == StoreFamily || family.StartsWith("Anthropic.Claude", StringComparison.Ordinal);
+    }
 
     private bool QuitAndWait(ClaudeInstallInfo info, CancellationToken cancellationToken)
     {
