@@ -12,9 +12,9 @@ namespace ConnectorControl.App.Services;
 /// Settings ▸ Claude, which lives in settings.json — is launched by this app
 /// as a child process. Before Claude is quit and that path started, the file
 /// has to carry a valid Authenticode signature chained to a trusted root
-/// (WinVerifyTrust, no UI, no network) AND name Anthropic as the signing organization (<see cref="ClaudePublisher"/>). An MSIX
-/// launch target is an app identity that Windows itself verified at install,
-/// so it never comes here.
+/// (WinVerifyTrust, no UI, no network) AND name Anthropic as the signing
+/// organization (<see cref="ClaudePublisher"/>). An MSIX launch target is an
+/// app identity that Windows itself verified at install, so it never comes here.
 /// </summary>
 public static class AuthenticodeVerifier
 {

@@ -49,18 +49,23 @@ public static class ClaudePublisher
         return null;
     }
 
-    /// <summary>The value of the first single-valued O= (id-at-organizationName, 2.5.4.10) attribute, or null.</summary>
+    /// <summary>The value of the O= (id-at-organizationName, 2.5.4.10) attribute — exactly one, or null. Two organizations is nobody's identity.</summary>
     internal static string? OrganizationOf(string subject)
     {
         var name = new X500DistinguishedName(subject);
+        string? organization = null;
         foreach (var rdn in name.EnumerateRelativeDistinguishedNames())
         {
             if (!rdn.HasMultipleElements && rdn.GetSingleElementType().Value == "2.5.4.10")
             {
-                return rdn.GetSingleElementValue();
+                if (organization is not null)
+                {
+                    return null;
+                }
+                organization = rdn.GetSingleElementValue();
             }
         }
-        return null;
+        return organization;
     }
 
     /// <summary>Lower-case, punctuation dropped, whitespace collapsed: "Anthropic, PBC" and "ANTHROPIC P.B.C." compare equal.</summary>

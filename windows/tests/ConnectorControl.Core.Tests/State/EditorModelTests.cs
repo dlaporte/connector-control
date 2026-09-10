@@ -826,4 +826,22 @@ public class EditorModelTests
         Assert.True(editor.Save());
         Assert.Equal("a&b|c", state.Store.Mcps["r"].Config["env"]!["AUTH_HEADER"]!.StringValue);
     }
+
+    [Fact]
+    public void CmdLauncherAllowsSpaceSeparatedScopes()
+    {
+        // Scopes are a space-separated list by definition; the whitespace allowance is only for them.
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var editor = Editor(h, state, EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        editor.Name = "r";
+        editor.RemoteUrl = Url;
+        editor.AuthKindIndex = EditorModel.AuthKinds.ToList().IndexOf(RemoteAuthKind.OAuthClient);
+        editor.OAuthClientId = "id";
+        editor.OAuthClientSecret = "s";
+        editor.OAuthScopes = "openid profile";
+        Assert.True(editor.Save());
+        var args = state.Store.Mcps["r"].Config["args"]!.ArrayItems.Select(a => a.StringValue).ToArray();
+        Assert.Contains("{\"scope\":\"openid profile\"}", args);
+    }
 }

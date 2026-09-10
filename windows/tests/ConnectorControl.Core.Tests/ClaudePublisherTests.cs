@@ -20,6 +20,7 @@ public class ClaudePublisherTests
     [InlineData("CN=Claude Desktop, OU=anthropic-fans, O=Some Company, C=US")]
     [InlineData("CN=Anthropic")]
     [InlineData("CN=claude.exe, O=Evil Corp, C=US")]
+    [InlineData("O=Anthropic, O=Evil Corp, CN=Claude")]
     public void AnyoneElseFails(string subject)
     {
         // Every one of these contains the word or names no organization at all; the old substring check passed the first four.
@@ -59,9 +60,10 @@ public class ClaudePublisherTests
     }
 
     [Fact]
-    public void OrganizationIsTheOAttributeOnly()
+    public void OrganizationIsTheSoleOAttribute()
     {
         Assert.Equal("Anthropic, PBC", ClaudePublisher.OrganizationOf("CN=\"Anthropic, PBC\", O=\"Anthropic, PBC\", C=US"));
         Assert.Null(ClaudePublisher.OrganizationOf("CN=Anthropic, OU=Anthropic"));
+        Assert.Null(ClaudePublisher.OrganizationOf("O=Anthropic, O=Evil Corp"));   // two organizations is nobody's identity
     }
 }
