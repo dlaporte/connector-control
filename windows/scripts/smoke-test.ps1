@@ -93,6 +93,19 @@ Assert-True ($manifest -match "<channel>$([regex]::Escape($Channel))</channel>")
 if ($ExpectSigned) {
     $exeSignature = Get-AuthenticodeSignature -FilePath $exe
     Assert-True ($exeSignature.Status -eq 'Valid') "installed ConnectorControl.exe is signed"
+    # The app refuses an update unless every .exe/.dll in the package is signed by its own
+    # publisher (UpdateVerifier). Prove the package this build produced would pass that rule.
+    $nupkg = Join-Path (Split-Path -Parent $SetupExe) "ConnectorControl-$Version-$Channel-full.nupkg"
+    Assert-True (Test-Path $nupkg) "full package sits beside Setup.exe ($nupkg)"
+    $unpacked = Join-Path $sandbox 'nupkg'
+    Expand-Archive -Path $nupkg -DestinationPath $unpacked -Force
+    $publisher = $setupSignature.SignerCertificate.Subject
+    $binaries = Get-ChildItem -Path $unpacked -Recurse -Include *.exe, *.dll
+    Assert-True ($binaries.Count -gt 0) "package contains executables to check"
+    foreach ($binary in $binaries) {
+        $sig = Get-AuthenticodeSignature -FilePath $binary.FullName
+        Assert-True ($sig.Status -eq 'Valid' -and $sig.SignerCertificate.Subject -eq $publisher) "$($binary.Name) in the package is signed by $publisher"
+    }
 }
 
 if ($SkipLaunch) {

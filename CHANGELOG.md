@@ -69,6 +69,27 @@ Hardening from a security review of the app and its release pipeline.
   whether the word "Anthropic" appears anywhere in the certificate, and a
   Store-app launch target set by hand in settings.json must name a Claude
   Desktop package.
+- Both platforms: editing a remote connector keeps its `mcp-remote@<version>`
+  pin. Earlier builds rewrote the pinned package as plain `mcp-remote` on
+  every save from the form view, silently dropping a version the user had
+  chosen on purpose.
+- macOS: files and folders the app creates carry no inherited ACL entries. A
+  folder shared with an inheritable read entry (a Finder-shared folder, a
+  `chmod +a … file_inherit` folder) used to hand that entry to every new
+  master list, config and backup, and mode 600 does not override an ACL.
+  Temp files are now born in the app's own private folder and renamed into
+  place whenever the target is on the same volume, and a one-time pass
+  strips inherited entries from files written by earlier builds.
+- Windows: a downloaded update is installed only if the updater it carries
+  and every program and library inside it are signed by the same publisher
+  as the running app. A package that fails that check is discarded and a
+  notification says so, even for a background update. Before, the update
+  feed's checksum was the only thing standing between a GitHub release and
+  code running on your PC.
+- macOS: Sparkle now verifies an update's signature before unpacking it and
+  requires the update feed itself to be signed.
+- Release pipeline: Dependabot now also watches the Windows NuGet packages
+  and the Swift package.
 
 ## v1.3.1
 
