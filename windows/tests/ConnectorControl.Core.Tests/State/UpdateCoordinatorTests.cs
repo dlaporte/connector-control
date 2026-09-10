@@ -311,4 +311,34 @@ public class UpdateCoordinatorTests
         Assert.Equal("Install and Relaunch", UpdateCoordinator.InstallButton);
         Assert.Equal("Later", UpdateCoordinator.LaterButton);
     }
+
+    [Fact]
+    public async Task ARefusedUpdateIsAnnouncedOncePerVersionAndNeverStaged()
+    {
+        // A package that fails authenticity verification is the one failure a background check must not keep quiet about.
+        updater.Next = Update();
+        updater.DownloadFailure = new UpdateVerificationException("ConnectorControl.exe inside the update is not signed by this app's publisher; the update was not installed.");
+        using var coordinator = Coordinator();
+        Assert.Equal(UpdateOutcome.Failed, await coordinator.CheckAsync(interactive: false));
+        Assert.Equal(0, updater.AppliedOnQuit);
+        Assert.Null(coordinator.StagedVersion);
+        Assert.Equal("1.3.0", coordinator.RefusedVersion);
+        Assert.Equal((Notifications.Title, updater.DownloadFailure.Message, (string?)null), Assert.Single(notifier.Sent));
+
+        Assert.Equal(UpdateOutcome.Failed, await coordinator.CheckAsync(interactive: false));
+        Assert.Single(notifier.Sent);   // same version: no second toast
+    }
+
+    [Fact]
+    public async Task ARefusedUpdateTellsTheUserWhyWhenTheyAsked()
+    {
+        updater.Next = Update();
+        updater.DownloadFailure = new UpdateVerificationException("refused");
+        dialogs.NextOffer = true;
+        using var coordinator = Coordinator();
+        Assert.Equal(UpdateOutcome.Failed, await coordinator.CheckAsync(interactive: true));
+        Assert.Equal(0, updater.AppliedAndRestarted);
+        Assert.Equal(new FakeDialogs.InformCall(UpdateCoordinator.UpdateRefusedMessage, "refused"), Assert.Single(dialogs.Informs));
+        Assert.Empty(notifier.Sent);
+    }
 }

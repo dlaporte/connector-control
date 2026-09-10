@@ -16,6 +16,7 @@ public sealed class UpdateCoordinator : IDisposable
     public const string ReadyToastBody = "An update to Connector Control is ready and will install when you quit.";
     public const string UpToDateMessage = "You're up to date.";
     public const string CheckFailedMessage = "Couldn’t check for updates.";
+    public const string UpdateRefusedMessage = "The update was not installed.";
     public const string AvailableHeadline = "A new version of Connector Control is available!";
     public const string InstallButton = "Install and Relaunch";
     public const string LaterButton = "Later";
@@ -48,6 +49,9 @@ public sealed class UpdateCoordinator : IDisposable
 
     /// <summary>The version already handed to ApplyOnQuit, so a later check does not stage it twice.</summary>
     public string? StagedVersion { get; private set; }
+
+    /// <summary>The version whose package failed verification and was announced, so the daily check does not toast it again.</summary>
+    public string? RefusedVersion { get; private set; }
 
     public void Start()
     {
@@ -175,6 +179,20 @@ public sealed class UpdateCoordinator : IDisposable
             {
                 await updater.DownloadAsync(update).ConfigureAwait(false);
             }
+            catch (UpdateVerificationException refused)
+            {
+                // The one download failure a silent check must not keep quiet about.
+                await host.MarshalAsync(() =>
+                {
+                    if (RefusedVersion != update.Version)
+                    {
+                        RefusedVersion = update.Version;
+                        notifier.Notify(Notifications.Title, refused.Message);
+                    }
+                    return true;
+                }).ConfigureAwait(false);
+                return UpdateOutcome.Failed;
+            }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // IUpdater documents that DownloadAsync throws on network or filesystem
@@ -221,6 +239,11 @@ public sealed class UpdateCoordinator : IDisposable
         try
         {
             await updater.DownloadAsync(update).ConfigureAwait(false);
+        }
+        catch (UpdateVerificationException refused)
+        {
+            host.Marshal(() => dialogs.Inform(UpdateRefusedMessage, refused.Message));
+            return UpdateOutcome.Failed;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
