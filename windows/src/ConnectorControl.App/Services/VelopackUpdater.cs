@@ -16,13 +16,16 @@ public sealed class VelopackUpdater : IUpdater
     private const string DevelopmentBuild = "development build";
 
     /// <summary>UpdateManager keeps its locator protected; the verifier needs PackagesDir and UpdateExePath.</summary>
-    private sealed class LocatingUpdateManager(IUpdateSource source, IVelopackLocator? locator) : UpdateManager(source, null, locator)
+    private sealed class LocatingUpdateManager(IUpdateSource source, IVelopackLocator? locator)
+        // Never a delta: applying one runs the installed Update.exe over feed-supplied bytes before anything is verified. A full package costs bandwidth and nothing else.
+        : UpdateManager(source, new UpdateOptions { MaximumDeltasBeforeFallback = 0 }, locator)
     {
         public IVelopackLocator Location => Locator;
     }
 
     private readonly LocatingUpdateManager? manager;
     private readonly Func<string, string?, string, Version, Version, string?> verify;
+    private readonly Func<string?, string, string?> verifyInstalled;
 
     public VelopackUpdater() : this(RepoUrl)
     {
@@ -37,9 +40,10 @@ public sealed class VelopackUpdater : IUpdater
     /// Test seam. <paramref name="source"/> builds the feed for a given "include prereleases"
     /// flag (GithubSource in the app); <paramref name="locator"/> describes the install
     /// (Velopack's TestVelopackLocator in tests; null = inspect the real install layout);
-    /// <paramref name="verify"/> replaces <see cref="UpdateVerifier.Verify"/> in tests.
+    /// <paramref name="verify"/> replaces <see cref="UpdateVerifier.Verify"/> in tests and
+    /// <paramref name="verifyInstalled"/> replaces <see cref="UpdateVerifier.VerifyInstalledUpdater"/>.
     /// </summary>
-    internal VelopackUpdater(Func<bool, IUpdateSource> source, IVelopackLocator? locator, Func<string, string?, string, Version, Version, string?>? verify = null)
+    internal VelopackUpdater(Func<bool, IUpdateSource> source, IVelopackLocator? locator, Func<string, string?, string, Version, Version, string?>? verify = null, Func<string?, string, string?>? verifyInstalled = null)
     {
         LocatingUpdateManager? resolved = null;
         var followsPrereleases = false;
@@ -65,6 +69,7 @@ public sealed class VelopackUpdater : IUpdater
         FollowsPrereleases = followsPrereleases;
         VersionDisplay = manager?.CurrentVersion?.ToString() ?? DevelopmentBuild;
         this.verify = verify ?? UpdateVerifier.Verify;
+        this.verifyInstalled = verifyInstalled ?? UpdateVerifier.VerifyInstalledUpdater;
     }
 
     /// <summary>Spec §6.7: true for a preview install (prerelease version), so update checks include prereleases.</summary>
@@ -98,16 +103,27 @@ public sealed class VelopackUpdater : IUpdater
         {
             return;
         }
+        var location = manager.Location;
+        var runningExe = Environment.ProcessPath
+            ?? throw new UpdateVerificationException("This app's own location is unknown, so an update cannot be checked" + UpdateVerifier.NotInstalledSuffix);
+        // Velopack may run the installed Update.exe during a download; it must already be ours,
+        // and a copy of it is kept so a refused package cannot leave its own updater behind.
+        if (verifyInstalled(location.UpdateExePath, runningExe) is { } installedProblem)
+        {
+            throw new UpdateVerificationException(installedProblem);
+        }
+        var knownGoodUpdater = location.UpdateExePath is { } updateExe && File.Exists(updateExe) ? File.ReadAllBytes(updateExe) : null;
         await manager.DownloadUpdatesAsync(info, percent => progress?.Report(percent), cancellationToken).ConfigureAwait(false);
-        VerifyDownloaded(info);
+        VerifyDownloaded(info, knownGoodUpdater);
     }
 
     /// <summary>
     /// Velopack has checked the feed checksum and already overwritten Update.exe from the package.
     /// Before anything is staged, that Update.exe and every binary in the package must be signed by
-    /// this app's own publisher; a refused package is deleted so no later apply can pick it up.
+    /// this app's own publisher and carry the advertised version. A refused package is deleted and
+    /// the previous Update.exe put back, so neither can be picked up by a later apply or uninstall.
     /// </summary>
-    internal void VerifyDownloaded(UpdateInfo info)
+    internal void VerifyDownloaded(UpdateInfo info, byte[]? knownGoodUpdater)
     {
         if (manager is null)
         {
@@ -120,6 +136,10 @@ public sealed class VelopackUpdater : IUpdater
         if (verify(packagePath, location.UpdateExePath, Environment.ProcessPath ?? "", running, feed) is { } problem)
         {
             try { File.Delete(packagePath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            if (knownGoodUpdater is not null && location.UpdateExePath is { } updateExe)
+            {
+                try { File.WriteAllBytes(updateExe, knownGoodUpdater); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            }
             throw new UpdateVerificationException(problem);
         }
     }
