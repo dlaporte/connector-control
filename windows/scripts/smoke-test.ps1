@@ -98,7 +98,9 @@ if ($ExpectSigned) {
     $nupkg = Join-Path (Split-Path -Parent $SetupExe) "ConnectorControl-$Version-$Channel-full.nupkg"
     Assert-True (Test-Path $nupkg) "full package sits beside Setup.exe ($nupkg)"
     $unpacked = Join-Path $sandbox 'nupkg'
-    Expand-Archive -Path $nupkg -DestinationPath $unpacked -Force
+    # Expand-Archive insists on a .zip extension; the .NET zip API does not care what the file is called.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($nupkg, $unpacked)
     $publisher = $setupSignature.SignerCertificate.Subject
     $binaries = Get-ChildItem -Path $unpacked -Recurse -Include *.exe, *.dll
     Assert-True ($binaries.Count -gt 0) "package contains executables to check"
