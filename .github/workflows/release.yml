@@ -15,14 +15,19 @@
 #                               signature checked. windows-preview.yml calls the same file.
 #   publish          (ubuntu)   the ONLY writer: creates the release WITH the DMG and appcast
 #                               attached (so it is never "latest" without its feed), uploads the
-#                               Windows assets with gh --clobber, verifies releases/latest and
-#                               the served appcast (version, build, enclosure, EdDSA signature)
+#                               Windows assets (never overwriting a published one), verifies
+#                               releases/latest and the served appcast (version, build,
+#                               enclosure, EdDSA signature)
 #
 # Trigger: exact vX.Y.Z tags only (see below). workflow_dispatch runs everything EXCEPT
 # publish — a rehearsal that cannot create a release (its version input names the
 # CHANGELOG section and stamps the packages; the artifacts are the only output).
 #
-# Required repository secrets
+# Required secrets. The Mac set belongs in the "signing" GitHub Environment (Settings ▸
+# Environments), which only the mac job names: with required reviewers and a deployment
+# policy of the master branch plus v* tags on that environment, no job GitHub has not shown
+# a human can read them. The Windows set stays a repository secret set: both prepare jobs
+# check for it before any build minutes are spent, and a preview may be cut from any branch.
 #   Mac (same names as the trailcache repo):
 #   APPLE_CERTIFICATE          base64-encoded Developer ID Application .p12
 #   APPLE_CERTIFICATE_PASSWORD password for the .p12
@@ -77,7 +82,7 @@ jobs:
     env:
       INPUT_VERSION: ${{ inputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -147,7 +152,7 @@ jobs:
           fi
           echo "All six AZURE_* signing secrets are present."
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: notes
           path: notes.md
@@ -159,7 +164,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # Same gate as mac-ci.yml (scripts/test-mac.sh): the suite must pass with exactly the
       # one deliberate skip before any signing or notarization minutes are spent.
@@ -170,6 +175,14 @@ jobs:
     name: macOS build, sign, notarize
     needs: [prepare, mac-test]
     runs-on: macos-15
+    # The Apple certificate and the Sparkle key are read here and nowhere else.
+    # Keep them as secrets of the "signing" GitHub Environment (with required
+    # reviewers and a v* tag policy) rather than as repository secrets: a job
+    # that does not name this environment then cannot read them at all, which
+    # is what stops a workflow file edited on some other branch from ever
+    # holding them. GitHub creates the environment unprotected on first use;
+    # the protection rules live in repository settings.
+    environment: signing
     # Longest job on the slowest runner: `notarytool submit --wait` blocks on Apple's
     # service twice (app, then DMG). 12-20 min is normal; 60 is a hang, not a queue.
     timeout-minutes: 60
@@ -178,11 +191,11 @@ jobs:
       # Interpolated once here rather than inside run: blocks (injection hygiene).
       TAG: ${{ needs.prepare.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # notes.md lands in the working directory so the appcast step reads it
       # exactly as it always has.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: notes
           path: .
@@ -193,24 +206,28 @@ jobs:
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
+          # The decoded .p12 lives under RUNNER_TEMP, never in the checkout,
+          # and is removed by a trap so an import failure cannot leave it on
+          # disk; the throwaway keychain is deleted by the always() step below.
           KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain-db
-          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
-          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security import certificate.p12 -k $KEYCHAIN_PATH -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security -A
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security list-keychains -d user -s $KEYCHAIN_PATH
-          security default-keychain -s $KEYCHAIN_PATH
-          security find-identity -v -p codesigning $KEYCHAIN_PATH
-          rm certificate.p12
+          P12="$RUNNER_TEMP/certificate.p12"
+          trap 'rm -f "$P12"' EXIT
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$P12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$P12" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security -A
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
       - name: Build and sign
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $RUNNER_TEMP/build.keychain-db
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/build.keychain-db"
           # BUILD_NUMBER deliberately not set: build-app.sh derives it from
           # the version (monotonic across releases — Sparkle's comparison
           # key), where the old run-number scheme let a re-tagged older
@@ -259,9 +276,22 @@ jobs:
           # DMG bytes. Tools version pinned to match Package.resolved.
           # -f: an HTTP error page must fail here, not reach tar as a bogus
           # archive with a misleading "Unrecognized archive format" error.
-          curl -sfL --retry 3 --retry-delay 5 -o sparkle-tools.tar.xz \
+          #
+          # The private key is piped into a binary from this archive, so the
+          # archive is pinned by content, not just by URL: a GitHub release
+          # asset can be deleted and re-uploaded under the same name. The
+          # digest below is Sparkle-2.9.6.tar.xz as published (it matches the
+          # asset digest GitHub reports for that release); bumping the Sparkle
+          # tools means bumping this literal in the same commit. It is
+          # extracted under RUNNER_TEMP so a hostile archive could not plant
+          # files in the checkout that later steps read.
+          SPARKLE_SHA256=52bf9e88cdd972fc0c81501377a880e90d47031bd8ca5462488f843e2609e192
+          SPARKLE_TOOLS="$RUNNER_TEMP/sparkle-tools"
+          curl -sfL --retry 3 --retry-delay 5 -o "$RUNNER_TEMP/sparkle-tools.tar.xz" \
             "https://github.com/sparkle-project/Sparkle/releases/download/2.9.6/Sparkle-2.9.6.tar.xz"
-          mkdir sparkle-tools && tar -xf sparkle-tools.tar.xz -C sparkle-tools
+          echo "$SPARKLE_SHA256  $RUNNER_TEMP/sparkle-tools.tar.xz" | shasum -a 256 -c - \
+            || { echo "::error::Sparkle-2.9.6.tar.xz does not match the pinned SHA-256; refusing to sign with its tools."; exit 1; }
+          mkdir "$SPARKLE_TOOLS" && tar -xf "$RUNNER_TEMP/sparkle-tools.tar.xz" -C "$SPARKLE_TOOLS"
           mkdir appcast-work
           cp "ConnectorControl_${VERSION}.dmg" appcast-work/
           # Render the changelog to HTML (GitHub's markdown renderer) and drop
@@ -274,7 +304,7 @@ jobs:
             echo '<style>body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; margin: 12px; }</style>'
             cat notes-body.html
           } > "appcast-work/ConnectorControl_${VERSION}.html"
-          printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | ./sparkle-tools/bin/generate_appcast \
+          printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | "$SPARKLE_TOOLS/bin/generate_appcast" \
             --ed-key-file - \
             --embed-release-notes \
             --download-url-prefix "https://github.com/dlaporte/connector-control/releases/download/${TAG}/" \
@@ -283,7 +313,7 @@ jobs:
           cat appcast.xml
 
       # The publish job posts these; nothing is uploaded to GitHub from here.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mac
           path: |
@@ -291,6 +321,13 @@ jobs:
             appcast.xml
           if-no-files-found: error
           retention-days: 14
+
+      # The signing identity must not outlive the job, whether it passed or failed.
+      - name: Remove the signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/build.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/certificate.p12"
 
   windows:
     name: Windows
@@ -307,7 +344,16 @@ jobs:
       version: ${{ needs.prepare.outputs.version }}
       prerelease: false
       require-signing: true
-    secrets: inherit
+    # Only the six Windows signing secrets, by name. `secrets: inherit` would
+    # also hand the called workflow the Apple certificate and the Sparkle key,
+    # which no Windows job has any use for.
+    secrets:
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+      AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+      AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
 
   publish:
     name: Publish release
@@ -324,24 +370,24 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
       REPO_URL: https://github.com/dlaporte/connector-control
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: notes
           path: notes
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: mac
           path: mac
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: velopack-win-x64
           path: artifacts/win-x64
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: velopack-win-arm64
           path: artifacts/win-arm64
@@ -372,13 +418,27 @@ jobs:
               echo "::error::Release $TAG exists and IS a prerelease; a v* tag must be a full release. Delete it and re-run."
               exit 1
             fi
-            # Re-run path: the release is already published and already "latest", so the Mac
-            # assets are put back the only way left, with --clobber. That deletes and re-uploads
-            # appcast.xml, which reopens the 404 window for about a second on a 2 KB file.
-            # The body is not refreshed on a re-run: notes.md came from the same CHANGELOG
-            # section, and only the assets can have been left incomplete.
-            echo "Release $TAG already exists (re-run); reusing it and re-uploading the Mac assets."
-            gh release upload "$TAG" "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml --clobber
+            # Re-run path: the release is already published and already "latest". A published
+            # binary is never overwritten — a re-run has rebuilt the DMG, and a different DMG
+            # under the same version and build number with a fresh valid signature is exactly
+            # what an update system must never see. Both Mac assets are uploaded only when
+            # neither is there yet. Half a pair is an error, not something to complete: the
+            # appcast's EdDSA signature covers the DMG bytes, and this run's DMG is not the one
+            # already published. The body is not refreshed on a re-run: notes.md came from the
+            # same CHANGELOG section.
+            echo "Release $TAG already exists (re-run); reusing it."
+            gh release view "$TAG" --json assets --jq '.assets[].name' > existing-assets.txt
+            HAVE_DMG=false; HAVE_APPCAST=false
+            grep -qx "ConnectorControl_$VERSION.dmg" existing-assets.txt && HAVE_DMG=true
+            grep -qx "appcast.xml" existing-assets.txt && HAVE_APPCAST=true
+            if [ "$HAVE_DMG" = true ] && [ "$HAVE_APPCAST" = true ]; then
+              echo "Both Mac assets are already published; leaving them untouched."
+            elif [ "$HAVE_DMG" = false ] && [ "$HAVE_APPCAST" = false ]; then
+              gh release upload "$TAG" "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml
+            else
+              echo "::error::$TAG carries one Mac asset but not the other (dmg=$HAVE_DMG appcast=$HAVE_APPCAST). Published assets are never replaced: remove the stray one with 'gh release delete-asset $TAG <name> --yes' and re-run, or delete the release and re-tag."
+              exit 1
+            fi
           else
             # The DMG and the appcast are positional arguments to `gh release create`, NOT a
             # follow-up upload: with assets to attach, gh creates the release as a draft, uploads
@@ -394,9 +454,10 @@ jobs:
               "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml
           fi
 
-      # gh, not vpk, uploads everything, --clobber makes a re-run idempotent, and the pack-time
-      # releases.<rid>.json is filtered to this build's own packages first — all of it, with the
-      # reasons, in the script windows-preview.yml calls too.
+      # gh, not vpk, uploads everything, a re-run skips a RID whose assets are all published
+      # (and refuses to complete a half-published one), and the pack-time releases.<rid>.json
+      # is filtered to this build's own packages first — all of it, with the reasons, in the
+      # script windows-preview.yml calls too.
       - name: Upload the Windows assets
         run: ./windows/scripts/upload-release-assets.sh "$TAG" "$VERSION" artifacts
 
