@@ -148,4 +148,22 @@ public class BackupManagerTests : IDisposable
     {
         Assert.Empty(new BackupManager(dir.File("never")).Backups(Series));
     }
+
+    [Fact]
+    public void AFreshBackupsTreeIsOwnerOnlyFromTheParentDown()
+    {
+        // First run with an empty Claude config: the backups dir is the first thing the app creates,
+        // so its parent (the default store dir) must be private from the create call too.
+        var backups = dir.File(Path.Combine("Connector Control", "backups"));
+        var fresh = new BackupManager(backups, keepCount: 3);
+        var made = fresh.BackUp(source, Series, At(1_752_600_000));
+        Assert.NotNull(made);
+        Assert.Equal(File.ReadAllBytes(source), File.ReadAllBytes(made));
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.GetDirectoryName(backups)!), "the parent this call created is private");
+            Assert.True(OwnerOnlyAcl.IsOwnerOnly(backups));
+            Assert.True(OwnerOnlyAcl.IsOwnerOnly(made), "the copy is private from its create call, not a fix-up");
+        }
+    }
 }
