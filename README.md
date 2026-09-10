@@ -15,6 +15,10 @@ Control keeps its own **master list** as the source of truth, treats Claude's
 config as generated output, and backs up both files before every write — so a
 wiped or mangled config is always one click from restored.
 
+<p align="center">
+  <img src="docs/screenshots/mac-popover.png" width="344" alt="The Connector Control popover on macOS: a profile chip, a list of connectors with on/off toggles, and an edit pencil on every row.">
+</p>
+
 ## Features
 
 - **One-click enable/disable** — toggle any connector from the menu bar or
@@ -44,6 +48,15 @@ wiped or mangled config is always one click from restored.
 - **Careful with secrets** — connector env vars can hold API tokens, so the
   master list and all backups are written owner-only (mode 600 on macOS, an
   owner-only ACL on Windows).
+
+The editor's two views of the same connector:
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/mac-editor-form.png" width="420" alt="Form view: Name, Server URL, and an Authentication type picker for a remote mcp-remote connector."><br><sub>Form view</sub></td>
+    <td align="center"><img src="docs/screenshots/mac-editor-json.png" width="420" alt="JSON view of the same connector, with the paste-a-README-snippet tip along the bottom."><br><sub>JSON view</sub></td>
+  </tr>
+</table>
 
 ### Profiles
 
@@ -170,6 +183,22 @@ menu entry. Older builds of Claude Desktop kept a virtualized copy of the
 config under `%LOCALAPPDATA%\Packages\Claude_…\LocalCache\Roaming\Claude\`;
 the app manages that copy only when it exists, and Settings ▸ Claude lets
 you point it at any file.
+
+### Settings
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/mac-settings-general.png" width="290" alt="Settings, General tab: launch at login, confirm before restarting Claude, confirm before quitting, notify about outside changes, and update options."><br><sub>General</sub></td>
+    <td align="center"><img src="docs/screenshots/mac-settings-storage.png" width="290" alt="Settings, Storage tab: the master list location (here a OneDrive folder) and the backup retention count with Reveal in Finder and Restore buttons."><br><sub>Storage</sub></td>
+    <td align="center"><img src="docs/screenshots/mac-settings-claude.png" width="290" alt="Settings, Claude tab: the Claude app path and a Tools table showing whether npx, node, uvx and uv are installed where Claude can find them."><br><sub>Claude</sub></td>
+  </tr>
+</table>
+
+**General** covers launch-at-login, the confirmation prompts, outside-change
+notifications, and updates. **Storage** is where the master list lives (point
+it at a synced folder to share connectors across machines) and how many
+backups to keep. **Claude** lets you choose which Claude app to restart and
+shows whether the launchers connectors depend on are installed.
 
 ### Syncing across machines
 
