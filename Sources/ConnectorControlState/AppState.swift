@@ -16,7 +16,6 @@ public final class AppState: ObservableObject {
 
     nonisolated public static let noConnectorsSubtitle = "No connectors configured"
     nonisolated public static let claudeConfigRegeneratedBody = "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up."
-    nonisolated public static let connectorListChangedRestartBody = "Connector list has changed, restart required."
     nonisolated public static let regenerationFailedBody = "The connector configuration changed, but Claude's config could not be updated — open Connector Control to retry."
     nonisolated public static let claudeConfigChangedBody = "Claude's config changed outside Connector Control."
     nonisolated public static let storeChangedBody = "The connector list changed outside Connector Control — review it before your next change is applied."
@@ -41,6 +40,13 @@ public final class AppState: ObservableObject {
     nonisolated public static func malformedConfigMessage(detail: String) -> String { "Claude's config file is not valid JSON (\(detail)). Nothing was written. Use Backups ▸ Restore… to recover it." }
 
     nonisolated public static func enabledSubtitle(enabled: Int, total: Int) -> String { "\(enabled) of \(total) enabled" }
+
+    /// A synced connector-list change was adopted and written into Claude's config: say what it runs now.
+    nonisolated public static func connectorListChangedBody(_ delta: ServerDelta, restartRequired: Bool) -> String {
+        let what = delta.isEmpty ? "was regenerated" : "now " + delta.summary()
+        let then = restartRequired ? "Restart Claude to pick it up." : "Claude will use it the next time it starts."
+        return "The connector list changed outside Connector Control — Claude's config \(what). \(then)"
+    }
 
     // MARK: - Published state (catalog §1.1)
 
@@ -330,11 +336,21 @@ public final class AppState: ObservableObject {
             // on first load or for quiet adoptions. At most one per reload.
             if regenerated && wasLoaded && trigger == .routine && claudeConfigChangedExternally {
                 notify(AppState.claudeConfigRegeneratedBody)
-            } else if regenerated && wasLoaded && trigger == .externalStoreAdoption && needsClaudeRestart {
+            } else if regenerated && wasLoaded && trigger == .externalStoreAdoption {
                 // A remote (synced) connector-list change landed while nobody
-                // was looking and Claude is running on the older config — the
-                // one restart-pending case with no in-app feedback in view.
-                notify(AppState.connectorListChangedRestartBody, category: Notifications.restartCategory)
+                // was looking and has just been written into Claude's config.
+                // Every mcpServers entry is a command Claude runs, so this is
+                // announced every time, naming what changed: with Claude
+                // running on the older config the notification offers the
+                // restart; with Claude not running there is no restart to
+                // offer, but the user still learns what starts next launch.
+                let delta = ServerDelta(from: previousApplied, to: store.enabledServers)
+                if needsClaudeRestart {
+                    notify(AppState.connectorListChangedBody(delta, restartRequired: true),
+                           category: Notifications.restartCategory)
+                } else {
+                    notify(AppState.connectorListChangedBody(delta, restartRequired: false))
+                }
             } else if regenerationFailed && wasLoaded && trigger != .quietStoreAdoption {
                 notify(AppState.regenerationFailedBody)
             } else if claudeConfigChangedExternally {

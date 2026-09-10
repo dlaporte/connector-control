@@ -77,7 +77,10 @@ runs without Gatekeeper warnings.
    takes a permanent snapshot of your original config.
 
 There is no dock icon; the app lives entirely in the menu bar. Enable
-**Launch at login** in Settings (⚙︎) if you want it always available.
+**Launch at login** in Settings (⚙︎) if you want it always available. The
+app checks for new releases on its own and offers each one in an update
+window; Settings ▸ General ▸ Updates has a switch for installing them
+automatically instead, and a **Check for Updates…** button.
 
 #### Uninstalling
 
@@ -179,6 +182,11 @@ changes live (the file is watched). Notes:
 - The whole file syncs — including enabled/disabled state.
 - Connector env vars (API keys!) sync too. Use a private repo, or keep
   secrets out of synced connectors.
+- A change that arrives through the synced folder is written into Claude's
+  config and announced by name — which connectors it added, removed or
+  changed — whether or not Claude is running at the time. Every connector
+  is a command Claude runs, so treat write access to the synced folder as
+  you would treat access to the machines that follow it.
 - Conflicts are your sync tool's department; local backups make any bad
   merge recoverable.
 - A Mac and a PC can share one list, but connector commands are OS-specific:

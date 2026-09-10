@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using ConnectorControl.Core.State;
 using Microsoft.Win32;
+using ConnectorControl.App.Services;
 using AppServices = ConnectorControl.App.Services.Services;
 
 namespace ConnectorControl.App.Views;
@@ -101,6 +102,14 @@ public partial class SettingsWindow : Window
         var picker = new OpenFileDialog { Title = "Choose", Filter = "Programs (*.exe)|*.exe|All files (*.*)|*.*" };
         if (picker.ShowDialog(this) == true)
         {
+            // The path is trusted at every Restart Claude from now on, so a file that is not
+            // Claude signed by Anthropic is refused here, with the reason, rather than at the
+            // next restart click.
+            if (AuthenticodeVerifier.VerifyClaude(picker.FileName) is { } problem)
+            {
+                ConfirmDialog.Show(this, SettingsModel.LaunchTargetRejectedTitle, problem, "OK", null, destructive: false);
+                return;
+            }
             Model.ChooseLaunchTarget(picker.FileName);
         }
     }

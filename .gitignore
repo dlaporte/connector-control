@@ -7,3 +7,7 @@ DerivedData/
 .sandbox/
 .claude/
 tasks/
+# Signing material must never be committed; the release job decodes a .p12 on the runner.
+*.p12
+*.pem
+*.key

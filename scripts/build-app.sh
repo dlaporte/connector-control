@@ -63,6 +63,13 @@ otool -l "$APP/Contents/MacOS/Connector Control" \
 mkdir -p "$APP/Contents/Resources"
 swift scripts/generate-icon.swift "$APP/Contents/Resources/AppIcon.icns"
 
+# SUAutomaticallyUpdate is false: Sparkle still checks on its schedule and
+# shows the update, but installing it is a click, not something that happens
+# to a background menu-bar agent with no Dock presence while nobody is
+# looking. Whoever prefers silent installs turns them on in Settings ▸ General
+# (Sparkle persists that choice itself). Signed updates are only as safe as
+# the signing key, and a prompt is what turns a compromised key into a dialog
+# a person can refuse instead of code that runs everywhere.
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -82,7 +89,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>SUFeedURL</key><string>https://github.com/dlaporte/connector-control/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key><string>UmpM6nLMC8udcgUZ4IYigUgqFHziHPNsYilHc7Nn/3Q=</string>
     <key>SUEnableAutomaticChecks</key><true/>
-    <key>SUAutomaticallyUpdate</key><true/>
+    <key>SUAutomaticallyUpdate</key><false/>
 </dict>
 </plist>
 PLIST

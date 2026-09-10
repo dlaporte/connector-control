@@ -28,7 +28,10 @@ foreach ($p in $candidates) {
   else { "missing $p" }
 }
 
-Section "command shapes in existing configs (name: command args)"
+Section "command shapes in existing configs (name: command first-two-args …)"
+# Only the launcher shape is of interest here (npx / uvx / node / a path). The rest of args
+# can carry tokens and OAuth client secrets, and env is not read at all: this output is meant
+# to be pasted into a chat.
 foreach ($p in $candidates) {
   if (-not (Test-Path $p)) { continue }
   "--- $p"
@@ -36,8 +39,10 @@ foreach ($p in $candidates) {
     $j = Get-Content $p -Raw | ConvertFrom-Json
     if ($j.mcpServers) {
       $j.mcpServers.PSObject.Properties | ForEach-Object {
-        $a = @($_.Value.args) -join ' '
-        "{0}: {1} {2}" -f $_.Name, $_.Value.command, $a
+        $all = @($_.Value.args)
+        $shown = @($all | Select-Object -First 2) -join ' '
+        $rest = if ($all.Count -gt 2) { " … (+{0} more args, not shown)" -f ($all.Count - 2) } else { "" }
+        "{0}: {1} {2}{3}" -f $_.Name, $_.Value.command, $shown, $rest
       }
     } else { "(no mcpServers key)" }
   } catch { "(unparseable)" }

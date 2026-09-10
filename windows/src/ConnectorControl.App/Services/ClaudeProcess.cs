@@ -22,6 +22,7 @@ public sealed class ClaudeProcess : IClaudeProcess
 
     private readonly Func<ClaudeInstallInfo> install;
     private readonly Func<string?> launchTargetOverride;
+    private readonly Func<string, string?> verifyExe;
     private readonly TimeSpan quitTimeout;
     private readonly TimeSpan pollInterval;
     private readonly object gate = new();
@@ -29,10 +30,16 @@ public sealed class ClaudeProcess : IClaudeProcess
     private ClaudeInstallInfo? cachedInstall;
     private DateTime cachedAt;
 
-    public ClaudeProcess(Func<ClaudeInstallInfo> install, Func<string?> launchTargetOverride, TimeSpan? quitTimeout = null, TimeSpan? pollInterval = null)
+    /// <param name="verifyExe">
+    /// Judges an exe launch target before Claude is quit and it is started: null to allow, else
+    /// the user-facing reason. Defaults to <see cref="AuthenticodeVerifier.VerifyClaude"/>; tests
+    /// substitute it.
+    /// </param>
+    public ClaudeProcess(Func<ClaudeInstallInfo> install, Func<string?> launchTargetOverride, TimeSpan? quitTimeout = null, TimeSpan? pollInterval = null, Func<string, string?>? verifyExe = null)
     {
         this.install = install;
         this.launchTargetOverride = launchTargetOverride;
+        this.verifyExe = verifyExe ?? AuthenticodeVerifier.VerifyClaude;
         this.quitTimeout = quitTimeout ?? DefaultQuitTimeout;
         this.pollInterval = pollInterval ?? DefaultPollInterval;
     }
@@ -113,6 +120,16 @@ public sealed class ClaudeProcess : IClaudeProcess
         if (!aumid && !File.Exists(target))
         {
             return $"Claude was not found at {target}.";
+        }
+        if (!aumid)
+        {
+            // Verified BEFORE anything is quit: a target that fails the check must not cost the
+            // user the Claude they have running. An AUMID names a package Windows verified itself.
+            var problem = await Task.Run(() => verifyExe(target), cancellationToken).ConfigureAwait(false);
+            if (problem is not null)
+            {
+                return problem;
+            }
         }
         if (IsRunningFor(info))
         {

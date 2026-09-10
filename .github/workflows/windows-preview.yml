@@ -74,7 +74,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -201,7 +201,7 @@ jobs:
           } > notes.md
           cat notes.md
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: notes
           path: notes.md
@@ -218,7 +218,17 @@ jobs:
       version: ${{ needs.prepare.outputs.version }}
       prerelease: true
       require-signing: true
-    secrets: inherit
+    # Only the six Windows signing secrets, by name. A preview tag can be pushed from any
+    # branch (see the header), so the workflow file that runs is whatever that branch holds;
+    # `secrets: inherit` would hand it every repository secret, the Apple certificate and
+    # the Sparkle key included, which nothing on the Windows side ever needs.
+    secrets:
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+      AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+      AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
 
   publish:
     name: Publish prerelease
@@ -236,19 +246,19 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
       REPO_URL: https://github.com/dlaporte/connector-control
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: notes
           path: notes
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: velopack-win-x64
           path: artifacts/win-x64
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: velopack-win-arm64
           path: artifacts/win-arm64
@@ -277,9 +287,10 @@ jobs:
               --title "Connector Control $VERSION (Windows preview)" --notes-file notes/notes.md
           fi
 
-      # gh, not vpk, uploads everything, --clobber makes a re-run idempotent, and the pack-time
-      # releases.<rid>.json is filtered to this build's own packages first — all of it, with the
-      # reasons, in the script release.yml calls too.
+      # gh, not vpk, uploads everything, a re-run skips a RID whose assets are all published
+      # (and refuses to complete a half-published one), and the pack-time releases.<rid>.json
+      # is filtered to this build's own packages first — all of it, with the reasons, in the
+      # script release.yml calls too.
       - name: Upload Velopack assets
         run: ./windows/scripts/upload-release-assets.sh "$TAG" "$VERSION" artifacts
 
