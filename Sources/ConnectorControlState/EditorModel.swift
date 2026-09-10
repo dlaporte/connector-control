@@ -14,6 +14,10 @@ public final class EditorModel: ObservableObject {
     public static let remoteFooter = "Runs via npx mcp-remote — managed for you."
     public static let automaticCaption = "Uses the server's OAuth (a browser window opens on first use), or no auth if the server is open."
     public static let bearerCaption = "Sent as Authorization: Bearer …"
+    /// mcp-remote reads --static-oauth-client-info literally (or from an @file); it has no
+    /// env-var indirection for it the way the header flags do, so unlike the token and
+    /// header fields this value ends up on the process command line.
+    public static let oauthSecretCaption = "Passed to mcp-remote on its command line, which other programs running on this Mac can read."
     public static let invalidURLError = "Server URL must be a valid http(s) URL."
     public static let bearerTokenError = "Enter a bearer token."
     public static let headerNameError = "Enter a header name."

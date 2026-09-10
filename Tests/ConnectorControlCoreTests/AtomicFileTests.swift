@@ -62,6 +62,36 @@ final class AtomicFileTests: XCTestCase {
         }
     }
 
+    /// The mode comes from open(2) at creation, not from a chmod after the
+    /// bytes are on disk: with the umask cleared, Data.write would create
+    /// 0666 and the secrets would be world-readable until the chmod landed.
+    func testWriteIsPrivateFromCreationRegardlessOfUmask() throws {
+        let previous = umask(0)
+        defer { umask(previous) }
+        let url = dir.appendingPathComponent("secret.json")
+        try AtomicFile.write(Data("token".utf8), to: url)
+        let mode = try XCTUnwrap(FileManager.default
+            .attributesOfItem(atPath: url.path)[.posixPermissions] as? Int)
+        XCTAssertEqual(mode, 0o600)
+    }
+
+    /// A config symlinked into a dotfiles repo is written through: the link
+    /// survives, the real file gets the bytes and the private mode.
+    func testWriteThroughASymlinkUpdatesTheTargetAndKeepsTheLink() throws {
+        let fm = FileManager.default
+        let real = dir.appendingPathComponent("dotfiles/claude.json")
+        let link = dir.appendingPathComponent("claude_desktop_config.json")
+        try fm.createDirectory(at: real.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("old".utf8).write(to: real)
+        try fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: real.path)
+        try fm.createSymbolicLink(at: link, withDestinationURL: real)
+        try AtomicFile.write(Data("new".utf8), to: link)
+        XCTAssertEqual(try fm.destinationOfSymbolicLink(atPath: link.path), real.path, "the link is still a link")
+        XCTAssertEqual(try String(contentsOf: real, encoding: .utf8), "new")
+        let mode = try XCTUnwrap(fm.attributesOfItem(atPath: real.path)[.posixPermissions] as? Int)
+        XCTAssertEqual(mode, 0o600)
+    }
+
     func testNoTempFilesLeftBehind() throws {
         let url = dir.appendingPathComponent("file.json")
         try AtomicFile.write(Data("x".utf8), to: url)

@@ -366,7 +366,15 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(AppState.enabledSubtitle(enabled: 2, total: 3), "2 of 3 enabled")
         XCTAssertEqual(AppState.claudeConfigRegeneratedBody,
                        "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up.")
-        XCTAssertEqual(AppState.connectorListChangedRestartBody, "Connector list has changed, restart required.")
+        XCTAssertEqual(
+            AppState.connectorListChangedBody(ServerDelta(added: ["evil"], removed: ["fs"]), restartRequired: true),
+            "The connector list changed outside Connector Control — Claude's config now adds evil; removes fs. Restart Claude to pick it up.")
+        XCTAssertEqual(
+            AppState.connectorListChangedBody(ServerDelta(changed: ["aws-mcp"]), restartRequired: false),
+            "The connector list changed outside Connector Control — Claude's config now changes aws-mcp. Claude will use it the next time it starts.")
+        XCTAssertEqual(
+            AppState.connectorListChangedBody(ServerDelta(), restartRequired: false),
+            "The connector list changed outside Connector Control — Claude's config was regenerated. Claude will use it the next time it starts.")
         XCTAssertEqual(AppState.regenerationFailedBody,
                        "The connector configuration changed, but Claude's config could not be updated — open Connector Control to retry.")
         XCTAssertEqual(AppState.claudeConfigChangedBody, "Claude's config changed outside Connector Control.")

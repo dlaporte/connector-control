@@ -232,6 +232,9 @@ struct EditSheetView: View {
         case .oauthClient:
             TextField("Client ID", text: $model.oauthClientID)
             SecureField("Client Secret", text: $model.oauthClientSecret)
+            Text(EditorModel.oauthSecretCaption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             TextField("Scopes (optional)", text: $model.oauthScopes, prompt: Text("space separated"))
         }
     }

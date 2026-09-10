@@ -16,11 +16,11 @@ public struct BackupManager {
         let base = url.deletingPathExtension().lastPathComponent
         let dest = backupsDir.appendingPathComponent("\(base).original.json")
         guard !fm.fileExists(atPath: dest.path) else { return }
-        try fm.createDirectory(at: backupsDir, withIntermediateDirectories: true,
-                               attributes: [.posixPermissions: 0o700])   // backups hold secrets
-        try fm.copyItem(at: url, to: dest)
-        // Backups can hold env-var secrets — keep them owner-only.
-        try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: dest.path)
+        // Written like every other private file (created 0600, atomically), not
+        // copied: copyItem would inherit the source's mode — Claude's config is
+        // usually 0644 — and, for a symlinked config, copy the link itself
+        // rather than the bytes it points at.
+        try AtomicFile.write(try Data(contentsOf: url), to: dest)
     }
 
     /// Returns the existing newest backup instead of writing a duplicate when
@@ -37,8 +37,6 @@ public struct BackupManager {
            (try? Data(contentsOf: newest)) == current {
             return newest
         }
-        try fm.createDirectory(at: backupsDir, withIntermediateDirectories: true,
-                               attributes: [.posixPermissions: 0o700])   // backups hold secrets
         var dest = backupsDir
             .appendingPathComponent("\(series).\(BackupTimestamp.string(from: now)).json")
         var counter = 2
@@ -52,9 +50,10 @@ public struct BackupManager {
         if fm.fileExists(atPath: dest.path) {
             try fm.removeItem(at: dest)
         }
-        try fm.copyItem(at: url, to: dest)
-        // Backups can hold env-var secrets — keep them owner-only.
-        try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: dest.path)
+        // See ensureOriginalSnapshot: a private, atomic write of the bytes, not a
+        // copy of the file (or of a symlink to it). AtomicFile creates the
+        // backups directory 0700 when it does not exist yet.
+        try AtomicFile.write(try Data(contentsOf: url), to: dest)
         try prune(series: series)
         return dest
     }

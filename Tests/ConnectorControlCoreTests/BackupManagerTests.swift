@@ -121,6 +121,33 @@ final class BackupManagerTests: XCTestCase {
         XCTAssertEqual(mode, 0o600)
     }
 
+    /// Claude's own config is 0644; a copy would inherit that. The snapshot is
+    /// written like every other private file instead.
+    func testOriginalSnapshotOfAWorldReadableSourceIsPrivate() throws {
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: source.path)
+        try manager.ensureOriginalSnapshot(of: source)
+        let original = manager.backupsDir.appendingPathComponent("claude_desktop_config.original.json")
+        let mode = try XCTUnwrap(FileManager.default
+            .attributesOfItem(atPath: original.path)[.posixPermissions] as? Int)
+        XCTAssertEqual(mode, 0o600)
+    }
+
+    /// A config symlinked into a dotfiles repo: the backup must be a snapshot
+    /// of the bytes, not a copy of the link (which would read the live file
+    /// forever, so no restore could ever go back).
+    func testBackupOfASymlinkedSourceIsARealSnapshot() throws {
+        let fm = FileManager.default
+        let real = dir.appendingPathComponent("dotfiles/claude.json")
+        try fm.createDirectory(at: real.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("v1".utf8).write(to: real)
+        let link = dir.appendingPathComponent("linked_config.json")
+        try fm.createSymbolicLink(at: link, withDestinationURL: real)
+        let made = try XCTUnwrap(manager.backUp(fileAt: link, series: "claude_desktop_config"))
+        XCTAssertNil(try? fm.destinationOfSymbolicLink(atPath: made.path), "the backup is a regular file")
+        try Data("v2".utf8).write(to: real)
+        XCTAssertEqual(try String(contentsOf: made, encoding: .utf8), "v1", "the snapshot does not follow the live file")
+    }
+
     func testSeriesAreIndependent() throws {
         try manager.backUp(fileAt: source, series: "claude_desktop_config")
         try manager.backUp(fileAt: source, series: "mcps")
