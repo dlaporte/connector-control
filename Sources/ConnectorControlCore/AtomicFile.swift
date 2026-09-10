@@ -14,8 +14,14 @@ public enum AtomicFile {
         // owner-only from the start (the sweep would only catch it on the
         // next launch; Windows applies its ACL the same way). Directories that
         // already exist — a synced folder the user chose — are left alone.
+        let dirExisted = fm.fileExists(atPath: dir.path)
         try fm.createDirectory(at: dir, withIntermediateDirectories: true,
                                attributes: [.posixPermissions: 0o700])
+        if !dirExisted {
+            // A folder with an inheritable ACE hands one to every child, directories
+            // included; 0700 alone would leave the new directory listable by that principal.
+            try stripACL(atPath: dir.path)
+        }
         let tmp = dir.appendingPathComponent(".\(target.lastPathComponent).tmp-\(UUID().uuidString)")
         // Connector configs can hold env-var secrets. The file is created 0600
         // by open(2) itself — never with the umask's default and a chmod after
@@ -28,6 +34,8 @@ public enum AtomicFile {
                           userInfo: [NSFilePathErrorKey: tmp.path])
         }
         defer { try? fm.removeItem(at: tmp) }
+        // Before the first byte lands: an inherited ACE grants read regardless of the 0600.
+        try stripACL(fd: fd)
         let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
         try handle.write(contentsOf: data)
         try handle.close()
@@ -48,5 +56,32 @@ public enum AtomicFile {
                 _ = try fm.replaceItemAt(target, withItemAt: tmp, options: .usingNewMetadataOnly)
             }
         }
+    }
+
+    /// Removes every ACL entry from the object `fd` refers to. `open(…, 0600)` cannot refuse
+    /// the ACEs a parent folder hands down, and macOS consults ACEs before the mode bits, so
+    /// a file in a shared folder is only private once its ACL is gone.
+    public static func stripACL(fd: Int32) throws {
+        guard let empty = acl_init(0) else { throw posixError() }
+        defer { acl_free(UnsafeMutableRawPointer(empty)) }
+        guard acl_set_fd_np(fd, empty, ACL_TYPE_EXTENDED) == 0 else { throw posixError() }
+    }
+
+    /// `stripACL(fd:)` for a path: directories, and the sweep's repair of existing files.
+    public static func stripACL(atPath path: String) throws {
+        guard let empty = acl_init(0) else { throw posixError() }
+        defer { acl_free(UnsafeMutableRawPointer(empty)) }
+        guard acl_set_link_np(path, ACL_TYPE_EXTENDED, empty) == 0 else { throw posixError() }
+    }
+
+    /// True when the object carries any ACL entry (inherited or explicit).
+    public static func hasACL(atPath path: String) -> Bool {
+        guard let acl = acl_get_link_np(path, ACL_TYPE_EXTENDED) else { return false }
+        acl_free(UnsafeMutableRawPointer(acl))
+        return true
+    }
+
+    private static func posixError() -> NSError {
+        NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
     }
 }

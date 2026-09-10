@@ -125,4 +125,28 @@ final class AtomicFileTests: XCTestCase {
         let tmpFiles = parentContents.filter { $0.contains(".tmp-") }
         XCTAssert(tmpFiles.isEmpty, "Found orphaned tmp files: \(tmpFiles)")
     }
+
+    /// Mode 0600 is not private on a folder that carries an inheritable allow ACE: the new
+    /// file inherits the ACE and macOS evaluates ACEs before mode bits. The file and any
+    /// directory this call creates must end with no ACL at all.
+    func testInheritedACLEntriesAreStrippedFromTheFileAndCreatedDirectories() throws {
+        let fm = FileManager.default
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let chmod = Process()
+        chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+        chmod.arguments = ["+a", "group:everyone allow read,file_inherit,directory_inherit", dir.path]
+        try chmod.run()
+        chmod.waitUntilExit()
+        XCTAssertEqual(chmod.terminationStatus, 0)
+        // Control: a plain write DOES inherit, so the assertions below cannot pass vacuously.
+        let control = dir.appendingPathComponent("control.json")
+        try Data("{}".utf8).write(to: control)
+        XCTAssertTrue(AtomicFile.hasACL(atPath: control.path), "the folder's ACE is inheritable")
+
+        let url = dir.appendingPathComponent("nested/secret.json")
+        try AtomicFile.write(Data("token".utf8), to: url)
+        XCTAssertFalse(AtomicFile.hasACL(atPath: url.path))
+        XCTAssertFalse(AtomicFile.hasACL(atPath: dir.appendingPathComponent("nested").path))
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "token")
+    }
 }
