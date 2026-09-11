@@ -3,7 +3,9 @@ namespace ConnectorControl.Core.Services;
 /// <summary>The Windows counterpart of the Mac app's UserDefaults keys. Setters persist immediately.</summary>
 public interface ISettings
 {
+    /// <summary>Custom master-list directory; null means the default (and removes the key).</summary>
     string? MasterStoreDir { get; set; }
+    /// <summary>Windows-only: a custom path to Claude's config file; null means the default location.</summary>
     string? ClaudeConfigPath { get; set; }
     /// <summary>
     /// Broader than the Mac's <c>claudeAppPath</c>: the detected target can be an MSIX app
@@ -17,7 +19,9 @@ public interface ISettings
     DateTime? LastApplyDate { get; set; }
     /// <summary>How far PermissionsSweep's one-time repair has gotten; see its header comment.</summary>
     int SweepVersion { get; set; }
+    /// <summary>Windows-only: whether a background (non-interactive) update check downloads and stages the update automatically.</summary>
     bool AutoUpdate { get; set; }
+    /// <summary>Windows-only: whether the first-run tray tip has already been shown.</summary>
     bool TrayTipShown { get; set; }
 
     /// <summary>

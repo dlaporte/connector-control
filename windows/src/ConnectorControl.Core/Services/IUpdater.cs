@@ -1,6 +1,6 @@
 namespace ConnectorControl.Core.Services;
 
-/// <summary>Sparkle's role on Windows (spec §6.7).</summary>
+/// <summary>Sparkle's role on Windows.</summary>
 public interface IUpdater
 {
     /// <summary>False when not running from an installed build (bare `dotnet run`, tests); every other member is then inert.</summary>

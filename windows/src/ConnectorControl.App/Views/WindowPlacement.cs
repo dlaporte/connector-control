@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace ConnectorControl.App.Views;
 
 /// <summary>
-/// Spec §7.1: the flyout opens beside the notification area (fallbacks: the
+/// The flyout opens beside the notification area (fallbacks: the
 /// cursor, then the work-area corner). Every coordinate here is a physical
 /// pixel — what TrayInfo.GetTrayLocation, GetCursorPos, GetMonitorInfo and
 /// SetWindowPos all speak — so no DPI conversion happens anywhere.
@@ -44,7 +44,7 @@ public static class WindowPlacement
     }
 
     /// <summary>
-    /// Spec §7.1 anchoring rule, pure so it can be unit-tested: the notification
+    /// The anchoring rule, pure so it can be unit-tested: the notification
     /// area's own corner if the shell reported one, else the cursor, else the
     /// bottom-right corner of the work area. (0,0) from either source means
     /// "not reported" — neither the tray nor a real cursor ever sits there.
@@ -65,7 +65,7 @@ public static class WindowPlacement
     /// <summary>
     /// Moves an already-shown, already-laid-out window to the anchor. The same
     /// call serves the left-click toggle, the tray menu's Open item, and any
-    /// programmatic show, so all three land in the same place (spec §7.1).
+    /// programmatic show, so all three land in the same place.
     /// </summary>
     /// <param name="trayAnchor">TrayInfo.GetTrayLocation(), or null when the shell did not answer.</param>
     public static void MoveNearTray(nint hwnd, Point? trayAnchor)

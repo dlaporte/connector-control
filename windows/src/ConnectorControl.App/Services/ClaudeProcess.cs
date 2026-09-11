@@ -6,9 +6,9 @@ using ConnectorControl.Core.Services;
 namespace ConnectorControl.App.Services;
 
 /// <summary>
-/// Replaces NSRunningApplication + ClaudeRestarter (spec §6.2): running check
-/// and launch time by process name; restart = graceful quit (session-end
-/// messages, never force-kill), wait up to 15 s, relaunch by AUMID or exe.
+/// Replaces NSRunningApplication + ClaudeRestarter: running check and launch
+/// time by process name; restart = graceful quit (session-end messages,
+/// never force-kill), wait up to 15 s, relaunch by AUMID or exe.
 /// </summary>
 public sealed class ClaudeProcess : IClaudeProcess
 {
@@ -85,10 +85,10 @@ public sealed class ClaudeProcess : IClaudeProcess
     /// The install, resolved on first use and then cached. Detect() walks every
     /// package registered for the user, and RefreshRestartState's Snapshot() plus
     /// the 250 ms quit poll's IsRunningFor read it far too often to pay for that
-    /// on each read (review I3). A NotFound result is never cached, and RestartAsync
+    /// on each read. A NotFound result is never cached, and RestartAsync
     /// re-resolves, so a Claude installed while the app runs is still found. The
     /// cache also expires on a TTL: BelongsToInstall already tolerates Claude's own
-    /// MSIX update relocating its versioned folder (review R1), but the TTL is a
+    /// MSIX update relocating its versioned folder, but the TTL is a
     /// cheap second line of defence against any other way the cached info could
     /// go stale (e.g. a package reinstalled under a new publisher id).
     /// </summary>
@@ -201,7 +201,7 @@ public sealed class ClaudeProcess : IClaudeProcess
     /// Claude's processes: the right image name, in this logon session, and —
     /// when the install location is known — running from it. Without the
     /// location filter the Claude Code CLI (also <c>claude.exe</c>) and another
-    /// logged-on user's Claude Desktop would both count as ours (spec §6.2).
+    /// logged-on user's Claude Desktop would both count as ours.
     /// </summary>
     private bool IsClaude(Process process, ClaudeInstallInfo info)
     {
@@ -229,7 +229,7 @@ public sealed class ClaudeProcess : IClaudeProcess
     /// <c>PackageFamilyName</c>), not the exact installed folder: Claude updates
     /// itself roughly weekly and each update relocates every process to a new
     /// versioned WindowsApps folder, so an exact-folder match goes stale until
-    /// the next Restart click (review R1). Legacy installs match the exact
+    /// the next Restart click. Legacy installs match the exact
     /// folder, which the Squirrel updater never moves. A null
     /// <c>InstallDirectory</c> means the location is unknown, so the caller's
     /// name-only match is all there is.

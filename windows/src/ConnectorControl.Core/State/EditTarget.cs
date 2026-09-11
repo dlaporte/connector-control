@@ -1,6 +1,6 @@
 namespace ConnectorControl.Core.State;
 
-/// <summary>Catalog §3.1: what an editor window edits. Existing connectors use id == name (one window each); new ones a fresh GUID.</summary>
+/// <summary>What an editor window edits. Existing connectors use id == name (one window each); new ones a fresh GUID.</summary>
 public sealed record EditTarget(string Id, string Name, McpEntry Entry, bool IsNew, bool ForcesRemote = false)
 {
     public static EditTarget Existing(string name, McpEntry entry) => new(name, name, entry, IsNew: false);
@@ -15,6 +15,6 @@ public sealed record EditTarget(string Id, string Name, McpEntry Entry, bool IsN
 
     public static string EditTitle(string name) => $"Edit “{name}”";
 
-    /// <summary>Catalog §3.12: fixed at open time.</summary>
+    /// <summary>Fixed at open time.</summary>
     public string WindowTitle => IsNew ? AddTitle : EditTitle(Name);
 }

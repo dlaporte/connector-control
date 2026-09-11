@@ -3,7 +3,7 @@ using ConnectorControl.Core.Services;
 namespace ConnectorControl.Core.State;
 
 /// <summary>
-/// Spec §6.7: check 10 s after launch and every 24 h; with autoUpdate on,
+/// Checks 10 s after launch and every 24 h; with autoUpdate on,
 /// download silently, stage for quit, and toast once per version; otherwise —
 /// and always for Check for Updates… — show the update dialog. Manual checks
 /// report "up to date" and failures; background checks stay silent.

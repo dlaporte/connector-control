@@ -9,7 +9,7 @@ using ConnectorControl.Core.State;
 namespace ConnectorControl.App;
 
 /// <summary>
-/// Composition root (catalog §0 / spec §7.6 init order): Velopack hook first,
+/// Composition root: Velopack hook first,
 /// single-instance guard, platform services, AppState (which reloads and arms
 /// watchers), the update coordinator, windows, tray icon, first-run tip.
 /// No window is shown at startup; the tray icon is the app.

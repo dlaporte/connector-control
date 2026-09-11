@@ -24,7 +24,7 @@ public class AppStateWatcherTests
         Assert.Single(h.Notifier.Sent);
     }
 
-    // Controller addition (Task 5 review of Task 4): Notify()'s settings.NotifyExternalChanges
+    // Notify()'s settings.NotifyExternalChanges
     // gate had no direct coverage — only that the reload/regeneration it would announce still happens.
     [Fact]
     public void ExternalEditIsSilentWhenNotifyExternalChangesIsDisabledButStillReloads()
@@ -128,7 +128,7 @@ public class AppStateWatcherTests
 
         // ArmWatchers cannot arm a watcher whose parent directory is missing; the
         // regenerating write inside the same Reload creates it, and the re-arm at the
-        // end of Reload catches up (spec §6.3).
+        // end of Reload catches up.
         state.RepointClaudeConfig(later);
         Assert.True(File.Exists(later));
         Assert.True(state.WatchersArmed);

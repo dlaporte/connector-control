@@ -355,7 +355,7 @@ public class AppStateTests
         var raised = new List<string?>();
         state.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
         var task = state.RefreshToolsAsync();
-        // The task completes once the probe batch is posted, not once it is applied (Task 4 review),
+        // The task completes once the probe batch is posted, not once it is applied,
         // so pump until the actual publication (the observable ToolStatuses count) rather than task.IsCompleted.
         Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 4, TimeSpan.FromSeconds(5)));
         Assert.True(task.IsCompleted);

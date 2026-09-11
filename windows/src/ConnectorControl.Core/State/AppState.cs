@@ -4,9 +4,9 @@ using ConnectorControl.Core.Services;
 namespace ConnectorControl.Core.State;
 
 /// <summary>
-/// The Mac AppState (catalog §1) on Windows. UI-thread-only; everything that
+/// The Mac AppState, on Windows. UI-thread-only; everything that
 /// arrives from another thread comes through <see cref="AppHost.Marshal"/>.
-/// Init sequence (catalog §1.2 minus legacy migration): resolve the service,
+/// Init sequence (minus legacy migration): resolve the service,
 /// one-time ACL sweep, route the toast Restart action, reload, arm watchers.
 /// </summary>
 public sealed class AppState : ObservableObject, IDisposable
@@ -32,10 +32,10 @@ public sealed class AppState : ObservableObject, IDisposable
     public static string DeleteProfileMessage(string profile) => $"Delete Profile “{profile}”?";
     public static string MalformedConfigMessage(string detail) =>
         $"Claude's config file is not valid JSON ({detail}). Nothing was written. Use Backups ▸ Restore… to recover it.";
-    /// <summary>Catalog §1.17: Claude's launch time is re-read 3 s after the restart completes.</summary>
+    /// <summary>Claude's launch time is re-read 3 s after the restart completes.</summary>
     public static readonly TimeSpan RestartRecheckDelay = TimeSpan.FromSeconds(3);
     /// <summary>
-    /// Spec §6.2 probe: a relaunched Claude is up within 20 s. RestartAsync reports null
+    /// The probe that a relaunched Claude is up within 20 s. RestartAsync reports null
     /// even when the AUMID launch silently did nothing (explorer.exe succeeds for any
     /// AUMID), so this second look is the only place that failure becomes visible.
     /// </summary>
@@ -65,7 +65,7 @@ public sealed class AppState : ObservableObject, IDisposable
     private FileWatcher? storeWatcher;
     private bool disposed;
 
-    /// <summary>Test probe: both watchers are live. Spec §6.3 wants this true after every reload.</summary>
+    /// <summary>Test probe: both watchers are live. Should be true after every reload.</summary>
     internal bool WatchersArmed => watcher is { IsArmed: true } && storeWatcher is { IsArmed: true };
 
     public AppState(ISettings settings, IClaudeProcess claude, INotifier notifier, IDialogs dialogs, PathContext paths, AppHost host, IToolProbe tools)
@@ -88,11 +88,11 @@ public sealed class AppState : ObservableObject, IDisposable
         ArmWatchers();
     }
 
-    // MARK: published state (catalog §1.1)
+    // MARK: published state
 
     public MasterStore Store { get => store; private set => Set(ref store, value); }
 
-    /// <summary>Settable: the restore dialog reports its failure here (catalog §5).</summary>
+    /// <summary>Settable: the restore dialog reports its failure here.</summary>
     public string? LastError { get => lastError; set => Set(ref lastError, value); }
 
     private bool storeNotPrivate;
@@ -121,7 +121,7 @@ public sealed class AppState : ObservableObject, IDisposable
 
     public string ActiveProfile => Store.ActiveProfile;
 
-    /// <summary>Catalog §2.2 header subtitle.</summary>
+    /// <summary>The header subtitle.</summary>
     public string HeaderSubtitle
     {
         get
@@ -133,7 +133,7 @@ public sealed class AppState : ObservableObject, IDisposable
 
     public static string EnabledSubtitle(int enabled, int total) => $"{enabled} of {total} enabled";
 
-    // MARK: tools (spec 2026-09-05-tool-probe §3.6)
+    // MARK: tools
 
     /// <summary>
     /// Which of the four launchers Claude Desktop can start: probed on demand — Settings ▸ Claude,
@@ -187,7 +187,7 @@ public sealed class AppState : ObservableObject, IDisposable
         });
     }
 
-    // MARK: watchers (catalog §1.4, §1.5; spec §6.3)
+    // MARK: watchers
 
     /// <summary>Replaces both watchers. Re-run on every repoint.</summary>
     private void ArmWatchers()
@@ -234,9 +234,9 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>
     /// Runs a watcher-triggered callback with a catch-all around its ENTIRE body, not only Reload's
-    /// own narrower catch filter (Task 3 review). This also covers <see cref="AdoptExternalStoreChange"/>'s
-    /// File.Exists/MasterStoreIO.Read/equality work, which runs before any Reload is reached (Task 5
-    /// review of Task 4's controller) — without this, an exception there would escape through a
+    /// own narrower catch filter. This also covers <see cref="AdoptExternalStoreChange"/>'s
+    /// File.Exists/MasterStoreIO.Read/equality work, which runs before any Reload is reached —
+    /// without this, an exception there would escape through a
     /// marshalled FileWatcher callback and take the whole app down instead of showing a banner.
     /// Also re-arms both watchers here: an exception means the ReArm at the bottom of Reload never
     /// ran, so without this a watcher could stay disarmed until the next reload. Not used for a Reload
@@ -267,7 +267,7 @@ public sealed class AppState : ObservableObject, IDisposable
         }
     }
 
-    // MARK: repointing (catalog §1.12) and restore (catalog §1.13)
+    // MARK: repointing and restore
 
     /// <summary>
     /// Repoints the master store to a new directory (or back to the default when <paramref name="dir"/>
@@ -343,7 +343,7 @@ public sealed class AppState : ObservableObject, IDisposable
         Reload(ReloadTrigger.QuietStoreAdoption);
     }
 
-    // MARK: service construction (catalog §1.3, spec §5.6)
+    // MARK: service construction
 
     public static ConfigService MakeService(ISettings settings, PathContext paths)
     {
@@ -355,7 +355,7 @@ public sealed class AppState : ObservableObject, IDisposable
         return new ConfigService(resolved, settings.BackupKeepCount);
     }
 
-    // MARK: reload (catalog §1.7 + §1.8)
+    // MARK: reload
 
     public void Reload(ReloadTrigger trigger = ReloadTrigger.Routine)
     {
@@ -416,7 +416,7 @@ public sealed class AppState : ObservableObject, IDisposable
             }
 
             // Fire notifications AFTER all state above has been assigned, never on first load or for
-            // quiet adoptions. At most one per reload (catalog §1.8).
+            // quiet adoptions. At most one per reload.
             if (regenerated && wasLoaded && trigger == ReloadTrigger.Routine && claudeConfigChangedExternally)
             {
                 Notify(ClaudeConfigRegeneratedBody);
@@ -467,7 +467,7 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         // Only when arming previously failed — the parent directory did not exist, or
         // FileWatcher.HandleError disarmed itself because the directory was deleted.
-        // Never a blanket re-arm: a flyout open reloads (catalog §2.1), and tearing two
+        // Never a blanket re-arm: a flyout open reloads, and tearing two
         // FileSystemWatchers down and rebuilding them each time would re-baseline the
         // last-seen write time and open a gap where an external write is simply lost.
         // (FileWatcher.Start() is itself a no-op while armed; the IsArmed test states the
@@ -477,7 +477,7 @@ public sealed class AppState : ObservableObject, IDisposable
         RaiseAll();
     }
 
-    // MARK: apply / persist (catalog §1.10)
+    // MARK: apply / persist
 
     private void PerformApply()
     {
@@ -562,7 +562,7 @@ public sealed class AppState : ObservableObject, IDisposable
         return null;
     }
 
-    /// <summary>Removes and persists; the caller applies (catalog §3.10 does both in one turn).</summary>
+    /// <summary>Removes and persists; the caller applies (both happen in one turn).</summary>
     public void Remove(string name)
     {
         Store.Mcps.Remove(name);
@@ -570,7 +570,7 @@ public sealed class AppState : ObservableObject, IDisposable
         RaiseAll();
     }
 
-    // MARK: restart-required derivation (catalog §1.11, spec §6.2)
+    // MARK: restart-required derivation
 
     /// <summary>Claude needs a restart iff it's running on a config older than our last write; self-clears however Claude gets restarted.</summary>
     public void RefreshRestartState()
@@ -583,7 +583,7 @@ public sealed class AppState : ObservableObject, IDisposable
             && launchDate.ToUniversalTime() < applied.ToUniversalTime();
     }
 
-    // MARK: quit (catalog §1.16)
+    // MARK: quit
 
     /// <summary>Raised when the app should terminate (after the optional confirmation).</summary>
     public event Action? QuitRequested;
@@ -597,7 +597,7 @@ public sealed class AppState : ObservableObject, IDisposable
         QuitRequested?.Invoke();
     }
 
-    // MARK: restart Claude (catalog §1.17)
+    // MARK: restart Claude
 
     /// <summary>The in-app button: confirm (unless disabled), then restart.</summary>
     public Task RestartClaudeAsync()
@@ -670,7 +670,7 @@ public sealed class AppState : ObservableObject, IDisposable
         _ = PerformRestartClaudeAsync();
     }
 
-    // MARK: profiles (catalog §1.18)
+    // MARK: profiles
 
     /// <summary>Switching profiles applies immediately, like every other change. An unknown name is silently ignored.</summary>
     public void SwitchProfile(string name)
@@ -725,7 +725,7 @@ public sealed class AppState : ObservableObject, IDisposable
         RaiseAll();
     }
 
-    // MARK: notifications (catalog §1.8)
+    // MARK: notifications
 
     private void Notify(string body, string? category = null)
     {

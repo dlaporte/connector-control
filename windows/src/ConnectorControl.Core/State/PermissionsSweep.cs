@@ -3,7 +3,7 @@ using ConnectorControl.Core.Services;
 namespace ConnectorControl.Core.State;
 
 /// <summary>
-/// The Mac sweepPermissionsOnce (catalog §1.15) with a DACL instead of chmod:
+/// The Mac sweepPermissionsOnce, with a DACL instead of chmod:
 /// one-time repair of files written before owner-only permissions were
 /// enforced, gated by the SweepVersion setting so launches stay cheap.
 /// Every error is ignored, like the Swift try?.

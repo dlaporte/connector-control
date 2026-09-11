@@ -7,6 +7,9 @@ namespace ConnectorControl.Core;
 /// </summary>
 public sealed class MasterStore : IEquatable<MasterStore>
 {
+    // Schema v2 only — no v1 fallback. A v1 (or otherwise malformed) file on
+    // disk fails to decode and is handled by MasterStoreIO.Load's existing
+    // corrupt-file path: moved aside and rebuilt fresh from Claude's config.
     public const long CurrentVersion = 2;
 
     public long Version { get; }

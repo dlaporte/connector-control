@@ -3,7 +3,7 @@ using ConnectorControl.Core.Services;
 
 namespace ConnectorControl.Core.State;
 
-/// <summary>Catalog §4 SettingsView state: three tabs, every toggle, path, and button.</summary>
+/// <summary>SettingsView state: three tabs, every toggle, path, and button.</summary>
 public sealed class SettingsModel : ObservableObject, IDisposable
 {
     public const string GeneralTab = "General";
@@ -61,9 +61,9 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         RaiseAll();
     }
 
-    // MARK: General (catalog §4.2)
+    // MARK: General
 
-    /// <summary>Catalog §4.2: no-op when the OS already agrees; on failure revert the toggle and show the note.</summary>
+    /// <summary>No-op when the OS already agrees; on failure revert the toggle and show the note.</summary>
     public bool LaunchAtStartup
     {
         get => launchAtStartup;
@@ -142,7 +142,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
 
     public Task CheckForUpdatesAsync() => updates.CheckAsync(interactive: true);
 
-    // MARK: Storage (catalog §4.3)
+    // MARK: Storage
 
     public string StoreDirPath => state.Service.Paths.StoreDir;
 
@@ -190,7 +190,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
 
     public string BackupsDir => state.Service.Backups.BackupsDir;
 
-    // MARK: Claude (catalog §4.4, spec §7.3)
+    // MARK: Claude
 
     public string InstallKindText => installInfo.Kind switch
     {
@@ -232,12 +232,12 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         RaiseAll();
     }
 
-    // MARK: Tools (spec 2026-09-05-tool-probe §3.5)
+    // MARK: Tools
 
     public IReadOnlyList<ToolRow> ToolRows =>
         ToolInfo.All.Select(tool => ToolRow.Make(tool, state.ToolStatuses.TryGetValue(tool, out var status) ? status : null)).ToList();
 
-    /// <summary>Spec §6 D4: Windows probes all four when the window opens.</summary>
+    /// <summary>Windows probes all four when the window opens.</summary>
     public void RefreshTools() => _ = state.RefreshToolsAsync();
 
     private void OnStateChanged(object? sender, PropertyChangedEventArgs e)

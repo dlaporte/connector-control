@@ -3,7 +3,7 @@ using ConnectorControl.Core.State;
 
 namespace ConnectorControl.App.Views;
 
-/// <summary>Spec §6.7: the new version, the release notes rendered from Markdown, Install and Relaunch / Later.</summary>
+/// <summary>The new version, the release notes rendered from Markdown, Install and Relaunch / Later.</summary>
 public partial class UpdateDialog : DialogWindow
 {
     public UpdateDialog(string newVersion, string currentVersion, string? notesMarkdown)

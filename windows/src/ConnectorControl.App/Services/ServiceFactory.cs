@@ -3,7 +3,7 @@ using ConnectorControl.Core.Services;
 
 namespace ConnectorControl.App.Services;
 
-/// <summary>Composition root for the platform services (spec §4.2 data folder, §6).</summary>
+/// <summary>Composition root for the platform services.</summary>
 public static class ServiceFactory
 {
     public static string DefaultDataDir =>

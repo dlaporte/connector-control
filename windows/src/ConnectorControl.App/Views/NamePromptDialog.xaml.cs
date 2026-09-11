@@ -2,7 +2,7 @@ using System.Windows;
 
 namespace ConnectorControl.App.Views;
 
-/// <summary>Catalog §1.18 promptForName: a 220-wide text field prefilled with the initial value, OK/Cancel, raw text returned.</summary>
+/// <summary>A 220-wide text field prefilled with the initial value, OK/Cancel, raw text returned.</summary>
 public partial class NamePromptDialog : DialogWindow
 {
     public NamePromptDialog(string title, string initial)

@@ -5,6 +5,8 @@ namespace ConnectorControl.Core;
 /// <summary>
 /// Recognizes the <c>npx [-y] mcp-remote[@version] &lt;url&gt;</c> bridge pattern (and
 /// its Windows spelling <c>cmd /c npx …</c>) so the form view can show just Name + Server URL.
+/// Keys other than command/args (env, headers, …) don't disqualify — they surface in the
+/// form's read-only Additional fields.
 /// </summary>
 public static class RemotePattern
 {
@@ -14,7 +16,11 @@ public static class RemotePattern
     /// <summary>True when <paramref name="s"/> is the mcp-remote package specifier, with or without a version tag.</summary>
     internal static bool IsMarker(string s) => s == DefaultPackage || s.StartsWith(DefaultPackage + "@", StringComparison.Ordinal);
 
-    /// <summary>Swift's <c>URL(string:)</c> + http(s) scheme + non-empty host.</summary>
+    /// <summary>
+    /// The rule the URL argument must meet: an http or https scheme and a
+    /// non-empty host. <see cref="Detect"/> applies it to the bridge's URL;
+    /// the editor applies it to the Server URL field.
+    /// </summary>
     public static bool IsValidHttpUrl(string s) =>
         Uri.TryCreate(s, UriKind.Absolute, out var uri)
         && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
@@ -133,14 +139,23 @@ public static class RemotePattern
     public static JsonValue Make(string url, RemoteLaunchStyle style) =>
         BuildConfig(style, ["-y", DefaultPackage, url], null);
 
-    /// <summary>An mcp-remote invocation regardless of URL validity.</summary>
+    /// <summary>
+    /// An mcp-remote invocation regardless of URL validity. Used to keep the
+    /// remote form active for forced-remote targets.
+    /// </summary>
     public static bool IsRemoteShaped(JsonValue config)
     {
         var args = StrippedArgs(config);
         return args is { Count: > 0 } && IsMarker(args[0]);
     }
 
-    /// <summary>A BARE bridge invocation with at most one trailing argument (the URL slot).</summary>
+    /// <summary>
+    /// A BARE bridge invocation with at most one trailing argument (the URL
+    /// slot, present or missing). These must carry a valid URL to be
+    /// saveable. Extra flags (e.g. --header) make a config non-bare: still
+    /// remote-shaped, but save validation must not insist the trailing args
+    /// form a lone URL.
+    /// </summary>
     public static bool IsCanonicalShape(JsonValue config)
     {
         var args = StrippedArgs(config);
@@ -187,7 +202,8 @@ public static class RemotePattern
                 env["AUTH_HEADER"] = h.Value;
                 break;
             case RemoteAuth.OAuthClient o:
-                // Literal id/secret in the arg: mcp-remote reads client info from this flag directly.
+                // Literal id/secret in the arg: mcp-remote reads client info from this flag
+                // directly, and env indirection isn't reliably supported for it.
                 args.AddRange(["--static-oauth-client-info", CompactJson(("client_id", o.ClientId), ("client_secret", o.ClientSecret))]);
                 if (o.Scopes.Length > 0)
                 {
@@ -253,7 +269,10 @@ public static class RemotePattern
                 var raw = args[i + 1];
                 int colon = raw.IndexOf(':');
                 // Recognize ONLY this app's own indirection sentinel — `Name:${AUTH_HEADER}`
-                // backed by an AUTH_HEADER env var — and only the first one.
+                // backed by an AUTH_HEADER env var — as the editable auth header, and only
+                // the first one. Every other --header (literal values, other env vars,
+                // additional headers) is preserved verbatim as an extra arg so nothing is
+                // ever lost or collides with our fixed AUTH_HEADER slot on re-encode.
                 if (headerName is null && colon >= 0 && raw[(colon + 1)..] == "${AUTH_HEADER}" && env.TryGetValue("AUTH_HEADER", out var value))
                 {
                     headerName = raw[..colon];

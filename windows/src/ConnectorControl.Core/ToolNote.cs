@@ -1,7 +1,7 @@
 namespace ConnectorControl.Core;
 
 /// <summary>
-/// The editor note and the Settings row text for one tool (spec §3.4, §3.5, strings §5).
+/// The editor note and the Settings row text for one tool.
 /// <c>Text</c> is line 1; line 2 is <c>LinkTitle</c> (a link to <c>LinkUrl</c>), the words
 /// <see cref="OrRun"/>, then <c>InstallCommand</c>. Both platforms carry these strings verbatim.
 /// </summary>
@@ -18,7 +18,7 @@ public sealed record ToolNote(string Text, string LinkTitle, string LinkUrl, str
         $"{ToolInfo.Name(tool)} wasn’t found, so Claude Desktop won’t be able to start this connector.";
 
     /// <summary>
-    /// The row glyph's tooltip in the flyout (addendum 2026-09-06-row-glyph §2). Short on
+    /// The row glyph's tooltip in the flyout. Short on
     /// purpose: it names the launcher and sends the user to the editor, where the full note
     /// and the install line live.
     /// </summary>

@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ConnectorControl.App.Tests;
 
 /// <summary>
-/// Phase 4: the generated app icon (windows/assets/ConnectorControl.ico) is embedded in
+/// The generated app icon (windows/assets/ConnectorControl.ico) is embedded in
 /// ConnectorControl.exe, and the asset itself has the frame set Windows wants.
 /// </summary>
 public class AppIconTests

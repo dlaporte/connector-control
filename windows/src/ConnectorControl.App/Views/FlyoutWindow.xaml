@@ -19,7 +19,7 @@
   </Window.Resources>
   <Border BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
     <StackPanel>
-      <!-- Header (catalog §2.2) -->
+      <!-- Header -->
       <Border Background="{DynamicResource LayerFillColorDefaultBrush}" Padding="12,10">
         <Grid>
           <Grid.ColumnDefinitions>
@@ -40,7 +40,7 @@
       </Border>
       <Separator Margin="0" />
 
-      <!-- Error banner (catalog §2.3) -->
+      <!-- Error banner -->
       <Border x:Name="ErrorBanner" Padding="10" Visibility="{Binding HasError, Converter={StaticResource Vis}}">
         <Grid>
           <Grid.ColumnDefinitions>
@@ -52,7 +52,7 @@
         </Grid>
       </Border>
 
-      <!-- Connector list (catalog §2.4): grows to 420 then scrolls -->
+      <!-- Connector list: grows to 420 then scrolls -->
       <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto">
         <StackPanel>
           <ItemsControl x:Name="RowList" ItemsSource="{Binding Rows}">
@@ -68,8 +68,8 @@
                     </Grid.ColumnDefinitions>
                     <ToggleButton Style="{StaticResource Switch}" IsChecked="{Binding Enabled}" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="10,0" />
-                    <!-- Caution glyph (addendum 2026-09-06-row-glyph, divergence D8): its own Auto
-                         column, so the name column stays a star column and keeps trimming. -->
+                    <!-- Caution glyph: its own Auto column, so the name column stays a star
+                         column and keeps trimming. -->
                     <TextBlock Grid.Column="2" Style="{StaticResource CautionText}"
                                FontFamily="{StaticResource IconFont}"
                                Text="{x:Static state:FlyoutModel.ToolWarningGlyph}"
@@ -87,7 +87,7 @@
         </StackPanel>
       </ScrollViewer>
 
-      <!-- Footer (catalog §2.5) -->
+      <!-- Footer -->
       <StackPanel x:Name="FooterPanel" Visibility="{Binding ShowFooter, Converter={StaticResource Vis}}">
         <Separator Margin="0" />
         <Button HorizontalAlignment="Right" Margin="10" Style="{StaticResource FooterButton}" Click="OnFooter">

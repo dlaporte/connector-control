@@ -24,7 +24,7 @@ public sealed class WpfDialogs : IDialogs
     /// Null means there is nothing of ours on screen: centre and force to front.
     /// Never the flyout: it hides itself on Deactivated, which is exactly what
     /// showing a modal over it does, so Quit / Restart Required / the profile
-    /// prompts would end up owned by a hidden window (spec §7.5 path instead).
+    /// prompts would end up owned by a hidden window instead.
     /// </summary>
     internal Window? ResolveOwner() =>
         owner() ?? Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsVisible && w.IsActive && w is not FlyoutWindow);

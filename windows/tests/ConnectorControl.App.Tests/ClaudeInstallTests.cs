@@ -61,7 +61,7 @@ public class ClaudeInstallTests
             .AddDirectory(Path.Combine(Local, "Packages", "Claude_pzs8sxrjxfjjc"))
             .AddFile(Path.Combine(Local, "AnthropicClaude", "claude.exe"));
         // The CI runner has no Claude package, so WinRT succeeds with no match. A leftover
-        // package folder must not shadow the legacy install (spec §6.1).
+        // package folder must not shadow the legacy install.
         Assert.Equal(ClaudeInstallKind.Legacy, new ClaudeInstall(Folders, probe).Detect().Kind);
     }
 

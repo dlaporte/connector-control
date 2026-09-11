@@ -5,7 +5,7 @@ namespace ConnectorControl.App.Services;
 
 /// <summary>
 /// Reads another process's executable path so Claude Desktop's processes can be
-/// told apart from anything else called <c>claude</c> (spec §6.2).
+/// told apart from anything else called <c>claude</c>.
 /// <c>QueryFullProcessImageName</c> with <c>PROCESS_QUERY_LIMITED_INFORMATION</c>
 /// succeeds for the current user's processes, MSIX-packaged ones included, where
 /// <c>Process.MainModule</c> needs far more access and fails across bitness.

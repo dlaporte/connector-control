@@ -3,7 +3,7 @@ using ConnectorControl.Core.Services;
 namespace ConnectorControl.App.Services;
 
 /// <summary>
-/// Everything AppState (Phase 3) needs from the platform. Disposing it disposes
+/// Everything AppState needs from the platform. Disposing it disposes
 /// the services it owns, which today means the notifier: ToastNotifier holds a
 /// toast-activation subscription. App.OnExit disposes this one object.
 /// </summary>

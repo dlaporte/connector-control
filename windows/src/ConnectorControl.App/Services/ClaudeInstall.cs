@@ -6,7 +6,7 @@ using Windows.Management.Deployment;
 namespace ConnectorControl.App.Services;
 
 /// <summary>
-/// Detects how Claude Desktop is installed (spec §6.1). The WinRT package
+/// Detects how Claude Desktop is installed. The WinRT package
 /// manager is authoritative (it gives the AUMID and the install location); a
 /// scan of %LOCALAPPDATA%\Packages (the folder name IS the package family
 /// name) stands in only when that API throws, never when it simply reports no
@@ -36,7 +36,7 @@ public sealed class ClaudeInstall : IClaudeInstall
         }
         if (!msix.Available && DetectMsixByFolderScan() is { } scanned)
         {
-            return scanned;   // spec §6.1: scan only when the API itself failed
+            return scanned;   // scan only when the API itself failed
         }
         var legacyExe = Path.Combine(folders.LocalAppData, "AnthropicClaude", "claude.exe");
         if (probe.FileExists(legacyExe))
@@ -48,8 +48,8 @@ public sealed class ClaudeInstall : IClaudeInstall
 
     /// <summary>
     /// The outcome of the WinRT package query. <c>Available</c> is false only when
-    /// the API itself failed: spec §6.1 falls back to the folder scan on that alone,
-    /// because a %LOCALAPPDATA%\Packages folder left behind by an uninstalled MSIX
+    /// the API itself failed: only then does <see cref="Detect"/> fall back to the
+    /// folder scan, because a %LOCALAPPDATA%\Packages folder left behind by an uninstalled MSIX
     /// Claude would otherwise shadow a working legacy install with a launch target
     /// nothing can open.
     /// </summary>

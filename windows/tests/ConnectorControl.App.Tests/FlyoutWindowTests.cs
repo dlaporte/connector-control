@@ -83,7 +83,7 @@ public class FlyoutWindowTests
 
             var plain = new FlyoutWindow(model, registry) { TrayAnchor = () => null };
             plain.Show();
-            plain.HandleDeactivated();                       // clicking away dismisses (catalog §2.1)
+            plain.HandleDeactivated();                       // clicking away dismisses
             Assert.False(plain.IsVisible);
 
             var withMenu = new FlyoutWindow(model, registry) { TrayAnchor = () => null };
@@ -101,7 +101,7 @@ public class FlyoutWindowTests
     }
 
     /// <summary>
-    /// Catalog §2.2 puts a check mark on the active profile. The Fluent MenuItem template only
+    /// The profile chip menu puts a check mark on the active profile. The Fluent MenuItem template only
     /// gives an item a check column when it is checkable, so IsChecked alone drew nothing.
     /// </summary>
     [Fact]

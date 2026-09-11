@@ -9,7 +9,7 @@ using ConnectorControl.App.Services;
 
 namespace ConnectorControl.App.Views;
 
-/// <summary>Catalog §4 / spec §7.3: single instance, 480×560, three tabs; autostart re-read whenever the window activates.</summary>
+/// <summary>Single instance, 480×560, three tabs; autostart re-read whenever the window activates.</summary>
 public partial class SettingsWindow : Window
 {
     private readonly AppState state;
@@ -25,7 +25,7 @@ public partial class SettingsWindow : Window
         ClaudeTabItem.Header = TabHeader("", null, SettingsModel.ClaudeTab);
         Activated += (_, _) => Model.Refresh();
         Closed += (_, _) => Model.Dispose();
-        Model.RefreshTools();   // spec §6 D4: probe all four when the window opens
+        Model.RefreshTools();   // probe all four when the window opens
         // The Claude tab's icon needs a package walk plus an icon extraction (ClaudeIconLoader),
         // slow enough that doing it inline used to make opening Settings visibly stall; deferred to
         // Background priority (below layout/render) and run off the UI thread so the window shows
@@ -89,6 +89,8 @@ public partial class SettingsWindow : Window
         }
     }
 
+    // RestoreDialog.Show presents through WpfDialogs.Present, which activates the dialog; that is fine
+    // here because this window is the owner and the dialog is shown modally (ShowDialog).
     private void OnRestore(object sender, RoutedEventArgs e) => RestoreDialog.Show(this, state);
 
     private void OnChooseClaudeConfig(object sender, RoutedEventArgs e)

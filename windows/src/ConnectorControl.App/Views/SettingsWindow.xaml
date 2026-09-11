@@ -17,7 +17,7 @@
     </Style>
   </Window.Resources>
   <TabControl x:Name="Tabs" Margin="8">
-    <!-- General (catalog §4.2) -->
+    <!-- General -->
     <TabItem x:Name="GeneralTabItem">
       <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
         <StackPanel>
@@ -68,7 +68,7 @@
       </ScrollViewer>
     </TabItem>
 
-    <!-- Storage (catalog §4.3) -->
+    <!-- Storage -->
     <TabItem x:Name="StorageTabItem">
       <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
         <StackPanel>
@@ -103,7 +103,7 @@
       </ScrollViewer>
     </TabItem>
 
-    <!-- Claude (catalog §4.4, spec §7.3) -->
+    <!-- Claude -->
     <TabItem x:Name="ClaudeTabItem">
       <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
         <StackPanel>

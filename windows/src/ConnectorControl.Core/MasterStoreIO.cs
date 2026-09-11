@@ -18,7 +18,9 @@ public static class MasterStoreIO
         try
         {
             var store = MasterStore.FromJson(JsonValue.Parse(File.ReadAllBytes(path)));
-            // Self-heal a decoded-but-inconsistent activeProfile: never crash.
+            // Self-heal a decoded-but-inconsistent activeProfile (hand-edited or
+            // corrupted file) — never crash; fall back to an existing profile
+            // (sorted first), or a fresh Default if none remain.
             if (!store.Profiles.ContainsKey(store.ActiveProfile))
             {
                 var fallback = store.Profiles.Keys.Order(StringComparer.Ordinal).FirstOrDefault();
@@ -52,7 +54,12 @@ public static class MasterStoreIO
 
     public static AtomicWriteResult Save(MasterStore store, string path) => AtomicFile.Write(store.ToJson().Serialize(), path);
 
-    /// <summary>Side-effect-free peek: null when missing or undecodable. Never moves a corrupt file.</summary>
+    /// <summary>
+    /// Side-effect-free peek: null when missing or undecodable. Unlike
+    /// <see cref="Load"/>, never moves a corrupt file aside — used by the
+    /// store watcher to classify an on-disk change (own write echo, external
+    /// edit, or a sync tool's mid-write partial) before deciding to adopt it.
+    /// </summary>
     public static MasterStore? Read(string path)
     {
         try

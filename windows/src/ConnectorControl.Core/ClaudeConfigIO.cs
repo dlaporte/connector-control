@@ -45,8 +45,11 @@ public static class ClaudeConfigIO
             return null;
         }
         var data = File.ReadAllBytes(path);
-        // A zero-byte file (crash/truncation artifact) is treated like a missing
-        // file, not malformed JSON: there is nothing in it to preserve.
+        // A zero-byte file (crash/truncation artifact) is deliberately treated
+        // like a missing file, not malformed JSON: there is nothing in it to
+        // preserve, and callers back up before writing. A non-object top
+        // level is the one shape this app can never work with, so that alone
+        // throws (from ParseRoot below).
         if (data.Length == 0)
         {
             return JsonValue.Object();

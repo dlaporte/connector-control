@@ -34,13 +34,13 @@
   </Window.Resources>
 
   <DockPanel Grid.IsSharedSizeScope="True">
-    <!-- View switch (catalog §3.4 item 1) -->
+    <!-- View switch -->
     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10">
       <RadioButton x:Name="FormToggle" Content="Form" GroupName="View" MinWidth="72" IsChecked="{Binding View, Converter={StaticResource EnumToBool}, ConverterParameter=Form}" Style="{DynamicResource DefaultToggleButtonStyle}" />
       <RadioButton x:Name="JsonToggle" Content="JSON" GroupName="View" MinWidth="72" Margin="4,0,0,0" IsChecked="{Binding View, Converter={StaticResource EnumToBool}, ConverterParameter=Json}" Style="{DynamicResource DefaultToggleButtonStyle}" />
     </StackPanel>
 
-    <!-- Bottom bar (catalog §3.4 item 5) -->
+    <!-- Bottom bar -->
     <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
       <Grid Margin="16">
         <Button Content="{x:Static state:EditorModel.RemoveButton}" HorizontalAlignment="Left" Style="{StaticResource DestructiveButton}" Visibility="{Binding CanRemove, Converter={StaticResource Vis}}" Click="OnRemove" />
@@ -51,11 +51,11 @@
       </Grid>
     </Border>
 
-    <!-- Validation error (catalog §3.4 item 3) -->
+    <!-- Validation error -->
     <TextBlock DockPanel.Dock="Bottom" Text="{Binding ValidationError}" Style="{StaticResource ErrorText}" Margin="16,6" Visibility="{Binding HasValidationError, Converter={StaticResource Vis}}" />
 
     <Grid>
-      <!-- Form view (catalog §3.6) -->
+      <!-- Form view -->
       <ScrollViewer x:Name="FormBody" VerticalScrollBarVisibility="Auto" Padding="16,0">
         <ScrollViewer.Style>
           <Style TargetType="ScrollViewer">
@@ -242,7 +242,7 @@
         </StackPanel>
       </ScrollViewer>
 
-      <!-- JSON view (catalog §3.7) -->
+      <!-- JSON view -->
       <Grid x:Name="JsonBody" Margin="16,8,16,0">
         <Grid.Style>
           <Style TargetType="Grid">

@@ -4,7 +4,7 @@ using ConnectorControl.Core.State;
 
 namespace ConnectorControl.App.Views;
 
-/// <summary>Catalog §5: modal, 460 wide, a 180-high list of backups, Cancel / Restore…, confirmation, inline error.</summary>
+/// <summary>Modal, 460 wide, a 180-high list of backups, Cancel / Restore…, confirmation, inline error.</summary>
 public partial class RestoreDialog : DialogWindow
 {
     public RestoreDialog(AppState state)

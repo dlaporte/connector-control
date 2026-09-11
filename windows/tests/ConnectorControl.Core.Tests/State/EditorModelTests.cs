@@ -63,7 +63,7 @@ public class EditorModelTests
     [Fact]
     public void ExistingRemoteWithAuthFlagsOpensInTheLocalForm()
     {
-        // Catalog §3.3: detect() requires exactly two stripped args, so auth flags push the connector into the Local form
+        // detect() requires exactly two stripped args, so auth flags push the connector into the Local form
         // even though decode() populated the auth fields. Reproduced as-is.
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -168,7 +168,7 @@ public class EditorModelTests
         Assert.Empty(h.Dialogs.Confirms);
     }
 
-    /// <summary>Finding 4: Save() with unrecoverable JSON returns false and writes nothing.</summary>
+    /// <summary>Save() with unrecoverable JSON returns false and writes nothing.</summary>
     [Fact]
     public void SaveWithUnrecoverableJsonWritesNothing()
     {
@@ -184,7 +184,7 @@ public class EditorModelTests
         Assert.Empty(h.Dialogs.Informs);
     }
 
-    /// <summary>Finding 2: the reset-to-bridge-invocation branch is new-target-only, so an existing connector's
+    /// <summary>The reset-to-bridge-invocation branch is new-target-only, so an existing connector's
     /// command/args survive a switch to Local.</summary>
     [Fact]
     public void SwitchingAnExistingTargetToLocalDoesNotResetTheBridgeInvocation()
@@ -418,7 +418,7 @@ public class EditorModelTests
         Assert.Equal(RemotePattern.Encode(new RemoteConfig(Url, expected, RemoteLaunchStyle.CmdNpx)), state.Store.Mcps["auth"].Config);
     }
 
-    /// <summary>Finding 3: an out-of-range index (a ComboBox cleared to -1) leaves AuthKind untouched but
+    /// <summary>An out-of-range index (a ComboBox cleared to -1) leaves AuthKind untouched but
     /// still raises PropertyChanged so the control snaps back to the current selection.</summary>
     [Fact]
     public void AuthKindIndexOutOfRangeLeavesAuthKindAndSnapsBack()
@@ -597,7 +597,7 @@ public class EditorModelTests
         editor.Name = "pasted";
         editor.RequestView(EditView.Form);
         Assert.True(editor.IsRemote);            // forcesRemote + isRemoteShaped
-        Assert.Equal("", editor.RemoteUrl);      // catalog §3.5 quirk: adoptForm only takes the URL from detect()
+        Assert.Equal("", editor.RemoteUrl);      // quirk kept intentionally: adoptForm only takes the URL from detect()
         Assert.Equal(RemoteAuthKind.Header, editor.AuthKind);
         Assert.Equal("X-API-Key", editor.HeaderName);
         editor.RemoteUrl = Url;
@@ -700,7 +700,7 @@ public class EditorModelTests
         h.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound;
         using var state = h.Create();
         var warm = state.RefreshToolsAsync();
-        // The task completes once the probe batch is posted, not once it is published (Task 4 review):
+        // The task completes once the probe batch is posted, not once it is published:
         // pump until the cache the editor reads from is actually populated.
         Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.ContainsKey(Tool.Npx), TimeSpan.FromSeconds(5)));
         Assert.True(warm.IsCompleted);

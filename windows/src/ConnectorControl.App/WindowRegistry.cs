@@ -6,7 +6,7 @@ using ConnectorControl.Core.State;
 namespace ConnectorControl.App;
 
 /// <summary>
-/// Catalog §0: one editor window per target id (an existing connector's id is
+/// One editor window per target id (an existing connector's id is
 /// its name; a new one gets a fresh GUID each time), brought forward if
 /// already open; one Settings window.
 /// </summary>

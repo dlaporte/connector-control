@@ -37,9 +37,12 @@ public sealed class BackupManager
     }
 
     /// <summary>
-    /// Returns the existing newest backup instead of writing a duplicate when the
-    /// file's content is unchanged (dedup against the newest snapshot only, so an
-    /// A → B → A sequence still records the return to A). Null when the source is missing.
+    /// Returns the existing newest backup instead of writing a duplicate when
+    /// the file's content is unchanged: regeneration backs up without user
+    /// action, and identical snapshots would only churn real history out of
+    /// the retention window. Dedup is against the newest snapshot only, so an
+    /// A → B → A sequence still records the return to A. Null when the source
+    /// is missing.
     /// </summary>
     public string? BackUp(string path, string series, DateTime? now = null)
     {

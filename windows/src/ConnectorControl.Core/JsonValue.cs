@@ -110,7 +110,7 @@ public sealed class JsonValue : IEquatable<JsonValue>
         _ => throw new InvalidOperationException(),
     };
 
-    // MARK: output (Task 6)
+    // MARK: output
 
     /// <summary>Swift <c>serialized()</c>: Apple JSONEncoder pretty + sorted keys, slashes escaped.</summary>
     public byte[] Serialize() => AppleJsonWriter.WriteUtf8(this, AppleJsonFormat.Encoder);

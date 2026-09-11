@@ -13,7 +13,7 @@ using DrawingPoint = System.Drawing.Point;
 namespace ConnectorControl.App.Views;
 
 /// <summary>
-/// Spec §7.1: the Mac popover as a borderless, topmost, taskbar-less window
+/// The Mac popover as a borderless, topmost, taskbar-less window
 /// sized to content (240–380 wide), rounded on Windows 11, anchored beside the
 /// notification area, closed on deactivate or Escape, reloading on every open.
 /// </summary>
@@ -122,8 +122,8 @@ public partial class FlyoutWindow : Window
     /// Deactivation normally dismisses the flyout — but a WPF ContextMenu lives in its
     /// own top-level window, so opening the profile chip's menu deactivates us, and
     /// hiding here would take the menu's PlacementTarget away with it and leave profiles
-    /// unreachable (catalog §2.2: the chip menu is the only way to switch, create,
-    /// rename or delete a profile). Ignore those; the check is repeated once the menu
+    /// unreachable — the chip menu is the only way to switch, create, rename or delete a
+    /// profile. Ignore those; the check is repeated once the menu
     /// closes. Internal so a test can raise it without a real focus change.
     /// </summary>
     internal void HandleDeactivated()
@@ -182,7 +182,7 @@ public partial class FlyoutWindow : Window
 
     private void OnProfileChip(object sender, RoutedEventArgs e) => OpenProfileMenu();
 
-    /// <summary>Catalog §2.2 profile chip menu: profiles (check on the active), separator, New / Rename / Delete.</summary>
+    /// <summary>The profile chip menu: profiles (check on the active), separator, New / Rename / Delete.</summary>
     internal ContextMenu OpenProfileMenu()
     {
         var menu = new ContextMenu { PlacementTarget = ProfileChip, Placement = PlacementMode.Bottom, StaysOpen = false };

@@ -4,7 +4,7 @@ using System.ComponentModel;
 
 namespace ConnectorControl.Core.State;
 
-/// <summary>Catalog §3 EditSheetView without the pixels: every field, switch rule, validation string, and save/remove flow.</summary>
+/// <summary>The edit-sheet view without the pixels: every field, switch rule, validation string, and save/remove flow.</summary>
 public sealed class EditorModel : ObservableObject, IDisposable
 {
     public const string NotValidJson = "Not valid JSON — check for a stray brace, missing comma, or unquoted value.";
@@ -20,7 +20,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// </summary>
     public const string OAuthSecretCaption = "Passed to mcp-remote on its command line, which other programs running on this PC can read.";
     public const string InvalidUrlError = "Server URL must be a valid http(s) URL.";
-    /// <summary>Security review 2026-09-10: under the cmd /c launcher cmd.exe re-parses every argument.</summary>
+    /// <summary>Under the cmd /c launcher cmd.exe re-parses every argument.</summary>
     public const string CmdUnsafeSuffix = " must not contain & | < > ^ \" or spaces: on Windows the cmd /c launcher hands it to cmd.exe, which treats those as commands.";
     public static string CmdUnsafeError(string field) => field + CmdUnsafeSuffix;
     public const string CmdPercentCaution = "This URL has more than one %, which cmd.exe can expand as a variable. If the connector fails to start, check its JSON view.";
@@ -111,7 +111,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         recoveredJson = PasteRecovery.Recover(jsonText);
         remoteLaunchStyle = newRemoteStyle;
         Load(config);
-        // Spec 2026-09-05-tool-probe §3.4: on open, a cached status shows its note at once; an
+        // On open, a cached status shows its note at once; an
         // unknown one is probed now. Later changes go through EvaluateRequiredTool.
         state.PropertyChanged += OnStateChanged;
         Args.CollectionChanged += OnArgsChanged;
@@ -145,7 +145,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     private void SetView(EditView value)
     {
-        if (Set(ref view, value))
+        if (Set(ref view, value, nameof(View)))
         {
             Raise(nameof(CanSave));
             EvaluateRequiredTool();
@@ -351,12 +351,12 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public bool HasValidationError => validationError is not null;
 
-    /// <summary>Catalog §3.4: Save is disabled with a JSON error, or in the remote form without a valid, cmd-safe URL.</summary>
+    /// <summary>Save is disabled with a JSON error, or in the remote form without a valid, cmd-safe URL.</summary>
     public bool CanSave => !((view == EditView.Json && jsonError is not null) || (view == EditView.Form && isRemote && !(RemoteUrlValid && RemoteUrlCmdSafe)));
 
     public bool CanRemove => !Target.IsNew;
 
-    // MARK: tool note (spec 2026-09-05-tool-probe §3.3–§3.4)
+    // MARK: tool note
 
     /// <summary>
     /// The launcher this connector needs: npx in the remote form, the Command field (through one
@@ -420,7 +420,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         Args.CollectionChanged -= OnArgsChanged;
     }
 
-    // MARK: list editing (catalog §3.6)
+    // MARK: list editing
 
     public void AddArg() => Args.Add(new ArgRow(""));
 
@@ -443,7 +443,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public void ToggleReveal(EnvRow row) => row.Revealed = !row.Revealed;
 
-    // MARK: view switching (catalog §3.5)
+    // MARK: view switching
 
     public void RequestView(EditView requested)
     {
@@ -606,7 +606,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     private static IEnumerable<EnvRow> EnvRowsFrom(IReadOnlyDictionary<string, string> env) =>
         env.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => new EnvRow(kv.Key, kv.Value));
 
-    // MARK: JSON (catalog §3.7)
+    // MARK: JSON
 
     private void ValidateJson() => JsonError = recoveredJson is null ? NotValidJson : null;
 
@@ -628,7 +628,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         return recovered.Config;
     }
 
-    // MARK: form → config (catalog §3.5 currentFormConfig)
+    // MARK: form → config
 
     private RemoteAuth CurrentRemoteAuth() => authKind switch
     {
@@ -707,7 +707,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         return null;
     }
 
-    // MARK: save / remove / cancel (catalog §3.8–§3.10)
+    // MARK: save / remove / cancel
 
     /// <summary>True when the entry was saved and the window should close.</summary>
     public bool Save()

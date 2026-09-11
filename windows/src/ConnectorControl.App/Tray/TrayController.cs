@@ -9,7 +9,7 @@ using Microsoft.Win32;
 namespace ConnectorControl.App.Tray;
 
 /// <summary>
-/// Spec §7.1: the tray icon (powerplug, or the warning triangle while an apply
+/// The tray icon (powerplug, or the warning triangle while an apply
 /// awaits retry; black on a light taskbar, white on a dark one, re-rendered on
 /// theme change), left-click toggles the flyout, right-click shows Open /
 /// Settings… / Quit Connector Control.
@@ -29,7 +29,7 @@ public sealed class TrayController : IDisposable
         this.state = state;
         icon.ToolTipText = ToolTip;
         icon.NoLeftClickDelay = true;
-        icon.ContextMenu = BuildMenu(flyout.ShowFlyout, windows.OpenSettings, state.QuitApp);   // Open goes through ShowFlyout, so it anchors on the tray like a left-click (spec §7.1)
+        icon.ContextMenu = BuildMenu(flyout.ShowFlyout, windows.OpenSettings, state.QuitApp);   // Open goes through ShowFlyout, so it anchors on the tray like a left-click
         icon.TrayLeftMouseUp += (_, _) => flyout.Toggle();
         RefreshTheme();
         icon.ForceCreate(false);
@@ -37,7 +37,7 @@ public sealed class TrayController : IDisposable
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
 
-    /// <summary>Spec §7.1 right-click menu.</summary>
+    /// <summary>The right-click menu.</summary>
     internal static ContextMenu BuildMenu(Action open, Action settings, Action quit)
     {
         var menu = new ContextMenu();
@@ -80,7 +80,7 @@ public sealed class TrayController : IDisposable
     {
         currentLight = TaskbarTheme.IsLight();
         // The pixel size is part of the key: a display-scaling change must re-render, or the
-        // shell keeps upscaling a stale 16 px bitmap (Task 13 review).
+        // shell keeps upscaling a stale 16 px bitmap.
         currentSize = TrayIconRenderer.SystemIconPixelSize();
         currentGlyph = null;   // force the render below even if the glyph itself didn't change
         Render(GlyphFor(state));

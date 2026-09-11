@@ -10,7 +10,7 @@ using ConnectorControl.Core.Services;
 namespace ConnectorControl.App.Views;
 
 /// <summary>
-/// Spec §7.3: the Claude tab icon is Claude's own icon, extracted from the
+/// The Claude tab icon is Claude's own icon, extracted from the
 /// resolved exe and desaturated (the Mac uses the template tray glyph). Best
 /// effort — null means "use the generic glyph".
 /// </summary>

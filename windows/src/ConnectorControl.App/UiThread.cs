@@ -12,7 +12,7 @@ public static class UiThread
     /// <summary>
     /// POSTS to the UI thread; never blocks. FileWatcher marshals from a timer thread and
     /// the toast notifier from a COM MTA thread, so a Dispatcher.Invoke here would deadlock
-    /// the moment either side ever waits on the other (Phase 2 review). Already on the UI
+    /// the moment either side ever waits on the other. Already on the UI
     /// thread, the action runs inline so state changes keep their obvious ordering.
     /// </summary>
     public static void Marshal(Action action)

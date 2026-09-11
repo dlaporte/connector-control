@@ -7,7 +7,7 @@ using Velopack.Sources;
 namespace ConnectorControl.App.Services;
 
 /// <summary>
-/// Sparkle's role (spec §6.7) on top of Velopack: GitHub Releases feed,
+/// Sparkle's role on Windows, on top of Velopack: GitHub Releases feed,
 /// prereleases followed only by a prerelease install. Inert when the process
 /// is not a Velopack install (bare `dotnet run`, tests).
 /// </summary>
@@ -81,7 +81,7 @@ public sealed class VelopackUpdater : IUpdater
         this.verifyInstalled = verifyInstalled ?? UpdateVerifier.VerifyInstalledUpdater;
     }
 
-    /// <summary>Spec §6.7: true for a preview install (prerelease version), so update checks include prereleases.</summary>
+    /// <summary>True for a preview install (prerelease version), so update checks include prereleases.</summary>
     public bool FollowsPrereleases { get; }
 
     /// <summary>Velopack's process-start hook (install/update/uninstall callbacks). Call before anything else at startup.</summary>

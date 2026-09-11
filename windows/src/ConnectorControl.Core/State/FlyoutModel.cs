@@ -4,7 +4,7 @@ using ConnectorControl.Core.Services;
 
 namespace ConnectorControl.Core.State;
 
-/// <summary>Catalog §2 PopoverView, minus pixels: header, error banner, rows, footer, and every action it wires.</summary>
+/// <summary>The popover view, minus pixels: header, error banner, rows, footer, and every action it wires.</summary>
 public sealed class FlyoutModel : ObservableObject, IDisposable
 {
     public const string Title = Product.Name;
@@ -93,8 +93,8 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// The tools the listed connectors need that are not cached yet (addendum
-    /// 2026-09-06-row-glyph §3). Nothing required, or everything cached, spawns no process;
+    /// The tools the listed connectors need that are not cached yet.
+    /// Nothing required, or everything cached, spawns no process;
     /// AppState coalesces a tool already in flight.
     /// </summary>
     private void ProbeRowTools()
@@ -110,7 +110,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     /// <summary>
     /// One row's caution-glyph tooltip, by the rule the editor and Settings also use: the
-    /// entry's required tool, then that tool's cached status (addendum §2).
+    /// entry's required tool, then that tool's cached status.
     /// </summary>
     private string? WarningFor(McpEntry entry)
     {
@@ -145,7 +145,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>The pencil button opens the editor only if the entry still exists in the store (catalog §2.4).</summary>
+    /// <summary>The pencil button opens the editor only if the entry still exists in the store.</summary>
     public McpEntry? EntryFor(string name) => state.Store.Mcps.TryGetValue(name, out var entry) ? entry : null;
 
     private void OnStateChanged(object? sender, PropertyChangedEventArgs e)

@@ -36,7 +36,7 @@
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
-  <!-- The tool note's first line (spec 2026-09-05-tool-probe §3.4): a warning, not an error. -->
+  <!-- The tool note's first line: a warning, not an error. -->
   <Style x:Key="CautionText" TargetType="TextBlock">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
@@ -147,7 +147,7 @@
   </Style>
 
   <!--
-    K-5: replaces Placeholder.cs's attached property + PlaceholderAdorner's AdornerLayer overlay
+    Replaces Placeholder.cs's attached property + PlaceholderAdorner's AdornerLayer overlay
     with a Tag-bound watermark baked into the template. The chrome (background, border, corner
     radius, hover/focus/disabled states) mirrors the Fluent theme's own TextBoxBase template —
     same DynamicResource keys, from the .NET 10 WPF source — so a watermarked box looks like every
@@ -188,6 +188,7 @@
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource TextControlBackgroundDisabled}" />
               <Setter TargetName="ContentBorder" Property="BorderBrush" Value="{DynamicResource TextControlBorderBrushDisabled}" />
+              <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>

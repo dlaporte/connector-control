@@ -84,7 +84,7 @@ public class EditorWindowTests
     }
 
     /// <summary>
-    /// The C1 regression, end to end: Add Connector ▸ Bearer token ▸ type a token used to leave
+    /// End to end: Add Connector ▸ Bearer token ▸ type a token used to leave
     /// EditorModel.BearerToken empty, so Save answered "Enter a bearer token." and the app's
     /// headline feature was unusable on a first run.
     /// </summary>
@@ -118,7 +118,7 @@ public class EditorWindowTests
     }
 
     /// <summary>
-    /// M16, the same bridge from a DataTemplate: a masked env value that is empty on disk. The
+    /// The same bridge from a DataTemplate: a masked env value that is empty on disk. The
     /// template-created PasswordBox has no local value for the attached property, so the bridge
     /// recognises it by the property having a value at all, whatever its precedence.
     /// </summary>

@@ -9,12 +9,12 @@ using ConnectorControl.Core.State;
 namespace ConnectorControl.App.Views;
 
 /// <summary>
-/// Catalog §3 / spec §7.2: min 540×620, one window per target id (WindowRegistry
+/// Min 540×620, one window per target id (WindowRegistry
 /// enforces that), Enter saves, Escape cancels, dialogs owned by this window.
 /// </summary>
 public partial class EditorWindow : Window
 {
-    /// <summary>Spec §5.5: new remote connectors on Windows use the cmd /c npx bridge shape.</summary>
+    /// <summary>New remote connectors on Windows use the cmd /c npx bridge shape.</summary>
     public const RemoteLaunchStyle NewRemoteStyle = RemoteLaunchStyle.CmdNpx;
 
     public EditorWindow(AppState state, EditTarget target)
@@ -74,7 +74,7 @@ public partial class EditorWindow : Window
         }
     }
 
-    /// <summary>Catalog §3.6: a fresh ＋ row focuses its name field on the next turn.</summary>
+    /// <summary>A fresh ＋ row focuses its name field on the next turn.</summary>
     private void FocusEnvRow(EnvRow row)
     {
         EnvList.UpdateLayout();

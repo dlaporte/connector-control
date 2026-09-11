@@ -5,7 +5,7 @@ using Microsoft.Win32;
 namespace ConnectorControl.App.Services;
 
 /// <summary>
-/// SMAppService's role (spec §6.6): a value under HKCU\...\Run pointing at
+/// SMAppService's role on Windows: a value under HKCU\...\Run pointing at
 /// this executable. Velopack's launcher path is stable across updates.
 /// Windows keeps a second, authoritative opinion under StartupApproved\Run:
 /// disabling an entry in Settings ▸ Apps ▸ Startup or Task Manager ▸ Startup

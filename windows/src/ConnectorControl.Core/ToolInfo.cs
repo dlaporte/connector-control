@@ -1,6 +1,6 @@
 namespace ConnectorControl.Core;
 
-/// <summary>Names, families, and the per-family install link and command (spec §3.1, §5).</summary>
+/// <summary>Names, families, and the per-family install link and command.</summary>
 public static class ToolInfo
 {
     public static readonly IReadOnlyList<Tool> All = [Tool.Npx, Tool.Node, Tool.Uvx, Tool.Uv];
@@ -35,7 +35,7 @@ public static class ToolInfo
     public static string LinkUrl(ToolFamily family) =>
         family == ToolFamily.NodeJs ? "https://nodejs.org/en/download" : "https://docs.astral.sh/uv/getting-started/installation/";
 
-    /// <summary>The Windows install command (the Mac shows Homebrew's — spec §6 D3).</summary>
+    /// <summary>Winget installs into the user PATH, which is what makes the note go away.</summary>
     public static string InstallCommand(ToolFamily family) =>
         family == ToolFamily.NodeJs ? "winget install OpenJS.NodeJS.LTS" : "winget install astral-sh.uv";
 }

@@ -149,7 +149,7 @@ public class ClaudeProcessTests
     // the family name is <Name>_<PublisherId>. Msix cases below all use the family
     // "Claude_pzs8sxrjxfjjc" against install directory
     // C:\Program Files\WindowsApps\Claude_1.37937.0.0_x64__pzs8sxrjxfjjc (an older,
-    // cached version) to prove the match survives Claude's own update (review R1).
+    // cached version) to prove the match survives Claude's own update.
     [Theory]
     [InlineData(
         ClaudeInstallKind.Msix,
