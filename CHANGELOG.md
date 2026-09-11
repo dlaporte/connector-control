@@ -9,6 +9,11 @@ by -preview.N, and the preview build fails if that version has already
 been released), so open the next version's section as soon as the previous
 one ships.
 
+## v1.3.3
+
+- Windows: the tray icon is now the same plug as the Mac's menu bar icon,
+  prongs to the right and cable to the left; it used to stand upright.
+
 ## v1.3.2
 
 Hardening from a security review of the app and its release pipeline.

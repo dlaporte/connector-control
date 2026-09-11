@@ -11,8 +11,12 @@ namespace ConnectorControl.App.Tray;
 /// </summary>
 public static class TrayIconRenderer
 {
-    /// <summary>A plug seen from the front (two prongs up, body, cable stub) in a 24×24 box.</summary>
-    public const string PlugPathData = "F1 M7,1 h2 v6 h-2 z M15,1 h2 v6 h-2 z M4,7 h16 v5 a5,5 0 0 1 -5,5 h-6 a5,5 0 0 1 -5,-5 z M10.5,17 h3 v6 h-3 z";
+    /// <summary>
+    /// A plug seen from the side — prongs pointing right, body, cable stub to the left — in a
+    /// 24×24 box: the same orientation as the Mac's SF Symbol <c>powerplug.fill</c>, so the two
+    /// apps read as one product in a screenshot side by side.
+    /// </summary>
+    public const string PlugPathData = "F1 M17,7 h6 v2 h-6 z M17,15 h6 v2 h-6 z M17,4 v16 h-5 a5,5 0 0 1 -5,-5 v-6 a5,5 0 0 1 5,-5 z M1,10.5 h6 v3 h-6 z";
 
     /// <summary>A filled triangle with an even-odd exclamation cut-out, 24×24 box.</summary>
     public const string WarningPathData = "F0 M12,2 L22.5,21 H1.5 Z M10.9,8 h2.2 v6.5 h-2.2 z M10.9,16.2 h2.2 v2.3 h-2.2 z";
