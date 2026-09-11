@@ -57,4 +57,5 @@ jobs:
         shell: pwsh
         run: |
           Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
-          Invoke-ScriptAnalyzer -Path windows/scripts,windows/tools -Recurse -Severity Error -EnableExit
+          # -Path takes one string; analyze the two folders in turn (-EnableExit fails the step on a finding).
+          foreach ($folder in 'windows/scripts', 'windows/tools') { Invoke-ScriptAnalyzer -Path $folder -Recurse -Severity Error -EnableExit }
