@@ -45,7 +45,7 @@ jobs:
           xcodebuild -version
           swift --version
 
-      # test-mac.sh fails on any failure and on any skip other than the deliberate one.
+      # test-mac.sh fails if any test skips or fails.
       - name: Test
         run: ./scripts/test-mac.sh
 

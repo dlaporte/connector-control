@@ -6,7 +6,7 @@
 # let it fail the run, and callers that do (e.g. a preview cut before the section exists) pass
 # --quiet to suppress the ::error:: annotation.
 #
-#   changelog-section.sh [-q|--quiet] <vX.Y.Z> [CHANGELOG.md]
+#   changelog-section.sh [-q|--quiet] <vX.Y.Z>
 set -euo pipefail
 
 QUIET=false
@@ -15,8 +15,8 @@ if [ "${1:-}" = "-q" ] || [ "${1:-}" = "--quiet" ]; then
   shift
 fi
 
-VER=${1:?usage: changelog-section.sh [-q|--quiet] <vX.Y.Z> [CHANGELOG.md]}
-FILE=${2:-CHANGELOG.md}
+VER=${1:?usage: changelog-section.sh [-q|--quiet] <vX.Y.Z>}
+FILE=CHANGELOG.md
 if [ ! -f "$FILE" ]; then
   $QUIET || echo "::error::$FILE not found" >&2
   exit 1

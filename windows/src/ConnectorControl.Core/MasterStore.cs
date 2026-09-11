@@ -21,8 +21,8 @@ public sealed class MasterStore : IEquatable<MasterStore>
         Version = version;
         Profiles = new Dictionary<string, Profile>(profiles, StringComparer.Ordinal);
         // The Mcps getter must never create a profile as a side effect, so this constructor is
-        // the one place that guarantees Profiles[ActiveProfile] exists — the same fallback
-        // MasterStoreIO.Load applies when a decoded file names a profile it doesn't have.
+        // the one place that guarantees Profiles[ActiveProfile] exists — including a decoded
+        // file that names a profile it doesn't have (MasterStoreIO.Load relies on this).
         if (Profiles.ContainsKey(activeProfile))
         {
             ActiveProfile = activeProfile;

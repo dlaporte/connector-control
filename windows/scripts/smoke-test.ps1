@@ -17,7 +17,7 @@
          current\ConnectorControl.exe being the stable path it records: asserted here.
       2. LAUNCH assertions. This starts current\ConnectorControl.exe against a throwaway Claude
          config and master-list folder (CONNECTOR_CONTROL_CLAUDE_CONFIG / CONNECTOR_CONTROL_STORE_DIR
-         — the same env overrides AppPathsResolver honours), polls up to -Seconds for the first-run
+         — the same env overrides AppPaths honours), polls up to -Seconds for the first-run
          import to write <store>\mcps.json, and asserts exactly four things:
            a. the process is still alive;
            b. no crash.log under %LOCALAPPDATA%\Connector Control;

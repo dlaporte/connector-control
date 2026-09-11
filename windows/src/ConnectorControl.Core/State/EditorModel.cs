@@ -529,35 +529,50 @@ public sealed class EditorModel : ObservableObject, IDisposable
     private void Load(JsonValue config)
     {
         suppressToolEvaluation = true;
-        var model = FormMapper.Analyze(config).Model;
-        Command = model.Command;
-        Args.Clear();
-        foreach (var arg in model.Args)
+        try
         {
-            Args.Add(new ArgRow(arg));
+            var model = FormMapper.Analyze(config).Model;
+            Command = model.Command;
+            Args.Clear();
+            foreach (var arg in model.Args)
+            {
+                Args.Add(new ArgRow(arg));
+            }
+            EnvRows.Clear();
+            foreach (var row in EnvRowsFrom(model.Env))
+            {
+                EnvRows.Add(row);   // all values re-masked
+            }
+            additional = model.Additional;
+            var detected = RemotePattern.Detect(config);
+            // The backing field, not the IsRemote setter — that setter also discards the remote
+            // template's bridge invocation when switching to local, which would clobber the
+            // Command/Args just loaded above from config. See EditorModel.swift's isRemoteChanged.
+            isRemote = detected is not null || (Target.ForcesRemote && RemotePattern.IsRemoteShaped(config));
+            // Quirk kept intentionally: RemoteUrl comes ONLY from Detect()'s canonical 2-arg shape,
+            // even when IsRemote is true via the ForcesRemote/IsRemoteShaped fallback above — Decode()
+            // may have found a real URL past extra flags, but the Server URL field stays blank until
+            // the user (re)types it.
+            remoteUrl = detected ?? "";
+            if (RemotePattern.Decode(config) is { } remote)
+            {
+                ApplyRemoteFields(remote);
+            }
+            else
+            {
+                ResetRemoteFields();
+            }
         }
-        EnvRows.Clear();
-        foreach (var row in EnvRowsFrom(model.Env))
+        finally
         {
-            EnvRows.Add(row);   // all values re-masked
+            suppressToolEvaluation = false;
         }
-        additional = model.Additional;
-        var detected = RemotePattern.Detect(config);
-        IsRemote = detected is not null || (Target.ForcesRemote && RemotePattern.IsRemoteShaped(config));
-        // Quirk kept intentionally: RemoteUrl comes ONLY from Detect()'s canonical 2-arg shape,
-        // even when IsRemote is true via the ForcesRemote/IsRemoteShaped fallback above — Decode()
-        // may have found a real URL past extra flags, but the Server URL field stays blank until
-        // the user (re)types it.
-        remoteUrl = detected ?? "";
-        if (RemotePattern.Decode(config) is { } remote)
-        {
-            ApplyRemoteFields(remote);
-        }
-        else
-        {
-            ResetRemoteFields();
-        }
-        suppressToolEvaluation = false;
+        // isRemote was set via the backing field above, so raise its dependents here —
+        // AdoptForm's RaiseAll after this call covers the rest, but the constructor's call
+        // to Load needs these raised too (harmless pre-construction no-op there).
+        Raise(nameof(IsRemote));
+        Raise(nameof(IsLocal));
+        Raise(nameof(CanSave));
     }
 
     /// <summary>

@@ -32,13 +32,6 @@
     Azure Artifact Signing metadata.json ({Endpoint, CodeSigningAccountName, CertificateProfileName}).
     Windows only. Needs AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET in the environment.
     Omit for an unsigned build (vpk then warns "No signing parameters provided").
-.PARAMETER Vpk
-    How to invoke vpk, split on the first space: the default 'dotnet vpk' runs the local tool
-    windows/.config/dotnet-tools.json pins (restored by `dotnet tool restore` in windows/) as
-    "dotnet" plus a leading "vpk" argument; a bare 'vpk' (a global install) still works unsplit.
-.PARAMETER CrossCompile
-    Prefix vpk with the [win] directive: required when packing on macOS/Linux; signing is
-    unavailable there.
 
 .EXAMPLE
     ./windows/scripts/package.ps1 -Version 1.3.0-preview.1 -Runtime win-x64 -ReleaseNotes notes.md
@@ -54,10 +47,13 @@ param(
     [string] $Runtime,
 
     [string] $ReleaseNotes,
-    [string] $AzureTrustedSignFile,
-    [string] $Vpk = 'dotnet vpk',
-    [switch] $CrossCompile
+    [string] $AzureTrustedSignFile
 )
+
+# How to invoke vpk, split on the first space: 'dotnet vpk' runs the local tool
+# windows/.config/dotnet-tools.json pins (restored by `dotnet tool restore` in windows/) as
+# "dotnet" plus a leading "vpk" argument. No caller needs a different invocation.
+$vpkCommand = 'dotnet vpk'
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -82,8 +78,8 @@ function Invoke-Native {
 if (-not (Test-Path $icon)) { throw "Missing $icon — run: swift scripts/generate-icon.swift windows/assets/ConnectorControl.ico (on the Mac)" }
 
 # 'dotnet vpk' splits into the exe to run and a leading argument in front of every other vpk
-# argument below; a bare global install ('vpk') has nothing to prefix.
-$vpkParts = $Vpk.Split([char[]]' ', 2)
+# argument below.
+$vpkParts = $vpkCommand.Split([char[]]' ', 2)
 $vpkExe = $vpkParts[0]
 # Typed: PowerShell unrolls a one-element array returned from an if-expression into a plain
 # string, and a string plus an array is string concatenation, not an argument list.
@@ -98,7 +94,6 @@ if (-not (Test-Path $mainExe)) { throw "publish produced no $mainExe" }
 
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 $vpkGlobal = @('--skip-updates', '--yes')        # no vpk self-update check (it stalled a Mac run for 5 min); no prompts
-if ($CrossCompile) { $vpkGlobal = @('[win]') + $vpkGlobal }
 
 Write-Host "== vpk pack $Runtime"
 $packArgs = $vpkGlobal + @(

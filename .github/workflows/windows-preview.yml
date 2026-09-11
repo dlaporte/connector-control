@@ -215,8 +215,7 @@ jobs:
             --notes notes/notes.md --target "$GITHUB_SHA"
 
       # gh, not vpk, uploads everything, a re-run skips a RID whose assets are all published
-      # (and refuses to complete a half-published one), and the pack-time releases.<rid>.json
-      # is filtered to this build's own packages first — all of it, with the reasons, in the
+      # (and refuses to complete a half-published one) — all of it, with the reasons, in the
       # script release.yml calls too.
       - name: Upload Velopack assets
         run: ./scripts/release/upload-release-assets.sh "$TAG" "$VERSION" artifacts

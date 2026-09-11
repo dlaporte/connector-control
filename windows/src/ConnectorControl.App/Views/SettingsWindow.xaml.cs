@@ -32,8 +32,16 @@ public partial class SettingsWindow : Window
         // and its text is usable immediately, with the icon popping in a moment later.
         Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(async () =>
         {
-            var icon = await Task.Run(() => ClaudeIconLoader.Load(services.ClaudeInstall.Detect()));
-            ClaudeTabItem.Header = TabHeader("", icon, SettingsModel.ClaudeTab);
+            try
+            {
+                var icon = await Task.Run(() => ClaudeIconLoader.Load(services.ClaudeInstall.Detect()));
+                ClaudeTabItem.Header = TabHeader("", icon, SettingsModel.ClaudeTab);
+            }
+            catch (Exception)
+            {
+                // async void: an unhandled exception here would crash the app. Leave the plain-text
+                // glyph header already in place rather than rethrow for a popped-in icon that failed.
+            }
         }));
     }
 

@@ -362,4 +362,38 @@ public class StringCatalogTests
         winKeys.Sort(StringComparer.Ordinal);
         Assert.Equal(winKeys, actualKeys);
     }
+
+    /// <summary>
+    /// The comparison above only ever looks at keys WinValue resolves — a fixture entry resolving
+    /// on neither platform (both "mac" and "win" omitted, or an unrecognized value shape) is
+    /// silently skipped here AND by the Swift mirror's equivalent loop, so such a mistake would be
+    /// asserted nowhere. This pins the fixture-wide invariant directly: every root key must
+    /// resolve on at least one platform.
+    /// </summary>
+    [Fact]
+    public void EveryKeyResolvesOnAtLeastOnePlatform()
+    {
+        var json = File.ReadAllText(Fixtures.Path("strings.json"));
+        var root = JsonNode.Parse(json)!.AsObject();
+
+        foreach (var (key, node) in root)
+        {
+            bool resolves;
+            if (node is JsonTextValue leaf && leaf.TryGetValue(out string? _))
+            {
+                resolves = true;   // a bare literal, shared verbatim by both platforms
+            }
+            else if (node is JsonObject obj)
+            {
+                resolves = (obj.TryGetPropertyValue("format", out var format) && format is JsonTextValue formatLeaf && formatLeaf.TryGetValue(out string? _))
+                    || (obj.TryGetPropertyValue("mac", out var mac) && mac is not null)
+                    || (obj.TryGetPropertyValue("win", out var win) && win is not null);
+            }
+            else
+            {
+                resolves = false;
+            }
+            Assert.True(resolves, $"{key} resolves on neither platform");
+        }
+    }
 }

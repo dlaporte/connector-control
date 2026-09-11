@@ -106,6 +106,17 @@ public class MasterStoreTests : IDisposable
     }
 
     [Fact]
+    public void LoadWithUnknownActiveProfileFallsBackToExistingProfile()
+    {
+        File.WriteAllText(Url, """
+            {"version":2,"activeProfile":"Ghost","profiles":{"Alpha":{"mcps":{}},"Beta":{"mcps":{}}}}
+            """);
+        var (store, corrupt) = MasterStoreIO.Load(Url);
+        Assert.Null(corrupt);
+        Assert.Equal("Alpha", store.ActiveProfile);   // sorted-first existing profile
+    }
+
+    [Fact]
     public void SavedFileUsesAppleEncoderFormat()
     {
         var store = MasterStore.Empty();

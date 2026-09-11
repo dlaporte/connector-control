@@ -17,23 +17,11 @@ public static class MasterStoreIO
         }
         try
         {
+            // A decoded-but-inconsistent activeProfile (hand-edited or corrupted
+            // file) is self-healed by the MasterStore constructor itself — see
+            // its comment — so FromJson always returns a store whose
+            // ActiveProfile names an existing profile.
             var store = MasterStore.FromJson(JsonValue.Parse(File.ReadAllBytes(path)));
-            // Self-heal a decoded-but-inconsistent activeProfile (hand-edited or
-            // corrupted file) — never crash; fall back to an existing profile
-            // (sorted first), or a fresh Default if none remain.
-            if (!store.Profiles.ContainsKey(store.ActiveProfile))
-            {
-                var fallback = store.Profiles.Keys.Order(StringComparer.Ordinal).FirstOrDefault();
-                if (fallback is not null)
-                {
-                    store.ActiveProfile = fallback;
-                }
-                else
-                {
-                    store.Profiles["Default"] = new Profile();
-                    store.ActiveProfile = "Default";
-                }
-            }
             return (store, null);
         }
         catch (Exception ex) when (ex is JsonException or FormatException or IOException or UnauthorizedAccessException)

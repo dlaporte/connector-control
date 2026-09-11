@@ -56,8 +56,12 @@ public sealed class UpdateCoordinator : IDisposable
     /// <summary>The version whose package failed verification and was announced, so the daily check does not toast it again.</summary>
     public string? RefusedVersion { get; private set; }
 
-    /// <summary>The version the user declined via a non-interactive offer, so the background check does not re-offer it; Settings ▸ Check for Updates… always offers regardless.</summary>
-    public string? DeclinedVersion { get; private set; }
+    /// <summary>
+    /// The version the user declined via a non-interactive offer, so the background check does not
+    /// re-offer it; Settings ▸ Check for Updates… always offers regardless. Backed by
+    /// <see cref="ISettings.DeclinedUpdateVersion"/> so a decline survives a relaunch.
+    /// </summary>
+    public string? DeclinedVersion => settings.DeclinedUpdateVersion;
 
     public void Start()
     {
@@ -241,7 +245,7 @@ public sealed class UpdateCoordinator : IDisposable
             {
                 await host.MarshalAsync(() =>
                 {
-                    DeclinedVersion = update.Version;
+                    settings.DeclinedUpdateVersion = update.Version;
                     return true;
                 }).ConfigureAwait(false);
             }

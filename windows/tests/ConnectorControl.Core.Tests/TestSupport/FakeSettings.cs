@@ -15,6 +15,7 @@ public sealed class FakeSettings : ISettings
     public int SweepVersion { get; set; }
     public bool AutoUpdate { get; set; }
     public bool TrayTipShown { get; set; }
+    public string? DeclinedUpdateVersion { get; set; }
     /// <summary>Settable so a test can simulate a failed settings save (FlyoutModel.ErrorMessage's last-resort banner).</summary>
     public string? LastSaveError { get; set; }
 }

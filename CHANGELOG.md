@@ -47,6 +47,10 @@ section is about to ship.
   upgraded install runs it once more.
 - The tray icon is now the same plug as the Mac's menu bar icon, prongs to the right
   and cable to the left; it used to stand upright.
+- A JSON object with a duplicate key now keeps the first value, matching the Mac; it
+  used to keep the last.
+- A declined update is no longer offered again by the background check; a manual
+  check still offers it.
 
 ### Both platforms
 
@@ -54,6 +58,7 @@ section is about to ship.
   the next rotation.
 - The messages for a Claude app that is not found, or not signed by Anthropic, end
   with the same sentence on both platforms.
+- The error for an unparseable backup names the parser's complaint.
 
 ### Release pipeline
 
@@ -62,8 +67,9 @@ section is about to ship.
 - The smoke test asks the installed app to verify its own package with the code the
   updater runs, instead of re-implementing the publisher policy in PowerShell.
 - The release and preview workflows share one secrets gate and one set of publish
-  scripts; a new lint workflow checks every workflow and script on push; the Mac CI
-  build also produces the DMG. vpk is pinned in a tool manifest that Dependabot tracks.
+  scripts; a new lint workflow checks every workflow and the scripts they call on push;
+  the Mac CI build also produces the DMG. vpk is pinned in a tool manifest that
+  Dependabot tracks.
 
 ## v1.3.2
 

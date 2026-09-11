@@ -27,6 +27,7 @@ public class SettingsStoreTests : IDisposable
         Assert.Equal(0, s.SweepVersion);
         Assert.False(s.AutoUpdate);
         Assert.False(s.TrayTipShown);
+        Assert.Null(s.DeclinedUpdateVersion);
         Assert.False(File.Exists(Path));   // reading never creates the file
     }
 
@@ -49,6 +50,7 @@ public class SettingsStoreTests : IDisposable
         s.SweepVersion = 1;
         s.AutoUpdate = true;
         s.TrayTipShown = true;
+        s.DeclinedUpdateVersion = "1.4.0";
         Assert.True(File.Exists(Path));
 
         var again = new SettingsStore(Path);
@@ -64,6 +66,7 @@ public class SettingsStoreTests : IDisposable
         Assert.Equal(1, again.SweepVersion);
         Assert.True(again.AutoUpdate);
         Assert.True(again.TrayTipShown);
+        Assert.Equal("1.4.0", again.DeclinedUpdateVersion);
     }
 
     /// <summary>Pins the on-disk key set so a renamed or forgotten property is caught here
@@ -83,13 +86,14 @@ public class SettingsStoreTests : IDisposable
         s.SweepVersion = 1;
         s.AutoUpdate = true;
         s.TrayTipShown = true;
+        s.DeclinedUpdateVersion = "1.4.0";
 
         var root = JsonValue.Parse(File.ReadAllBytes(Path));
         Assert.Equal(
             [
                 "autoUpdate", "backupKeepCount", "claudeConfigPath", "claudeLaunchTarget",
-                "confirmBeforeQuit", "confirmBeforeRestart", "lastApplyDate", "masterStoreDir",
-                "notifyExternalChanges", "sweepVersion", "trayTipShown",
+                "confirmBeforeQuit", "confirmBeforeRestart", "declinedUpdateVersion", "lastApplyDate",
+                "masterStoreDir", "notifyExternalChanges", "sweepVersion", "trayTipShown",
             ],
             root.ObjectProperties.Keys.ToArray());
     }

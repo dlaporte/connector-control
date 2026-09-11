@@ -321,4 +321,29 @@ final class StringCatalogTests: XCTestCase {
         // in the fixture, or vice versa — fails here on whichever side lacks it.
         XCTAssertEqual(Set(actual.keys), macKeys)
     }
+
+    /// The comparison above only ever looks at keys `macValue` resolves — a fixture entry
+    /// resolving on neither platform (both `mac` and `win` omitted, or an unrecognized value
+    /// shape) is silently skipped here AND by the C# mirror's equivalent loop, so such a mistake
+    /// would be asserted nowhere. This pins the fixture-wide invariant directly: every root key
+    /// must resolve on at least one platform.
+    func testEveryKeyResolvesOnAtLeastOnePlatform() throws {
+        let fixture = try Self.loadFixture()
+        for (key, entry) in fixture {
+            let resolves: Bool
+            switch entry {
+            case .string:
+                resolves = true   // a bare literal, shared verbatim by both platforms
+            case .object(let obj):
+                if case .string? = obj["format"] {
+                    resolves = true   // a shared template, shared verbatim by both platforms
+                } else {
+                    resolves = obj["mac"] != nil || obj["win"] != nil
+                }
+            default:
+                resolves = false
+            }
+            XCTAssertTrue(resolves, "\(key) resolves on neither platform")
+        }
+    }
 }

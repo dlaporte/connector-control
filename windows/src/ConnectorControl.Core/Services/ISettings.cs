@@ -23,6 +23,12 @@ public interface ISettings
     bool AutoUpdate { get; set; }
     /// <summary>Windows-only: whether the first-run tray tip has already been shown.</summary>
     bool TrayTipShown { get; set; }
+    /// <summary>
+    /// The version most recently declined via a non-interactive update offer; null once none is
+    /// declined (or the declined version was superseded). Persisted so the decline survives a
+    /// relaunch — the same way the Mac's Sparkle persists "Skip This Version".
+    /// </summary>
+    string? DeclinedUpdateVersion { get; set; }
 
     /// <summary>
     /// Setters never throw. When persisting a change fails (e.g. the store

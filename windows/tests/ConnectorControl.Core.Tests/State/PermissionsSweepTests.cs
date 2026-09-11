@@ -166,4 +166,43 @@ public class PermissionsSweepTests : IDisposable
         Assert.True(PermissionsSweep.RunOnce(settings, paths));
         Assert.Equal(PermissionsSweep.CurrentVersion, settings.SweepVersion);
     }
+
+    /// <summary>
+    /// The sweep's local Apply(path) closure counts a path as applied purely on
+    /// OwnerOnlyAcl.TryApply's return value. A backup gone by the time OwnerOnlyAcl.Apply looks
+    /// for it — neither a directory nor a file — must report false, not true, or a deleted backup
+    /// alone could satisfy the sweep's completion rule and the sweep would never retry. A dangling
+    /// symlink reproduces "enumerated but gone" deterministically: EnumerateFileSystemEntries
+    /// lists the link itself (it is a real directory entry), but Directory.Exists/File.Exists —
+    /// which follow the reparse point, the same calls OwnerOnlyAcl.Apply makes — both report false
+    /// for it, exactly like a backup file deleted out from under the sweep.
+    /// </summary>
+    [Fact]
+    [SupportedOSPlatform("windows")]
+    public void AVanishedFileDoesNotCountAsApplied()
+    {
+        var backups = dir.File("backups");
+        Directory.CreateDirectory(backups);
+        var dangling = Path.Combine(backups, "mcps.2026-09-10T00-00-00-000Z.json");
+        try
+        {
+            File.CreateSymbolicLink(dangling, Path.Combine(backups, "gone.json"));
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            // Creating a symlink on Windows needs Developer Mode or elevation; GitHub's hosted
+            // Windows runners are elevated (see AtomicFileTests), so this is not expected to skip.
+            Assert.Skip("symlink creation is not permitted in this environment");
+            return;
+        }
+        var paths = new AppPaths(dir.File("claude.json"), dir.File("store"), backups);
+        var settings = new FakeSettings();
+
+        // The sweep still runs to completion — the real backups directory itself gets a real ACL
+        // applied — but that must not paper over the dangling entry inside it: asked directly, the
+        // same question PermissionsSweep's Apply(path) closure asks, it must report false.
+        Assert.True(PermissionsSweep.RunOnce(settings, paths));
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        Assert.False(OwnerOnlyAcl.TryApply(dangling), "a vanished entry must not report itself applied");
+    }
 }

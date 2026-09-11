@@ -47,6 +47,7 @@ public sealed class SettingsStore : ISettings
     public int SweepVersion { get => GetInt("sweepVersion", 0); set => Set("sweepVersion", JsonValue.Int(value)); }
     public bool AutoUpdate { get => GetBool("autoUpdate", false); set => Set("autoUpdate", JsonValue.Bool(value)); }
     public bool TrayTipShown { get => GetBool("trayTipShown", false); set => Set("trayTipShown", JsonValue.Bool(value)); }
+    public string? DeclinedUpdateVersion { get => GetString("declinedUpdateVersion"); set => SetString("declinedUpdateVersion", value); }
 
     public string? LastSaveError { get; private set; }
 

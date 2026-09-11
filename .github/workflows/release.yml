@@ -145,8 +145,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Same gate as mac-ci.yml (scripts/test-mac.sh): the suite must pass with exactly the
-      # one deliberate skip before any signing or notarization minutes are spent.
+      # Same gate as mac-ci.yml (scripts/test-mac.sh): no test may skip or fail
+      # before any signing or notarization minutes are spent.
       - name: Test
         run: ./scripts/test-mac.sh
 
@@ -349,8 +349,7 @@ jobs:
             "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml
 
       # gh, not vpk, uploads everything, a re-run skips a RID whose assets are all published
-      # (and refuses to complete a half-published one), and the pack-time releases.<rid>.json
-      # is filtered to this build's own packages first — all of it, with the reasons, in the
+      # (and refuses to complete a half-published one) — all of it, with the reasons, in the
       # script windows-preview.yml calls too.
       - name: Upload the Windows assets
         run: ./scripts/release/upload-release-assets.sh "$TAG" "$VERSION" artifacts

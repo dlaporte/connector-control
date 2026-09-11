@@ -11,8 +11,10 @@ final class UserNotificationsNotifier: Notifier {
     var onRestartAction: MainActorAction?
     /// The center holds its delegate weakly; this notifier retains the bridge.
     private var handler: NotificationActionHandler?
-    /// The result of the first authorization request, so later notifications
-    /// skip asking again; nil until one has been asked for.
+    /// Whether authorization has been granted, so later notifications skip asking again; nil
+    /// until a request has succeeded. Only a grant is remembered — a denial is NOT cached, so
+    /// the next notification asks again, in case the user granted it later in System Settings
+    /// without relaunching the app.
     private var authorization: Bool?
 
     /// Registers the category whose Restart Claude button routes back into AppState.
@@ -30,8 +32,7 @@ final class UserNotificationsNotifier: Notifier {
     func notify(title: String, body: String, category: String?) {
         guard UserNotificationsNotifier.hasAppBundle else { return }
         let center = UNUserNotificationCenter.current()
-        if let authorization {
-            guard authorization else { return }
+        if authorization == true {
             post(title: title, body: body, category: category, to: center)
             return
         }
@@ -39,8 +40,8 @@ final class UserNotificationsNotifier: Notifier {
         // to the main actor before touching `self` (now @MainActor).
         center.requestAuthorization(options: [.alert]) { [weak self] granted, _ in
             Task { @MainActor in
-                self?.authorization = granted
-                guard granted else { return }
+                guard granted else { return }   // not cached: retried on the next notification
+                self?.authorization = true
                 self?.post(title: title, body: body, category: category, to: center)
             }
         }

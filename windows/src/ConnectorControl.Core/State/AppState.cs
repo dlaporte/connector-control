@@ -6,8 +6,8 @@ namespace ConnectorControl.Core.State;
 /// <summary>
 /// The Mac AppState, on Windows. UI-thread-only; everything that
 /// arrives from another thread comes through <see cref="AppHost.Marshal"/>.
-/// Init sequence (minus legacy migration): resolve the service,
-/// one-time ACL sweep, route the toast Restart action, reload, arm watchers.
+/// Init sequence: resolve the service, one-time ACL sweep, route the toast
+/// Restart action, reload, arm watchers.
 /// </summary>
 public sealed class AppState : ObservableObject, IDisposable
 {
@@ -238,8 +238,8 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Runs a watcher-triggered callback with a catch-all around its ENTIRE body, not only Reload's
-    /// own narrower catch filter. This also covers <see cref="AdoptExternalStoreChange"/>'s
+    /// Runs a watcher-triggered callback with a catch-all around its ENTIRE body, including the
+    /// part outside Reload's own catch-all. This also covers <see cref="AdoptExternalStoreChange"/>'s
     /// File.Exists/MasterStoreIO.Read/equality work, which runs before any Reload is reached —
     /// without this, an exception there would escape through a
     /// marshalled FileWatcher callback and take the whole app down instead of showing a banner.

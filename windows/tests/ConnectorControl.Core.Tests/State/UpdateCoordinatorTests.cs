@@ -339,6 +339,7 @@ public class UpdateCoordinatorTests
         Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: false));
         Assert.Single(dialogs.Offers);
         Assert.Equal("1.3.0", coordinator.DeclinedVersion);
+        Assert.Equal("1.3.0", settings.DeclinedUpdateVersion);   // persisted, not just in-memory
 
         // A later scheduled check for the same version does not re-offer it.
         Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: false));
@@ -349,6 +350,7 @@ public class UpdateCoordinatorTests
         Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: false));
         Assert.Equal(2, dialogs.Offers.Count);
         Assert.Equal("1.4.0", coordinator.DeclinedVersion);
+        Assert.Equal("1.4.0", settings.DeclinedUpdateVersion);
     }
 
     [Fact]
@@ -362,10 +364,35 @@ public class UpdateCoordinatorTests
         Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: false));
         Assert.Single(dialogs.Offers);
         Assert.Equal("1.3.0", coordinator.DeclinedVersion);
+        Assert.Equal("1.3.0", settings.DeclinedUpdateVersion);   // persisted, not just in-memory
 
         // Settings ▸ Check for Updates… always offers, even a version the user already declined.
         Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: true));
         Assert.Equal(2, dialogs.Offers.Count);
+    }
+
+    /// <summary>
+    /// The decline is persisted (ISettings.DeclinedUpdateVersion), not held only in the
+    /// coordinator's memory, so it survives a relaunch — a fresh coordinator over the same
+    /// settings still treats the version as declined.
+    /// </summary>
+    [Fact]
+    public async Task ADeclinedVersionSurvivesARelaunch()
+    {
+        settings.AutoUpdate = false;
+        updater.Next = Update();
+        dialogs.NextOffer = false;
+        using (var coordinator = Coordinator())
+        {
+            Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: false));
+            Assert.Single(dialogs.Offers);
+        }
+
+        // A new coordinator (as after a relaunch), over the same settings instance.
+        using var relaunched = Coordinator();
+        Assert.Equal("1.3.0", relaunched.DeclinedVersion);
+        Assert.Equal(UpdateOutcome.Deferred, await relaunched.CheckAsync(interactive: false));
+        Assert.Single(dialogs.Offers);   // still not re-offered
     }
 
     [Fact]
