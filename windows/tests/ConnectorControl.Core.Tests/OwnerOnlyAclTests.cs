@@ -10,9 +10,15 @@ public class OwnerOnlyAclTests : IDisposable
     public void Dispose() => dir.Dispose();
 
     [Fact]
-    public void TryApplyOnMissingPathDoesNotThrow()
+    public void TryApplyOnAMissingPathDoesNotThrowAndIsNotApplied()
     {
-        OwnerOnlyAcl.TryApply(dir.File("does-not-exist.json"));
+        // PermissionsSweep counts a path as applied purely on this return value, and its completion
+        // rule is "attempted == 0 || applied > 0". A backup deleted out from under the sweep is
+        // neither a directory nor a file by the time Apply looks, so it must report false, or
+        // vanished entries alone could mark a sweep that secured nothing as done.
+        var applied = OwnerOnlyAcl.TryApply(dir.File("does-not-exist.json"));
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        Assert.False(applied, "a path with nothing at it must not report itself applied");
     }
 
     [Fact]
