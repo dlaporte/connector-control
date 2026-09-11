@@ -327,18 +327,6 @@ final class StringCatalogTests: XCTestCase {
     /// shape) is silently skipped here AND by the C# mirror's equivalent loop, so such a mistake
     /// would be asserted nowhere. This pins the fixture-wide invariant directly: every root key
     /// must resolve on at least one platform.
-    /// True when `value` is present and not JSON `null`. A `"mac"`/`"win"`
-    /// key explicitly set to `null` is present but unresolved and must not
-    /// count as resolving — matching StringCatalogTests.cs's `mac is not
-    /// null` check on `JsonNode`, where a JSON null parses to a null node
-    /// (and every other JSON type — string, nested `format` object, etc. —
-    /// parses to a non-null one).
-    private static func isResolved(_ value: JSONValue?) -> Bool {
-        guard let value else { return false }
-        if case .null = value { return false }
-        return true
-    }
-
     func testEveryKeyResolvesOnAtLeastOnePlatform() throws {
         let fixture = try Self.loadFixture()
         for (key, entry) in fixture {
@@ -357,5 +345,26 @@ final class StringCatalogTests: XCTestCase {
             }
             XCTAssertTrue(resolves, "\(key) resolves on neither platform")
         }
+    }
+
+    /// True when `value` is present and not JSON `null`. A `"mac"`/`"win"`
+    /// key explicitly set to `null` is present but unresolved and must not
+    /// count as resolving — matching StringCatalogTests.cs's `mac is not
+    /// null` check on `JsonNode`, where a JSON null parses to a null node
+    /// (and every other JSON type — string, nested `format` object, etc. —
+    /// parses to a non-null one).
+    private static func isResolved(_ value: JSONValue?) -> Bool {
+        guard let value else { return false }
+        if case .null = value { return false }
+        return true
+    }
+
+    /// The fixture has no `null` platform value today, so the rule above is
+    /// pinned here rather than by the fixture walk.
+    func testANullPlatformValueDoesNotResolve() {
+        XCTAssertFalse(Self.isResolved(nil))
+        XCTAssertFalse(Self.isResolved(.null))
+        XCTAssertTrue(Self.isResolved(.string("Quit")))
+        XCTAssertTrue(Self.isResolved(.object(["format": .string("{0} left")])))
     }
 }
