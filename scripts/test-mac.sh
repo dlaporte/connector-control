@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Runs the Swift suite the way CI gates it: every test must run, exactly one may
-# skip (GoldenFileTests.testRegenerateGoldens rewrites the goldens and runs only
-# with CONNECTOR_CONTROL_UPDATE_GOLDENS=1), and none may fail — the Swift
-# counterpart of windows/ci.runsettings' FailSkips. Called by mac-ci.yml and
-# release.yml; runs locally too (set DEVELOPER_DIR when the default toolchain
-# cannot run tests).
+# Runs the Swift suite the way CI gates it: every test must run, none may skip
+# and none may fail — the Swift counterpart of windows/ci.runsettings'
+# FailSkips. The one legitimate local exception is the exFAT test, which skips
+# if hdiutil cannot attach a disk image on this machine (it attaches
+# successfully on CI). Called by mac-ci.yml and release.yml; runs locally too
+# (set DEVELOPER_DIR when the default toolchain cannot run tests).
 #
 # How the two test targets report depends on the toolchain: one .xctest bundle
 # per target with its own summary (Xcode-beta locally) or one combined
@@ -26,7 +26,7 @@ if [ "$FAILED" != "0" ] || [ "$FAILED_SUITES" != "0" ]; then
     echo "error: $FAILED test(s) and $FAILED_SUITES suite(s) failed" >&2
     exit 1
 fi
-[ "$SKIPPED" = "1" ] \
-    || { echo "error: expected exactly one skipped test (testRegenerateGoldens), found $SKIPPED" >&2; exit 1; }
+[ "$SKIPPED" = "0" ] \
+    || { echo "error: expected no skipped tests, found $SKIPPED (the exFAT test skips locally if hdiutil cannot attach an image; it must not skip on CI)" >&2; exit 1; }
 [ "$PASSED_ALL" -ge 1 ] \
     || { echo "error: no 'All tests' suite passed — did the run finish?" >&2; exit 1; }
