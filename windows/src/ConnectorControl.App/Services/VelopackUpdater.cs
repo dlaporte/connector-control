@@ -142,11 +142,7 @@ public sealed class VelopackUpdater : IUpdater
         }
         var location = manager.Location;
         var packagePath = Path.Combine(location.PackagesDir ?? "", info.TargetFullRelease.FileName);
-        var current = manager.CurrentVersion;
-        var running = new Version(current?.Major ?? 0, current?.Minor ?? 0, current?.Patch ?? 0);
-        var advertised = info.TargetFullRelease.Version;
-        var feed = new Version(advertised?.Major ?? 0, advertised?.Minor ?? 0, advertised?.Patch ?? 0);
-        if (verify(packagePath, location.UpdateExePath, identity, running, feed) is { } problem)
+        if (verify(packagePath, location.UpdateExePath, identity, NumericVersion(manager.CurrentVersion), NumericVersion(info.TargetFullRelease.Version)) is { } problem)
         {
             try { File.Delete(packagePath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             if (location.UpdateExePath is { } updateExe)
@@ -180,4 +176,8 @@ public sealed class VelopackUpdater : IUpdater
             manager.ApplyUpdatesAndRestart(info.TargetFullRelease);
         }
     }
+
+    /// <summary>Major.minor.patch of a Velopack version as a System.Version; a missing version is 0.0.0.</summary>
+    private static Version NumericVersion(SemanticVersion? version) =>
+        new(version?.Major ?? 0, version?.Minor ?? 0, version?.Patch ?? 0);
 }
