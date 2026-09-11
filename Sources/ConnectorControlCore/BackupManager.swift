@@ -73,7 +73,7 @@ public struct BackupManager: Sendable {
         // copy of the file (or of a symlink to it). AtomicFile creates the
         // backups directory 0700 when it does not exist yet.
         try AtomicFile.write(current, to: dest, staging: stagingDir)
-        try prune(series: series, listing: existing + [dest])
+        prune(series: series, listing: existing + [dest])
         return dest
     }
 
@@ -92,10 +92,12 @@ public struct BackupManager: Sendable {
     /// `listing` is the caller's own pre-write directory read plus the file it just
     /// wrote — sorted the same way `backups(series:)` would — so pruning does not
     /// re-list a directory `backUp` already just listed.
-    private func prune(series: String, listing: [URL]) throws {
+    private func prune(series: String, listing: [URL]) {
         let all = listing.sorted { $0.lastPathComponent > $1.lastPathComponent }
         for stale in all.dropFirst(keepCount) {
-            try FileManager.default.removeItem(at: stale)
+            // Best-effort: a locked or read-only stale backup must not fail the
+            // user's save; the next rotation retries.
+            try? FileManager.default.removeItem(at: stale)
         }
     }
 }
