@@ -110,7 +110,6 @@ public class EditorModelViewSwitchTests
 
     /// <summary>The template-discard rule fires once, at the first switch to Local; a second
     /// Type toggle must not re-derive it and wipe what the user typed.</summary>
-
     [Fact]
     public void TogglingTheTypeTwiceKeepsATypedLocalCommand()
     {
@@ -124,6 +123,44 @@ public class EditorModelViewSwitchTests
         editor.IsRemote = false;
         Assert.Equal("node", editor.Command);
         Assert.Equal(["server.js"], editor.Args.Select(a => a.Value).ToArray());
+    }
+
+    /// <summary>A JSON-view edit to a still-open remote template must survive the round trip back
+    /// to Form: the template flag is consumed by an actual edit, not just by opening the JSON
+    /// view, so a later Type toggle to Remote and back to Local must not re-derive and wipe the
+    /// edited command/args. The edit is a LOCAL-shaped config on purpose: Load assigns the
+    /// isRemote backing field directly (not the IsRemote setter's discard path), so switching to
+    /// Form alone fires no discard regardless of this fix; only the later explicit toggle does,
+    /// and only the fix keeps it from wiping what was just adopted.</summary>
+    [Fact]
+    public void ATemplateEditedInJsonKeepsItsCommandOnSwitchToLocal()
+    {
+        using var rig = new EditorRig();
+        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        editor.RequestView(EditView.Json);
+        editor.JsonText = "{\"command\":\"node\",\"args\":[\"server.js\"]}";
+        editor.RequestView(EditView.Form);
+        Assert.Equal(EditView.Form, editor.View);
+        editor.IsRemote = true;
+        editor.IsRemote = false;
+        Assert.Equal("node", editor.Command);
+        Assert.Equal(["server.js"], editor.Args.Select(a => a.Value).ToArray());
+    }
+
+    /// <summary>An unedited JSON round trip (straight to JSON and back without touching the text)
+    /// still counts as untouched — the discard on Type toggle to Local fires exactly as it did
+    /// before this template flag was scoped to actual edits.</summary>
+    [Fact]
+    public void AnUnchangedJsonRoundTripStillDiscardsTheTemplateOnSwitchToLocal()
+    {
+        using var rig = new EditorRig();
+        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        editor.RequestView(EditView.Json);
+        editor.RequestView(EditView.Form);
+        Assert.Equal(EditView.Form, editor.View);
+        editor.IsRemote = false;
+        Assert.Equal("npx", editor.Command);
+        Assert.Equal(["-y", ""], editor.Args.Select(a => a.Value).ToArray());
     }
 
     [Fact]

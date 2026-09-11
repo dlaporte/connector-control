@@ -52,11 +52,12 @@ public final class EditorModel: ObservableObject {
     private var subscription: AnyCancellable?
     private var suppressToolEvaluation = false
     /// True only for a brand-new connector still showing the remote
-    /// template's placeholder command/args. Set at open; cleared the first
-    /// time the template is discarded (below), since from then on the
-    /// command/args are the user's own local form, not a re-derivable
-    /// property of the current fields — a second Type toggle must not
-    /// wipe what they typed.
+    /// template's placeholder command/args. Set at open; consumed by the
+    /// first discard (below) or by adopting an edited JSON view into the
+    /// form, since from then on the command/args are the user's own, not a
+    /// re-derivable property of the current fields — a later Type toggle
+    /// must not wipe what they typed. An unchanged JSON round trip (open
+    /// JSON, switch straight back) leaves it set.
     private var isUntouchedTemplate: Bool
 
     // MARK: - Fields
@@ -298,6 +299,12 @@ public final class EditorModel: ObservableObject {
     /// bridge-discard branch — gated on `view == .form` — from firing mid-load.
     private func adoptForm(_ config: JSONValue) {
         load(config)
+        // A JSON edit that changed the config consumes the template, exactly
+        // like a discard would — so a later Type toggle to Local re-derives
+        // nothing and leaves what the user typed alone. An unchanged round
+        // trip (config still equal to the template as opened) leaves the
+        // flag set.
+        isUntouchedTemplate = isUntouchedTemplate && config == target.entry.config
         evaluateRequiredTool()
     }
 

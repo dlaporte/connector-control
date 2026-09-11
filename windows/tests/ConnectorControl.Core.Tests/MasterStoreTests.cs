@@ -106,7 +106,7 @@ public class MasterStoreTests : IDisposable
     }
 
     [Fact]
-    public void LoadWithUnknownActiveProfileFallsBackToExistingProfile()
+    public void UnknownActiveProfileFallsBackToExistingProfile()
     {
         File.WriteAllText(Url, """
             {"version":2,"activeProfile":"Ghost","profiles":{"Alpha":{"mcps":{}},"Beta":{"mcps":{}}}}

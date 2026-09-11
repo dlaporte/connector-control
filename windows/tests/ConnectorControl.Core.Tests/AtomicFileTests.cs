@@ -143,4 +143,30 @@ public class AtomicFileTests : IDisposable
         Assert.Equal("through", File.ReadAllText(real));
         Assert.Equal("through", File.ReadAllText(link));
     }
+
+    /// <summary>Sources/ConnectorControlCore/AtomicFile.swift — testWritesThroughARelativeSymlinkedTarget.
+    /// A relative symlink target (resolved relative to the link's own directory) is written
+    /// through just like an absolute one.</summary>
+    [Fact]
+    public void WritesThroughARelativeSymlinkedTarget()
+    {
+        var real = dir.File(Path.Combine("real", "config.json"));
+        var link = dir.File("link.json");
+        try
+        {
+            File.CreateSymbolicLink(link, Path.Combine("real", "config.json"));
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            // Creating a symlink on Windows needs Developer Mode or elevation; a CI agent
+            // without either cannot exercise this, so there is nothing to assert.
+            // GitHub's hosted Windows runners are elevated, so under FailSkips=true (ci.runsettings) this skip would surface as a failure if that ever changed.
+            Assert.Skip("symlink creation is not permitted in this environment");
+            return;
+        }
+        AtomicFile.Write(Encoding.UTF8.GetBytes("through"), link);
+        Assert.NotNull(new FileInfo(link).LinkTarget);   // the link itself survives, not replaced by a plain file
+        Assert.Equal("through", File.ReadAllText(real));
+        Assert.Equal("through", File.ReadAllText(link));
+    }
 }

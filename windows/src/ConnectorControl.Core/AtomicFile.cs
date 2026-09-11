@@ -30,11 +30,12 @@ public static class AtomicFile
         // first-run case for a config linked into a dotfiles repo before the real file is ever
         // created — is still followed instead of being silently replaced. A path that is not a
         // link at all (including one that does not exist yet) leaves target as is.
-        if (new FileInfo(target).LinkTarget is not null)
+        var targetInfo = new FileInfo(target);
+        if (targetInfo.LinkTarget is not null)
         {
             try
             {
-                if (new FileInfo(target).ResolveLinkTarget(returnFinalTarget: true)?.FullName is { } real)
+                if (targetInfo.ResolveLinkTarget(returnFinalTarget: true)?.FullName is { } real)
                 {
                     target = real;
                 }

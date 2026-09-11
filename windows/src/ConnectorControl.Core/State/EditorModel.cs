@@ -62,9 +62,10 @@ public sealed class EditorModel : ObservableObject, IDisposable
     private readonly IDialogs dialogs;
     /// <summary>
     /// True only for a brand-new connector still showing the remote template's placeholder
-    /// command/args. Set at open; cleared the first time the template is discarded (below),
-    /// since from then on the command/args are the user's own local form, not a re-derivable
-    /// property of the current fields — a second Type toggle must not wipe what they typed.
+    /// command/args. Set at open; consumed by the first discard (below) or by adopting an edited
+    /// JSON view into the form, since from then on the command/args are the user's own, not a
+    /// re-derivable property of the current fields — a later Type toggle must not wipe what they
+    /// typed. An unchanged JSON round trip (open JSON, switch straight back) leaves it set.
     /// </summary>
     private bool isUntouchedTemplate;
 
@@ -515,6 +516,12 @@ public sealed class EditorModel : ObservableObject, IDisposable
     private void AdoptForm(JsonValue config)
     {
         Load(config);
+        // A JSON edit that changed the config consumes the template, exactly
+        // like a discard would — so a later Type toggle to Local re-derives
+        // nothing and leaves what the user typed alone. An unchanged round
+        // trip (config still equal to the template as opened) leaves the
+        // flag set.
+        isUntouchedTemplate = isUntouchedTemplate && config == Target.Entry.Config;
         EvaluateRequiredTool();
         RaiseAll();
     }
@@ -567,12 +574,6 @@ public sealed class EditorModel : ObservableObject, IDisposable
         {
             suppressToolEvaluation = false;
         }
-        // isRemote was set via the backing field above, so raise its dependents here —
-        // AdoptForm's RaiseAll after this call covers the rest, but the constructor's call
-        // to Load needs these raised too (harmless pre-construction no-op there).
-        Raise(nameof(IsRemote));
-        Raise(nameof(IsLocal));
-        Raise(nameof(CanSave));
     }
 
     /// <summary>

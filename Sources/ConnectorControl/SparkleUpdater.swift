@@ -7,6 +7,10 @@ import ConnectorControlState
 /// has none and Sparkle requires one.
 @MainActor
 final class SparkleUpdater: Updater {
+    /// Sparkle persists "Skip This Version" itself (`SUSkippedVersion` in user
+    /// defaults) — this app has no field for it, unlike Windows, which has no
+    /// framework equivalent and so mirrors that persistence itself through
+    /// `ISettings.DeclinedUpdateVersion`.
     private let controller = SPUStandardUpdaterController(
         startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil)
 

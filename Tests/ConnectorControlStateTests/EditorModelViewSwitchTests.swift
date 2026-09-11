@@ -126,6 +126,46 @@ final class EditorModelViewSwitchTests: XCTestCase {
         XCTAssertEqual(editor.args.map(\.value), ["server.js"])
     }
 
+    /// A JSON-view edit to a still-open remote template must survive the
+    /// round trip back to Form: the template flag is consumed by an actual
+    /// edit, not just by opening the JSON view, so a later Type toggle to
+    /// Remote and back to Local must not re-derive and wipe the edited
+    /// command/args. The edit is a LOCAL-shaped config on purpose: `load`
+    /// assigns `isRemote`'s backing field directly (a plain `didSet`, not
+    /// the `isRemote` setter's discard path — see `isRemoteChanged`'s
+    /// `view == .form` gate), so switching to Form alone fires no discard
+    /// regardless of this fix; only the later explicit toggle does, and only
+    /// the fix keeps it from wiping what was just adopted.
+    func testATemplateEditedInJsonKeepsItsCommandOnSwitchToLocal() {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let editor = rig.editor(.newRemote())
+        editor.requestView(.json)
+        editor.jsonText = "{\"command\":\"node\",\"args\":[\"server.js\"]}"
+        editor.requestView(.form)
+        XCTAssertEqual(editor.view, .form)
+        editor.isRemote = true
+        editor.isRemote = false
+        XCTAssertEqual(editor.command, "node")
+        XCTAssertEqual(editor.args.map(\.value), ["server.js"])
+    }
+
+    /// An unedited JSON round trip (straight to JSON and back without
+    /// touching the text) still counts as untouched — the discard on Type
+    /// toggle to Local fires exactly as it did before this template flag was
+    /// scoped to actual edits.
+    func testAnUnchangedJsonRoundTripStillDiscardsTheTemplateOnSwitchToLocal() {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let editor = rig.editor(.newRemote())
+        editor.requestView(.json)
+        editor.requestView(.form)
+        XCTAssertEqual(editor.view, .form)
+        editor.isRemote = false
+        XCTAssertEqual(editor.command, "npx")
+        XCTAssertEqual(editor.args.map(\.value), ["-y", ""])
+    }
+
     func testJsonValidationErrorDisablesSave() {
         let rig = EditorRig()
         defer { rig.dispose() }

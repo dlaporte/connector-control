@@ -29,7 +29,7 @@ public class OwnerOnlyAclTests : IDisposable
         var path = dir.File("f.json");
         File.WriteAllText(path, "{}");
         Assert.False(OwnerOnlyAcl.IsOwnerOnly(path), "a fresh file inherits the temp dir's ACL");
-        OwnerOnlyAcl.TryApply(path);
+        Assert.True(OwnerOnlyAcl.TryApply(path));
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(path));
         Assert.Equal("{}", File.ReadAllText(path));   // the owner can still read it
     }
@@ -41,7 +41,7 @@ public class OwnerOnlyAclTests : IDisposable
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         var path = dir.File("sub");
         Directory.CreateDirectory(path);
-        OwnerOnlyAcl.TryApply(path);
+        Assert.True(OwnerOnlyAcl.TryApply(path));
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(path));
         File.WriteAllText(Path.Combine(path, "child.json"), "{}");   // owner can still create inside
     }

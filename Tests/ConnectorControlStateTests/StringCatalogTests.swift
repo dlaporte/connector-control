@@ -327,6 +327,18 @@ final class StringCatalogTests: XCTestCase {
     /// shape) is silently skipped here AND by the C# mirror's equivalent loop, so such a mistake
     /// would be asserted nowhere. This pins the fixture-wide invariant directly: every root key
     /// must resolve on at least one platform.
+    /// True when `value` is present and not JSON `null`. A `"mac"`/`"win"`
+    /// key explicitly set to `null` is present but unresolved and must not
+    /// count as resolving — matching StringCatalogTests.cs's `mac is not
+    /// null` check on `JsonNode`, where a JSON null parses to a null node
+    /// (and every other JSON type — string, nested `format` object, etc. —
+    /// parses to a non-null one).
+    private static func isResolved(_ value: JSONValue?) -> Bool {
+        guard let value else { return false }
+        if case .null = value { return false }
+        return true
+    }
+
     func testEveryKeyResolvesOnAtLeastOnePlatform() throws {
         let fixture = try Self.loadFixture()
         for (key, entry) in fixture {
@@ -338,7 +350,7 @@ final class StringCatalogTests: XCTestCase {
                 if case .string? = obj["format"] {
                     resolves = true   // a shared template, shared verbatim by both platforms
                 } else {
-                    resolves = obj["mac"] != nil || obj["win"] != nil
+                    resolves = Self.isResolved(obj["mac"]) || Self.isResolved(obj["win"])
                 }
             default:
                 resolves = false

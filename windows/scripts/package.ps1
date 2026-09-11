@@ -50,10 +50,13 @@ param(
     [string] $AzureTrustedSignFile
 )
 
-# How to invoke vpk, split on the first space: 'dotnet vpk' runs the local tool
-# windows/.config/dotnet-tools.json pins (restored by `dotnet tool restore` in windows/) as
-# "dotnet" plus a leading "vpk" argument. No caller needs a different invocation.
-$vpkCommand = 'dotnet vpk'
+# 'dotnet vpk' runs the local tool windows/.config/dotnet-tools.json pins (restored by
+# `dotnet tool restore` in windows/) as "dotnet" plus a leading "vpk" argument. No caller
+# needs a different invocation.
+$vpkExe = 'dotnet'
+# Typed: PowerShell unrolls a one-element array into a plain string in some contexts, and a
+# string plus an array is string concatenation, not an argument list — that bit us once.
+[string[]] $vpkPrefixArgs = @('vpk')
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -76,14 +79,6 @@ function Invoke-Native {
 }
 
 if (-not (Test-Path $icon)) { throw "Missing $icon — run: swift scripts/generate-icon.swift windows/assets/ConnectorControl.ico (on the Mac)" }
-
-# 'dotnet vpk' splits into the exe to run and a leading argument in front of every other vpk
-# argument below.
-$vpkParts = $vpkCommand.Split([char[]]' ', 2)
-$vpkExe = $vpkParts[0]
-# Typed: PowerShell unrolls a one-element array returned from an if-expression into a plain
-# string, and a string plus an array is string concatenation, not an argument list.
-[string[]] $vpkPrefixArgs = if ($vpkParts.Count -gt 1) { @($vpkParts[1]) } else { @() }
 
 Write-Host "== Publish $Runtime, version $Version"
 if (Test-Path $publishDir) { Remove-Item -Recurse -Force $publishDir }

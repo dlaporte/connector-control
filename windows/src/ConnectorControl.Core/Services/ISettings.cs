@@ -24,9 +24,11 @@ public interface ISettings
     /// <summary>Windows-only: whether the first-run tray tip has already been shown.</summary>
     bool TrayTipShown { get; set; }
     /// <summary>
-    /// The version most recently declined via a non-interactive update offer; null once none is
-    /// declined (or the declined version was superseded). Persisted so the decline survives a
-    /// relaunch — the same way the Mac's Sparkle persists "Skip This Version".
+    /// The version most recently declined via a non-interactive update offer; null while none is
+    /// declined. It stays recorded until the user declines another version — declining a version
+    /// only suppresses a future offer of that exact version; a different version is always
+    /// offered. Persisted so the decline survives a relaunch — the same way the Mac's Sparkle
+    /// persists "Skip This Version".
     /// </summary>
     string? DeclinedUpdateVersion { get; set; }
 
