@@ -13,7 +13,8 @@
 #                    valid Authenticode signature on both RIDs. This is an explicit decision by
 #                    the caller — never inferred from whether a secret happens to be set. The
 #                    gate job below is what proves the six AZURE_* secrets exist, and it fails
-#                    the run before any build minutes are spent when they do not.
+#                    the run before the signed packaging jobs start; the unsigned test job runs
+#                    in parallel.
 #   package          false runs the test job alone (windows-ci.yml's per-push build).
 #
 # A caller that packages passes the six AZURE_* secrets by name (declared under `secrets:`
@@ -135,8 +136,11 @@ jobs:
     name: Package ${{ matrix.rid }}
     needs: [gate, test]
     # A skipped gate (require-signing: false) must not skip package for the unsigned case; a
-    # failed gate (require-signing: true, a secret missing) must.
-    if: inputs.package && (inputs.require-signing == false || needs.gate.result == 'success')
+    # failed gate (require-signing: true, a secret missing) must. needs.test.result is checked
+    # explicitly (with !cancelled(), not the bare success() GitHub implies over needs) because a
+    # skipped gate would otherwise make the implicit success() over needs true even when test
+    # failed or was cancelled.
+    if: ${{ !cancelled() && needs.test.result == 'success' && inputs.package && (inputs.require-signing == false || needs.gate.result == 'success') }}
     runs-on: windows-2025
     timeout-minutes: 30
     strategy:

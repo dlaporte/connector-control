@@ -29,7 +29,9 @@ DMG="ConnectorControl_${VERSION}.dmg"
 SPARKLE_TOOLS_VERSION=2.9.6
 SPARKLE_SHA256=52bf9e88cdd972fc0c81501377a880e90d47031bd8ca5462488f843e2609e192
 
-RESOLVED_VERSION=$(grep -A3 '"identity" *: *"sparkle"' Package.resolved | grep -o '"version" *: *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+# jq, not grep: the "version" field lives under "state", several lines below "identity", so a
+# line-proximity grep never matches it.
+RESOLVED_VERSION=$(jq -r '.pins[] | select(.identity == "sparkle") | .state.version' Package.resolved)
 if [ -z "$RESOLVED_VERSION" ]; then
   echo "::error::could not find the Sparkle package version in Package.resolved"
   exit 1

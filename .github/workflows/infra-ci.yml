@@ -33,7 +33,13 @@ jobs:
       - name: actionlint
         shell: bash
         run: |
-          bash <(curl -sfL https://raw.githubusercontent.com/rhysd/actionlint/914e7df21a07ef503a81201c76d2b11c789d3fca/scripts/download-actionlint.bash) # v1.7.12
+          # Downloaded to a file, not piped into bash: `bash <(curl ...)` swallows a curl
+          # failure since the process substitution itself still succeeds, so a broken download
+          # would silently run nothing instead of failing the job. The version argument is
+          # explicit because the SHA-pinned script installs the latest release when given none —
+          # without it, the "v1.7.12" comment would just be a wish, not a pin.
+          curl -sfL -o download-actionlint.bash https://raw.githubusercontent.com/rhysd/actionlint/914e7df21a07ef503a81201c76d2b11c789d3fca/scripts/download-actionlint.bash # v1.7.12
+          bash download-actionlint.bash 1.7.12
           ./actionlint -color
 
       - name: shellcheck

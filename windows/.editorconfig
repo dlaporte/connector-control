@@ -3,3 +3,4 @@
 [*.cs]
 csharp_style_namespace_declarations = file_scoped:warning
 csharp_prefer_braces = true:warning
+dotnet_sort_system_directives_first = true

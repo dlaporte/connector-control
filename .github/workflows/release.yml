@@ -28,8 +28,8 @@
 # Environments), which only the mac job names: with required reviewers and a deployment
 # policy of the master branch plus v* tags on that environment, no job GitHub has not shown
 # a human can read them. The Windows set stays a repository secret set: windows-build.yml's
-# own gate job checks for it before any build minutes are spent, and a preview may be cut
-# from any branch.
+# own gate job checks for it before the signed packaging jobs start (the unsigned test job
+# runs in parallel), and a preview may be cut from any branch.
 #   Mac (same names as the trailcache repo):
 #   APPLE_CERTIFICATE          base64-encoded Developer ID Application .p12
 #   APPLE_CERTIFICATE_PASSWORD password for the .p12
@@ -253,9 +253,10 @@ jobs:
     needs: prepare
     # test -> package (win-x64, win-arm64) -> smoke, the same file windows-preview.yml and
     # windows-ci.yml call. require-signing is stated here rather than derived from a secret:
-    # windows-build.yml's own gate job fails the run before any build minutes are spent if any
-    # of the six AZURE_* secrets is missing, and the smoke job therefore installs with
-    # -ExpectSigned and checks the arm64 Setup.exe signature.
+    # windows-build.yml's own gate job fails the run before the signed packaging jobs start
+    # (the unsigned test job runs in parallel) if any of the six AZURE_* secrets is missing,
+    # and the smoke job therefore installs with -ExpectSigned and checks the arm64 Setup.exe
+    # signature.
     uses: ./.github/workflows/windows-build.yml
     with:
       version: ${{ needs.prepare.outputs.version }}
@@ -321,13 +322,17 @@ jobs:
           } > body.md
           # Drafts and prereleases must not be the compare base. A transient API hiccup must not
           # silently drop the compare link (the old `|| true` did exactly that) — retry a few
-          # times instead.
+          # times instead. LISTED tracks whether a call ever succeeded, distinct from PREV being
+          # empty because there genuinely is no previous release, so 5 straight failures fail the
+          # job instead of quietly publishing without a compare link.
           PREV=""
+          LISTED=0
           for i in $(seq 1 5); do
-            PREV=$(gh release list --limit 1 --exclude-drafts --exclude-pre-releases --json tagName --jq '.[0].tagName') && break
+            PREV=$(gh release list --limit 1 --exclude-drafts --exclude-pre-releases --json tagName --jq '.[0].tagName') && { LISTED=1; break; }
             echo "gh release list failed, retrying ($i/5)"
             sleep 5
           done
+          [ "${LISTED:-0}" = 1 ] || { echo "::error::gh release list failed 5 times"; exit 1; }
           if [ -n "$PREV" ] && [ "$PREV" != "null" ] && [ "$PREV" != "$TAG" ]; then
             printf '\n**Full changelog**: %s/compare/%s...%s\n' "$REPO_URL" "$PREV" "$TAG" >> body.md
           fi

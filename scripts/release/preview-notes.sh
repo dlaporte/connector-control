@@ -59,7 +59,10 @@ echo "3. Uninstall from Settings ▸ Apps ▸ Installed apps; app data in \`%LOC
 echo
 echo "### Changes planned for v$NEXT (CHANGELOG.md)"
 echo
-awk -v ver="## v$NEXT" '$0 == ver {found=1; next} /^## / && found {exit} found {print}' CHANGELOG.md
+# A preview can be cut before CHANGELOG.md grows its "## v$NEXT" section (that section is
+# written when the release itself is prepared), so tolerate changelog-section.sh's exit 1 for a
+# section that doesn't exist yet rather than failing the preview over it.
+scripts/release/changelog-section.sh "v$NEXT" || true
 echo
 echo "### Commits since $BASE_LABEL"
 echo

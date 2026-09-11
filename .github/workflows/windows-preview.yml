@@ -135,10 +135,13 @@ jobs:
           echo "$GITHUB_EVENT_NAME -> $TAG: $NEXT-preview.$N (dry_run=$DRY)"
 
       - name: Write release notes
+        env:
+          TAG: ${{ steps.derive.outputs.tag }}
+          VERSION: ${{ steps.derive.outputs.version }}
+          NEXT: ${{ steps.derive.outputs.next }}
+          NUMBER: ${{ steps.derive.outputs.number }}
         run: |
-          ./scripts/release/preview-notes.sh \
-            "${{ steps.derive.outputs.tag }}" "${{ steps.derive.outputs.version }}" \
-            "${{ steps.derive.outputs.next }}" "${{ steps.derive.outputs.number }}" > notes.md
+          ./scripts/release/preview-notes.sh "$TAG" "$VERSION" "$NEXT" "$NUMBER" > notes.md
           cat notes.md
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

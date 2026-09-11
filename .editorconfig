@@ -8,7 +8,7 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 4
 
-[*.{yml,yaml,json,xml,md}]
+[*.{yml,yaml,json,xml,md,csproj,props,targets,xaml,slnx,runsettings}]
 indent_size = 2
 
 [*.swift]
