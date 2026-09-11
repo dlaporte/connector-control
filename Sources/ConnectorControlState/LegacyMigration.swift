@@ -5,7 +5,7 @@ import ConnectorControlCore
 /// every launch; idempotent. The directory move is separate from the defaults
 /// move so it can be tested against a temp directory.
 public enum LegacyMigration {
-    public static let currentDirectoryName = "Connector Control"
+    public static let currentDirectoryName = AppPaths.dataDirName
     /// Newest first: only the first existing old directory is moved.
     public static let legacyDirectoryNames = ["Custom Connector Control", "MCP Enabler"]
     public static let legacyDefaultsDomains = ["com.dlaporte.custom-connector-control", "com.dlaporte.mcp-enabler"]

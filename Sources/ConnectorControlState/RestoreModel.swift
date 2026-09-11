@@ -40,13 +40,17 @@ public final class RestoreModel: ObservableObject {
     }
 
     public func load() {
-        var found = (try? state.service.backups.backups(series: RestoreModel.series)) ?? []
-        let original = state.service.backups.backupsDir
-            .appendingPathComponent("\(RestoreModel.series).original.json")
-        if FileManager.default.fileExists(atPath: original.path) {
-            found.append(original)
+        do {
+            var found = try state.service.backups.backups(series: RestoreModel.series)
+            let original = state.service.backups.backupsDir
+                .appendingPathComponent("\(RestoreModel.series).original.json")
+            if FileManager.default.fileExists(atPath: original.path) {
+                found.append(original)
+            }
+            backups = found
+        } catch {
+            restoreError = error.localizedDescription
         }
-        backups = found
     }
 
     /// The Restore… button. A fresh attempt starts with a clean sheet: the

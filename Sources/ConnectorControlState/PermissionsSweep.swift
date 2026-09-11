@@ -23,12 +23,27 @@ public enum PermissionsSweep {
         let acls = !settings.aclSweepDone
         guard modes || acls else { return false }
         let fm = FileManager.default
+        var modeAttempted = 0, modeApplied = 0
+        var aclAttempted = 0, aclApplied = 0
         func repair(_ url: URL, mode: Int) {
-            if modes { try? fm.setAttributes([.posixPermissions: mode], ofItemAtPath: url.path) }
-            if acls { try? AtomicFile.stripACL(atPath: url.path) }
+            if modes {
+                modeAttempted += 1
+                if (try? fm.setAttributes([.posixPermissions: mode], ofItemAtPath: url.path)) != nil {
+                    modeApplied += 1
+                }
+            }
+            if acls {
+                aclAttempted += 1
+                if (try? AtomicFile.stripACL(atPath: url.path)) != nil {
+                    aclApplied += 1
+                }
+            }
         }
+        // A directory that does not exist yet (a fresh install, swept before
+        // the first reload() has written anything) has nothing to protect: it
+        // is not an attempt that failed, it is nothing to do.
         let storeDir = paths.storeDirURL
-        if settings.masterStoreDir == nil {
+        if (settings.masterStoreDir ?? "").isEmpty, fm.fileExists(atPath: storeDir.path) {
             repair(storeDir, mode: 0o700)
         }
         if let names = try? fm.contentsOfDirectory(atPath: storeDir.path) {
@@ -37,15 +52,23 @@ public enum PermissionsSweep {
             }
         }
         let backups = paths.backupsDirURL
-        repair(backups, mode: 0o700)
+        if fm.fileExists(atPath: backups.path) {
+            repair(backups, mode: 0o700)
+        }
         if let files = fm.enumerator(at: backups, includingPropertiesForKeys: [.isDirectoryKey]) {
             for case let file as URL in files {
                 let isDir = (try? file.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
                 repair(file, mode: isDir ? 0o700 : 0o600)
             }
         }
-        settings.permissionsSweepDone = true
-        settings.aclSweepDone = true
+        // A sweep that tried and achieved nothing is not done: leave the flag
+        // clear so the next launch tries again, instead of recording success.
+        if modes, modeAttempted == 0 || modeApplied > 0 {
+            settings.permissionsSweepDone = true
+        }
+        if acls, aclAttempted == 0 || aclApplied > 0 {
+            settings.aclSweepDone = true
+        }
         return true
     }
 

@@ -321,6 +321,16 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(service.backups.keepCount, 7)
     }
 
+    /// A stored empty string (e.g. a setting cleared by hand) counts as absent,
+    /// same as nil — the default location, not a literal empty path.
+    func testAnEmptyStoredStoreDirIsTheDefault() {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        h.settings.masterStoreDir = ""
+        let state = h.create()
+        XCTAssertEqual(state.service.paths.storeDirURL.path, h.storeDir.path)
+    }
+
     func testRefreshToolsProbesOffTheUiThreadAndPublishesThroughTheHost() {
         let h = AppStateHarness()
         defer { h.dispose() }

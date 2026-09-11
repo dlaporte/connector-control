@@ -60,9 +60,8 @@ public final class PopoverModel: ObservableObject {
     // MARK: rows (catalog §2.4)
 
     public var rows: [ConnectorRow] {
-        state.sortedNames.compactMap { name in
-            guard let entry = state.store.mcps[name] else { return nil }
-            return ConnectorRow(name: name, enabled: entry.enabled, toolWarning: warning(for: entry))
+        state.store.mcps.sorted { $0.key < $1.key }.map { name, entry in
+            ConnectorRow(name: name, enabled: entry.enabled, toolWarning: warning(for: entry))
         }
     }
 

@@ -87,7 +87,7 @@ public struct MasterStore: Equatable, Codable {
     public mutating func deleteActiveProfile() -> String? {
         guard profiles.count > 1 else { return "Can\u{2019}t delete the last profile." }
         profiles.removeValue(forKey: activeProfile)
-        activeProfile = profiles.keys.sorted().first!
+        activeProfile = profiles.keys.min() ?? "Default"
         return nil
     }
 
@@ -159,11 +159,17 @@ public enum BackupTimestamp {
     /// sort of these stamps, and local wall-clock repeats an hour every DST
     /// fall-back — during which newer backups would sort older, breaking
     /// dedup's newest-snapshot comparison and prune's keep-newest contract.
-    public static func string(from date: Date) -> String {
+    /// Built once: DateFormatter's own setup is not free, and every call here
+    /// only reads it.
+    private static let formatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = TimeZone(identifier: "UTC")
         f.dateFormat = "yyyy-MM-dd'T'HH-mm-ss-SSS'Z'"
-        return f.string(from: date)
+        return f
+    }()
+
+    public static func string(from date: Date) -> String {
+        formatter.string(from: date)
     }
 }

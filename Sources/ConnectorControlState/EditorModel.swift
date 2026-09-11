@@ -51,6 +51,10 @@ public final class EditorModel: ObservableObject {
     private let dialogs: Dialogs
     private var subscription: AnyCancellable?
     private var suppressToolEvaluation = false
+    /// True only for a brand-new connector still showing the remote
+    /// template's placeholder command/args — set once at open, never
+    /// re-derived from the current field values.
+    private let isUntouchedTemplate: Bool
 
     // MARK: - Fields (catalog §3.3)
 
@@ -104,6 +108,7 @@ public final class EditorModel: ObservableObject {
         self.state = state
         self.target = target
         self.dialogs = dialogs
+        isUntouchedTemplate = target.isNew && target.forcesRemote
         name = target.name
         view = target.entry.lastEditView
         let config = target.entry.config
@@ -155,10 +160,7 @@ public final class EditorModel: ObservableObject {
         EditorModel.additionalTitle(count: additional.count, keys: additional.keys.sorted())
     }
 
-    public var additionalPreview: String {
-        let data = (try? JSONValue.object(additional).serialized()) ?? Data()
-        return String(decoding: data, as: UTF8.self)
-    }
+    public var additionalPreview: String { JSONValue.object(additional).editorText() }
 
     public var hasJSONError: Bool { jsonError != nil }
 
@@ -212,8 +214,7 @@ public final class EditorModel: ObservableObject {
     /// Quality review Q54 asked; both directions are tested.
     private func isRemoteChanged(from oldValue: Bool) {
         guard oldValue != isRemote else { return }
-        if target.isNew, !isRemote, view == .form,
-           args.contains(where: { $0.value == RemotePattern.defaultPackage }) || command.isEmpty {
+        if !isRemote, view == .form, isUntouchedTemplate {
             // Discard the remote template's bridge invocation — a local
             // server has nothing to do with mcp-remote.
             command = "npx"

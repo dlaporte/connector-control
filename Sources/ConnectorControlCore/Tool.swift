@@ -19,10 +19,7 @@ public enum Tool: String, CaseIterable, Sendable {
 
     /// Case-insensitive lookup by basename.
     public init?(name: String) {
-        guard let tool = Tool.allCases.first(where: { $0.rawValue == name.lowercased() }) else {
-            return nil
-        }
-        self = tool
+        self.init(rawValue: name.lowercased())
     }
 }
 

@@ -93,6 +93,18 @@ final class EditorModelTests: XCTestCase {
         XCTAssertEqual(editor.additionalPreview, "{\n  \"disabled\" : false,\n  \"type\" : \"stdio\"\n}")
     }
 
+    /// P-5: additionalPreview now goes through editorText(), which (unlike the
+    /// old manual serialize+decode) does not escape forward slashes.
+    func testAdditionalPreviewDoesNotEscapeSlashes() {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        let config = local("node", ["server.js"], extra: [("homepage", .string("https://example.com/docs"))])
+        let editor = editor(h, state, .existing(name: "local", entry: MCPEntry(config: config, lastEditView: .json)))
+        editor.requestView(.form)
+        XCTAssertEqual(editor.additionalPreview, "{\n  \"homepage\" : \"https://example.com/docs\"\n}")
+    }
+
     func testSwitchingANewTargetToLocalResetsTheBridgeInvocation() {
         let h = AppStateHarness()
         defer { h.dispose() }

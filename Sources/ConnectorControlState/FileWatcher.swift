@@ -85,6 +85,26 @@ public final class FileWatcher: @unchecked Sendable {
 
     private func checkForChange() {
         guard dirSource != nil else { return }
+        guard FileManager.default.fileExists(atPath: url.deletingLastPathComponent().path) else {
+            // The watched directory itself is gone. Disarm now — the next
+            // start() (AppState retries on every reload) finds it still
+            // missing and stays unarmed until the directory reappears. The
+            // final callback below cannot use isLive(generation:): that
+            // checks dirSource != nil, which is already false by the time it
+            // runs because this is the deliberate disarm, not a stale one, so
+            // a wasArmed flag captured before the teardown stands in for it.
+            let wasArmed = dirSource != nil
+            dirSource?.cancel()
+            dirSource = nil
+            fileSource?.cancel()
+            fileSource = nil
+            generation += 1
+            marshal { [weak self] in
+                guard let self, wasArmed else { return }
+                self.onChange()
+            }
+            return
+        }
         armFileSource()
         let current = modificationDate()
         guard current != lastModified else { return }

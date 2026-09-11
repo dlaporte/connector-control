@@ -106,7 +106,7 @@ public struct ToolProbe: Sendable {
         }
         guard var token = text.split(whereSeparator: \.isWhitespace).first else { return nil }
         if let first = token.first, first == "v" || first == "V",
-           let second = token.dropFirst().first, second.isNumber {
+           let second = token.dropFirst().first, second.isASCII && second.isNumber {
             token = token.dropFirst()
         }
         return token.isEmpty ? nil : String(token)

@@ -1,6 +1,10 @@
 import Foundation
 
 public struct AppPaths {
+    public static let dataDirName = "Connector Control"
+    public static let claudeConfigEnv = "CONNECTOR_CONTROL_CLAUDE_CONFIG"
+    public static let storeDirEnv = "CONNECTOR_CONTROL_STORE_DIR"
+
     public let claudeConfigURL: URL
     public let storeDirURL: URL
     public let backupsDirURL: URL
@@ -25,10 +29,13 @@ public struct AppPaths {
         appSupport: URL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support")
     ) -> AppPaths {
-        let claude = environment["CONNECTOR_CONTROL_CLAUDE_CONFIG"].map(URL.init(fileURLWithPath:))
+        // An empty override counts as absent — an inherited but unset environment
+        // variable must not shadow the real default (AppState.makeService and
+        // PermissionsSweep apply the same rule to the stored setting).
+        let claude = environment[claudeConfigEnv].flatMap { $0.isEmpty ? nil : $0 }.map(URL.init(fileURLWithPath:))
             ?? appSupport.appendingPathComponent("Claude/claude_desktop_config.json")
-        let store = environment["CONNECTOR_CONTROL_STORE_DIR"].map(URL.init(fileURLWithPath:))
-            ?? appSupport.appendingPathComponent("Connector Control")
+        let store = environment[storeDirEnv].flatMap { $0.isEmpty ? nil : $0 }.map(URL.init(fileURLWithPath:))
+            ?? appSupport.appendingPathComponent(dataDirName)
         return AppPaths(claudeConfigURL: claude, storeDirURL: store)
     }
 }

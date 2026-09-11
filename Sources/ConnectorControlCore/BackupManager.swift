@@ -1,6 +1,9 @@
 import Foundation
 
 public struct BackupManager {
+    /// Same-millisecond backups tried before giving up and overwriting the last one.
+    private static let collisionBound = 100
+
     public let backupsDir: URL
     public let keepCount: Int
 
@@ -32,29 +35,29 @@ public struct BackupManager {
     public func backUp(fileAt url: URL, series: String, now: Date = Date()) throws -> URL? {
         let fm = FileManager.default
         guard fm.fileExists(atPath: url.path) else { return nil }
-        if let newest = try backups(series: series).first,
-           let current = try? Data(contentsOf: url),
-           (try? Data(contentsOf: newest)) == current {
+        let existing = try backups(series: series)
+        let current = try Data(contentsOf: url)
+        if let newest = existing.first, (try? Data(contentsOf: newest)) == current {
             return newest
         }
         var dest = backupsDir
             .appendingPathComponent("\(series).\(BackupTimestamp.string(from: now)).json")
         var counter = 2
-        while fm.fileExists(atPath: dest.path), counter <= 100 {
+        while fm.fileExists(atPath: dest.path), counter <= BackupManager.collisionBound {
             dest = backupsDir.appendingPathComponent(
                 "\(series).\(BackupTimestamp.string(from: now))-\(counter).json")
             counter += 1
         }
-        // Bound exhausted (100 same-millisecond backups already exist): overwrite
-        // rather than throw.
+        // Bound exhausted (collisionBound same-millisecond backups already
+        // exist): overwrite rather than throw.
         if fm.fileExists(atPath: dest.path) {
             try fm.removeItem(at: dest)
         }
         // See ensureOriginalSnapshot: a private, atomic write of the bytes, not a
         // copy of the file (or of a symlink to it). AtomicFile creates the
         // backups directory 0700 when it does not exist yet.
-        try AtomicFile.write(try Data(contentsOf: url), to: dest)
-        try prune(series: series)
+        try AtomicFile.write(current, to: dest)
+        try prune(series: series, listing: existing + [dest])
         return dest
     }
 
@@ -70,8 +73,11 @@ public struct BackupManager {
             .sorted { $0.lastPathComponent > $1.lastPathComponent }
     }
 
-    private func prune(series: String) throws {
-        let all = try backups(series: series)
+    /// `listing` is the caller's own pre-write directory read plus the file it just
+    /// wrote — sorted the same way `backups(series:)` would — so pruning does not
+    /// re-list a directory `backUp` already just listed.
+    private func prune(series: String, listing: [URL]) throws {
+        let all = listing.sorted { $0.lastPathComponent > $1.lastPathComponent }
         for stale in all.dropFirst(keepCount) {
             try FileManager.default.removeItem(at: stale)
         }

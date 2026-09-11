@@ -117,6 +117,79 @@ final class FileWatcherTests: XCTestCase {
         XCTAssertFalse(r.ui.pumpUntil({ r.hits > 0 }, timeout: settle))
     }
 
+    func testDoesNotFireWhenStoppedWhileAnEventIsInFlight() throws {
+        let r = Rig()
+        defer { r.dispose() }
+        try Data("a".utf8).write(to: r.file)
+        let watcher = r.make()
+        watcher.start()
+        Thread.sleep(forTimeInterval: 0.3)
+        try Data("bb".utf8).write(to: r.file)
+        XCTAssertTrue(r.waitForPost(timeout: wait))   // posted, not yet delivered
+        watcher.stop()                                // before the posted callback runs
+        r.ui.pump()
+        XCTAssertEqual(r.hits, 0, "a callback scheduled before the stop is dropped on delivery")
+    }
+
+    func testCallbackGoesThroughMarshal() throws {
+        let r = Rig()
+        defer { r.dispose() }
+        try Data("a".utf8).write(to: r.file)
+        r.make().start()
+        Thread.sleep(forTimeInterval: 0.3)
+        try Data("bb".utf8).write(to: r.file)
+        XCTAssertTrue(r.waitForPost(timeout: wait), "the change is posted to marshal, not delivered inline")
+        XCTAssertEqual(r.hits, 0, "not delivered until the test pumps marshal's queue")
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait))
+    }
+
+    /// The deletion of the watched directory itself (not just the file) is
+    /// delivered exactly once and disarms the watcher, however many of the
+    /// directory's and the file's own DispatchSource events fire for it — the
+    /// serial queue plus the top-of-function guard collapse them to one.
+    func testADeletedDirectoryFiresOnceAndDisarms() throws {
+        let r = Rig()
+        defer { r.dispose() }
+        try Data("a".utf8).write(to: r.file)
+        let watcher = r.make()
+        watcher.start()
+        XCTAssertTrue(watcher.isArmed)
+        try FileManager.default.removeItem(at: r.dir.url)
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait))
+        XCTAssertFalse(watcher.isArmed)
+        _ = r.ui.pumpUntil({ false }, timeout: settle)   // give a possible second event a chance to (mis)fire
+        XCTAssertEqual(r.hits, 1)
+    }
+
+    func testADeletedDirectoryDisarmsTheWatcherSoTheNextStartReArms() throws {
+        let r = Rig()
+        defer { r.dispose() }
+        try Data("a".utf8).write(to: r.file)
+        let watcher = r.make()
+        watcher.start()
+        try FileManager.default.removeItem(at: r.dir.url)
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait))
+        XCTAssertFalse(watcher.isArmed)
+        watcher.start()   // AppState retries on every reload; the directory is still gone
+        XCTAssertFalse(watcher.isArmed)
+    }
+
+    func testStartAfterTheDirectoryReappearsWatchesAgain() throws {
+        let r = Rig()
+        defer { r.dispose() }
+        try Data("a".utf8).write(to: r.file)
+        let watcher = r.make()
+        watcher.start()
+        try FileManager.default.removeItem(at: r.dir.url)
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait))
+        try FileManager.default.createDirectory(at: r.dir.url, withIntermediateDirectories: true)
+        watcher.start()
+        XCTAssertTrue(watcher.isArmed)
+        Thread.sleep(forTimeInterval: 0.3)
+        try Data("back".utf8).write(to: r.file)
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 2 }, timeout: wait), "the re-armed watcher still reports changes")
+    }
+
     func testStaysUnarmedUntilTheParentDirectoryExists() throws {
         let r = Rig()
         defer { r.dispose() }

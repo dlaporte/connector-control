@@ -24,6 +24,19 @@ final class AppPathsTests: XCTestCase {
         XCTAssertEqual(paths.stagingDirURL.path, "/tmp/x/store/.staging")
     }
 
+    /// A CI/sandbox environment that inherits the variable but leaves it unset
+    /// must not shadow the real default.
+    func testEmptyOverridesCountAsAbsent() {
+        let paths = AppPaths.live(environment: [
+            "CONNECTOR_CONTROL_CLAUDE_CONFIG": "",
+            "CONNECTOR_CONTROL_STORE_DIR": "",
+        ])
+        XCTAssertTrue(paths.claudeConfigURL.path.hasSuffix(
+            "Library/Application Support/Claude/claude_desktop_config.json"))
+        XCTAssertTrue(paths.storeDirURL.path.hasSuffix(
+            "Library/Application Support/Connector Control"))
+    }
+
     func testExplicitBackupsDirURLIsHonoredIndependentlyOfStoreDir() {
         let paths = AppPaths(
             claudeConfigURL: URL(fileURLWithPath: "/tmp/x/claude.json"),

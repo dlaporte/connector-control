@@ -109,4 +109,49 @@ final class PermissionsSweepTests: XCTestCase {
         XCTAssertTrue(PermissionsSweep.runOnce(settings: settings, paths: paths))
         XCTAssertTrue(settings.permissionsSweepDone)
     }
+
+    /// A real file the sweep attempts to repair (chflags uchg blocks chmod and
+    /// ACL changes even for the owner — unlike a write-blocked parent
+    /// directory, which only stops new entries, not metadata changes on an
+    /// existing one) plus an entirely missing backups directory: every
+    /// attempted repair fails, so neither flag may be recorded as done.
+    func testASweepThatAchievedNothingIsNotDone() throws {
+        let dir = TempDir(prefix: "sweep")
+        defer { dir.dispose() }
+        let fm = FileManager.default
+        let storeDir = dir.file("store")
+        try fm.createDirectory(at: storeDir, withIntermediateDirectories: true)
+        let storeFile = storeDir.appendingPathComponent("mcps.json")
+        try Data("{}".utf8).write(to: storeFile)
+        XCTAssertEqual(chflags(storeFile.path, UInt32(UF_IMMUTABLE)), 0)
+        defer { chflags(storeFile.path, 0) }
+        let paths = AppPaths(claudeConfigURL: dir.file("claude.json"), storeDirURL: storeDir,
+                             backupsDirURL: dir.file("backups-never-created"))
+        let settings = FakeSettings()
+        // A chosen store dir: its own mode is never the sweep's to touch, so
+        // the only store-side attempt is the immutable file — the real
+        // failure this test is about, not an incidental one from the dir.
+        settings.masterStoreDir = storeDir.path
+
+        XCTAssertTrue(PermissionsSweep.runOnce(settings: settings, paths: paths))
+        XCTAssertFalse(settings.permissionsSweepDone)
+        XCTAssertFalse(settings.aclSweepDone)
+    }
+
+    /// Existing, empty directories: there is nothing to repair inside them, but
+    /// chmod/ACL-strip on the (empty) directories themselves succeeds, so the
+    /// sweep is done.
+    func testASweepWithNothingToDoIsDone() throws {
+        let dir = TempDir(prefix: "sweep")
+        defer { dir.dispose() }
+        let fm = FileManager.default
+        let paths = AppPaths(claudeConfigURL: dir.file("claude.json"), storeDirURL: dir.file("store"))
+        try fm.createDirectory(at: paths.storeDirURL, withIntermediateDirectories: true)
+        try fm.createDirectory(at: paths.backupsDirURL, withIntermediateDirectories: true)
+        let settings = FakeSettings()
+
+        XCTAssertTrue(PermissionsSweep.runOnce(settings: settings, paths: paths))
+        XCTAssertTrue(settings.permissionsSweepDone)
+        XCTAssertTrue(settings.aclSweepDone)
+    }
 }

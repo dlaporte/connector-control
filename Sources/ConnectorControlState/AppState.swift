@@ -30,6 +30,7 @@ public final class AppState: ObservableObject {
     nonisolated public static let deleteButton = "Delete"
     nonisolated public static let nameEmptyError = "Name must not be empty."
     nonisolated public static let defaultClaudeAppPath = "/Applications/Claude.app"
+    nonisolated public static let chooseClaude = "Choose the real Claude Desktop under Settings ▸ Claude."
     /// Catalog §1.17: Claude's launch date is re-read 3 s after the restart completes.
     nonisolated public static let restartRecheckDelay: TimeInterval = 3
 
@@ -144,8 +145,10 @@ public final class AppState: ObservableObject {
 
     nonisolated public static func makeService(settings: AppSettings, paths: PathContext) -> ConfigService {
         var resolved = AppPaths.live(environment: paths.environment, appSupport: paths.appSupport)
-        // Env override (dev sandboxing) beats the user setting.
-        if paths.environment["CONNECTOR_CONTROL_STORE_DIR"] == nil, let custom = settings.masterStoreDir {
+        // Env override (dev sandboxing) beats the user setting; an empty value in
+        // either one counts as absent (AppPaths.live applies the same rule).
+        if (paths.environment[AppPaths.storeDirEnv] ?? "").isEmpty,
+           let custom = settings.masterStoreDir, !custom.isEmpty {
             // Backups always stay machine-local: a synced store directory must
             // not fill the user's repo/cloud folder with rotating backups. The
             // staging folder stays there too: temp files must never be born in
@@ -211,6 +214,7 @@ public final class AppState: ObservableObject {
     /// mcps.json yet, rebuilds the service, and re-arms both watchers.
     public func repointStore(to dir: URL?) {
         let previousStoreURL = service.paths.masterStoreURL
+        let previousMasterStoreDir = settings.masterStoreDir
         settings.masterStoreDir = dir?.path
         let rebuilt = AppState.makeService(settings: settings, paths: paths)
         let newStoreURL = rebuilt.paths.masterStoreURL
@@ -218,8 +222,14 @@ public final class AppState: ObservableObject {
         if !fm.fileExists(atPath: newStoreURL.path), fm.fileExists(atPath: previousStoreURL.path) {
             // copyItem into a shared folder would inherit its ACEs; AtomicFile creates the
             // directory and the file private from the first instant.
-            if let bytes = try? Data(contentsOf: previousStoreURL) {
-                try? AtomicFile.write(bytes, to: newStoreURL)
+            do {
+                try AtomicFile.write(try Data(contentsOf: previousStoreURL), to: newStoreURL)
+            } catch {
+                // The new location is left seedless — repointing to it would silently
+                // start empty — so the store stays where it was, settings included.
+                lastError = AppState.friendly(error)
+                settings.masterStoreDir = previousMasterStoreDir
+                return
             }
         }
         service = rebuilt
@@ -368,11 +378,10 @@ public final class AppState: ObservableObject {
             } else if storeChangedExternally {
                 notify(AppState.storeChangedBody)
             }
-            refreshRestartState()
         } catch {
             lastError = AppState.friendly(error)
-            refreshRestartState()
         }
+        refreshRestartState()
         AppState.reArm(watcher)
         AppState.reArm(storeWatcher)
     }

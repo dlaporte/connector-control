@@ -140,6 +140,20 @@ final class AppStateWatcherTests: XCTestCase {
         XCTAssertEqual(h.notifier.sent[0].body, AppState.claudeConfigRegeneratedBody)
     }
 
+    /// The store watcher's own directory disappearing (not just its file) is
+    /// self-healing: the deletion's own reload re-persists the store from
+    /// memory, recreating the directory the next reArm needs.
+    func testDeletingTheStoreDirectoryReArmsOnTheNextReload() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        XCTAssertTrue(state.watchersArmed)
+        try FileManager.default.removeItem(at: h.storeDir)
+        _ = h.ui.pumpUntil({ false }, timeout: settle)   // let the deletion's own detection run
+        state.reload()
+        XCTAssertTrue(state.watchersArmed)
+    }
+
     func testRepointStoreSeedsAnEmptyLocationAndReArmsTheWatcher() throws {
         let h = AppStateHarness()
         defer { h.dispose() }
@@ -176,6 +190,29 @@ final class AppStateWatcherTests: XCTestCase {
         XCTAssertEqual(state.store.mcps["aws-mcp"]?.enabled, false)
         XCTAssertEqual(try h.claudeServers().keys.sorted(), ["scoutbook", "service-now", "synced-only"])   // regenerated
         XCTAssertTrue(h.notifier.sent.isEmpty)   // quiet adoption: the user is watching
+    }
+
+    /// The new location exists but cannot be written into (its directory is
+    /// write-blocked): the seed write throws, so the repoint must not adopt a
+    /// service pointed at a store that was never actually seeded.
+    func testARepointWhoseSeedCannotBeWrittenKeepsTheOldStore() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        let target = h.dir.file("blocked")
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+        let block = try WriteBlock(target.appendingPathComponent("mcps.json"))
+        defer { block.dispose() }
+        XCTAssertTrue(block.isEffective)
+        let previousStoreDir = state.service.paths.storeDirURL
+        let beforeClaudeConfig = try Data(contentsOf: h.claudeConfigURL)
+
+        state.repointStore(to: target)
+
+        XCTAssertEqual(state.service.paths.storeDirURL, previousStoreDir)
+        XCTAssertNotNil(state.lastError)
+        XCTAssertEqual(try Data(contentsOf: h.claudeConfigURL), beforeClaudeConfig)
+        XCTAssertNil(h.settings.masterStoreDir, "restored to its previous value")
     }
 
     func testRepointStoreBackToTheDefault() {

@@ -23,6 +23,22 @@ final class RestoreModelTests: XCTestCase {
         XCTAssertFalse(model.canRestore)
     }
 
+    /// Commit-in-progress (K-6): a listing failure used to be swallowed by
+    /// `try?`, leaving an empty list with no explanation; it now surfaces.
+    func testLoadSurfacesABackupsListingFailure() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let state = h.create()
+        state.setEnabled("aws-mcp", false)   // a real backup to list, if listing worked
+        let model = RestoreModel(state: state)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: h.backupsDir.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: h.backupsDir.path) }
+
+        model.load()
+        XCTAssertTrue(model.backups.isEmpty)
+        XCTAssertTrue(model.hasRestoreError)
+    }
+
     func testRestoreConfirmsWithTheFileNameAndRestoresThroughAppState() {
         let h = AppStateHarness()
         defer { h.dispose() }

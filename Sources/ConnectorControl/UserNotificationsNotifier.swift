@@ -10,6 +10,9 @@ final class UserNotificationsNotifier: Notifier {
     var onRestartAction: MainActorAction?
     /// The center holds its delegate weakly; this notifier retains the bridge.
     private var handler: NotificationActionHandler?
+    /// The result of the first authorization request, so later notifications
+    /// skip asking again; nil until one has been asked for.
+    private var authorization: Bool?
 
     /// Registers the category whose Restart Claude button routes back into AppState.
     init() {
@@ -26,14 +29,24 @@ final class UserNotificationsNotifier: Notifier {
     func notify(title: String, body: String, category: String?) {
         guard UserNotificationsNotifier.hasAppBundle else { return }
         let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.alert]) { granted, _ in
-            guard granted else { return }
-            let content = UNMutableNotificationContent()
-            content.title = title
-            content.body = body
-            if let category { content.categoryIdentifier = category }
-            center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+        if let authorization {
+            guard authorization else { return }
+            post(title: title, body: body, category: category, to: center)
+            return
         }
+        center.requestAuthorization(options: [.alert]) { [weak self] granted, _ in
+            self?.authorization = granted
+            guard granted else { return }
+            self?.post(title: title, body: body, category: category, to: center)
+        }
+    }
+
+    private func post(title: String, body: String, category: String?, to center: UNUserNotificationCenter) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        if let category { content.categoryIdentifier = category }
+        center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
     }
 }
 
