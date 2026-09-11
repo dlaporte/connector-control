@@ -198,12 +198,14 @@ jobs:
           RID: ${{ matrix.rid }}
           REQUIRE_SIGNING: ${{ inputs.require-signing }}
         run: |
-          $packArgs = @('-Version', $env:VERSION, '-Runtime', $env:RID, '-ReleaseNotes', 'notes/notes.md')
+          # A hashtable, not an array: PowerShell splats an array positionally, which would hand
+          # the literal string "-Version" to the Version parameter.
+          $packArgs = @{ Version = $env:VERSION; Runtime = $env:RID; ReleaseNotes = 'notes/notes.md' }
           if ($env:REQUIRE_SIGNING -eq 'true') {
             # An empty -AzureTrustedSignFile packs UNSIGNED with nothing but a vpk warning, and
             # the run would not fail until the smoke job two jobs later. Assert it here instead.
             if (-not $env:SIGN_FILE) { throw 'require-signing is set but SIGN_FILE is empty' }
-            $packArgs += @('-AzureTrustedSignFile', $env:SIGN_FILE)
+            $packArgs['AzureTrustedSignFile'] = $env:SIGN_FILE
           }
           ./windows/scripts/package.ps1 @packArgs
 
