@@ -24,7 +24,7 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.profileNames, ["Default"])
         XCTAssertEqual(state.activeProfile, "Default")
         XCTAssertTrue(FileManager.default.fileExists(atPath: h.masterStoreURL.path))
-        XCTAssertTrue(h.settings.permissionsSweepDone)
+        XCTAssertEqual(h.settings.sweepVersion, PermissionsSweep.currentVersion)
     }
 
     func testHeaderSubtitleForAnEmptyStore() {
@@ -373,7 +373,7 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(Notifications.title, "Connector Control")
         XCTAssertEqual(Notifications.restartCategory, "restartPending")
         XCTAssertEqual(Notifications.restartAction, "restartClaude")
-        XCTAssertEqual(Notifications.restartButton, "Restart Claude")
+        XCTAssertEqual(Notifications.restartToastButton, "Restart Claude")
         XCTAssertEqual(AppState.noConnectorsSubtitle, "No connectors configured")
         XCTAssertEqual(AppState.enabledSubtitle(enabled: 2, total: 3), "2 of 3 enabled")
         XCTAssertEqual(AppState.claudeConfigRegeneratedBody,

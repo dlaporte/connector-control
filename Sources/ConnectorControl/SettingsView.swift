@@ -43,8 +43,8 @@ struct SettingsView: View {
         .sheet(isPresented: $showRestore) {
             RestoreSheetView(state: state)
         }
-        .onChange(of: model.claudeAppPath) {
-            claudeTabIcon = SettingsView.makeClaudeTabIcon(appPath: model.claudeAppPath)
+        .onChange(of: model.claudeApp) {
+            claudeTabIcon = SettingsView.makeClaudeTabIcon(appPath: model.claudeApp.path)
         }
     }
 
@@ -88,7 +88,7 @@ struct SettingsView: View {
     private var storageTab: some View {
         Form {
             Section(SettingsModel.masterListHeader) {
-                Text(model.storeDirPath)
+                Text(model.storeDir.path)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack {
@@ -120,7 +120,7 @@ struct SettingsView: View {
     private var claudeTab: some View {
         Form {
             Section(SettingsModel.claudeAppHeader) {
-                Text(model.claudeAppPath)
+                Text(model.claudeApp.path)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack {
@@ -164,13 +164,9 @@ struct SettingsView: View {
         guard let tiff = icon.tiffRepresentation,
               let ciImage = CIImage(data: tiff),
               let filter = CIFilter(name: "CIColorControls",
-                                    parameters: [kCIInputImageKey: ciImage,
-                                                 kCIInputSaturationKey: 0])
+                                    parameters: [kCIInputImageKey: ciImage, kCIInputSaturationKey: 0]),
+              let output = filter.outputImage
         else {
-            icon.size = size
-            return icon
-        }
-        guard let output = filter.outputImage else {
             icon.size = size
             return icon
         }

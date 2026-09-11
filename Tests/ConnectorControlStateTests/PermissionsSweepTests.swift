@@ -3,6 +3,7 @@ import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
+@MainActor
 final class PermissionsSweepTests: XCTestCase {
     private func mode(_ url: URL) throws -> Int {
         try XCTUnwrap(FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions] as? Int)
@@ -28,14 +29,13 @@ final class PermissionsSweepTests: XCTestCase {
         let settings = FakeSettings()
 
         XCTAssertTrue(PermissionsSweep.runOnce(settings: settings, paths: paths))
-        XCTAssertTrue(settings.permissionsSweepDone)
-        XCTAssertTrue(settings.aclSweepDone)
+        XCTAssertEqual(settings.sweepVersion, PermissionsSweep.currentVersion)
         XCTAssertEqual(try mode(paths.storeDirURL), 0o700)
         XCTAssertEqual(try mode(paths.masterStoreURL), 0o600)
         XCTAssertEqual(try mode(paths.backupsDirURL), 0o700)
         XCTAssertEqual(try mode(nested), 0o700)
         XCTAssertEqual(try mode(nestedFile), 0o600)
-        XCTAssertFalse(PermissionsSweep.runOnce(settings: settings, paths: paths), "gated by the flag from now on")
+        XCTAssertFalse(PermissionsSweep.runOnce(settings: settings, paths: paths), "gated by the version from now on")
     }
 
     /// The store directory can be a folder the user chose (a repo, iCloud Drive): only the
@@ -77,9 +77,10 @@ final class PermissionsSweepTests: XCTestCase {
         XCTAssertEqual(try mode(backup), 0o600)
     }
 
-    /// An install swept for modes before ACL stripping existed runs once more for the ACLs,
-    /// and only for the app's own files.
-    func testAnInstallSweptForModesStripsACLsOnceMore() throws {
+    /// K-3: an install that already swept modes under the old two-flag scheme
+    /// (recorded here as sweepVersion == 1) gets only the ACL pass on its next
+    /// launch, and lands at sweepVersion == PermissionsSweep.currentVersion.
+    func testAnInstallAtSweepVersionOneGetsOnlyTheACLPassAndLandsAtTwo() throws {
         let dir = TempDir(prefix: "sweep")
         defer { dir.dispose() }
         let paths = AppPaths(claudeConfigURL: dir.file("claude.json"), storeDirURL: dir.file("store"))
@@ -89,17 +90,20 @@ final class PermissionsSweepTests: XCTestCase {
         let backup = paths.backupsDirURL.appendingPathComponent("mcps.2026-09-10T00-00-00-000Z.json")
         try Data("{}".utf8).write(to: backup)
         for url in [paths.masterStoreURL, backup] {
+            try fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
             try grantEveryoneRead(at: url.path, inheritable: false)
             XCTAssertTrue(hasACL(atPath: url.path))
         }
         let settings = FakeSettings()
-        settings.permissionsSweepDone = true   // a pre-ACL build already did the modes
+        settings.sweepVersion = 1   // a pre-ACL build already did the modes
 
         XCTAssertTrue(PermissionsSweep.runOnce(settings: settings, paths: paths))
-        XCTAssertTrue(settings.aclSweepDone)
+        XCTAssertEqual(settings.sweepVersion, PermissionsSweep.currentVersion)
         XCTAssertFalse(hasACL(atPath: paths.masterStoreURL.path))
         XCTAssertFalse(hasACL(atPath: backup.path))
-        XCTAssertFalse(PermissionsSweep.runOnce(settings: settings, paths: paths), "both flags set: gated")
+        // Mode is untouched by this pass: it stays at the 644 set above, not swept to 600.
+        XCTAssertEqual(try mode(paths.masterStoreURL), 0o644, "the mode pass did not re-run")
+        XCTAssertFalse(PermissionsSweep.runOnce(settings: settings, paths: paths), "already at the current version: gated")
     }
 
     func testMissingDirectoriesAreToleratedAndStillMarkTheSweepDone() {
@@ -108,14 +112,14 @@ final class PermissionsSweepTests: XCTestCase {
         let paths = AppPaths(claudeConfigURL: dir.file("claude.json"), storeDirURL: dir.file("never-created"))
         let settings = FakeSettings()
         XCTAssertTrue(PermissionsSweep.runOnce(settings: settings, paths: paths))
-        XCTAssertTrue(settings.permissionsSweepDone)
+        XCTAssertEqual(settings.sweepVersion, PermissionsSweep.currentVersion)
     }
 
     /// A real file the sweep attempts to repair (chflags uchg blocks chmod and
     /// ACL changes even for the owner — unlike a write-blocked parent
     /// directory, which only stops new entries, not metadata changes on an
     /// existing one) plus an entirely missing backups directory: every
-    /// attempted repair fails, so neither flag may be recorded as done.
+    /// attempted repair fails, so the version may not advance.
     func testASweepThatAchievedNothingIsNotDone() throws {
         let dir = TempDir(prefix: "sweep")
         defer { dir.dispose() }
@@ -135,8 +139,7 @@ final class PermissionsSweepTests: XCTestCase {
         settings.masterStoreDir = storeDir.path
 
         XCTAssertTrue(PermissionsSweep.runOnce(settings: settings, paths: paths))
-        XCTAssertFalse(settings.permissionsSweepDone)
-        XCTAssertFalse(settings.aclSweepDone)
+        XCTAssertEqual(settings.sweepVersion, 0)
     }
 
     /// Existing, empty directories: there is nothing to repair inside them, but
@@ -152,7 +155,6 @@ final class PermissionsSweepTests: XCTestCase {
         let settings = FakeSettings()
 
         XCTAssertTrue(PermissionsSweep.runOnce(settings: settings, paths: paths))
-        XCTAssertTrue(settings.permissionsSweepDone)
-        XCTAssertTrue(settings.aclSweepDone)
+        XCTAssertEqual(settings.sweepVersion, PermissionsSweep.currentVersion)
     }
 }

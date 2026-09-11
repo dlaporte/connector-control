@@ -18,7 +18,7 @@ struct ConnectorControlApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        WindowGroup("Connector Editor", id: "editor", for: EditTarget.self) { $target in
+        WindowGroup("Connector Editor", id: EditTarget.editorWindowID, for: EditTarget.self) { $target in
             if let target = $target.wrappedValue {
                 EditSheetView(state: state, target: target)
                     .navigationTitle(target.windowTitle)

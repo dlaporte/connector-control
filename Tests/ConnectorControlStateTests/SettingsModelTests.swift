@@ -149,15 +149,15 @@ final class SettingsModelTests: XCTestCase {
     func testStoreLocationFollowsRepointing() {
         let rig = Rig()
         defer { rig.dispose() }
-        XCTAssertEqual(rig.model.storeDirPath, rig.h.storeDir.path)
+        XCTAssertEqual(rig.model.storeDir.path, rig.h.storeDir.path)
         XCTAssertFalse(rig.model.canUseDefaultStore)
         let synced = rig.h.dir.file("synced")
         rig.model.chooseStoreDir(synced)
-        XCTAssertEqual(rig.model.storeDirPath, synced.path)
+        XCTAssertEqual(rig.model.storeDir.path, synced.path)
         XCTAssertTrue(rig.model.canUseDefaultStore)
         XCTAssertEqual(rig.model.backupsDir.path, rig.h.backupsDir.path)
         rig.model.useDefaultStoreDir()
-        XCTAssertEqual(rig.model.storeDirPath, rig.h.storeDir.path)
+        XCTAssertEqual(rig.model.storeDir.path, rig.h.storeDir.path)
         XCTAssertFalse(rig.model.canUseDefaultStore)
     }
 
@@ -166,15 +166,15 @@ final class SettingsModelTests: XCTestCase {
     func testClaudeAppPathShowsTheOverrideOrTheDefault() {
         let rig = Rig()
         defer { rig.dispose() }
-        XCTAssertEqual(rig.model.claudeAppPath, "/Applications/Claude.app")
+        XCTAssertEqual(rig.model.claudeApp.path, "/Applications/Claude.app")
         XCTAssertFalse(rig.model.canUseDefaultClaudeApp)
         rig.model.chooseClaudeApp(URL(fileURLWithPath: "/Applications/Claude Beta.app"))
-        XCTAssertEqual(rig.model.claudeAppPath, "/Applications/Claude Beta.app")
+        XCTAssertEqual(rig.model.claudeApp.path, "/Applications/Claude Beta.app")
         XCTAssertEqual(rig.h.settings.claudeAppPath, "/Applications/Claude Beta.app")
         XCTAssertTrue(rig.model.canUseDefaultClaudeApp)
         rig.model.useDefaultClaudeApp()
         XCTAssertNil(rig.h.settings.claudeAppPath)
-        XCTAssertEqual(rig.model.claudeAppPath, "/Applications/Claude.app")
+        XCTAssertEqual(rig.model.claudeApp.path, "/Applications/Claude.app")
         XCTAssertFalse(rig.model.canUseDefaultClaudeApp)
         rig.h.settings.claudeAppPath = "/Applications/Claude.app"   // an older build wrote the default literally
         XCTAssertFalse(rig.model.canUseDefaultClaudeApp, "Use Default stays disabled when the stored path IS the default")

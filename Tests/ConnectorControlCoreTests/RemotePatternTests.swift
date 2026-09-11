@@ -60,6 +60,13 @@ final class RemotePatternTests: XCTestCase {
                                      .string("https://x.dev/mcp")])]))
     }
 
+    /// windows/tests/ConnectorControl.Core.Tests/RemotePatternTests.cs DefaultPackageIsTheMarkerAndWhatMakeWrites.
+    func testDefaultPackageIsTheMarkerAndWhatMakeWrites() {
+        XCTAssertTrue(RemotePattern.isMarker(RemotePattern.defaultPackage))
+        XCTAssertEqual(RemotePattern.decode(RemotePattern.make(url: "https://x.dev/mcp"))?.package,
+                       RemotePattern.defaultPackage)
+    }
+
     func testMakeThenDetectRoundTrips() {
         XCTAssertEqual(
             RemotePattern.detect(RemotePattern.make(url: "https://x.dev/mcp")),

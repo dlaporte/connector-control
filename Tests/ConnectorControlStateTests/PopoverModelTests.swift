@@ -105,7 +105,7 @@ final class PopoverModelTests: XCTestCase {
         let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
-        XCTAssertEqual(popover.footer, FooterKind.none)
+        XCTAssertEqual(popover.footer, FooterKind.hidden)
         XCTAssertFalse(popover.showFooter)
 
         state.setEnabled("aws-mcp", false)

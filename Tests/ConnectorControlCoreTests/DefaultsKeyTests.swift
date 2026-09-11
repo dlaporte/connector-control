@@ -7,8 +7,7 @@ final class DefaultsKeyTests: XCTestCase {
         // UserDefaults reads; a key missing here is a setting the seam forgets.
         XCTAssertEqual(Set(DefaultsKey.allCases.map(\.rawValue)), [
             "masterStoreDir", "claudeAppPath", "backupKeepCount", "notifyExternalChanges",
-            "confirmBeforeRestart", "confirmBeforeQuit", "lastApplyDate", "permissionsSweepDone",
-            "aclSweepDone",
+            "confirmBeforeRestart", "confirmBeforeQuit", "lastApplyDate", "sweepVersion",
         ])
     }
 }

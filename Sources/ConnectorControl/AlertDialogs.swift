@@ -3,6 +3,7 @@ import ConnectorControlState
 
 /// Catalog §1.16–§1.18 and §3.9: app-modal NSAlerts, activating the app first
 /// so the alert is not hidden behind whatever is frontmost.
+@MainActor
 final class AlertDialogs: Dialogs {
     static let okTitle = "OK"
 

@@ -1,10 +1,10 @@
 import Foundation
 
-public enum EditView: String, Codable, Hashable {
+public enum EditView: String, Codable, Hashable, Sendable {
     case form, json
 }
 
-public struct MCPEntry: Equatable, Hashable, Codable {
+public struct MCPEntry: Equatable, Hashable, Codable, Sendable {
     public var enabled: Bool
     public var config: JSONValue
     public var lastEditView: EditView
@@ -17,7 +17,7 @@ public struct MCPEntry: Equatable, Hashable, Codable {
 }
 
 /// A full, independent snapshot of connectors: its own configs + enabled flags.
-public struct Profile: Equatable, Codable {
+public struct Profile: Equatable, Codable, Sendable {
     public var mcps: [String: MCPEntry]
     public init(mcps: [String: MCPEntry] = [:]) { self.mcps = mcps }
 }
@@ -25,7 +25,7 @@ public struct Profile: Equatable, Codable {
 /// Schema v2 only — no v1 fallback. A v1 (or otherwise malformed) file on
 /// disk fails to decode and is handled by `MasterStoreIO.load`'s existing
 /// corrupt-file path: moved aside and rebuilt fresh from Claude's config.
-public struct MasterStore: Equatable, Codable {
+public struct MasterStore: Equatable, Codable, Sendable {
     public var version: Int
     public var activeProfile: String
     public var profiles: [String: Profile]
@@ -131,10 +131,8 @@ public enum MasterStoreIO {
         }
     }
 
-    public static func save(_ store: MasterStore, to url: URL) throws {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try AtomicFile.write(try encoder.encode(store), to: url)
+    public static func save(_ store: MasterStore, to url: URL, staging: URL? = nil) throws {
+        try AtomicFile.write(try JSONEncoder.canonical.encode(store), to: url, staging: staging)
     }
 
     /// Side-effect-free peek: nil when the file is missing or undecodable.
@@ -144,25 +142,5 @@ public enum MasterStoreIO {
     public static func read(from url: URL) -> MasterStore? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(MasterStore.self, from: data)
-    }
-}
-
-public enum BackupTimestamp {
-    /// UTC, not local time: backup recency is derived from a lexicographic
-    /// sort of these stamps, and local wall-clock repeats an hour every DST
-    /// fall-back — during which newer backups would sort older, breaking
-    /// dedup's newest-snapshot comparison and prune's keep-newest contract.
-    /// Built once: DateFormatter's own setup is not free, and every call here
-    /// only reads it.
-    private static let formatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = "yyyy-MM-dd'T'HH-mm-ss-SSS'Z'"
-        return f
-    }()
-
-    public static func string(from date: Date) -> String {
-        formatter.string(from: date)
     }
 }

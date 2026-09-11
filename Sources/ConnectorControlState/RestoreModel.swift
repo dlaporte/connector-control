@@ -37,9 +37,7 @@ public final class RestoreModel: ObservableObject {
     public func load() {
         do {
             var found = try state.service.backups.backups(series: RestoreModel.series)
-            let original = state.service.backups.backupsDir
-                .appendingPathComponent("\(RestoreModel.series).original.json")
-            if FileManager.default.fileExists(atPath: original.path) {
+            if let original = state.service.backups.originalSnapshotURL(series: RestoreModel.series) {
                 found.append(original)
             }
             backups = found

@@ -150,7 +150,7 @@ public final class SettingsModel: ObservableObject {
 
     // MARK: - Storage (catalog §4.3)
 
-    public var storeDirPath: String { state.service.paths.storeDirURL.path }
+    public var storeDir: URL { state.service.paths.storeDirURL }
 
     public var canUseDefaultStore: Bool { !(settings.masterStoreDir ?? "").isEmpty }
 
@@ -185,9 +185,9 @@ public final class SettingsModel: ObservableObject {
 
     // MARK: - Claude (catalog §4.4)
 
-    public var claudeAppPath: String { settings.claudeAppPath ?? AppState.defaultClaudeAppPath }
+    public var claudeApp: URL { URL(fileURLWithPath: settings.claudeAppPath ?? AppState.defaultClaudeAppPath) }
 
-    public var canUseDefaultClaudeApp: Bool { claudeAppPath != AppState.defaultClaudeAppPath }
+    public var canUseDefaultClaudeApp: Bool { claudeApp.path != AppState.defaultClaudeAppPath }
 
     public func chooseClaudeApp(_ app: URL) {
         objectWillChange.send()

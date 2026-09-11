@@ -2,6 +2,7 @@ import ServiceManagement
 import ConnectorControlState
 
 /// Catalog §4.2: launch at login through SMAppService.
+@MainActor
 final class SMAppServiceAutostart: Autostart {
     var isEnabled: Bool { SMAppService.mainApp.status == .enabled }
 

@@ -2,6 +2,7 @@ import XCTest
 import ConnectorControlCore
 @testable import ConnectorControlState
 
+@MainActor
 final class UserDefaultsSettingsTests: XCTestCase {
     // One fixed throwaway domain, cleared before and after: cfprefsd keeps an
     // empty plist per suite name in ~/Library/Preferences, so a fresh UUID per
@@ -27,8 +28,7 @@ final class UserDefaultsSettingsTests: XCTestCase {
         XCTAssertTrue(settings.confirmBeforeRestart)
         XCTAssertTrue(settings.confirmBeforeQuit)
         XCTAssertNil(settings.lastApplyDate)
-        XCTAssertFalse(settings.permissionsSweepDone)
-        XCTAssertFalse(settings.aclSweepDone)
+        XCTAssertEqual(settings.sweepVersion, 0)
 
         let applied = Date(timeIntervalSince1970: 1_788_523_200)
         settings.masterStoreDir = "/tmp/synced"
@@ -38,8 +38,7 @@ final class UserDefaultsSettingsTests: XCTestCase {
         settings.confirmBeforeRestart = false
         settings.confirmBeforeQuit = false
         settings.lastApplyDate = applied
-        settings.permissionsSweepDone = true
-        settings.aclSweepDone = true
+        settings.sweepVersion = 2
 
         // Read back through a second instance over the same suite: the values are on disk, under DefaultsKey's names.
         let again = UserDefaultsSettings(defaults: defaults)
@@ -50,8 +49,7 @@ final class UserDefaultsSettingsTests: XCTestCase {
         XCTAssertFalse(again.confirmBeforeRestart)
         XCTAssertFalse(again.confirmBeforeQuit)
         XCTAssertEqual(again.lastApplyDate, applied)
-        XCTAssertTrue(again.permissionsSweepDone)
-        XCTAssertTrue(again.aclSweepDone)
+        XCTAssertEqual(again.sweepVersion, 2)
         XCTAssertEqual(defaults.string(forKey: DefaultsKey.masterStoreDir.rawValue), "/tmp/synced")
 
         // nil removes the key (catalog §1.12 step 2).

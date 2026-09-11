@@ -1,29 +1,45 @@
 import Foundation
 
-public struct BackupManager {
+public struct BackupManager: Sendable {
     /// Same-millisecond backups tried before giving up and overwriting the last one.
     private static let collisionBound = 100
+    public static let defaultKeepCount = 20
 
     public let backupsDir: URL
     public let keepCount: Int
+    /// Where temp files are staged before the atomic rename (see `AtomicFile.write`);
+    /// nil in tests/tools that don't care where a temp file is briefly born.
+    public let stagingDir: URL?
 
-    public init(backupsDir: URL, keepCount: Int = 20) {
+    public init(backupsDir: URL, keepCount: Int = BackupManager.defaultKeepCount, stagingDir: URL? = nil) {
         self.backupsDir = backupsDir
         self.keepCount = keepCount
+        self.stagingDir = stagingDir
     }
 
     /// First-run snapshot; written once, never pruned.
     public func ensureOriginalSnapshot(of url: URL) throws {
         let fm = FileManager.default
         guard fm.fileExists(atPath: url.path) else { return }
-        let base = url.deletingPathExtension().lastPathComponent
-        let dest = backupsDir.appendingPathComponent("\(base).original.json")
+        let series = url.deletingPathExtension().lastPathComponent
+        let dest = originalSnapshotPath(series: series)
         guard !fm.fileExists(atPath: dest.path) else { return }
         // Written like every other private file (created 0600, atomically), not
         // copied: copyItem would inherit the source's mode — Claude's config is
         // usually 0644 — and, for a symlinked config, copy the link itself
         // rather than the bytes it points at.
-        try AtomicFile.write(try Data(contentsOf: url), to: dest)
+        try AtomicFile.write(try Data(contentsOf: url), to: dest, staging: stagingDir)
+    }
+
+    /// The `.original.json` snapshot's URL for a series — what `ensureOriginalSnapshot`
+    /// writes once and never prunes — when it exists on disk; nil otherwise.
+    public func originalSnapshotURL(series: String) -> URL? {
+        let dest = originalSnapshotPath(series: series)
+        return FileManager.default.fileExists(atPath: dest.path) ? dest : nil
+    }
+
+    private func originalSnapshotPath(series: String) -> URL {
+        backupsDir.appendingPathComponent("\(series).original.json")
     }
 
     /// Returns the existing newest backup instead of writing a duplicate when
@@ -56,7 +72,7 @@ public struct BackupManager {
         // See ensureOriginalSnapshot: a private, atomic write of the bytes, not a
         // copy of the file (or of a symlink to it). AtomicFile creates the
         // backups directory 0700 when it does not exist yet.
-        try AtomicFile.write(current, to: dest)
+        try AtomicFile.write(current, to: dest, staging: stagingDir)
         try prune(series: series, listing: existing + [dest])
         return dest
     }

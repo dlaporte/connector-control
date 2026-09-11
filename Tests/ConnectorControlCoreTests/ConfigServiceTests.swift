@@ -241,11 +241,26 @@ final class ConfigServiceTests: XCTestCase {
         let before = try Data(contentsOf: paths.claudeConfigURL)
         XCTAssertThrowsError(try service.restoreClaudeConfig(
             from: badBackup, mergedWith: store)) {
-            guard case ClaudeConfigError.malformed = $0 else {
+            guard case ClaudeConfigError.malformed(let detail) = $0 else {
                 return XCTFail("wrong error: \($0)")
             }
+            XCTAssertEqual(detail, "backup bad-backup.json is not a valid config file "
+                           + "(The data couldn’t be read because it isn’t in the correct format.)")
         }
         XCTAssertEqual(try Data(contentsOf: paths.claudeConfigURL), before,
                        "live config must be untouched after refused restore")
+    }
+
+    /// U-3: parseRoot treats zero bytes as an empty root (the same rule
+    /// ClaudeConfigIO's own read path already applies), so a zero-byte backup —
+    /// the same crash/truncation artifact — restores to an empty config
+    /// instead of being refused as malformed.
+    func testRestoreFromAnEmptyBackupTreatsItAsAnEmptyConfig() throws {
+        let store = try service.loadAndReconcile().store
+        let empty = dir.appendingPathComponent("empty-backup.json")
+        try Data().write(to: empty)
+        let servers = try service.restoreClaudeConfig(from: empty, mergedWith: store)
+        XCTAssertEqual(servers, [:])
+        XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL), [:])
     }
 }

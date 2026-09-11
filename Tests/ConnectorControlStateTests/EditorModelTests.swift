@@ -587,7 +587,11 @@ final class EditorModelTests: XCTestCase {
         XCTAssertTrue(h.dialogs.confirms.isEmpty)   // a sheet, not an NSAlert
     }
 
-    func testPastedAuthConfigOnANewRemoteTargetKeepsItsAuthAndExtraArgs() {
+    /// The remote-URL quirk is now `load()`'s rule (used by both `init` and
+    /// `adoptForm`): remoteURL is populated ONLY from `detect()`'s canonical
+    /// 2-arg shape, never from `decode()`'s URL, even when isRemote is true
+    /// via the forcesRemote/isRemoteShaped fallback.
+    func testLoadOnlyTakesRemoteUrlFromDetectNotDecodeEvenWhenAuthFlagsForceTheRemoteForm() {
         let h = AppStateHarness()
         defer { h.dispose() }
         let state = h.create()
@@ -599,7 +603,7 @@ final class EditorModelTests: XCTestCase {
         editor.name = "pasted"
         editor.requestView(.form)
         XCTAssertTrue(editor.isRemote)            // forcesRemote + isRemoteShaped
-        XCTAssertEqual(editor.remoteURL, "")      // catalog §3.5 quirk: adoptForm only takes the URL from detect()
+        XCTAssertEqual(editor.remoteURL, "")      // quirk: load() only takes the URL from detect()
         XCTAssertEqual(editor.authKind, .header)
         XCTAssertEqual(editor.headerName, "X-API-Key")
         editor.remoteURL = url

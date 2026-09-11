@@ -1,6 +1,7 @@
 import Foundation
 
 /// NSRunningApplication + ClaudeRestarter (catalog §1.11, §6.1) as a seam.
+@MainActor
 public protocol ClaudeProcess: AnyObject {
     var isRunning: Bool { get }
     /// The running Claude's launch date, or nil when not running / unknown.

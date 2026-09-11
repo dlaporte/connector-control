@@ -76,10 +76,10 @@ public final class PopoverModel: ObservableObject {
     public var footer: FooterKind {
         if state.applyRetryNeeded { return .retryApply }
         if state.needsClaudeRestart { return .restartRequired }
-        return FooterKind.none
+        return .hidden
     }
 
-    public var showFooter: Bool { footer != FooterKind.none }
+    public var showFooter: Bool { footer != .hidden }
 
     public var footerTitle: String { footer == .retryApply ? PopoverModel.retryTitle : PopoverModel.restartTitle }
 

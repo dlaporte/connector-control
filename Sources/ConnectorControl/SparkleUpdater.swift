@@ -5,6 +5,7 @@ import ConnectorControlState
 
 /// Catalog §1.2 step 5 and §4.2. Created not-started; started only from a
 /// real app bundle — bare `swift run` has none and Sparkle requires one.
+@MainActor
 final class SparkleUpdater: Updater {
     private let controller = SPUStandardUpdaterController(
         startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil)
@@ -12,7 +13,7 @@ final class SparkleUpdater: Updater {
     private(set) var isAvailable = false
 
     func startIfBundled() {
-        guard Bundle.main.bundleIdentifier != nil, !isAvailable else { return }
+        guard Bundle.main.isBundled, !isAvailable else { return }
         controller.startUpdater()
         isAvailable = true
     }

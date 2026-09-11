@@ -2,8 +2,8 @@ import Foundation
 import ConnectorControlCore
 
 /// One-time repair of files written before owner-only permissions were
-/// enforced (catalog §1.15), gated by the permissionsSweepDone setting so
-/// launches stay cheap. Every error is ignored (try?), as before.
+/// enforced, gated by the sweepVersion setting so launches stay cheap. Every
+/// error is ignored (try?), as before.
 ///
 /// The sweep touches only what this app writes. The store directory can be a
 /// folder the user chose — a git checkout, iCloud Drive, Documents — so only
@@ -13,29 +13,36 @@ import ConnectorControlCore
 /// backups directory is always the app's own (machine-local, never the synced
 /// folder), so everything under it is the app's to repair.
 ///
-/// Two one-shot passes share this: the mode repair (permissionsSweepDone) and the later ACL
-/// strip (aclSweepDone); an install that already had the first gets only the second.
+/// Two one-shot passes share this: pass 1 (mode) and pass 2 (ACL strip),
+/// tracked by a single `sweepVersion` rather than one flag each, so a future
+/// third pass needs only a `currentVersion` bump and one more `< N` check.
+/// There is no migration off the old `permissionsSweepDone`/`aclSweepDone`
+/// flags: both passes are idempotent and cheap, so an upgraded install simply
+/// re-runs the whole sweep once more under the new key.
 public enum PermissionsSweep {
+    /// Bump this, and add the new pass's `< currentVersion` check below, to add a pass.
+    public static let currentVersion = 2
+
     /// True when the sweep ran (first time only).
     @discardableResult
+    @MainActor
     public static func runOnce(settings: AppSettings, paths: AppPaths) -> Bool {
-        let modes = !settings.permissionsSweepDone
-        let acls = !settings.aclSweepDone
+        let modes = settings.sweepVersion < 1
+        let acls = settings.sweepVersion < 2
         guard modes || acls else { return false }
         let fm = FileManager.default
-        var modeAttempted = 0, modeApplied = 0
-        var aclAttempted = 0, aclApplied = 0
+        var attempted = 0, applied = 0
         func repair(_ url: URL, mode: Int) {
             if modes {
-                modeAttempted += 1
+                attempted += 1
                 if (try? fm.setAttributes([.posixPermissions: mode], ofItemAtPath: url.path)) != nil {
-                    modeApplied += 1
+                    applied += 1
                 }
             }
             if acls {
-                aclAttempted += 1
+                attempted += 1
                 if (try? AtomicFile.stripACL(atPath: url.path)) != nil {
-                    aclApplied += 1
+                    applied += 1
                 }
             }
         }
@@ -61,13 +68,10 @@ public enum PermissionsSweep {
                 repair(file, mode: isDir ? 0o700 : 0o600)
             }
         }
-        // A sweep that tried and achieved nothing is not done: leave the flag
-        // clear so the next launch tries again, instead of recording success.
-        if modes, modeAttempted == 0 || modeApplied > 0 {
-            settings.permissionsSweepDone = true
-        }
-        if acls, aclAttempted == 0 || aclApplied > 0 {
-            settings.aclSweepDone = true
+        // A sweep that tried and achieved nothing is not done: leave the version
+        // where it was so the next launch tries again, instead of recording success.
+        if attempted == 0 || applied > 0 {
+            settings.sweepVersion = PermissionsSweep.currentVersion
         }
         return true
     }

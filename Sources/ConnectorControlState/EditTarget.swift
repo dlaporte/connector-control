@@ -4,7 +4,10 @@ import ConnectorControlCore
 /// Catalog §3.1: what an editor window edits. Existing connectors use id ==
 /// name (one window each); new ones a fresh UUID. Codable and Hashable for
 /// the SwiftUI WindowGroup value.
-public struct EditTarget: Identifiable, Codable, Hashable {
+public struct EditTarget: Identifiable, Codable, Hashable, Sendable {
+    /// The editor `WindowGroup`'s id — shared by `ConnectorControlApp`'s
+    /// declaration and `PopoverView`'s `openWindow` call so they cannot drift apart.
+    public static let editorWindowID = "editor"
     public static let addTitle = "Add Connector"
 
     public static func editTitle(_ name: String) -> String { "Edit “\(name)”" }

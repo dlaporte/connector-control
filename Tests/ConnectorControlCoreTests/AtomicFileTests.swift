@@ -13,7 +13,6 @@ final class AtomicFileTests: XCTestCase {
 
     override func tearDownWithError() throws {
         tempDir.dispose()
-        AtomicFile.privateStagingDirectory = nil
     }
 
     func testWriteCreatesFileAndIntermediateDirectories() throws {
@@ -162,13 +161,13 @@ final class AtomicFileTests: XCTestCase {
     }
 
     func testWriteThroughStagingLeavesNothingBehind() throws {
-        AtomicFile.privateStagingDirectory = dir.appendingPathComponent("staging")
+        let staging = dir.appendingPathComponent("staging")
         let shared = dir.appendingPathComponent("shared")
         try FileManager.default.createDirectory(at: shared, withIntermediateDirectories: true)
         try grantEveryoneRead(at: shared.path, inheritable: true)
         let url = shared.appendingPathComponent("secret.json")
-        try AtomicFile.write(Data("one".utf8), to: url)
-        try AtomicFile.write(Data("two".utf8), to: url)
+        try AtomicFile.write(Data("one".utf8), to: url, staging: staging)
+        try AtomicFile.write(Data("two".utf8), to: url, staging: staging)
         XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "two")
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("staging").path), [])
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("shared").path), ["secret.json"])

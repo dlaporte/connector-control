@@ -11,11 +11,6 @@ public enum DefaultsKey: String, CaseIterable {
     case confirmBeforeQuit
     /// When the app last wrote Claude's config; drives Restart Required.
     case lastApplyDate
-    /// One-time repair of files written before owner-only permissions were
-    /// enforced.
-    case permissionsSweepDone
-    /// One-time strip of inherited ACL entries from files written before AtomicFile did it
-    /// at creation. Separate from permissionsSweepDone so an install swept for modes still
-    /// gets this pass once.
-    case aclSweepDone
+    /// How far `PermissionsSweep`'s one-time repair has gotten; see its header comment.
+    case sweepVersion
 }

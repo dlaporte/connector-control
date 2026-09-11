@@ -1,4 +1,5 @@
 /// SMAppService (catalog §4.2) as a seam.
+@MainActor
 public protocol Autostart: AnyObject {
     /// Read fresh each time: the user may change it in System Settings.
     var isEnabled: Bool { get }

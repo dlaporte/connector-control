@@ -17,21 +17,19 @@ public enum ClaudeConfigIO {
     /// Reads the file fresh, replaces ONLY the mcpServers key, preserves every
     /// other key by value, and writes atomically. Missing file → created.
     /// Malformed file → throws; the file is never overwritten blindly.
-    public static func write(mcpServers: [String: JSONValue], to url: URL) throws {
+    public static func write(mcpServers: [String: JSONValue], to url: URL, staging: URL? = nil) throws {
         var root = try readRootIfPresent(at: url) ?? [:]
         root["mcpServers"] = mcpServers.mapValues(\.anyValue)
         let data = try JSONSerialization.data(
             withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
-        try AtomicFile.write(data, to: url)
+        try AtomicFile.write(data, to: url, staging: staging)
     }
 
-    private static func readRootIfPresent(at url: URL) throws -> [String: Any]? {
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        let data = try Data(contentsOf: url)
-        // A zero-byte file (crash/truncation artifact) is deliberately treated
-        // like a missing file, not malformed JSON: there is nothing in it to
-        // preserve, and callers back up before writing. Reads yield no servers,
-        // which surfaces the missing-MCPs recovery UI instead of a hard error.
+    /// A zero-byte payload (crash/truncation artifact) is deliberately treated
+    /// like a missing file, not malformed JSON: there is nothing in it to
+    /// preserve, and callers back up before writing. A non-object top level is
+    /// the one shape this app can never work with, so that alone throws.
+    static func parseRoot(_ data: Data) throws -> [String: Any] {
         guard !data.isEmpty else { return [:] }
         let parsed: Any
         do {
@@ -43,6 +41,13 @@ public enum ClaudeConfigIO {
             throw ClaudeConfigError.malformed("top level is not a JSON object")
         }
         return root
+    }
+
+    private static func readRootIfPresent(at url: URL) throws -> [String: Any]? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        // Reads yield no servers when the file is empty, which surfaces the
+        // missing-MCPs recovery UI instead of a hard error.
+        return try parseRoot(try Data(contentsOf: url))
     }
 }
 

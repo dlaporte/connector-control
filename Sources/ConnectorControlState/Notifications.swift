@@ -3,5 +3,5 @@ public enum Notifications {
     public static let title = "Connector Control"
     public static let restartCategory = "restartPending"
     public static let restartAction = "restartClaude"
-    public static let restartButton = "Restart Claude"
+    public static let restartToastButton = "Restart Claude"
 }

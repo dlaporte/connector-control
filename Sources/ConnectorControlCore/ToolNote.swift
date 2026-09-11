@@ -37,22 +37,22 @@ public struct ToolNote: Equatable, Sendable {
     /// Both problem states offer the family's ordinary install command: it puts
     /// the tool in the PATH floor, which is what makes the note go away.
     public static func make(tool: Tool, status: ToolStatus?) -> ToolNote? {
+        let text: String
+        let advice: String?
         switch status {
         case nil, .found?:
             return nil
         case .notFound?:
-            return ToolNote(text: missingText(tool),
-                            advice: nil,
-                            linkTitle: tool.family.linkTitle,
-                            linkURL: tool.family.linkURL,
-                            installCommand: tool.family.installCommand)
+            text = missingText(tool)
+            advice = nil
         case .foundInShellOnly(let path, _)?:
-            return ToolNote(text: shellOnlyText(tool, path: path),
-                            advice: shellOnlyAdvice,
-                            linkTitle: tool.family.linkTitle,
-                            linkURL: tool.family.linkURL,
-                            installCommand: tool.family.installCommand)
+            text = shellOnlyText(tool, path: path)
+            advice = shellOnlyAdvice
         }
+        return ToolNote(text: text, advice: advice,
+                        linkTitle: tool.family.linkTitle,
+                        linkURL: tool.family.linkURL,
+                        installCommand: tool.family.installCommand)
     }
 
     /// The row glyph's tooltip in the popover (addendum 2026-09-06-row-glyph §2).

@@ -19,20 +19,11 @@ public struct ToolRow: Equatable, Sendable {
     }
 
     public static func make(tool: Tool, status: ToolStatus?) -> ToolRow {
-        let isProblem: Bool
-        let isShellOnly: Bool
-        switch status {
-        case .notFound?:
-            isProblem = true
-            isShellOnly = false
-        case .foundInShellOnly?:
-            isProblem = true
-            isShellOnly = true
-        default:
-            isProblem = false
-            isShellOnly = false
-        }
-        return ToolRow(name: tool.name, statusText: ToolNote.statusText(status), isProblem: isProblem,
-                       note: ToolNote.make(tool: tool, status: status), isShellOnly: isShellOnly)
+        let note = ToolNote.make(tool: tool, status: status)
+        // A note exists exactly for the two problem states; `advice` is set
+        // only in the shell-only one (ToolNote.make), so both facts read
+        // straight off the note instead of re-switching on `status`.
+        return ToolRow(name: tool.name, statusText: ToolNote.statusText(status),
+                       isProblem: note != nil, note: note, isShellOnly: note?.advice != nil)
     }
 }

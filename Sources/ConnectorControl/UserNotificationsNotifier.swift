@@ -4,8 +4,9 @@ import ConnectorControlState
 
 /// Catalog §1.8–§1.9. UNUserNotificationCenter.current() crashes under bare
 /// `swift run` (no app bundle), so every call is gated on hasAppBundle.
+@MainActor
 final class UserNotificationsNotifier: Notifier {
-    static let hasAppBundle = Bundle.main.bundleIdentifier != nil
+    static let hasAppBundle = Bundle.main.isBundled
 
     var onRestartAction: MainActorAction?
     /// The center holds its delegate weakly; this notifier retains the bridge.
@@ -18,7 +19,7 @@ final class UserNotificationsNotifier: Notifier {
     init() {
         guard UserNotificationsNotifier.hasAppBundle else { return }
         let center = UNUserNotificationCenter.current()
-        let restart = UNNotificationAction(identifier: Notifications.restartAction, title: Notifications.restartButton)
+        let restart = UNNotificationAction(identifier: Notifications.restartAction, title: Notifications.restartToastButton)
         center.setNotificationCategories([
             UNNotificationCategory(identifier: Notifications.restartCategory, actions: [restart], intentIdentifiers: [])])
         let handler = NotificationActionHandler { [weak self] in self?.onRestartAction?() }
@@ -34,10 +35,14 @@ final class UserNotificationsNotifier: Notifier {
             post(title: title, body: body, category: category, to: center)
             return
         }
+        // requestAuthorization's completion can land on any thread; hop back
+        // to the main actor before touching `self` (now @MainActor).
         center.requestAuthorization(options: [.alert]) { [weak self] granted, _ in
-            self?.authorization = granted
-            guard granted else { return }
-            self?.post(title: title, body: body, category: category, to: center)
+            Task { @MainActor in
+                self?.authorization = granted
+                guard granted else { return }
+                self?.post(title: title, body: body, category: category, to: center)
+            }
         }
     }
 

@@ -6,6 +6,12 @@ import ConnectorControlCore
 /// from another thread comes through `AppHost.marshal`. Init sequence
 /// (catalog §1.2): resolve the service, one-time permissions sweep, route
 /// the notification's Restart Claude action, reload, arm the watchers.
+///
+/// Failure conventions used across this file and the models built on it:
+/// UI validation a user can fix returns a `String?` message; I/O `throws`;
+/// an optional parse or lookup that may legitimately find nothing returns
+/// `nil`; a sheet-style confirmation flow reports success as `Bool` and
+/// publishes its own error separately.
 @MainActor
 public final class AppState: ObservableObject {
     // MARK: - Strings (catalog §1.8, §1.10, §1.16–§1.18, §2.2)
@@ -104,10 +110,6 @@ public final class AppState: ObservableObject {
         self.toolProbe = toolProbe
         let resolved = AppState.makeService(settings: settings, paths: paths)
         service = resolved
-        // Temp files for every write are born in the app's own folder (same volume permitting),
-        // never beside a synced/shared target — see AtomicFile.privateStagingDirectory. Set
-        // before the first write: makeService only builds values, the sweep and reload write.
-        AtomicFile.privateStagingDirectory = resolved.paths.stagingDirURL
         // Sweep the RESOLVED paths (a repointed store lives outside the default dir).
         PermissionsSweep.runOnce(settings: settings, paths: resolved.paths)
         // The notification's Restart Claude button routes back here. Skipping the
@@ -142,7 +144,7 @@ public final class AppState: ObservableObject {
 
     // MARK: - Service construction (catalog §1.3)
 
-    nonisolated public static func makeService(settings: AppSettings, paths: PathContext) -> ConfigService {
+    public static func makeService(settings: AppSettings, paths: PathContext) -> ConfigService {
         var resolved = AppPaths.live(environment: paths.environment, appSupport: paths.appSupport)
         // Env override (dev sandboxing) beats the user setting; an empty value in
         // either one counts as absent (AppPaths.live applies the same rule).
@@ -151,7 +153,8 @@ public final class AppState: ObservableObject {
             // Backups always stay machine-local: a synced store directory must
             // not fill the user's repo/cloud folder with rotating backups. The
             // staging folder stays there too: temp files must never be born in
-            // the synced folder (see AtomicFile.privateStagingDirectory).
+            // the synced folder — AtomicFile.write takes it as its `staging:`
+            // parameter, threaded through ConfigService/BackupManager.
             let machineLocal = AppPaths.live(environment: [:], appSupport: paths.appSupport)
             resolved = AppPaths(
                 claudeConfigURL: resolved.claudeConfigURL,
@@ -222,7 +225,8 @@ public final class AppState: ObservableObject {
             // copyItem into a shared folder would inherit its ACEs; AtomicFile creates the
             // directory and the file private from the first instant.
             do {
-                try AtomicFile.write(try Data(contentsOf: previousStoreURL), to: newStoreURL)
+                try AtomicFile.write(try Data(contentsOf: previousStoreURL), to: newStoreURL,
+                                     staging: rebuilt.paths.stagingDirURL)
             } catch {
                 // The new location is left seedless — repointing to it would silently
                 // start empty — so the store stays where it was, settings included.

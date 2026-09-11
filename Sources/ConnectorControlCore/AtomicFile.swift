@@ -1,13 +1,6 @@
 import Foundation
 
 public enum AtomicFile {
-    /// The app's own private folder for temp files (`…/Connector Control/.staging`), set once at
-    /// startup. When the target folder is on the same volume, temp files are created here and
-    /// renamed into place: a rename does not re-inherit ACEs, so a shared folder's principal
-    /// never sees the file, not even empty. Nil (tests, tools) means temp files are created
-    /// beside the target and stripped of ACEs before the first write.
-    nonisolated(unsafe) public static var privateStagingDirectory: URL?
-
     /// `staging` when it can serve `dir` — it exists (created 0700 with no ACL) and shares
     /// `dir`'s device, so the final rename stays a rename — else nil.
     static func stagingLocation(for dir: URL, staging: URL?) -> URL? {
@@ -27,7 +20,13 @@ public enum AtomicFile {
         return staging
     }
 
-    public static func write(_ data: Data, to url: URL) throws {
+    /// `staging` is the app's own private folder for temp files
+    /// (`…/Connector Control/.staging`) — when it can serve the target's directory
+    /// (see `stagingLocation`), the temp file is born there and renamed into place: a
+    /// rename does not re-inherit ACEs, so a shared folder's principal never sees the
+    /// file, not even empty. Nil (tests, tools, or a volume `staging` can't serve) means
+    /// the temp file is created beside the target and stripped of ACEs before the first write.
+    public static func write(_ data: Data, to url: URL, staging: URL? = nil) throws {
         let fm = FileManager.default
         // A symlinked destination (a config kept in a dotfiles repo) is written
         // through: the temp file is created in the private staging folder when
@@ -49,7 +48,7 @@ public enum AtomicFile {
             // included; 0700 alone would leave the new directory listable by that principal.
             try stripACL(atPath: dir.path)
         }
-        let tmpDir = stagingLocation(for: dir, staging: privateStagingDirectory) ?? dir
+        let tmpDir = stagingLocation(for: dir, staging: staging) ?? dir
         let tmp = tmpDir.appendingPathComponent(".\(target.lastPathComponent).tmp-\(UUID().uuidString)")
         // Connector configs can hold env-var secrets. The file is created 0600
         // by open(2) itself — never with the umask's default and a chmod after

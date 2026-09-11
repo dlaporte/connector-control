@@ -89,11 +89,15 @@ public final class EditorModel: ObservableObject {
     @Published public var jsonText: String {
         didSet {
             if oldValue != jsonText {
+                recoveredJSON = PasteRecovery.recover(jsonText)
                 validateJSON()
                 evaluateRequiredTool()
             }
         }
     }
+    /// `jsonText` recovered once per edit, in the didSet above; `validateJSON`
+    /// and `computeRequiredTool` read this instead of recovering it again.
+    private var recoveredJSON: PasteRecovery.Result?
     @Published public private(set) var jsonError: String?
     @Published public private(set) var validationError: String?
     /// Non-nil while the loss-warning sheet is up (catalog §3.5).
@@ -112,18 +116,17 @@ public final class EditorModel: ObservableObject {
         name = target.name
         view = target.entry.lastEditView
         let config = target.entry.config
-        let detected = RemotePattern.detect(config)
-        isRemote = target.forcesRemote || detected != nil
-        remoteURL = detected ?? ""
-        let model = FormMapper.analyze(config).model
-        command = model.command
-        args = model.args.map { ArgRow(value: $0) }
-        envRows = EditorModel.envRows(from: model.env)
-        additional = model.additional
+        // Placeholders: every stored property needs a value before `load`
+        // (an instance method) can run; it overwrites all of these.
+        isRemote = false
+        remoteURL = ""
+        command = ""
+        args = []
+        envRows = []
+        additional = [:]
         jsonText = config.editorText()
-        if let remote = RemotePattern.decode(config) {
-            applyRemoteFields(remote)
-        }
+        recoveredJSON = PasteRecovery.recover(jsonText)
+        load(config)
         // Spec 2026-09-05-tool-probe §3.4: on open, a cached status shows its
         // note at once; an unknown one is probed now. Later changes go through
         // evaluateRequiredTool. The relay makes the view re-read toolNote.
@@ -189,7 +192,7 @@ public final class EditorModel: ObservableObject {
 
     private func computeRequiredTool() -> Tool? {
         if view == .json {
-            return PasteRecovery.recover(jsonText).flatMap { ToolRequirement.requiredTool(for: $0.config) }
+            return recoveredJSON.flatMap { ToolRequirement.requiredTool(for: $0.config) }
         }
         return isRemote ? .npx : ToolRequirement.requiredTool(command: command, args: args.map(\.value))
     }
@@ -266,7 +269,7 @@ public final class EditorModel: ObservableObject {
         guard let config = effectiveJSONConfig() else { return }
         let analysis = FormMapper.analyze(config)
         if analysis.isLossless {
-            adoptForm(analysis.model, config: config)
+            adoptForm(config)
             view = .form
             return
         }
@@ -280,29 +283,45 @@ public final class EditorModel: ObservableObject {
     public func forceSwitchToForm() {
         lossWarning = nil
         guard let config = effectiveJSONConfig() else { return }
-        adoptForm(FormMapper.analyze(config).model, config: config)
+        adoptForm(config)
         view = .form
     }
 
-    private func adoptForm(_ model: FormModel, config: JSONValue) {
+    /// JSON → Form: `load` runs before `view` becomes `.form` (the caller
+    /// flips it after this returns), which is what keeps `isRemoteChanged`'s
+    /// bridge-discard branch — gated on `view == .form` — from firing mid-load.
+    private func adoptForm(_ config: JSONValue) {
+        load(config)
+        evaluateRequiredTool()
+    }
+
+    /// Loads `config` into every form/remote field and (re)computes `isRemote`.
+    /// The one shared place `init` and `adoptForm` funnel through, so they
+    /// cannot disagree on the isRemote rule or which fields a config fills in.
+    /// Tool evaluation is suppressed for the duration — both callers evaluate
+    /// once themselves, after `view` (for `computeRequiredTool`'s JSON branch)
+    /// is in its final state.
+    private func load(_ config: JSONValue) {
         suppressToolEvaluation = true
+        let model = FormMapper.analyze(config).model
         command = model.command
         args = model.args.map { ArgRow(value: $0) }
         envRows = EditorModel.envRows(from: model.env)   // all values re-masked
         additional = model.additional
         let detected = RemotePattern.detect(config)
         isRemote = detected != nil || (target.forcesRemote && RemotePattern.isRemoteShaped(config))
+        // Quirk kept intentionally: remoteURL comes ONLY from detect()'s
+        // canonical 2-arg shape, even when isRemote is true via the
+        // forcesRemote/isRemoteShaped fallback above — decode() may have found
+        // a real URL past extra flags, but the Server URL field stays blank
+        // until the user (re)types it.
         remoteURL = detected ?? ""
         if let remote = RemotePattern.decode(config) {
             applyRemoteFields(remote)
         } else {
             resetRemoteFields()
-            remoteExtraArgs = []
-            remotePassthroughEnv = [:]
-            remotePackage = RemotePattern.defaultPackage
         }
         suppressToolEvaluation = false
-        evaluateRequiredTool()
     }
 
     private func resetRemoteFields() {
@@ -313,6 +332,9 @@ public final class EditorModel: ObservableObject {
         oauthClientID = ""
         oauthClientSecret = ""
         oauthScopes = ""
+        remoteExtraArgs = []
+        remotePassthroughEnv = [:]
+        remotePackage = RemotePattern.defaultPackage
     }
 
     /// Maps a decoded RemoteConfig onto the form fields (catalog §3.3 authFields).
@@ -346,7 +368,7 @@ public final class EditorModel: ObservableObject {
     // MARK: - JSON (catalog §3.7)
 
     private func validateJSON() {
-        jsonError = PasteRecovery.recover(jsonText) == nil ? EditorModel.notValidJSON : nil
+        jsonError = recoveredJSON == nil ? EditorModel.notValidJSON : nil
     }
 
     /// Resolves the editor text via PasteRecovery, fills the name from a pasted

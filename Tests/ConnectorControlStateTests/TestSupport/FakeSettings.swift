@@ -1,6 +1,7 @@
 import Foundation
 @testable import ConnectorControlState
 
+@MainActor
 final class FakeSettings: AppSettings {
     var masterStoreDir: String?
     var claudeAppPath: String?
@@ -9,6 +10,5 @@ final class FakeSettings: AppSettings {
     var confirmBeforeRestart = true
     var confirmBeforeQuit = true
     var lastApplyDate: Date?
-    var permissionsSweepDone = false
-    var aclSweepDone = false
+    var sweepVersion = 0
 }

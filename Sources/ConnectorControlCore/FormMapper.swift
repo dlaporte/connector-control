@@ -1,4 +1,4 @@
-public struct FormModel: Equatable {
+public struct FormModel: Equatable, Sendable {
     public var command: String
     public var args: [String]
     public var env: [String: String]
@@ -14,7 +14,7 @@ public struct FormModel: Equatable {
     }
 }
 
-public struct FormAnalysis {
+public struct FormAnalysis: Sendable {
     public var model: FormModel
     /// Human-readable descriptions of elements the form CANNOT represent.
     /// Empty means switching JSON → Form loses nothing.

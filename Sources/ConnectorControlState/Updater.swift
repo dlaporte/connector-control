@@ -2,6 +2,7 @@ import Combine
 
 /// What Settings ▸ General needs from Sparkle (catalog §4.2). Sparkle itself
 /// owns the schedule, the download, the staging and every update dialog.
+@MainActor
 public protocol Updater: AnyObject {
     /// False under bare `swift run` (no bundle); every control is then disabled.
     var isAvailable: Bool { get }
