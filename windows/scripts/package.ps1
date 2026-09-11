@@ -14,6 +14,12 @@
     VelopackUpdater sets MaximumDeltasBeforeFallback = 0, so an installed client would never apply
     one anyway — producing one here would just be extra upload weight nobody downloads.
 
+    vpk itself runs with its working directory set to windows/, whatever directory this script was
+    invoked from (windows-build.yml runs it from the repo root): `dotnet` resolves a local tool's
+    manifest by walking up from the CURRENT directory, and windows/.config/dotnet-tools.json — the
+    manifest pinning vpk — is not an ancestor of the repo root. Every other path this script uses
+    is already absolute by the time vpk runs, so that directory change affects nothing else.
+
 .PARAMETER Version
     SemVer 2 version: 1.3.0 for a release, 1.3.0-preview.3 for a preview. Stamped into the assemblies
     (-p:Version) and the Velopack package (--packVersion) from this one value. A prerelease label
@@ -118,7 +124,16 @@ $packArgs = $vpkGlobal + @(
 )
 if ($ReleaseNotes) { $packArgs += @('--releaseNotes', (Resolve-Path $ReleaseNotes).Path) }
 if ($AzureTrustedSignFile) { $packArgs += @('--azureTrustedSignFile', (Resolve-Path $AzureTrustedSignFile).Path) }
-Invoke-Native 'vpk pack' $vpkExe ($vpkPrefixArgs + $packArgs)
+# Every argument above is already resolved (an absolute path, or a value with no path in it), so
+# it is safe to change directory now: vpk's own local-tool manifest lookup needs to run from
+# windows/, not wherever this script itself was invoked from.
+Push-Location $windowsDir
+try {
+    Invoke-Native 'vpk pack' $vpkExe ($vpkPrefixArgs + $packArgs)
+}
+finally {
+    Pop-Location
+}
 
 $expected = @(
     "ConnectorControl-$Runtime-Setup.exe",
