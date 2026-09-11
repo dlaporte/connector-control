@@ -168,6 +168,41 @@ public class UpdateVerifierTests : IDisposable
     }
 
     [Theory]
+    [InlineData("ConnectorControl.exe", true)]
+    [InlineData("connectorcontrol.core.dll", true)]
+    [InlineData("Squirrel.exe", true)]
+    [InlineData("Update.exe", true)]
+    [InlineData("System.Runtime.dll", false)]
+    [InlineData("Markdig.dll", false)]
+    public void OnlyTheAppsOwnFilesAndTheUpdaterMustCarryItsSignature(string name, bool expected)
+    {
+        Assert.Equal(expected, UpdateVerifier.MustBeOurs(name));
+    }
+
+    [Fact]
+    public void ATrustedThirdPartySignatureIsAcceptedOnlyWhereItBelongs()
+    {
+        // Seen from a "running app" with a different publisher, a Microsoft-signed runtime DLL passes as
+        // something the app is built from, but the same file under the app's own name does not.
+        RequireSignedFramework();
+        Assert.Null(UpdateVerifier.VerifyFile(SignedSibling, "test publisher", "System.Runtime.dll", mustBeOurs: false));
+        var own = UpdateVerifier.VerifyFile(SignedSibling, "test publisher", "ConnectorControl.dll", mustBeOurs: true);
+        Assert.NotNull(own);
+        Assert.Contains("not by this app's publisher", own);
+        Assert.NotNull(UpdateVerifier.VerifyFile(UnsignedBinary, "test publisher", "Markdig.dll", mustBeOurs: false));
+    }
+
+    [Fact]
+    public void AMainExecutableFromAnotherPublisherIsRefusedEvenWhenThatPublisherIsTrusted()
+    {
+        RequireSignedFramework();
+        var foreign = new UpdateVerifier.RunningIdentity("test publisher", false);
+        var problem = UpdateVerifier.Verify(Package(("lib/app/ConnectorControl.exe", RunningExe)), updateExePath: null, foreign, Older, FrameworkVersion);
+        Assert.NotNull(problem);
+        Assert.Contains("not by this app's publisher", problem);
+    }
+
+    [Theory]
     [InlineData("lib/app/ConnectorControl.exe.", true)]
     [InlineData("lib/app/ConnectorControl.exe ", true)]
     [InlineData("lib/app/a:b.dll", true)]

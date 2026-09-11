@@ -11,8 +11,10 @@ namespace ConnectorControl.App.Services;
 /// come from the same GitHub release, so whoever can write release assets could ship anything.
 /// This app's own binaries are Authenticode-signed by its publisher, an identity a release
 /// token does not carry: before an update is staged, the replaced Update.exe and every
-/// executable inside the package (found by content, not by name) must be validly signed by
-/// the same organization as the running app, and the package's own ConnectorControl.exe must
+/// executable inside the package (found by content, not by name) must be validly signed —
+/// this app's own files and the updater by the same organization as the running app, the
+/// runtime and libraries it is built from by that organization or one in
+/// <see cref="TrustedOrganizations"/> — and the package's own ConnectorControl.exe must
 /// carry the version the feed advertises, so an old signed release cannot be replayed as new.
 /// Sparkle's pinned EdDSA key plays this role on the Mac. Known residual: any library this
 /// publisher ever signed is interchangeable with any other inside a package; only the main
@@ -24,6 +26,25 @@ public static class UpdateVerifier
 
     /// <summary>The binary whose embedded file version must match the feed; every package carries it.</summary>
     public const string MainExecutable = "ConnectorControl.exe";
+
+    /// <summary>
+    /// Publishers whose signatures the package legitimately carries besides this app's own: the
+    /// .NET runtime and the WPF stack are Microsoft-signed, and one toolkit is signed by the .NET
+    /// Foundation. vpk signs what ships unsigned (this app's assemblies, the updater, plain NuGet
+    /// libraries) and leaves already-signed files alone. Normalized like <see cref="SignerIdentity.Organization"/>.
+    /// The smoke test applies the same list, so a release cannot ship a package a client would refuse.
+    /// </summary>
+    public static readonly string[] TrustedOrganizations = ["microsoft corporation", "windows community toolkit net foundation"];
+
+    /// <summary>
+    /// The files an attacker would have to replace to run code in this app's name: its own
+    /// executables and assemblies, and the updater. These must carry this app's own signature;
+    /// a trusted third party's is not enough.
+    /// </summary>
+    internal static bool MustBeOurs(string fileName) =>
+        fileName.StartsWith("ConnectorControl", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(fileName, "Squirrel.exe", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(fileName, "Update.exe", StringComparison.OrdinalIgnoreCase);
 
     private const string CannotValidateSelf = "This app's own signature could not be validated, so an update cannot be checked against it";
 
@@ -51,7 +72,7 @@ public static class UpdateVerifier
             return CannotValidateSelf + NotInstalledSuffix;
         }
         if (updateExePath is not null && File.Exists(updateExePath)
-            && VerifyFile(updateExePath, expected, "Update.exe") is { } updaterProblem)
+            && VerifyFile(updateExePath, expected, "Update.exe", mustBeOurs: true) is { } updaterProblem)
         {
             return updaterProblem;
         }
@@ -99,7 +120,7 @@ public static class UpdateVerifier
                 {
                     return SizeProblem(entry, actual);
                 }
-                if (VerifyFile(extracted, expected, name + " inside the update") is { } problem)
+                if (VerifyFile(extracted, expected, name + " inside the update", MustBeOurs(name)) is { } problem)
                 {
                     return problem;
                 }
@@ -148,7 +169,7 @@ public static class UpdateVerifier
         {
             return CannotValidateSelf + NotInstalledSuffix;
         }
-        return VerifyFile(updateExePath, expected, "The installed Update.exe");
+        return VerifyFile(updateExePath, expected, "The installed Update.exe", mustBeOurs: true);
     }
 
     /// <summary>The running app's signer organization, normalized; <c>Unsigned</c> when it carries no signature at all.</summary>
@@ -161,18 +182,26 @@ public static class UpdateVerifier
 
     /// <summary>Null when <paramref name="path"/> is validly signed by <paramref name="expectedOrganization"/>; else why not.</summary>
     [SupportedOSPlatform("windows")]
-    internal static string? VerifyFile(string path, string expectedOrganization, string displayName)
+    internal static string? VerifyFile(string path, string expectedOrganization, string displayName, bool mustBeOurs)
     {
         var signer = AuthenticodeVerifier.SignerSubject(path);
         if (signer.Identity is not { } identity)
         {
             return $"{displayName} is not validly signed{NotInstalledSuffix}";
         }
-        if (identity.Organization != expectedOrganization)
+        if (identity.Organization == expectedOrganization)
+        {
+            return null;
+        }
+        if (mustBeOurs)
         {
             return $"{displayName} is signed by \"{identity.Subject}\", not by this app's publisher{NotInstalledSuffix}";
         }
-        return null;
+        if (identity.Organization is { } organization && TrustedOrganizations.Contains(organization, StringComparer.Ordinal))
+        {
+            return null;
+        }
+        return $"{displayName} is signed by \"{identity.Subject}\", not by this app's publisher or one it is built from{NotInstalledSuffix}";
     }
 
     /// <summary>

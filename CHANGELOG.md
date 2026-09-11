@@ -80,9 +80,11 @@ Hardening from a security review of the app and its release pipeline.
   Temp files are now born in the app's own private folder and renamed into
   place whenever the target is on the same volume, and a one-time pass
   strips inherited entries from files written by earlier builds.
-- Windows: a downloaded update is installed only if the updater it carries
-  and every program and library inside it are signed by the same publisher
-  as the running app, and only if the app inside it carries the version the
+- Windows: a downloaded update is installed only if every program and
+  library inside it is validly signed — the app's own files and the updater
+  by the same publisher as the running app, the .NET runtime and the
+  libraries the app is built from by that publisher or by Microsoft or the
+  .NET Foundation — and only if the app inside it carries the version the
   update feed advertises, so an older signed release cannot be replayed as
   new. Programs are recognized by their content, not their file name. A
   package that fails these checks is discarded, the previous updater is put

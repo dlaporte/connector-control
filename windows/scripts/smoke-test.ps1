@@ -101,12 +101,27 @@ if ($ExpectSigned) {
     # Expand-Archive insists on a .zip extension; the .NET zip API does not care what the file is called.
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [System.IO.Compression.ZipFile]::ExtractToDirectory($nupkg, $unpacked)
-    $publisher = $setupSignature.SignerCertificate.Subject
+    # The same rule UpdateVerifier applies on the client: the app's own files and the updater carry
+    # our organization; the runtime and libraries we build from may carry ours or a publisher in
+    # $trustedOrganizations (Microsoft for .NET/WPF, the .NET Foundation for one toolkit). Keep this
+    # list in step with UpdateVerifier.TrustedOrganizations.
+    function Get-Organization([string] $subject) {
+        $m = [regex]::Match($subject, '(?:^|,\s*)O=("(?<q>[^"]*)"|(?<u>[^,]*))')
+        if (-not $m.Success) { return '' }
+        $raw = if ($m.Groups['q'].Success) { $m.Groups['q'].Value } else { $m.Groups['u'].Value }
+        return (($raw.ToLowerInvariant() -replace '[^a-z0-9]+', ' ').Trim())
+    }
+    $ourOrganization = Get-Organization $setupSignature.SignerCertificate.Subject
+    Assert-True ($ourOrganization.Length -gt 0) "Setup.exe's signer names an organization ($ourOrganization)"
+    $trustedOrganizations = @('microsoft corporation', 'windows community toolkit net foundation')
     $binaries = Get-ChildItem -Path $unpacked -Recurse -Include *.exe, *.dll
     Assert-True ($binaries.Count -gt 0) "package contains executables to check"
     foreach ($binary in $binaries) {
         $sig = Get-AuthenticodeSignature -FilePath $binary.FullName
-        Assert-True ($sig.Status -eq 'Valid' -and $sig.SignerCertificate.Subject -eq $publisher) "$($binary.Name) in the package is signed by $publisher"
+        $org = if ($null -ne $sig.SignerCertificate) { Get-Organization $sig.SignerCertificate.Subject } else { '' }
+        $mustBeOurs = $binary.Name -like 'ConnectorControl*' -or $binary.Name -in @('Squirrel.exe', 'Update.exe')
+        $allowed = ($org -eq $ourOrganization) -or (-not $mustBeOurs -and $trustedOrganizations -contains $org)
+        Assert-True ($sig.Status -eq 'Valid' -and $allowed) "$($binary.Name) is validly signed by an accepted publisher (got '$org', status $($sig.Status))"
     }
 }
 
