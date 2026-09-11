@@ -7,18 +7,13 @@
 # Inputs
 #   version          the version stamped into the assemblies and the Velopack package
 #                    (X.Y.Z for a release, X.Y.Z-preview.N for a preview). Unused when
-#                    package is false.
-#   prerelease       passes -Prerelease to package.ps1, which decides WHICH previous release
-#                    the delta package is built against: with it, the newest prerelease of the
-#                    channel (a preview follows previews); without it, the newest full release
-#                    carrying releases.<rid>.json — none before v1.3.0, so v1.3.0 shipped
-#                    without a delta package and v1.3.1 gets one against v1.3.0.
+#                    package is false; defaults to 0.0.0 for that case.
 #   require-signing  signing is mandatory: the package job writes the Azure Artifact Signing
 #                    metadata and passes -AzureTrustedSignFile, and the smoke job demands a
 #                    valid Authenticode signature on both RIDs. This is an explicit decision by
 #                    the caller — never inferred from whether a secret happens to be set. The
-#                    caller's prepare job is what proves the six AZURE_* secrets exist, and it
-#                    fails the run before any build minutes are spent when they do not.
+#                    gate job below is what proves the six AZURE_* secrets exist, and it fails
+#                    the run before any build minutes are spent when they do not.
 #   package          false runs the test job alone (windows-ci.yml's per-push build).
 #
 # A caller that packages passes the six AZURE_* secrets by name (declared under `secrets:`
@@ -29,20 +24,16 @@
 # The `notes` artifact is an INPUT to the package job: the caller's prepare job uploads it, and
 # its text is embedded in the package and shown by the in-app update dialog.
 # Artifacts produced: test-results, velopack-win-x64, velopack-win-arm64, smoke-logs.
-name: Windows build
+name: Windows Build
 
 on:
   workflow_call:
     inputs:
       version:
-        description: 'Version to stamp into the packages (X.Y.Z or X.Y.Z-preview.N).'
-        required: true
-        type: string
-      prerelease:
-        description: 'Build the delta against the previous PRERELEASE of the channel (-Prerelease).'
+        description: 'Version to stamp into the packages (X.Y.Z or X.Y.Z-preview.N). Unused, and optional, when package is false.'
         required: false
-        default: false
-        type: boolean
+        default: '0.0.0'
+        type: string
       require-signing:
         description: 'Signing is mandatory: sign the packages and require a valid signature in the smoke test.'
         required: true
@@ -52,9 +43,10 @@ on:
         required: false
         default: true
         type: boolean
-    # The Azure Artifact Signing secrets, read only by the package job. Optional at the
+    # The Azure Artifact Signing secrets, read only by the gate and package jobs. Optional at the
     # declaration so windows-ci.yml (package: false) can keep passing none; a caller that
-    # packages with require-signing: true has already proved all six exist.
+    # packages with require-signing: true is proven by the gate job below to hold all six before
+    # any build minutes are spent.
     secrets:
       AZURE_TENANT_ID:
         required: false
@@ -73,9 +65,42 @@ on:
 # writes to the repository. The callers stay read-only; only their publish jobs raise that.
 
 jobs:
+  # The one copy of this gate: release.yml and windows-preview.yml each used to carry their own,
+  # identical, before their own build minutes were spent. Here it also gates package directly, so
+  # a caller can never reach a signed package step with a secret missing.
+  gate:
+    name: Require Windows signing secrets
+    if: inputs.require-signing
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - name: Require the Windows signing secrets
+        shell: bash
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+        run: |
+          missing=0
+          for name in AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET \
+                      AZURE_SIGNING_ENDPOINT AZURE_SIGNING_ACCOUNT AZURE_SIGNING_PROFILE; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is missing. A signed build never runs without all six AZURE_* secrets — add it under Settings ▸ Secrets and variables ▸ Actions, then re-run."
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          echo "All six AZURE_* signing secrets are present."
+
   test:
     name: Build and test
-    runs-on: windows-latest
+    # windows-2025 is pinned deliberately (as is ubuntu-24.04 and macos-15 elsewhere in this
+    # repo's workflows): a runner-image rollover is a deliberate version bump here, not
+    # something that happens under a floating "-latest" label. Dependabot does not manage these.
+    runs-on: windows-2025
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -85,14 +110,17 @@ jobs:
           global-json-file: windows/global.json
 
       - name: Restore
+        shell: pwsh
         run: dotnet restore windows/ConnectorControl.slnx
 
       - name: Build
+        shell: pwsh
         run: dotnet build windows/ConnectorControl.slnx --no-restore -c Release
 
       # ci.runsettings sets xUnit FailSkips, so a test that silently skips on the
       # runner (a Windows-only test that did not run) fails the build.
       - name: Test
+        shell: pwsh
         run: dotnet test windows/ConnectorControl.slnx --no-build -c Release --settings windows/ci.runsettings --logger "trx;LogFileName=results.trx" --results-directory TestResults
 
       - name: Upload test results
@@ -105,16 +133,16 @@ jobs:
 
   package:
     name: Package ${{ matrix.rid }}
-    needs: test
-    if: inputs.package
-    runs-on: windows-latest
+    needs: [gate, test]
+    # A skipped gate (require-signing: false) must not skip package for the unsigned case; a
+    # failed gate (require-signing: true, a secret missing) must.
+    if: inputs.package && (inputs.require-signing == false || needs.gate.result == 'success')
+    runs-on: windows-2025
     timeout-minutes: 30
     strategy:
       fail-fast: true
       matrix:
         rid: [win-x64, win-arm64]
-    env:
-      VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -122,10 +150,13 @@ jobs:
         with:
           global-json-file: windows/global.json
 
-      - name: Install vpk 1.2.0
-        run: |
-          dotnet tool install --global vpk --version 1.2.0
-          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      # vpk 1.2.0 is a LOCAL tool (windows/.config/dotnet-tools.json), restored from the
+      # manifest rather than installed globally: a version bump is then a one-line diff reviewed
+      # like any other dependency change, instead of a number buried in a workflow run step.
+      - name: Restore local tools
+        shell: pwsh
+        working-directory: windows
+        run: dotnet tool restore
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -134,6 +165,7 @@ jobs:
 
       - name: Write Azure Artifact Signing metadata
         if: inputs.require-signing
+        shell: pwsh
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -150,37 +182,26 @@ jobs:
             ConvertTo-Json | Set-Content -Path $file -Encoding utf8NoBOM
           "SIGN_FILE=$file" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      # The degrade path for a caller that packages with require-signing: false (a fork
-      # without signing secrets). No workflow in this repository takes it: both callers that
-      # package require signing, so on this repository the step never runs.
-      - name: Unsigned build
-        if: ${{ !inputs.require-signing }}
-        run: Write-Host "::warning::require-signing is false; this build is unsigned and SmartScreen will warn."
-
-      # package.ps1 does the dotnet publish, the `vpk download github` of the previous release
-      # and the `vpk pack` in ONE invocation, so the download cannot carry a tighter timeout of
-      # its own without splitting the script. 12 minutes covers publish + download + pack (the
-      # step takes ~4 on a green run) while still failing fast if the download stalls.
+      # publish + pack only now (no delta download to stall on): ~4 min on a green run.
       - name: Publish and pack
-        timeout-minutes: 12
+        timeout-minutes: 6
+        shell: pwsh
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           VERSION: ${{ inputs.version }}
           RID: ${{ matrix.rid }}
-          PRERELEASE: ${{ inputs.prerelease }}
           REQUIRE_SIGNING: ${{ inputs.require-signing }}
         run: |
-          $extra = @{}
-          if ($env:PRERELEASE -eq 'true') { $extra['Prerelease'] = $true }
+          $packArgs = @('-Version', $env:VERSION, '-Runtime', $env:RID, '-ReleaseNotes', 'notes/notes.md')
           if ($env:REQUIRE_SIGNING -eq 'true') {
             # An empty -AzureTrustedSignFile packs UNSIGNED with nothing but a vpk warning, and
             # the run would not fail until the smoke job two jobs later. Assert it here instead.
             if (-not $env:SIGN_FILE) { throw 'require-signing is set but SIGN_FILE is empty' }
-            $extra['AzureTrustedSignFile'] = $env:SIGN_FILE
+            $packArgs += @('-AzureTrustedSignFile', $env:SIGN_FILE)
           }
-          ./windows/scripts/package.ps1 -Version $env:VERSION -Runtime $env:RID -ReleaseNotes notes/notes.md -DownloadPrevious @extra
+          ./windows/scripts/package.ps1 @packArgs
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -194,8 +215,7 @@ jobs:
   smoke:
     name: Install and launch (win-x64)
     needs: package
-    if: inputs.package
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -215,6 +235,7 @@ jobs:
       # With require-signing, -ExpectSigned demands that Setup.exe and the installed exe carry a
       # valid Authenticode signature, or this job — and therefore the release — fails.
       - name: Silent install, launch, first-run checks
+        shell: pwsh
         env:
           VERSION: ${{ inputs.version }}
           REQUIRE_SIGNING: ${{ inputs.require-signing }}
@@ -226,11 +247,8 @@ jobs:
       # The arm64 package cannot be installed on this x64 runner; its signature can be checked.
       - name: arm64 Setup.exe signature
         if: inputs.require-signing
-        run: |
-          $sig = Get-AuthenticodeSignature -FilePath artifacts-arm64/ConnectorControl-win-arm64-Setup.exe
-          $subject = if ($null -ne $sig.SignerCertificate) { $sig.SignerCertificate.Subject } else { '(no certificate)' }
-          Write-Host "ConnectorControl-win-arm64-Setup.exe: $($sig.Status) $subject"
-          if ($sig.Status -ne 'Valid') { throw "arm64 Setup.exe is not validly signed ($($sig.Status))" }
+        shell: pwsh
+        run: ./windows/scripts/smoke-test.ps1 -SignatureOnly -SetupExe (Resolve-Path artifacts-arm64/ConnectorControl-win-arm64-Setup.exe).Path
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

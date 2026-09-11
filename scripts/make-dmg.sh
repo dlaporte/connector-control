@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Packages build/Connector Control.app into a drag-to-Applications DMG.
 # Usage: scripts/make-dmg.sh <output.dmg>
 set -euo pipefail

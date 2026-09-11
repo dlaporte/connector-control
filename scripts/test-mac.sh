@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Runs the Swift suite the way CI gates it: every test must run, exactly one may
 # skip (GoldenFileTests.testRegenerateGoldens rewrites the goldens and runs only
 # with CONNECTOR_CONTROL_UPDATE_GOLDENS=1), and none may fail — the Swift

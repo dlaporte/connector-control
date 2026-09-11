@@ -7,12 +7,24 @@ section is missing. The top section also names the version a Windows
 preview build is cut from (a preview is versioned as that number followed
 by -preview.N, and the preview build fails if that version has already
 been released), so open the next version's section as soon as the previous
-one ships.
+one ships. A freshly opened section starts with four sub-headings, in this
+order: `### macOS`, `### Windows`, `### Both platforms`, `### Release
+pipeline`; leave a sub-heading's bullets empty rather than removing the
+sub-heading, and drop any sub-heading that never got a bullet once the
+section is about to ship.
 
 ## v1.3.3
 
+### macOS
+
+### Windows
+
 - Windows: the tray icon is now the same plug as the Mac's menu bar icon,
   prongs to the right and cable to the left; it used to stand upright.
+
+### Both platforms
+
+### Release pipeline
 
 ## v1.3.2
 
@@ -50,12 +62,6 @@ Hardening from a security review of the app and its release pipeline.
 - Windows: the app manifest declares that it runs as the signed-in user,
   which keeps Windows from ever treating it as an installer that wants
   elevation.
-- Release pipeline: the Sparkle tools that sign the Mac update feed are
-  verified against a pinned checksum before use; the Windows build receives
-  only the six signing secrets it needs rather than every repository
-  secret; a re-run never replaces an asset already published under a
-  version; every GitHub Action is pinned to a commit, with Dependabot
-  keeping the pins current.
 - Windows: the connector editor refuses a Server URL, header name or OAuth
   client field that contains `& | < > ^ "` or a space when the connector
   uses the `cmd /c npx` launcher, and says why: Claude Desktop hands that
@@ -100,8 +106,13 @@ Hardening from a security review of the app and its release pipeline.
   PC.
 - macOS: Sparkle now verifies an update's signature before unpacking it and
   requires the update feed itself to be signed.
-- Release pipeline: Dependabot now also watches the Windows NuGet packages
-  and the Swift package.
+- Release pipeline: the Sparkle tools that sign the Mac update feed are
+  verified against a pinned checksum before use; the Windows build receives
+  only the six signing secrets it needs rather than every repository
+  secret; a re-run never replaces an asset already published under a
+  version; every GitHub Action is pinned to a commit, with Dependabot
+  keeping the pins current, including the Windows NuGet packages and the
+  Swift package.
 
 ## v1.3.1
 
@@ -122,15 +133,15 @@ Hardening from a security review of the app and its release pipeline.
 
 ## v1.3.0
 
-- Connector Control now runs on Windows. The new app lives in the system
-  tray and brings the same connector list, editor, profiles, backups,
+- Windows: Connector Control now runs on Windows. The new app lives in the
+  system tray and brings the same connector list, editor, profiles, backups,
   self-healing and syncing to Windows 10 (build 17763 and later) and
   Windows 11, on x64 and Arm64 PCs. Install it from
   ConnectorControl-win-x64-Setup.exe (or the win-arm64 one) on the release
   page; it keeps itself up to date from then on. Both apps read and write
   the same mcps.json, so a master list synced between a Mac and a PC
   serves both — local-server commands stay OS-specific, see the README.
-- Missing-tool warnings: a connector that starts through npx, node,
+- Both platforms: Missing-tool warnings: a connector that starts through npx, node,
   uvx or uv now shows a caution glyph in the connector list when that
   tool isn't installed where Claude Desktop can find it. The editor explains
   what to install, with a download link and the brew (or winget)

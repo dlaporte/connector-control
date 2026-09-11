@@ -1,0 +1,51 @@
+# Lint the CI plumbing itself: the workflow YAML and every shell/PowerShell script the
+# workflows call. A broken script here fails in under a minute instead of partway through a
+# 30-minute Windows build or a signed release.
+name: Infra CI
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - '.github/**'
+      - 'scripts/**'
+      - 'windows/scripts/**'
+
+permissions:
+  contents: read
+
+# A newer push to the same branch supersedes a run still going.
+concurrency:
+  group: infra-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint workflows and scripts
+    # ubuntu-24.04 is pinned deliberately, as elsewhere in this repo's workflows: a
+    # runner-image rollover is a deliberate version bump, not something that happens under a
+    # floating "-latest" label. Dependabot does not manage this pin.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: actionlint
+        shell: bash
+        run: |
+          bash <(curl -sfL https://raw.githubusercontent.com/rhysd/actionlint/914e7df21a07ef503a81201c76d2b11c789d3fca/scripts/download-actionlint.bash) # v1.7.12
+          ./actionlint -color
+
+      - name: shellcheck
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+          mapfile -t files < <(printf '%s\n' scripts/*.sh scripts/**/*.sh windows/scripts/*.sh windows/scripts/**/*.sh | sort -u)
+          [ "${#files[@]}" -gt 0 ] || { echo "::error::no .sh files found under scripts/ or windows/scripts/"; exit 1; }
+          shellcheck "${files[@]}"
+
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          Invoke-ScriptAnalyzer -Path windows/scripts -Recurse -Severity Error -EnableExit

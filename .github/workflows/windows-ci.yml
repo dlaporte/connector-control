@@ -1,21 +1,17 @@
-# Build and test the Windows app on every push/PR that touches it. Sources/ConnectorControlCore
+# Build and test the Windows app on every push that touches it. Sources/ConnectorControlCore
 # is watched too: the Core tests assert Apple Foundation's JSON output byte for byte against
 # the goldens under Tests/Fixtures, so a Mac serialization change must re-run them here.
 #
 # The build itself is .github/workflows/windows-build.yml with package: false — the same
 # restore/build/test release.yml and windows-preview.yml run, without the packaging.
+#
+# No pull_request trigger: every push in this repository is to a branch of the same repo (no
+# forks), so the push trigger below already runs on every branch, including PR branches.
 name: Windows CI
 
 on:
   push:
     branches: ['**']
-    paths:
-      - 'windows/**'
-      - 'Tests/Fixtures/**'
-      - 'Sources/ConnectorControlCore/**'
-      - '.github/workflows/windows-ci.yml'
-      - '.github/workflows/windows-build.yml'
-  pull_request:
     paths:
       - 'windows/**'
       - 'Tests/Fixtures/**'
@@ -34,12 +30,10 @@ concurrency:
 jobs:
   test:
     name: Windows
-    # version is required by the reusable workflow but unused with package: false — nothing here
-    # is stamped or packed; require-signing: false for the same reason (no packages to sign).
-    # No `secrets: inherit`: the test job needs only GITHUB_TOKEN, which a called workflow
+    # require-signing: false — nothing here is packaged, so nothing needs signing. No
+    # `secrets: inherit`: the test job needs only GITHUB_TOKEN, which a called workflow
     # receives anyway, and a per-push workflow has no business holding the signing secrets.
     uses: ./.github/workflows/windows-build.yml
     with:
-      version: 0.0.0-ci
       require-signing: false
       package: false

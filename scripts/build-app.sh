@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Assembles build/Connector Control.app from the SwiftPM build products.
 #
 # Environment knobs (all optional; defaults produce a local dev build):

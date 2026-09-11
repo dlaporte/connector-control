@@ -26,8 +26,9 @@
 #
 # The build itself — test, package (win-x64, win-arm64), smoke — is
 # .github/workflows/windows-build.yml, the same file release.yml calls. A preview is signed
-# exactly like a release: prepare proves all six Azure Artifact Signing secrets (spec §8.4) are
-# there, and the build is called with require-signing: true, so nothing here is ever unsigned.
+# exactly like a release: windows-build.yml's own gate job proves all six Azure Artifact Signing
+# secrets (spec §8.4) are there before any build minutes are spent, so nothing here is ever
+# unsigned.
 #   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET   service principal with the
 #                                                          "Trusted Signing Certificate Profile Signer"
 #                                                          role (DefaultAzureCredential, Azure.Identity)
@@ -60,10 +61,14 @@ concurrency:
   group: windows-preview
   cancel-in-progress: false
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   prepare:
     name: Version and notes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       tag: ${{ steps.derive.outputs.tag }}
@@ -129,76 +134,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "$GITHUB_EVENT_NAME -> $TAG: $NEXT-preview.$N (dry_run=$DRY)"
 
-      # A preview is never built unsigned either: the same gate as release.yml's prepare, run
-      # here before any build minutes are spent, because windows-build.yml is called with
-      # require-signing: true and would fail in the package job without these.
-      - name: Require the Windows signing secrets
-        env:
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
-          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
-          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
-        run: |
-          missing=""
-          for name in AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET \
-                      AZURE_SIGNING_ENDPOINT AZURE_SIGNING_ACCOUNT AZURE_SIGNING_PROFILE; do
-            [ -n "${!name}" ] || missing="$missing $name"
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::Windows signing secrets missing:$missing. A preview is never built unsigned — add them under Settings ▸ Secrets and variables ▸ Actions, then re-run."
-            exit 1
-          fi
-          echo "All six AZURE_* signing secrets are present."
-
       - name: Write release notes
-        env:
-          TAG: ${{ steps.derive.outputs.tag }}
-          VERSION: ${{ steps.derive.outputs.version }}
-          NEXT: ${{ steps.derive.outputs.next }}
-          NUMBER: ${{ steps.derive.outputs.number }}
         run: |
-          # Commits since the more recent of two points: the highest REAL preview below this
-          # one (a windows-preview-dry-<n> tag is never a comparison point) and the newest v*
-          # release reachable from here — previews are cut from master after a release, so
-          # "since the last preview" alone would re-list a whole release. With neither (a
-          # first preview on a fresh branch), since the branch left master.
-          PREV=$(git tag -l 'windows-preview-[0-9]*' \
-            | sed -n 's/^windows-preview-\([0-9][0-9]*\)$/\1/p' \
-            | sort -n | awk -v n="$NUMBER" '$1 + 0 < n + 0' | tail -1)
-          LAST=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD 2>/dev/null || true)
-          BASE=""
-          for candidate in ${PREV:+windows-preview-$PREV} $LAST; do
-            if [ -z "$BASE" ] || git merge-base --is-ancestor "$BASE" "$candidate"; then
-              BASE="$candidate"
-            fi
-          done
-          if [ -n "$BASE" ]; then
-            BASE_LABEL="$BASE"
-          else
-            BASE=$(git merge-base origin/master HEAD); BASE_LABEL="master (${BASE:0:7})"
-          fi
-          {
-            echo "Windows **preview** build \`$VERSION\` of Connector Control, from commit ${GITHUB_SHA:0:7} (tag \`$TAG\`)."
-            echo
-            echo "> Preview builds are GitHub prereleases for Windows testers. They never touch the Mac app's update feed, and a preview install only updates to later previews (and to the final release). This build is code-signed (Azure Artifact Signing)."
-            echo
-            echo "### Install"
-            echo
-            echo "1. Download \`ConnectorControl-win-x64-Setup.exe\` (Intel/AMD PCs) or \`ConnectorControl-win-arm64-Setup.exe\` (ARM PCs) from the assets below."
-            echo "2. Run it. It installs for the current user under \`%LOCALAPPDATA%\\ConnectorControl\`, adds a Start menu entry, and launches the app: look for the plug icon in the system tray (open the \`^\` overflow if it is hidden)."
-            echo "3. On first run the app imports the connectors from Claude Desktop's \`claude_desktop_config.json\` into its master list. The first change you make snapshots the original file under \`%LOCALAPPDATA%\\Connector Control\\backups\`."
-            echo "4. Uninstall from Settings ▸ Apps ▸ Installed apps; app data in \`%LOCALAPPDATA%\\Connector Control\` is left in place."
-            echo
-            echo "### Changes planned for v$NEXT (CHANGELOG.md)"
-            echo
-            awk -v ver="## v$NEXT" '$0 == ver {found=1; next} /^## / && found {exit} found {print}' CHANGELOG.md
-            echo
-            echo "### Commits since $BASE_LABEL"
-            echo
-            git log --format='- %s (%h)' "$BASE..HEAD"
-          } > notes.md
+          ./scripts/release/preview-notes.sh \
+            "${{ steps.derive.outputs.tag }}" "${{ steps.derive.outputs.version }}" \
+            "${{ steps.derive.outputs.next }}" "${{ steps.derive.outputs.number }}" > notes.md
           cat notes.md
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -211,12 +151,9 @@ jobs:
     name: Windows
     needs: prepare
     # test -> package (win-x64, win-arm64) -> smoke, the same file release.yml calls.
-    # prerelease: true — the previous release the delta package is built against is the newest
-    # PRERELEASE of the channel, i.e. the preview before this one.
     uses: ./.github/workflows/windows-build.yml
     with:
       version: ${{ needs.prepare.outputs.version }}
-      prerelease: true
       require-signing: true
     # Only the six Windows signing secrets, by name. A preview tag can be pushed from any
     # branch (see the header), so the workflow file that runs is whatever that branch holds;
@@ -236,7 +173,7 @@ jobs:
     # The only job that writes anything. A dry run — a windows-preview-dry-<n> tag or a dispatch
     # with dry_run — skips it entirely, so it creates no release and uploads no assets.
     if: needs.prepare.outputs.dry != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
@@ -244,7 +181,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ needs.prepare.outputs.tag }}
       VERSION: ${{ needs.prepare.outputs.version }}
-      REPO_URL: https://github.com/dlaporte/connector-control
+      REPO_URL: ${{ github.server_url }}/${{ github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -263,48 +200,31 @@ jobs:
           name: velopack-win-arm64
           path: artifacts/win-arm64
 
+      # --target pins the tag to the commit being built: on a tag push the tag already exists
+      # and gh ignores it; on a dispatch it stops gh from creating the tag on the default branch
+      # instead of the ref that was dispatched. --prerelease is the whole point: a prerelease is
+      # never releases/latest, so the Mac appcast at releases/latest/download/appcast.xml keeps
+      # resolving to the last Mac release. --latest is NEVER passed here, in any form.
       - name: Create the prerelease
         run: |
-          set -o pipefail
-          # --prerelease is the whole point: a prerelease is never releases/latest, so the Mac
-          # appcast at releases/latest/download/appcast.xml keeps resolving to the last Mac
-          # release. --latest is NEVER passed here, in any form. --target pins the tag to the
-          # commit that is being built: on a tag push the tag already exists and GitHub ignores
-          # it, and on a dispatch it is what stops gh from creating the tag on the default
-          # branch instead of on the ref that was dispatched.
-          #
-          # Stale drafts under this tag would make GitHub refuse to publish anything else under
-          # it; the script explains why they can go.
-          ./windows/scripts/delete-stale-drafts.sh "$TAG"
-          if EXISTING=$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease 2>/dev/null); then
-            if [ "$EXISTING" != "true" ]; then
-              echo "::error::Release $TAG exists and is NOT a prerelease; refusing to touch it."
-              exit 1
-            fi
-            echo "Release $TAG already exists (re-run); reusing it."
-          else
-            gh release create "$TAG" --prerelease --target "$GITHUB_SHA" \
-              --title "Connector Control $VERSION (Windows preview)" --notes-file notes/notes.md
-          fi
+          ./scripts/release/ensure-release.sh "$TAG" --prerelease \
+            --title "Connector Control $VERSION (Windows preview)" \
+            --notes notes/notes.md --target "$GITHUB_SHA"
 
       # gh, not vpk, uploads everything, a re-run skips a RID whose assets are all published
       # (and refuses to complete a half-published one), and the pack-time releases.<rid>.json
       # is filtered to this build's own packages first — all of it, with the reasons, in the
       # script release.yml calls too.
       - name: Upload Velopack assets
-        run: ./windows/scripts/upload-release-assets.sh "$TAG" "$VERSION" artifacts
+        run: ./scripts/release/upload-release-assets.sh "$TAG" "$VERSION" artifacts
 
       - name: Verify the release
         run: |
-          set -o pipefail
-          gh release view "$TAG" --json isPrerelease,isDraft,assets --jq '{prerelease: .isPrerelease, draft: .isDraft, assets: [.assets[].name]}' | tee release.json
-          [ "$(jq -r .prerelease release.json)" = "true" ] || { echo "::error::$TAG is not a prerelease"; exit 1; }
-          [ "$(jq -r .draft release.json)" = "false" ] || { echo "::error::$TAG is a draft; gh release create must publish it"; exit 1; }
-          for a in ConnectorControl-win-x64-Setup.exe ConnectorControl-win-arm64-Setup.exe \
-                   "ConnectorControl-$VERSION-win-x64-full.nupkg" "ConnectorControl-$VERSION-win-arm64-full.nupkg" \
-                   releases.win-x64.json releases.win-arm64.json; do
-            jq -e --arg a "$a" '.assets | index($a) != null' release.json >/dev/null || { echo "::error::asset $a missing from $TAG"; exit 1; }
-          done
+          ./scripts/release/verify-release.sh "$TAG" --prerelease \
+            ConnectorControl-win-x64-Setup.exe ConnectorControl-win-arm64-Setup.exe \
+            "ConnectorControl-$VERSION-win-x64-full.nupkg" "ConnectorControl-$VERSION-win-arm64-full.nupkg" \
+            releases.win-x64.json releases.win-arm64.json
+
           # `gh release view --json isLatest` does not exist (gh 2.99.0: "Unknown JSON field"),
           # and "Latest" is a repository-level pointer anyway. This endpoint IS what the Mac
           # appcast URL resolves through, so asking it is the real check.
@@ -319,6 +239,4 @@ jobs:
             echo
             echo "- Release: $REPO_URL/releases/tag/$TAG"
             echo "- releases/latest unchanged: $LATEST"
-            echo "- Assets:"
-            jq -r '.assets[] | "  - " + .' release.json
           } >> "$GITHUB_STEP_SUMMARY"
