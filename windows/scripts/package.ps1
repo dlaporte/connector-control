@@ -85,7 +85,9 @@ if (-not (Test-Path $icon)) { throw "Missing $icon — run: swift scripts/genera
 # argument below; a bare global install ('vpk') has nothing to prefix.
 $vpkParts = $Vpk.Split([char[]]' ', 2)
 $vpkExe = $vpkParts[0]
-$vpkPrefixArgs = if ($vpkParts.Count -gt 1) { @($vpkParts[1]) } else { @() }
+# Typed: PowerShell unrolls a one-element array returned from an if-expression into a plain
+# string, and a string plus an array is string concatenation, not an argument list.
+[string[]] $vpkPrefixArgs = if ($vpkParts.Count -gt 1) { @($vpkParts[1]) } else { @() }
 
 Write-Host "== Publish $Runtime, version $Version"
 if (Test-Path $publishDir) { Remove-Item -Recurse -Force $publishDir }
