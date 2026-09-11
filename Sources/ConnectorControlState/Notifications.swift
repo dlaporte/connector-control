@@ -1,4 +1,4 @@
-/// Identifiers shared by the notifier and AppState (catalog §1.9).
+/// Identifiers shared by the notifier and AppState.
 public enum Notifications {
     public static let title = "Connector Control"
     public static let restartCategory = "restartPending"

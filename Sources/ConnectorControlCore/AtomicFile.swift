@@ -72,7 +72,7 @@ public enum AtomicFile {
         // a failure surface rather than shipping a file of unknown mode. A
         // rename keeps the temp file's mode, but replaceItemAt does NOT by
         // default: it restores the destination's old metadata, so a 644 file
-        // Claude Desktop created would stay 644 through every write.
+        // Claude Desktop created stays 644 through every write.
         // .usingNewMetadataOnly keeps the 600 set here.
         try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: tmp.path)
         if fm.fileExists(atPath: target.path) {

@@ -15,8 +15,8 @@ public enum RemotePattern {
         s == defaultPackage || s.hasPrefix(defaultPackage + "@")
     }
 
-    /// The rule the URL argument must meet (catalog §3.4 remoteURLValid): an
-    /// http or https scheme and a host. `detect` applies it to the bridge's
+    /// The rule the URL argument must meet: an http or https scheme and a
+    /// host. `detect` applies it to the bridge's
     /// URL; the editor applies it to the Server URL field.
     public static func isValidHTTPURL(_ text: String) -> Bool {
         guard let url = URL(string: text), let scheme = url.scheme?.lowercased(),

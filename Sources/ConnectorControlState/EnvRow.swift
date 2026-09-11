@@ -1,6 +1,6 @@
 import Foundation
 
-/// One environment-variable row (catalog §3.6). Rows carry a stable identity
+/// One environment-variable row. Rows carry a stable identity
 /// while the name is edited — a dictionary key cannot, since each keystroke
 /// would re-key the dictionary, re-sort the list, and drop field focus.
 /// Values are masked unless `revealed` (only freshly added rows start revealed).

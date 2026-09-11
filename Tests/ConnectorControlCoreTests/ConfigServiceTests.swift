@@ -251,7 +251,7 @@ final class ConfigServiceTests: XCTestCase {
                        "live config must be untouched after refused restore")
     }
 
-    /// U-3: parseRoot treats zero bytes as an empty root (the same rule
+    /// parseRoot treats zero bytes as an empty root (the same rule
     /// ClaudeConfigIO's own read path already applies), so a zero-byte backup —
     /// the same crash/truncation artifact — restores to an empty config
     /// instead of being refused as malformed.

@@ -1,6 +1,6 @@
 import Foundation
 
-/// NSRunningApplication + ClaudeRestarter (catalog §1.11, §6.1) as a seam.
+/// NSRunningApplication + ClaudeRestarter as a seam.
 @MainActor
 public protocol ClaudeProcess: AnyObject {
     var isRunning: Bool { get }

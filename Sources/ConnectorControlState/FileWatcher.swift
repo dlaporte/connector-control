@@ -3,10 +3,10 @@ import Foundation
 /// Watches the parent directory of `url` (atomic writes replace the inode, so
 /// watching the directory catches create/rename/delete) AND the file's own
 /// descriptor (so an in-place truncate+write with no rename still fires).
-/// Fires when the file's modification date changes (catalog §6.2).
+/// Fires when the file's modification date changes.
 ///
 /// Everything runs on a private serial queue; a confirmed change is handed to
-/// `marshal`, which posts `onChange` to the main actor (port design §7.6). The
+/// `marshal`, which posts `onChange` to the main actor. The
 /// callback re-checks on delivery and is dropped if the watcher was stopped or
 /// restarted in the meantime — a `stop()` that raced the check wins.
 public final class FileWatcher: @unchecked Sendable {
@@ -91,16 +91,14 @@ public final class FileWatcher: @unchecked Sendable {
             // missing and stays unarmed until the directory reappears. The
             // final callback below cannot use isLive(generation:): that
             // checks dirSource != nil, which is already false by the time it
-            // runs because this is the deliberate disarm, not a stale one, so
-            // a wasArmed flag captured before the teardown stands in for it.
-            let wasArmed = dirSource != nil
+            // runs because this is the deliberate disarm, not a stale one.
             dirSource?.cancel()
             dirSource = nil
             fileSource?.cancel()
             fileSource = nil
             generation += 1
             marshal { [weak self] in
-                guard let self, wasArmed else { return }
+                guard let self else { return }
                 self.onChange()
             }
             return

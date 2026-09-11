@@ -4,14 +4,14 @@ import Foundation
 /// process was launched with, plus the PATH floor Claude Desktop adds for
 /// itself — and, because neither list holds a version manager's directory,
 /// falls back to the login shell's PATH to tell "not installed" from
-/// "installed where Claude Desktop cannot see it" (spec §3.2). Never throws;
+/// "installed where Claude Desktop cannot see it". Never throws;
 /// the version call is best-effort with a timeout.
 public struct ToolProbe: Sendable {
     public static let defaultVersionTimeout: TimeInterval = 2
     private static let defaultShellTimeout: TimeInterval = 2
 
-    /// The directories Claude Desktop's bundle adds to its own PATH (spec
-    /// §3.2.3). A tool in one of these counts as visible even when this app's
+    /// The directories Claude Desktop's bundle adds to its own PATH. A tool in
+    /// one of these counts as visible even when this app's
     /// PATH does not name it; whether Claude's connector spawner reads the
     /// list is unverified, which is why the note says "may not".
     public static let defaultClaudePathFloor = ["/usr/local/bin", "/opt/homebrew/bin", "/opt/homebrew/sbin"]
@@ -101,6 +101,7 @@ public struct ToolProbe: Sendable {
             text = text.dropFirst(prefix.count)
         }
         guard var token = text.split(whereSeparator: \.isWhitespace).first else { return nil }
+        // ASCII digits only: `isNumber` also accepts fractions and Roman numerals.
         if let first = token.first, first == "v" || first == "V",
            let second = token.dropFirst().first, second.isASCII && second.isNumber {
             token = token.dropFirst()

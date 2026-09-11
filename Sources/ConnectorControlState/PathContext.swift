@@ -1,8 +1,8 @@
 import Foundation
 
-/// Everything path resolution needs from the machine (catalog §1.3), injectable
-/// for tests: the process environment (the two CONNECTOR_CONTROL_* overrides)
-/// and the Application Support directory the defaults hang off.
+/// Everything path resolution needs from the machine, injectable for tests:
+/// the process environment (the two CONNECTOR_CONTROL_* overrides) and the
+/// Application Support directory the defaults hang off.
 public struct PathContext: Sendable {
     public let environment: [String: String]
     public let appSupport: URL

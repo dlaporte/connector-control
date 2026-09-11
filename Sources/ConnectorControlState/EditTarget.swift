@@ -1,7 +1,7 @@
 import Foundation
 import ConnectorControlCore
 
-/// Catalog §3.1: what an editor window edits. Existing connectors use id ==
+/// What an editor window edits. Existing connectors use id ==
 /// name (one window each); new ones a fresh UUID. Codable and Hashable for
 /// the SwiftUI WindowGroup value.
 public struct EditTarget: Identifiable, Codable, Hashable, Sendable {
@@ -37,6 +37,6 @@ public struct EditTarget: Identifiable, Codable, Hashable, Sendable {
                    entry: MCPEntry(config: RemotePattern.make(url: "")), isNew: true, forcesRemote: true)
     }
 
-    /// Catalog §3.12: fixed at open time.
+    /// Fixed at open time.
     public var windowTitle: String { isNew ? EditTarget.addTitle : EditTarget.editTitle(name) }
 }

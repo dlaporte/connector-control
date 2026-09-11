@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import ConnectorControlCore
 
-/// Catalog §3 EditSheetView without the pixels: every field, switch rule,
+/// EditSheetView without the pixels: every field, switch rule,
 /// validation string, and the save/remove flow. The two sheet-style
 /// confirmations (loss warning, remove) are published state the view binds
 /// to, with one method per button; the save-conflict alert goes through Dialogs.
@@ -56,14 +56,14 @@ public final class EditorModel: ObservableObject {
     /// re-derived from the current field values.
     private let isUntouchedTemplate: Bool
 
-    // MARK: - Fields (catalog §3.3)
+    // MARK: - Fields
 
     @Published public private(set) var view: EditView {
         didSet { if oldValue != view { evaluateRequiredTool() } }
     }
     @Published public var name: String
     /// The Type picker (new targets only). Switching to Local discards the
-    /// remote template's bridge invocation (catalog §3.6).
+    /// remote template's bridge invocation.
     @Published public var isRemote: Bool {
         didSet { isRemoteChanged(from: oldValue) }
     }
@@ -100,12 +100,11 @@ public final class EditorModel: ObservableObject {
     private var recoveredJSON: PasteRecovery.Result?
     @Published public private(set) var jsonError: String?
     @Published public private(set) var validationError: String?
-    /// Non-nil while the loss-warning sheet is up (catalog §3.5).
+    /// Non-nil while the loss-warning sheet is up.
     @Published public private(set) var lossWarning: [String]?
-    /// True while the remove confirmation sheet is up (catalog §3.10).
+    /// True while the remove confirmation sheet is up.
     @Published public private(set) var removeConfirmationPending = false
-    /// The launcher this connector needs (spec 2026-09-05-tool-probe §3.3);
-    /// nil for none, a path, or unparseable JSON.
+    /// The launcher this connector needs; nil for none, a path, or unparseable JSON.
     @Published public private(set) var requiredTool: Tool?
 
     public init(state: AppState, target: EditTarget, dialogs: Dialogs) {
@@ -127,9 +126,9 @@ public final class EditorModel: ObservableObject {
         jsonText = config.editorText()
         recoveredJSON = PasteRecovery.recover(jsonText)
         load(config)
-        // Spec 2026-09-05-tool-probe §3.4: on open, a cached status shows its
-        // note at once; an unknown one is probed now. Later changes go through
-        // evaluateRequiredTool. The relay makes the view re-read toolNote.
+        // On open, a cached status shows its note at once; an unknown one is
+        // probed now. Later changes go through evaluateRequiredTool. The relay
+        // makes the view re-read toolNote.
         subscription = state.$toolStatuses.dropFirst().sink { [weak self] _ in self?.objectWillChange.send() }
         requiredTool = computeRequiredTool()
         if let initial = requiredTool, state.toolStatuses[initial] == nil {
@@ -175,14 +174,14 @@ public final class EditorModel: ObservableObject {
 
     public var removeConfirmationMessage: String { EditorModel.removeMessage(target.name) }
 
-    /// Catalog §3.4: Save is disabled with a JSON error, or in the remote form without a valid URL.
+    /// Save is disabled with a JSON error, or in the remote form without a valid URL.
     public var canSave: Bool {
         !((view == .json && jsonError != nil) || (view == .form && isRemote && !remoteURLValid))
     }
 
     public var canRemove: Bool { !target.isNew }
 
-    // MARK: - Tool note (spec 2026-09-05-tool-probe §3.3–§3.4)
+    // MARK: - Tool note
 
     /// nil while the tool is unknown (not probed yet) or found. Never blocks Save.
     public var toolNote: ToolNote? {
@@ -208,9 +207,9 @@ public final class EditorModel: ObservableObject {
 
     /// Only a user's picker tap reaches the re-seed below: adoptForm assigns
     /// isRemote while `view` is still `.json`, so the guard skips it — the same
-    /// outcome as the old view (its Type picker was out of the hierarchy while
-    /// the JSON view showed) and as EditorModel.cs (which bypasses the setter).
-    /// Quality review Q54 asked; both directions are tested.
+    /// outcome as the old view (its Type picker is out of the hierarchy while
+    /// the JSON view shows) and as EditorModel.cs (which bypasses the setter).
+    /// Both directions are tested.
     private func isRemoteChanged(from oldValue: Bool) {
         guard oldValue != isRemote else { return }
         if !isRemote, view == .form, isUntouchedTemplate {
@@ -222,7 +221,7 @@ public final class EditorModel: ObservableObject {
         evaluateRequiredTool()
     }
 
-    // MARK: - List editing (catalog §3.6)
+    // MARK: - List editing
 
     public func addArg() { args.append(ArgRow(value: "")) }
 
@@ -244,7 +243,7 @@ public final class EditorModel: ObservableObject {
         envRows[index].revealed.toggle()
     }
 
-    // MARK: - View switching (catalog §3.5)
+    // MARK: - View switching
 
     public func requestView(_ requested: EditView) {
         guard requested != view else { return }
@@ -337,7 +336,7 @@ public final class EditorModel: ObservableObject {
         remotePackage = RemotePattern.defaultPackage
     }
 
-    /// Maps a decoded RemoteConfig onto the form fields (catalog §3.3 authFields).
+    /// Maps a decoded RemoteConfig onto the form fields.
     private func applyRemoteFields(_ remote: RemoteConfig) {
         resetRemoteFields()
         switch remote.auth {
@@ -365,7 +364,7 @@ public final class EditorModel: ObservableObject {
         env.sorted { $0.key < $1.key }.map { EnvRow(name: $0.key, value: $0.value) }
     }
 
-    // MARK: - JSON (catalog §3.7)
+    // MARK: - JSON
 
     private func validateJSON() {
         jsonError = recoveredJSON == nil ? EditorModel.notValidJSON : nil
@@ -386,7 +385,7 @@ public final class EditorModel: ObservableObject {
         return recovered.config
     }
 
-    // MARK: - Form → config (catalog §3.5 currentFormConfig)
+    // MARK: - Form → config
 
     private var currentRemoteAuth: RemoteAuth {
         switch authKind {
@@ -437,7 +436,7 @@ public final class EditorModel: ObservableObject {
         return nil
     }
 
-    // MARK: - Save / remove (catalog §3.8–§3.10)
+    // MARK: - Save / remove
 
     /// True when the entry was saved and the window should close.
     public func save() -> Bool {
@@ -483,7 +482,7 @@ public final class EditorModel: ObservableObject {
             validationError = EditorModel.invalidURLError
             return false
         }
-        // The editor works on a snapshot taken at window-open; if the store's copy moved
+        // The editor works on a snapshot taken at window-open; if the store's copy has moved
         // underneath (external edit, delete, or rename reconciled in), do not silently
         // overwrite or resurrect it.
         var current: MCPEntry?

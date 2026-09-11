@@ -190,7 +190,7 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertTrue(popover.rows.allSatisfy(\.enabled))   // the glyph never touched the switch
     }
 
-    /// macOS only (addendum 2026-09-06-row-glyph, S19): a launcher only the login shell can see.
+    /// macOS only: a launcher only the login shell can see.
     func testRowsCarryTheShellOnlyWarning() {
         let h = AppStateHarness()
         defer { h.dispose() }

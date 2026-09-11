@@ -1,6 +1,6 @@
 import Foundation
 
-/// Which of the four tools a connector's command needs (spec §3.3): the first
+/// Which of the four tools a connector's command needs: the first
 /// token by basename, case-insensitive, `.cmd`/`.exe` stripped, one `cmd /c`
 /// unwrapped. A command written as a path (`/usr/local/bin/npx`) is left
 /// alone — the user chose it deliberately and PATH lookup does not apply.
@@ -31,7 +31,7 @@ public enum ToolRequirement {
 
     /// Every tool the given configs need, deduplicated and in `Tool.allCases`
     /// order — what the popover must have probed before it can decide which rows
-    /// carry a warning (addendum 2026-09-06-row-glyph §3).
+    /// carry a warning.
     public static func requiredTools(for configs: [JSONValue]) -> [Tool] {
         let needed = Set(configs.compactMap { requiredTool(for: $0) })
         return Tool.allCases.filter(needed.contains)

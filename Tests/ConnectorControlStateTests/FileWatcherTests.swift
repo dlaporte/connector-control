@@ -2,7 +2,7 @@ import XCTest
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
-/// Catalog §6.2 on the marshalled watcher: the callback is posted, never
+/// The marshalled watcher: the callback is posted, never
 /// delivered until the test pumps, and dropped after a stop or restart. A
 /// truncate+write can post two callbacks before one pump, so hit counts are
 /// lower bounds, as the C# suite asserts them.

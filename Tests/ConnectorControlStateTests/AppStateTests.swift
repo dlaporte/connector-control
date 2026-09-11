@@ -368,7 +368,7 @@ final class AppStateTests: XCTestCase {
         XCTAssertTrue(h.ui.pumpUntil({ h.tools.probed.count == 3 }, timeout: 5))
     }
 
-    /// Every string AppState shows, byte for byte as the views showed them at ccf3b25.
+    /// Every string AppState shows, byte for byte as the views showed them.
     func testStringsMatchTheCatalog() {
         XCTAssertEqual(Notifications.title, "Connector Control")
         XCTAssertEqual(Notifications.restartCategory, "restartPending")

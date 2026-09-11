@@ -4,7 +4,7 @@ import CoreImage
 import UniformTypeIdentifiers
 import ConnectorControlState
 
-/// Catalog §4: three tabs of bindings; every rule and string is SettingsModel's.
+/// Three tabs of bindings; every rule and string is SettingsModel's.
 struct SettingsView: View {
     @StateObject private var model: SettingsModel
     private let state: AppState
@@ -140,7 +140,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        // Spec §6 D4: the Mac refreshes when this tab appears.
+        // The Mac refreshes when this tab appears.
         .onAppear { model.refreshTools() }
     }
 

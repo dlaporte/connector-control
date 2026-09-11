@@ -24,7 +24,7 @@ final class RestoreModelTests: XCTestCase {
         XCTAssertFalse(model.canRestore)
     }
 
-    /// Commit-in-progress (K-6): a listing failure used to be swallowed by
+    /// A listing failure used to be swallowed by
     /// `try?`, leaving an empty list with no explanation; it now surfaces.
     func testLoadSurfacesABackupsListingFailure() throws {
         let h = AppStateHarness()
@@ -85,7 +85,7 @@ final class RestoreModelTests: XCTestCase {
         XCTAssertFalse(model.confirming)
     }
 
-    /// Commit 8c61005: a fresh attempt starts with a clean sheet — the previous
+    /// A fresh attempt starts with a clean sheet — the previous
     /// attempt's error must not outlive a new selection or a cancelled confirmation.
     func testRequestRestoreClearsThePreviousError() throws {
         let h = AppStateHarness()

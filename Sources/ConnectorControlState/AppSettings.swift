@@ -1,10 +1,10 @@
 import Foundation
 import ConnectorControlCore
 
-/// The app's UserDefaults keys (catalog §1.19) as a seam (C# ISettings).
-/// Setters persist immediately and never fail. Absent keys read as the
-/// catalog's defaults. Named AppSettings, not Settings: the app's SwiftUI
-/// `Settings` scene would make the bare name ambiguous there.
+/// The app's UserDefaults keys as a seam (C# ISettings). Setters persist
+/// immediately and never fail. Absent keys read as the documented defaults.
+/// Named AppSettings, not Settings: the app's SwiftUI `Settings` scene would
+/// make the bare name ambiguous there.
 @MainActor
 public protocol AppSettings: AnyObject {
     /// Custom master-list directory; nil means the default (and removes the key).

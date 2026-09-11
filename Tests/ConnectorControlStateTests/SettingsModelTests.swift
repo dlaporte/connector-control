@@ -27,7 +27,7 @@ final class SettingsModelTests: XCTestCase {
         }
     }
 
-    // MARK: General (catalog §4.2)
+    // MARK: General
 
     func testLaunchAtLoginTogglesAutostart() {
         let rig = Rig()
@@ -68,7 +68,7 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertNil(rig.model.loginItemNote)
     }
 
-    /// macOS only (catalog §4.2): registered, but System Settings has not approved it yet.
+    /// macOS only: registered, but System Settings has not approved it yet.
     func testLaunchAtLoginRequiringApprovalShowsTheApprovalNote() {
         let rig = Rig()
         defer { rig.dispose() }
@@ -127,7 +127,7 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertEqual(rig.updater.checks, 1)   // Sparkle shows "up to date" or the update itself
     }
 
-    // MARK: Storage (catalog §4.3)
+    // MARK: Storage
 
     func testBackupKeepCountClampsAndRebuildsTheService() {
         let rig = Rig()
@@ -161,7 +161,7 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertFalse(rig.model.canUseDefaultStore)
     }
 
-    // MARK: Claude (catalog §4.4)
+    // MARK: Claude
 
     func testClaudeAppPathShowsTheOverrideOrTheDefault() {
         let rig = Rig()
@@ -209,7 +209,7 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertEqual(SettingsModel.maxKeepCount, 100)
     }
 
-    // MARK: Tools (spec 2026-09-05-tool-probe §3.5)
+    // MARK: Tools
 
     func testToolRowsStartAsCheckingAndFillInAfterARefresh() throws {
         let rig = Rig()
@@ -275,7 +275,7 @@ final class SettingsModelTests: XCTestCase {
                        ToolRow(name: "node", statusText: "Checking…", isProblem: false, note: nil, isShellOnly: false))
     }
 
-    /// macOS only (catalog §4.4): under a shell-only row, the sentence, the advice line, then the install line.
+    /// macOS only: under a shell-only row, the sentence, the advice line, then the install line.
     func testToolRowShowsTheShellOnlySentence() throws {
         let status = ToolStatus.foundInShellOnly(path: "/Users/me/.nvm/versions/node/v22/bin/node", version: "22.11.0")
         let row = ToolRow.make(tool: .node, status: status)

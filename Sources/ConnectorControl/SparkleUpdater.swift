@@ -3,8 +3,8 @@ import Foundation
 import Sparkle
 import ConnectorControlState
 
-/// Catalog §1.2 step 5 and §4.2. Created not-started; started only from a
-/// real app bundle — bare `swift run` has none and Sparkle requires one.
+/// Created not-started; started only from a real app bundle — bare `swift run`
+/// has none and Sparkle requires one.
 @MainActor
 final class SparkleUpdater: Updater {
     private let controller = SPUStandardUpdaterController(

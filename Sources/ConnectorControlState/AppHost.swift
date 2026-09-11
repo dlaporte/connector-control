@@ -3,7 +3,7 @@ import Foundation
 /// A closure that must run on the main actor.
 public typealias MainActorAction = @MainActor () -> Void
 
-/// The main thread as three closures (port design §7.6): `marshal` POSTS a
+/// The main thread as three closures: `marshal` POSTS a
 /// closure to it and never blocks (the FileWatchers call it from their own
 /// queue, the tool probe from a global queue, the restart completion from
 /// wherever it lands), `delay` schedules one there later, `now` is the clock.

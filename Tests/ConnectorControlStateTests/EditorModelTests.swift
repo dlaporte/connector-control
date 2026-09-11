@@ -24,7 +24,7 @@ final class EditorModelTests: XCTestCase {
         EditorModel(state: state, target: target, dialogs: h.dialogs)
     }
 
-    // MARK: opening (catalog §3.3)
+    // MARK: opening
 
     func testNewRemoteTargetOpensInTheRemoteFormWithAnEmptyUrl() {
         let h = AppStateHarness()
@@ -56,7 +56,7 @@ final class EditorModelTests: XCTestCase {
     }
 
     func testExistingRemoteWithAuthFlagsOpensInTheLocalForm() throws {
-        // Catalog §3.3: detect() requires exactly two stripped args, so auth flags push the
+        // detect() requires exactly two stripped args, so auth flags push the
         // connector into the Local form even though decode() populated the auth fields.
         let h = AppStateHarness()
         defer { h.dispose() }
@@ -93,7 +93,7 @@ final class EditorModelTests: XCTestCase {
         XCTAssertEqual(editor.additionalPreview, "{\n  \"disabled\" : false,\n  \"type\" : \"stdio\"\n}")
     }
 
-    /// P-5: additionalPreview now goes through editorText(), which (unlike the
+    /// additionalPreview now goes through editorText(), which (unlike the
     /// old manual serialize+decode) does not escape forward slashes.
     func testAdditionalPreviewDoesNotEscapeSlashes() {
         let h = AppStateHarness()
@@ -131,7 +131,7 @@ final class EditorModelTests: XCTestCase {
         XCTAssertEqual(editor.args.map(\.value), ["-y", "mcp-remote", url])
     }
 
-    // MARK: view switching (catalog §3.5)
+    // MARK: view switching
 
     func testSettingIsJsonViewSwitchesToJsonAndClearsIsFormView() {
         let h = AppStateHarness()
@@ -256,7 +256,7 @@ final class EditorModelTests: XCTestCase {
         XCTAssertTrue(h.dialogs.confirms.isEmpty)   // a sheet, not an NSAlert
     }
 
-    // MARK: JSON view (catalog §3.7)
+    // MARK: JSON view
 
     func testJsonValidationErrorDisablesSave() {
         let h = AppStateHarness()
@@ -341,7 +341,7 @@ final class EditorModelTests: XCTestCase {
         XCTAssertTrue(editor.args.isEmpty)
     }
 
-    // MARK: save (catalog §3.8–§3.9)
+    // MARK: save
 
     func testEnvNamesReachTheStoreVerbatim() throws {
         // Names are kept as typed: trimming once silently renamed a user's keys.
@@ -563,7 +563,7 @@ final class EditorModelTests: XCTestCase {
         XCTAssertEqual(state.store.mcps["scoutbook"]?.enabled, true)   // a re-added entry takes the editor's snapshot enabled state
     }
 
-    // MARK: remove (catalog §3.10)
+    // MARK: remove
 
     func testRemoveConfirmsThenRemovesAndAppliesInOneTurn() throws {
         let h = AppStateHarness()
@@ -628,7 +628,7 @@ final class EditorModelTests: XCTestCase {
         XCTAssertEqual(saved["args"], .array([.string("-y"), .string("mcp-remote"), .string("https://moved.example/mcp")]))
     }
 
-    // MARK: tool note (spec 2026-09-05-tool-probe §3.3–§3.4)
+    // MARK: tool note
 
     func testNewRemoteConnectorNotesAMissingNpx() throws {
         let h = AppStateHarness()
@@ -745,7 +745,7 @@ final class EditorModelTests: XCTestCase {
         XCTAssertEqual(raised, 0)   // the view was never told to re-read: dispose stopped the relay
     }
 
-    /// macOS only (catalog §3.13): a launcher only the login shell can see gets the advice line.
+    /// macOS only: a launcher only the login shell can see gets the advice line.
     func testAShellOnlyToolShowsTheAdviceLine() throws {
         let h = AppStateHarness()
         defer { h.dispose() }

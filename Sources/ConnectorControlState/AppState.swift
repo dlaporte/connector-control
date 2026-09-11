@@ -2,10 +2,10 @@ import Foundation
 import Combine
 import ConnectorControlCore
 
-/// The app's state (catalog §1). Main-actor only; everything that arrives
-/// from another thread comes through `AppHost.marshal`. Init sequence
-/// (catalog §1.2): resolve the service, one-time permissions sweep, route
-/// the notification's Restart Claude action, reload, arm the watchers.
+/// The app's state. Main-actor only; everything that arrives from another
+/// thread comes through `AppHost.marshal`. Init sequence: resolve the
+/// service, one-time permissions sweep, route the notification's Restart
+/// Claude action, reload, arm the watchers.
 ///
 /// Failure conventions used across this file and the models built on it:
 /// UI validation a user can fix returns a `String?` message; I/O `throws`;
@@ -14,50 +14,51 @@ import ConnectorControlCore
 /// publishes its own error separately.
 @MainActor
 public final class AppState: ObservableObject {
-    // MARK: - Strings (catalog §1.8, §1.10, §1.16–§1.18, §2.2)
-    // nonisolated, like today's restartCategoryID: LiveClaudeProcess, a
-    // non-isolated type, reads defaultClaudeAppPath. Every constant is one
-    // line so the string check can find it on its `static let`/`static func` line.
+    // MARK: - Strings
+    // Every constant is one line so the string check can find it on its
+    // `static let`/`static func` line. `chooseClaude` stays `nonisolated`:
+    // ClaudeRestarter.verifyIsClaude reads it from a non-isolated context,
+    // deliberately off the main thread while it validates a whole app bundle.
 
-    nonisolated public static let noConnectorsSubtitle = "No connectors configured"
-    nonisolated public static let claudeConfigRegeneratedBody = "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up."
-    nonisolated public static let regenerationFailedBody = "The connector configuration changed, but Claude's config could not be updated — open Connector Control to retry."
-    nonisolated public static let claudeConfigChangedBody = "Claude's config changed outside Connector Control."
-    nonisolated public static let storeChangedBody = "The connector list changed outside Connector Control — review it before your next change is applied."
-    nonisolated public static let quitMessage = "Quit Connector Control?"
-    nonisolated public static let quitButton = "Quit"
-    nonisolated public static let restartMessage = "Restart Claude Desktop now?"
-    nonisolated public static let restartInformative = "Any in-progress Claude conversation will be interrupted."
-    nonisolated public static let restartButton = "Restart"
-    nonisolated public static let newProfileTitle = "New Profile"
-    nonisolated public static let renameProfileTitle = "Rename Profile"
-    nonisolated public static let deleteProfileInformative = "Its connector list is removed; backups keep prior states."
-    nonisolated public static let deleteButton = "Delete"
-    nonisolated public static let nameEmptyError = "Name must not be empty."
-    nonisolated public static let defaultClaudeAppPath = "/Applications/Claude.app"
+    public static let noConnectorsSubtitle = "No connectors configured"
+    public static let claudeConfigRegeneratedBody = "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up."
+    public static let regenerationFailedBody = "The connector configuration changed, but Claude's config could not be updated — open Connector Control to retry."
+    public static let claudeConfigChangedBody = "Claude's config changed outside Connector Control."
+    public static let storeChangedBody = "The connector list changed outside Connector Control — review it before your next change is applied."
+    public static let quitMessage = "Quit Connector Control?"
+    public static let quitButton = "Quit"
+    public static let restartMessage = "Restart Claude Desktop now?"
+    public static let restartInformative = "Any in-progress Claude conversation will be interrupted."
+    public static let restartButton = "Restart"
+    public static let newProfileTitle = "New Profile"
+    public static let renameProfileTitle = "Rename Profile"
+    public static let deleteProfileInformative = "Its connector list is removed; backups keep prior states."
+    public static let deleteButton = "Delete"
+    public static let nameEmptyError = "Name must not be empty."
+    public static let defaultClaudeAppPath = "/Applications/Claude.app"
     nonisolated public static let chooseClaude = "Choose the real Claude Desktop under Settings ▸ Claude."
-    /// Catalog §1.17: Claude's launch date is re-read 3 s after the restart completes.
-    nonisolated public static let restartRecheckDelay: TimeInterval = 3
+    /// Claude's launch date is re-read 3 s after the restart completes.
+    public static let restartRecheckDelay: TimeInterval = 3
 
-    nonisolated public static func deleteProfileMessage(_ profile: String) -> String { "Delete Profile “\(profile)”?" }
+    public static func deleteProfileMessage(_ profile: String) -> String { "Delete Profile “\(profile)”?" }
 
-    nonisolated public static func duplicateNameError(_ name: String) -> String { "A connector named “\(name)” already exists." }
+    public static func duplicateNameError(_ name: String) -> String { "A connector named “\(name)” already exists." }
 
-    nonisolated public static func malformedConfigMessage(detail: String) -> String { "Claude's config file is not valid JSON (\(detail)). Nothing was written. Use Backups ▸ Restore… to recover it." }
+    public static func malformedConfigMessage(detail: String) -> String { "Claude's config file is not valid JSON (\(detail)). Nothing was written. Use Backups ▸ Restore… to recover it." }
 
-    nonisolated public static func enabledSubtitle(enabled: Int, total: Int) -> String { "\(enabled) of \(total) enabled" }
+    public static func enabledSubtitle(enabled: Int, total: Int) -> String { "\(enabled) of \(total) enabled" }
 
     /// A synced connector-list change was adopted and written into Claude's config: say what it runs now.
-    nonisolated public static func connectorListChangedBody(_ delta: ServerDelta, restartRequired: Bool) -> String {
+    public static func connectorListChangedBody(_ delta: ServerDelta, restartRequired: Bool) -> String {
         let what = delta.isEmpty ? "was regenerated" : "now " + delta.summary()
         let then = restartRequired ? "Restart Claude to pick it up." : "Claude will use it the next time it starts."
         return "The connector list changed outside Connector Control — Claude's config \(what). \(then)"
     }
 
-    // MARK: - Published state (catalog §1.1)
+    // MARK: - Published state
 
     @Published public private(set) var store: MasterStore = .empty
-    /// Settable: the restore sheet reports its failure here (catalog §5).
+    /// Settable: the restore sheet reports its failure here.
     @Published public var lastError: String?
     @Published public private(set) var needsClaudeRestart = false
     /// True when the last apply threw; keeps a retry affordance visible even
@@ -66,9 +67,8 @@ public final class AppState: ObservableObject {
     /// mcpServers as last read from / written to Claude's file, for dirty tracking.
     @Published private(set) var appliedServers: [String: JSONValue] = [:]
     @Published public private(set) var service: ConfigService
-    /// Which of the four launchers Claude Desktop can start (spec
-    /// 2026-09-05-tool-probe §3.6): probed on demand and cached for the run.
-    /// A tool absent here has not been probed yet.
+    /// Which of the four launchers Claude Desktop can start: probed on demand
+    /// and cached for the run. A tool absent here has not been probed yet.
     @Published public private(set) var toolStatuses: [Tool: ToolStatus] = [:]
 
     /// The prompts AppState itself raises (quit, restart, profiles); the editor owns its own.
@@ -88,7 +88,7 @@ public final class AppState: ObservableObject {
     private var hasLoadedOnce = false
     private var disposed = false
 
-    /// Test probe: both watchers are live. Spec §6.3 wants this true after every reload.
+    /// Test probe: both watchers are live, which should hold true after every reload.
     var watchersArmed: Bool { (watcher?.isArmed ?? false) && (storeWatcher?.isArmed ?? false) }
 
     /// Test probe: the watcher objects themselves, so a test can assert that a
@@ -124,7 +124,7 @@ public final class AppState: ObservableObject {
         armWatchers()
     }
 
-    // MARK: - Derived (catalog §1.1, §2.2)
+    // MARK: - Derived
 
     var isDirty: Bool { store.enabledServers != appliedServers }
 
@@ -134,7 +134,7 @@ public final class AppState: ObservableObject {
 
     public var activeProfile: String { store.activeProfile }
 
-    /// Catalog §2.2 header subtitle.
+    /// The popover header's subtitle.
     public var headerSubtitle: String {
         let total = store.mcps.count
         return total == 0
@@ -142,7 +142,7 @@ public final class AppState: ObservableObject {
             : AppState.enabledSubtitle(enabled: store.enabledServers.count, total: total)
     }
 
-    // MARK: - Service construction (catalog §1.3)
+    // MARK: - Service construction
 
     public static func makeService(settings: AppSettings, paths: PathContext) -> ConfigService {
         var resolved = AppPaths.live(environment: paths.environment, appSupport: paths.appSupport)
@@ -165,7 +165,7 @@ public final class AppState: ObservableObject {
         return ConfigService(paths: resolved, keepCount: settings.backupKeepCount)
     }
 
-    // MARK: - Watchers (catalog §1.4, §1.5)
+    // MARK: - Watchers
 
     /// Replaces both watchers. Re-run on every repoint.
     private func armWatchers() {
@@ -182,9 +182,9 @@ public final class AppState: ObservableObject {
     }
 
     /// Only when arming previously failed (the parent directory did not exist).
-    /// Never a blanket re-arm: a popover open reloads (catalog §2.1), and tearing
-    /// the sources down each time would re-baseline the last-seen mtime and open
-    /// a gap where an external write is simply lost.
+    /// Never a blanket re-arm: a popover open reloads, and tearing the sources
+    /// down each time would re-baseline the last-seen mtime and open a gap
+    /// where an external write is simply lost.
     private static func reArm(_ watcher: FileWatcher?) {
         if let watcher, !watcher.isArmed { watcher.start() }
     }
@@ -209,7 +209,7 @@ public final class AppState: ObservableObject {
         reload(trigger: .externalStoreAdoption)
     }
 
-    // MARK: - Repointing (catalog §1.12) and restore (catalog §1.13)
+    // MARK: - Repointing and restore
 
     /// Repoints the master store to a new directory (or back to the default when
     /// `dir` is nil). Seeds the new location from the current store if it has no
@@ -265,7 +265,7 @@ public final class AppState: ObservableObject {
         reload(trigger: .quietStoreAdoption)
     }
 
-    // MARK: - Tools (spec 2026-09-05-tool-probe §3.6)
+    // MARK: - Tools
 
     /// Probes `tools` off the main thread and publishes the results through
     /// the host; a tool already in flight is not probed twice.
@@ -286,7 +286,7 @@ public final class AppState: ObservableObject {
         toolStatuses.merge(results) { _, new in new }
     }
 
-    // MARK: - Restart-required derivation (catalog §1.11)
+    // MARK: - Restart-required derivation
 
     /// Claude needs a restart iff it is running on a config older than our last
     /// write. Derived from the process launch date, so it self-clears however
@@ -299,7 +299,7 @@ public final class AppState: ObservableObject {
         needsClaudeRestart = launched < lastApply
     }
 
-    // MARK: - Reload (catalog §1.7 + §1.8)
+    // MARK: - Reload
 
     public func reload(trigger: ReloadTrigger = .routine) {
         do {
@@ -389,7 +389,7 @@ public final class AppState: ObservableObject {
         AppState.reArm(storeWatcher)
     }
 
-    // MARK: - Apply / persist (catalog §1.10)
+    // MARK: - Apply / persist
 
     private func performApply() {
         do {
@@ -441,13 +441,13 @@ public final class AppState: ObservableObject {
         return nil
     }
 
-    /// Removes and persists; the caller applies (catalog §3.10 does both in one turn).
+    /// Removes and persists; the caller applies (the editor's remove flow does both in one turn).
     public func remove(name: String) {
         store.mcps.removeValue(forKey: name)
         persistStore()
     }
 
-    // MARK: - Quit (catalog §1.16)
+    // MARK: - Quit
 
     public func quitApp() {
         if settings.confirmBeforeQuit,
@@ -457,7 +457,7 @@ public final class AppState: ObservableObject {
         quitRequested?()
     }
 
-    // MARK: - Restart Claude (catalog §1.17)
+    // MARK: - Restart Claude
 
     /// The in-app button: confirm (unless disabled), then restart.
     public func restartClaude() {
@@ -488,7 +488,7 @@ public final class AppState: ObservableObject {
         }
     }
 
-    // MARK: - Profiles (catalog §1.18)
+    // MARK: - Profiles
 
     /// Switching profiles applies immediately, like every other change. An unknown name is silently ignored.
     public func switchProfile(to name: String) {
@@ -523,15 +523,15 @@ public final class AppState: ObservableObject {
         }
     }
 
-    // MARK: - Notifications (catalog §1.8)
+    // MARK: - Notifications
 
     private func notify(_ body: String, category: String? = nil) {
         guard settings.notifyExternalChanges else { return }
         notifier.notify(title: Notifications.title, body: body, category: category)
     }
 
-    /// Catalog §1.10 friendly(): the malformed-config case gets the guided message; everything else its own text.
-    nonisolated public static func friendly(_ error: Error) -> String {
+    /// The malformed-config case gets the guided message; everything else its own text.
+    public static func friendly(_ error: Error) -> String {
         if case ClaudeConfigError.malformed(let detail) = error {
             return malformedConfigMessage(detail: detail)
         }

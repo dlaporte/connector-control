@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-/// Catalog §5 RestoreSheetView state. The confirmation is a sheet:
+/// RestoreSheetView state. The confirmation is a sheet:
 /// requestRestore opens it (and clears the previous attempt's error),
 /// confirmRestore is its Restore button, cancelRestore its implicit Cancel.
 @MainActor
@@ -17,7 +17,7 @@ public final class RestoreModel: ObservableObject {
 
     private let state: AppState
 
-    /// Full URLs, newest first; the permanent .original snapshot last (catalog §5).
+    /// Full URLs, newest first; the permanent .original snapshot last.
     @Published public private(set) var backups: [URL] = []
     @Published public var selection: URL?
     @Published public private(set) var restoreError: String?
@@ -66,7 +66,7 @@ public final class RestoreModel: ObservableObject {
             try state.restoreClaudeConfig(from: backup)
             return true
         } catch {
-            restoreError = error.localizedDescription   // raw message, not friendly(): catalog §5
+            restoreError = error.localizedDescription   // raw message, not friendly()
             state.lastError = error.localizedDescription
             return false
         }

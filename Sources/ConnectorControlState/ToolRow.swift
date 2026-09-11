@@ -1,13 +1,13 @@
 import ConnectorControlCore
 
-/// One Settings ▸ Claude ▸ Tools row (spec §3.5): name, status text, and the
+/// One Settings ▸ Claude ▸ Tools row: name, status text, and the
 /// install note when there is something to do.
 public struct ToolRow: Equatable, Sendable {
     public let name: String
     public let statusText: String
     public let isProblem: Bool
     public let note: ToolNote?
-    /// macOS only (catalog §4.4): the row also shows the note's first line.
+    /// macOS only: the row also shows the note's first line.
     public let isShellOnly: Bool
 
     public init(name: String, statusText: String, isProblem: Bool, note: ToolNote?, isShellOnly: Bool) {

@@ -1,4 +1,4 @@
-/// UNUserNotificationCenter (catalog §1.8, §1.9) as a seam.
+/// UNUserNotificationCenter as a seam.
 @MainActor
 public protocol Notifier: AnyObject {
     /// Post a notification; `category == Notifications.restartCategory` adds the

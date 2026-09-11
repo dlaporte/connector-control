@@ -2,9 +2,8 @@ import AppKit
 import ConnectorControlCore
 import ConnectorControlState
 
-/// The composition root (catalog §0, §1.2): the platform services, then the
-/// one AppState, in the order the old AppState.init did it — Sparkle started
-/// only with a bundle.
+/// The composition root: the platform services, then the one AppState, in the
+/// order the old AppState.init did it — Sparkle starts only with a bundle.
 @MainActor
 final class LiveServices {
     static let shared = LiveServices()

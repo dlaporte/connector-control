@@ -1,7 +1,7 @@
 import AppKit
 import ConnectorControlState
 
-/// Catalog §1.11 and §6.1 over NSRunningApplication and ClaudeRestarter.
+/// The ClaudeProcess implementation, over NSRunningApplication and ClaudeRestarter.
 @MainActor
 final class LiveClaudeProcess: ClaudeProcess {
     private let settings: AppSettings

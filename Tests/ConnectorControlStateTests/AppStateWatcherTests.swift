@@ -113,7 +113,7 @@ final class AppStateWatcherTests: XCTestCase {
 
     /// The C# version repoints the Claude config into a directory that does not
     /// exist yet; the Mac has no such repoint, so the missing directory is the
-    /// Claude folder itself at launch (spec §6.3: both watchers live after every reload).
+    /// Claude folder itself at launch. Both watchers should be live after every reload.
     func testReloadArmsOnlyTheWatcherThatCouldNotArmYet() throws {
         let h = AppStateHarness(seedClaudeConfig: false, createClaudeDirectory: false)
         defer { h.dispose() }

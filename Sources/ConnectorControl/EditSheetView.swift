@@ -2,7 +2,7 @@ import SwiftUI
 import ConnectorControlCore
 import ConnectorControlState
 
-/// Catalog §3: fields, bindings and layout only; every rule is EditorModel's.
+/// Fields, bindings and layout only; every rule is EditorModel's.
 struct EditSheetView: View {
     @StateObject private var model: EditorModel
     @Environment(\.dismiss) private var dismiss

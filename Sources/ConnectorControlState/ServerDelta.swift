@@ -1,9 +1,9 @@
 import ConnectorControlCore
 
 /// What a regenerated Claude config now runs that it did not before, by
-/// connector name (catalog §1.8). An mcpServers entry is a command Claude
-/// executes, so a notification about an adopted synced change names the
-/// entries rather than saying only that "the list changed".
+/// connector name. An mcpServers entry is a command Claude executes, so a
+/// notification about an adopted synced change names the entries rather
+/// than saying only that "the list changed".
 public struct ServerDelta: Equatable, Sendable {
     public var added: [String]
     public var removed: [String]

@@ -77,7 +77,7 @@ final class PermissionsSweepTests: XCTestCase {
         XCTAssertEqual(try mode(backup), 0o600)
     }
 
-    /// K-3: an install that already swept modes under the old two-flag scheme
+    /// An install that already swept modes under the old two-flag scheme
     /// (recorded here as sweepVersion == 1) gets only the ACL pass on its next
     /// launch, and lands at sweepVersion == PermissionsSweep.currentVersion.
     func testAnInstallAtSweepVersionOneGetsOnlyTheACLPassAndLandsAtTwo() throws {

@@ -20,7 +20,7 @@ final class UserDefaultsSettingsTests: XCTestCase {
     func testEveryKeyRoundTripsAndDefaultsApplyWhenAbsent() throws {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         let settings = UserDefaultsSettings(defaults: defaults)
-        // Catalog §1.19: the defaults when a key is absent.
+        // The defaults when a key is absent.
         XCTAssertNil(settings.masterStoreDir)
         XCTAssertNil(settings.claudeAppPath)
         XCTAssertEqual(settings.backupKeepCount, 20)
@@ -52,7 +52,7 @@ final class UserDefaultsSettingsTests: XCTestCase {
         XCTAssertEqual(again.sweepVersion, 2)
         XCTAssertEqual(defaults.string(forKey: DefaultsKey.masterStoreDir.rawValue), "/tmp/synced")
 
-        // nil removes the key (catalog §1.12 step 2).
+        // nil removes the key.
         settings.masterStoreDir = nil
         settings.claudeAppPath = nil
         settings.lastApplyDate = nil

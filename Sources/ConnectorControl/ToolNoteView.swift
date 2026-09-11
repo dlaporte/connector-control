@@ -2,7 +2,7 @@ import SwiftUI
 import ConnectorControlCore
 import ConnectorControlState
 
-/// The tool note (spec §3.4): what is wrong, the advice line when there is one
+/// The tool note: what is wrong, the advice line when there is one
 /// (the shell-only state), then the install line. `showsText`/`textStyle` let
 /// `ToolRowView` embed this for its advice + install line without repeating
 /// them, while keeping its own status text as the row's "what is wrong" line.
@@ -47,7 +47,7 @@ struct ToolNoteInstallLine: View {
     }
 }
 
-/// One Settings ▸ Claude ▸ Tools row (spec §3.5): name, status, and — when
+/// One Settings ▸ Claude ▸ Tools row: name, status, and — when
 /// there is something to do — the install line (and, for a tool only the
 /// shell can see, the sentence that says so). Layout only: the facts are the ToolRow's.
 struct ToolRowView: View {

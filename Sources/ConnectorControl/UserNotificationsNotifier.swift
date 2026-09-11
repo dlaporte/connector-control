@@ -2,8 +2,8 @@ import Foundation
 @preconcurrency import UserNotifications
 import ConnectorControlState
 
-/// Catalog §1.8–§1.9. UNUserNotificationCenter.current() crashes under bare
-/// `swift run` (no app bundle), so every call is gated on hasAppBundle.
+/// UNUserNotificationCenter.current() crashes under bare `swift run` (no app
+/// bundle), so every call is gated on hasAppBundle.
 @MainActor
 final class UserNotificationsNotifier: Notifier {
     static let hasAppBundle = Bundle.main.isBundled

@@ -1,5 +1,5 @@
-/// The NSAlert surfaces (catalog §1.16, §1.17, §1.18, §3.9) as a seam the app
-/// implements with `NSAlert` and tests script with a fake. The sheet-style
+/// The NSAlert surfaces as a seam the app implements with `NSAlert` and tests
+/// script with a fake. The sheet-style
 /// confirmations (loss warning, remove, restore) are not here: their models
 /// publish a pending state the SwiftUI `confirmationDialog` binds to.
 @MainActor
