@@ -20,6 +20,10 @@ final class BackupManagerTests: XCTestCase {
         tempDir.dispose()
     }
 
+    func testBackupsOfMissingDirIsEmpty() throws {
+        XCTAssertEqual(try manager.backups(series: "claude_desktop_config"), [])
+    }
+
     func testBackupsDirectoryIsCreatedPrivate() throws {
         _ = try manager.backUp(fileAt: source, series: "claude_desktop_config")
         let mode = try XCTUnwrap(FileManager.default

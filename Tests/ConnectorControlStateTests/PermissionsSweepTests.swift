@@ -157,4 +157,31 @@ final class PermissionsSweepTests: XCTestCase {
         XCTAssertTrue(PermissionsSweep.runOnce(settings: settings, paths: paths))
         XCTAssertEqual(settings.sweepVersion, PermissionsSweep.currentVersion)
     }
+
+    /// Before this fix, one combined attempted/applied counter across both
+    /// passes let a fully-succeeding ACL pass mask a mode pass that failed on
+    /// every file: `applied > 0` from the ACL side alone was enough to record
+    /// `sweepVersion = currentVersion` and the failed mode pass was never
+    /// retried. Each pass now keeps its own count.
+    func testAFailedModePassIsNotHiddenByASuccessfulACLPass() throws {
+        let dir = TempDir(prefix: "sweep")
+        defer { dir.dispose() }
+        let fm = FileManager.default
+        let paths = AppPaths(claudeConfigURL: dir.file("claude.json"), storeDirURL: dir.file("store"))
+        try fm.createDirectory(at: paths.storeDirURL, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: paths.masterStoreURL)
+        try fm.createDirectory(at: paths.backupsDirURL, withIntermediateDirectories: true)
+        let settings = FakeSettings()
+
+        XCTAssertTrue(PermissionsSweep.runOnce(
+            settings: settings, paths: paths,
+            repairModes: { _, _ in false },   // every mode repair fails
+            repairACLs: { _ in true }))       // every ACL repair succeeds
+        XCTAssertEqual(settings.sweepVersion, 0,
+                       "a failed mode pass must not be hidden behind a successful ACL pass")
+
+        XCTAssertTrue(PermissionsSweep.runOnce(settings: settings, paths: paths))
+        XCTAssertEqual(settings.sweepVersion, PermissionsSweep.currentVersion,
+                       "a clean run with the real repairs completes both passes")
+    }
 }

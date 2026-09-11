@@ -77,7 +77,8 @@ final class ConfigServiceTests: XCTestCase {
         let result = try service.loadAndReconcile()
         XCTAssertEqual(result.store.mcps.count, 3, "rebuilt from Claude's config")
         XCTAssertEqual(result.notes.count, 1)
-        XCTAssertTrue(result.notes[0].contains("mcps.corrupt."))
+        XCTAssertTrue(result.notes[0].hasPrefix("The MCP list file was unreadable; it was preserved as mcps.corrupt."))
+        XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude's config."))
     }
 
     func testCorruptStoreAndMalformedClaudeConfigBothNotesSurface() throws {
@@ -85,9 +86,13 @@ final class ConfigServiceTests: XCTestCase {
         try Data("garbage".utf8).write(to: paths.masterStoreURL)
         try Data("{oops".utf8).write(to: paths.claudeConfigURL)
         let result = try service.loadAndReconcile()
+        // Both sentences, in reconcile order; the second is the one that says what to do.
         XCTAssertEqual(result.notes.count, 2)
-        XCTAssertTrue(result.notes.contains { $0.contains("mcps.corrupt.") })
-        XCTAssertTrue(result.notes.contains { $0.contains("Backups") })
+        XCTAssertTrue(result.notes[0].hasPrefix("The MCP list file was unreadable; it was preserved as mcps.corrupt."))
+        XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude's config."))
+        XCTAssertEqual(result.notes[1],
+                       "Claude's config file is not valid JSON. Your MCP list is safe; "
+                       + "use Backups ▸ Restore… to repair the file.")
     }
 
     func testRestoreClaudeConfigFromBackup() throws {
@@ -141,7 +146,9 @@ final class ConfigServiceTests: XCTestCase {
 
         XCTAssertEqual(result.store.mcps.count, 3)
         XCTAssertEqual(result.notes.count, 1)
-        XCTAssertTrue(result.notes[0].contains("Backups"))
+        XCTAssertEqual(result.notes[0],
+                       "Claude's config file is not valid JSON. Your MCP list is safe; "
+                       + "use Backups ▸ Restore… to repair the file.")
         XCTAssertNil(result.claudeServers, "no baseline should be recorded from a failed reconcile")
         XCTAssertEqual(try service.backups.backups(series: "mcps").count, backupCountBefore,
                        "a failed reconcile pass must not save (and thus back up) the store")
@@ -229,7 +236,12 @@ final class ConfigServiceTests: XCTestCase {
         try Data(#"{"mcpServers": "oops"}"#.utf8).write(to: badBackup)
         let before = try Data(contentsOf: paths.claudeConfigURL)
         XCTAssertThrowsError(try service.restoreClaudeConfig(
-            from: badBackup, mergedWith: .empty))
+            from: badBackup, mergedWith: .empty)) {
+            guard case ClaudeConfigError.malformed(let detail) = $0 else {
+                return XCTFail("wrong error: \($0)")
+            }
+            XCTAssertEqual(detail, "backup bad-servers.json has an invalid mcpServers section")
+        }
         XCTAssertEqual(try Data(contentsOf: paths.claudeConfigURL), before,
                        "live config must be untouched when validation fails")
     }

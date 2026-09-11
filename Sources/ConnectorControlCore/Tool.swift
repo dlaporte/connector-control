@@ -23,7 +23,7 @@ public enum Tool: String, CaseIterable, Sendable {
 }
 
 /// What installs a tool: Node.js brings node and npx; uv brings uv and uvx.
-public enum ToolFamily: Sendable {
+public enum ToolFamily: Equatable, Sendable {
     case nodeJS, uv
 
     public var linkTitle: String {

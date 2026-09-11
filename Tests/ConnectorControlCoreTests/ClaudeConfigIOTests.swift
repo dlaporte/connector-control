@@ -50,7 +50,17 @@ final class ClaudeConfigIOTests: XCTestCase {
 
     func testReadNonObjectMCPServersThrows() throws {
         try write(#"{"mcpServers": "surprise"}"#)
-        XCTAssertThrowsError(try ClaudeConfigIO.readMCPServers(at: url))
+        XCTAssertThrowsError(try ClaudeConfigIO.readMCPServers(at: url)) {
+            XCTAssertEqual($0 as? ClaudeConfigError, .malformed("mcpServers is not a JSON object"))
+        }
+    }
+
+    /// windows/tests/ConnectorControl.Core.Tests/ClaudeConfigIOTests.cs ReadNonObjectTopLevelThrows.
+    func testReadNonObjectTopLevelThrows() throws {
+        try write("[1, 2]")
+        XCTAssertThrowsError(try ClaudeConfigIO.readMCPServers(at: url)) {
+            XCTAssertEqual($0 as? ClaudeConfigError, .malformed("top level is not a JSON object"))
+        }
     }
 
     func testWritePreservesEveryOtherKeyByValue() throws {
@@ -61,12 +71,7 @@ final class ClaudeConfigIOTests: XCTestCase {
         let after = try rootObject()
         XCTAssertEqual(Set(after.keys), Set(before.keys))
         for key in before.keys where key != "mcpServers" {
-            XCTAssertEqual(
-                try JSONSerialization.data(withJSONObject: ["v": after[key]!],
-                                           options: [.sortedKeys]),
-                try JSONSerialization.data(withJSONObject: ["v": before[key]!],
-                                           options: [.sortedKeys]),
-                "key \(key) changed")
+            XCTAssertEqual(JSONValue(any: after[key]!), JSONValue(any: before[key]!), "key \(key) changed")
         }
         let servers = try XCTUnwrap(after["mcpServers"] as? [String: Any])
         XCTAssertEqual(Array(servers.keys), ["only-one"])

@@ -1,4 +1,5 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 final class FormMapperTests: XCTestCase {
@@ -77,5 +78,17 @@ final class FormMapperTests: XCTestCase {
         let analysis = FormMapper.analyze(original)
         XCTAssertTrue(analysis.isLossless)
         XCTAssertEqual(FormMapper.serialize(analysis.model), original)
+    }
+
+    /// `cmd /c npx …` (the Windows launcher shape): the Mac form has no
+    /// widget for it either, so it round-trips losslessly, and the tool it
+    /// needs is still npx once the `cmd /c` wrapper is unwrapped.
+    func testRemoteCmdNpxFixtureRoundTrips() throws {
+        let data = try Data(contentsOf: Fixtures.url("remote_cmd_npx.json"))
+        let config = try JSONValue.parse(data)
+        let analysis = FormMapper.analyze(config)
+        XCTAssertTrue(analysis.isLossless)
+        XCTAssertEqual(FormMapper.serialize(analysis.model), config)
+        XCTAssertEqual(ToolRequirement.requiredTool(for: config), .npx)
     }
 }

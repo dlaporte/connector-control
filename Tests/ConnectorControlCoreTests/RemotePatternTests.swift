@@ -102,6 +102,7 @@ final class RemotePatternTests: XCTestCase {
     func testIsValidHTTPURLNeedsAnHTTPSchemeAndAHost() {
         XCTAssertTrue(RemotePattern.isValidHTTPURL("https://example.com/mcp"))
         XCTAssertTrue(RemotePattern.isValidHTTPURL("HTTP://example.com"), "scheme case does not matter")
+        XCTAssertTrue(RemotePattern.isValidHTTPURL("http://localhost:8080/sse"), "plain http, a host, and a port")
         XCTAssertFalse(RemotePattern.isValidHTTPURL(""))
         XCTAssertFalse(RemotePattern.isValidHTTPURL("ftp://x"))
         XCTAssertFalse(RemotePattern.isValidHTTPURL("https://"), "a scheme with no host")

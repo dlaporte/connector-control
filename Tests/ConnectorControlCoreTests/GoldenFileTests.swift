@@ -22,6 +22,8 @@ final class GoldenFileTests: XCTestCase {
             ("editor", Data(value.editorText().utf8)),
             ("serialization", try JSONSerialization.data(
                 withJSONObject: value.anyValue, options: [.prettyPrinted, .sortedKeys])),
+            ("serialization-compact", try JSONSerialization.data(
+                withJSONObject: value.anyValue, options: [.sortedKeys])),
         ]
     }
 

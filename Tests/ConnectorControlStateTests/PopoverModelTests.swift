@@ -10,9 +10,8 @@ import ConnectorControlTestSupport
 @MainActor
 final class PopoverModelTests: XCTestCase {
     func testHeaderTextsFollowTheStore() {
-        let h = AppStateHarness(seedClaudeConfig: false)
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertEqual(PopoverModel.title, "Connector Control")
@@ -26,9 +25,8 @@ final class PopoverModelTests: XCTestCase {
     }
 
     func testRowsAreSortedOrdinallyWithEditTooltips() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         XCTAssertNil(state.upsert(name: "Zebra", entry: MCPEntry(config: AppStateHarness.remote("https://zebra.example/mcp")), renamedFrom: nil))
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
@@ -38,9 +36,8 @@ final class PopoverModelTests: XCTestCase {
     }
 
     func testTogglingARowPersistsAndAppliesThroughAppState() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         popover.setEnabled("aws-mcp", false)
@@ -51,9 +48,8 @@ final class PopoverModelTests: XCTestCase {
     }
 
     func testRowsFollowExternalStateChanges() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         // The rows read through to AppState; the republish in init is what makes
@@ -77,9 +73,8 @@ final class PopoverModelTests: XCTestCase {
     }
 
     func testProfileMenuItemsAndTitles() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertEqual(popover.profileItems, [ProfileMenuItem(name: "Default", isActive: true)])
@@ -142,9 +137,8 @@ final class PopoverModelTests: XCTestCase {
     }
 
     func testOpenedRunsARoutineReload() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         try h.writeClaudeServers([("scoutbook", try XCTUnwrap(state.store.mcps["scoutbook"]).config)])
@@ -154,9 +148,8 @@ final class PopoverModelTests: XCTestCase {
     }
 
     func testEntryForReturnsTheLiveEntryOrNull() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertEqual(popover.entryFor("scoutbook"), state.store.mcps["scoutbook"])
@@ -205,9 +198,8 @@ final class PopoverModelTests: XCTestCase {
     }
 
     func testOpenedProbesOnlyTheToolsTheRowsNeedAndOnlyOnce() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertEqual(h.tools.batches, 0)   // building the model probes nothing
@@ -224,9 +216,8 @@ final class PopoverModelTests: XCTestCase {
     }
 
     func testOpenedProbesNothingWhenNoRowNeedsATool() {
-        let h = AppStateHarness(seedClaudeConfig: false)
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         popover.opened()   // an empty catalog

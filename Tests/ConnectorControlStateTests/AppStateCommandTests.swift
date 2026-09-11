@@ -10,9 +10,8 @@ final class AppStateCommandTests: XCTestCase {
     private let fixture = ["aws-mcp", "scoutbook", "service-now"]
 
     func testQuitAsksForConfirmationByDefault() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         var quit = 0
         state.quitRequested = { quit += 1 }
         h.dialogs.nextConfirm = false
@@ -38,9 +37,8 @@ final class AppStateCommandTests: XCTestCase {
     }
 
     func testRestartClaudeConfirmsThenRestarts() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.restartClaude()
         XCTAssertEqual(h.dialogs.confirms[0], FakeDialogs.ConfirmCall(
             message: "Restart Claude Desktop now?",
@@ -50,9 +48,8 @@ final class AppStateCommandTests: XCTestCase {
     }
 
     func testRestartClaudeCancelledDoesNothing() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         h.dialogs.nextConfirm = false
         state.restartClaude()
         XCTAssertEqual(h.claude.restartCalls, 0)
@@ -106,9 +103,8 @@ final class AppStateCommandTests: XCTestCase {
     }
 
     func testNotificationRestartActionIsGuardedByAPendingRestartAndSkipsTheConfirmation() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         h.notifier.activateRestart()   // stale click: nothing pending
         XCTAssertEqual(h.claude.restartCalls, 0)
 
@@ -122,9 +118,8 @@ final class AppStateCommandTests: XCTestCase {
     }
 
     func testDisposeUnsubscribesTheNotificationRestartAction() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         h.claude.isRunning = true
         h.claude.launchDate = h.now.addingTimeInterval(-3600)
         state.setEnabled("aws-mcp", false)
@@ -155,9 +150,8 @@ final class AppStateCommandTests: XCTestCase {
     }
 
     func testSwitchProfileAppliesImmediately() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         h.dialogs.nextPromptAnswer = "Work"
         state.newProfile()
         XCTAssertEqual(state.activeProfile, "Work")
@@ -173,9 +167,8 @@ final class AppStateCommandTests: XCTestCase {
     }
 
     func testSwitchProfileIgnoresAnUnknownName() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.switchProfile(to: "Nope")
         XCTAssertEqual(state.activeProfile, "Default")
         XCTAssertNil(state.lastError)
@@ -183,9 +176,8 @@ final class AppStateCommandTests: XCTestCase {
     }
 
     func testNewProfilePromptTextAndCancel() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         h.dialogs.nextPromptAnswer = nil
         state.newProfile()
         XCTAssertEqual(h.dialogs.prompts[0], FakeDialogs.PromptCall(title: "New Profile", initial: ""))
@@ -199,9 +191,8 @@ final class AppStateCommandTests: XCTestCase {
     }
 
     func testNewProfileErrorsGoToLastError() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         h.dialogs.nextPromptAnswer = "Default"
         state.newProfile()
         XCTAssertEqual(state.lastError, "A profile named “Default” already exists.")
@@ -212,9 +203,8 @@ final class AppStateCommandTests: XCTestCase {
     }
 
     func testRenameProfilePrefillsTheActiveName() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         h.dialogs.nextPromptAnswer = "Main"
         state.renameProfile()
         XCTAssertEqual(h.dialogs.prompts[0], FakeDialogs.PromptCall(title: "Rename Profile", initial: "Default"))
@@ -224,9 +214,8 @@ final class AppStateCommandTests: XCTestCase {
     }
 
     func testDeleteProfileConfirmTextAndLastProfileError() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.deleteProfile()
         XCTAssertEqual(h.dialogs.confirms[0], FakeDialogs.ConfirmCall(
             message: "Delete Profile “Default”?",
@@ -237,9 +226,8 @@ final class AppStateCommandTests: XCTestCase {
     }
 
     func testDeleteProfileSwitchesToTheAlphabeticallyFirstRemaining() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         h.dialogs.nextPromptAnswer = "Zeta"
         state.newProfile()
         h.dialogs.nextPromptAnswer = "Work"

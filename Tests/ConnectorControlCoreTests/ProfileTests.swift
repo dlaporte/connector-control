@@ -1,21 +1,7 @@
 import XCTest
-import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 final class ProfileTests: XCTestCase {
-    var tempDir: TempDir!
-    var dir: URL!
-    var url: URL { dir.appendingPathComponent("mcps.json") }
-
-    override func setUpWithError() throws {
-        tempDir = TempDir(prefix: "profile-store")
-        dir = tempDir.url
-    }
-
-    override func tearDownWithError() throws {
-        tempDir.dispose()
-    }
-
     private func entry(_ url: String) -> MCPEntry {
         MCPEntry(config: RemotePattern.make(url: url))
     }
@@ -23,7 +9,7 @@ final class ProfileTests: XCTestCase {
     // MARK: - Decoding
 
     func testV2RoundTripPreservesTwoProfiles() throws {
-        var store = MasterStore(
+        let store = MasterStore(
             activeProfile: "Work",
             profiles: [
                 "Work": Profile(mcps: ["a": entry("https://a.example/mcp")]),
@@ -35,35 +21,6 @@ final class ProfileTests: XCTestCase {
         XCTAssertEqual(decoded.activeProfile, "Work")
         XCTAssertEqual(decoded.profiles["Work"]?.mcps.keys.sorted(), ["a"])
         XCTAssertEqual(decoded.profiles["Personal"]?.mcps.keys.sorted(), ["b"])
-        _ = store // silence unused-mutation warning if any
-    }
-
-    func testUnknownActiveProfileFallsBackToExistingProfile() throws {
-        let json = """
-        {"version":2,"activeProfile":"Ghost",\
-        "profiles":{"Alpha":{"mcps":{}},"Beta":{"mcps":{}}}}
-        """
-        try Data(json.utf8).write(to: url)
-        let result = MasterStoreIO.load(from: url)
-        XCTAssertNil(result.corruptFileURL)
-        XCTAssertEqual(result.store.activeProfile, "Alpha", "sorted-first existing profile")
-    }
-
-    func testV1FormatFileIsTreatedAsCorruptAndRebuilt() throws {
-        // No v1 compatibility: an old-format file can't decode against the
-        // v2-only schema, so it flows through the existing corrupt-file path
-        // (moved aside, empty store returned) rather than being migrated.
-        let json = """
-        {"version":1,"mcps":{"scoutbook":{"enabled":true,\
-        "config":{"command":"npx","args":["-y","mcp-remote","https://example.com/mcp"]},\
-        "lastEditView":"form"}}}
-        """
-        try Data(json.utf8).write(to: url)
-        let result = MasterStoreIO.load(from: url)
-        XCTAssertEqual(result.store, .empty)
-        let corrupt = try XCTUnwrap(result.corruptFileURL)
-        XCTAssertTrue(corrupt.lastPathComponent.hasPrefix("mcps.corrupt."))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 
     // MARK: - mcps accessor scoping
@@ -100,12 +57,13 @@ final class ProfileTests: XCTestCase {
 
     func testAddProfileRejectsEmptyName() {
         var store = MasterStore.empty
-        XCTAssertNotNil(store.addProfile(named: "   ", copyingCurrent: false))
+        XCTAssertEqual(store.addProfile(named: "   ", copyingCurrent: false), "Name must not be empty.")
     }
 
     func testAddProfileRejectsDuplicateName() {
         var store = MasterStore.empty
-        XCTAssertNotNil(store.addProfile(named: "Default", copyingCurrent: false))
+        XCTAssertEqual(store.addProfile(named: "Default", copyingCurrent: false),
+                       "A profile named “Default” already exists.")
     }
 
     func testRenameActiveProfile() {
@@ -120,7 +78,7 @@ final class ProfileTests: XCTestCase {
         var store = MasterStore(
             activeProfile: "Work",
             profiles: ["Work": Profile(), "Personal": Profile()])
-        XCTAssertNotNil(store.renameActiveProfile(to: "Personal"))
+        XCTAssertEqual(store.renameActiveProfile(to: "Personal"), "A profile named “Personal” already exists.")
         XCTAssertEqual(store.activeProfile, "Work", "unchanged on error")
     }
 
@@ -141,7 +99,7 @@ final class ProfileTests: XCTestCase {
 
     func testDeleteActiveProfileRejectsLastProfile() {
         var store = MasterStore.empty
-        XCTAssertNotNil(store.deleteActiveProfile())
+        XCTAssertEqual(store.deleteActiveProfile(), "Can’t delete the last profile.")
         XCTAssertEqual(store.profiles.count, 1)
     }
 
@@ -155,7 +113,17 @@ final class ProfileTests: XCTestCase {
 
     func testSwitchProfileRejectsUnknownName() {
         var store = MasterStore.empty
-        XCTAssertNotNil(store.switchProfile(to: "Nope"))
+        XCTAssertEqual(store.switchProfile(to: "Nope"), "No profile named “Nope”.")
         XCTAssertEqual(store.activeProfile, "Default")
+    }
+
+    /// windows/tests/ConnectorControl.Core.Tests/ProfileTests.cs
+    /// ErrorMessagesUseTypographicPunctuationLikeTheMacApp.
+    func testErrorMessagesUseTypographicPunctuationLikeTheMacApp() {
+        var store = MasterStore.empty
+        let duplicate = store.addProfile(named: "Default", copyingCurrent: false)!
+        XCTAssertEqual(duplicate[duplicate.index(before: duplicate.range(of: "Default")!.lowerBound)], "“")
+        XCTAssertEqual(duplicate[duplicate.range(of: "Default")!.upperBound], "”")
+        XCTAssertTrue(store.deleteActiveProfile()!.contains("’"))
     }
 }

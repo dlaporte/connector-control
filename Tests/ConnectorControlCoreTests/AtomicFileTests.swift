@@ -51,6 +51,22 @@ final class AtomicFileTests: XCTestCase {
         XCTAssertEqual(mode, 0o600)
     }
 
+    /// windows/tests/ConnectorControl.Core.Tests/AtomicFileTests.cs
+    /// ADirectoryWriteCreatesIsOwnerOnlyWhileAnExistingParentIsUntouched — the
+    /// other half of that test: a directory the app did NOT create (a folder
+    /// the user chose) keeps whatever mode and ACL it already had.
+    func testAPreExistingParentIsLeftAsItWas() throws {
+        let fm = FileManager.default
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path)
+        try grantEveryoneRead(at: dir.path, inheritable: false)
+        let url = dir.appendingPathComponent("settings.json")
+        try AtomicFile.write(Data("{}".utf8), to: url)
+        XCTAssertEqual(try XCTUnwrap(fm.attributesOfItem(atPath: dir.path)[.posixPermissions] as? Int), 0o755,
+                       "a directory that already existed is left as it was")
+        XCTAssertTrue(hasACL(atPath: dir.path), "its ACL is untouched too")
+    }
+
     /// A fresh install: the store directory does not exist until the first
     /// save creates it, and it must be private from that moment, not from the
     /// next launch's sweep.
@@ -103,29 +119,17 @@ final class AtomicFileTests: XCTestCase {
 
     func testNoTempFilesLeftBehindOnFailure() throws {
         let fm = FileManager.default
-
-        // Create test directory structure
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
 
-        // Test case: create a file where we need a directory, causing createDirectory to fail
+        // A file where we need a directory: createDirectory fails before tmp is ever created.
         let blockingPath = dir.appendingPathComponent("blocking")
         try Data("placeholder".utf8).write(to: blockingPath)
-
         let url = dir.appendingPathComponent("blocking/file.json")
 
-        // This should fail at createDirectory before tmp is created
-        var didThrow = false
-        do {
-            try AtomicFile.write(Data("test".utf8), to: url)
-        } catch {
-            didThrow = true
-        }
-        XCTAssert(didThrow, "Expected write to throw but it succeeded")
+        XCTAssertThrowsError(try AtomicFile.write(Data("test".utf8), to: url))
 
-        // Verify no .tmp- files left behind (there shouldn't be any because tmp was never created)
         let parentContents = try fm.contentsOfDirectory(atPath: dir.path)
-        let tmpFiles = parentContents.filter { $0.contains(".tmp-") }
-        XCTAssert(tmpFiles.isEmpty, "Found orphaned tmp files: \(tmpFiles)")
+        XCTAssertTrue(parentContents.filter { $0.contains(".tmp-") }.isEmpty, "no orphaned tmp files")
     }
 
     /// Mode 0600 is not private on a folder that carries an inheritable allow ACE: the new

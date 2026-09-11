@@ -7,9 +7,8 @@ import ConnectorControlCore
 @MainActor
 final class RestoreModelTests: XCTestCase {
     func testListsBackupsNewestFirstWithTheOriginalLast() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.setEnabled("aws-mcp", false)           // backup 1 (three servers) + original snapshot
         Thread.sleep(forTimeInterval: 0.005)          // a different millisecond in the next backup's name
         state.setEnabled("scoutbook", false)         // backup 2 (two servers)
@@ -27,9 +26,8 @@ final class RestoreModelTests: XCTestCase {
     /// A listing failure used to be swallowed by
     /// `try?`, leaving an empty list with no explanation; it now surfaces.
     func testLoadSurfacesABackupsListingFailure() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.setEnabled("aws-mcp", false)   // a real backup to list, if listing worked
         let model = RestoreModel(state: state)
         try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: h.backupsDir.path)
@@ -41,9 +39,8 @@ final class RestoreModelTests: XCTestCase {
     }
 
     func testRestoreConfirmsWithTheFileNameAndRestoresThroughAppState() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.setEnabled("aws-mcp", false)
         let model = RestoreModel(state: state)
         model.load()
@@ -67,9 +64,8 @@ final class RestoreModelTests: XCTestCase {
     }
 
     func testRestoreFailureShowsInlineAndInLastError() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let bad = h.backupsDir.appendingPathComponent("claude_desktop_config.2026-09-04T00-00-00-000Z.json")
         try FileManager.default.createDirectory(at: h.backupsDir, withIntermediateDirectories: true)
         try Data("{not json".utf8).write(to: bad)
@@ -88,9 +84,8 @@ final class RestoreModelTests: XCTestCase {
     /// A fresh attempt starts with a clean sheet — the previous
     /// attempt's error must not outlive a new selection or a cancelled confirmation.
     func testRequestRestoreClearsThePreviousError() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let bad = h.backupsDir.appendingPathComponent("claude_desktop_config.2026-09-04T00-00-00-000Z.json")
         try FileManager.default.createDirectory(at: h.backupsDir, withIntermediateDirectories: true)
         try Data("{not json".utf8).write(to: bad)

@@ -9,9 +9,8 @@ final class AppStateTests: XCTestCase {
     private let fixture = ["aws-mcp", "scoutbook", "service-now"]
 
     func testFirstLoadImportsClaudeServersEnabled() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         XCTAssertEqual(state.sortedNames, fixture)
         XCTAssertTrue(state.store.mcps.values.allSatisfy(\.enabled))
         XCTAssertEqual(state.appliedServers.keys.sorted(), fixture)
@@ -28,17 +27,15 @@ final class AppStateTests: XCTestCase {
     }
 
     func testHeaderSubtitleForAnEmptyStore() {
-        let h = AppStateHarness(seedClaudeConfig: false)
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        let state = h.create()
         XCTAssertEqual(state.headerSubtitle, "No connectors configured")
         XCTAssertTrue(state.sortedNames.isEmpty)
     }
 
     func testSetEnabledPersistsAndAppliesImmediately() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.setEnabled("aws-mcp", false)
         XCTAssertEqual(try h.claudeServers().keys.sorted(), ["scoutbook", "service-now"])
         XCTAssertEqual(try h.storeOnDisk().mcps["aws-mcp"]?.enabled, false)
@@ -52,9 +49,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testRestartRequiredFollowsClaudeLaunchTime() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         h.claude.isRunning = true
         h.claude.launchDate = h.now.addingTimeInterval(-3600)
         state.setEnabled("aws-mcp", false)
@@ -81,9 +77,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testUpsertValidatesNames() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let entry = MCPEntry(config: AppStateHarness.remote("https://new.example/mcp"))
         XCTAssertEqual(state.upsert(name: "", entry: entry, renamedFrom: nil), "Name must not be empty.")
         XCTAssertEqual(state.upsert(name: " \t ", entry: entry, renamedFrom: nil), "Name must not be empty.")
@@ -96,9 +91,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testUpsertPersistsButOnlyInteractiveApplyWritesClaudesConfig() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         XCTAssertNil(state.upsert(name: "new", entry: MCPEntry(config: AppStateHarness.remote("https://new.example/mcp")), renamedFrom: nil))
         XCTAssertNotNil(try h.storeOnDisk().mcps["new"])
         XCTAssertNil(try h.claudeServers()["new"])
@@ -109,9 +103,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testUpsertRenameRemovesTheOldKey() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let entry = try XCTUnwrap(state.store.mcps["scoutbook"])
         XCTAssertNil(state.upsert(name: "scoutbook2", entry: entry, renamedFrom: "scoutbook"))
         XCTAssertNil(state.store.mcps["scoutbook"])
@@ -120,9 +113,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testRemovePersistsButDoesNotApply() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.remove(name: "aws-mcp")
         XCTAssertNil(try h.storeOnDisk().mcps["aws-mcp"])
         XCTAssertNotNil(try h.claudeServers()["aws-mcp"])
@@ -132,9 +124,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testApplyInteractivelyIsANoOpWhenCleanButApplyAlwaysWrites() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.applyInteractively()
         XCTAssertNil(h.settings.lastApplyDate)
         state.apply()
@@ -142,9 +133,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testPendingRemovalIsRegeneratedQuietlyOnReload() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.remove(name: "aws-mcp")
         state.reload()
         XCTAssertNil(try h.claudeServers()["aws-mcp"])     // regenerated from the store
@@ -154,9 +144,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testExternalEditOfClaudesConfigIsRegeneratedAndAnnounced() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let original = try XCTUnwrap(state.store.mcps["scoutbook"]).config
         try h.writeClaudeServers([
             ("scoutbook", AppStateHarness.remote("https://changed.example/mcp")),
@@ -176,9 +165,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testExternalRemovalIsRegeneratedAndAnnounced() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         try h.writeClaudeServers([("scoutbook", try XCTUnwrap(state.store.mcps["scoutbook"]).config)])
         state.reload()
         XCTAssertEqual(try h.claudeServers().keys.sorted(), fixture)
@@ -186,9 +174,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testExternalEditThatMatchesTheStoreOnlyAnnouncesTheChange() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.remove(name: "aws-mcp")   // pending removal: store and file now differ
         try h.writeClaudeServers([      // someone writes exactly what the store would render
             ("scoutbook", try XCTUnwrap(state.store.mcps["scoutbook"]).config),
@@ -201,9 +188,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testStoreEditedOutsideWithoutRegenerationIsAnnounced() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.setEnabled("aws-mcp", false)
         h.notifier.clearSent()
         var edited = try h.storeOnDisk()
@@ -215,9 +201,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testMalformedClaudeConfigReportsTheNoteAndBlocksApply() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         try Data("{oops".utf8).write(to: h.claudeConfigURL)
         state.reload()
         XCTAssertEqual(state.lastError,
@@ -243,9 +228,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testRegenerationFailureIsAnnouncedOnceOnTheTransitionOnly() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         try h.writeClaudeServers([("scoutbook", try XCTUnwrap(state.store.mcps["scoutbook"]).config)])   // external edit needing regeneration
         let block = try WriteBlock(h.claudeConfigURL)
         defer { block.dispose() }
@@ -267,9 +251,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testCorruptStoreIsRebuiltWithANote() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         try Data("garbage".utf8).write(to: h.masterStoreURL)
         state.reload()
         let message = try XCTUnwrap(state.lastError)
@@ -279,9 +262,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testCorruptStoreAndMalformedClaudeConfigSurfaceBothNotes() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         try Data("garbage".utf8).write(to: h.masterStoreURL)
         try Data("{oops".utf8).write(to: h.claudeConfigURL)
         state.reload()
@@ -292,9 +274,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testReloadOverwritesLastError() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.lastError = "stale"
         state.reload()
         XCTAssertNil(state.lastError)
@@ -352,9 +333,8 @@ final class AppStateTests: XCTestCase {
     }
 
     func testRefreshToolsDoesNotProbeAToolAlreadyInFlight() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.refreshTools([.npx])
         state.refreshTools([.npx, .node])   // npx joins the flight already in the air; node starts one
         XCTAssertTrue(h.ui.pumpUntil({ state.toolStatuses.count == 2 }, timeout: 5))
