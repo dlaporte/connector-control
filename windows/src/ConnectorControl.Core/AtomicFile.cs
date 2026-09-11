@@ -29,9 +29,21 @@ public static class AtomicFile
         // returning null when the path (or a missing parent directory) doesn't exist yet, which
         // is the common first-run case, so it is only ever asked about a path already on disk;
         // one that is not there yet, or exists but is not a link, leaves target as is.
-        if (File.Exists(target) && new FileInfo(target).ResolveLinkTarget(returnFinalTarget: true) is { FullName: var real })
+        if (File.Exists(target))
         {
-            target = real;
+            try
+            {
+                if (new FileInfo(target).ResolveLinkTarget(returnFinalTarget: true) is { FullName: var real })
+                {
+                    target = real;
+                }
+            }
+            catch (IOException)
+            {
+                // the target vanished, or was replaced by something that is not a link, between
+                // the exists check above and the resolve: write to the literal path instead of
+                // failing the write. (DirectoryNotFoundException derives from IOException.)
+            }
         }
         var dir = Path.GetDirectoryName(target)
             ?? throw new ArgumentException("Path has no parent directory.", nameof(path));

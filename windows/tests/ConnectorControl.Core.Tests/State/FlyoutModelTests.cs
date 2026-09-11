@@ -230,4 +230,24 @@ public class FlyoutModelTests
         state.LastError = "apply failed";
         Assert.Equal("apply failed", flyout.ErrorMessage);
     }
+
+    [Fact]
+    public void ASettingsSaveFailureShowsInTheBannerBelowLastErrorAndStoreNotPrivate()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.False(flyout.HasError);
+
+        const string detail = "disk full";
+        h.Settings.LastSaveError = detail;
+        Assert.True(flyout.HasError);
+        Assert.Equal(FlyoutModel.SettingsNotSavedCaution(detail), flyout.ErrorMessage);
+
+        state.StoreNotPrivate = true;   // StoreNotPrivate outranks the settings-save banner
+        Assert.Equal(FlyoutModel.StoreNotPrivateCaution, flyout.ErrorMessage);
+
+        state.LastError = "apply failed";   // LastError outranks both
+        Assert.Equal("apply failed", flyout.ErrorMessage);
+    }
 }

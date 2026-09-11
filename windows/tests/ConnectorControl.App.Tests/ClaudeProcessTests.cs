@@ -14,8 +14,9 @@ public class ClaudeProcessTests
     public void NotRunningWhenNoProcessMatches()
     {
         var p = new ClaudeProcess(() => ClaudeInstallInfo.NotFound with { ProcessName = NoSuchProcess }, () => null);
-        Assert.False(p.IsRunning);
-        Assert.Null(p.LaunchTime);
+        var snapshot = p.Snapshot();
+        Assert.False(snapshot.IsRunning);
+        Assert.Null(snapshot.LaunchTime);
     }
 
     [Fact]
@@ -68,10 +69,11 @@ public class ClaudeProcessTests
         var exe = Environment.ProcessPath!;
         var info = new ClaudeInstallInfo(ClaudeInstallKind.Legacy, null, exe, self.ProcessName, Path.GetDirectoryName(exe));
         var p = new ClaudeProcess(() => info, () => null);
-        Assert.True(p.IsRunning);
-        Assert.NotNull(p.LaunchTime);
-        Assert.Equal(DateTimeKind.Utc, p.LaunchTime.Value.Kind);
-        Assert.Equal(self.StartTime.ToUniversalTime(), p.LaunchTime.Value, TimeSpan.FromSeconds(1));
+        var snapshot = p.Snapshot();
+        Assert.True(snapshot.IsRunning);
+        Assert.NotNull(snapshot.LaunchTime);
+        Assert.Equal(DateTimeKind.Utc, snapshot.LaunchTime.Value.Kind);
+        Assert.Equal(self.StartTime.ToUniversalTime(), snapshot.LaunchTime.Value, TimeSpan.FromSeconds(1));
     }
 
     [Fact]
@@ -82,8 +84,9 @@ public class ClaudeProcessTests
         var elsewhere = Path.Combine(Path.GetTempPath(), "cc-not-the-install");
         var info = new ClaudeInstallInfo(ClaudeInstallKind.Msix, "Claude_x", "Claude_x!Claude", self.ProcessName, elsewhere);
         var p = new ClaudeProcess(() => info, () => null);
-        Assert.False(p.IsRunning);
-        Assert.Null(p.LaunchTime);
+        var snapshot = p.Snapshot();
+        Assert.False(snapshot.IsRunning);
+        Assert.Null(snapshot.LaunchTime);
     }
 
     [Fact]
@@ -93,7 +96,7 @@ public class ClaudeProcessTests
         var info = new ClaudeInstallInfo(ClaudeInstallKind.Msix, "Claude_x", "Claude_x!Claude", self.ProcessName);
         var p = new ClaudeProcess(() => info, () => null);
         Assert.Null(info.InstallDirectory);
-        Assert.True(p.IsRunning);
+        Assert.True(p.Snapshot().IsRunning);
     }
 
     [Fact]
@@ -105,9 +108,8 @@ public class ClaudeProcessTests
         var p = new ClaudeProcess(
             () => { detections++; return Legacy(Path.Combine(Path.GetTempPath(), "cc-missing", "claude.exe")); },
             () => null);
-        _ = p.IsRunning;
-        _ = p.LaunchTime;
-        _ = p.IsRunning;
+        _ = p.Snapshot();
+        _ = p.Snapshot();
         Assert.Equal(1, detections);
     }
 
@@ -117,11 +119,11 @@ public class ClaudeProcessTests
         var detections = 0;
         var exe = Path.Combine(Path.GetTempPath(), "cc-missing", "claude.exe");
         var p = new ClaudeProcess(() => { detections++; return Legacy(exe); }, () => null);
-        _ = p.IsRunning;
+        _ = p.Snapshot();
         Assert.Equal(1, detections);
         await p.RestartAsync(TestContext.Current.CancellationToken);
         Assert.Equal(2, detections);   // Claude may have been installed or updated since
-        _ = p.IsRunning;
+        _ = p.Snapshot();
         Assert.Equal(2, detections);   // and the fresh result is cached again
     }
 
@@ -132,8 +134,8 @@ public class ClaudeProcessTests
         var p = new ClaudeProcess(
             () => { detections++; return ClaudeInstallInfo.NotFound with { ProcessName = NoSuchProcess }; },
             () => null);
-        _ = p.IsRunning;
-        _ = p.IsRunning;
+        _ = p.Snapshot();
+        _ = p.Snapshot();
         Assert.Equal(2, detections);   // so a Claude installed after we started is picked up
     }
 

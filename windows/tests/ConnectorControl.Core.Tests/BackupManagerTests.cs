@@ -149,6 +149,7 @@ public class BackupManagerTests : IDisposable
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
+            // Creating a symlink needs Developer Mode or elevation; GitHub's hosted Windows runners are elevated, so under FailSkips=true (ci.runsettings) this skip would surface as a failure if that ever changed.
             Assert.Skip("symlink creation is not permitted in this environment");
             return;
         }

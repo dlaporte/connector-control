@@ -50,15 +50,11 @@ public sealed class ClaudeProcess : IClaudeProcess
         this.pollInterval = pollInterval ?? DefaultPollInterval;
     }
 
-    public bool IsRunning => IsRunningFor(CurrentInstall());
-
     /// <summary>
-    /// Earliest start time across Claude's processes (Electron spawns several
-    /// within a couple of seconds), in UTC, or null when Claude is not running.
+    /// Whether Claude is running and, when it is, the earliest start time across its processes
+    /// (Electron spawns several within a couple of seconds), in UTC — from one process
+    /// enumeration rather than two.
     /// </summary>
-    public DateTime? LaunchTime => WithProcesses(CurrentInstall(), EarliestStart);
-
-    /// <summary><see cref="IsRunning"/> and <see cref="LaunchTime"/> from one process enumeration instead of two.</summary>
     public ClaudeProcessSnapshot Snapshot() =>
         WithProcesses(CurrentInstall(), processes => new ClaudeProcessSnapshot(processes.Length > 0, EarliestStart(processes)));
 
@@ -87,9 +83,9 @@ public sealed class ClaudeProcess : IClaudeProcess
 
     /// <summary>
     /// The install, resolved on first use and then cached. Detect() walks every
-    /// package registered for the user, and RefreshRestartState plus the 250 ms
-    /// quit poll read IsRunning and LaunchTime far too often to pay for that on
-    /// each read (review I3). A NotFound result is never cached, and RestartAsync
+    /// package registered for the user, and RefreshRestartState's Snapshot() plus
+    /// the 250 ms quit poll's IsRunningFor read it far too often to pay for that
+    /// on each read (review I3). A NotFound result is never cached, and RestartAsync
     /// re-resolves, so a Claude installed while the app runs is still found. The
     /// cache also expires on a TTL: BelongsToInstall already tolerates Claude's own
     /// MSIX update relocating its versioned folder (review R1), but the TTL is a

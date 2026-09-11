@@ -115,6 +115,7 @@ public class AtomicFileTests : IDisposable
         {
             // Creating a symlink on Windows needs Developer Mode or elevation; a CI agent
             // without either cannot exercise this, so there is nothing to assert.
+            // GitHub's hosted Windows runners are elevated, so under FailSkips=true (ci.runsettings) this skip would surface as a failure if that ever changed.
             Assert.Skip("symlink creation is not permitted in this environment");
             return;
         }
