@@ -23,7 +23,7 @@ public class SettingsStoreTests : IDisposable
         Assert.True(s.ConfirmBeforeRestart);
         Assert.True(s.ConfirmBeforeQuit);
         Assert.Null(s.LastApplyDate);
-        Assert.False(s.AclSweepDone);
+        Assert.Equal(0, s.SweepVersion);
         Assert.False(s.AutoUpdate);
         Assert.False(s.TrayTipShown);
         Assert.False(File.Exists(Path));   // reading never creates the file
@@ -37,7 +37,7 @@ public class SettingsStoreTests : IDisposable
         s.BackupKeepCount = 7;
         s.NotifyExternalChanges = false;
         s.LastApplyDate = new DateTime(2026, 9, 3, 12, 34, 56, DateTimeKind.Utc);
-        s.AclSweepDone = true;
+        s.SweepVersion = 1;
         Assert.True(File.Exists(Path));
 
         var again = new SettingsStore(Path);
@@ -46,7 +46,7 @@ public class SettingsStoreTests : IDisposable
         Assert.False(again.NotifyExternalChanges);
         Assert.Equal(new DateTime(2026, 9, 3, 12, 34, 56, DateTimeKind.Utc), again.LastApplyDate);
         Assert.Equal(DateTimeKind.Utc, again.LastApplyDate!.Value.Kind);
-        Assert.True(again.AclSweepDone);
+        Assert.Equal(1, again.SweepVersion);
         Assert.True(again.ConfirmBeforeQuit);   // untouched keys keep their defaults
     }
 

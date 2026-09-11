@@ -89,11 +89,7 @@ public partial class SettingsWindow : Window
         }
     }
 
-    private void OnRestore(object sender, RoutedEventArgs e)
-    {
-        var dialog = new RestoreDialog(state) { Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner };
-        dialog.ShowDialog();
-    }
+    private void OnRestore(object sender, RoutedEventArgs e) => RestoreDialog.Show(this, state);
 
     private void OnChooseClaudeConfig(object sender, RoutedEventArgs e)
     {

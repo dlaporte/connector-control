@@ -46,6 +46,10 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public static string ChangedOutsideMessage(string name) => $"“{name}” changed outside this editor.";
     public static string RemovedOutsideMessage(string name) => $"“{name}” was removed outside this editor.";
 
+    /// <summary>The Mac's static and an instance property of the same name can coexist there; C# forbids that, so the instance property below calls this.</summary>
+    public static string AdditionalTitleFor(int count, IEnumerable<string> keys) =>
+        $"{count} field(s) not editable here: {string.Join(", ", keys)} — switch to JSON to edit";
+
     /// <summary>The picker's order, as an array so <see cref="AuthKindIndex"/> can search it without allocating.</summary>
     private static readonly RemoteAuthKind[] AuthKindOrder =
         [RemoteAuthKind.Automatic, RemoteAuthKind.Bearer, RemoteAuthKind.Header, RemoteAuthKind.OAuthClient];
@@ -56,6 +60,11 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     private readonly AppState state;
     private readonly IDialogs dialogs;
+    /// <summary>
+    /// True only for a brand-new connector still showing the remote template's placeholder
+    /// command/args — set once at open, never re-derived from the current field values.
+    /// </summary>
+    private readonly bool isUntouchedTemplate;
 
     private EditView view;
     private string name;
@@ -75,6 +84,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
     private string command;
     private IReadOnlyDictionary<string, JsonValue> additional;
     private string jsonText;
+    /// <summary>`jsonText` recovered once per edit, in its setter below; ValidateJson and ComputeRequiredTool read this instead of recovering it again.</summary>
+    private PasteResult? recoveredJson;
     private string? jsonError;
     private string? validationError;
     private Tool? requiredTool;
@@ -85,23 +96,21 @@ public sealed class EditorModel : ObservableObject, IDisposable
         this.state = state;
         this.dialogs = dialogs;
         Target = target;
+        isUntouchedTemplate = target.IsNew && target.ForcesRemote;
         name = target.Name;
         view = target.Entry.LastEditView;
         var config = target.Entry.Config;
-        var detected = RemotePattern.Detect(config);
-        isRemote = target.ForcesRemote || detected is not null;
-        remoteUrl = detected ?? "";
-        var model = FormMapper.Analyze(config).Model;
-        command = model.Command;
-        Args = new ObservableCollection<ArgRow>(model.Args.Select(a => new ArgRow(a)));
-        EnvRows = new ObservableCollection<EnvRow>(EnvRowsFrom(model.Env));
-        additional = model.Additional;
+        // Placeholders: every field needs a value before Load (an instance method) can run; it
+        // overwrites all of these.
+        remoteUrl = "";
+        command = "";
+        Args = [];
+        EnvRows = [];
+        additional = new Dictionary<string, JsonValue>(StringComparer.Ordinal);
         jsonText = config.EditorText();
+        recoveredJson = PasteRecovery.Recover(jsonText);
         remoteLaunchStyle = newRemoteStyle;
-        if (RemotePattern.Decode(config) is { } remote)
-        {
-            ApplyRemoteFields(remote);
-        }
+        Load(config);
         // Spec 2026-09-05-tool-probe §3.4: on open, a cached status shows its note at once; an
         // unknown one is probed now. Later changes go through EvaluateRequiredTool.
         state.PropertyChanged += OnStateChanged;
@@ -124,50 +133,23 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     // MARK: view
 
+    /// <summary>
+    /// The two segmented buttons' binding: a set is a request; a refused switch snaps back, since
+    /// RequestView raises this property whether or not it actually switched.
+    /// </summary>
     public EditView View
     {
         get => view;
-        private set
-        {
-            if (Set(ref view, value))
-            {
-                RaiseViewFlags();
-                EvaluateRequiredTool();
-            }
-        }
+        set => RequestView(value);
     }
 
-    public bool IsFormView
+    private void SetView(EditView value)
     {
-        get => view == EditView.Form;
-        set
+        if (Set(ref view, value))
         {
-            if (value)
-            {
-                RequestView(EditView.Form);
-            }
-            RaiseViewFlags();   // a refused switch must snap the segmented control back
+            Raise(nameof(CanSave));
+            EvaluateRequiredTool();
         }
-    }
-
-    public bool IsJsonView
-    {
-        get => view == EditView.Json;
-        set
-        {
-            if (value)
-            {
-                RequestView(EditView.Json);
-            }
-            RaiseViewFlags();
-        }
-    }
-
-    private void RaiseViewFlags()
-    {
-        Raise(nameof(IsFormView));
-        Raise(nameof(IsJsonView));
-        Raise(nameof(CanSave));
     }
 
     // MARK: fields
@@ -189,8 +171,9 @@ public sealed class EditorModel : ObservableObject, IDisposable
             }
             Raise(nameof(IsLocal));
             Raise(nameof(CanSave));
-            if (Target.IsNew && !value && View == EditView.Form && (Args.Any(a => a.Value == RemotePattern.DefaultPackage) || Command.Length == 0))
+            if (!isRemote && View == EditView.Form && isUntouchedTemplate)
             {
+                // Discard the remote template's bridge invocation — a local server has nothing to do with mcp-remote.
                 Command = "npx";
                 Args.Clear();
                 Args.Add(new ArgRow("-y"));
@@ -318,8 +301,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public bool HasAdditional => additional.Count > 0;
 
-    public string AdditionalTitle =>
-        $"{additional.Count} field(s) not editable here: {string.Join(", ", additional.Keys.Order(StringComparer.Ordinal))} — switch to JSON to edit";
+    public string AdditionalTitle => AdditionalTitleFor(additional.Count, additional.Keys.Order(StringComparer.Ordinal));
 
     public string AdditionalPreview => JsonValue.Object(additional).EditorText();
 
@@ -330,6 +312,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         {
             if (Set(ref jsonText, value))
             {
+                recoveredJson = PasteRecovery.Recover(jsonText);
                 ValidateJson();
                 EvaluateRequiredTool();
             }
@@ -392,7 +375,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     {
         if (view == EditView.Json)
         {
-            return PasteRecovery.Recover(jsonText) is { } recovered ? ToolRequirement.RequiredTool(recovered.Config) : null;
+            return recoveredJson is { } recovered ? ToolRequirement.RequiredTool(recovered.Config) : null;
         }
         return isRemote ? Tool.Npx : ToolRequirement.RequiredTool(command, Args.Select(a => a.Value).ToList());
     }
@@ -464,28 +447,33 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public void RequestView(EditView requested)
     {
-        if (requested == view)
+        if (requested != view)
         {
+            if (requested == EditView.Json)
+            {
+                RequestJsonView();
+            }
+            else
+            {
+                AttemptSwitchToForm();
+            }
+        }
+        Raise(nameof(View));
+    }
+
+    private void RequestJsonView()
+    {
+        // The JSON view renders CollapsedEnv(), which can't represent duplicate or nameless rows —
+        // switching would silently drop them, bypassing the same validation Save enforces.
+        if (!isRemote && EnvValidationError() is { } envError)
+        {
+            ValidationError = envError;
             return;
         }
-        if (requested == EditView.Json)
-        {
-            // The JSON view renders CollapsedEnv(), which can't represent duplicate or nameless rows —
-            // switching would silently drop them, bypassing the same validation Save enforces.
-            if (!isRemote && EnvValidationError() is { } envError)
-            {
-                ValidationError = envError;
-                return;
-            }
-            ValidationError = null;
-            JsonText = CurrentFormConfig().EditorText();
-            JsonError = null;
-            View = EditView.Json;
-        }
-        else
-        {
-            AttemptSwitchToForm();
-        }
+        ValidationError = null;
+        JsonText = CurrentFormConfig().EditorText();
+        JsonError = null;
+        SetView(EditView.Json);
     }
 
     private void AttemptSwitchToForm()
@@ -497,8 +485,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
         var analysis = FormMapper.Analyze(config);
         if (analysis.IsLossless)
         {
-            AdoptForm(analysis.Model, config);
-            View = EditView.Form;
+            AdoptForm(config);
+            SetView(EditView.Form);
             return;
         }
         var warning = LossWarningPrefix + string.Join("\n", analysis.Lost);
@@ -514,45 +502,56 @@ public sealed class EditorModel : ObservableObject, IDisposable
         {
             return;
         }
-        AdoptForm(FormMapper.Analyze(config).Model, config);
-        View = EditView.Form;
+        AdoptForm(config);
+        SetView(EditView.Form);
     }
 
-    private void AdoptForm(FormModel model, JsonValue config)
+    private void AdoptForm(JsonValue config)
     {
-        suppressToolEvaluation = true;
-        try
-        {
-            Command = model.Command;
-            Args.Clear();
-            foreach (var arg in model.Args)
-            {
-                Args.Add(new ArgRow(arg));
-            }
-            EnvRows.Clear();
-            foreach (var row in EnvRowsFrom(model.Env))
-            {
-                EnvRows.Add(row);   // all values re-masked
-            }
-            additional = model.Additional;
-            var detected = RemotePattern.Detect(config);
-            isRemote = detected is not null || (Target.ForcesRemote && RemotePattern.IsRemoteShaped(config));
-            remoteUrl = detected ?? "";
-            if (RemotePattern.Decode(config) is { } remote)
-            {
-                ApplyRemoteFields(remote);
-            }
-            else
-            {
-                ResetRemoteFields();
-            }
-        }
-        finally
-        {
-            suppressToolEvaluation = false;
-        }
+        Load(config);
         EvaluateRequiredTool();
         RaiseAll();
+    }
+
+    /// <summary>
+    /// Loads <paramref name="config"/> into every form/remote field and (re)computes
+    /// <see cref="IsRemote"/>. The one shared place the constructor and AdoptForm funnel through,
+    /// so they cannot disagree on the isRemote rule or which fields a config fills in. Tool
+    /// evaluation is suppressed for the duration — both callers evaluate once themselves, after
+    /// View (for ComputeRequiredTool's JSON branch) is in its final state.
+    /// </summary>
+    private void Load(JsonValue config)
+    {
+        suppressToolEvaluation = true;
+        var model = FormMapper.Analyze(config).Model;
+        Command = model.Command;
+        Args.Clear();
+        foreach (var arg in model.Args)
+        {
+            Args.Add(new ArgRow(arg));
+        }
+        EnvRows.Clear();
+        foreach (var row in EnvRowsFrom(model.Env))
+        {
+            EnvRows.Add(row);   // all values re-masked
+        }
+        additional = model.Additional;
+        var detected = RemotePattern.Detect(config);
+        IsRemote = detected is not null || (Target.ForcesRemote && RemotePattern.IsRemoteShaped(config));
+        // Quirk kept intentionally: RemoteUrl comes ONLY from Detect()'s canonical 2-arg shape,
+        // even when IsRemote is true via the ForcesRemote/IsRemoteShaped fallback above — Decode()
+        // may have found a real URL past extra flags, but the Server URL field stays blank until
+        // the user (re)types it.
+        remoteUrl = detected ?? "";
+        if (RemotePattern.Decode(config) is { } remote)
+        {
+            ApplyRemoteFields(remote);
+        }
+        else
+        {
+            ResetRemoteFields();
+        }
+        suppressToolEvaluation = false;
     }
 
     /// <summary>
@@ -609,7 +608,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     // MARK: JSON (catalog §3.7)
 
-    private void ValidateJson() => JsonError = PasteRecovery.Recover(jsonText) is null ? NotValidJson : null;
+    private void ValidateJson() => JsonError = recoveredJson is null ? NotValidJson : null;
 
     /// <summary>Resolves the editor text via PasteRecovery, fills the name from a pasted stanza when blank, and rewrites the text to the canonical config.</summary>
     private JsonValue? EffectiveJsonConfig()

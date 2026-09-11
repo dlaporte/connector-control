@@ -48,7 +48,10 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public string Subtitle => state.HeaderSubtitle;
 
-    public string ProfileChipText => state.ActiveProfile + " ▾";
+    /// <summary>The Mac's static and an instance property of the same name can coexist there; C# forbids that, so the instance property below calls this.</summary>
+    public static string ProfileChipTextFor(string active) => $"{active} ▾";
+
+    public string ProfileChipText => ProfileChipTextFor(state.ActiveProfile);
 
     public IReadOnlyList<ProfileMenuItem> ProfileItems => profileItems;
 

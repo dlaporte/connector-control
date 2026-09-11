@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace ConnectorControl.Core;
 
 /// <summary>
@@ -11,7 +9,7 @@ public sealed class ConfigService
     public AppPaths Paths { get; }
     public BackupManager Backups { get; }
 
-    public ConfigService(AppPaths paths, int keepCount = 20)
+    public ConfigService(AppPaths paths, int keepCount = BackupManager.DefaultKeepCount)
     {
         Paths = paths;
         Backups = new BackupManager(paths.BackupsDir, keepCount);
@@ -95,13 +93,9 @@ public sealed class ConfigService
         JsonValue root;
         try
         {
-            root = JsonValue.Parse(data);
+            root = ClaudeConfigIO.ParseRoot(data);
         }
-        catch (JsonException)
-        {
-            throw new ClaudeConfigException($"backup {name} is not a valid config file");
-        }
-        if (root.Kind != JsonKind.Object)
+        catch (ClaudeConfigException)
         {
             throw new ClaudeConfigException($"backup {name} is not a valid config file");
         }
@@ -112,7 +106,11 @@ public sealed class ConfigService
         }
         Backups.BackUp(Paths.ClaudeConfigPath, "claude_desktop_config");
         AtomicFile.Write(data, Paths.ClaudeConfigPath);
-        var servers = ClaudeConfigIO.ReadMcpServers(Paths.ClaudeConfigPath);
+        // The bytes just written are what was already parsed above — reading the servers back off
+        // the disk file would just reparse the same bytes a second time.
+        IReadOnlyDictionary<string, JsonValue> servers = rawServers is null
+            ? new Dictionary<string, JsonValue>(StringComparer.Ordinal)
+            : rawServers.ObjectProperties;
         var outcome = Reconciler.AdoptSnapshot(store, servers);
         if (outcome.StoreChanged)
         {

@@ -170,10 +170,9 @@ public class EditorWindowTests
     }
 
     /// <summary>
-    /// Task 7 review controller addition: EditorModel.IsFormView/IsJsonView refuse a switch by
-    /// raising PropertyChanged synchronously inside their own setter, which a WPF TwoWay binding
-    /// ignores for the property it is currently writing — so without EditorWindow's explicit
-    /// DataBind-priority refresh, the segmented control would stay on Form after a refused switch.
+    /// EditorModel.View refuses a switch (invalid JSON here) by raising PropertyChanged for View
+    /// regardless, so the EnumToBoolConverter-bound RadioButtons re-read it and the segmented
+    /// control snaps back to the view the model actually stayed on.
     /// </summary>
     [Fact]
     public void FormToggleSnapsBackWhenTheModelRefusesTheSwitchFromJson()
@@ -194,7 +193,7 @@ public class EditorWindowTests
 
             Assert.False(window.FormToggle.IsChecked);
             Assert.True(window.JsonToggle.IsChecked);
-            Assert.True(window.Model.IsJsonView);
+            Assert.Equal(EditView.Json, window.Model.View);
         });
     }
 

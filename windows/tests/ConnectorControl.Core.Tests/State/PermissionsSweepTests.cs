@@ -20,7 +20,7 @@ public class PermissionsSweepTests : IDisposable
         var settings = new FakeSettings();
 
         Assert.True(PermissionsSweep.RunOnce(settings, paths));
-        Assert.True(settings.AclSweepDone);
+        Assert.Equal(PermissionsSweep.CurrentVersion, settings.SweepVersion);
         if (OperatingSystem.IsWindows())
         {
             Assert.True(OwnerOnlyAcl.IsOwnerOnly(paths.StoreDir));
@@ -28,7 +28,26 @@ public class PermissionsSweepTests : IDisposable
             Assert.True(OwnerOnlyAcl.IsOwnerOnly(paths.BackupsDir));
             Assert.True(OwnerOnlyAcl.IsOwnerOnly(nestedFile));
         }
-        Assert.False(PermissionsSweep.RunOnce(settings, paths));   // gated by the flag from now on
+        Assert.False(PermissionsSweep.RunOnce(settings, paths));   // gated by the version from now on
+    }
+
+    [Fact]
+    public void ACompletedSweepRecordsCurrentVersion()
+    {
+        var paths = new AppPaths(dir.File("claude.json"), dir.File("store"));
+        var settings = new FakeSettings();
+
+        Assert.True(PermissionsSweep.RunOnce(settings, paths));
+        Assert.Equal(PermissionsSweep.CurrentVersion, settings.SweepVersion);
+    }
+
+    [Fact]
+    public void AlreadyAtCurrentVersionSkipsTheSweep()
+    {
+        var paths = new AppPaths(dir.File("claude.json"), dir.File("store"));
+        var settings = new FakeSettings { SweepVersion = PermissionsSweep.CurrentVersion };
+
+        Assert.False(PermissionsSweep.RunOnce(settings, paths));
     }
 
     /// <summary>
@@ -56,7 +75,7 @@ public class PermissionsSweepTests : IDisposable
         var settings = new FakeSettings { MasterStoreDir = chosen };
 
         Assert.True(PermissionsSweep.RunOnce(settings, paths));
-        Assert.True(settings.AclSweepDone);
+        Assert.Equal(PermissionsSweep.CurrentVersion, settings.SweepVersion);
         if (OperatingSystem.IsWindows())
         {
             Assert.False(OwnerOnlyAcl.IsOwnerOnly(chosen), "a chosen folder's own DACL is not the app's to rewrite");
@@ -91,7 +110,7 @@ public class PermissionsSweepTests : IDisposable
         var settings = new FakeSettings { MasterStoreDir = shellFolder };
 
         Assert.True(PermissionsSweep.RunOnce(settings, paths, [shellFolder]));
-        Assert.True(settings.AclSweepDone);
+        Assert.Equal(PermissionsSweep.CurrentVersion, settings.SweepVersion);
         if (OperatingSystem.IsWindows())
         {
             Assert.False(OwnerOnlyAcl.IsOwnerOnly(shellFolder), "a shell folder is never rewritten");
@@ -123,7 +142,7 @@ public class PermissionsSweepTests : IDisposable
 
         // Both roots refused: the store directory is the shell folder, the backups directory is listed too.
         Assert.True(PermissionsSweep.RunOnce(settings, paths, [shellFolder, paths.BackupsDir]));
-        Assert.True(settings.AclSweepDone, "nothing was attempted, so there is nothing left to retry");
+        Assert.Equal(PermissionsSweep.CurrentVersion, settings.SweepVersion);   // nothing was attempted, so there is nothing left to retry
         if (OperatingSystem.IsWindows())
         {
             Assert.False(OwnerOnlyAcl.IsOwnerOnly(shellFolder));
@@ -148,6 +167,6 @@ public class PermissionsSweepTests : IDisposable
         var paths = new AppPaths(dir.File("claude.json"), dir.File("never-created"));
         var settings = new FakeSettings();
         Assert.True(PermissionsSweep.RunOnce(settings, paths));
-        Assert.True(settings.AclSweepDone);
+        Assert.Equal(PermissionsSweep.CurrentVersion, settings.SweepVersion);
     }
 }

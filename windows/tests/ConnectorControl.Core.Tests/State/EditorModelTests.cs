@@ -131,12 +131,9 @@ public class EditorModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var editor = Editor(h, state, EditTarget.New(Local("node", ["x.js"])));
-        Assert.True(editor.IsFormView);
-        Assert.False(editor.IsJsonView);
-        editor.IsJsonView = true;
+        Assert.Equal(EditView.Form, editor.View);
+        editor.View = EditView.Json;
         Assert.Equal(EditView.Json, editor.View);
-        Assert.True(editor.IsJsonView);
-        Assert.False(editor.IsFormView);
     }
 
     [Fact]
@@ -147,15 +144,13 @@ public class EditorModelTests
         var editor = Editor(h, state, EditTarget.New(Local("node", ["x.js"])));
         editor.RequestView(EditView.Json);
         editor.JsonText = "{\"command\": \"node\", \"args\": [\"y.js\"]}";
-        editor.IsFormView = true;
+        editor.View = EditView.Form;
         Assert.Equal(EditView.Form, editor.View);
-        Assert.True(editor.IsFormView);
-        Assert.False(editor.IsJsonView);
         Assert.Equal(["y.js"], editor.Args.Select(a => a.Value).ToArray());
     }
 
-    /// <summary>Finding 1c: an unparseable JSON text refuses the switch and snaps the segmented control back
-    /// via PropertyChanged, without ever reaching the loss-warning dialog (finding 4's second case).</summary>
+    /// <summary>An unparseable JSON text refuses the switch and snaps the segmented control back
+    /// via PropertyChanged for View, without ever reaching the loss-warning dialog.</summary>
     [Fact]
     public void SettingIsFormViewWithUnrecoverableJsonIsRefusedAndSnapsBack()
     {
@@ -166,13 +161,10 @@ public class EditorModelTests
         editor.JsonText = "{\"command\": ";
         var raised = new List<string?>();
         editor.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
-        editor.IsFormView = true;
+        editor.View = EditView.Form;
         Assert.Equal(EditView.Json, editor.View);
-        Assert.True(editor.IsJsonView);
-        Assert.False(editor.IsFormView);
         Assert.Equal(EditorModel.NotValidJson, editor.JsonError);
-        Assert.Contains(nameof(EditorModel.IsFormView), raised);
-        Assert.Contains(nameof(EditorModel.IsJsonView), raised);
+        Assert.Contains(nameof(EditorModel.View), raised);
         Assert.Empty(h.Dialogs.Confirms);
     }
 
@@ -265,7 +257,7 @@ public class EditorModelTests
         editor.RequestView(EditView.Json);
         Assert.Equal(EditView.Form, editor.View);
         Assert.Equal("An environment variable value is missing its name.", editor.ValidationError);
-        Assert.False(editor.IsJsonView);
+        Assert.Equal(EditView.Form, editor.View);
     }
 
     [Fact]

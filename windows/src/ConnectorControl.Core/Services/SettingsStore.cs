@@ -4,9 +4,9 @@ using System.Text.Json;
 namespace ConnectorControl.Core.Services;
 
 /// <summary>
-/// settings.json in the machine-local data folder (spec §6.5): a flat JSON
-/// object written in the Apple encoder format, unknown keys preserved,
-/// wrong-typed values ignored, corrupt file treated as empty until the next write.
+/// settings.json in the machine-local data folder: a flat JSON object written in the Apple
+/// encoder format, unknown keys preserved, wrong-typed values ignored, corrupt file treated as
+/// empty until the next write.
 /// </summary>
 public sealed class SettingsStore : ISettings
 {
@@ -40,11 +40,11 @@ public sealed class SettingsStore : ISettings
     public string? MasterStoreDir { get => GetString("masterStoreDir"); set => SetString("masterStoreDir", value); }
     public string? ClaudeConfigPath { get => GetString("claudeConfigPath"); set => SetString("claudeConfigPath", value); }
     public string? ClaudeLaunchTarget { get => GetString("claudeLaunchTarget"); set => SetString("claudeLaunchTarget", value); }
-    public int BackupKeepCount { get => GetInt("backupKeepCount", 20); set => Set("backupKeepCount", JsonValue.Int(value)); }
+    public int BackupKeepCount { get => GetInt("backupKeepCount", BackupManager.DefaultKeepCount); set => Set("backupKeepCount", JsonValue.Int(value)); }
     public bool NotifyExternalChanges { get => GetBool("notifyExternalChanges", true); set => Set("notifyExternalChanges", JsonValue.Bool(value)); }
     public bool ConfirmBeforeRestart { get => GetBool("confirmBeforeRestart", true); set => Set("confirmBeforeRestart", JsonValue.Bool(value)); }
     public bool ConfirmBeforeQuit { get => GetBool("confirmBeforeQuit", true); set => Set("confirmBeforeQuit", JsonValue.Bool(value)); }
-    public bool AclSweepDone { get => GetBool("aclSweepDone", false); set => Set("aclSweepDone", JsonValue.Bool(value)); }
+    public int SweepVersion { get => GetInt("sweepVersion", 0); set => Set("sweepVersion", JsonValue.Int(value)); }
     public bool AutoUpdate { get => GetBool("autoUpdate", false); set => Set("autoUpdate", JsonValue.Bool(value)); }
     public bool TrayTipShown { get => GetBool("trayTipShown", false); set => Set("trayTipShown", JsonValue.Bool(value)); }
 

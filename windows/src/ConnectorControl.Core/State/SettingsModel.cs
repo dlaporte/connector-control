@@ -135,7 +135,10 @@ public sealed class SettingsModel : ObservableObject, IDisposable
 
     public bool UpdatesEnabled => updater.IsAvailable;
 
-    public string VersionText => $"Version {updater.VersionDisplay}";
+    /// <summary>The Mac's static and an instance property of the same name can coexist there; C# forbids that, so the instance property below calls this.</summary>
+    public static string VersionTextFor(string version) => $"Version {version}";
+
+    public string VersionText => VersionTextFor(updater.VersionDisplay);
 
     public Task CheckForUpdatesAsync() => updates.CheckAsync(interactive: true);
 
@@ -176,7 +179,10 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         }
     }
 
-    public string KeepCountLabel => $"Keep {settings.BackupKeepCount} backups of each file";
+    /// <summary>The Mac's static and an instance property of the same name can coexist there; C# forbids that, so the instance property below calls this.</summary>
+    public static string KeepCountLabelFor(int count) => $"Keep {count} backups of each file";
+
+    public string KeepCountLabel => KeepCountLabelFor(settings.BackupKeepCount);
 
     public void IncrementKeepCount() => BackupKeepCount = settings.BackupKeepCount + 1;
 

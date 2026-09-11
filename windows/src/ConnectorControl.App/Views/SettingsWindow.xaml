@@ -8,12 +8,7 @@
         Width="480" Height="560" ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ApplicationBackgroundBrush}">
   <Window.Resources>
-    <BooleanToVisibilityConverter x:Key="Vis" />
     <Style x:Key="ToggleRow" TargetType="Grid">
-      <Setter Property="Margin" Value="0,0,0,8" />
-    </Style>
-    <Style x:Key="SectionTitle" TargetType="TextBlock">
-      <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Margin" Value="0,0,0,8" />
     </Style>
     <Style x:Key="PathText" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">

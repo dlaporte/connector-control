@@ -89,21 +89,12 @@ public sealed record AppPaths(string ClaudeConfigPath, string StoreDir, string B
     }
 
     /// <summary>
-    /// Every LocalCache config path a Claude MSIX package folder (one whose name passes
-    /// <see cref="ClaudePackage.IsClaudeFamily"/>) could produce, in ordinal folder-name
-    /// order. Existence of the file or the package folder is not implied — callers probe for that.
+    /// Every LocalCache config path a Claude MSIX package folder could produce, in ordinal
+    /// folder-name order. Existence of the file or the package folder is not implied — callers
+    /// probe for that.
     /// </summary>
-    internal static IReadOnlyList<string> MsixClaudeConfigCandidates(KnownFolders folders, IPathProbe probe)
-    {
-        var packages = Path.Combine(folders.LocalAppData, "Packages");
-        if (!probe.DirectoryExists(packages))
-        {
-            return [];
-        }
-        return probe.EnumerateDirectories(packages)
-            .Where(dir => ClaudePackage.IsClaudeFamily(Path.GetFileName(dir)))
-            .OrderBy(dir => dir, StringComparer.Ordinal)
+    internal static IReadOnlyList<string> MsixClaudeConfigCandidates(KnownFolders folders, IPathProbe probe) =>
+        ClaudePackage.PackageFolders(probe, folders)
             .Select(dir => Path.Combine(dir, "LocalCache", "Roaming", "Claude", "claude_desktop_config.json"))
             .ToList();
-    }
 }

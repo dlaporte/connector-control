@@ -66,46 +66,9 @@ public sealed class ClaudeInstall : IClaudeInstall
     {
         try
         {
-            var manager = new PackageManager();
-            foreach (var package in manager.FindPackagesForUser(string.Empty))
-            {
-                var family = package.Id.FamilyName;
-                if (!ClaudePackage.IsClaudeFamily(family))
-                {
-                    continue;
-                }
-                string? aumid = null;
-                string? installDirectory = null;
-                // Package.GetAppListEntries() and Package.InstalledPath require Windows
-                // 10.0.19041.0+; the app's SupportedOSPlatformVersion (10.0.17763.0) is
-                // lower, so both must be guarded.
-                if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
-                {
-                    try
-                    {
-                        var entries = package.GetAppListEntries();
-                        if (entries.Count > 0)
-                        {
-                            aumid = entries[0].AppUserModelId;
-                        }
-                    }
-                    catch (COMException)
-                    {
-                        // fall back to the conventional id below
-                    }
-                    try
-                    {
-                        installDirectory = package.InstalledPath;
-                    }
-                    catch (Exception ex) when (ex is COMException or InvalidOperationException)
-                    {
-                        // location unavailable (a staged or partly installed package):
-                        // process matching falls back to the name alone
-                    }
-                }
-                return MsixLookup.Found(new ClaudeInstallInfo(ClaudeInstallKind.Msix, family, aumid ?? family + AppIdSuffix, ClaudeInstallInfo.DefaultProcessName, installDirectory));
-            }
-            return MsixLookup.NotInstalled;   // the query worked: there is no MSIX Claude
+            return FindClaudePackage() is { } found
+                ? MsixLookup.Found(new ClaudeInstallInfo(ClaudeInstallKind.Msix, found.Family, found.Aumid, ClaudeInstallInfo.DefaultProcessName, found.InstalledPath))
+                : MsixLookup.NotInstalled;   // the query worked: there is no MSIX Claude
         }
         catch (Exception ex) when (ex is COMException or UnauthorizedAccessException or InvalidOperationException
             or TypeLoadException or FileNotFoundException or PlatformNotSupportedException)
@@ -115,22 +78,55 @@ public sealed class ClaudeInstall : IClaudeInstall
     }
 
     /// <summary>
+    /// One WinRT loop over every package for the current user, returning the first whose family
+    /// name is Claude's: the family name, its best-effort AUMID (falling back to
+    /// <c>family!Claude</c> when the app-list entry can't be read), and its install location when
+    /// available. Null means the query worked and found no Claude package; an exception means
+    /// WinRT itself is unusable — <see cref="DetectMsixViaPackageManager"/> tells those apart.
+    /// </summary>
+    internal static (string Family, string Aumid, string? InstalledPath)? FindClaudePackage()
+    {
+        var manager = new PackageManager();
+        foreach (var package in manager.FindPackagesForUser(string.Empty))
+        {
+            var family = package.Id.FamilyName;
+            if (!ClaudePackage.IsClaudeFamily(family))
+            {
+                continue;
+            }
+            string? aumid = null;
+            string? installedPath = null;
+            // Package.GetAppListEntries() and Package.InstalledPath require Windows
+            // 10.0.19041.0+; the app's SupportedOSPlatformVersion (10.0.17763.0) is
+            // lower, so both must be guarded.
+            if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
+            {
+                try
+                {
+                    var entries = package.GetAppListEntries();
+                    aumid = entries.Count > 0 ? entries[0].AppUserModelId : null;
+                    installedPath = package.InstalledPath;
+                }
+                catch (Exception ex) when (ex is COMException or InvalidOperationException)
+                {
+                    // app-list entry or install location unavailable (a staged or partly
+                    // installed package): fall back to the conventional id below, and process
+                    // matching falls back to the name alone
+                }
+            }
+            return (family, aumid ?? family + AppIdSuffix, installedPath);
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Fallback when WinRT is unavailable: package folders are named by family name.
     /// The install directory cannot be derived from the family name, so it is left
     /// unknown and Claude's processes are matched by name alone.
     /// </summary>
     internal ClaudeInstallInfo? DetectMsixByFolderScan()
     {
-        var packages = Path.Combine(folders.LocalAppData, "Packages");
-        if (!probe.DirectoryExists(packages))
-        {
-            return null;
-        }
-        var family = probe.EnumerateDirectories(packages)
-            .Select(dir => Path.GetFileName(dir))
-            .Where(name => name is not null && ClaudePackage.IsClaudeFamily(name))
-            .OrderBy(name => name, StringComparer.Ordinal)
-            .FirstOrDefault();
+        var family = ClaudePackage.PackageFolders(probe, folders).Select(Path.GetFileName).FirstOrDefault();
         return family is null
             ? null
             : new ClaudeInstallInfo(ClaudeInstallKind.Msix, family, family + AppIdSuffix, ClaudeInstallInfo.DefaultProcessName);

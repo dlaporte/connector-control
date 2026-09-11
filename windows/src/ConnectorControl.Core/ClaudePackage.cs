@@ -35,4 +35,22 @@ public static class ClaudePackage
         var match = AumidGrammar.Match(aumid);
         return match.Success && IsClaudeFamily(match.Groups["family"].Value);
     }
+
+    /// <summary>
+    /// Every Claude package folder under <c>%LOCALAPPDATA%\Packages</c>, in ordinal folder-name
+    /// order. Shared by the config-path search and the AppX-manager-unavailable fallback so
+    /// neither can disagree with the other about which folders are Claude's.
+    /// </summary>
+    public static IReadOnlyList<string> PackageFolders(IPathProbe probe, KnownFolders folders)
+    {
+        var packages = Path.Combine(folders.LocalAppData, "Packages");
+        if (!probe.DirectoryExists(packages))
+        {
+            return [];
+        }
+        return probe.EnumerateDirectories(packages)
+            .Where(dir => IsClaudeFamily(Path.GetFileName(dir)))
+            .OrderBy(dir => dir, StringComparer.Ordinal)
+            .ToList();
+    }
 }

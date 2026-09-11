@@ -4,8 +4,8 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using ConnectorControl.App.Services;
 using ConnectorControl.Core.Services;
-using Windows.Management.Deployment;
 
 namespace ConnectorControl.App.Views;
 
@@ -73,23 +73,18 @@ public static class ClaudeIconLoader
         }
         try
         {
-            var manager = new PackageManager();
-            foreach (var package in manager.FindPackagesForUser(string.Empty))
+            if (ClaudeInstall.FindClaudePackage() is not { InstalledPath: { } root } found || found.Family != family)
             {
-                if (package.Id.FamilyName != family)
-                {
-                    continue;
-                }
-                var root = package.InstalledLocation.Path;
-                var candidate = Path.Combine(root, "app", "claude.exe");
-                return File.Exists(candidate) ? candidate : Directory.EnumerateFiles(root, "claude.exe", SearchOption.AllDirectories).FirstOrDefault();
+                return null;
             }
+            var candidate = Path.Combine(root, "app", "claude.exe");
+            return File.Exists(candidate) ? candidate : Directory.EnumerateFiles(root, "claude.exe", SearchOption.AllDirectories).FirstOrDefault();
         }
         catch (Exception ex) when (ex is COMException or UnauthorizedAccessException or IOException or InvalidOperationException
             or FileNotFoundException or TypeLoadException or PlatformNotSupportedException)
         {
             // WinRT unavailable or the package folder is unreadable
+            return null;
         }
-        return null;
     }
 }

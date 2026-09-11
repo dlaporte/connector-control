@@ -7,14 +7,9 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ApplicationBackgroundBrush}">
   <Window.Resources>
-    <BooleanToVisibilityConverter x:Key="Vis" />
     <Style x:Key="FieldLabel" TargetType="TextBlock">
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Margin" Value="0,0,12,0" />
-    </Style>
-    <Style x:Key="SectionTitle" TargetType="TextBlock">
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Margin" Value="0,0,0,8" />
     </Style>
     <DataTemplate x:Key="MaskedValue">
       <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
@@ -38,11 +33,11 @@
     </Style>
   </Window.Resources>
 
-  <DockPanel>
+  <DockPanel Grid.IsSharedSizeScope="True">
     <!-- View switch (catalog §3.4 item 1) -->
     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10">
-      <RadioButton x:Name="FormToggle" Content="Form" GroupName="View" MinWidth="72" IsChecked="{Binding IsFormView}" Style="{DynamicResource DefaultToggleButtonStyle}" />
-      <RadioButton x:Name="JsonToggle" Content="JSON" GroupName="View" MinWidth="72" Margin="4,0,0,0" IsChecked="{Binding IsJsonView}" Style="{DynamicResource DefaultToggleButtonStyle}" />
+      <RadioButton x:Name="FormToggle" Content="Form" GroupName="View" MinWidth="72" IsChecked="{Binding View, Converter={StaticResource EnumToBool}, ConverterParameter=Form}" Style="{DynamicResource DefaultToggleButtonStyle}" />
+      <RadioButton x:Name="JsonToggle" Content="JSON" GroupName="View" MinWidth="72" Margin="4,0,0,0" IsChecked="{Binding View, Converter={StaticResource EnumToBool}, ConverterParameter=Json}" Style="{DynamicResource DefaultToggleButtonStyle}" />
     </StackPanel>
 
     <!-- Bottom bar (catalog §3.4 item 5) -->
@@ -61,15 +56,22 @@
 
     <Grid>
       <!-- Form view (catalog §3.6) -->
-      <ScrollViewer x:Name="FormBody" VerticalScrollBarVisibility="Auto" Padding="16,0" Visibility="{Binding IsFormView, Converter={StaticResource Vis}}">
+      <ScrollViewer x:Name="FormBody" VerticalScrollBarVisibility="Auto" Padding="16,0">
+        <ScrollViewer.Style>
+          <Style TargetType="ScrollViewer">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding View}" Value="Form">
+                <Setter Property="Visibility" Value="Visible" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </ScrollViewer.Style>
         <StackPanel>
           <Border Style="{StaticResource Card}">
             <StackPanel>
               <Grid x:Name="TypePicker" Margin="0,0,0,8" Visibility="{Binding ShowTypePicker, Converter={StaticResource Vis}}">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="110" />
-                  <ColumnDefinition />
-                </Grid.ColumnDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                 <TextBlock Text="Type" Style="{StaticResource FieldLabel}" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                   <RadioButton Content="Remote" GroupName="Type" MinWidth="72" IsChecked="{Binding IsRemote}" Style="{DynamicResource DefaultToggleButtonStyle}" />
@@ -77,12 +79,9 @@
                 </StackPanel>
               </Grid>
               <Grid>
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="110" />
-                  <ColumnDefinition />
-                </Grid.ColumnDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                 <TextBlock Text="Name" Style="{StaticResource FieldLabel}" />
-                <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" views:Placeholder.Text="my-mcp" />
+                <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="my-mcp" />
               </Grid>
             </StackPanel>
           </Border>
@@ -91,12 +90,9 @@
             <Border Style="{StaticResource Card}">
               <StackPanel>
                 <Grid>
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="110" />
-                    <ColumnDefinition />
-                  </Grid.ColumnDefinitions>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                   <TextBlock Text="Server URL" Style="{StaticResource FieldLabel}" />
-                  <TextBox Grid.Column="1" Text="{Binding RemoteUrl, UpdateSourceTrigger=PropertyChanged}" views:Placeholder.Text="https://example.com/mcp" />
+                  <TextBox Grid.Column="1" Text="{Binding RemoteUrl, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="https://example.com/mcp" />
                 </Grid>
                 <TextBlock Text="{x:Static state:EditorModel.UrlHint}" Style="{StaticResource ErrorText}" FontSize="12" Margin="110,4,0,0" Visibility="{Binding ShowUrlHint, Converter={StaticResource Vis}}" />
                 <TextBlock Text="{Binding UrlCaution}" Style="{StaticResource CautionText}" FontSize="12" Margin="110,4,0,0" TextWrapping="Wrap" Visibility="{Binding ShowUrlCaution, Converter={StaticResource Vis}}" />
@@ -108,20 +104,14 @@
               <StackPanel>
                 <TextBlock Text="Authentication" Style="{StaticResource SectionTitle}" />
                 <Grid Margin="0,0,0,8">
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="110" />
-                    <ColumnDefinition />
-                  </Grid.ColumnDefinitions>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                   <TextBlock Text="Type" Style="{StaticResource FieldLabel}" />
                   <ComboBox Grid.Column="1" ItemsSource="{x:Static state:EditorModel.AuthKindTitles}" SelectedIndex="{Binding AuthKindIndex}" HorizontalAlignment="Left" MinWidth="220" />
                 </Grid>
                 <TextBlock Text="{x:Static state:EditorModel.AutomaticCaption}" Style="{StaticResource CaptionText}" Visibility="{Binding IsAutomatic, Converter={StaticResource Vis}}" />
                 <StackPanel Visibility="{Binding IsBearer, Converter={StaticResource Vis}}">
                   <Grid>
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="110" />
-                      <ColumnDefinition />
-                    </Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Token" Style="{StaticResource FieldLabel}" />
                     <PasswordBox x:Name="BearerTokenBox" Grid.Column="1" views:PasswordBoxHelper.BoundPassword="{Binding BearerToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                   </Grid>
@@ -129,47 +119,32 @@
                 </StackPanel>
                 <StackPanel Visibility="{Binding IsHeader, Converter={StaticResource Vis}}">
                   <Grid Margin="0,0,0,8">
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="110" />
-                      <ColumnDefinition />
-                    </Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Header name" Style="{StaticResource FieldLabel}" />
-                    <TextBox Grid.Column="1" Text="{Binding HeaderName, UpdateSourceTrigger=PropertyChanged}" views:Placeholder.Text="X-API-Key" />
+                    <TextBox Grid.Column="1" Text="{Binding HeaderName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="X-API-Key" />
                   </Grid>
                   <Grid>
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="110" />
-                      <ColumnDefinition />
-                    </Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Header value" Style="{StaticResource FieldLabel}" />
                     <PasswordBox Grid.Column="1" views:PasswordBoxHelper.BoundPassword="{Binding HeaderValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                   </Grid>
                 </StackPanel>
                 <StackPanel Visibility="{Binding IsOAuth, Converter={StaticResource Vis}}">
                   <Grid Margin="0,0,0,8">
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="110" />
-                      <ColumnDefinition />
-                    </Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Client ID" Style="{StaticResource FieldLabel}" />
                     <TextBox Grid.Column="1" Text="{Binding OAuthClientId, UpdateSourceTrigger=PropertyChanged}" />
                   </Grid>
                   <Grid Margin="0,0,0,8">
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="110" />
-                      <ColumnDefinition />
-                    </Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Client Secret" Style="{StaticResource FieldLabel}" />
                     <PasswordBox Grid.Column="1" views:PasswordBoxHelper.BoundPassword="{Binding OAuthClientSecret, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                   </Grid>
                   <TextBlock Text="{x:Static state:EditorModel.OAuthSecretCaption}" Style="{StaticResource CaptionText}" Margin="0,-2,0,8" TextWrapping="Wrap" />
                   <Grid>
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="110" />
-                      <ColumnDefinition />
-                    </Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Scopes (optional)" Style="{StaticResource FieldLabel}" />
-                    <TextBox Grid.Column="1" Text="{Binding OAuthScopes, UpdateSourceTrigger=PropertyChanged}" views:Placeholder.Text="space separated" />
+                    <TextBox Grid.Column="1" Text="{Binding OAuthScopes, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="space separated" />
                   </Grid>
                 </StackPanel>
               </StackPanel>
@@ -180,12 +155,9 @@
             <Border Style="{StaticResource Card}">
               <StackPanel>
                 <Grid>
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="110" />
-                    <ColumnDefinition />
-                  </Grid.ColumnDefinitions>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                   <TextBlock Text="Command" Style="{StaticResource FieldLabel}" />
-                  <TextBox Grid.Column="1" Text="{Binding Command, UpdateSourceTrigger=PropertyChanged}" views:Placeholder.Text="npx" />
+                  <TextBox Grid.Column="1" Text="{Binding Command, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="npx" />
                 </Grid>
                 <views:ToolNoteBlock x:Name="LocalToolNote" Note="{Binding ToolNote}" Margin="110,6,0,0" />
               </StackPanel>
@@ -201,7 +173,7 @@
                           <ColumnDefinition />
                           <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}" views:Placeholder.Text="argument" />
+                        <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}" Style="{StaticResource Watermarked}" Tag="argument" />
                         <Button Grid.Column="1" Style="{StaticResource IconButton}" Content="&#xE711;" Margin="6,0,0,0" Click="OnRemoveArg" />
                       </Grid>
                     </DataTemplate>
@@ -271,7 +243,17 @@
       </ScrollViewer>
 
       <!-- JSON view (catalog §3.7) -->
-      <Grid x:Name="JsonBody" Margin="16,8,16,0" Visibility="{Binding IsJsonView, Converter={StaticResource Vis}}">
+      <Grid x:Name="JsonBody" Margin="16,8,16,0">
+        <Grid.Style>
+          <Style TargetType="Grid">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding View}" Value="Json">
+                <Setter Property="Visibility" Value="Visible" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Grid.Style>
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
           <RowDefinition />
@@ -284,7 +266,7 @@
             <ColumnDefinition />
           </Grid.ColumnDefinitions>
           <TextBlock Text="Name" Style="{StaticResource FieldLabel}" />
-          <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" views:Placeholder.Text="my-mcp" />
+          <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="my-mcp" />
         </Grid>
         <TextBox x:Name="JsonEditor" Grid.Row="1" Style="{StaticResource JsonBox}" Text="{Binding JsonText, UpdateSourceTrigger=PropertyChanged}" />
         <TextBlock Grid.Row="2" Text="{Binding JsonStatusText}" Margin="0,6,0,0" TextWrapping="Wrap" FontSize="12">

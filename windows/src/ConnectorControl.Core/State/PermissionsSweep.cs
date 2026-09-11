@@ -5,7 +5,7 @@ namespace ConnectorControl.Core.State;
 /// <summary>
 /// The Mac sweepPermissionsOnce (catalog §1.15) with a DACL instead of chmod:
 /// one-time repair of files written before owner-only permissions were
-/// enforced, gated by the aclSweepDone setting so launches stay cheap.
+/// enforced, gated by the SweepVersion setting so launches stay cheap.
 /// Every error is ignored, like the Swift try?.
 /// </summary>
 /// <remarks>
@@ -20,16 +20,25 @@ namespace ConnectorControl.Core.State;
 /// never the synced folder), so everything under it is the app's to repair.
 /// A drive root or a well-known shell folder is refused outright, whatever
 /// role it was given.
+///
+/// Windows has always swept with a DACL, so there is only the one pass
+/// (unlike the Mac's mode-then-ACL history): CurrentVersion is 1, and there
+/// is no migration off the old boolean AclSweepDone flag — the sweep is
+/// idempotent and cheap, so an upgraded install simply re-runs it once more
+/// under the new key.
 /// </remarks>
 public static class PermissionsSweep
 {
+    /// <summary>Bump this, and add the new pass's check below, to add a pass.</summary>
+    public const int CurrentVersion = 1;
+
     /// <summary>True when the sweep ran (first time only).</summary>
     public static bool RunOnce(ISettings settings, AppPaths paths) =>
         RunOnce(settings, paths, ProtectedRoots());
 
     internal static bool RunOnce(ISettings settings, AppPaths paths, IReadOnlyCollection<string> protectedRoots)
     {
-        if (settings.AclSweepDone)
+        if (settings.SweepVersion >= CurrentVersion)
         {
             return false;
         }
@@ -70,11 +79,11 @@ public static class PermissionsSweep
             }
         }
 
-        // A sweep that tried and achieved nothing is not done: leave the flag
-        // clear so the next launch tries again, instead of recording success.
+        // A sweep that tried and achieved nothing is not done: leave the version behind so the
+        // next launch tries again, instead of recording success.
         if (attempted == 0 || applied > 0)
         {
-            settings.AclSweepDone = true;
+            settings.SweepVersion = CurrentVersion;
         }
         return true;
     }

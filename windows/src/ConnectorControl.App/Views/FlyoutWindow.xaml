@@ -8,7 +8,6 @@
         WindowStartupLocation="Manual" Left="{x:Static views:FlyoutWindow.OffScreen}" Top="{x:Static views:FlyoutWindow.OffScreen}"
         Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
   <Window.Resources>
-    <BooleanToVisibilityConverter x:Key="Vis" />
     <Style x:Key="FooterButton" TargetType="Button" BasedOn="{StaticResource DestructiveButton}">
       <Setter Property="Padding" Value="10,4" />
       <Style.Triggers>

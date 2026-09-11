@@ -1,8 +1,5 @@
-using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -28,33 +25,11 @@ public partial class EditorWindow : Window
         Title = Model.WindowTitle;
         Model.CloseRequested += () => Dispatcher.BeginInvoke(new Action(Close));
         Model.FocusEnvRowRequested += row => Dispatcher.BeginInvoke(new Action(() => FocusEnvRow(row)), DispatcherPriority.Loaded);
-        Model.PropertyChanged += OnModelPropertyChanged;
         PreviewKeyDown += OnPreviewKeyDown;
         Closed += (_, _) => Model.Dispose();   // stop listening to AppState.ToolStatuses
     }
 
     public EditorModel Model { get; }
-
-    /// <summary>
-    /// Task 7 review: EditorModel.IsFormView/IsJsonView can refuse a switch (e.g. invalid JSON)
-    /// by raising PropertyChanged for IsFormView/IsJsonView synchronously, from inside their own
-    /// setter. A WPF TwoWay binding ignores a change notification for the same property it is
-    /// currently writing, so the segmented control's RadioButton would stay checked instead of
-    /// snapping back to reflect the refusal. Force each toggle to re-read the model once the
-    /// current binding update has finished, at DataBind priority (below the Normal/Send priority
-    /// the binding update itself runs at, so it runs after — but still before layout/render).
-    /// </summary>
-    private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is nameof(EditorModel.IsFormView) or nameof(EditorModel.IsJsonView))
-        {
-            Dispatcher.BeginInvoke(DispatcherPriority.DataBind, () =>
-            {
-                BindingOperations.GetBindingExpression(FormToggle, ToggleButton.IsCheckedProperty)?.UpdateTarget();
-                BindingOperations.GetBindingExpression(JsonToggle, ToggleButton.IsCheckedProperty)?.UpdateTarget();
-            });
-        }
-    }
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {

@@ -12,7 +12,7 @@ public sealed class FakeSettings : ISettings
     public bool ConfirmBeforeRestart { get; set; } = true;
     public bool ConfirmBeforeQuit { get; set; } = true;
     public DateTime? LastApplyDate { get; set; }
-    public bool AclSweepDone { get; set; }
+    public int SweepVersion { get; set; }
     public bool AutoUpdate { get; set; }
     public bool TrayTipShown { get; set; }
     /// <summary>Settable so a test can simulate a failed settings save (FlyoutModel.ErrorMessage's last-resort banner).</summary>

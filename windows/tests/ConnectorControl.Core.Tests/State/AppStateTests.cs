@@ -25,7 +25,7 @@ public class AppStateTests
         Assert.Equal(["Default"], state.ProfileNames);
         Assert.Equal("Default", state.ActiveProfile);
         Assert.True(File.Exists(h.MasterStorePath));
-        Assert.True(h.Settings.AclSweepDone);
+        Assert.Equal(PermissionsSweep.CurrentVersion, h.Settings.SweepVersion);
     }
 
     [Fact]

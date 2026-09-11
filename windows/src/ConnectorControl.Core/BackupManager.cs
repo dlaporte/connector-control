@@ -8,10 +8,13 @@ namespace ConnectorControl.Core;
 /// </summary>
 public sealed class BackupManager
 {
+    /// <summary>The keep count ConfigService and SettingsStore fall back to.</summary>
+    public const int DefaultKeepCount = 20;
+
     public string BackupsDir { get; }
     public int KeepCount { get; }
 
-    public BackupManager(string backupsDir, int keepCount = 20)
+    public BackupManager(string backupsDir, int keepCount = DefaultKeepCount)
     {
         BackupsDir = backupsDir;
         KeepCount = keepCount;

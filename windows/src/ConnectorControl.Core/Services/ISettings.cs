@@ -1,6 +1,6 @@
 namespace ConnectorControl.Core.Services;
 
-/// <summary>The Mac app's UserDefaults keys (spec §6.5). Setters persist immediately.</summary>
+/// <summary>The Windows counterpart of the Mac app's UserDefaults keys. Setters persist immediately.</summary>
 public interface ISettings
 {
     string? MasterStoreDir { get; set; }
@@ -15,7 +15,8 @@ public interface ISettings
     bool ConfirmBeforeRestart { get; set; }
     bool ConfirmBeforeQuit { get; set; }
     DateTime? LastApplyDate { get; set; }
-    bool AclSweepDone { get; set; }
+    /// <summary>How far PermissionsSweep's one-time repair has gotten; see its header comment.</summary>
+    int SweepVersion { get; set; }
     bool AutoUpdate { get; set; }
     bool TrayTipShown { get; set; }
 
