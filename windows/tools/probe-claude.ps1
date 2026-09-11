@@ -1,7 +1,7 @@
 # Day-one probe for the Connector Control Windows port.
 # Run in a normal (non-admin) PowerShell:   powershell -ExecutionPolicy Bypass -File .\probe-claude.ps1
-# Reports how Claude Desktop is installed, where its config really lives, how
-# it can be relaunched, and (optionally) whether it quits on WM_CLOSE.
+# Reports how Claude Desktop is installed, where its config really lives, and the AUMID it can
+# be relaunched by. SessionEnd.cs answers how Claude Desktop is asked to quit; this probe does not.
 $ErrorActionPreference = 'Continue'
 
 function Section($title) { Write-Host ""; Write-Host "== $title ==" -ForegroundColor Cyan }
@@ -74,53 +74,6 @@ Section "node / npx on PATH"
 foreach ($c in 'node', 'npx', 'npx.cmd') {
   $w = Get-Command $c -ErrorAction SilentlyContinue
   "{0}: {1}" -f $c, $(if ($w) { $w.Source } else { 'not found' })
-}
-
-if ($procs) {
-  Section "Graceful-quit test"
-  $answer = Read-Host "Claude is running. Post WM_CLOSE to its top-level windows to see whether it quits? This closes Claude. (y/N)"
-  if ($answer -eq 'y') {
-    Add-Type @"
-using System;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
-using System.Text;
-public static class Win {
-  public delegate bool EnumProc(IntPtr h, IntPtr l);
-  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc p, IntPtr l);
-  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
-  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
-  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
-  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
-  public static List<IntPtr> WindowsOf(HashSet<uint> pids) {
-    var r = new List<IntPtr>();
-    EnumWindows((h, l) => { uint pid; GetWindowThreadProcessId(h, out pid); if (pids.Contains(pid)) r.Add(h); return true; }, IntPtr.Zero);
-    return r;
-  }
-}
-"@
-    $pids = New-Object 'System.Collections.Generic.HashSet[uint32]'
-    $procs | ForEach-Object { [void]$pids.Add([uint32]$_.Id) }
-    $wins = [Win]::WindowsOf($pids)
-    "top-level windows: $($wins.Count)"
-    foreach ($h in $wins) {
-      $sb = New-Object System.Text.StringBuilder 256
-      [void][Win]::GetWindowText($h, $sb, 256)
-      "  hwnd {0} visible={1} title='{2}'" -f $h, [Win]::IsWindowVisible($h), $sb.ToString()
-    }
-    foreach ($h in $wins) { [void][Win]::PostMessage($h, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) }   # WM_CLOSE
-    $deadline = (Get-Date).AddSeconds(15)
-    do {
-      Start-Sleep -Milliseconds 250
-      $still = Get-Process | Where-Object { $_.ProcessName -like 'claude*' }
-    } while ($still -and (Get-Date) -lt $deadline)
-    if ($still) {
-      "RESULT: Claude still running after 15 s (it hides to the tray or ignores WM_CLOSE)"
-      $still | Select-Object Id, ProcessName, MainWindowTitle | Format-Table -AutoSize
-    } else {
-      "RESULT: Claude quit gracefully on WM_CLOSE"
-    }
-  }
 }
 
 Section "Done"

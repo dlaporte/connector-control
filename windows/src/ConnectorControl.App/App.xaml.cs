@@ -28,6 +28,13 @@ public partial class App : Application
     {
         VelopackUpdater.RunStartupHook();   // must run before anything else (install/update/uninstall callbacks)
         base.OnStartup(e);
+        if (PackageVerificationCommand.TryRun(e.Args, out var verificationExitCode))
+        {
+            // smoke-test.ps1's own invocation of the installed exe: check a package and exit,
+            // never reaching the tray UI or the single-instance guard.
+            Shutdown(verificationExitCode);
+            return;
+        }
         DispatcherUnhandledException += OnUnhandledException;   // before the second-instance path too, so it leaves a crash.log
         instance = new SingleInstance();
         if (!instance.IsFirstInstance)

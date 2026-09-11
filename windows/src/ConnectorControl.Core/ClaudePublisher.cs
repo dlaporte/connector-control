@@ -11,7 +11,7 @@ public static class ClaudePublisher
     /// <summary>
     /// Accepted organizations after <see cref="SignerIdentity.NormalizeOrganization"/>. Anthropic's public
     /// spellings are "Anthropic" and "Anthropic, PBC"; the exact value on a real claude.exe is what
-    /// windows/scripts/probe-claude.ps1 (section "Signer") prints — a rotation to another spelling is a
+    /// windows/tools/probe-claude.ps1 (section "Signer") prints — a rotation to another spelling is a
     /// one-line addition here.
     /// </summary>
     public static readonly string[] ExpectedOrganizations = ["anthropic", "anthropic pbc"];

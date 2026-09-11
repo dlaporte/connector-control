@@ -19,13 +19,9 @@
 # of a job that failed AFTER uploading is idempotent); a RID with some but not all of them fails
 # with the delete-asset commands to run first. If the release itself is wrong,
 # `gh release delete <tag> --yes --cleanup-tag`, `git tag -d <tag>`, re-tag and re-push for a
-# fresh run. The file set is the one vpk uploaded for windows-preview-1: the installer, the
-# full package, the delta package when a previous release existed, and the channel index
-# GithubSource reads. RELEASES-<rid> and assets.<rid>.json are pack-time by-products and stay
-# out. One difference from vpk is corrected below: the pack-time releases.<rid>.json also lists
-# the PREVIOUS release's package (downloaded for the delta, then pruned), and vpk rebuilt the
-# index from this build's Full and Delta only; the same filter is applied here so no entry points
-# at a file this release does not carry.
+# fresh run. The file set is the one vpk uploaded for windows-preview-1: the installer, the full
+# package, and the channel index GithubSource reads. RELEASES-<rid> and assets.<rid>.json are
+# pack-time by-products and stay out.
 set -euo pipefail
 
 TAG=${1:?usage: upload-release-assets.sh <tag> <version> <artifacts-dir>}
@@ -38,15 +34,9 @@ for rid in win-x64 win-arm64; do
   dir="$ARTIFACTS/$rid"
   index="$dir/releases.$rid.json"
   [ -f "$index" ] || { echo "::error::expected asset $index is missing"; exit 1; }
-  jq --arg v "$VERSION" '.Assets |= map(select(.Version == $v))' "$index" > "$index.filtered"
-  mv "$index.filtered" "$index"
-  echo "releases.$rid.json now lists: $(jq -r '.Assets[] | "\(.Type) \(.Version)"' "$index" | paste -sd, -)"
+  echo "releases.$rid.json lists: $(jq -r '.Assets[] | "\(.Type) \(.Version)"' "$index" | paste -sd, -)"
   files=("$dir/ConnectorControl-$rid-Setup.exe" "$dir/ConnectorControl-$VERSION-$rid-full.nupkg" "$index")
   for f in "${files[@]}"; do [ -f "$f" ] || { echo "::error::expected asset $f is missing"; exit 1; }; done
-  # The delta package only exists when a previous release of this channel was there to diff
-  # against (the first release of a channel has none), so it is optional.
-  delta="$dir/ConnectorControl-$VERSION-$rid-delta.nupkg"
-  if [ -f "$delta" ]; then files+=("$delta"); fi
 
   present=(); missing=()
   for f in "${files[@]}"; do
