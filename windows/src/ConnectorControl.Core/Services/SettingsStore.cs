@@ -19,7 +19,7 @@ public sealed class SettingsStore : ISettings
         Reload();
     }
 
-    public void Reload()
+    internal void Reload()
     {
         try
         {
@@ -45,7 +45,7 @@ public sealed class SettingsStore : ISettings
     public bool ConfirmBeforeRestart { get => GetBool("confirmBeforeRestart", true); set => Set("confirmBeforeRestart", JsonValue.Bool(value)); }
     public bool ConfirmBeforeQuit { get => GetBool("confirmBeforeQuit", true); set => Set("confirmBeforeQuit", JsonValue.Bool(value)); }
     public bool AclSweepDone { get => GetBool("aclSweepDone", false); set => Set("aclSweepDone", JsonValue.Bool(value)); }
-    public bool AutoUpdate { get => GetBool("autoUpdate", true); set => Set("autoUpdate", JsonValue.Bool(value)); }
+    public bool AutoUpdate { get => GetBool("autoUpdate", false); set => Set("autoUpdate", JsonValue.Bool(value)); }
     public bool TrayTipShown { get => GetBool("trayTipShown", false); set => Set("trayTipShown", JsonValue.Bool(value)); }
 
     public string? LastSaveError { get; private set; }

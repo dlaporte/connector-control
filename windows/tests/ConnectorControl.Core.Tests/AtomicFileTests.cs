@@ -100,6 +100,30 @@ public class AtomicFileTests : IDisposable
         Assert.False(OwnerOnlyAcl.IsOwnerOnly(dir.Path), "a directory that already existed is left as it was");
     }
 
+    /// <summary>A config symlinked into a dotfiles repo is written through: the link survives, the real file gets the bytes.</summary>
+    [Fact]
+    public void WritesThroughASymlinkedTarget()
+    {
+        var real = dir.File("real.json");
+        File.WriteAllText(real, "{}");
+        var link = dir.File("link.json");
+        try
+        {
+            File.CreateSymbolicLink(link, real);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            // Creating a symlink on Windows needs Developer Mode or elevation; a CI agent
+            // without either cannot exercise this, so there is nothing to assert.
+            Assert.Skip("symlink creation is not permitted in this environment");
+            return;
+        }
+        AtomicFile.Write(Encoding.UTF8.GetBytes("through"), link);
+        Assert.NotNull(new FileInfo(link).LinkTarget);   // the link itself survives, not replaced by a plain file
+        Assert.Equal("through", File.ReadAllText(real));
+        Assert.Equal("through", File.ReadAllText(link));
+    }
+
     [Fact]
     public void SaveStoreReportsTheOutcome()
     {

@@ -15,6 +15,11 @@ public sealed class ClaudeProcess : IClaudeProcess
     public const string MainWindowTitle = "Claude";
     public const string DidNotQuitMessage = "Claude didn’t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again.";
     public const string NotInstalledMessage = "Claude Desktop was not found on this PC.";
+    /// <summary>
+    /// The reason a settings.json AUMID is refused. Phrased for the user who typed it: the fix is the
+    /// Settings ▸ Claude picker, not the file.
+    /// </summary>
+    public const string NotAClaudePackageSuffix = " is not a Claude Desktop package. " + ClaudePublisher.ChooseClaude;
 
     private static readonly int? CurrentSessionId = CurrentSession();
     private static readonly TimeSpan DefaultQuitTimeout = TimeSpan.FromSeconds(15);
@@ -51,7 +56,13 @@ public sealed class ClaudeProcess : IClaudeProcess
     /// Earliest start time across Claude's processes (Electron spawns several
     /// within a couple of seconds), in UTC, or null when Claude is not running.
     /// </summary>
-    public DateTime? LaunchTime => WithProcesses(CurrentInstall(), processes =>
+    public DateTime? LaunchTime => WithProcesses(CurrentInstall(), EarliestStart);
+
+    /// <summary><see cref="IsRunning"/> and <see cref="LaunchTime"/> from one process enumeration instead of two.</summary>
+    public ClaudeProcessSnapshot Snapshot() =>
+        WithProcesses(CurrentInstall(), processes => new ClaudeProcessSnapshot(processes.Length > 0, EarliestStart(processes)));
+
+    private static DateTime? EarliestStart(Process[] processes)
     {
         DateTime? earliest = null;
         foreach (var process in processes)
@@ -72,7 +83,7 @@ public sealed class ClaudeProcess : IClaudeProcess
             }
         }
         return earliest;
-    });
+    }
 
     /// <summary>
     /// The install, resolved on first use and then cached. Detect() walks every
@@ -126,7 +137,7 @@ public sealed class ClaudeProcess : IClaudeProcess
         }
         if (!aumid && !File.Exists(target))
         {
-            return $"Claude was not found at {target}.";
+            return $"Claude Desktop was not found at {target}.";
         }
         if (!aumid)
         {
@@ -152,12 +163,6 @@ public sealed class ClaudeProcess : IClaudeProcess
 
     /// <summary>An app user model id looks like <c>Family_hash!App</c>; an exe path is rooted.</summary>
     internal static bool IsAumid(string target) => target.Contains('!') && !Path.IsPathRooted(target);
-
-    /// <summary>
-    /// The reason a settings.json AUMID is refused. Phrased for the user who typed it: the fix is the
-    /// Settings ▸ Claude picker, not the file.
-    /// </summary>
-    public const string NotAClaudePackageSuffix = " is not a Claude Desktop package. Choose Claude Desktop under Settings ▸ Claude.";
 
     private bool QuitAndWait(ClaudeInstallInfo info, CancellationToken cancellationToken)
     {

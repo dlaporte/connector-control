@@ -134,6 +134,31 @@ public class BackupManagerTests : IDisposable
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.Combine(manager.BackupsDir, "claude_desktop_config.original.json")));
     }
 
+    /// <summary>A config symlinked into a dotfiles repo: the backup must be a snapshot of the bytes,
+    /// not a copy of the link (which would read the live file forever, so no restore could ever go back).</summary>
+    [Fact]
+    public void BackupOfASymlinkedSourceIsARealSnapshot()
+    {
+        var real = dir.File(Path.Combine("dotfiles", "claude.json"));
+        Directory.CreateDirectory(Path.GetDirectoryName(real)!);
+        File.WriteAllText(real, "v1");
+        var link = dir.File("linked_config.json");
+        try
+        {
+            File.CreateSymbolicLink(link, real);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            Assert.Skip("symlink creation is not permitted in this environment");
+            return;
+        }
+        var made = manager.BackUp(link, Series);
+        Assert.NotNull(made);
+        Assert.Null(new FileInfo(made!).LinkTarget);   // the backup is a regular file, not a link
+        File.WriteAllText(real, "v2");
+        Assert.Equal("v1", File.ReadAllText(made!));   // the snapshot does not follow the live file
+    }
+
     [Fact]
     public void SeriesAreIndependent()
     {

@@ -35,8 +35,6 @@ public partial class EditorWindow : Window
 
     public EditorModel Model { get; }
 
-    public string TargetId => Model.Target.Id;
-
     /// <summary>
     /// Task 7 review: EditorModel.IsFormView/IsJsonView can refuse a switch (e.g. invalid JSON)
     /// by raising PropertyChanged for IsFormView/IsJsonView synchronously, from inside their own

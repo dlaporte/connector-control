@@ -37,6 +37,45 @@ public class SettingsWindowTests
         });
     }
 
+    /// <summary>The Claude tab's icon (a package walk plus an icon extraction) must not run
+    /// inside the constructor, or opening Settings would stall on it every time.</summary>
+    [Fact]
+    public void TheClaudeTabIconIsLoadedOffTheUiThreadAfterConstruction()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var install = new FakeClaudeInstall();
+        var services = new AppServices(h.Settings, install, h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            var window = new SettingsWindow(state, services, updates);
+            var afterConstruction = install.DetectCalls;
+            // The deferred load's Task.Run hop means one Background-priority pump only starts it;
+            // pump repeatedly (a nested message loop, not a blocking wait, so its own continuation
+            // can still reach the dispatcher) until the async work actually completes.
+            Assert.True(PumpUntil(window.Dispatcher, () => install.DetectCalls > afterConstruction, TimeSpan.FromSeconds(5)),
+                "the icon's Detect()+Load() must be deferred, not run inside the constructor");
+            window.Close();
+        });
+    }
+
+    private static bool PumpUntil(Dispatcher dispatcher, Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!condition())
+        {
+            if (DateTime.UtcNow >= deadline)
+            {
+                return false;
+            }
+            var frame = new DispatcherFrame();
+            dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => frame.Continue = false));
+            Dispatcher.PushFrame(frame);
+        }
+        return true;
+    }
+
     [Fact]
     public void RestoreDialogListsBackupsWithTheOriginalLast()
     {

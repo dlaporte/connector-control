@@ -105,7 +105,7 @@ public sealed class VelopackUpdater : IUpdater
         return new UpdateCheck(target.Version.ToString(), target.NotesMarkdown, info);
     }
 
-    public async Task DownloadAsync(UpdateCheck update, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
+    public async Task DownloadAsync(UpdateCheck update, CancellationToken cancellationToken = default)
     {
         if (manager is null || update.Token is not UpdateInfo info)
         {
@@ -123,7 +123,7 @@ public sealed class VelopackUpdater : IUpdater
             throw new UpdateVerificationException(installedProblem);
         }
         var knownGoodUpdater = location.UpdateExePath is { } updateExe && File.Exists(updateExe) ? File.ReadAllBytes(updateExe) : null;
-        await manager.DownloadUpdatesAsync(info, percent => progress?.Report(percent), cancellationToken).ConfigureAwait(false);
+        await manager.DownloadUpdatesAsync(info, cancelToken: cancellationToken).ConfigureAwait(false);
         VerifyDownloaded(info, knownGoodUpdater, identity);
     }
 

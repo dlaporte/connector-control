@@ -66,7 +66,7 @@ public class SettingsModelTests
         rig.Model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
         rig.Model.LaunchAtStartup = true;
         Assert.False(rig.Model.LaunchAtStartup);
-        Assert.Equal("Couldn't update login item: Access is denied.", rig.Model.LoginItemNote);
+        Assert.Equal("Couldn't update startup entry: Access is denied.", rig.Model.LoginItemNote);
         Assert.True(rig.Model.HasLoginItemNote);
         Assert.Contains(nameof(SettingsModel.HasLoginItemNote), raised);
         rig.Autostart.FailWith = null;
@@ -153,6 +153,7 @@ public class SettingsModelTests
     {
         using var rig = new Rig();
         rig.Install.Info = new ClaudeInstallInfo(kind, null, kind == ClaudeInstallKind.NotFound ? null : "target", "claude");
+        rig.Model.Refresh();   // the install is cached; a window re-open is what re-reads it
         Assert.Equal(expected, rig.Model.InstallKindText);
     }
 
@@ -169,6 +170,7 @@ public class SettingsModelTests
         rig.Model.UseDefaultLaunchTarget();
         Assert.Null(rig.H.Settings.ClaudeLaunchTarget);
         rig.Install.Info = ClaudeInstallInfo.NotFound;
+        rig.Model.Refresh();   // the install is cached; a window re-open is what re-reads it
         Assert.Equal("Not found", rig.Model.LaunchTargetText);
     }
 
@@ -204,6 +206,7 @@ public class SettingsModelTests
         Assert.Equal("Show in Explorer", SettingsModel.ShowInExplorerTitle);
         Assert.Equal("Restore…", SettingsModel.RestoreTitle);
         Assert.Equal("Claude App", SettingsModel.ClaudeAppHeader);
+        Assert.Equal("Couldn't update startup entry: Access is denied.", SettingsModel.StartupEntryFailureNote("Access is denied."));
     }
 
     [Fact]

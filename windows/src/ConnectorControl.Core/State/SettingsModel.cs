@@ -42,7 +42,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     private readonly UpdateCoordinator updates;
     private bool launchAtStartup;
     private string? loginItemNote;
-    private readonly PropertyChangedEventHandler onStateChanged;
+    private ClaudeInstallInfo installInfo;
 
     public SettingsModel(AppState state, ISettings settings, IAutostart autostart, IClaudeInstall install, IUpdater updater, UpdateCoordinator updates)
     {
@@ -53,14 +53,15 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         this.updater = updater;
         this.updates = updates;
         launchAtStartup = autostart.IsEnabled;
-        onStateChanged = OnStateChanged;
-        state.PropertyChanged += onStateChanged;
+        installInfo = install.Detect();
+        state.PropertyChanged += OnStateChanged;
     }
 
-    /// <summary>Called whenever the window opens: autostart is read fresh (the user may have changed it in Windows Settings).</summary>
+    /// <summary>Called whenever the window opens: autostart and the install are read fresh (the user may have changed either since).</summary>
     public void Refresh()
     {
         launchAtStartup = autostart.IsEnabled;
+        installInfo = install.Detect();
         RaiseAll();
     }
 
@@ -90,10 +91,13 @@ public sealed class SettingsModel : ObservableObject, IDisposable
             {
                 launchAtStartup = actual;
                 Raise(nameof(LaunchAtStartup));
-                LoginItemNote = $"Couldn't update login item: {ex.Message}";
+                LoginItemNote = StartupEntryFailureNote(ex.Message);
             }
         }
     }
+
+    /// <summary>Windows has no "login item" concept; this names the Settings ▸ Apps ▸ Startup entry instead.</summary>
+    public static string StartupEntryFailureNote(string message) => $"Couldn't update startup entry: {message}";
 
     public string? LoginItemNote
     {
@@ -186,7 +190,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
 
     // MARK: Claude (catalog §4.4, spec §7.3)
 
-    public string InstallKindText => install.Detect().Kind switch
+    public string InstallKindText => installInfo.Kind switch
     {
         ClaudeInstallKind.Msix => "MSIX package",
         ClaudeInstallKind.Legacy => "Legacy installer",
@@ -210,7 +214,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     }
 
     public string LaunchTargetText =>
-        settings.ClaudeLaunchTarget is { Length: > 0 } overridden ? overridden : install.Detect().LaunchTarget ?? NotFoundText;
+        settings.ClaudeLaunchTarget is { Length: > 0 } overridden ? overridden : installInfo.LaunchTarget ?? NotFoundText;
 
     public bool CanUseDefaultLaunchTarget => !string.IsNullOrEmpty(settings.ClaudeLaunchTarget);
 
@@ -236,11 +240,11 @@ public sealed class SettingsModel : ObservableObject, IDisposable
 
     private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(AppState.ToolStatuses) or null or "")
+        if (Affects(e, nameof(AppState.ToolStatuses)))
         {
             Raise(nameof(ToolRows));
         }
     }
 
-    public void Dispose() => state.PropertyChanged -= onStateChanged;
+    public void Dispose() => state.PropertyChanged -= OnStateChanged;
 }

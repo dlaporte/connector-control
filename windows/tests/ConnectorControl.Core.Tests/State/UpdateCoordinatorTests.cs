@@ -48,6 +48,7 @@ public class UpdateCoordinatorTests
     [Fact]
     public async Task AutoUpdateDownloadsStagesForQuitAndToastsOncePerVersion()
     {
+        settings.AutoUpdate = true;
         updater.Next = Update();
         using var coordinator = Coordinator();
         Assert.Equal(UpdateOutcome.StagedForQuit, await coordinator.CheckAsync(interactive: false));
@@ -69,6 +70,7 @@ public class UpdateCoordinatorTests
     [Fact]
     public async Task TheSamePendingUpdateIsStagedOnlyOnce()
     {
+        settings.AutoUpdate = true;
         updater.Next = Update();
         using var coordinator = Coordinator();
         await coordinator.CheckAsync(interactive: false);
@@ -159,6 +161,7 @@ public class UpdateCoordinatorTests
     [InlineData(false, 0)]
     public async Task ADownloadFailureIsHandledAndNothingIsStaged(bool interactive, int informs)
     {
+        settings.AutoUpdate = true;   // the interactive:false case exercises the silent auto-update download path
         updater.Next = Update();
         updater.DownloadFailure = new HttpRequestException("connection reset");
         dialogs.NextOffer = true;
@@ -174,6 +177,7 @@ public class UpdateCoordinatorTests
     [Fact]
     public async Task StateWritesOnlyHappenWhenTheMarshalQueueIsPumped()
     {
+        settings.AutoUpdate = true;
         var ui = new MarshalQueue();
         var host = new AppHost(ui.Post, delays.Add, () => DateTime.UtcNow);
         updater.Next = Update();
@@ -201,6 +205,7 @@ public class UpdateCoordinatorTests
     [Fact]
     public async Task TheInFlightCheckIsClearedOnTheUiThreadBeforeItsOutcomeIsPublished()
     {
+        settings.AutoUpdate = true;
         var ui = new MarshalQueue();
         var posted = 0;
         var host = new AppHost(a => { Interlocked.Increment(ref posted); ui.Post(a); }, delays.Add, () => DateTime.UtcNow);
@@ -246,6 +251,7 @@ public class UpdateCoordinatorTests
     [Fact]
     public async Task OverlappingChecksShareTheSameInFlightCheckInsteadOfHittingTheFeedTwice()
     {
+        settings.AutoUpdate = true;
         updater.Next = Update();
         updater.CheckGate = new TaskCompletionSource<bool>();
         using var coordinator = Coordinator();
@@ -276,6 +282,7 @@ public class UpdateCoordinatorTests
     [Fact]
     public async Task ADownloadFailureAfterAVersionIsAlreadyStagedLeavesTheOlderVersionInPlace()
     {
+        settings.AutoUpdate = true;
         updater.Next = Update();
         using var coordinator = Coordinator();
         Assert.Equal(UpdateOutcome.StagedForQuit, await coordinator.CheckAsync(interactive: false));
@@ -316,6 +323,7 @@ public class UpdateCoordinatorTests
     public async Task ARefusedUpdateIsAnnouncedOncePerVersionAndNeverStaged()
     {
         // A package that fails authenticity verification is the one failure a background check must not keep quiet about.
+        settings.AutoUpdate = true;
         updater.Next = Update();
         updater.DownloadFailure = new UpdateVerificationException("ConnectorControl.exe inside the update is not signed by this app's publisher; the update was not installed.");
         using var coordinator = Coordinator();

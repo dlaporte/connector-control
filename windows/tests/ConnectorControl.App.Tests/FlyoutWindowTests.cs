@@ -34,7 +34,7 @@ public class FlyoutWindowTests
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
-            using var model = new FlyoutModel(state);
+            using var model = new FlyoutModel(state, h.Settings);
             var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates));
             Layout(window);
             Assert.Equal(3, window.RowList.Items.Count);
@@ -60,7 +60,7 @@ public class FlyoutWindowTests
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
-            using var model = new FlyoutModel(state);
+            using var model = new FlyoutModel(state, h.Settings);
             var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates));
             Layout(window);
             Assert.Equal(Visibility.Visible, window.FooterPanel.Visibility);
@@ -78,7 +78,7 @@ public class FlyoutWindowTests
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
-            using var model = new FlyoutModel(state);
+            using var model = new FlyoutModel(state, h.Settings);
             var registry = new WindowRegistry(state, services, updates);
 
             var plain = new FlyoutWindow(model, registry) { TrayAnchor = () => null };
@@ -115,7 +115,7 @@ public class FlyoutWindowTests
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
-            using var model = new FlyoutModel(state);
+            using var model = new FlyoutModel(state, h.Settings);
             var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates)) { TrayAnchor = () => null };
             window.Show();
             var menu = window.OpenProfileMenu();
@@ -170,7 +170,7 @@ public class FlyoutWindowTests
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
-            using var model = new FlyoutModel(state);
+            using var model = new FlyoutModel(state, h.Settings);
             var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates)) { TrayAnchor = () => null };
             window.Show();   // an ItemsControl generates no containers until the window has a real layout pass
             Layout(window);

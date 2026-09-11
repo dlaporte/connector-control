@@ -4,7 +4,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
-using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.Core.State;
 using H.NotifyIcon.Core;
@@ -22,6 +21,9 @@ public partial class FlyoutWindow : Window
 {
     /// <summary>Clicking the tray icon deactivates (hides) an open flyout before the click arrives; ignore that click so it toggles instead of reopening.</summary>
     public static readonly TimeSpan ReopenGuard = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>Where the window sits before <see cref="ShowFlyout"/> repositions it, so SizeToContent settles unseen.</summary>
+    public const double OffScreen = -10000;
 
     private readonly FlyoutModel model;
     private readonly WindowRegistry windows;

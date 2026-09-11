@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using ConnectorControl.Core.Services;
 
 namespace ConnectorControl.Core.State;
 
@@ -15,19 +16,31 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public const string RestartTitle = "Restart Required";
     public const string NewProfileTitle = "New Profile…";
     /// <summary>Segoe Fluent Icons: Warning (exclamationmark.arrow.circlepath's nearest) and Refresh (arrow.clockwise).</summary>
-    public const string RetryGlyph = "";
-    public const string RestartGlyph = "";
+    public const string RetryGlyph = "\ue7ba";
+    public const string RestartGlyph = "\ue72c";
     /// <summary>Segoe Fluent Icons: Warning, on a row whose launcher is missing. The same code point the retry footer uses, named separately so changing one does not move the other.</summary>
     public const string ToolWarningGlyph = "\ue7ba";
     /// <summary>Shown in the error banner when nothing worse is: the store's folder refused the owner-only permission.</summary>
     public const string StoreNotPrivateCaution = "The master list could not be made private: its folder refused the permission change, so connector secrets in it are readable by anyone who can read that folder.";
 
+    public static string SettingsNotSavedCaution(string detail) => $"Settings could not be saved ({detail}); changes apply until the app quits.";
+
+    /// <summary>Property names Rebuild actually depends on — everything else AppState raises is noise for this view.</summary>
+    private static readonly string[] RelevantProperties =
+    [
+        nameof(AppState.Store), nameof(AppState.ToolStatuses), nameof(AppState.LastError),
+        nameof(AppState.StoreNotPrivate), nameof(AppState.ApplyRetryNeeded), nameof(AppState.NeedsClaudeRestart),
+    ];
+
     private readonly AppState state;
+    private readonly ISettings settings;
+    private readonly Dictionary<string, ConnectorRow> rowsByName = new(StringComparer.Ordinal);
     private IReadOnlyList<ProfileMenuItem> profileItems = [];
 
-    public FlyoutModel(AppState state)
+    public FlyoutModel(AppState state, ISettings settings)
     {
         this.state = state;
+        this.settings = settings;
         Rows = [];
         state.PropertyChanged += OnStateChanged;
         Rebuild();
@@ -43,9 +56,11 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public string DeleteProfileTitle => $"Delete “{state.ActiveProfile}”…";
 
-    public bool CanDeleteProfile => state.ProfileNames.Count >= 2;
+    public bool CanDeleteProfile => state.Store.Profiles.Count >= 2;
 
-    public string? ErrorMessage => state.LastError ?? (state.StoreNotPrivate ? StoreNotPrivateCaution : null);
+    public string? ErrorMessage => state.LastError
+        ?? (state.StoreNotPrivate ? StoreNotPrivateCaution : null)
+        ?? (settings.LastSaveError is { } e ? SettingsNotSavedCaution(e) : null);
 
     public bool HasError => ErrorMessage is not null;
 
@@ -126,7 +141,13 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     /// <summary>The pencil button opens the editor only if the entry still exists in the store (catalog §2.4).</summary>
     public McpEntry? EntryFor(string name) => state.Store.Mcps.TryGetValue(name, out var entry) ? entry : null;
 
-    private void OnStateChanged(object? sender, PropertyChangedEventArgs e) => Rebuild();
+    private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (RelevantProperties.Any(name => Affects(e, name)))
+        {
+            Rebuild();
+        }
+    }
 
     /// <summary>Diffs Rows against the store so an in-flight toggle keeps its row object.</summary>
     private void Rebuild()
@@ -136,6 +157,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
         {
             if (!state.Store.Mcps.ContainsKey(Rows[i].Name))
             {
+                rowsByName.Remove(Rows[i].Name);
                 Rows.RemoveAt(i);
             }
         }
@@ -149,19 +171,17 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
             {
                 Rows[i].Sync(enabled, warning);
             }
+            else if (rowsByName.TryGetValue(name, out var existing))
+            {
+                Rows.Remove(existing);
+                existing.Sync(enabled, warning);
+                Rows.Insert(i, existing);
+            }
             else
             {
-                var existing = Rows.FirstOrDefault(r => r.Name == name);
-                if (existing is not null)
-                {
-                    Rows.Remove(existing);
-                    existing.Sync(enabled, warning);
-                    Rows.Insert(i, existing);
-                }
-                else
-                {
-                    Rows.Insert(i, new ConnectorRow(state, name, enabled, warning));
-                }
+                var row = new ConnectorRow(state, name, enabled, warning);
+                rowsByName[name] = row;
+                Rows.Insert(i, row);
             }
         }
         var active = state.ActiveProfile;

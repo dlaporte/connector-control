@@ -301,6 +301,18 @@ public class AppStateTests
         Assert.EndsWith(" Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore… to repair the file.", state.LastError, StringComparison.Ordinal);
     }
 
+    /// <summary>Reload's own catch used to filter by exception type, so a throw from
+    /// RefreshRestartState's IClaudeProcess read (not one of the filtered types) escaped uncaught.</summary>
+    [Fact]
+    public void AnUnexpectedExceptionInReloadBecomesABanner()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Claude.ThrowFromStateReads = new InvalidOperationException("boom");
+        state.Reload();
+        Assert.Equal("boom", state.LastError);
+    }
+
     [Fact]
     public void ReloadOverwritesLastError()
     {

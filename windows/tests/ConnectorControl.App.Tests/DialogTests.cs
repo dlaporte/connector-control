@@ -147,14 +147,14 @@ public class DialogTests
             // The flyout hides itself the moment something takes the focus, which is exactly what
             // showing a modal does — so Quit / Restart Required / the profile prompts must never
             // be owned by it, however visible and active it is when they are raised.
-            using var model = new FlyoutModel(state);
+            using var model = new FlyoutModel(state, h.Settings);
             var flyout = new FlyoutWindow(model, new WindowRegistry(state, services, updates)) { TrayAnchor = () => null };
             flyout.Show();
             flyout.Activate();
             Assert.True(flyout.IsVisible);
             Assert.Null(dialogs.ResolveOwner());
 
-            var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
+            var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = FlyoutWindow.OffScreen, Top = FlyoutWindow.OffScreen };
             window.Show();
             window.Activate();
             // Settings ▸ Check for Updates… reaches the coordinator's ownerless WpfDialogs;

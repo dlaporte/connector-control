@@ -98,6 +98,19 @@ public class EditorModelTests
         Assert.Equal("{\n  \"disabled\" : false,\n  \"type\" : \"stdio\"\n}", editor.AdditionalPreview);
     }
 
+    /// <summary>AdditionalPreview uses editor-text formatting (no slash escaping), like every other
+    /// text this app shows for editing — the plain serializer escapes slashes and made URLs unreadable.</summary>
+    [Fact]
+    public void AdditionalPreviewDoesNotEscapeSlashes()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var config = Local("node", ["x.js"], null, [("url", JsonValue.String("https://example.com/mcp"))]);
+        var editor = Editor(h, state, EditTarget.Existing("local", new McpEntry(config)));
+        Assert.Contains("https://example.com/mcp", editor.AdditionalPreview, StringComparison.Ordinal);
+        Assert.DoesNotContain("\\/", editor.AdditionalPreview, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void SwitchingANewTargetToLocalResetsTheBridgeInvocation()
     {
@@ -194,6 +207,29 @@ public class EditorModelTests
         Assert.False(editor.IsRemote);
         Assert.Equal("npx", editor.Command);
         Assert.Equal(["-y", "mcp-remote", Url], editor.Args.Select(a => a.Value).ToArray());
+    }
+
+    /// <summary>Adopting a config with a different auth kind must clear the previous kind's
+    /// fields — otherwise a bearer token typed earlier stays readable behind Header auth.</summary>
+    [Fact]
+    public void AdoptingAHeaderConfigClearsTheOldBearerToken()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var editor = Editor(h, state, EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        editor.RemoteUrl = Url;
+        editor.AuthKindIndex = EditorModel.AuthKinds.ToList().IndexOf(RemoteAuthKind.Bearer);
+        editor.BearerToken = "tok";
+        Assert.Equal(RemoteAuthKind.Bearer, editor.AuthKind);
+
+        editor.RequestView(EditView.Json);
+        var headerConfig = RemotePattern.Encode(new RemoteConfig(Url, new RemoteAuth.Header("X-API-Key", "v"), RemoteLaunchStyle.CmdNpx));
+        editor.JsonText = headerConfig.EditorText();
+        editor.RequestView(EditView.Form);
+
+        Assert.Equal(RemoteAuthKind.Header, editor.AuthKind);
+        Assert.Equal("X-API-Key", editor.HeaderName);
+        Assert.Equal("", editor.BearerToken);
     }
 
     [Fact]

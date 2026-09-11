@@ -25,9 +25,22 @@ public static class TrayIconRenderer
     private const int IconDirSize = 6;
     private const int IconDirEntrySize = 16;
 
+    // Parsed once: the path data never changes, and every icon render (a theme flip, a state
+    // tick) used to re-parse the mini-language string from scratch. Frozen so the same instance
+    // is safe to draw from whichever thread renders (StaRunner spins up a fresh one per test).
+    private static readonly Geometry PlugGeometry = Frozen(PlugPathData);
+    private static readonly Geometry WarningGeometry = Frozen(WarningPathData);
+
+    private static Geometry Frozen(string pathData)
+    {
+        var geometry = Geometry.Parse(pathData);
+        geometry.Freeze();
+        return geometry;
+    }
+
     public static BitmapSource Render(TrayGlyph glyph, bool lightTaskbar, int pixelSize)
     {
-        var geometry = Geometry.Parse(glyph == TrayGlyph.Plug ? PlugPathData : WarningPathData);
+        var geometry = glyph == TrayGlyph.Plug ? PlugGeometry : WarningGeometry;
         var brush = lightTaskbar ? Brushes.Black : Brushes.White;
         var visual = new DrawingVisual();
         using (var context = visual.RenderOpen())

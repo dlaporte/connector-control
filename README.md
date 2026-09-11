@@ -125,11 +125,11 @@ then **Run anyway**. The warning goes away as the signature earns reputation.
    takes the permanent snapshot of the original config.
 
 Left-click the tray icon for the connector list; right-click it for
-**Settings…** and **Quit**. Updates are automatic: the app checks GitHub for
-new releases, downloads them in the background, and offers **Install and
-Relaunch** (Settings ▸ General ▸ Updates has the switch and a **Check for
-Updates…** button). Turn on **Launch at startup** there to have it always
-available.
+**Settings…** and **Quit**. Updates are offered, not installed silently: the
+app checks GitHub for new releases and shows **Install and Relaunch** when
+one is available (Settings ▸ General ▸ Updates has a switch to download and
+install them automatically, and a **Check for Updates…** button). Turn on
+**Launch at startup** there to have it always available.
 
 #### Uninstalling
 

@@ -30,7 +30,7 @@ public class ClaudeProcessTests
     {
         var exe = Path.Combine(Path.GetTempPath(), "cc-missing", "claude.exe");
         var p = new ClaudeProcess(() => Legacy(exe), () => null);
-        Assert.Equal($"Claude was not found at {exe}.", await p.RestartAsync(TestContext.Current.CancellationToken));
+        Assert.Equal($"Claude Desktop was not found at {exe}.", await p.RestartAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public class ClaudeProcessTests
         var detected = Path.Combine(Path.GetTempPath(), "cc-missing", "detected.exe");
         var overridden = Path.Combine(Path.GetTempPath(), "cc-missing", "override.exe");
         var p = new ClaudeProcess(() => Legacy(detected), () => overridden);
-        Assert.Equal($"Claude was not found at {overridden}.", await p.RestartAsync(TestContext.Current.CancellationToken));
+        Assert.Equal($"Claude Desktop was not found at {overridden}.", await p.RestartAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class ClaudeProcessTests
     {
         var detected = Path.Combine(Path.GetTempPath(), "cc-missing", "detected.exe");
         var p = new ClaudeProcess(() => Legacy(detected), () => "");
-        Assert.Equal($"Claude was not found at {detected}.", await p.RestartAsync(TestContext.Current.CancellationToken));
+        Assert.Equal($"Claude Desktop was not found at {detected}.", await p.RestartAsync(TestContext.Current.CancellationToken));
     }
 
     [Theory]

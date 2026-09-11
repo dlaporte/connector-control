@@ -22,7 +22,4 @@ public interface ISettings
     /// successful save clears it back to null.
     /// </summary>
     string? LastSaveError { get; }
-
-    /// <summary>Re-read the file (external edits).</summary>
-    void Reload();
 }

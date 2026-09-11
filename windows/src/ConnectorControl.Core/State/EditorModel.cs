@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Text;
 
 namespace ConnectorControl.Core.State;
 
@@ -80,7 +79,6 @@ public sealed class EditorModel : ObservableObject, IDisposable
     private string jsonText;
     private string? jsonError;
     private string? validationError;
-    private readonly PropertyChangedEventHandler onStateChanged;
     private Tool? requiredTool;
     private bool suppressToolEvaluation;
 
@@ -108,8 +106,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         }
         // Spec 2026-09-05-tool-probe §3.4: on open, a cached status shows its note at once; an
         // unknown one is probed now. Later changes go through EvaluateRequiredTool.
-        onStateChanged = OnStateChanged;
-        state.PropertyChanged += onStateChanged;
+        state.PropertyChanged += OnStateChanged;
         Args.CollectionChanged += OnArgsChanged;
         requiredTool = ComputeRequiredTool();
         if (requiredTool is { } initial && !state.ToolStatuses.ContainsKey(initial))
@@ -326,7 +323,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public string AdditionalTitle =>
         $"{additional.Count} field(s) not editable here: {string.Join(", ", additional.Keys.Order(StringComparer.Ordinal))} — switch to JSON to edit";
 
-    public string AdditionalPreview => Encoding.UTF8.GetString(JsonValue.Object(additional).Serialize());
+    public string AdditionalPreview => JsonValue.Object(additional).EditorText();
 
     public string JsonText
     {
@@ -428,7 +425,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(AppState.ToolStatuses) or null or "")
+        if (Affects(e, nameof(AppState.ToolStatuses)))
         {
             Raise(nameof(ToolNote));
             Raise(nameof(HasToolNote));
@@ -438,7 +435,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// <summary>Stops listening to AppState; the window calls this from Closed.</summary>
     public void Dispose()
     {
-        state.PropertyChanged -= onStateChanged;
+        state.PropertyChanged -= OnStateChanged;
         Args.CollectionChanged -= OnArgsChanged;
     }
 
@@ -549,16 +546,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
             }
             else
             {
-                AuthKind = RemoteAuthKind.Automatic;
-                BearerToken = "";
-                HeaderName = "";
-                HeaderValue = "";
-                OAuthClientId = "";
-                OAuthClientSecret = "";
-                OAuthScopes = "";
-                remoteExtraArgs = [];
-                remotePassthroughEnv = new Dictionary<string, string>(StringComparer.Ordinal);
-                remotePackage = RemotePattern.DefaultPackage;
+                ResetRemoteFields();
             }
         }
         finally
@@ -569,8 +557,28 @@ public sealed class EditorModel : ObservableObject, IDisposable
         RaiseAll();
     }
 
+    /// <summary>
+    /// The blank slate every remote field starts from. Called before adopting a decoded config
+    /// too: without it, switching from one auth kind to another left the old kind's fields — a
+    /// bearer token, say — populated behind an auth kind that no longer shows them.
+    /// </summary>
+    private void ResetRemoteFields()
+    {
+        AuthKind = RemoteAuthKind.Automatic;
+        BearerToken = "";
+        HeaderName = "";
+        HeaderValue = "";
+        OAuthClientId = "";
+        OAuthClientSecret = "";
+        OAuthScopes = "";
+        remoteExtraArgs = [];
+        remotePassthroughEnv = new Dictionary<string, string>(StringComparer.Ordinal);
+        remotePackage = RemotePattern.DefaultPackage;
+    }
+
     private void ApplyRemoteFields(RemoteConfig remote)
     {
+        ResetRemoteFields();
         switch (remote.Auth)
         {
             case RemoteAuth.Bearer bearer:

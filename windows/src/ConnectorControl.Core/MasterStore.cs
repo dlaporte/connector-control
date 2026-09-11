@@ -9,15 +9,30 @@ public sealed class MasterStore : IEquatable<MasterStore>
 {
     public const long CurrentVersion = 2;
 
-    public long Version { get; set; }
+    public long Version { get; }
     public string ActiveProfile { get; set; }
     public Dictionary<string, Profile> Profiles { get; }
 
     public MasterStore(long version, string activeProfile, IEnumerable<KeyValuePair<string, Profile>> profiles)
     {
         Version = version;
-        ActiveProfile = activeProfile;
         Profiles = new Dictionary<string, Profile>(profiles, StringComparer.Ordinal);
+        // The Mcps getter must never create a profile as a side effect, so this constructor is
+        // the one place that guarantees Profiles[ActiveProfile] exists — the same fallback
+        // MasterStoreIO.Load applies when a decoded file names a profile it doesn't have.
+        if (Profiles.ContainsKey(activeProfile))
+        {
+            ActiveProfile = activeProfile;
+        }
+        else if (Profiles.Keys.Order(StringComparer.Ordinal).FirstOrDefault() is { } fallback)
+        {
+            ActiveProfile = fallback;
+        }
+        else
+        {
+            Profiles["Default"] = new Profile();
+            ActiveProfile = "Default";
+        }
     }
 
     /// <summary>Swift <c>MasterStore(version:mcps:)</c>: a single "Default" profile; always v2.</summary>
@@ -30,23 +45,21 @@ public sealed class MasterStore : IEquatable<MasterStore>
     public static MasterStore Empty() =>
         new(CurrentVersion, "Default", [new KeyValuePair<string, Profile>("Default", new Profile())]);
 
-    /// <summary>The active profile's connectors — the view the entire app operates on. Created on demand.</summary>
-    public Dictionary<string, McpEntry> Mcps
-    {
-        get
-        {
-            if (!Profiles.TryGetValue(ActiveProfile, out var profile))
-            {
-                profile = new Profile();
-                Profiles[ActiveProfile] = profile;
-            }
-            return profile.Mcps;
-        }
-    }
+    /// <summary>
+    /// The active profile's connectors — the view the entire app operates on. Side-effect free:
+    /// an active profile that somehow doesn't exist yet returns an empty, unstored dictionary
+    /// rather than creating one — the constructor is what normally guarantees
+    /// Profiles[ActiveProfile] exists.
+    /// </summary>
+    public Dictionary<string, McpEntry> Mcps =>
+        Profiles.TryGetValue(ActiveProfile, out var profile) ? profile.Mcps : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
 
     /// <summary>Claude's <c>mcpServers</c> section rendered from this store: the enabled subset's configs.</summary>
     public IReadOnlyDictionary<string, JsonValue> EnabledServers =>
         Mcps.Where(p => p.Value.Enabled).ToDictionary(p => p.Key, p => p.Value.Config, StringComparer.Ordinal);
+
+    /// <summary>How many connectors are enabled, without building the config dictionary <see cref="EnabledServers"/> does.</summary>
+    public int EnabledCount => Mcps.Count(p => p.Value.Enabled);
 
     /// <summary>null on success, else a user-facing error message.</summary>
     public string? AddProfile(string name, bool copyingCurrent)

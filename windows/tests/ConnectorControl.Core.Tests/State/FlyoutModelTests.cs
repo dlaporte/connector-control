@@ -10,7 +10,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
-        using var flyout = new FlyoutModel(state);
+        using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal("Connector Control", FlyoutModel.Title);
         Assert.Equal("No connectors configured", flyout.Subtitle);
         Assert.Equal("Default ▾", flyout.ProfileChipText);
@@ -27,7 +27,7 @@ public class FlyoutModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         state.Upsert("Zebra", new McpEntry(AppStateHarness.Remote("https://zebra.example/mcp")), null);
-        using var flyout = new FlyoutModel(state);
+        using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal(["Zebra", "aws-mcp", "scoutbook", "service-now"], flyout.Rows.Select(r => r.Name).ToArray());   // uppercase first: ordinal
         Assert.Equal("Edit “aws-mcp”", flyout.Rows[1].EditTooltip);
         Assert.All(flyout.Rows, r => Assert.True(r.Enabled));
@@ -38,7 +38,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        using var flyout = new FlyoutModel(state);
+        using var flyout = new FlyoutModel(state, h.Settings);
         var row = flyout.Rows.Single(r => r.Name == "aws-mcp");
         row.Enabled = false;
         Assert.False(h.StoreOnDisk().Mcps["aws-mcp"].Enabled);
@@ -52,7 +52,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        using var flyout = new FlyoutModel(state);
+        using var flyout = new FlyoutModel(state, h.Settings);
         var row = flyout.Rows.Single(r => r.Name == "aws-mcp");
         state.SetEnabled("aws-mcp", false);
         Assert.False(row.Enabled);
@@ -67,7 +67,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        using var flyout = new FlyoutModel(state);
+        using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal([new ProfileMenuItem("Default", true)], flyout.ProfileItems);
         Assert.Equal("New Profile…", FlyoutModel.NewProfileTitle);
         Assert.Equal("Rename “Default”…", flyout.RenameProfileTitle);
@@ -90,7 +90,7 @@ public class FlyoutModelTests
         h.Claude.IsRunning = true;
         h.Claude.LaunchTime = h.Now.AddHours(-1);
         using var state = h.Create();
-        using var flyout = new FlyoutModel(state);
+        using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal(FooterKind.None, flyout.Footer);
         Assert.False(flyout.ShowFooter);
 
@@ -119,7 +119,7 @@ public class FlyoutModelTests
         h.Claude.IsRunning = true;
         h.Claude.LaunchTime = h.Now.AddHours(-1);
         using var state = h.Create();
-        using var flyout = new FlyoutModel(state);
+        using var flyout = new FlyoutModel(state, h.Settings);
         state.SetEnabled("aws-mcp", false);
         flyout.FooterAction();
         await Task.Yield();
@@ -131,7 +131,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        using var flyout = new FlyoutModel(state);
+        using var flyout = new FlyoutModel(state, h.Settings);
         h.WriteClaudeServers(("scoutbook", state.Store.Mcps["scoutbook"].Config));
         flyout.Opened();
         Assert.Equal(["aws-mcp", "scoutbook", "service-now"], AppStateHarness.Keys(h.ClaudeServers().Keys));
@@ -143,7 +143,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        using var flyout = new FlyoutModel(state);
+        using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal(state.Store.Mcps["scoutbook"], flyout.EntryFor("scoutbook"));
         Assert.Null(flyout.EntryFor("gone"));
     }
@@ -154,7 +154,7 @@ public class FlyoutModelTests
         using var h = new AppStateHarness();
         h.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound;
         using var state = h.Create();
-        using var flyout = new FlyoutModel(state);
+        using var flyout = new FlyoutModel(state, h.Settings);
         Assert.All(flyout.Rows, r => Assert.False(r.HasToolWarning));   // nothing probed yet: no glyph
         Assert.All(flyout.Rows, r => Assert.Null(r.ToolWarning));
 
@@ -184,7 +184,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        using var flyout = new FlyoutModel(state);
+        using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal(0, h.Tools.Batches);   // building the model probes nothing
 
         flyout.Opened();
@@ -203,7 +203,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
-        using var flyout = new FlyoutModel(state);
+        using var flyout = new FlyoutModel(state, h.Settings);
         flyout.Opened();   // an empty catalog
         Assert.Equal(0, h.Tools.Batches);
 
@@ -222,7 +222,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        using var flyout = new FlyoutModel(state);
+        using var flyout = new FlyoutModel(state, h.Settings);
         Assert.False(flyout.HasError);
         state.StoreNotPrivate = true;
         Assert.True(flyout.HasError);

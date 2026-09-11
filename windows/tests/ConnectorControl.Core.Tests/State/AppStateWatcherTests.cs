@@ -160,6 +160,26 @@ public class AppStateWatcherTests
         Assert.True(h.Ui.PumpUntil(() => !state.Store.Mcps["aws-mcp"].Enabled, Wait));   // the new location is watched
     }
 
+    /// <summary>A seed write that fails must not switch the store to a location with no
+    /// mcps.json — Reload would read that as empty and quietly wipe the connector list.</summary>
+    [Fact]
+    public void ARepointWhoseSeedCannotBeWrittenKeepsTheOldStore()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var before = state.Store.Clone();
+        var blocked = h.Dir.File("blocked");
+        File.WriteAllText(blocked, "not a directory");
+        var target = Path.Combine(blocked, "synced");   // "blocked" is a file: CreateDirectoryProtected throws IOException
+
+        state.RepointStore(target);
+
+        Assert.Null(h.Settings.MasterStoreDir);                    // reverted to the default
+        Assert.Equal(h.StoreDir, state.Service.Paths.StoreDir);    // Service was never rebuilt
+        Assert.Equal(before, state.Store);                          // nothing adopted from the failed location
+        Assert.NotNull(state.LastError);
+    }
+
     [Fact]
     public void RepointStoreAdoptsAnExistingStoreQuietly()
     {

@@ -13,11 +13,8 @@ public sealed class FakeSettings : ISettings
     public bool ConfirmBeforeQuit { get; set; } = true;
     public DateTime? LastApplyDate { get; set; }
     public bool AclSweepDone { get; set; }
-    public bool AutoUpdate { get; set; } = true;
+    public bool AutoUpdate { get; set; }
     public bool TrayTipShown { get; set; }
-    /// <summary>Always null: an in-memory fake has nothing to fail at. Phase 3 never reads it (see Global Constraints).</summary>
-    public string? LastSaveError => null;
-    public int Reloads { get; private set; }
-
-    public void Reload() => Reloads++;
+    /// <summary>Settable so a test can simulate a failed settings save (FlyoutModel.ErrorMessage's last-resort banner).</summary>
+    public string? LastSaveError { get; set; }
 }

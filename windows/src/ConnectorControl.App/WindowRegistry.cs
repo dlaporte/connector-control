@@ -25,8 +25,6 @@ public sealed class WindowRegistry
         this.updates = updates;
     }
 
-    public int OpenEditorCount => editors.Count;
-
     public void OpenEditor(EditTarget target)
     {
         if (editors.TryGetValue(target.Id, out var open))

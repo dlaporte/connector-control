@@ -2,16 +2,17 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:state="clr-namespace:ConnectorControl.Core.State;assembly=ConnectorControl.Core"
+        xmlns:views="clr-namespace:ConnectorControl.App.Views"
         WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True" ShowActivated="True"
         SizeToContent="WidthAndHeight" MinWidth="240" MaxWidth="380"
-        WindowStartupLocation="Manual" Left="-10000" Top="-10000"
+        WindowStartupLocation="Manual" Left="{x:Static views:FlyoutWindow.OffScreen}" Top="{x:Static views:FlyoutWindow.OffScreen}"
         Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="Vis" />
     <Style x:Key="FooterButton" TargetType="Button" BasedOn="{StaticResource DestructiveButton}">
       <Setter Property="Padding" Value="10,4" />
       <Style.Triggers>
-        <DataTrigger Binding="{Binding Footer}" Value="RestartRequired">
+        <DataTrigger Binding="{Binding Footer}" Value="{x:Static state:FooterKind.RestartRequired}">
           <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
         </DataTrigger>
       </Style.Triggers>

@@ -24,7 +24,7 @@ public class SettingsStoreTests : IDisposable
         Assert.True(s.ConfirmBeforeQuit);
         Assert.Null(s.LastApplyDate);
         Assert.False(s.AclSweepDone);
-        Assert.True(s.AutoUpdate);
+        Assert.False(s.AutoUpdate);
         Assert.False(s.TrayTipShown);
         Assert.False(File.Exists(Path));   // reading never creates the file
     }

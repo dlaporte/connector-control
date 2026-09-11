@@ -1,8 +1,9 @@
 namespace ConnectorControl.Core.State;
 
 /// <summary>
-/// One environment-variable row (catalog §3.6). Rows carry a stable identity while the name is
-/// edited; values are masked unless <see cref="Revealed"/> (only freshly added rows start revealed).
+/// One environment-variable row. The row object's own identity — not a stored id — is what keeps
+/// it in place while the name is edited; values are masked unless <see cref="Revealed"/> (only
+/// freshly added rows start revealed).
 /// </summary>
 public sealed class EnvRow : ObservableObject
 {
@@ -15,8 +16,6 @@ public sealed class EnvRow : ObservableObject
         this.name = name;
         this.value = value;
     }
-
-    public Guid Id { get; } = Guid.NewGuid();
 
     public string Name { get => name; set => Set(ref name, value); }
 

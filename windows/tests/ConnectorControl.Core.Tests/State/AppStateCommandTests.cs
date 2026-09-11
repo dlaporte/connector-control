@@ -199,6 +199,15 @@ public class AppStateCommandTests
         h.Delays.RunNext();   // 20 s relaunch check: same
         Assert.Equal(errorBefore, state.LastError);
         Assert.Equal(needsRestartBefore, state.NeedsClaudeRestart);
+
+        // The completion block itself — not only the two delayed follow-ups — must be a no-op
+        // once disposed: a restart that finishes after Dispose (the app quitting mid-restart)
+        // must not resurrect state or schedule fresh delays.
+        state.LastError = "should not survive";
+        await state.PerformRestartClaudeAsync();
+        h.Ui.Pump();
+        Assert.Equal("should not survive", state.LastError);
+        Assert.Empty(h.Delays.Pending);   // no new delays scheduled on a disposed state
     }
 
     [Fact]

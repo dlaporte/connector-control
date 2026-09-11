@@ -1,5 +1,12 @@
 namespace ConnectorControl.Core.Services;
 
+/// <summary>
+/// <see cref="IsRunning"/> and <see cref="LaunchTime"/> together, from one enumeration of Claude's
+/// processes rather than two — <see cref="ConnectorControl.Core.State.AppState.RefreshRestartState"/>
+/// needs both at once and used to pay for each separately.
+/// </summary>
+public readonly record struct ClaudeProcessSnapshot(bool IsRunning, DateTime? LaunchTime);
+
 /// <summary>Replaces the Mac's NSRunningApplication + ClaudeRestarter.</summary>
 public interface IClaudeProcess
 {
@@ -11,6 +18,9 @@ public interface IClaudeProcess
     /// with <see cref="ISettings.LastApplyDate"/>, which is UTC too.
     /// </summary>
     DateTime? LaunchTime { get; }
+
+    /// <summary><see cref="IsRunning"/> and <see cref="LaunchTime"/> from a single enumeration.</summary>
+    ClaudeProcessSnapshot Snapshot();
 
     /// <summary>
     /// Gracefully quit Claude (never force-kill), wait up to 15 s, relaunch.

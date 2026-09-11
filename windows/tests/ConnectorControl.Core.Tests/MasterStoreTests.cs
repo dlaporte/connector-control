@@ -32,6 +32,28 @@ public class MasterStoreTests : IDisposable
     }
 
     [Fact]
+    public void ReadingMcpsDoesNotCreateAProfile()
+    {
+        var store = new MasterStore(2, "Work", [new KeyValuePair<string, Profile>("Work", new Profile())]);
+        store.ActiveProfile = "Ghost";   // an active profile the store has no Profile object for
+        Assert.Empty(store.Mcps);
+        Assert.False(store.Profiles.ContainsKey("Ghost"), "reading Mcps must not create a profile as a side effect");
+        Assert.Single(store.Profiles);
+    }
+
+    [Fact]
+    public void EnabledCountCountsWithoutBuildingTheServerDictionary()
+    {
+        var store = new MasterStore(new Dictionary<string, McpEntry>
+        {
+            ["on"] = new McpEntry(true, Cmd("a")),
+            ["off"] = new McpEntry(false, Cmd("b")),
+            ["on2"] = new McpEntry(true, Cmd("c")),
+        });
+        Assert.Equal(2, store.EnabledCount);
+    }
+
+    [Fact]
     public void SaveThenLoadRoundTrips()
     {
         var store = MasterStore.Empty();

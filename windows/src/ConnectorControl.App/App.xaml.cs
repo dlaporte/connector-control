@@ -56,7 +56,7 @@ public partial class App : Application
         updates = new UpdateCoordinator(services.Updater, services.Settings, services.Notifier, dialogs, host);
         updates.Start();   // only arms the delayed first check through host.Delay
         var windows = new WindowRegistry(state, services, updates);
-        flyoutModel = new FlyoutModel(state);
+        flyoutModel = new FlyoutModel(state, services.Settings);
         flyout = new FlyoutWindow(flyoutModel, windows);
         tray = new TrayController(state, flyout, windows);
         instance.OnShowRequested(() => host.Marshal(() => flyout.ShowFlyout()));

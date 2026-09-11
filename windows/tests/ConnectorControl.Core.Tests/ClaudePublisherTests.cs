@@ -31,7 +31,7 @@ public class ClaudePublisherTests
     public void TheRefusalNamesTheSigner()
     {
         Assert.Equal(
-            "claude.exe is signed by \"CN=Evil, O=Evil Corp\", not by Anthropic. Choose Claude Desktop's own claude.exe under Settings ▸ Claude.",
+            "claude.exe is signed by \"CN=Evil, O=Evil Corp\", not by Anthropic. Choose the real Claude Desktop under Settings ▸ Claude.",
             ClaudePublisher.SubjectProblem("CN=Evil, O=Evil Corp", Exe));
     }
 
@@ -39,7 +39,7 @@ public class ClaudePublisherTests
     public void ASubjectWithoutAnOrganizationSaysSo()
     {
         Assert.Equal(
-            "claude.exe is signed by \"CN=Anthropic\", which names no organization. Choose Claude Desktop's own claude.exe under Settings ▸ Claude.",
+            "claude.exe is signed by \"CN=Anthropic\", which names no organization. Choose the real Claude Desktop under Settings ▸ Claude.",
             ClaudePublisher.SubjectProblem("CN=Anthropic", Exe));
     }
 
