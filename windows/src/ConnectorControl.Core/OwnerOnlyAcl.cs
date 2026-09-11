@@ -19,8 +19,9 @@ public static class OwnerOnlyAcl
 
     /// <summary>
     /// Best effort, like Swift's <c>try?</c>: errors swallowed. Returns true when the ACL was
-    /// applied (or there was nothing to do: off Windows), false when the attempt failed, so a
-    /// caller that sweeps many paths can tell a working sweep from one that achieved nothing.
+    /// applied (or there was nothing to do: off Windows), false when the attempt failed OR there
+    /// was nothing at <paramref name="path"/> to apply it to (a vanished file), so a caller that
+    /// sweeps many paths can tell a working sweep from one that achieved nothing.
     /// </summary>
     public static bool TryApply(string path)
     {
@@ -30,8 +31,7 @@ public static class OwnerOnlyAcl
         }
         try
         {
-            Apply(path);
-            return true;
+            return Apply(path);
         }
         catch (Exception ex) when (IsAclRepairFailure(ex))
         {
@@ -140,17 +140,21 @@ public static class OwnerOnlyAcl
         return currentUser;
     }
 
+    /// <summary>Whether an ACL was actually set — false for a path that is neither a directory nor a file (e.g. a vanished backup).</summary>
     [SupportedOSPlatform("windows")]
-    private static void Apply(string path)
+    private static bool Apply(string path)
     {
         if (Directory.Exists(path))
         {
             new DirectoryInfo(path).SetAccessControl(DirectorySecurityForCurrentUser());
+            return true;
         }
-        else if (File.Exists(path))
+        if (File.Exists(path))
         {
             new FileInfo(path).SetAccessControl(FileSecurityForCurrentUser());
+            return true;
         }
+        return false;
     }
 
     /// <summary>
@@ -172,7 +176,7 @@ public static class OwnerOnlyAcl
 
     /// <summary>True when the DACL is protected and every rule names the current user.</summary>
     [SupportedOSPlatform("windows")]
-    public static bool IsOwnerOnly(string path)
+    internal static bool IsOwnerOnly(string path)
     {
         var user = CurrentUser();
         FileSystemSecurity security = Directory.Exists(path)

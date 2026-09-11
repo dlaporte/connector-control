@@ -2,8 +2,12 @@ namespace ConnectorControl.Core;
 
 /// <summary>
 /// The store is the source of truth; Claude's config is downstream of it.
-/// Reconciliation performs exactly one file→store flow: ingesting entries the
-/// store has never heard of. Known entries are never modified by the file.
+/// Reconciliation therefore performs exactly one file→store flow: ingesting
+/// entries the store has never heard of (installer scripts and hand-edits
+/// writing straight into claude_desktop_config.json). Known entries are never
+/// modified by the file — edits, re-adds of disabled connectors, and removals
+/// are all resolved by the caller regenerating the file from
+/// <see cref="MasterStore.EnabledServers"/>.
 /// </summary>
 public static class Reconciler
 {
@@ -39,9 +43,12 @@ public static class Reconciler
         baseline is null || !baseline.TryGetValue(name, out var known) || known != config;
 
     /// <summary>
-    /// Adopts a deliberately restored Claude-config snapshot INTO the store: snapshot
-    /// entries are upserted (config, enabled; view memory preserved for known names);
-    /// known entries absent from it are disabled, never deleted.
+    /// Adopts a deliberately restored Claude-config snapshot INTO the store —
+    /// the one case where the file legitimately rewrites store truth, because
+    /// the user chose that snapshot. Entries in the snapshot are upserted
+    /// (config, enabled; view memory preserved for known names); known entries
+    /// absent from it are disabled, never deleted. The result renders exactly
+    /// the snapshot, so no divergence survives the restore.
     /// </summary>
     public static ReconcileOutcome AdoptSnapshot(MasterStore store, IReadOnlyDictionary<string, JsonValue> servers)
     {

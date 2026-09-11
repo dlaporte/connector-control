@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO.Compression;
 using ConnectorControl.App.Services;
 using ConnectorControl.Core.Tests.TestSupport;
@@ -21,14 +20,7 @@ public class UpdateVerifierTests : IDisposable
     private static string UnsignedBinary => typeof(UpdateVerifierTests).Assembly.Location;
 
     /// <summary>The numeric file version baked into the framework DLL that stands in for ConnectorControl.exe.</summary>
-    private static Version FrameworkVersion
-    {
-        get
-        {
-            var info = FileVersionInfo.GetVersionInfo(RunningExe);
-            return new Version(info.FileMajorPart, info.FileMinorPart, info.FileBuildPart);
-        }
-    }
+    private static Version FrameworkVersion => UpdateVerifier.EmbeddedVersion(RunningExe);
 
     private static readonly Version Older = new(1, 0, 0);
 
@@ -216,18 +208,11 @@ public class UpdateVerifierTests : IDisposable
     }
 
     [Theory]
-    [InlineData(new byte[] { (byte)'M', (byte)'Z', 0x90, 0x00 }, true)]
-    [InlineData(new byte[] { (byte)'P', (byte)'K', 0x03, 0x04 }, false)]
-    [InlineData(new byte[] { (byte)'M' }, false)]
-    public void ExecutablesAreRecognizedByContent(byte[] bytes, bool expected)
+    [InlineData(new byte[] { (byte)'M', (byte)'Z' }, true)]
+    [InlineData(new byte[] { (byte)'P', (byte)'K' }, false)]
+    [InlineData(new byte[] { (byte)'M' }, false)]   // a short read is not a match, whatever the one byte is
+    public void ExecutablesAreRecognizedByContent(byte[] magic, bool expected)
     {
-        var path = dir.File($"{Guid.NewGuid():N}.zip");
-        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
-        {
-            using var stream = zip.CreateEntry("lib/app/anything").Open();
-            stream.Write(bytes);
-        }
-        using var read = ZipFile.OpenRead(path);
-        Assert.Equal(expected, UpdateVerifier.IsPortableExecutable(read.Entries.Single()));
+        Assert.Equal(expected, UpdateVerifier.IsMZ(magic));
     }
 }

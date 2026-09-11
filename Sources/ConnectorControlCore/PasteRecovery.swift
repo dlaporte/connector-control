@@ -10,6 +10,12 @@ import Foundation
 ///   • a bare property fragment     `"NAME": {…}`
 ///   • that fragment with a trailing stray `}` (the mcpServers-copy artifact)
 public enum PasteRecovery {
+    /// The recovered connector name (when the paste carried one) and its config object.
+    public struct Result: Equatable {
+        public let name: String?
+        public let config: JSONValue
+    }
+
     /// Keys that mark an object as a connector CONFIG rather than a
     /// `{name: config}` wrapper.
     private static let configKeys: Set<String> =
@@ -17,7 +23,7 @@ public enum PasteRecovery {
 
     /// Returns the recovered connector name (when the paste carried one) and
     /// its config object, or nil when the text can't be interpreted at all.
-    public static func recover(_ text: String) -> (name: String?, config: JSONValue)? {
+    public static func recover(_ text: String) -> Result? {
         guard let value = parseTolerant(text) else { return nil }
         return unwrap(value)
     }
@@ -90,20 +96,20 @@ public enum PasteRecovery {
 
     // MARK: unwrapping
 
-    private static func unwrap(_ value: JSONValue) -> (name: String?, config: JSONValue) {
+    private static func unwrap(_ value: JSONValue) -> Result {
         // {"mcpServers": {"NAME": {…}}} — single entry.
         if case .object(let outer) = value, outer.count == 1,
            case .object(let inner)? = outer["mcpServers"], inner.count == 1,
            let entry = inner.first {
-            return (entry.key, entry.value)
+            return Result(name: entry.key, config: entry.value)
         }
         // {"NAME": {config}} where NAME is neither a config field nor the
         // mcpServers wrapper key.
         if case .object(let outer) = value, outer.count == 1,
            let entry = outer.first, case .object = entry.value,
            entry.key != "mcpServers", !configKeys.contains(entry.key) {
-            return (entry.key, entry.value)
+            return Result(name: entry.key, config: entry.value)
         }
-        return (nil, value)
+        return Result(name: nil, config: value)
     }
 }

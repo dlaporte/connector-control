@@ -62,10 +62,38 @@ public class RestoreModelTests
         var closed = 0;
         model.CloseRequested += () => closed++;
         Assert.False(model.Restore());
-        Assert.Equal("backup claude_desktop_config.2026-09-04T00-00-00-000Z.json is not a valid config file", model.RestoreError);
+        Assert.Equal(
+            "backup claude_desktop_config.2026-09-04T00-00-00-000Z.json is not a valid config file "
+                + "('n' is an invalid start of a property name. Expected a '\"'. LineNumber: 0 | BytePositionInLine: 1.)",
+            model.RestoreError);
         Assert.Equal(model.RestoreError, state.LastError);
         Assert.True(model.HasRestoreError);
         Assert.Equal(0, closed);
+    }
+
+    /// <summary>Restore() clears RestoreError as its first act — before the confirm dialog even
+    /// resolves — so a stale error from a prior failed attempt never lingers into the next one.</summary>
+    [Fact]
+    public void ANewAttemptClearsThePreviousError()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var bad = Path.Combine(h.BackupsDir, "claude_desktop_config.2026-09-04T00-00-00-000Z.json");
+        Directory.CreateDirectory(h.BackupsDir);
+        File.WriteAllText(bad, "{not json");
+        var model = new RestoreModel(state, h.Dialogs);
+        model.Load();
+        model.Selection = bad;
+        Assert.False(model.Restore());
+        Assert.NotNull(model.RestoreError);
+
+        h.Dialogs.NextConfirm = false;
+        Assert.False(model.Restore());
+        Assert.Null(model.RestoreError);
+
+        model.Selection = null;
+        Assert.False(model.Restore());   // nothing selected: no dialog, and still no stale error
+        Assert.Null(model.RestoreError);
     }
 
     [Fact]
@@ -79,14 +107,5 @@ public class RestoreModelTests
         model.Cancel();
         Assert.Equal(1, closed);
         Assert.Empty(h.Dialogs.Confirms);
-    }
-
-    [Fact]
-    public void StringsMatchTheMacApp()
-    {
-        Assert.Equal("Restore Claude config from a backup", RestoreModel.Headline);
-        Assert.Equal("The current file is backed up first, then replaced by the selected backup.", RestoreModel.Caption);
-        Assert.Equal("Restore…", RestoreModel.RestoreTitle);
-        Assert.Equal("Restore", RestoreModel.RestoreButton);
     }
 }

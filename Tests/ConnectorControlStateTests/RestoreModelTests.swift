@@ -7,26 +7,40 @@ import ConnectorControlCore
 @MainActor
 final class RestoreModelTests: XCTestCase {
     func testListsBackupsNewestFirstWithTheOriginalLast() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.setEnabled("aws-mcp", false)           // backup 1 (three servers) + original snapshot
         Thread.sleep(forTimeInterval: 0.005)          // a different millisecond in the next backup's name
         state.setEnabled("scoutbook", false)         // backup 2 (two servers)
         let model = RestoreModel(state: state)
         model.load()
         XCTAssertEqual(model.backups.count, 3)
-        XCTAssertTrue(model.backupNames[0].hasPrefix("claude_desktop_config."))
-        XCTAssertGreaterThan(model.backupNames[0], model.backupNames[1])   // newest first
-        XCTAssertEqual(model.backupNames[2], "claude_desktop_config.original.json")
+        let names = model.backups.map(\.lastPathComponent)
+        XCTAssertTrue(names[0].hasPrefix("claude_desktop_config."))
+        XCTAssertGreaterThan(names[0], names[1])   // newest first
+        XCTAssertEqual(names[2], "claude_desktop_config.original.json")
         XCTAssertNil(model.selection)
         XCTAssertFalse(model.canRestore)
     }
 
-    func testRestoreConfirmsWithTheFileNameAndRestoresThroughAppState() {
-        let h = AppStateHarness()
+    /// A listing failure used to be swallowed by
+    /// `try?`, leaving an empty list with no explanation; it now surfaces.
+    func testLoadSurfacesABackupsListingFailure() throws {
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
+        state.setEnabled("aws-mcp", false)   // a real backup to list, if listing worked
+        let model = RestoreModel(state: state)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: h.backupsDir.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: h.backupsDir.path) }
+
+        model.load()
+        XCTAssertTrue(model.backups.isEmpty)
+        XCTAssertNotNil(model.restoreError)
+    }
+
+    func testRestoreConfirmsWithTheFileNameAndRestoresThroughAppState() {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
         state.setEnabled("aws-mcp", false)
         let model = RestoreModel(state: state)
         model.load()
@@ -35,8 +49,7 @@ final class RestoreModelTests: XCTestCase {
 
         model.requestRestore()
         XCTAssertTrue(model.confirming)
-        XCTAssertEqual(model.confirmMessage, "Replace Claude's config with \(model.backupNames[0])?")
-        XCTAssertEqual(RestoreModel.restoreButton, "Restore")
+        XCTAssertEqual(model.confirmMessage, "Replace Claude's config with \(model.backups[0].lastPathComponent)?")
         model.cancelRestore()
         XCTAssertFalse(model.confirming)
         XCTAssertEqual(state.store.mcps["aws-mcp"]?.enabled, false)   // cancelled: nothing restored
@@ -50,9 +63,8 @@ final class RestoreModelTests: XCTestCase {
     }
 
     func testRestoreFailureShowsInlineAndInLastError() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let bad = h.backupsDir.appendingPathComponent("claude_desktop_config.2026-09-04T00-00-00-000Z.json")
         try FileManager.default.createDirectory(at: h.backupsDir, withIntermediateDirectories: true)
         try Data("{not json".utf8).write(to: bad)
@@ -61,18 +73,18 @@ final class RestoreModelTests: XCTestCase {
         model.selection = bad
         model.requestRestore()
         XCTAssertFalse(model.confirmRestore())
-        XCTAssertEqual(model.restoreError, "backup claude_desktop_config.2026-09-04T00-00-00-000Z.json is not a valid config file")
+        XCTAssertEqual(model.restoreError,
+                       "backup claude_desktop_config.2026-09-04T00-00-00-000Z.json is not a valid config file "
+                       + "(The data couldn’t be read because it isn’t in the correct format.)")
         XCTAssertEqual(state.lastError, model.restoreError)
-        XCTAssertTrue(model.hasRestoreError)
         XCTAssertFalse(model.confirming)
     }
 
-    /// Commit 8c61005: a fresh attempt starts with a clean sheet — the previous
+    /// A fresh attempt starts with a clean sheet — the previous
     /// attempt's error must not outlive a new selection or a cancelled confirmation.
     func testRequestRestoreClearsThePreviousError() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let bad = h.backupsDir.appendingPathComponent("claude_desktop_config.2026-09-04T00-00-00-000Z.json")
         try FileManager.default.createDirectory(at: h.backupsDir, withIntermediateDirectories: true)
         try Data("{not json".utf8).write(to: bad)
@@ -95,13 +107,10 @@ final class RestoreModelTests: XCTestCase {
         XCTAssertNil(model.restoreError)
     }
 
-    func testStringsMatchTheMacApp() {
-        XCTAssertEqual(RestoreModel.headline, "Restore Claude config from a backup")
-        XCTAssertEqual(RestoreModel.caption, "The current file is backed up first, then replaced by the selected backup.")
-        XCTAssertEqual(RestoreModel.cancelTitle, "Cancel")
-        XCTAssertEqual(RestoreModel.restoreTitle, "Restore…")
-        XCTAssertEqual(RestoreModel.restoreButton, "Restore")
+    /// The backup-file series name: an internal identifier, deliberately out
+    /// of the shared string catalog (it names an on-disk file series, not
+    /// anything the user reads).
+    func testSeriesNameIsSessionLocalAndStable() {
         XCTAssertEqual(RestoreModel.series, "claude_desktop_config")
-        XCTAssertEqual(RestoreModel.confirmMessage(fileName: "x.json"), "Replace Claude's config with x.json?")
     }
 }

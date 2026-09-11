@@ -1,11 +1,10 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Text;
 
 namespace ConnectorControl.Core.State;
 
-/// <summary>Catalog §3 EditSheetView without the pixels: every field, switch rule, validation string, and save/remove flow.</summary>
+/// <summary>The edit-sheet view without the pixels: every field, switch rule, validation string, and save/remove flow.</summary>
 public sealed class EditorModel : ObservableObject, IDisposable
 {
     public const string NotValidJson = "Not valid JSON — check for a stray brace, missing comma, or unquoted value.";
@@ -21,7 +20,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// </summary>
     public const string OAuthSecretCaption = "Passed to mcp-remote on its command line, which other programs running on this PC can read.";
     public const string InvalidUrlError = "Server URL must be a valid http(s) URL.";
-    /// <summary>Security review 2026-09-10: under the cmd /c launcher cmd.exe re-parses every argument.</summary>
+    /// <summary>Under the cmd /c launcher cmd.exe re-parses every argument.</summary>
     public const string CmdUnsafeSuffix = " must not contain & | < > ^ \" or spaces: on Windows the cmd /c launcher hands it to cmd.exe, which treats those as commands.";
     public static string CmdUnsafeError(string field) => field + CmdUnsafeSuffix;
     public const string CmdPercentCaution = "This URL has more than one %, which cmd.exe can expand as a variable. If the connector fails to start, check its JSON view.";
@@ -39,6 +38,17 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public const string RemoveInformative = "A copy remains in Backups.";
     public const string AddArgumentTitle = "＋ Add argument";
     public const string AddVariableTitle = "＋ Add variable";
+    public const string ChangedOutsideDetail = "Saving will overwrite that change with this editor's version.";
+    public const string RemovedOutsideDetail = "Saving will add it back.";
+
+    public static string DuplicateEnvError(string name) => $"Duplicate environment variable name: {name}";
+    public static string RemoveMessage(string name) => $"Remove “{name}”? {RemoveInformative}";
+    public static string ChangedOutsideMessage(string name) => $"“{name}” changed outside this editor.";
+    public static string RemovedOutsideMessage(string name) => $"“{name}” was removed outside this editor.";
+
+    /// <summary>The Mac's static and an instance property of the same name can coexist there; C# forbids that, so the instance property below calls this.</summary>
+    public static string AdditionalTitleFor(int count, IEnumerable<string> keys) =>
+        $"{count} field(s) not editable here: {string.Join(", ", keys)} — switch to JSON to edit";
 
     /// <summary>The picker's order, as an array so <see cref="AuthKindIndex"/> can search it without allocating.</summary>
     private static readonly RemoteAuthKind[] AuthKindOrder =
@@ -46,19 +56,18 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public static readonly IReadOnlyList<RemoteAuthKind> AuthKinds = AuthKindOrder;
 
-    public static readonly IReadOnlyList<string> AuthKindTitles = AuthKinds.Select(AuthKindTitle).ToList();
-
-    public static string AuthKindTitle(RemoteAuthKind kind) => kind switch
-    {
-        RemoteAuthKind.Automatic => "Automatic (OAuth / none)",
-        RemoteAuthKind.Bearer => "Bearer token",
-        RemoteAuthKind.Header => "Custom header",
-        RemoteAuthKind.OAuthClient => "OAuth client ID/secret",
-        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
-    };
+    public static readonly IReadOnlyList<string> AuthKindTitles = AuthKinds.Select(k => k.Title()).ToList();
 
     private readonly AppState state;
     private readonly IDialogs dialogs;
+    /// <summary>
+    /// True only for a brand-new connector still showing the remote template's placeholder
+    /// command/args. Set at open; consumed by the first discard (below) or by adopting an edited
+    /// JSON view into the form, since from then on the command/args are the user's own, not a
+    /// re-derivable property of the current fields — a later Type toggle must not wipe what they
+    /// typed. An unchanged JSON round trip (open JSON, switch straight back) leaves it set.
+    /// </summary>
+    private bool isUntouchedTemplate;
 
     private EditView view;
     private string name;
@@ -78,9 +87,10 @@ public sealed class EditorModel : ObservableObject, IDisposable
     private string command;
     private IReadOnlyDictionary<string, JsonValue> additional;
     private string jsonText;
+    /// <summary>`jsonText` recovered once per edit, in its setter below; ValidateJson and ComputeRequiredTool read this instead of recovering it again.</summary>
+    private PasteResult? recoveredJson;
     private string? jsonError;
     private string? validationError;
-    private readonly PropertyChangedEventHandler onStateChanged;
     private Tool? requiredTool;
     private bool suppressToolEvaluation;
 
@@ -89,27 +99,24 @@ public sealed class EditorModel : ObservableObject, IDisposable
         this.state = state;
         this.dialogs = dialogs;
         Target = target;
+        isUntouchedTemplate = target.IsNew && target.ForcesRemote;
         name = target.Name;
         view = target.Entry.LastEditView;
         var config = target.Entry.Config;
-        var detected = RemotePattern.Detect(config);
-        isRemote = target.ForcesRemote || detected is not null;
-        remoteUrl = detected ?? "";
-        var model = FormMapper.Analyze(config).Model;
-        command = model.Command;
-        Args = new ObservableCollection<ArgRow>(model.Args.Select(a => new ArgRow(a)));
-        EnvRows = new ObservableCollection<EnvRow>(EnvRowsFrom(model.Env));
-        additional = model.Additional;
+        // Placeholders: every field needs a value before Load (an instance method) can run; it
+        // overwrites all of these.
+        remoteUrl = "";
+        command = "";
+        Args = [];
+        EnvRows = [];
+        additional = new Dictionary<string, JsonValue>(StringComparer.Ordinal);
         jsonText = config.EditorText();
+        recoveredJson = PasteRecovery.Recover(jsonText);
         remoteLaunchStyle = newRemoteStyle;
-        if (RemotePattern.Decode(config) is { } remote)
-        {
-            ApplyRemoteFields(remote);
-        }
-        // Spec 2026-09-05-tool-probe §3.4: on open, a cached status shows its note at once; an
+        Load(config);
+        // On open, a cached status shows its note at once; an
         // unknown one is probed now. Later changes go through EvaluateRequiredTool.
-        onStateChanged = OnStateChanged;
-        state.PropertyChanged += onStateChanged;
+        state.PropertyChanged += OnStateChanged;
         Args.CollectionChanged += OnArgsChanged;
         requiredTool = ComputeRequiredTool();
         if (requiredTool is { } initial && !state.ToolStatuses.ContainsKey(initial))
@@ -129,50 +136,23 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     // MARK: view
 
+    /// <summary>
+    /// The two segmented buttons' binding: a set is a request; a refused switch snaps back, since
+    /// RequestView raises this property whether or not it actually switched.
+    /// </summary>
     public EditView View
     {
         get => view;
-        private set
-        {
-            if (Set(ref view, value))
-            {
-                RaiseViewFlags();
-                EvaluateRequiredTool();
-            }
-        }
+        set => RequestView(value);
     }
 
-    public bool IsFormView
+    private void SetView(EditView value)
     {
-        get => view == EditView.Form;
-        set
+        if (Set(ref view, value, nameof(View)))
         {
-            if (value)
-            {
-                RequestView(EditView.Form);
-            }
-            RaiseViewFlags();   // a refused switch must snap the segmented control back
+            Raise(nameof(CanSave));
+            EvaluateRequiredTool();
         }
-    }
-
-    public bool IsJsonView
-    {
-        get => view == EditView.Json;
-        set
-        {
-            if (value)
-            {
-                RequestView(EditView.Json);
-            }
-            RaiseViewFlags();
-        }
-    }
-
-    private void RaiseViewFlags()
-    {
-        Raise(nameof(IsFormView));
-        Raise(nameof(IsJsonView));
-        Raise(nameof(CanSave));
     }
 
     // MARK: fields
@@ -194,12 +174,17 @@ public sealed class EditorModel : ObservableObject, IDisposable
             }
             Raise(nameof(IsLocal));
             Raise(nameof(CanSave));
-            if (Target.IsNew && !value && View == EditView.Form && (Args.Any(a => a.Value == RemotePattern.DefaultPackage) || Command.Length == 0))
+            if (!isRemote && View == EditView.Form && isUntouchedTemplate)
             {
+                // Discard the remote template's bridge invocation — a local server has nothing
+                // to do with mcp-remote. The template is consumed by this one discard; from here
+                // on the fields are the user's own local form, so a later switch back and forth
+                // must not re-derive and repeat it.
                 Command = "npx";
                 Args.Clear();
                 Args.Add(new ArgRow("-y"));
                 Args.Add(new ArgRow(""));
+                isUntouchedTemplate = false;
             }
             EvaluateRequiredTool();
         }
@@ -323,10 +308,9 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public bool HasAdditional => additional.Count > 0;
 
-    public string AdditionalTitle =>
-        $"{additional.Count} field(s) not editable here: {string.Join(", ", additional.Keys.Order(StringComparer.Ordinal))} — switch to JSON to edit";
+    public string AdditionalTitle => AdditionalTitleFor(additional.Count, additional.Keys.Order(StringComparer.Ordinal));
 
-    public string AdditionalPreview => Encoding.UTF8.GetString(JsonValue.Object(additional).Serialize());
+    public string AdditionalPreview => JsonValue.Object(additional).EditorText();
 
     public string JsonText
     {
@@ -335,6 +319,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         {
             if (Set(ref jsonText, value))
             {
+                recoveredJson = PasteRecovery.Recover(jsonText);
                 ValidateJson();
                 EvaluateRequiredTool();
             }
@@ -373,12 +358,12 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public bool HasValidationError => validationError is not null;
 
-    /// <summary>Catalog §3.4: Save is disabled with a JSON error, or in the remote form without a valid, cmd-safe URL.</summary>
+    /// <summary>Save is disabled with a JSON error, or in the remote form without a valid, cmd-safe URL.</summary>
     public bool CanSave => !((view == EditView.Json && jsonError is not null) || (view == EditView.Form && isRemote && !(RemoteUrlValid && RemoteUrlCmdSafe)));
 
     public bool CanRemove => !Target.IsNew;
 
-    // MARK: tool note (spec 2026-09-05-tool-probe §3.3–§3.4)
+    // MARK: tool note
 
     /// <summary>
     /// The launcher this connector needs: npx in the remote form, the Command field (through one
@@ -389,7 +374,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     /// <summary>Null while the tool is unknown (not probed yet) or found. Never blocks Save.</summary>
     public ToolNote? ToolNote =>
-        requiredTool is { } tool && state.ToolStatuses.TryGetValue(tool, out var status) ? Core.ToolNote.For(tool, status) : null;
+        requiredTool is { } tool && state.ToolStatuses.TryGetValue(tool, out var status) ? Core.ToolNote.Make(tool, status) : null;
 
     public bool HasToolNote => ToolNote is not null;
 
@@ -397,7 +382,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     {
         if (view == EditView.Json)
         {
-            return PasteRecovery.Recover(jsonText) is { } recovered ? ToolRequirement.RequiredTool(recovered.Config) : null;
+            return recoveredJson is { } recovered ? ToolRequirement.RequiredTool(recovered.Config) : null;
         }
         return isRemote ? Tool.Npx : ToolRequirement.RequiredTool(command, Args.Select(a => a.Value).ToList());
     }
@@ -428,7 +413,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(AppState.ToolStatuses) or null or "")
+        if (Affects(e, nameof(AppState.ToolStatuses)))
         {
             Raise(nameof(ToolNote));
             Raise(nameof(HasToolNote));
@@ -438,11 +423,11 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// <summary>Stops listening to AppState; the window calls this from Closed.</summary>
     public void Dispose()
     {
-        state.PropertyChanged -= onStateChanged;
+        state.PropertyChanged -= OnStateChanged;
         Args.CollectionChanged -= OnArgsChanged;
     }
 
-    // MARK: list editing (catalog §3.6)
+    // MARK: list editing
 
     public void AddArg() => Args.Add(new ArgRow(""));
 
@@ -465,32 +450,37 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public void ToggleReveal(EnvRow row) => row.Revealed = !row.Revealed;
 
-    // MARK: view switching (catalog §3.5)
+    // MARK: view switching
 
     public void RequestView(EditView requested)
     {
-        if (requested == view)
+        if (requested != view)
         {
+            if (requested == EditView.Json)
+            {
+                RequestJsonView();
+            }
+            else
+            {
+                AttemptSwitchToForm();
+            }
+        }
+        Raise(nameof(View));
+    }
+
+    private void RequestJsonView()
+    {
+        // The JSON view renders CollapsedEnv(), which can't represent duplicate or nameless rows —
+        // switching would silently drop them, bypassing the same validation Save enforces.
+        if (!isRemote && EnvValidationError() is { } envError)
+        {
+            ValidationError = envError;
             return;
         }
-        if (requested == EditView.Json)
-        {
-            // The JSON view renders CollapsedEnv(), which can't represent duplicate or nameless rows —
-            // switching would silently drop them, bypassing the same validation Save enforces.
-            if (!isRemote && EnvValidationError() is { } envError)
-            {
-                ValidationError = envError;
-                return;
-            }
-            ValidationError = null;
-            JsonText = CurrentFormConfig().EditorText();
-            JsonError = null;
-            View = EditView.Json;
-        }
-        else
-        {
-            AttemptSwitchToForm();
-        }
+        ValidationError = null;
+        JsonText = CurrentFormConfig().EditorText();
+        JsonError = null;
+        SetView(EditView.Json);
     }
 
     private void AttemptSwitchToForm()
@@ -502,8 +492,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
         var analysis = FormMapper.Analyze(config);
         if (analysis.IsLossless)
         {
-            AdoptForm(analysis.Model, config);
-            View = EditView.Form;
+            AdoptForm(config);
+            SetView(EditView.Form);
             return;
         }
         var warning = LossWarningPrefix + string.Join("\n", analysis.Lost);
@@ -519,15 +509,36 @@ public sealed class EditorModel : ObservableObject, IDisposable
         {
             return;
         }
-        AdoptForm(FormMapper.Analyze(config).Model, config);
-        View = EditView.Form;
+        AdoptForm(config);
+        SetView(EditView.Form);
     }
 
-    private void AdoptForm(FormModel model, JsonValue config)
+    private void AdoptForm(JsonValue config)
+    {
+        Load(config);
+        // A JSON edit that changed the config consumes the template, exactly
+        // like a discard would — so a later Type toggle to Local re-derives
+        // nothing and leaves what the user typed alone. An unchanged round
+        // trip (config still equal to the template as opened) leaves the
+        // flag set.
+        isUntouchedTemplate = isUntouchedTemplate && config == Target.Entry.Config;
+        EvaluateRequiredTool();
+        RaiseAll();
+    }
+
+    /// <summary>
+    /// Loads <paramref name="config"/> into every form/remote field and (re)computes
+    /// <see cref="IsRemote"/>. The one shared place the constructor and AdoptForm funnel through,
+    /// so they cannot disagree on the isRemote rule or which fields a config fills in. Tool
+    /// evaluation is suppressed for the duration — both callers evaluate once themselves, after
+    /// View (for ComputeRequiredTool's JSON branch) is in its final state.
+    /// </summary>
+    private void Load(JsonValue config)
     {
         suppressToolEvaluation = true;
         try
         {
+            var model = FormMapper.Analyze(config).Model;
             Command = model.Command;
             Args.Clear();
             foreach (var arg in model.Args)
@@ -541,7 +552,14 @@ public sealed class EditorModel : ObservableObject, IDisposable
             }
             additional = model.Additional;
             var detected = RemotePattern.Detect(config);
+            // The backing field, not the IsRemote setter — that setter also discards the remote
+            // template's bridge invocation when switching to local, which would clobber the
+            // Command/Args just loaded above from config. See EditorModel.swift's isRemoteChanged.
             isRemote = detected is not null || (Target.ForcesRemote && RemotePattern.IsRemoteShaped(config));
+            // Quirk kept intentionally: RemoteUrl comes ONLY from Detect()'s canonical 2-arg shape,
+            // even when IsRemote is true via the ForcesRemote/IsRemoteShaped fallback above — Decode()
+            // may have found a real URL past extra flags, but the Server URL field stays blank until
+            // the user (re)types it.
             remoteUrl = detected ?? "";
             if (RemotePattern.Decode(config) is { } remote)
             {
@@ -549,28 +567,37 @@ public sealed class EditorModel : ObservableObject, IDisposable
             }
             else
             {
-                AuthKind = RemoteAuthKind.Automatic;
-                BearerToken = "";
-                HeaderName = "";
-                HeaderValue = "";
-                OAuthClientId = "";
-                OAuthClientSecret = "";
-                OAuthScopes = "";
-                remoteExtraArgs = [];
-                remotePassthroughEnv = new Dictionary<string, string>(StringComparer.Ordinal);
-                remotePackage = RemotePattern.DefaultPackage;
+                ResetRemoteFields();
             }
         }
         finally
         {
             suppressToolEvaluation = false;
         }
-        EvaluateRequiredTool();
-        RaiseAll();
+    }
+
+    /// <summary>
+    /// The blank slate every remote field starts from. Called before adopting a decoded config
+    /// too: without it, switching from one auth kind to another left the old kind's fields — a
+    /// bearer token, say — populated behind an auth kind that no longer shows them.
+    /// </summary>
+    private void ResetRemoteFields()
+    {
+        AuthKind = RemoteAuthKind.Automatic;
+        BearerToken = "";
+        HeaderName = "";
+        HeaderValue = "";
+        OAuthClientId = "";
+        OAuthClientSecret = "";
+        OAuthScopes = "";
+        remoteExtraArgs = [];
+        remotePassthroughEnv = new Dictionary<string, string>(StringComparer.Ordinal);
+        remotePackage = RemotePattern.DefaultPackage;
     }
 
     private void ApplyRemoteFields(RemoteConfig remote)
     {
+        ResetRemoteFields();
         switch (remote.Auth)
         {
             case RemoteAuth.Bearer bearer:
@@ -601,9 +628,9 @@ public sealed class EditorModel : ObservableObject, IDisposable
     private static IEnumerable<EnvRow> EnvRowsFrom(IReadOnlyDictionary<string, string> env) =>
         env.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => new EnvRow(kv.Key, kv.Value));
 
-    // MARK: JSON (catalog §3.7)
+    // MARK: JSON
 
-    private void ValidateJson() => JsonError = PasteRecovery.Recover(jsonText) is null ? NotValidJson : null;
+    private void ValidateJson() => JsonError = recoveredJson is null ? NotValidJson : null;
 
     /// <summary>Resolves the editor text via PasteRecovery, fills the name from a pasted stanza when blank, and rewrites the text to the canonical config.</summary>
     private JsonValue? EffectiveJsonConfig()
@@ -623,7 +650,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         return recovered.Config;
     }
 
-    // MARK: form → config (catalog §3.5 currentFormConfig)
+    // MARK: form → config
 
     private RemoteAuth CurrentRemoteAuth() => authKind switch
     {
@@ -696,13 +723,13 @@ public sealed class EditorModel : ObservableObject, IDisposable
             }
             if (!seen.Add(row.Name))
             {
-                return $"Duplicate environment variable name: {row.Name}";
+                return DuplicateEnvError(row.Name);
             }
         }
         return null;
     }
 
-    // MARK: save / remove / cancel (catalog §3.8–§3.10)
+    // MARK: save / remove / cancel
 
     /// <summary>True when the entry was saved and the window should close.</summary>
     public bool Save()
@@ -774,8 +801,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
             if (current?.Config != Target.Entry.Config)
             {
                 var missing = current is null;
-                var message = missing ? $"“{Target.Name}” was removed outside this editor." : $"“{Target.Name}” changed outside this editor.";
-                var detail = missing ? "Saving will add it back." : "Saving will overwrite that change with this editor's version.";
+                var message = missing ? RemovedOutsideMessage(Target.Name) : ChangedOutsideMessage(Target.Name);
+                var detail = missing ? RemovedOutsideDetail : ChangedOutsideDetail;
                 if (!dialogs.Confirm(message, detail, SaveAnywayButton))
                 {
                     return false;
@@ -796,7 +823,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// <summary>Remove and apply in the same turn: a watcher-driven reload between the two once resurrected the connector.</summary>
     public void Remove()
     {
-        if (!dialogs.Confirm($"Remove “{Target.Name}”? {RemoveInformative}", null, RemoveButton, destructive: true))
+        if (!dialogs.Confirm(RemoveMessage(Target.Name), null, RemoveButton, destructive: true))
         {
             return;
         }

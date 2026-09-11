@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows.Controls;
 using ConnectorControl.App.Views;
+using ConnectorControl.Core;
 using ConnectorControl.Core.State;
 using H.NotifyIcon;
 using Microsoft.Win32;
@@ -8,14 +9,14 @@ using Microsoft.Win32;
 namespace ConnectorControl.App.Tray;
 
 /// <summary>
-/// Spec §7.1: the tray icon (powerplug, or the warning triangle while an apply
+/// The tray icon (powerplug, or the warning triangle while an apply
 /// awaits retry; black on a light taskbar, white on a dark one, re-rendered on
 /// theme change), left-click toggles the flyout, right-click shows Open /
 /// Settings… / Quit Connector Control.
 /// </summary>
 public sealed class TrayController : IDisposable
 {
-    public const string ToolTip = "Connector Control";
+    public const string ToolTip = Product.Name;
 
     private readonly TaskbarIcon icon = new();
     private readonly AppState state;
@@ -28,15 +29,15 @@ public sealed class TrayController : IDisposable
         this.state = state;
         icon.ToolTipText = ToolTip;
         icon.NoLeftClickDelay = true;
-        icon.ContextMenu = BuildMenu(flyout.ShowFlyout, windows.OpenSettings, state.QuitApp);   // Open goes through ShowFlyout, so it anchors on the tray like a left-click (spec §7.1)
+        icon.ContextMenu = BuildMenu(flyout.ShowFlyout, windows.OpenSettings, state.QuitApp);   // Open goes through ShowFlyout, so it anchors on the tray like a left-click
         icon.TrayLeftMouseUp += (_, _) => flyout.Toggle();
-        RefreshIcon();
+        RefreshTheme();
         icon.ForceCreate(false);
         state.PropertyChanged += OnStateChanged;
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
 
-    /// <summary>Spec §7.1 right-click menu.</summary>
+    /// <summary>The right-click menu.</summary>
     internal static ContextMenu BuildMenu(Action open, Action settings, Action quit)
     {
         var menu = new ContextMenu();
@@ -56,9 +57,10 @@ public sealed class TrayController : IDisposable
 
     private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(AppState.ApplyRetryNeeded))
+        if (ObservableObject.Affects(e, nameof(AppState.ApplyRetryNeeded)))
         {
-            RefreshIcon();
+            // A state tick never touches theme or DPI — only the glyph can have changed.
+            Render(GlyphFor(state));
         }
     }
 
@@ -66,25 +68,32 @@ public sealed class TrayController : IDisposable
     {
         if (e.Category == UserPreferenceCategory.General || e.Category == UserPreferenceCategory.VisualStyle)
         {
-            RefreshIcon();
+            RefreshTheme();
         }
     }
 
-    private void RefreshIcon()
+    private static TrayGlyph GlyphFor(AppState state) => state.ApplyRetryNeeded ? TrayGlyph.Warning : TrayGlyph.Plug;
+
+    /// <summary>Theme and DPI are read here and in the constructor only — reading the registry and
+    /// calling GetDpiForSystem on every AppState tick was pure waste for a value that rarely moves.</summary>
+    private void RefreshTheme()
     {
-        var glyph = state.ApplyRetryNeeded ? TrayGlyph.Warning : TrayGlyph.Plug;
-        var light = TaskbarTheme.IsLight();
+        currentLight = TaskbarTheme.IsLight();
         // The pixel size is part of the key: a display-scaling change must re-render, or the
-        // shell keeps upscaling a stale 16 px bitmap (Task 13 review).
-        var size = TrayIconRenderer.SystemIconPixelSize();
-        if (glyph == currentGlyph && light == currentLight && size == currentSize)
+        // shell keeps upscaling a stale 16 px bitmap.
+        currentSize = TrayIconRenderer.SystemIconPixelSize();
+        currentGlyph = null;   // force the render below even if the glyph itself didn't change
+        Render(GlyphFor(state));
+    }
+
+    private void Render(TrayGlyph glyph)
+    {
+        if (glyph == currentGlyph)
         {
             return;
         }
         currentGlyph = glyph;
-        currentLight = light;
-        currentSize = size;
-        icon.Icon = TrayIconRenderer.RenderIcon(glyph, light, size);
+        icon.Icon = TrayIconRenderer.RenderIcon(glyph, currentLight, currentSize);
     }
 
     public void Dispose()

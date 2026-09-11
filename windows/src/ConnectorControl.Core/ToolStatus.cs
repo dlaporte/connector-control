@@ -1,7 +1,7 @@
 namespace ConnectorControl.Core;
 
 /// <summary>
-/// Where a probe found a tool, if anywhere. Windows has two states (spec §6 D1): a GUI app and
+/// Where a probe found a tool, if anywhere. Windows has two states: a GUI app and
 /// a console see the same user PATH, so there is no "only the shell can see it" here.
 /// </summary>
 public sealed record ToolStatus(string? Path, string? Version)

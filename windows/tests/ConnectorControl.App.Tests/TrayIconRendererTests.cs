@@ -13,14 +13,14 @@ public class TrayIconRendererTests
     [InlineData(TrayGlyph.Warning, false, 16)]
     public void RendersVisiblePixelsAtTheRequestedSize(TrayGlyph glyph, bool light, int size)
     {
-        var (width, height, visible, iconHandle, iconWidth) = StaRunner.Run(() =>
+        var (width, height, visible, iconHandle, iconWidth) = WpfApp.Invoke(() =>
         {
             var bitmap = TrayIconRenderer.Render(glyph, light, size);
             // The tray takes a System.Drawing.Icon and RenderIcon is the only conversion that
             // works, so it is exercised here at every size: assigning the bitmap to
             // TaskbarIcon.IconSource instead threw NotImplementedException at startup.
             using var icon = TrayIconRenderer.RenderIcon(glyph, light, size);
-            return (bitmap.PixelWidth, bitmap.PixelHeight, TrayIconRenderer.CountVisiblePixels(bitmap), icon.Handle, icon.Width);
+            return (bitmap.PixelWidth, bitmap.PixelHeight, BitmapAssertions.CountVisiblePixels(bitmap), icon.Handle, icon.Width);
         });
         Assert.Equal(size, width);
         Assert.Equal(size, height);
@@ -35,9 +35,9 @@ public class TrayIconRendererTests
     [Fact]
     public void LightTaskbarGetsABlackGlyphAndDarkTaskbarAWhiteOne()
     {
-        var (light, dark) = StaRunner.Run(() => (
-            TrayIconRenderer.DominantColor(TrayIconRenderer.Render(TrayGlyph.Plug, lightTaskbar: true, 32)),
-            TrayIconRenderer.DominantColor(TrayIconRenderer.Render(TrayGlyph.Plug, lightTaskbar: false, 32))));
+        var (light, dark) = WpfApp.Invoke(() => (
+            BitmapAssertions.DominantColor(TrayIconRenderer.Render(TrayGlyph.Plug, lightTaskbar: true, 32)),
+            BitmapAssertions.DominantColor(TrayIconRenderer.Render(TrayGlyph.Plug, lightTaskbar: false, 32))));
         Assert.Equal(Colors.Black, light);
         Assert.Equal(Colors.White, dark);
     }

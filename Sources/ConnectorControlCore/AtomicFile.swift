@@ -1,13 +1,6 @@
 import Foundation
 
 public enum AtomicFile {
-    /// The app's own private folder for temp files (`…/Connector Control/.staging`), set once at
-    /// startup. When the target folder is on the same volume, temp files are created here and
-    /// renamed into place: a rename does not re-inherit ACEs, so a shared folder's principal
-    /// never sees the file, not even empty. Nil (tests, tools) means temp files are created
-    /// beside the target and stripped of ACEs before the first write.
-    nonisolated(unsafe) public static var privateStagingDirectory: URL?
-
     /// `staging` when it can serve `dir` — it exists (created 0700 with no ACL) and shares
     /// `dir`'s device, so the final rename stays a rename — else nil.
     static func stagingLocation(for dir: URL, staging: URL?) -> URL? {
@@ -27,7 +20,13 @@ public enum AtomicFile {
         return staging
     }
 
-    public static func write(_ data: Data, to url: URL) throws {
+    /// `staging` is the app's own private folder for temp files
+    /// (`…/Connector Control/.staging`) — when it can serve the target's directory
+    /// (see `stagingLocation`), the temp file is born there and renamed into place: a
+    /// rename does not re-inherit ACEs, so a shared folder's principal never sees the
+    /// file, not even empty. Nil (tests, tools, or a volume `staging` can't serve) means
+    /// the temp file is created beside the target and stripped of ACEs before the first write.
+    public static func write(_ data: Data, to url: URL, staging: URL? = nil) throws {
         let fm = FileManager.default
         // A symlinked destination (a config kept in a dotfiles repo) is written
         // through: the temp file is created in the private staging folder when
@@ -35,7 +34,7 @@ public enum AtomicFile {
         // renamed over the real file either way, so the link survives and the
         // bytes land where every other reader of the link finds them.
         // Components that do not exist yet are left as given.
-        let target = url.resolvingSymlinksInPath()
+        let target = resolveWriteTarget(url)
         let dir = target.deletingLastPathComponent()
         // A directory this call has to create holds a private file, so it is
         // owner-only from the start (the sweep would only catch it on the
@@ -49,7 +48,7 @@ public enum AtomicFile {
             // included; 0700 alone would leave the new directory listable by that principal.
             try stripACL(atPath: dir.path)
         }
-        let tmpDir = stagingLocation(for: dir, staging: privateStagingDirectory) ?? dir
+        let tmpDir = stagingLocation(for: dir, staging: staging) ?? dir
         let tmp = tmpDir.appendingPathComponent(".\(target.lastPathComponent).tmp-\(UUID().uuidString)")
         // Connector configs can hold env-var secrets. The file is created 0600
         // by open(2) itself — never with the umask's default and a chmod after
@@ -73,7 +72,7 @@ public enum AtomicFile {
         // a failure surface rather than shipping a file of unknown mode. A
         // rename keeps the temp file's mode, but replaceItemAt does NOT by
         // default: it restores the destination's old metadata, so a 644 file
-        // Claude Desktop created would stay 644 through every write.
+        // Claude Desktop created stays 644 through every write.
         // .usingNewMetadataOnly keeps the 600 set here.
         try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: tmp.path)
         if fm.fileExists(atPath: target.path) {
@@ -85,6 +84,30 @@ public enum AtomicFile {
                 _ = try fm.replaceItemAt(target, withItemAt: tmp, options: .usingNewMetadataOnly)
             }
         }
+    }
+
+    /// `resolvingSymlinksInPath()` for every case but one: a symlink whose
+    /// target does not exist yet. `resolvingSymlinksInPath()` (like
+    /// `realpath(3)`) requires the fully resolved path to already exist and
+    /// otherwise leaves the whole URL unresolved — which would make the
+    /// rename below collide with the dangling link and fail (or, off this
+    /// codebase, replace it outright), instead of writing through it. This
+    /// is the read side of the same shape of bug `File.Exists` guards
+    /// against in the Windows writer. Walked by hand, like
+    /// ResolveLinkTarget(returnFinalTarget: true), one readlink at a time,
+    /// so a config linked into a dotfiles repo before its real file is ever
+    /// created still gets written through the link.
+    static func resolveWriteTarget(_ url: URL) -> URL {
+        var current = url
+        for _ in 0..<32 {   // a bound against a symlink cycle, not a realistic chain depth
+            guard let destination = try? FileManager.default.destinationOfSymbolicLink(atPath: current.path) else {
+                return current.resolvingSymlinksInPath()
+            }
+            current = destination.hasPrefix("/")
+                ? URL(fileURLWithPath: destination)
+                : URL(fileURLWithPath: destination, relativeTo: current.deletingLastPathComponent()).standardizedFileURL
+        }
+        return current   // a link cycle: give up resolving further and let the write fail on it
     }
 
     /// Removes every ACL entry from the object `fd` refers to. `open(…, 0600)` cannot refuse
@@ -106,13 +129,6 @@ public enum AtomicFile {
         guard let empty = acl_init(0) else { throw posixError() }
         defer { acl_free(UnsafeMutableRawPointer(empty)) }
         guard apply(empty) == 0 || errno == ENOTSUP else { throw posixError() }
-    }
-
-    /// True when the object carries any ACL entry (inherited or explicit).
-    public static func hasACL(atPath path: String) -> Bool {
-        guard let acl = acl_get_link_np(path, ACL_TYPE_EXTENDED) else { return false }
-        acl_free(UnsafeMutableRawPointer(acl))
-        return true
     }
 
     private static func posixError() -> NSError {

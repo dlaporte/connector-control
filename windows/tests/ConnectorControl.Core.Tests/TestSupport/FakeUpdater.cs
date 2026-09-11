@@ -32,14 +32,13 @@ public sealed class FakeUpdater : IUpdater
         return Next;
     }
 
-    public Task DownloadAsync(UpdateCheck update, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
+    public Task DownloadAsync(UpdateCheck update, CancellationToken cancellationToken = default)
     {
         Downloads++;
         if (DownloadFailure is not null)
         {
             throw DownloadFailure;
         }
-        progress?.Report(100);
         return Task.CompletedTask;
     }
 

@@ -96,9 +96,9 @@ public class JsonValueTests
     }
 
     [Fact]
-    public void LastDuplicateKeyWins()
+    public void FirstDuplicateKeyWins()
     {
-        Assert.Equal(JsonValue.Int(2), JsonValue.Parse("{\"k\": 1, \"k\": 2}")["k"]);
+        Assert.Equal(JsonValue.Int(1), JsonValue.Parse("{\"k\": 1, \"k\": 2}")["k"]);
     }
 
     [Theory]

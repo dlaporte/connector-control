@@ -1,5 +1,4 @@
 import SwiftUI
-import ConnectorControlCore
 import ConnectorControlState
 
 struct PopoverView: View {
@@ -28,7 +27,7 @@ struct PopoverView: View {
     }
 
     private func openEditor(_ target: EditTarget) {
-        openWindow(id: "editor", value: target)
+        openWindow(id: EditTarget.editorWindowID, value: target)
         NSApp.activate(ignoringOtherApps: true)
     }
 

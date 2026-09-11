@@ -15,8 +15,8 @@ public enum RemotePattern {
         s == defaultPackage || s.hasPrefix(defaultPackage + "@")
     }
 
-    /// The rule the URL argument must meet (catalog §3.4 remoteURLValid): an
-    /// http or https scheme and a host. `detect` applies it to the bridge's
+    /// The rule the URL argument must meet: an http or https scheme and a
+    /// host. `detect` applies it to the bridge's
     /// URL; the editor applies it to the Server URL field.
     public static func isValidHTTPURL(_ text: String) -> Bool {
         guard let url = URL(string: text), let scheme = url.scheme?.lowercased(),
@@ -25,18 +25,9 @@ public enum RemotePattern {
     }
 
     public static func detect(_ config: JSONValue) -> String? {
-        guard case .object(let object) = config,
-              case .string("npx") = object["command"] ?? .null,
-              case .array(let rawArgs) = object["args"] ?? .null
+        guard let args = strippedArgs(config), args.count == 2,
+              isMarker(args[0]), isValidHTTPURL(args[1])
         else { return nil }
-        var args: [String] = []
-        for raw in rawArgs {
-            guard case .string(let s) = raw else { return nil }
-            args.append(s)
-        }
-        if args.first == "-y" { args.removeFirst() }
-        guard args.count == 2, isMarker(args[0]) else { return nil }
-        guard isValidHTTPURL(args[1]) else { return nil }
         return args[1]
     }
 
@@ -62,9 +53,10 @@ public enum RemotePattern {
         return args.count <= 2 && (args.first.map(isMarker) ?? false)
     }
 
-    /// String args with a leading "-y" stripped, or nil when the config isn't
-    /// an all-string-args npx invocation.
-    private static func strippedArgs(_ config: JSONValue) -> [String]? {
+    /// The config's `args` as strings, when it's an object whose `command` is
+    /// `npx` and every arg is a string; nil otherwise (wrong command, a
+    /// missing/non-array `args`, or a non-string element).
+    private static func launcherArgs(_ config: JSONValue) -> [String]? {
         guard case .object(let object) = config,
               case .string("npx") = object["command"] ?? .null,
               case .array(let rawArgs) = object["args"] ?? .null
@@ -74,6 +66,13 @@ public enum RemotePattern {
             guard case .string(let s) = raw else { return nil }
             args.append(s)
         }
+        return args
+    }
+
+    /// `launcherArgs` with a leading "-y" stripped, or nil when the config isn't
+    /// an all-string-args npx invocation.
+    private static func strippedArgs(_ config: JSONValue) -> [String]? {
+        guard var args = launcherArgs(config) else { return nil }
         if args.first == "-y" { args.removeFirst() }
         return args
     }
@@ -82,7 +81,7 @@ public enum RemotePattern {
 // MARK: - Remote authentication
 
 /// How mcp-remote should authenticate to the remote server.
-public enum RemoteAuth: Equatable {
+public enum RemoteAuth: Equatable, Sendable {
     /// OAuth dynamic client registration, or no auth for an open server.
     case automatic
     /// `Authorization: Bearer <token>`.
@@ -95,7 +94,7 @@ public enum RemoteAuth: Equatable {
 
 /// The pieces of a `npx mcp-remote` invocation the Remote form edits, plus
 /// whatever it doesn't model so those survive a round-trip untouched.
-public struct RemoteConfig: Equatable {
+public struct RemoteConfig: Equatable, Sendable {
     public var url: String
     public var auth: RemoteAuth
     /// mcp-remote flags this app has no widget for — preserved verbatim, in order.
@@ -160,26 +159,15 @@ public extension RemotePattern {
     /// Reads a `npx mcp-remote` config back into a `RemoteConfig`, or nil when
     /// it isn't one (wrong command, missing/invalid marker, or no valid URL).
     static func decode(_ config: JSONValue) -> RemoteConfig? {
-        guard case .object(let object) = config,
-              case .string("npx") = object["command"] ?? .null,
-              case .array(let rawArgs) = object["args"] ?? .null
-        else { return nil }
-        var args: [String] = []
-        for raw in rawArgs {
-            guard case .string(let s) = raw else { return nil }
-            args.append(s)
-        }
+        guard case .object(let object) = config, let args = launcherArgs(config) else { return nil }
 
         var i = 0
         if args.first == "-y" { i = 1 }
         guard i < args.count, isMarker(args[i]) else { return nil }
         let package = args[i]
         i += 1
-        guard i < args.count else { return nil }
+        guard i < args.count, isValidHTTPURL(args[i]) else { return nil }
         let urlString = args[i]
-        guard let url = URL(string: urlString), let scheme = url.scheme?.lowercased(),
-              scheme == "http" || scheme == "https", url.host != nil
-        else { return nil }
         i += 1
 
         var env: [String: String] = [:]

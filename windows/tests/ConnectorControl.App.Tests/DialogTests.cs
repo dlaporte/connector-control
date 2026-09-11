@@ -1,11 +1,11 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using ConnectorControl.App.Services;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
 using ConnectorControl.Core.State;
 using ConnectorControl.Core.Tests.TestSupport;
-using AppServices = ConnectorControl.App.Services.Services;
 
 namespace ConnectorControl.App.Tests;
 
@@ -121,23 +121,11 @@ public class DialogTests
     }
 
     [Fact]
-    public void WpfDialogsMatchesTheSeamTheFakeMirrors()
-    {
-        // The fake in Core.Tests supplies the same defaults; if these drift apart, a call
-        // site compiles against one shape and is tested against another.
-        var confirm = typeof(WpfDialogs).GetMethod(nameof(IDialogs.Confirm))!;
-        Assert.Equal("Cancel", confirm.GetParameters()[3].DefaultValue);
-        Assert.Equal(false, confirm.GetParameters()[4].DefaultValue);
-        Assert.True(typeof(WpfDialogs).IsSealed);
-        Assert.True(typeof(IDialogs).IsAssignableFrom(typeof(WpfDialogs)));
-    }
-
-    [Fact]
     public void WpfDialogsFallsBackToTheActiveWindowWhenNoOwnerWasGiven()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var services = new AppServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
@@ -147,14 +135,14 @@ public class DialogTests
             // The flyout hides itself the moment something takes the focus, which is exactly what
             // showing a modal does — so Quit / Restart Required / the profile prompts must never
             // be owned by it, however visible and active it is when they are raised.
-            using var model = new FlyoutModel(state);
+            using var model = new FlyoutModel(state, h.Settings);
             var flyout = new FlyoutWindow(model, new WindowRegistry(state, services, updates)) { TrayAnchor = () => null };
             flyout.Show();
             flyout.Activate();
             Assert.True(flyout.IsVisible);
             Assert.Null(dialogs.ResolveOwner());
 
-            var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
+            var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = FlyoutWindow.OffScreen, Top = FlyoutWindow.OffScreen };
             window.Show();
             window.Activate();
             // Settings ▸ Check for Updates… reaches the coordinator's ownerless WpfDialogs;

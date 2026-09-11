@@ -2,7 +2,7 @@ import SwiftUI
 import ConnectorControlCore
 import ConnectorControlState
 
-/// Catalog §3: fields, bindings and layout only; every rule is EditorModel's.
+/// Fields, bindings and layout only; every rule is EditorModel's.
 struct EditSheetView: View {
     @StateObject private var model: EditorModel
     @Environment(\.dismiss) private var dismiss
@@ -45,7 +45,7 @@ struct EditSheetView: View {
                     Button(EditorModel.removeButton, role: .destructive) { model.requestRemove() }
                 }
                 Spacer()
-                Button("Cancel") { dismiss() }
+                Button(AlertDialogs.cancelTitle) { dismiss() }
                 Button("Save") { if model.save() { dismiss() } }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!model.canSave)

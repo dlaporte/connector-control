@@ -7,12 +7,69 @@ section is missing. The top section also names the version a Windows
 preview build is cut from (a preview is versioned as that number followed
 by -preview.N, and the preview build fails if that version has already
 been released), so open the next version's section as soon as the previous
-one ships.
+one ships. A freshly opened section starts with four sub-headings, in this
+order: `### macOS`, `### Windows`, `### Both platforms`, `### Release
+pipeline`; leave a sub-heading's bullets empty rather than removing the
+sub-heading, and drop any sub-heading that never got a bullet once the
+section is about to ship.
 
 ## v1.3.3
 
-- Windows: the tray icon is now the same plug as the Mac's menu bar icon,
-  prongs to the right and cable to the left; it used to stand upright.
+### macOS
+
+- The one-time permissions repair no longer records itself done when every repair
+  failed; it retries at the next launch. It is tracked by a version number now, so an
+  upgraded install runs it once more.
+- The Restore… sheet reports a failure to list backups instead of showing an empty list.
+- Repointing the master list to a folder that cannot be written keeps the current
+  location and reports the failure instead of switching to an empty list.
+- Deleting the folder that holds Claude's config or the connector list no longer
+  leaves the file watcher stuck; it recovers when the folder reappears.
+- An empty `CONNECTOR_CONTROL_CLAUDE_CONFIG` or `CONNECTOR_CONTROL_STORE_DIR`
+  variable, or an empty stored master-list path, now counts as unset.
+- The migration from the pre-1.0 app names is gone; no released build ever needed it.
+
+### Windows
+
+- Updates are offered, not installed silently, matching the Mac; the switch under
+  Settings ▸ General ▸ Updates turns automatic installation back on.
+- A Claude config reached through a symlink is written through to the real file
+  instead of being replaced by a plain copy.
+- The editor clears a bearer token, header or OAuth client secret when a JSON edit
+  switches the auth type, instead of keeping it behind the new one.
+- The Settings window no longer stalls while the Claude tab's icon loads or while a
+  chosen launch target is verified.
+- Previews of a connector's extra fields no longer show escaped slashes.
+- Repointing the master list to a folder that refuses the write keeps the current
+  location and reports the failure.
+- A failed settings save shows in the flyout banner instead of passing silently.
+- The one-time owner-only permissions repair is tracked by a version number; an
+  upgraded install runs it once more.
+- The tray icon is now the same plug as the Mac's menu bar icon, prongs to the right
+  and cable to the left; it used to stand upright.
+- A JSON object with a duplicate key now keeps the first value, matching the Mac; it
+  used to keep the last.
+- A declined update is no longer offered again by the background check; a manual
+  check still offers it.
+
+### Both platforms
+
+- A stale backup that cannot be deleted no longer fails the save; it is retried at
+  the next rotation.
+- The messages for a Claude app that is not found, or not signed by Anthropic, end
+  with the same sentence on both platforms.
+- The error for an unparseable backup names the parser's complaint.
+
+### Release pipeline
+
+- The Windows build no longer downloads the previous release or builds a delta
+  package; no client has applied one since v1.3.2.
+- The smoke test asks the installed app to verify its own package with the code the
+  updater runs, instead of re-implementing the publisher policy in PowerShell.
+- The release and preview workflows share one secrets gate and one set of publish
+  scripts; a new lint workflow checks every workflow and the scripts they call on push;
+  the Mac CI build also produces the DMG. vpk is pinned in a tool manifest that
+  Dependabot tracks.
 
 ## v1.3.2
 
@@ -50,12 +107,6 @@ Hardening from a security review of the app and its release pipeline.
 - Windows: the app manifest declares that it runs as the signed-in user,
   which keeps Windows from ever treating it as an installer that wants
   elevation.
-- Release pipeline: the Sparkle tools that sign the Mac update feed are
-  verified against a pinned checksum before use; the Windows build receives
-  only the six signing secrets it needs rather than every repository
-  secret; a re-run never replaces an asset already published under a
-  version; every GitHub Action is pinned to a commit, with Dependabot
-  keeping the pins current.
 - Windows: the connector editor refuses a Server URL, header name or OAuth
   client field that contains `& | < > ^ "` or a space when the connector
   uses the `cmd /c npx` launcher, and says why: Claude Desktop hands that
@@ -100,8 +151,13 @@ Hardening from a security review of the app and its release pipeline.
   PC.
 - macOS: Sparkle now verifies an update's signature before unpacking it and
   requires the update feed itself to be signed.
-- Release pipeline: Dependabot now also watches the Windows NuGet packages
-  and the Swift package.
+- Release pipeline: the Sparkle tools that sign the Mac update feed are
+  verified against a pinned checksum before use; the Windows build receives
+  only the six signing secrets it needs rather than every repository
+  secret; a re-run never replaces an asset already published under a
+  version; every GitHub Action is pinned to a commit, with Dependabot
+  keeping the pins current, including the Windows NuGet packages and the
+  Swift package.
 
 ## v1.3.1
 
@@ -122,16 +178,16 @@ Hardening from a security review of the app and its release pipeline.
 
 ## v1.3.0
 
-- Connector Control now runs on Windows. The new app lives in the system
-  tray and brings the same connector list, editor, profiles, backups,
+- Windows: Connector Control now runs on Windows. The new app lives in the
+  system tray and brings the same connector list, editor, profiles, backups,
   self-healing and syncing to Windows 10 (build 17763 and later) and
   Windows 11, on x64 and Arm64 PCs. Install it from
   ConnectorControl-win-x64-Setup.exe (or the win-arm64 one) on the release
   page; it keeps itself up to date from then on. Both apps read and write
   the same mcps.json, so a master list synced between a Mac and a PC
   serves both — local-server commands stay OS-specific, see the README.
-- Missing-tool warnings: a connector that starts through npx, node,
-  uvx or uv now shows a caution glyph in the connector list when that
+- Both platforms: missing-tool warnings for a connector that starts through npx, node,
+  uvx or uv now show a caution glyph in the connector list when that
   tool isn't installed where Claude Desktop can find it. The editor explains
   what to install, with a download link and the brew (or winget)
   command, and Settings ▸ Claude ▸ Tools lists all four tools with their

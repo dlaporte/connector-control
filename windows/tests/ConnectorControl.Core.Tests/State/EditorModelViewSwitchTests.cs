@@ -1,0 +1,201 @@
+using ConnectorControl.Core.State;
+using ConnectorControl.Core.Tests.TestSupport;
+
+namespace ConnectorControl.Core.Tests.State;
+
+public class EditorModelViewSwitchTests
+{
+    private const string Url = "https://scoutbook.example.com/mcp";
+
+    [Fact]
+    public void SettingIsJsonViewSwitchesToJsonAndClearsIsFormView()
+    {
+        using var rig = new EditorRig();
+        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        Assert.Equal(EditView.Form, editor.View);
+        editor.View = EditView.Json;
+        Assert.Equal(EditView.Json, editor.View);
+    }
+
+    [Fact]
+    public void SettingIsFormViewFromValidJsonSwitchesBack()
+    {
+        using var rig = new EditorRig();
+        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        editor.RequestView(EditView.Json);
+        editor.JsonText = "{\"command\": \"node\", \"args\": [\"y.js\"]}";
+        editor.View = EditView.Form;
+        Assert.Equal(EditView.Form, editor.View);
+        Assert.Equal(["y.js"], editor.Args.Select(a => a.Value).ToArray());
+    }
+
+    /// <summary>An unparseable JSON text refuses the switch and snaps the segmented control back
+    /// via PropertyChanged for View, without ever reaching the loss-warning dialog.</summary>
+
+    [Fact]
+    public void SettingIsFormViewWithUnrecoverableJsonIsRefusedAndSnapsBack()
+    {
+        using var rig = new EditorRig();
+        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        editor.RequestView(EditView.Json);
+        editor.JsonText = "{\"command\": ";
+        var raised = new List<string?>();
+        editor.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        editor.View = EditView.Form;
+        Assert.Equal(EditView.Json, editor.View);
+        Assert.Equal(EditorModel.NotValidJson, editor.JsonError);
+        Assert.Contains(nameof(EditorModel.View), raised);
+        Assert.Empty(rig.H.Dialogs.Confirms);
+    }
+
+    /// <summary>Save() with unrecoverable JSON returns false and writes nothing.</summary>
+
+    [Fact]
+    public void FormToJsonSyncsTheTextAndJsonToFormAdoptsIt()
+    {
+        using var rig = new EditorRig();
+        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        editor.RemoteUrl = Url;
+        editor.RequestView(EditView.Json);
+        Assert.Equal(EditView.Json, editor.View);
+        Assert.Equal("{\n  \"args\" : [\n    \"/c\",\n    \"npx\",\n    \"-y\",\n    \"mcp-remote\",\n    \"" + Url + "\"\n  ],\n  \"command\" : \"cmd\"\n}", editor.JsonText);
+        Assert.Null(editor.JsonError);
+        Assert.Equal(EditorModel.JsonTip, editor.JsonStatusText);
+
+        editor.JsonText = "{\"command\": \"node\", \"args\": [\"x.js\"], \"env\": {\"K\": \"v\"}}";
+        editor.RequestView(EditView.Form);
+        Assert.Equal(EditView.Form, editor.View);
+        Assert.False(editor.IsRemote);
+        Assert.Equal("node", editor.Command);
+        Assert.Equal(["x.js"], editor.Args.Select(a => a.Value).ToArray());
+        Assert.False(editor.EnvRows[0].Revealed);   // re-adopted values are masked again
+    }
+
+    [Fact]
+    public void FormToJsonIsBlockedByEnvValidation()
+    {
+        using var rig = new EditorRig();
+        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        editor.AddEnvRow();
+        editor.EnvRows[0].Value = "orphan";
+        editor.RequestView(EditView.Json);
+        Assert.Equal(EditView.Form, editor.View);
+        Assert.Equal("An environment variable value is missing its name.", editor.ValidationError);
+        Assert.Equal(EditView.Form, editor.View);
+    }
+
+    [Fact]
+    public void JsonToFormWithLossPromptsAndStaysUnlessForced()
+    {
+        using var rig = new EditorRig();
+        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        editor.RequestView(EditView.Json);
+        editor.JsonText = "{\"command\": 1, \"args\": [\"a\", 2], \"env\": {\"K\": true}}";
+        rig.H.Dialogs.NextConfirm = false;
+        editor.RequestView(EditView.Form);
+        Assert.Equal(EditView.Json, editor.View);
+        var call = Assert.Single(rig.H.Dialogs.Confirms);
+        Assert.Equal("Switching to Form view can’t fully represent this configuration. These elements would be lost or altered:\nargs[1] (number)\ncommand (number)\nenv.K (boolean)", call.Message);
+        Assert.Equal("Switch Anyway", call.Primary);
+        Assert.Equal("Stay in JSON", call.Cancel);
+        Assert.True(call.Destructive);
+
+        rig.H.Dialogs.NextConfirm = true;
+        editor.RequestView(EditView.Form);
+        Assert.Equal(EditView.Form, editor.View);
+        Assert.Equal("", editor.Command);
+        Assert.Equal(["a"], editor.Args.Select(a => a.Value).ToArray());
+        Assert.Empty(editor.EnvRows);
+    }
+
+    /// <summary>The template-discard rule fires once, at the first switch to Local; a second
+    /// Type toggle must not re-derive it and wipe what the user typed.</summary>
+    [Fact]
+    public void TogglingTheTypeTwiceKeepsATypedLocalCommand()
+    {
+        using var rig = new EditorRig();
+        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        editor.IsRemote = false;
+        editor.Command = "node";
+        editor.Args.Clear();
+        editor.Args.Add(new ArgRow("server.js"));
+        editor.IsRemote = true;
+        editor.IsRemote = false;
+        Assert.Equal("node", editor.Command);
+        Assert.Equal(["server.js"], editor.Args.Select(a => a.Value).ToArray());
+    }
+
+    /// <summary>A JSON-view edit to a still-open remote template must survive the round trip back
+    /// to Form: the template flag is consumed by an actual edit, not just by opening the JSON
+    /// view, so a later Type toggle to Remote and back to Local must not re-derive and wipe the
+    /// edited command/args. The edit is a LOCAL-shaped config on purpose: Load assigns the
+    /// isRemote backing field directly (not the IsRemote setter's discard path), so switching to
+    /// Form alone fires no discard regardless of this fix; only the later explicit toggle does,
+    /// and only the fix keeps it from wiping what was just adopted.</summary>
+    [Fact]
+    public void ATemplateEditedInJsonKeepsItsCommandOnSwitchToLocal()
+    {
+        using var rig = new EditorRig();
+        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        editor.RequestView(EditView.Json);
+        editor.JsonText = "{\"command\":\"node\",\"args\":[\"server.js\"]}";
+        editor.RequestView(EditView.Form);
+        Assert.Equal(EditView.Form, editor.View);
+        editor.IsRemote = true;
+        editor.IsRemote = false;
+        Assert.Equal("node", editor.Command);
+        Assert.Equal(["server.js"], editor.Args.Select(a => a.Value).ToArray());
+    }
+
+    /// <summary>An unedited JSON round trip (straight to JSON and back without touching the text)
+    /// still counts as untouched — the discard on Type toggle to Local fires exactly as it did
+    /// before this template flag was scoped to actual edits.</summary>
+    [Fact]
+    public void AnUnchangedJsonRoundTripStillDiscardsTheTemplateOnSwitchToLocal()
+    {
+        using var rig = new EditorRig();
+        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        editor.RequestView(EditView.Json);
+        editor.RequestView(EditView.Form);
+        Assert.Equal(EditView.Form, editor.View);
+        editor.IsRemote = false;
+        Assert.Equal("npx", editor.Command);
+        Assert.Equal(["-y", ""], editor.Args.Select(a => a.Value).ToArray());
+    }
+
+    [Fact]
+    public void JsonValidationErrorDisablesSave()
+    {
+        using var rig = new EditorRig();
+        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        editor.RequestView(EditView.Json);
+        editor.JsonText = "{\"command\": ";
+        Assert.Equal("Not valid JSON — check for a stray brace, missing comma, or unquoted value.", editor.JsonError);
+        Assert.Equal(editor.JsonError, editor.JsonStatusText);
+        Assert.True(editor.HasJsonError);
+        Assert.False(editor.CanSave);
+        editor.JsonText = "{\"command\": \"node\"}";
+        Assert.Null(editor.JsonError);
+        Assert.True(editor.CanSave);
+    }
+
+    [Fact]
+    public void AdoptingAHeaderConfigClearsTheOldBearerToken()
+    {
+        using var rig = new EditorRig();
+        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        editor.RemoteUrl = Url;
+        editor.AuthKindIndex = EditorRig.AuthKindIndexOf(RemoteAuthKind.Bearer);
+        editor.BearerToken = "tok";
+        Assert.Equal(RemoteAuthKind.Bearer, editor.AuthKind);
+
+        editor.RequestView(EditView.Json);
+        var headerConfig = RemotePattern.Encode(new RemoteConfig(Url, new RemoteAuth.Header("X-API-Key", "v"), RemoteLaunchStyle.CmdNpx));
+        editor.JsonText = headerConfig.EditorText();
+        editor.RequestView(EditView.Form);
+
+        Assert.Equal(RemoteAuthKind.Header, editor.AuthKind);
+        Assert.Equal("X-API-Key", editor.HeaderName);
+        Assert.Equal("", editor.BearerToken);
+    }
+}

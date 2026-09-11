@@ -48,6 +48,7 @@ public class UpdateCoordinatorTests
     [Fact]
     public async Task AutoUpdateDownloadsStagesForQuitAndToastsOncePerVersion()
     {
+        settings.AutoUpdate = true;
         updater.Next = Update();
         using var coordinator = Coordinator();
         Assert.Equal(UpdateOutcome.StagedForQuit, await coordinator.CheckAsync(interactive: false));
@@ -69,6 +70,7 @@ public class UpdateCoordinatorTests
     [Fact]
     public async Task TheSamePendingUpdateIsStagedOnlyOnce()
     {
+        settings.AutoUpdate = true;
         updater.Next = Update();
         using var coordinator = Coordinator();
         await coordinator.CheckAsync(interactive: false);
@@ -159,6 +161,7 @@ public class UpdateCoordinatorTests
     [InlineData(false, 0)]
     public async Task ADownloadFailureIsHandledAndNothingIsStaged(bool interactive, int informs)
     {
+        settings.AutoUpdate = true;   // the interactive:false case exercises the silent auto-update download path
         updater.Next = Update();
         updater.DownloadFailure = new HttpRequestException("connection reset");
         dialogs.NextOffer = true;
@@ -174,6 +177,7 @@ public class UpdateCoordinatorTests
     [Fact]
     public async Task StateWritesOnlyHappenWhenTheMarshalQueueIsPumped()
     {
+        settings.AutoUpdate = true;
         var ui = new MarshalQueue();
         var host = new AppHost(ui.Post, delays.Add, () => DateTime.UtcNow);
         updater.Next = Update();
@@ -201,6 +205,7 @@ public class UpdateCoordinatorTests
     [Fact]
     public async Task TheInFlightCheckIsClearedOnTheUiThreadBeforeItsOutcomeIsPublished()
     {
+        settings.AutoUpdate = true;
         var ui = new MarshalQueue();
         var posted = 0;
         var host = new AppHost(a => { Interlocked.Increment(ref posted); ui.Post(a); }, delays.Add, () => DateTime.UtcNow);
@@ -246,6 +251,7 @@ public class UpdateCoordinatorTests
     [Fact]
     public async Task OverlappingChecksShareTheSameInFlightCheckInsteadOfHittingTheFeedTwice()
     {
+        settings.AutoUpdate = true;
         updater.Next = Update();
         updater.CheckGate = new TaskCompletionSource<bool>();
         using var coordinator = Coordinator();
@@ -276,6 +282,7 @@ public class UpdateCoordinatorTests
     [Fact]
     public async Task ADownloadFailureAfterAVersionIsAlreadyStagedLeavesTheOlderVersionInPlace()
     {
+        settings.AutoUpdate = true;
         updater.Next = Update();
         using var coordinator = Coordinator();
         Assert.Equal(UpdateOutcome.StagedForQuit, await coordinator.CheckAsync(interactive: false));
@@ -304,18 +311,10 @@ public class UpdateCoordinatorTests
     }
 
     [Fact]
-    public void DialogStringsMatchTheSpec()
-    {
-        Assert.Equal("A new version of Connector Control is available!", UpdateCoordinator.AvailableHeadline);
-        Assert.Equal("Connector Control 1.3.0 is now available — you have 1.2.2. Would you like to install it now?", UpdateCoordinator.AvailableDetail("1.3.0", "1.2.2"));
-        Assert.Equal("Install and Relaunch", UpdateCoordinator.InstallButton);
-        Assert.Equal("Later", UpdateCoordinator.LaterButton);
-    }
-
-    [Fact]
     public async Task ARefusedUpdateIsAnnouncedOncePerVersionAndNeverStaged()
     {
         // A package that fails authenticity verification is the one failure a background check must not keep quiet about.
+        settings.AutoUpdate = true;
         updater.Next = Update();
         updater.DownloadFailure = new UpdateVerificationException("ConnectorControl.exe inside the update is not signed by this app's publisher; the update was not installed.");
         using var coordinator = Coordinator();
@@ -327,6 +326,73 @@ public class UpdateCoordinatorTests
 
         Assert.Equal(UpdateOutcome.Failed, await coordinator.CheckAsync(interactive: false));
         Assert.Single(notifier.Sent);   // same version: no second toast
+    }
+
+    [Fact]
+    public async Task ADeclinedVersionIsNotOfferedAgainByTheBackgroundCheck()
+    {
+        settings.AutoUpdate = false;
+        updater.Next = Update();
+        dialogs.NextOffer = false;
+        using var coordinator = Coordinator();
+
+        Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: false));
+        Assert.Single(dialogs.Offers);
+        Assert.Equal("1.3.0", coordinator.DeclinedVersion);
+        Assert.Equal("1.3.0", settings.DeclinedUpdateVersion);   // persisted, not just in-memory
+
+        // A later scheduled check for the same version does not re-offer it.
+        Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: false));
+        Assert.Single(dialogs.Offers);
+
+        // A newer version is offered again.
+        updater.Next = Update("1.4.0");
+        Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: false));
+        Assert.Equal(2, dialogs.Offers.Count);
+        Assert.Equal("1.4.0", coordinator.DeclinedVersion);
+        Assert.Equal("1.4.0", settings.DeclinedUpdateVersion);
+    }
+
+    [Fact]
+    public async Task AManualCheckStillOffersADeclinedVersion()
+    {
+        settings.AutoUpdate = false;
+        updater.Next = Update();
+        dialogs.NextOffer = false;
+        using var coordinator = Coordinator();
+
+        Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: false));
+        Assert.Single(dialogs.Offers);
+        Assert.Equal("1.3.0", coordinator.DeclinedVersion);
+        Assert.Equal("1.3.0", settings.DeclinedUpdateVersion);   // persisted, not just in-memory
+
+        // Settings ▸ Check for Updates… always offers, even a version the user already declined.
+        Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: true));
+        Assert.Equal(2, dialogs.Offers.Count);
+    }
+
+    /// <summary>
+    /// The decline is persisted (ISettings.DeclinedUpdateVersion), not held only in the
+    /// coordinator's memory, so it survives a relaunch — a fresh coordinator over the same
+    /// settings still treats the version as declined.
+    /// </summary>
+    [Fact]
+    public async Task ADeclinedVersionSurvivesARelaunch()
+    {
+        settings.AutoUpdate = false;
+        updater.Next = Update();
+        dialogs.NextOffer = false;
+        using (var coordinator = Coordinator())
+        {
+            Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: false));
+            Assert.Single(dialogs.Offers);
+        }
+
+        // A new coordinator (as after a relaunch), over the same settings instance.
+        using var relaunched = Coordinator();
+        Assert.Equal("1.3.0", relaunched.DeclinedVersion);
+        Assert.Equal(UpdateOutcome.Deferred, await relaunched.CheckAsync(interactive: false));
+        Assert.Single(dialogs.Offers);   // still not re-offered
     }
 
     [Fact]

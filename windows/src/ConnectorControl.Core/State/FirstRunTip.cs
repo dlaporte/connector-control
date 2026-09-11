@@ -2,7 +2,7 @@ using ConnectorControl.Core.Services;
 
 namespace ConnectorControl.Core.State;
 
-/// <summary>Spec §7.1: one toast on first launch, remembered in settings.</summary>
+/// <summary>One toast on first launch, remembered in settings.</summary>
 public static class FirstRunTip
 {
     public const string Body = "Connector Control lives in the system tray. Drag its icon out of the overflow (^) to keep it visible.";

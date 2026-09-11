@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import ConnectorControlCore
 
-/// Catalog §3 EditSheetView without the pixels: every field, switch rule,
+/// EditSheetView without the pixels: every field, switch rule,
 /// validation string, and the save/remove flow. The two sheet-style
 /// confirmations (loss warning, remove) are published state the view binds
 /// to, with one method per button; the save-conflict alert goes through Dialogs.
@@ -51,15 +51,23 @@ public final class EditorModel: ObservableObject {
     private let dialogs: Dialogs
     private var subscription: AnyCancellable?
     private var suppressToolEvaluation = false
+    /// True only for a brand-new connector still showing the remote
+    /// template's placeholder command/args. Set at open; consumed by the
+    /// first discard (below) or by adopting an edited JSON view into the
+    /// form, since from then on the command/args are the user's own, not a
+    /// re-derivable property of the current fields — a later Type toggle
+    /// must not wipe what they typed. An unchanged JSON round trip (open
+    /// JSON, switch straight back) leaves it set.
+    private var isUntouchedTemplate: Bool
 
-    // MARK: - Fields (catalog §3.3)
+    // MARK: - Fields
 
     @Published public private(set) var view: EditView {
         didSet { if oldValue != view { evaluateRequiredTool() } }
     }
     @Published public var name: String
     /// The Type picker (new targets only). Switching to Local discards the
-    /// remote template's bridge invocation (catalog §3.6).
+    /// remote template's bridge invocation.
     @Published public var isRemote: Bool {
         didSet { isRemoteChanged(from: oldValue) }
     }
@@ -85,43 +93,46 @@ public final class EditorModel: ObservableObject {
     @Published public var jsonText: String {
         didSet {
             if oldValue != jsonText {
+                recoveredJSON = PasteRecovery.recover(jsonText)
                 validateJSON()
                 evaluateRequiredTool()
             }
         }
     }
+    /// `jsonText` recovered once per edit, in the didSet above; `validateJSON`
+    /// and `computeRequiredTool` read this instead of recovering it again.
+    private var recoveredJSON: PasteRecovery.Result?
     @Published public private(set) var jsonError: String?
     @Published public private(set) var validationError: String?
-    /// Non-nil while the loss-warning sheet is up (catalog §3.5).
+    /// Non-nil while the loss-warning sheet is up.
     @Published public private(set) var lossWarning: [String]?
-    /// True while the remove confirmation sheet is up (catalog §3.10).
+    /// True while the remove confirmation sheet is up.
     @Published public private(set) var removeConfirmationPending = false
-    /// The launcher this connector needs (spec 2026-09-05-tool-probe §3.3);
-    /// nil for none, a path, or unparseable JSON.
+    /// The launcher this connector needs; nil for none, a path, or unparseable JSON.
     @Published public private(set) var requiredTool: Tool?
 
     public init(state: AppState, target: EditTarget, dialogs: Dialogs) {
         self.state = state
         self.target = target
         self.dialogs = dialogs
+        isUntouchedTemplate = target.isNew && target.forcesRemote
         name = target.name
         view = target.entry.lastEditView
         let config = target.entry.config
-        let detected = RemotePattern.detect(config)
-        isRemote = target.forcesRemote || detected != nil
-        remoteURL = detected ?? ""
-        let model = FormMapper.analyze(config).model
-        command = model.command
-        args = model.args.map { ArgRow(value: $0) }
-        envRows = EditorModel.envRows(from: model.env)
-        additional = model.additional
+        // Placeholders: every stored property needs a value before `load`
+        // (an instance method) can run; it overwrites all of these.
+        isRemote = false
+        remoteURL = ""
+        command = ""
+        args = []
+        envRows = []
+        additional = [:]
         jsonText = config.editorText()
-        if let remote = RemotePattern.decode(config) {
-            applyRemoteFields(remote)
-        }
-        // Spec 2026-09-05-tool-probe §3.4: on open, a cached status shows its
-        // note at once; an unknown one is probed now. Later changes go through
-        // evaluateRequiredTool. The relay makes the view re-read toolNote.
+        recoveredJSON = PasteRecovery.recover(jsonText)
+        load(config)
+        // On open, a cached status shows its note at once; an unknown one is
+        // probed now. Later changes go through evaluateRequiredTool. The relay
+        // makes the view re-read toolNote.
         subscription = state.$toolStatuses.dropFirst().sink { [weak self] _ in self?.objectWillChange.send() }
         requiredTool = computeRequiredTool()
         if let initial = requiredTool, state.toolStatuses[initial] == nil {
@@ -155,16 +166,11 @@ public final class EditorModel: ObservableObject {
         EditorModel.additionalTitle(count: additional.count, keys: additional.keys.sorted())
     }
 
-    public var additionalPreview: String {
-        let data = (try? JSONValue.object(additional).serialized()) ?? Data()
-        return String(decoding: data, as: UTF8.self)
-    }
+    public var additionalPreview: String { JSONValue.object(additional).editorText() }
 
     public var hasJSONError: Bool { jsonError != nil }
 
     public var jsonStatusText: String { jsonError ?? EditorModel.jsonTip }
-
-    public var hasValidationError: Bool { validationError != nil }
 
     public var lossWarningMessage: String {
         EditorModel.lossWarningPrefix + (lossWarning ?? []).joined(separator: "\n")
@@ -172,14 +178,14 @@ public final class EditorModel: ObservableObject {
 
     public var removeConfirmationMessage: String { EditorModel.removeMessage(target.name) }
 
-    /// Catalog §3.4: Save is disabled with a JSON error, or in the remote form without a valid URL.
+    /// Save is disabled with a JSON error, or in the remote form without a valid URL.
     public var canSave: Bool {
         !((view == .json && jsonError != nil) || (view == .form && isRemote && !remoteURLValid))
     }
 
     public var canRemove: Bool { !target.isNew }
 
-    // MARK: - Tool note (spec 2026-09-05-tool-probe §3.3–§3.4)
+    // MARK: - Tool note
 
     /// nil while the tool is unknown (not probed yet) or found. Never blocks Save.
     public var toolNote: ToolNote? {
@@ -187,11 +193,9 @@ public final class EditorModel: ObservableObject {
         return ToolNote.make(tool: tool, status: state.toolStatuses[tool])
     }
 
-    public var hasToolNote: Bool { toolNote != nil }
-
     private func computeRequiredTool() -> Tool? {
         if view == .json {
-            return PasteRecovery.recover(jsonText).flatMap { ToolRequirement.requiredTool(for: $0.config) }
+            return recoveredJSON.flatMap { ToolRequirement.requiredTool(for: $0.config) }
         }
         return isRemote ? .npx : ToolRequirement.requiredTool(command: command, args: args.map(\.value))
     }
@@ -207,22 +211,25 @@ public final class EditorModel: ObservableObject {
 
     /// Only a user's picker tap reaches the re-seed below: adoptForm assigns
     /// isRemote while `view` is still `.json`, so the guard skips it — the same
-    /// outcome as the old view (its Type picker was out of the hierarchy while
-    /// the JSON view showed) and as EditorModel.cs (which bypasses the setter).
-    /// Quality review Q54 asked; both directions are tested.
+    /// outcome as the old view (its Type picker is out of the hierarchy while
+    /// the JSON view shows) and as EditorModel.cs (which bypasses the setter).
+    /// Both directions are tested.
     private func isRemoteChanged(from oldValue: Bool) {
         guard oldValue != isRemote else { return }
-        if target.isNew, !isRemote, view == .form,
-           args.contains(where: { $0.value == RemotePattern.defaultPackage }) || command.isEmpty {
+        if !isRemote, view == .form, isUntouchedTemplate {
             // Discard the remote template's bridge invocation — a local
-            // server has nothing to do with mcp-remote.
+            // server has nothing to do with mcp-remote. The template is
+            // consumed by this one discard; from here on the fields are
+            // the user's own local form, so a later switch back and forth
+            // must not re-derive and repeat it.
             command = "npx"
             args = [ArgRow(value: "-y"), ArgRow(value: "")]
+            isUntouchedTemplate = false
         }
         evaluateRequiredTool()
     }
 
-    // MARK: - List editing (catalog §3.6)
+    // MARK: - List editing
 
     public func addArg() { args.append(ArgRow(value: "")) }
 
@@ -244,7 +251,7 @@ public final class EditorModel: ObservableObject {
         envRows[index].revealed.toggle()
     }
 
-    // MARK: - View switching (catalog §3.5)
+    // MARK: - View switching
 
     public func requestView(_ requested: EditView) {
         guard requested != view else { return }
@@ -269,7 +276,7 @@ public final class EditorModel: ObservableObject {
         guard let config = effectiveJSONConfig() else { return }
         let analysis = FormMapper.analyze(config)
         if analysis.isLossless {
-            adoptForm(analysis.model, config: config)
+            adoptForm(config)
             view = .form
             return
         }
@@ -283,29 +290,51 @@ public final class EditorModel: ObservableObject {
     public func forceSwitchToForm() {
         lossWarning = nil
         guard let config = effectiveJSONConfig() else { return }
-        adoptForm(FormMapper.analyze(config).model, config: config)
+        adoptForm(config)
         view = .form
     }
 
-    private func adoptForm(_ model: FormModel, config: JSONValue) {
+    /// JSON → Form: `load` runs before `view` becomes `.form` (the caller
+    /// flips it after this returns), which is what keeps `isRemoteChanged`'s
+    /// bridge-discard branch — gated on `view == .form` — from firing mid-load.
+    private func adoptForm(_ config: JSONValue) {
+        load(config)
+        // A JSON edit that changed the config consumes the template, exactly
+        // like a discard would — so a later Type toggle to Local re-derives
+        // nothing and leaves what the user typed alone. An unchanged round
+        // trip (config still equal to the template as opened) leaves the
+        // flag set.
+        isUntouchedTemplate = isUntouchedTemplate && config == target.entry.config
+        evaluateRequiredTool()
+    }
+
+    /// Loads `config` into every form/remote field and (re)computes `isRemote`.
+    /// The one shared place `init` and `adoptForm` funnel through, so they
+    /// cannot disagree on the isRemote rule or which fields a config fills in.
+    /// Tool evaluation is suppressed for the duration — both callers evaluate
+    /// once themselves, after `view` (for `computeRequiredTool`'s JSON branch)
+    /// is in its final state.
+    private func load(_ config: JSONValue) {
         suppressToolEvaluation = true
+        let model = FormMapper.analyze(config).model
         command = model.command
         args = model.args.map { ArgRow(value: $0) }
         envRows = EditorModel.envRows(from: model.env)   // all values re-masked
         additional = model.additional
         let detected = RemotePattern.detect(config)
         isRemote = detected != nil || (target.forcesRemote && RemotePattern.isRemoteShaped(config))
+        // Quirk kept intentionally: remoteURL comes ONLY from detect()'s
+        // canonical 2-arg shape, even when isRemote is true via the
+        // forcesRemote/isRemoteShaped fallback above — decode() may have found
+        // a real URL past extra flags, but the Server URL field stays blank
+        // until the user (re)types it.
         remoteURL = detected ?? ""
         if let remote = RemotePattern.decode(config) {
             applyRemoteFields(remote)
         } else {
             resetRemoteFields()
-            remoteExtraArgs = []
-            remotePassthroughEnv = [:]
-            remotePackage = RemotePattern.defaultPackage
         }
         suppressToolEvaluation = false
-        evaluateRequiredTool()
     }
 
     private func resetRemoteFields() {
@@ -316,9 +345,12 @@ public final class EditorModel: ObservableObject {
         oauthClientID = ""
         oauthClientSecret = ""
         oauthScopes = ""
+        remoteExtraArgs = []
+        remotePassthroughEnv = [:]
+        remotePackage = RemotePattern.defaultPackage
     }
 
-    /// Maps a decoded RemoteConfig onto the form fields (catalog §3.3 authFields).
+    /// Maps a decoded RemoteConfig onto the form fields.
     private func applyRemoteFields(_ remote: RemoteConfig) {
         resetRemoteFields()
         switch remote.auth {
@@ -346,10 +378,10 @@ public final class EditorModel: ObservableObject {
         env.sorted { $0.key < $1.key }.map { EnvRow(name: $0.key, value: $0.value) }
     }
 
-    // MARK: - JSON (catalog §3.7)
+    // MARK: - JSON
 
     private func validateJSON() {
-        jsonError = PasteRecovery.recover(jsonText) == nil ? EditorModel.notValidJSON : nil
+        jsonError = recoveredJSON == nil ? EditorModel.notValidJSON : nil
     }
 
     /// Resolves the editor text via PasteRecovery, fills the name from a pasted
@@ -367,7 +399,7 @@ public final class EditorModel: ObservableObject {
         return recovered.config
     }
 
-    // MARK: - Form → config (catalog §3.5 currentFormConfig)
+    // MARK: - Form → config
 
     private var currentRemoteAuth: RemoteAuth {
         switch authKind {
@@ -418,7 +450,7 @@ public final class EditorModel: ObservableObject {
         return nil
     }
 
-    // MARK: - Save / remove (catalog §3.8–§3.10)
+    // MARK: - Save / remove
 
     /// True when the entry was saved and the window should close.
     public func save() -> Bool {
@@ -464,7 +496,7 @@ public final class EditorModel: ObservableObject {
             validationError = EditorModel.invalidURLError
             return false
         }
-        // The editor works on a snapshot taken at window-open; if the store's copy moved
+        // The editor works on a snapshot taken at window-open; if the store's copy has moved
         // underneath (external edit, delete, or rename reconciled in), do not silently
         // overwrite or resurrect it.
         var current: MCPEntry?

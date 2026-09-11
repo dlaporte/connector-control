@@ -1,16 +1,5 @@
-root = true
-
-[*]
-charset = utf-8
-end_of_line = lf
-insert_final_newline = true
-indent_style = space
-indent_size = 4
-trim_trailing_whitespace = true
-
-[*.{xml,csproj,props,targets,json,yml,yaml,xaml}]
-indent_size = 2
-
+# Inherits charset/line-ending/whitespace rules from the root .editorconfig; this file adds
+# only the C#-specific conventions the root file has no business knowing about.
 [*.cs]
 csharp_style_namespace_declarations = file_scoped:warning
 csharp_prefer_braces = true:warning

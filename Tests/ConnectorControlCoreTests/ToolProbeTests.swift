@@ -1,17 +1,18 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 final class ToolProbeTests: XCTestCase {
+    private var tempDir: TempDir!
     private var dir: URL!
 
     override func setUpWithError() throws {
-        dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("toolprobe-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        tempDir = TempDir(prefix: "toolprobe")
+        dir = tempDir.url
     }
 
     override func tearDownWithError() throws {
-        try? FileManager.default.removeItem(at: dir)
+        tempDir.dispose()
     }
 
     /// A stub launcher: an executable shell script named `name` in `sub`.
@@ -46,6 +47,8 @@ final class ToolProbeTests: XCTestCase {
                        "a leading v is dropped only before a digit")
         XCTAssertNil(ToolProbe.parseVersion("", tool: .node))
         XCTAssertNil(ToolProbe.parseVersion("\n  \n", tool: .npx))
+        XCTAssertEqual(ToolProbe.parseVersion("v\u{0663}23", tool: .node), "v\u{0663}23",
+                       "a leading v is dropped only before an ASCII digit — an Arabic-Indic ٣ is Character.isNumber but not isASCII")
     }
 
     func testResolveNeedsAnExecutableRegularFile() throws {
@@ -64,8 +67,8 @@ final class ToolProbeTests: XCTestCase {
 
     func testProbeFindsAStubAndReadsItsVersion() throws {
         let exe = try stub("npx", in: "bin")
-        XCTAssertEqual(probe(path: bin).probe(.npx), .found(path: exe.path, version: "10.9.2"))
-        XCTAssertEqual(probe(path: bin).probe(.uvx), .notFound)
+        XCTAssertEqual(probe(path: bin).probe([.npx])[.npx], .found(path: exe.path, version: "10.9.2"))
+        XCTAssertEqual(probe(path: bin).probe([.uvx])[.uvx], .notFound)
     }
 
     func testAToolInClaudesPathFloorIsVisible() throws {
@@ -76,17 +79,17 @@ final class ToolProbeTests: XCTestCase {
         let calls = Counter()
         let probe = probe(path: dir.appendingPathComponent("empty").path,
                           floor: [floorDir], shell: { calls.bump(); return floorDir })
-        XCTAssertEqual(probe.probe(.npx), .found(path: exe.path, version: "10.9.2"),
+        XCTAssertEqual(probe.probe([.npx])[.npx], .found(path: exe.path, version: "10.9.2"),
                        "Claude Desktop adds its PATH floor itself, so this is state A")
         XCTAssertEqual(calls.value, 0, "nothing was missing: the shell was never asked")
-        XCTAssertEqual(probe.probe(.node), .notFound, "the floor directory holds npx only")
+        XCTAssertEqual(probe.probe([.node])[.node], .notFound, "the floor directory holds npx only")
         XCTAssertEqual(calls.value, 1)
     }
 
     func testProbeFallsBackToTheShellPath() throws {
         let exe = try stub("node", in: "shellbin", body: "echo v22.11.0")
         let shellDir = dir.appendingPathComponent("shellbin").path
-        let status = probe(path: dir.appendingPathComponent("empty").path, shell: { shellDir }).probe(.node)
+        let status = probe(path: dir.appendingPathComponent("empty").path, shell: { shellDir }).probe([.node])[.node]
         XCTAssertEqual(status, .foundInShellOnly(path: exe.path, version: "22.11.0"))
     }
 
@@ -104,13 +107,13 @@ final class ToolProbeTests: XCTestCase {
         XCTAssertEqual(results[.uvx], .notFound)
         XCTAssertEqual(results[.uv], .notFound)
         let silent = probe(path: dir.appendingPathComponent("empty").path, shell: { nil })
-        XCTAssertEqual(silent.probe(.uv), .notFound, "no shell PATH at all is just not found")
+        XCTAssertEqual(silent.probe([.uv])[.uv], .notFound, "no shell PATH at all is just not found")
     }
 
     func testVersionCallTimesOutToVersionUnknown() throws {
         let exe = try stub("uv", in: "bin", body: "exec sleep 5")
         let started = Date()
-        let status = probe(path: bin, timeout: 0.2).probe(.uv)
+        let status = probe(path: bin, timeout: 0.2).probe([.uv])[.uv]
         XCTAssertEqual(status, .found(path: exe.path, version: nil))
         XCTAssertLessThan(Date().timeIntervalSince(started), 3,
                           "the hung version call was abandoned, not waited for")
@@ -118,12 +121,12 @@ final class ToolProbeTests: XCTestCase {
 
     func testNeverThrowsOnGarbage() throws {
         let garbage = probe(path: "::/nonexistent dir with spaces:/dev/null:\(dir.path)/missing")
-        XCTAssertEqual(garbage.probe(.npx), .notFound)
+        XCTAssertEqual(garbage.probe([.npx])[.npx], .notFound)
         XCTAssertEqual(
-            ToolProbe(environment: [:], shellPath: { nil }, claudePathFloor: []).probe(.node),
+            ToolProbe(environment: [:], shellPath: { nil }, claudePathFloor: []).probe([.node])[.node],
             .notFound)
         let broken = try stub("uvx", in: "bin", body: "exit 3")
-        XCTAssertEqual(probe(path: bin).probe(.uvx), .found(path: broken.path, version: nil),
+        XCTAssertEqual(probe(path: bin).probe([.uvx])[.uvx], .found(path: broken.path, version: nil),
                        "a launcher that exits without printing is still found")
     }
 }

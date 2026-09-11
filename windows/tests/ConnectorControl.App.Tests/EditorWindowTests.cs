@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
@@ -12,15 +11,7 @@ namespace ConnectorControl.App.Tests;
 
 public class EditorWindowTests
 {
-    private static void Layout(Window window)
-    {
-        // WPF defers a binding's first target update to DataBind priority; the test host runs
-        // the body synchronously, so pump that queue before reading any bound state.
-        window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
-        window.Measure(new Size(540, 620));
-        window.Arrange(new Rect(0, 0, 540, 620));
-        window.UpdateLayout();
-    }
+    private static void Layout(Window window) => WindowTestSupport.Layout(window, new Size(540, 620));
 
     [Fact]
     public void NewRemoteTargetShowsTheRemoteFormWithTheTypePicker()
@@ -84,7 +75,7 @@ public class EditorWindowTests
     }
 
     /// <summary>
-    /// The C1 regression, end to end: Add Connector ▸ Bearer token ▸ type a token used to leave
+    /// End to end: Add Connector ▸ Bearer token ▸ type a token used to leave
     /// EditorModel.BearerToken empty, so Save answered "Enter a bearer token." and the app's
     /// headline feature was unusable on a first run.
     /// </summary>
@@ -118,7 +109,7 @@ public class EditorWindowTests
     }
 
     /// <summary>
-    /// M16, the same bridge from a DataTemplate: a masked env value that is empty on disk. The
+    /// The same bridge from a DataTemplate: a masked env value that is empty on disk. The
     /// template-created PasswordBox has no local value for the attached property, so the bridge
     /// recognises it by the property having a value at all, whatever its precedence.
     /// </summary>
@@ -141,7 +132,7 @@ public class EditorWindowTests
 
             var container = window.EnvList.ItemContainerGenerator.ContainerFromItem(row);
             Assert.NotNull(container);
-            var box = FindDescendant<PasswordBox>(container);
+            var box = VisualTree.FindDescendant<PasswordBox>(container);
             Assert.NotNull(box);
 
             box.Password = "typed-into-the-mask";
@@ -151,29 +142,10 @@ public class EditorWindowTests
         });
     }
 
-    private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
-    {
-        var count = VisualTreeHelper.GetChildrenCount(root);
-        for (int i = 0; i < count; i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            if (child is T match)
-            {
-                return match;
-            }
-            if (FindDescendant<T>(child) is { } deeper)
-            {
-                return deeper;
-            }
-        }
-        return null;
-    }
-
     /// <summary>
-    /// Task 7 review controller addition: EditorModel.IsFormView/IsJsonView refuse a switch by
-    /// raising PropertyChanged synchronously inside their own setter, which a WPF TwoWay binding
-    /// ignores for the property it is currently writing — so without EditorWindow's explicit
-    /// DataBind-priority refresh, the segmented control would stay on Form after a refused switch.
+    /// EditorModel.View refuses a switch (invalid JSON here) by raising PropertyChanged for View
+    /// regardless, so the EnumToBoolConverter-bound RadioButtons re-read it and the segmented
+    /// control snaps back to the view the model actually stayed on.
     /// </summary>
     [Fact]
     public void FormToggleSnapsBackWhenTheModelRefusesTheSwitchFromJson()
@@ -194,7 +166,7 @@ public class EditorWindowTests
 
             Assert.False(window.FormToggle.IsChecked);
             Assert.True(window.JsonToggle.IsChecked);
-            Assert.True(window.Model.IsJsonView);
+            Assert.Equal(EditView.Json, window.Model.View);
         });
     }
 

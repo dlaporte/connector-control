@@ -5,7 +5,7 @@ namespace ConnectorControl.Core.Tests;
 
 public class ToolProbeTests : IDisposable
 {
-    private const string PathExt = ".COM;.EXE;.BAT;.CMD";
+    private const string PathExt = ToolProbe.DefaultPathExt;
     private readonly TempDir dir = new("toolprobe");
 
     public void Dispose() => dir.Dispose();
@@ -39,6 +39,12 @@ public class ToolProbeTests : IDisposable
         var file = Path.Combine(folder, name + ".cmd");
         File.WriteAllText(file, windowsBody ?? "@echo 10.9.2\r\n");
         return file;
+    }
+
+    [Fact]
+    public void DefaultPathExtIsTheWindowsExecutableSuffixList()
+    {
+        Assert.Equal(".COM;.EXE;.BAT;.CMD", ToolProbe.DefaultPathExt);
     }
 
     [Theory]
@@ -106,7 +112,7 @@ public class ToolProbeTests : IDisposable
         Assert.True(results[Tool.Npx].Found);
         Assert.Equal(ToolStatus.NotFound, results[Tool.Uvx]);
         Assert.False(results[Tool.Uvx].Found);
-        Assert.Equal(results[Tool.Npx], probe.Probe(Tool.Npx));
+        Assert.Equal(results[Tool.Npx], probe.Probe([Tool.Npx])[Tool.Npx]);
     }
 
     [Fact]
@@ -114,7 +120,7 @@ public class ToolProbeTests : IDisposable
     {
         var exe = Stub("uv", "bin", windowsBody: "@ping -n 6 127.0.0.1 > nul\r\n@echo 0.4.30\r\n", unixBody: "exec sleep 5");
         var started = Stopwatch.StartNew();
-        var status = new ToolProbe(Env(Bin), TimeSpan.FromMilliseconds(200)).Probe(Tool.Uv);
+        var status = new ToolProbe(Env(Bin), TimeSpan.FromMilliseconds(200)).Probe([Tool.Uv])[Tool.Uv];
         Assert.Equal(new ToolStatus(exe, null), status);
         Assert.True(started.Elapsed < TimeSpan.FromSeconds(3));   // abandoned, not waited for
     }
@@ -122,11 +128,16 @@ public class ToolProbeTests : IDisposable
     [Fact]
     public void ProbeNeverThrowsOnGarbage()
     {
-        Assert.Equal(ToolStatus.NotFound, new ToolProbe(new Dictionary<string, string>(StringComparer.Ordinal)).Probe(Tool.Node));
-        var weird = "::" + dir.File("missing dir with spaces") + Path.PathSeparator + dir.File("nope");
-        Assert.Equal(ToolStatus.NotFound, new ToolProbe(Env(weird)).Probe(Tool.Npx));
+        Assert.Equal(ToolStatus.NotFound, new ToolProbe(new Dictionary<string, string>(StringComparer.Ordinal)).Probe([Tool.Node])[Tool.Node]);
+        // A regular file where a PATH entry should be a directory (the Mac vector is /dev/null,
+        // always a file, never a directory) must not throw when the probe tries to enumerate it.
+        var notADirectory = dir.File("not-a-directory.txt");
+        File.WriteAllText(notADirectory, "");
+        var weird = "::" + dir.File("missing dir with spaces") + Path.PathSeparator + dir.File("nope")
+            + Path.PathSeparator + notADirectory;
+        Assert.Equal(ToolStatus.NotFound, new ToolProbe(Env(weird)).Probe([Tool.Npx])[Tool.Npx]);
         // exits without printing: found, version unknown
         var silent = Stub("uvx", "bin", windowsBody: "@exit /b 3\r\n", unixBody: "exit 3");
-        Assert.Equal(new ToolStatus(silent, null), new ToolProbe(Env(Bin)).Probe(Tool.Uvx));
+        Assert.Equal(new ToolStatus(silent, null), new ToolProbe(Env(Bin)).Probe([Tool.Uvx])[Tool.Uvx]);
     }
 }

@@ -6,5 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="ConnectorControl.Core.Tests" />
+    <!-- AppHost.Inline() is a test-only convenience; the App's own tests build one directly too. -->
+    <InternalsVisibleTo Include="ConnectorControl.App.Tests" />
   </ItemGroup>
 </Project>

@@ -1,17 +1,18 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 final class AtomicFileTests: XCTestCase {
+    var tempDir: TempDir!
     var dir: URL!
 
     override func setUpWithError() throws {
-        dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("atomic-\(UUID().uuidString)")
+        tempDir = TempDir(prefix: "atomic")
+        dir = tempDir.file("target")   // not created — tests exercise AtomicFile creating it
     }
 
     override func tearDownWithError() throws {
-        try? FileManager.default.removeItem(at: dir)
-        AtomicFile.privateStagingDirectory = nil
+        tempDir.dispose()
     }
 
     func testWriteCreatesFileAndIntermediateDirectories() throws {
@@ -48,6 +49,22 @@ final class AtomicFileTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "new")
         let mode = try XCTUnwrap(fm.attributesOfItem(atPath: url.path)[.posixPermissions] as? Int)
         XCTAssertEqual(mode, 0o600)
+    }
+
+    /// windows/tests/ConnectorControl.Core.Tests/AtomicFileTests.cs
+    /// ADirectoryWriteCreatesIsOwnerOnlyWhileAnExistingParentIsUntouched — the
+    /// other half of that test: a directory the app did NOT create (a folder
+    /// the user chose) keeps whatever mode and ACL it already had.
+    func testAPreExistingParentIsLeftAsItWas() throws {
+        let fm = FileManager.default
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path)
+        try grantEveryoneRead(at: dir.path, inheritable: false)
+        let url = dir.appendingPathComponent("settings.json")
+        try AtomicFile.write(Data("{}".utf8), to: url)
+        XCTAssertEqual(try XCTUnwrap(fm.attributesOfItem(atPath: dir.path)[.posixPermissions] as? Int), 0o755,
+                       "a directory that already existed is left as it was")
+        XCTAssertTrue(hasACL(atPath: dir.path), "its ACL is untouched too")
     }
 
     /// A fresh install: the store directory does not exist until the first
@@ -93,6 +110,36 @@ final class AtomicFileTests: XCTestCase {
         XCTAssertEqual(mode, 0o600)
     }
 
+    /// windows/tests/ConnectorControl.Core.Tests/AtomicFileTests.cs —
+    /// WritesThroughADanglingSymlinkedTarget. A link whose target does not
+    /// exist yet (created but never populated) is still written through, not
+    /// replaced by a plain file.
+    func testWritesThroughADanglingSymlinkedTarget() throws {
+        let fm = FileManager.default
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let real = dir.appendingPathComponent("real.json")   // never created — the link's target does not exist yet
+        let link = dir.appendingPathComponent("link.json")
+        try fm.createSymbolicLink(at: link, withDestinationURL: real)
+        try AtomicFile.write(Data("through".utf8), to: link)
+        XCTAssertEqual(try fm.destinationOfSymbolicLink(atPath: link.path), real.path, "the link is still a link")
+        XCTAssertEqual(try String(contentsOf: real, encoding: .utf8), "through")
+    }
+
+    /// windows/tests/ConnectorControl.Core.Tests/AtomicFileTests.cs —
+    /// WritesThroughARelativeSymlinkedTarget. Exercises resolveWriteTarget's
+    /// relative-destination branch (AtomicFile.swift:106-108) — the two symlink
+    /// tests above only ever create links with absolute destinations.
+    func testWritesThroughARelativeSymlinkedTarget() throws {
+        let fm = FileManager.default
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let real = dir.appendingPathComponent("real/config.json")
+        let link = dir.appendingPathComponent("link.json")
+        try fm.createSymbolicLink(atPath: link.path, withDestinationPath: "real/config.json")
+        try AtomicFile.write(Data("through".utf8), to: link)
+        XCTAssertEqual(try fm.destinationOfSymbolicLink(atPath: link.path), "real/config.json", "the link is still a link")
+        XCTAssertEqual(try String(contentsOf: real, encoding: .utf8), "through")
+    }
+
     func testNoTempFilesLeftBehind() throws {
         let url = dir.appendingPathComponent("file.json")
         try AtomicFile.write(Data("x".utf8), to: url)
@@ -102,29 +149,17 @@ final class AtomicFileTests: XCTestCase {
 
     func testNoTempFilesLeftBehindOnFailure() throws {
         let fm = FileManager.default
-
-        // Create test directory structure
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
 
-        // Test case: create a file where we need a directory, causing createDirectory to fail
+        // A file where we need a directory: createDirectory fails before tmp is ever created.
         let blockingPath = dir.appendingPathComponent("blocking")
         try Data("placeholder".utf8).write(to: blockingPath)
-
         let url = dir.appendingPathComponent("blocking/file.json")
 
-        // This should fail at createDirectory before tmp is created
-        var didThrow = false
-        do {
-            try AtomicFile.write(Data("test".utf8), to: url)
-        } catch {
-            didThrow = true
-        }
-        XCTAssert(didThrow, "Expected write to throw but it succeeded")
+        XCTAssertThrowsError(try AtomicFile.write(Data("test".utf8), to: url))
 
-        // Verify no .tmp- files left behind (there shouldn't be any because tmp was never created)
         let parentContents = try fm.contentsOfDirectory(atPath: dir.path)
-        let tmpFiles = parentContents.filter { $0.contains(".tmp-") }
-        XCTAssert(tmpFiles.isEmpty, "Found orphaned tmp files: \(tmpFiles)")
+        XCTAssertTrue(parentContents.filter { $0.contains(".tmp-") }.isEmpty, "no orphaned tmp files")
     }
 
     /// Mode 0600 is not private on a folder that carries an inheritable allow ACE: the new
@@ -137,12 +172,12 @@ final class AtomicFileTests: XCTestCase {
         // Control: a plain write DOES inherit, so the assertions below cannot pass vacuously.
         let control = dir.appendingPathComponent("control.json")
         try Data("{}".utf8).write(to: control)
-        XCTAssertTrue(AtomicFile.hasACL(atPath: control.path), "the folder's ACE is inheritable")
+        XCTAssertTrue(hasACL(atPath: control.path), "the folder's ACE is inheritable")
 
         let url = dir.appendingPathComponent("nested/secret.json")
         try AtomicFile.write(Data("token".utf8), to: url)
-        XCTAssertFalse(AtomicFile.hasACL(atPath: url.path))
-        XCTAssertFalse(AtomicFile.hasACL(atPath: dir.appendingPathComponent("nested").path))
+        XCTAssertFalse(hasACL(atPath: url.path))
+        XCTAssertFalse(hasACL(atPath: dir.appendingPathComponent("nested").path))
         XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "token")
     }
 
@@ -160,17 +195,17 @@ final class AtomicFileTests: XCTestCase {
     }
 
     func testWriteThroughStagingLeavesNothingBehind() throws {
-        AtomicFile.privateStagingDirectory = dir.appendingPathComponent("staging")
+        let staging = dir.appendingPathComponent("staging")
         let shared = dir.appendingPathComponent("shared")
         try FileManager.default.createDirectory(at: shared, withIntermediateDirectories: true)
         try grantEveryoneRead(at: shared.path, inheritable: true)
         let url = shared.appendingPathComponent("secret.json")
-        try AtomicFile.write(Data("one".utf8), to: url)
-        try AtomicFile.write(Data("two".utf8), to: url)
+        try AtomicFile.write(Data("one".utf8), to: url, staging: staging)
+        try AtomicFile.write(Data("two".utf8), to: url, staging: staging)
         XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "two")
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("staging").path), [])
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("shared").path), ["secret.json"])
-        XCTAssertFalse(AtomicFile.hasACL(atPath: url.path))
+        XCTAssertFalse(hasACL(atPath: url.path))
     }
 
     /// exFAT and other ACL-less volumes have nothing to strip: ENOTSUP from the ACL calls is
@@ -208,6 +243,6 @@ final class AtomicFileTests: XCTestCase {
         try AtomicFile.write(Data("{}".utf8), to: url)
         try AtomicFile.write(Data("{\"v\":2}".utf8), to: url)
         XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "{\"v\":2}")
-        XCTAssertFalse(AtomicFile.hasACL(atPath: url.path))
+        XCTAssertFalse(hasACL(atPath: url.path))
     }
 }

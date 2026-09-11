@@ -11,6 +11,7 @@
     <Company>David LaPorte</Company>
     <Product>Connector Control</Product>
     <Copyright>© 2026 David LaPorte</Copyright>
+    <!-- AppleKeyCollation needs ICU (CompareInfo); keep globalization on. -->
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
 </Project>

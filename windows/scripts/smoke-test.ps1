@@ -1,19 +1,24 @@
 #Requires -Version 7
 <#
 .SYNOPSIS
-    Installs a packed Setup.exe silently and proves the installed app starts and stays up.
+    Installs a packed Setup.exe silently and proves the installed app starts and stays up; or,
+    with -SignatureOnly, just checks a Setup.exe's Authenticode signature.
 
 .DESCRIPTION
-    Runs on a Windows machine — the preview workflow's smoke job, or a tester's PC:
+    windows-build.yml's smoke job, for both a release and a preview, runs this two ways:
+      * The win-x64 package it just built: the full flow below.
+      * The win-arm64 package, which cannot be installed on the x64 runner that job uses:
+        -SignatureOnly -SetupExe <path> only — no install, no launch, just the signature check.
+
+    The full flow:
       1. INSTALL assertions, always run. Setup.exe --silent →
          %LOCALAPPDATA%\ConnectorControl\{Update.exe, current\ConnectorControl.exe, current\sq.version},
-         with the version and channel read back out of sq.version. Spec §6.6 relies on
-         current\ConnectorControl.exe being the stable path the Run key records: asserted here.
-      2. LAUNCH assertions, skipped by -SkipLaunch. A silent Velopack install does not launch the
-         app, so this starts current\ConnectorControl.exe against a throwaway Claude config and
-         master-list folder (CONNECTOR_CONTROL_CLAUDE_CONFIG / CONNECTOR_CONTROL_STORE_DIR — the
-         same env overrides AppPathsResolver honours), waits -Seconds, and asserts exactly four
-         things:
+         with the version and channel read back out of sq.version. The Run key relies on
+         current\ConnectorControl.exe being the stable path it records: asserted here.
+      2. LAUNCH assertions. This starts current\ConnectorControl.exe against a throwaway Claude
+         config and master-list folder (CONNECTOR_CONTROL_CLAUDE_CONFIG / CONNECTOR_CONTROL_STORE_DIR
+         — the same env overrides AppPaths honours), polls up to -Seconds for the first-run
+         import to write <store>\mcps.json, and asserts exactly four things:
            a. the process is still alive;
            b. no crash.log under %LOCALAPPDATA%\Connector Control;
            c. the first-run import wrote <store>\mcps.json;
@@ -27,28 +32,34 @@
            * settings.json — written last of all, by FirstRunTip, so asserting it turns any
              tray-layer problem into a confusing store-layer failure.
          Both are on the manual PC checklist instead, after a real toggle.
-      3. stops the process (a tray app has no main window to close) and copies logs to -LogDir.
+      3. With -ExpectSigned: the installed exe's own signature, then a package verification —
+         the installed exe checks this build's own full package with --verify-package, the same
+         rule VelopackUpdater applies to a downloaded update. Running the app's own check here,
+         rather than a second copy of it in PowerShell, means the two cannot drift apart.
+      4. stops the process (a tray app has no main window to close) and copies logs to -LogDir.
     Prints "SMOKE PASS" and exits 0; any failed assertion throws.
 
-.PARAMETER SetupExe      The ConnectorControl-<rid>-Setup.exe to install.
+.PARAMETER SetupExe      The ConnectorControl-<rid>-Setup.exe to check or install.
+.PARAMETER SignatureOnly Check SetupExe's Authenticode signature and exit; no install, no launch.
+                         For a runtime the current runner cannot install (arm64 on an x64 runner).
 .PARAMETER Version       The version the package was built with (asserted against current\sq.version).
 .PARAMETER Channel       The channel the package was built with (asserted against current\sq.version).
-.PARAMETER Seconds       How long the app must stay alive.
+.PARAMETER Seconds       How long to wait for the first-run import before giving up.
 .PARAMETER LogDir        Where setup.log, crash.log and the imported mcps.json are copied.
-.PARAMETER ExpectSigned  Fail unless Setup.exe and the installed exe carry a valid Authenticode signature.
-.PARAMETER SkipLaunch    Run the install assertions only. For a hosted CI runner with no
-                         interactive desktop session, where App.OnStartup cannot complete.
-                         Never pass it on a real PC: it removes the whole runtime check.
+.PARAMETER ExpectSigned  Fail unless Setup.exe, the installed exe, and this build's own full
+                         package all pass the app's own update-signature check.
 #>
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Install')]
 param(
     [Parameter(Mandatory)] [string] $SetupExe,
-    [Parameter(Mandatory)] [string] $Version,
-    [ValidateSet('win-x64', 'win-arm64')] [string] $Channel = 'win-x64',
-    [int] $Seconds = 20,
-    [string] $LogDir = (Join-Path (Get-Location).Path 'smoke-logs'),
-    [switch] $ExpectSigned,
-    [switch] $SkipLaunch
+
+    [Parameter(Mandatory, ParameterSetName = 'SignatureOnly')] [switch] $SignatureOnly,
+
+    [Parameter(Mandatory, ParameterSetName = 'Install')] [string] $Version,
+    [Parameter(ParameterSetName = 'Install')] [ValidateSet('win-x64', 'win-arm64')] [string] $Channel = 'win-x64',
+    [Parameter(ParameterSetName = 'Install')] [int] $Seconds = 20,
+    [Parameter(ParameterSetName = 'Install')] [string] $LogDir = (Join-Path (Get-Location).Path 'smoke-logs'),
+    [Parameter(ParameterSetName = 'Install')] [switch] $ExpectSigned
 )
 
 Set-StrictMode -Version Latest
@@ -64,8 +75,18 @@ function Assert-True {
     Write-Host "ok   $Message"
 }
 
-$installRoot = Join-Path $env:LOCALAPPDATA 'ConnectorControl'          # Velopack app id (spec §4.2)
-$dataDir = Join-Path $env:LOCALAPPDATA 'Connector Control'             # app data (spec §4.2)
+if ($SignatureOnly) {
+    Write-Host "== Signature ($([System.IO.Path]::GetFileName($SetupExe)))"
+    $sig = Get-AuthenticodeSignature -FilePath $SetupExe
+    $signer = if ($null -ne $sig.SignerCertificate) { $sig.SignerCertificate.Subject } else { '(no certificate)' }
+    Write-Host "     $([System.IO.Path]::GetFileName($SetupExe)): $($sig.Status) $signer"
+    Assert-True ($sig.Status -eq 'Valid') "$([System.IO.Path]::GetFileName($SetupExe)) carries a valid Authenticode signature"
+    Write-Host "SMOKE PASS (signature only)"
+    exit 0
+}
+
+$installRoot = Join-Path $env:LOCALAPPDATA 'ConnectorControl'          # Velopack app id: the install root
+$dataDir = Join-Path $env:LOCALAPPDATA 'Connector Control'             # app data
 $sandbox = Join-Path ([System.IO.Path]::GetTempPath()) "cc-smoke-$([guid]::NewGuid().ToString('N'))"
 $store = Join-Path $sandbox 'store'
 New-Item -ItemType Directory -Force -Path $sandbox, $store, $LogDir | Out-Null
@@ -93,44 +114,20 @@ Assert-True ($manifest -match "<channel>$([regex]::Escape($Channel))</channel>")
 if ($ExpectSigned) {
     $exeSignature = Get-AuthenticodeSignature -FilePath $exe
     Assert-True ($exeSignature.Status -eq 'Valid') "installed ConnectorControl.exe is signed"
-    # The app refuses an update unless every .exe/.dll in the package is signed by its own
-    # publisher (UpdateVerifier). Prove the package this build produced would pass that rule.
+
+    Write-Host "== Package verification"
+    # The exact rule VelopackUpdater applies to a downloaded update, run by the installed app
+    # itself against this build's own full package: proves a real update from this release would
+    # be accepted, without a second copy of UpdateVerifier's rule transcribed here to drift from it.
     $nupkg = Join-Path (Split-Path -Parent $SetupExe) "ConnectorControl-$Version-$Channel-full.nupkg"
     Assert-True (Test-Path $nupkg) "full package sits beside Setup.exe ($nupkg)"
-    $unpacked = Join-Path $sandbox 'nupkg'
-    # Expand-Archive insists on a .zip extension; the .NET zip API does not care what the file is called.
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [System.IO.Compression.ZipFile]::ExtractToDirectory($nupkg, $unpacked)
-    # The same rule UpdateVerifier applies on the client: the app's own files and the updater carry
-    # our organization; the runtime and libraries we build from may carry ours or a publisher in
-    # $trustedOrganizations (Microsoft for .NET/WPF, the .NET Foundation for one toolkit). Keep this
-    # list in step with UpdateVerifier.TrustedOrganizations.
-    function Get-Organization([string] $subject) {
-        $m = [regex]::Match($subject, '(?:^|,\s*)O=("(?<q>[^"]*)"|(?<u>[^,]*))')
-        if (-not $m.Success) { return '' }
-        $raw = if ($m.Groups['q'].Success) { $m.Groups['q'].Value } else { $m.Groups['u'].Value }
-        return (($raw.ToLowerInvariant() -replace '[^a-z0-9]+', ' ').Trim())
-    }
-    $ourOrganization = Get-Organization $setupSignature.SignerCertificate.Subject
-    Assert-True ($ourOrganization.Length -gt 0) "Setup.exe's signer names an organization ($ourOrganization)"
-    $trustedOrganizations = @('microsoft corporation', 'windows community toolkit net foundation')
-    $binaries = Get-ChildItem -Path $unpacked -Recurse -Include *.exe, *.dll
-    Assert-True ($binaries.Count -gt 0) "package contains executables to check"
-    foreach ($binary in $binaries) {
-        $sig = Get-AuthenticodeSignature -FilePath $binary.FullName
-        $org = if ($null -ne $sig.SignerCertificate) { Get-Organization $sig.SignerCertificate.Subject } else { '' }
-        $mustBeOurs = $binary.Name -like 'ConnectorControl*' -or $binary.Name -in @('Squirrel.exe', 'Update.exe')
-        $allowed = ($org -eq $ourOrganization) -or (-not $mustBeOurs -and $trustedOrganizations -contains $org)
-        Assert-True ($sig.Status -eq 'Valid' -and $allowed) "$($binary.Name) is validly signed by an accepted publisher (got '$org', status $($sig.Status))"
-    }
-}
-
-if ($SkipLaunch) {
-    Copy-Item -Path (Join-Path $installRoot '*.log') -Destination $LogDir -ErrorAction SilentlyContinue
-    Write-Host "== Launch check skipped (-SkipLaunch)"
-    Write-Host "     The install layout above is verified; runtime behaviour is deferred to a real PC."
-    Write-Host "SMOKE PASS (launch check skipped)"
-    exit 0
+    $report = Join-Path $sandbox 'verify-report.txt'
+    $verify = Start-Process -FilePath $exe -ArgumentList @('--verify-package', $nupkg, '--report', $report) -PassThru -Wait
+    $reportText = if (Test-Path $report) { (Get-Content $report -Raw).Trim() } else { '(no report written)' }
+    Write-Host "     $reportText"
+    Assert-True ($verify.ExitCode -eq 0) "--verify-package exited 0 (got $($verify.ExitCode))"
+    # A passing report is "OK" followed by a line naming which checks ran; only the first line matters here.
+    Assert-True ($reportText -match '^OK') "the package verification report says OK (got '$reportText')"
 }
 
 Write-Host "== Launch against a sandbox config"
@@ -139,23 +136,29 @@ Set-Content -Path $claudeConfig -Encoding utf8 -Value '{"mcpServers":{"smoke":{"
 $env:CONNECTOR_CONTROL_CLAUDE_CONFIG = $claudeConfig    # inherited by the child process
 $env:CONNECTOR_CONTROL_STORE_DIR = $store               # the app's own override: the test owns where the store lands
 $app = Start-Process -FilePath $exe -PassThru
-Start-Sleep -Seconds $Seconds
+$masterList = Join-Path $store 'mcps.json'
+$pollIntervalMs = 250
+$deadline = (Get-Date).AddSeconds($Seconds)
+# Polling instead of a flat sleep: the common case (the import finishes in well under $Seconds)
+# returns as soon as it is done instead of always paying for the worst case.
+do {
+    Start-Sleep -Milliseconds $pollIntervalMs
+} while (-not (Test-Path $masterList) -and -not $app.HasExited -and (Get-Date) -lt $deadline)
 $alive = -not $app.HasExited
 if (Test-Path $crashLog) {
     Write-Host "--- crash.log ---"
     Get-Content $crashLog | Write-Host
     Copy-Item $crashLog (Join-Path $LogDir 'crash.log')
 }
-Assert-True $alive "ConnectorControl.exe is still running after $Seconds s"
+Assert-True $alive "ConnectorControl.exe is still running after up to $Seconds s"
 Assert-True (-not (Test-Path $crashLog)) "no crash.log under $dataDir"
-$masterList = Join-Path $store 'mcps.json'
-Assert-True (Test-Path $masterList) "the first-run import wrote $masterList"
+Assert-True (Test-Path $masterList) "the first-run import wrote $masterList within $Seconds s"
 # Logged, not asserted: what the store CONTAINS is covered by the Core tests and by the manual
 # PC checklist. All this script needs is that the app got far enough to write it.
 Write-Host "     mcps.json: $((Get-Content $masterList -Raw) -replace '\s+', ' ')"
 
 Write-Host "== Stop"
-$stopTimeoutMs = 15000
+$stopTimeoutMs = 15000   # generous margin over how long a graceful WM_CLOSE-style shutdown should ever take
 & taskkill.exe /PID $app.Id | Out-Null      # graceful first: posts WM_CLOSE to the process's windows
 if (-not $app.WaitForExit($stopTimeoutMs)) {
     # Expected for a tray app: with no top-level window, taskkill reports "can only be

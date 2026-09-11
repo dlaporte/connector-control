@@ -1,10 +1,11 @@
 import Foundation
 import ConnectorControlCore
 
-/// The app's UserDefaults keys (catalog §1.19) as a seam (C# ISettings).
-/// Setters persist immediately and never fail. Absent keys read as the
-/// catalog's defaults. Named AppSettings, not Settings: the app's SwiftUI
-/// `Settings` scene would make the bare name ambiguous there.
+/// The app's UserDefaults keys as a seam (C# ISettings). Setters persist
+/// immediately and never fail. Absent keys read as the documented defaults.
+/// Named AppSettings, not Settings: the app's SwiftUI `Settings` scene would
+/// make the bare name ambiguous there.
+@MainActor
 public protocol AppSettings: AnyObject {
     /// Custom master-list directory; nil means the default (and removes the key).
     var masterStoreDir: String? { get set }
@@ -15,12 +16,13 @@ public protocol AppSettings: AnyObject {
     var confirmBeforeRestart: Bool { get set }
     var confirmBeforeQuit: Bool { get set }
     var lastApplyDate: Date? { get set }
-    var permissionsSweepDone: Bool { get set }
-    var aclSweepDone: Bool { get set }
+    /// How far `PermissionsSweep`'s one-time repair has gotten; see its header comment.
+    var sweepVersion: Int { get set }
 }
 
 /// `UserDefaults.standard` in the app; a suite in tests. Every key name comes
-/// from `DefaultsKey`, so the migration and this class cannot drift apart.
+/// from `DefaultsKey`, so this class and the key list it reads cannot drift apart.
+@MainActor
 public final class UserDefaultsSettings: AppSettings {
     private let defaults: UserDefaults
 
@@ -39,7 +41,7 @@ public final class UserDefaultsSettings: AppSettings {
     }
 
     public var backupKeepCount: Int {
-        get { defaults.object(forKey: DefaultsKey.backupKeepCount.rawValue) as? Int ?? 20 }
+        get { defaults.object(forKey: DefaultsKey.backupKeepCount.rawValue) as? Int ?? BackupManager.defaultKeepCount }
         set { defaults.set(newValue, forKey: DefaultsKey.backupKeepCount.rawValue) }
     }
 
@@ -63,14 +65,9 @@ public final class UserDefaultsSettings: AppSettings {
         set { setOrRemove(newValue, DefaultsKey.lastApplyDate) }
     }
 
-    public var permissionsSweepDone: Bool {
-        get { bool(DefaultsKey.permissionsSweepDone, default: false) }
-        set { defaults.set(newValue, forKey: DefaultsKey.permissionsSweepDone.rawValue) }
-    }
-
-    public var aclSweepDone: Bool {
-        get { bool(DefaultsKey.aclSweepDone, default: false) }
-        set { defaults.set(newValue, forKey: DefaultsKey.aclSweepDone.rawValue) }
+    public var sweepVersion: Int {
+        get { defaults.object(forKey: DefaultsKey.sweepVersion.rawValue) as? Int ?? 0 }
+        set { defaults.set(newValue, forKey: DefaultsKey.sweepVersion.rawValue) }
     }
 
     private func bool(_ key: DefaultsKey, default fallback: Bool) -> Bool {

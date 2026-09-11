@@ -1,10 +1,6 @@
 import Foundation
 
-public enum JSONValueError: Error, Equatable {
-    case unsupported(String)
-}
-
-public enum JSONValue: Equatable, Hashable {
+public enum JSONValue: Equatable, Hashable, Sendable {
     case null
     case bool(Bool)
     case int(Int)
@@ -50,9 +46,7 @@ public extension JSONValue {
     }
 
     func serialized() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return try encoder.encode(self)
+        try JSONEncoder.canonical.encode(self)
     }
 
     /// Pretty JSON for display/editing — like `serialized()` but without
@@ -75,7 +69,7 @@ public extension JSONValue {
         }
     }
 
-    init(any: Any) throws {
+    init(any: Any) {
         switch any {
         case is NSNull:
             self = .null
@@ -93,11 +87,11 @@ public extension JSONValue {
         case let s as String:
             self = .string(s)
         case let a as [Any]:
-            self = .array(try a.map(JSONValue.init(any:)))
+            self = .array(a.map(JSONValue.init(any:)))
         case let o as [String: Any]:
-            self = .object(try o.mapValues(JSONValue.init(any:)))
+            self = .object(o.mapValues(JSONValue.init(any:)))
         default:
-            throw JSONValueError.unsupported(String(describing: type(of: any)))
+            preconditionFailure("JSONSerialization produced \(type(of: any))")
         }
     }
 
@@ -110,5 +104,17 @@ public extension JSONValue {
         case .array: return "array"
         case .object: return "object"
         }
+    }
+}
+
+extension JSONEncoder {
+    /// Pretty, key-sorted output — the on-disk file format everywhere this app
+    /// writes JSON (`JSONValue.serialized()`, `MasterStoreIO.save`). A fresh
+    /// instance per use: `JSONEncoder` is a class, and nothing here needs to
+    /// share one across calls.
+    static var canonical: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return encoder
     }
 }

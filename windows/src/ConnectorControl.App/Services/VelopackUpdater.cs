@@ -1,3 +1,4 @@
+using ConnectorControl.Core;
 using ConnectorControl.Core.Services;
 using Velopack;
 using Velopack.Locators;
@@ -6,7 +7,7 @@ using Velopack.Sources;
 namespace ConnectorControl.App.Services;
 
 /// <summary>
-/// Sparkle's role (spec §6.7) on top of Velopack: GitHub Releases feed,
+/// Sparkle's role on Windows, on top of Velopack: GitHub Releases feed,
 /// prereleases followed only by a prerelease install. Inert when the process
 /// is not a Velopack install (bare `dotnet run`, tests).
 /// </summary>
@@ -80,7 +81,7 @@ public sealed class VelopackUpdater : IUpdater
         this.verifyInstalled = verifyInstalled ?? UpdateVerifier.VerifyInstalledUpdater;
     }
 
-    /// <summary>Spec §6.7: true for a preview install (prerelease version), so update checks include prereleases.</summary>
+    /// <summary>True for a preview install (prerelease version), so update checks include prereleases.</summary>
     public bool FollowsPrereleases { get; }
 
     /// <summary>Velopack's process-start hook (install/update/uninstall callbacks). Call before anything else at startup.</summary>
@@ -105,7 +106,7 @@ public sealed class VelopackUpdater : IUpdater
         return new UpdateCheck(target.Version.ToString(), target.NotesMarkdown, info);
     }
 
-    public async Task DownloadAsync(UpdateCheck update, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
+    public async Task DownloadAsync(UpdateCheck update, CancellationToken cancellationToken = default)
     {
         if (manager is null || update.Token is not UpdateInfo info)
         {
@@ -123,7 +124,7 @@ public sealed class VelopackUpdater : IUpdater
             throw new UpdateVerificationException(installedProblem);
         }
         var knownGoodUpdater = location.UpdateExePath is { } updateExe && File.Exists(updateExe) ? File.ReadAllBytes(updateExe) : null;
-        await manager.DownloadUpdatesAsync(info, percent => progress?.Report(percent), cancellationToken).ConfigureAwait(false);
+        await manager.DownloadUpdatesAsync(info, cancelToken: cancellationToken).ConfigureAwait(false);
         VerifyDownloaded(info, knownGoodUpdater, identity);
     }
 
@@ -144,18 +145,20 @@ public sealed class VelopackUpdater : IUpdater
         var packagePath = Path.Combine(location.PackagesDir ?? "", info.TargetFullRelease.FileName);
         if (verify(packagePath, location.UpdateExePath, identity, NumericVersion(manager.CurrentVersion), NumericVersion(info.TargetFullRelease.Version)) is { } problem)
         {
-            try { File.Delete(packagePath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            FileSystemErrors.TryDelete(packagePath);
             if (location.UpdateExePath is { } updateExe)
             {
                 // Put back the updater that was there before the download; when there was none,
                 // the one there now came from the refused package and goes too.
-                try
+                if (knownGoodUpdater is not null)
                 {
-                    if (knownGoodUpdater is not null) { File.WriteAllBytes(updateExe, knownGoodUpdater); }
-                    else if (File.Exists(updateExe)) { File.Delete(updateExe); }
+                    try { File.WriteAllBytes(updateExe, knownGoodUpdater); }
+                    catch (Exception ex) when (FileSystemErrors.IsTransient(ex)) { }
                 }
-                catch (IOException) { }
-                catch (UnauthorizedAccessException) { }
+                else
+                {
+                    FileSystemErrors.TryDelete(updateExe);
+                }
             }
             throw new UpdateVerificationException(problem);
         }

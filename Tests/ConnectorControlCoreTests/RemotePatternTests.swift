@@ -9,8 +9,7 @@ final class RemotePatternTests: XCTestCase {
 
     func testDetectsCanonicalPattern() {
         XCTAssertEqual(
-            RemotePattern.detect(config(
-                args: ["-y", "mcp-remote", "https://example.com/mcp"])),
+            RemotePattern.detect(RemotePattern.make(url: "https://example.com/mcp")),
             "https://example.com/mcp")
     }
 
@@ -61,6 +60,13 @@ final class RemotePatternTests: XCTestCase {
                                      .string("https://x.dev/mcp")])]))
     }
 
+    /// windows/tests/ConnectorControl.Core.Tests/RemotePatternTests.cs DefaultPackageIsTheMarkerAndWhatMakeWrites.
+    func testDefaultPackageIsTheMarkerAndWhatMakeWrites() {
+        XCTAssertTrue(RemotePattern.isMarker(RemotePattern.defaultPackage))
+        XCTAssertEqual(RemotePattern.decode(RemotePattern.make(url: "https://x.dev/mcp"))?.package,
+                       RemotePattern.defaultPackage)
+    }
+
     func testMakeThenDetectRoundTrips() {
         XCTAssertEqual(
             RemotePattern.detect(RemotePattern.make(url: "https://x.dev/mcp")),
@@ -96,6 +102,7 @@ final class RemotePatternTests: XCTestCase {
     func testIsValidHTTPURLNeedsAnHTTPSchemeAndAHost() {
         XCTAssertTrue(RemotePattern.isValidHTTPURL("https://example.com/mcp"))
         XCTAssertTrue(RemotePattern.isValidHTTPURL("HTTP://example.com"), "scheme case does not matter")
+        XCTAssertTrue(RemotePattern.isValidHTTPURL("http://localhost:8080/sse"), "plain http, a host, and a port")
         XCTAssertFalse(RemotePattern.isValidHTTPURL(""))
         XCTAssertFalse(RemotePattern.isValidHTTPURL("ftp://x"))
         XCTAssertFalse(RemotePattern.isValidHTTPURL("https://"), "a scheme with no host")

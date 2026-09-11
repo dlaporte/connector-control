@@ -45,12 +45,26 @@ public static class ClaudeConfigIO
             return null;
         }
         var data = File.ReadAllBytes(path);
-        // A zero-byte file (crash/truncation artifact) is treated like a missing
-        // file, not malformed JSON: there is nothing in it to preserve.
+        // A zero-byte file (crash/truncation artifact) is deliberately treated
+        // like a missing file, not malformed JSON: there is nothing in it to
+        // preserve, and callers back up before writing. A non-object top
+        // level is the one shape this app can never work with, so that alone
+        // throws (from ParseRoot below).
         if (data.Length == 0)
         {
             return JsonValue.Object();
         }
+        return ParseRoot(data);
+    }
+
+    /// <summary>
+    /// Parses raw file bytes into the top-level JSON object a Claude config or one of its backups
+    /// must be. Shared so ConfigService.RestoreClaudeConfig and this type's own read path cannot
+    /// disagree on what counts as valid; a caller with its own file-specific wording catches
+    /// ClaudeConfigException and rethrows with that instead of this method's generic detail.
+    /// </summary>
+    public static JsonValue ParseRoot(byte[] data)
+    {
         JsonValue parsed;
         try
         {

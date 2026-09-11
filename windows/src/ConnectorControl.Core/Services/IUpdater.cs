@@ -1,6 +1,6 @@
 namespace ConnectorControl.Core.Services;
 
-/// <summary>Sparkle's role on Windows (spec §6.7).</summary>
+/// <summary>Sparkle's role on Windows.</summary>
 public interface IUpdater
 {
     /// <summary>False when not running from an installed build (bare `dotnet run`, tests); every other member is then inert.</summary>
@@ -25,7 +25,7 @@ public interface IUpdater
     /// release; callers must catch broadly and treat any exception as a failed download.
     /// Throws <see cref="UpdateVerificationException"/> when the downloaded package fails authenticity verification; nothing is staged in that case.
     /// </summary>
-    Task DownloadAsync(UpdateCheck update, IProgress<int>? progress = null, CancellationToken cancellationToken = default);
+    Task DownloadAsync(UpdateCheck update, CancellationToken cancellationToken = default);
 
     /// <summary>Stage the downloaded update to apply when the app exits (auto-update mode).</summary>
     void ApplyOnQuit(UpdateCheck update);

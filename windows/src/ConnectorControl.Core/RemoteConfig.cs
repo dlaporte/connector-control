@@ -58,6 +58,4 @@ public sealed class RemoteConfig : IEquatable<RemoteConfig>
         hash.Add(Package, StringComparer.Ordinal);
         return hash.ToHashCode();
     }
-
-    public override string ToString() => $"RemoteConfig({Package} {Url}, {Auth}, style={LaunchStyle})";
 }

@@ -1,8 +1,7 @@
 import SwiftUI
-import ConnectorControlCore
 import ConnectorControlState
 
-/// Catalog §5: layout only; every rule and string is RestoreModel's.
+/// Layout only; every rule and string is RestoreModel's.
 struct RestoreSheetView: View {
     @StateObject private var model: RestoreModel
     @Environment(\.dismiss) private var dismiss

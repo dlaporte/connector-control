@@ -6,15 +6,20 @@ using ConnectorControl.Core.Services;
 namespace ConnectorControl.App.Services;
 
 /// <summary>
-/// Replaces NSRunningApplication + ClaudeRestarter (spec §6.2): running check
-/// and launch time by process name; restart = graceful quit (session-end
-/// messages, never force-kill), wait up to 15 s, relaunch by AUMID or exe.
+/// Replaces NSRunningApplication + ClaudeRestarter: running check and launch
+/// time by process name; restart = graceful quit (session-end messages,
+/// never force-kill), wait up to 15 s, relaunch by AUMID or exe.
 /// </summary>
 public sealed class ClaudeProcess : IClaudeProcess
 {
     public const string MainWindowTitle = "Claude";
     public const string DidNotQuitMessage = "Claude didn’t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again.";
     public const string NotInstalledMessage = "Claude Desktop was not found on this PC.";
+    /// <summary>
+    /// The reason a settings.json AUMID is refused. Phrased for the user who typed it: the fix is the
+    /// Settings ▸ Claude picker, not the file.
+    /// </summary>
+    public const string NotAClaudePackageSuffix = " is not a Claude Desktop package. " + ClaudePublisher.ChooseClaude;
 
     private static readonly int? CurrentSessionId = CurrentSession();
     private static readonly TimeSpan DefaultQuitTimeout = TimeSpan.FromSeconds(15);
@@ -45,13 +50,15 @@ public sealed class ClaudeProcess : IClaudeProcess
         this.pollInterval = pollInterval ?? DefaultPollInterval;
     }
 
-    public bool IsRunning => IsRunningFor(CurrentInstall());
-
     /// <summary>
-    /// Earliest start time across Claude's processes (Electron spawns several
-    /// within a couple of seconds), in UTC, or null when Claude is not running.
+    /// Whether Claude is running and, when it is, the earliest start time across its processes
+    /// (Electron spawns several within a couple of seconds), in UTC — from one process
+    /// enumeration rather than two.
     /// </summary>
-    public DateTime? LaunchTime => WithProcesses(CurrentInstall(), processes =>
+    public ClaudeProcessSnapshot Snapshot() =>
+        WithProcesses(CurrentInstall(), processes => new ClaudeProcessSnapshot(processes.Length > 0, EarliestStart(processes)));
+
+    private static DateTime? EarliestStart(Process[] processes)
     {
         DateTime? earliest = null;
         foreach (var process in processes)
@@ -72,16 +79,16 @@ public sealed class ClaudeProcess : IClaudeProcess
             }
         }
         return earliest;
-    });
+    }
 
     /// <summary>
     /// The install, resolved on first use and then cached. Detect() walks every
-    /// package registered for the user, and RefreshRestartState plus the 250 ms
-    /// quit poll read IsRunning and LaunchTime far too often to pay for that on
-    /// each read (review I3). A NotFound result is never cached, and RestartAsync
+    /// package registered for the user, and RefreshRestartState's Snapshot() plus
+    /// the 250 ms quit poll's IsRunningFor read it far too often to pay for that
+    /// on each read. A NotFound result is never cached, and RestartAsync
     /// re-resolves, so a Claude installed while the app runs is still found. The
     /// cache also expires on a TTL: BelongsToInstall already tolerates Claude's own
-    /// MSIX update relocating its versioned folder (review R1), but the TTL is a
+    /// MSIX update relocating its versioned folder, but the TTL is a
     /// cheap second line of defence against any other way the cached info could
     /// go stale (e.g. a package reinstalled under a new publisher id).
     /// </summary>
@@ -126,7 +133,7 @@ public sealed class ClaudeProcess : IClaudeProcess
         }
         if (!aumid && !File.Exists(target))
         {
-            return $"Claude was not found at {target}.";
+            return $"Claude Desktop was not found at {target}.";
         }
         if (!aumid)
         {
@@ -152,12 +159,6 @@ public sealed class ClaudeProcess : IClaudeProcess
 
     /// <summary>An app user model id looks like <c>Family_hash!App</c>; an exe path is rooted.</summary>
     internal static bool IsAumid(string target) => target.Contains('!') && !Path.IsPathRooted(target);
-
-    /// <summary>
-    /// The reason a settings.json AUMID is refused. Phrased for the user who typed it: the fix is the
-    /// Settings ▸ Claude picker, not the file.
-    /// </summary>
-    public const string NotAClaudePackageSuffix = " is not a Claude Desktop package. Choose Claude Desktop under Settings ▸ Claude.";
 
     private bool QuitAndWait(ClaudeInstallInfo info, CancellationToken cancellationToken)
     {
@@ -200,7 +201,7 @@ public sealed class ClaudeProcess : IClaudeProcess
     /// Claude's processes: the right image name, in this logon session, and —
     /// when the install location is known — running from it. Without the
     /// location filter the Claude Code CLI (also <c>claude.exe</c>) and another
-    /// logged-on user's Claude Desktop would both count as ours (spec §6.2).
+    /// logged-on user's Claude Desktop would both count as ours.
     /// </summary>
     private bool IsClaude(Process process, ClaudeInstallInfo info)
     {
@@ -228,7 +229,7 @@ public sealed class ClaudeProcess : IClaudeProcess
     /// <c>PackageFamilyName</c>), not the exact installed folder: Claude updates
     /// itself roughly weekly and each update relocates every process to a new
     /// versioned WindowsApps folder, so an exact-folder match goes stale until
-    /// the next Restart click (review R1). Legacy installs match the exact
+    /// the next Restart click. Legacy installs match the exact
     /// folder, which the Squirrel updater never moves. A null
     /// <c>InstallDirectory</c> means the location is unknown, so the caller's
     /// name-only match is all there is.

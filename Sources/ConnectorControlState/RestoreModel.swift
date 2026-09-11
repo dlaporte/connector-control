@@ -1,8 +1,7 @@
 import Foundation
 import Combine
-import ConnectorControlCore
 
-/// Catalog §5 RestoreSheetView state. The confirmation is a sheet:
+/// RestoreSheetView state. The confirmation is a sheet:
 /// requestRestore opens it (and clears the previous attempt's error),
 /// confirmRestore is its Restore button, cancelRestore its implicit Cancel.
 @MainActor
@@ -18,7 +17,7 @@ public final class RestoreModel: ObservableObject {
 
     private let state: AppState
 
-    /// Full URLs, newest first; the permanent .original snapshot last (catalog §5).
+    /// Full URLs, newest first; the permanent .original snapshot last.
     @Published public private(set) var backups: [URL] = []
     @Published public var selection: URL?
     @Published public private(set) var restoreError: String?
@@ -29,24 +28,22 @@ public final class RestoreModel: ObservableObject {
         self.state = state
     }
 
-    public var backupNames: [String] { backups.map(\.lastPathComponent) }
-
     public var canRestore: Bool { selection != nil }
-
-    public var hasRestoreError: Bool { restoreError != nil }
 
     public var confirmMessage: String {
         RestoreModel.confirmMessage(fileName: selection?.lastPathComponent ?? "")
     }
 
     public func load() {
-        var found = (try? state.service.backups.backups(series: RestoreModel.series)) ?? []
-        let original = state.service.backups.backupsDir
-            .appendingPathComponent("\(RestoreModel.series).original.json")
-        if FileManager.default.fileExists(atPath: original.path) {
-            found.append(original)
+        do {
+            var found = try state.service.backups.backups(series: RestoreModel.series)
+            if let original = state.service.backups.originalSnapshotURL(series: RestoreModel.series) {
+                found.append(original)
+            }
+            backups = found
+        } catch {
+            restoreError = error.localizedDescription
         }
-        backups = found
     }
 
     /// The Restore… button. A fresh attempt starts with a clean sheet: the
@@ -69,7 +66,7 @@ public final class RestoreModel: ObservableObject {
             try state.restoreClaudeConfig(from: backup)
             return true
         } catch {
-            restoreError = error.localizedDescription   // raw message, not friendly(): catalog §5
+            restoreError = error.localizedDescription   // raw message, not friendly()
             state.lastError = error.localizedDescription
             return false
         }

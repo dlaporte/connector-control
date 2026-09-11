@@ -69,7 +69,7 @@ public class VelopackUpdaterTests
     [Fact]
     public async Task PreviewInstallAsksThePrereleaseFeedOnItsOwnChannel()
     {
-        // Spec §6.7: prerelease flag = current version is a prerelease. A preview is packed as
+        // The prerelease flag = current version is a prerelease. A preview is packed as
         // 1.3.0-preview.N, so the installed app must query GitHub WITH prereleases and for the
         // channel it was packed with — that is the whole contract between the workflow and the app.
         using var packages = new TempDir("velopack");

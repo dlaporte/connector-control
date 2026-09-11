@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using System.Text;
 using ConnectorControl.Core.Tests.TestSupport;
 
@@ -27,28 +28,22 @@ public class AtomicFileTests : IDisposable
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void WritesArePrivate()
     {
         // testWritesArePrivate: mode 0600 on Mac; an owner-only DACL on Windows.
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Windows only");
-            return;
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         var path = dir.File("secret.json");
         AtomicFile.Write(Encoding.UTF8.GetBytes("token"), path);
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(path));
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void ReplacingAnExistingFileMakesItOwnerOnly()
     {
         // ReplaceFile keeps the replaced file's DACL; Write must still end owner-only.
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Windows only");
-            return;
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         var path = dir.File("existing.json");
         File.WriteAllText(path, "{}");   // inherits the temp dir's permissive ACL
         Assert.False(OwnerOnlyAcl.IsOwnerOnly(path));
@@ -87,23 +82,91 @@ public class AtomicFileTests : IDisposable
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void ADirectoryWriteCreatesIsOwnerOnlyWhileAnExistingParentIsUntouched()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Windows only");
-            return;
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         var path = dir.File(Path.Combine("fresh", "settings.json"));
         AtomicFile.Write(Encoding.UTF8.GetBytes("{}"), path);
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.GetDirectoryName(path)!), "the app's own directory is private from the start, like the Mac's 0700");
         Assert.False(OwnerOnlyAcl.IsOwnerOnly(dir.Path), "a directory that already existed is left as it was");
     }
 
+    /// <summary>A config symlinked into a dotfiles repo is written through: the link survives, the real file gets the bytes.</summary>
     [Fact]
-    public void SaveStoreReportsTheOutcome()
+    public void WritesThroughASymlinkedTarget()
     {
-        var store = new MasterStore([]);
-        Assert.True(MasterStoreIO.Save(store, dir.File("mcps.json")).Protected);
+        var real = dir.File("real.json");
+        File.WriteAllText(real, "{}");
+        var link = dir.File("link.json");
+        try
+        {
+            File.CreateSymbolicLink(link, real);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            // Creating a symlink on Windows needs Developer Mode or elevation; a CI agent
+            // without either cannot exercise this, so there is nothing to assert.
+            // GitHub's hosted Windows runners are elevated, so under FailSkips=true (ci.runsettings) this skip would surface as a failure if that ever changed.
+            Assert.Skip("symlink creation is not permitted in this environment");
+            return;
+        }
+        AtomicFile.Write(Encoding.UTF8.GetBytes("through"), link);
+        Assert.NotNull(new FileInfo(link).LinkTarget);   // the link itself survives, not replaced by a plain file
+        Assert.Equal("through", File.ReadAllText(real));
+        Assert.Equal("through", File.ReadAllText(link));
+    }
+
+    /// <summary>A link whose target does not exist yet (a config linked into a dotfiles repo
+    /// before the real file is ever created) is still written through, not replaced by a plain
+    /// file. File.Exists is false for a dangling link, which must not be mistaken for "not a
+    /// link at all".</summary>
+    [Fact]
+    public void WritesThroughADanglingSymlinkedTarget()
+    {
+        var real = dir.File("real.json");   // never created — the link's target does not exist yet
+        var link = dir.File("link.json");
+        try
+        {
+            File.CreateSymbolicLink(link, real);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            // Creating a symlink on Windows needs Developer Mode or elevation; a CI agent
+            // without either cannot exercise this, so there is nothing to assert.
+            // GitHub's hosted Windows runners are elevated, so under FailSkips=true (ci.runsettings) this skip would surface as a failure if that ever changed.
+            Assert.Skip("symlink creation is not permitted in this environment");
+            return;
+        }
+        AtomicFile.Write(Encoding.UTF8.GetBytes("through"), link);
+        Assert.NotNull(new FileInfo(link).LinkTarget);   // the link itself survives, not replaced by a plain file
+        Assert.Equal("through", File.ReadAllText(real));
+        Assert.Equal("through", File.ReadAllText(link));
+    }
+
+    /// <summary>Sources/ConnectorControlCore/AtomicFile.swift — testWritesThroughARelativeSymlinkedTarget.
+    /// A relative symlink target (resolved relative to the link's own directory) is written
+    /// through just like an absolute one.</summary>
+    [Fact]
+    public void WritesThroughARelativeSymlinkedTarget()
+    {
+        var real = dir.File(Path.Combine("real", "config.json"));
+        var link = dir.File("link.json");
+        try
+        {
+            File.CreateSymbolicLink(link, Path.Combine("real", "config.json"));
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            // Creating a symlink on Windows needs Developer Mode or elevation; a CI agent
+            // without either cannot exercise this, so there is nothing to assert.
+            // GitHub's hosted Windows runners are elevated, so under FailSkips=true (ci.runsettings) this skip would surface as a failure if that ever changed.
+            Assert.Skip("symlink creation is not permitted in this environment");
+            return;
+        }
+        AtomicFile.Write(Encoding.UTF8.GetBytes("through"), link);
+        Assert.NotNull(new FileInfo(link).LinkTarget);   // the link itself survives, not replaced by a plain file
+        Assert.Equal("through", File.ReadAllText(real));
+        Assert.Equal("through", File.ReadAllText(link));
     }
 }

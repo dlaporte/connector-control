@@ -7,16 +7,21 @@ struct WindowFinder: NSViewRepresentable {
     var onFound: (NSWindow) -> Void
 
     func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async { [weak view] in
-            if let window = view?.window { onFound(window) }
-        }
+        let view = ReportingView()
+        view.onFound = onFound
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async { [weak nsView] in
-            if let window = nsView?.window { onFound(window) }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    /// Reports through the proper AppKit hook — it fires exactly when the
+    /// view's window changes, so no polling on a dispatch queue is needed.
+    private final class ReportingView: NSView {
+        var onFound: ((NSWindow) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let window { onFound?(window) }
         }
     }
 }

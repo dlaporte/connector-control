@@ -1,20 +1,13 @@
-# Build and test the Mac app on every push/PR that touches it. This is where `swift test`
-# runs in CI: the release build (scripts/build-app.sh) runs `swift build` alone, and
-# GoldenFileTests.testGoldensAreCurrent — the Mac half of the JSON byte contract the
-# Windows suite asserts against — has no other gate.
+# Runs the Swift suite and an ad-hoc build on every push; release.yml re-runs the suite
+# before signing.
+#
+# No pull_request trigger: every push in this repository is to a branch of the same repo (no
+# forks), so the push trigger below already runs on every branch, including PR branches.
 name: Mac CI
 
 on:
   push:
     branches: ['**']
-    paths:
-      - 'Sources/**'
-      - 'Tests/**'
-      - 'Package.swift'
-      - 'Package.resolved'
-      - 'scripts/**'
-      - '.github/workflows/mac-ci.yml'
-  pull_request:
     paths:
       - 'Sources/**'
       - 'Tests/**'
@@ -31,9 +24,17 @@ concurrency:
   group: mac-ci-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   test:
-    name: Build and test
+    name: macOS build and test
+    # macos-15 is pinned deliberately (as are the ubuntu-24.04 and windows-2025 images used
+    # elsewhere in this repo's workflows): a runner-image rollover is a deliberate version bump
+    # here, not something that happens under a floating "-latest" label. Dependabot does not
+    # manage these.
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -44,7 +45,7 @@ jobs:
           xcodebuild -version
           swift --version
 
-      # test-mac.sh fails on any failure and on any skip other than the deliberate one.
+      # test-mac.sh fails if any test skips or fails.
       - name: Test
         run: ./scripts/test-mac.sh
 
@@ -52,3 +53,7 @@ jobs:
       # generate-icon.swift or Sparkle embedding fails here instead of on a tag.
       - name: Build the app bundle
         run: ./scripts/build-app.sh
+
+      # Proves make-dmg.sh too, the same way, before a tag ever reaches it.
+      - name: Build the DMG
+        run: ./scripts/make-dmg.sh build/ConnectorControl-ci.dmg

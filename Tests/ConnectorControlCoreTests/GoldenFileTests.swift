@@ -1,14 +1,15 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 /// The golden files under Tests/Fixtures/golden are Apple Foundation's output for
 /// each input, produced by the REAL Core module. The Windows test suite asserts
 /// its writer reproduces them byte for byte.
 ///
-/// - `testGoldensAreCurrent` (always on) fails when the committed goldens no
-///   longer match what this machine's Foundation produces.
-/// - `testRegenerateGoldens` rewrites them; it runs only when
-///   `CONNECTOR_CONTROL_UPDATE_GOLDENS=1` is set:
+/// `testGoldensAreCurrent` always runs and always compares. When
+/// `CONNECTOR_CONTROL_UPDATE_GOLDENS=1` is set, it first rewrites every golden
+/// output from this machine's Foundation, then compares (so the rewrite is
+/// checked immediately, and the test never skips):
 ///     CONNECTOR_CONTROL_UPDATE_GOLDENS=1 swift test --filter GoldenFileTests
 final class GoldenFileTests: XCTestCase {
     private var goldenDir: URL { Fixtures.url("golden") }
@@ -21,6 +22,8 @@ final class GoldenFileTests: XCTestCase {
             ("editor", Data(value.editorText().utf8)),
             ("serialization", try JSONSerialization.data(
                 withJSONObject: value.anyValue, options: [.prettyPrinted, .sortedKeys])),
+            ("serialization-compact", try JSONSerialization.data(
+                withJSONObject: value.anyValue, options: [.sortedKeys])),
         ]
     }
 
@@ -30,10 +33,7 @@ final class GoldenFileTests: XCTestCase {
             .sorted()
     }
 
-    func testRegenerateGoldens() throws {
-        try XCTSkipUnless(
-            ProcessInfo.processInfo.environment["CONNECTOR_CONTROL_UPDATE_GOLDENS"] == "1",
-            "set CONNECTOR_CONTROL_UPDATE_GOLDENS=1 to rewrite the golden files")
+    private func regenerateGoldens() throws {
         let fm = FileManager.default
         for name in try inputNames() {
             let value = try JSONValue.parse(try Data(contentsOf: inputsDir.appendingPathComponent(name)))
@@ -46,6 +46,9 @@ final class GoldenFileTests: XCTestCase {
     }
 
     func testGoldensAreCurrent() throws {
+        if ProcessInfo.processInfo.environment["CONNECTOR_CONTROL_UPDATE_GOLDENS"] == "1" {
+            try regenerateGoldens()
+        }
         let names = try inputNames()
         XCTAssertEqual(names.count, 4, "expected the four golden inputs")
         for name in names {

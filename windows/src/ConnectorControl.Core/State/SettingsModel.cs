@@ -3,7 +3,7 @@ using ConnectorControl.Core.Services;
 
 namespace ConnectorControl.Core.State;
 
-/// <summary>Catalog §4 SettingsView state: three tabs, every toggle, path, and button.</summary>
+/// <summary>SettingsView state: three tabs, every toggle, path, and button.</summary>
 public sealed class SettingsModel : ObservableObject, IDisposable
 {
     public const string GeneralTab = "General";
@@ -23,14 +23,10 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string BackupsHeader = "Backups";
     public const string BackupsCaption = "Both config files are backed up automatically before every change.";
     public const string ShowInExplorerTitle = "Show in Explorer";
-    public const string RestoreTitle = "Restore…";
     public const string ClaudeAppHeader = "Claude App";
     public const string ConfigPathLabel = "Config file";
     public const string LaunchTargetLabel = "Launch target";
-    public const string NotFoundText = "Not found";
     public const string LaunchTargetRejectedTitle = "That program can’t be used as Claude Desktop";
-    public const string ToolsHeader = ToolNote.SettingsHeader;
-    public const string ToolsCaption = ToolNote.SettingsCaption;
     public const int MinKeepCount = 5;
     public const int MaxKeepCount = 100;
 
@@ -42,7 +38,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     private readonly UpdateCoordinator updates;
     private bool launchAtStartup;
     private string? loginItemNote;
-    private readonly PropertyChangedEventHandler onStateChanged;
+    private ClaudeInstallInfo installInfo;
 
     public SettingsModel(AppState state, ISettings settings, IAutostart autostart, IClaudeInstall install, IUpdater updater, UpdateCoordinator updates)
     {
@@ -53,20 +49,21 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         this.updater = updater;
         this.updates = updates;
         launchAtStartup = autostart.IsEnabled;
-        onStateChanged = OnStateChanged;
-        state.PropertyChanged += onStateChanged;
+        installInfo = install.Detect();
+        state.PropertyChanged += OnStateChanged;
     }
 
-    /// <summary>Called whenever the window opens: autostart is read fresh (the user may have changed it in Windows Settings).</summary>
+    /// <summary>Called whenever the window opens: autostart and the install are read fresh (the user may have changed either since).</summary>
     public void Refresh()
     {
         launchAtStartup = autostart.IsEnabled;
+        installInfo = install.Detect();
         RaiseAll();
     }
 
-    // MARK: General (catalog §4.2)
+    // MARK: General
 
-    /// <summary>Catalog §4.2: no-op when the OS already agrees; on failure revert the toggle and show the note.</summary>
+    /// <summary>No-op when the OS already agrees; on failure revert the toggle and show the note.</summary>
     public bool LaunchAtStartup
     {
         get => launchAtStartup;
@@ -90,10 +87,13 @@ public sealed class SettingsModel : ObservableObject, IDisposable
             {
                 launchAtStartup = actual;
                 Raise(nameof(LaunchAtStartup));
-                LoginItemNote = $"Couldn't update login item: {ex.Message}";
+                LoginItemNote = StartupEntryFailureNote(ex.Message);
             }
         }
     }
+
+    /// <summary>Windows has no "login item" concept; this names the Settings ▸ Apps ▸ Startup entry instead.</summary>
+    public static string StartupEntryFailureNote(string message) => $"Couldn't update startup entry: {message}";
 
     public string? LoginItemNote
     {
@@ -135,11 +135,14 @@ public sealed class SettingsModel : ObservableObject, IDisposable
 
     public bool UpdatesEnabled => updater.IsAvailable;
 
-    public string VersionText => $"Version {updater.VersionDisplay}";
+    /// <summary>The Mac's static and an instance property of the same name can coexist there; C# forbids that, so the instance property below calls this.</summary>
+    public static string VersionTextFor(string version) => $"Version {version}";
+
+    public string VersionText => VersionTextFor(updater.VersionDisplay);
 
     public Task CheckForUpdatesAsync() => updates.CheckAsync(interactive: true);
 
-    // MARK: Storage (catalog §4.3)
+    // MARK: Storage
 
     public string StoreDirPath => state.Service.Paths.StoreDir;
 
@@ -176,7 +179,10 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         }
     }
 
-    public string KeepCountLabel => $"Keep {settings.BackupKeepCount} backups of each file";
+    /// <summary>The Mac's static and an instance property of the same name can coexist there; C# forbids that, so the instance property below calls this.</summary>
+    public static string KeepCountLabelFor(int count) => $"Keep {count} backups of each file";
+
+    public string KeepCountLabel => KeepCountLabelFor(settings.BackupKeepCount);
 
     public void IncrementKeepCount() => BackupKeepCount = settings.BackupKeepCount + 1;
 
@@ -184,13 +190,13 @@ public sealed class SettingsModel : ObservableObject, IDisposable
 
     public string BackupsDir => state.Service.Backups.BackupsDir;
 
-    // MARK: Claude (catalog §4.4, spec §7.3)
+    // MARK: Claude
 
-    public string InstallKindText => install.Detect().Kind switch
+    public string InstallKindText => installInfo.Kind switch
     {
         ClaudeInstallKind.Msix => "MSIX package",
         ClaudeInstallKind.Legacy => "Legacy installer",
-        _ => NotFoundText,
+        _ => ToolNote.NotFoundText,
     };
 
     public string ClaudeConfigPath => state.Service.Paths.ClaudeConfigPath;
@@ -210,7 +216,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     }
 
     public string LaunchTargetText =>
-        settings.ClaudeLaunchTarget is { Length: > 0 } overridden ? overridden : install.Detect().LaunchTarget ?? NotFoundText;
+        settings.ClaudeLaunchTarget is { Length: > 0 } overridden ? overridden : installInfo.LaunchTarget ?? ToolNote.NotFoundText;
 
     public bool CanUseDefaultLaunchTarget => !string.IsNullOrEmpty(settings.ClaudeLaunchTarget);
 
@@ -226,21 +232,21 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         RaiseAll();
     }
 
-    // MARK: Tools (spec 2026-09-05-tool-probe §3.5)
+    // MARK: Tools
 
     public IReadOnlyList<ToolRow> ToolRows =>
-        ToolInfo.All.Select(tool => ToolRow.For(tool, state.ToolStatuses.TryGetValue(tool, out var status) ? status : null)).ToList();
+        ToolInfo.All.Select(tool => ToolRow.Make(tool, state.ToolStatuses.TryGetValue(tool, out var status) ? status : null)).ToList();
 
-    /// <summary>Spec §6 D4: Windows probes all four when the window opens.</summary>
+    /// <summary>Windows probes all four when the window opens.</summary>
     public void RefreshTools() => _ = state.RefreshToolsAsync();
 
     private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(AppState.ToolStatuses) or null or "")
+        if (Affects(e, nameof(AppState.ToolStatuses)))
         {
             Raise(nameof(ToolRows));
         }
     }
 
-    public void Dispose() => state.PropertyChanged -= onStateChanged;
+    public void Dispose() => state.PropertyChanged -= OnStateChanged;
 }

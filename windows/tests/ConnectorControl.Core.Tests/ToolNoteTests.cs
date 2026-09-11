@@ -5,20 +5,20 @@ public class ToolNoteTests
     [Fact]
     public void MissingToolNoteCarriesTheInstallLinkAndCommand()
     {
-        var note = ToolNote.For(Tool.Npx, ToolStatus.NotFound);
+        var note = ToolNote.Make(Tool.Npx, ToolStatus.NotFound);
         Assert.NotNull(note);
         Assert.Equal("npx wasn’t found, so Claude Desktop won’t be able to start this connector.", note.Text);
         Assert.Equal("Install Node.js", note.LinkTitle);
         Assert.Equal("https://nodejs.org/en/download", note.LinkUrl);
         Assert.Equal("winget install OpenJS.NodeJS.LTS", note.InstallCommand);
-        var uv = ToolNote.For(Tool.Uv, ToolStatus.NotFound);
+        var uv = ToolNote.Make(Tool.Uv, ToolStatus.NotFound);
         Assert.NotNull(uv);
         Assert.Equal("uv wasn’t found, so Claude Desktop won’t be able to start this connector.", uv.Text);
         Assert.Equal("Install uv", uv.LinkTitle);
         Assert.Equal("https://docs.astral.sh/uv/getting-started/installation/", uv.LinkUrl);
         Assert.Equal("winget install astral-sh.uv", uv.InstallCommand);
-        Assert.Null(ToolNote.For(Tool.Node, new ToolStatus(@"C:\Program Files\nodejs\node.exe", "22.11.0")));
-        Assert.Null(ToolNote.For(Tool.Node, null));   // unknown is not a problem yet
+        Assert.Null(ToolNote.Make(Tool.Node, new ToolStatus(@"C:\Program Files\nodejs\node.exe", "22.11.0")));
+        Assert.Null(ToolNote.Make(Tool.Node, null));   // unknown is not a problem yet
     }
 
     [Fact]
@@ -31,8 +31,11 @@ public class ToolNoteTests
     }
 
     [Fact]
-    public void StringsAndOrderMatchTheSpec()
+    public void OrderNameMappingAndFamilyLookup()
     {
+        // Order, name mapping, and lookup: behavior StringCatalogTests doesn't
+        // cover (it pins strings, not enum order or lookup logic). The Windows-only
+        // PATHEXT constant is ToolProbe's own, and is pinned in ToolProbeTests.
         Assert.Equal([Tool.Npx, Tool.Node, Tool.Uvx, Tool.Uv], ToolInfo.All.ToArray());
         Assert.Equal(["npx", "node", "uvx", "uv"], ToolInfo.All.Select(ToolInfo.Name).ToArray());
         Assert.Equal(Tool.Npx, ToolInfo.Parse("NPX"));
@@ -41,10 +44,6 @@ public class ToolNoteTests
         Assert.Equal(ToolFamily.NodeJs, ToolInfo.Family(Tool.Node));
         Assert.Equal(ToolFamily.Uv, ToolInfo.Family(Tool.Uvx));
         Assert.Equal(ToolFamily.Uv, ToolInfo.Family(Tool.Uv));
-        Assert.Equal("or run", ToolNote.OrRun);
-        Assert.Equal("Tools", ToolNote.SettingsHeader);
-        Assert.Equal("Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them.", ToolNote.SettingsCaption);
-        Assert.Equal(".COM;.EXE;.BAT;.CMD", ToolProbe.DefaultPathExt);
     }
 
     [Fact]

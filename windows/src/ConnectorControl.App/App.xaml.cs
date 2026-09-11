@@ -5,12 +5,11 @@ using ConnectorControl.App.Tray;
 using ConnectorControl.App.Views;
 using ConnectorControl.Core;
 using ConnectorControl.Core.State;
-using AppServices = ConnectorControl.App.Services.Services;
 
 namespace ConnectorControl.App;
 
 /// <summary>
-/// Composition root (catalog §0 / spec §7.6 init order): Velopack hook first,
+/// Composition root: Velopack hook first,
 /// single-instance guard, platform services, AppState (which reloads and arms
 /// watchers), the update coordinator, windows, tray icon, first-run tip.
 /// No window is shown at startup; the tray icon is the app.
@@ -18,7 +17,7 @@ namespace ConnectorControl.App;
 public partial class App : Application
 {
     private SingleInstance? instance;
-    private AppServices? services;
+    private PlatformServices? services;
     private AppState? state;
     private UpdateCoordinator? updates;
     private FlyoutModel? flyoutModel;
@@ -29,6 +28,13 @@ public partial class App : Application
     {
         VelopackUpdater.RunStartupHook();   // must run before anything else (install/update/uninstall callbacks)
         base.OnStartup(e);
+        if (PackageVerificationCommand.TryRun(e.Args, out var verificationExitCode))
+        {
+            // smoke-test.ps1's own invocation of the installed exe: check a package and exit,
+            // never reaching the tray UI or the single-instance guard.
+            Shutdown(verificationExitCode);
+            return;
+        }
         DispatcherUnhandledException += OnUnhandledException;   // before the second-instance path too, so it leaves a crash.log
         instance = new SingleInstance();
         if (!instance.IsFirstInstance)
@@ -56,7 +62,7 @@ public partial class App : Application
         updates = new UpdateCoordinator(services.Updater, services.Settings, services.Notifier, dialogs, host);
         updates.Start();   // only arms the delayed first check through host.Delay
         var windows = new WindowRegistry(state, services, updates);
-        flyoutModel = new FlyoutModel(state);
+        flyoutModel = new FlyoutModel(state, services.Settings);
         flyout = new FlyoutWindow(flyoutModel, windows);
         tray = new TrayController(state, flyout, windows);
         instance.OnShowRequested(() => host.Marshal(() => flyout.ShowFlyout()));

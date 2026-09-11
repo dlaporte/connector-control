@@ -2,14 +2,12 @@ namespace ConnectorControl.Core.State;
 
 /// <summary>
 /// What a regenerated Claude config now runs that it did not before, by
-/// connector name (catalog §1.8; Swift <c>ServerDelta</c>). An mcpServers
+/// connector name (Swift <c>ServerDelta</c>). An mcpServers
 /// entry is a command Claude executes, so a notification about an adopted
 /// synced change names the entries rather than saying only that "the list changed".
 /// </summary>
 public sealed record ServerDelta(IReadOnlyList<string> Added, IReadOnlyList<string> Removed, IReadOnlyList<string> Changed)
 {
-    public static readonly ServerDelta Empty = new([], [], []);
-
     public static ServerDelta Between(IReadOnlyDictionary<string, JsonValue> before, IReadOnlyDictionary<string, JsonValue> after)
     {
         var added = after.Keys.Where(k => !before.ContainsKey(k)).Order(StringComparer.Ordinal).ToList();

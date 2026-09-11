@@ -1,22 +1,27 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 final class BackupManagerTests: XCTestCase {
+    var tempDir: TempDir!
     var dir: URL!
     var source: URL!
     var manager: BackupManager!
 
     override func setUpWithError() throws {
-        dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("backups-\(UUID().uuidString)")
+        tempDir = TempDir(prefix: "backups")
+        dir = tempDir.url
         source = dir.appendingPathComponent("claude_desktop_config.json")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try Data(#"{"mcpServers": {}}"#.utf8).write(to: source)
         manager = BackupManager(backupsDir: dir.appendingPathComponent("backups"), keepCount: 3)
     }
 
     override func tearDownWithError() throws {
-        try? FileManager.default.removeItem(at: dir)
+        tempDir.dispose()
+    }
+
+    func testBackupsOfMissingDirIsEmpty() throws {
+        XCTAssertEqual(try manager.backups(series: "claude_desktop_config"), [])
     }
 
     func testBackupsDirectoryIsCreatedPrivate() throws {
@@ -81,6 +86,31 @@ final class BackupManagerTests: XCTestCase {
         XCTAssertEqual(kept.count, 3)
         XCTAssertEqual(try String(contentsOf: kept[0], encoding: .utf8), "v4")
         XCTAssertEqual(try String(contentsOf: kept[2], encoding: .utf8), "v2")
+    }
+
+    /// A stale backup pruning cannot delete (locked, read-only, whatever the
+    /// cause) must not fail the save that triggered the prune; it is simply
+    /// left behind for the next rotation to retry.
+    func testRotationSkipsAStaleBackupThatCannotBeDeleted() throws {
+        let limited = BackupManager(backupsDir: dir.appendingPathComponent("backups"), keepCount: 2)
+        for i in 0..<2 {
+            try Data("v\(i)".utf8).write(to: source)
+            try limited.backUp(fileAt: source, series: "claude_desktop_config",
+                               now: Date(timeIntervalSince1970: Double(1_752_600_000 + i)))
+        }
+        let stale = try XCTUnwrap(try limited.backups(series: "claude_desktop_config").last)
+        XCTAssertEqual(chflags(stale.path, UInt32(UF_IMMUTABLE)), 0)
+        defer { chflags(stale.path, 0) }
+        // The fixture must actually block deletion, or this test proves nothing.
+        XCTAssertThrowsError(try FileManager.default.removeItem(at: stale))
+
+        try Data("v2".utf8).write(to: source)
+        let made = try limited.backUp(fileAt: source, series: "claude_desktop_config",
+                                      now: Date(timeIntervalSince1970: 1_752_600_002))
+        XCTAssertNotNil(made, "the save must succeed even though pruning the stale backup failed")
+        let remaining = try limited.backups(series: "claude_desktop_config")
+        XCTAssertTrue(remaining.contains(stale), "the undeletable backup survives, to be retried next rotation")
+        XCTAssertEqual(remaining.count, 3, "keepCount 2, plus the one stuck backup that could not be pruned")
     }
 
     func testOriginalSnapshotWrittenOnceAndNeverPruned() throws {

@@ -42,7 +42,7 @@ public class WindowPlacementTests
         Assert.Equal(new Rectangle(810, 592, 300, 400), rect);
     }
 
-    // Spec §7.1 anchoring order: the tray's own corner, then the cursor, then the work-area corner.
+    // Anchoring order: the tray's own corner, then the cursor, then the work-area corner.
 
     [Fact]
     public void AnchorPrefersTheTrayPosition()

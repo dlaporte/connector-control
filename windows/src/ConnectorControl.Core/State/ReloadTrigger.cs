@@ -1,6 +1,6 @@
 namespace ConnectorControl.Core.State;
 
-/// <summary>Why a reload is running — controls reconciliation authority and which notifications may fire (catalog §1.6).</summary>
+/// <summary>Why a reload is running — controls reconciliation authority and which notifications may fire.</summary>
 public enum ReloadTrigger
 {
     /// <summary>Launch, flyout open, or the Claude-config watcher.</summary>

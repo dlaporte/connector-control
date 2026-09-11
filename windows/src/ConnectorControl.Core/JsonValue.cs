@@ -71,6 +71,10 @@ public sealed class JsonValue : IEquatable<JsonValue>
     public static JsonValue Object(params (string Key, JsonValue Value)[] properties) =>
         Object(properties.Select(p => new KeyValuePair<string, JsonValue>(p.Key, p.Value)));
 
+    /// <summary>A JSON object of string values, the shape an env dictionary always takes.</summary>
+    public static JsonValue FromObject(IReadOnlyDictionary<string, string> properties) =>
+        Object(properties.Select(kv => new KeyValuePair<string, JsonValue>(kv.Key, String(kv.Value))));
+
     public bool BoolValue => Kind == JsonKind.Bool ? boolValue : throw Mismatch(JsonKind.Bool);
     public long IntValue => Kind == JsonKind.Int ? intValue : throw Mismatch(JsonKind.Int);
     public double DoubleValue => Kind == JsonKind.Double ? doubleValue : throw Mismatch(JsonKind.Double);
@@ -106,7 +110,7 @@ public sealed class JsonValue : IEquatable<JsonValue>
         _ => throw new InvalidOperationException(),
     };
 
-    // MARK: output (Task 6)
+    // MARK: output
 
     /// <summary>Swift <c>serialized()</c>: Apple JSONEncoder pretty + sorted keys, slashes escaped.</summary>
     public byte[] Serialize() => AppleJsonWriter.WriteUtf8(this, AppleJsonFormat.Encoder);
@@ -174,7 +178,14 @@ public sealed class JsonValue : IEquatable<JsonValue>
                     {
                         throw new JsonException("Property without a value.");
                     }
-                    builder[key] = ReadValue(ref reader);   // last duplicate wins
+                    var propertyValue = ReadValue(ref reader);
+                    // Apple's JSONSerialization and JSONDecoder both keep the FIRST of two
+                    // duplicate object keys; the Mac test testFirstDuplicateKeyWins pins it,
+                    // and re-parsing our own sorted-key output must never disagree with them.
+                    if (!builder.ContainsKey(key))
+                    {
+                        builder[key] = propertyValue;
+                    }
                 }
                 return new(JsonKind.Object, false, 0, 0, "", EmptyArray, builder.ToImmutable());
             }

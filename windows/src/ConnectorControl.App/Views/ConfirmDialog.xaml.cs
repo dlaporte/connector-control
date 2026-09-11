@@ -7,7 +7,7 @@ namespace ConnectorControl.App.Views;
 /// button (accent, or red when destructive) and an optional Cancel. Native
 /// MessageBox cannot carry the Mac's button labels, hence this window.
 /// </summary>
-public partial class ConfirmDialog : Window
+public partial class ConfirmDialog : DialogWindow
 {
     public ConfirmDialog(string message, string? informativeText, string primaryTitle, string? cancelTitle, bool destructive)
     {
@@ -18,7 +18,8 @@ public partial class ConfirmDialog : Window
         PrimaryButton.Content = primaryTitle;
         CancelButton.Content = cancelTitle ?? string.Empty;
         CancelButton.Visibility = cancelTitle is null ? Visibility.Collapsed : Visibility.Visible;
-        if (TryFindResource(destructive ? "DestructiveButton" : "AccentButtonStyle") is Style style)
+        // The XAML default is AccentButtonStyle; destructive is the one runtime choice a Style can't make.
+        if (destructive && TryFindResource("DestructiveButton") is Style style)
         {
             PrimaryButton.Style = style;
         }
@@ -30,8 +31,7 @@ public partial class ConfirmDialog : Window
     public static bool Show(Window? owner, string message, string? informativeText, string primaryTitle, string? cancelTitle, bool destructive)
     {
         var dialog = new ConfirmDialog(message, informativeText, primaryTitle, cancelTitle, destructive);
-        WpfDialogs.Present(dialog, owner);
-        return dialog.Result;
+        return Present(dialog, owner, () => dialog.Result);
     }
 
     private void OnPrimary(object sender, RoutedEventArgs e)

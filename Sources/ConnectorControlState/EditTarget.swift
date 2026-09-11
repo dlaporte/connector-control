@@ -1,10 +1,13 @@
 import Foundation
 import ConnectorControlCore
 
-/// Catalog §3.1: what an editor window edits. Existing connectors use id ==
+/// What an editor window edits. Existing connectors use id ==
 /// name (one window each); new ones a fresh UUID. Codable and Hashable for
 /// the SwiftUI WindowGroup value.
-public struct EditTarget: Identifiable, Codable, Hashable {
+public struct EditTarget: Identifiable, Codable, Hashable, Sendable {
+    /// The editor `WindowGroup`'s id — shared by `ConnectorControlApp`'s
+    /// declaration and `PopoverView`'s `openWindow` call so they cannot drift apart.
+    public static let editorWindowID = "editor"
     public static let addTitle = "Add Connector"
 
     public static func editTitle(_ name: String) -> String { "Edit “\(name)”" }
@@ -27,10 +30,6 @@ public struct EditTarget: Identifiable, Codable, Hashable {
         EditTarget(id: name, name: name, entry: entry, isNew: false)
     }
 
-    public static func new(template: JSONValue) -> EditTarget {
-        EditTarget(id: UUID().uuidString, name: "", entry: MCPEntry(config: template), isNew: true)
-    }
-
     /// Add-Remote flow: the template has an empty URL that detect() cannot
     /// classify, so the remote form is forced explicitly.
     public static func newRemote() -> EditTarget {
@@ -38,6 +37,6 @@ public struct EditTarget: Identifiable, Codable, Hashable {
                    entry: MCPEntry(config: RemotePattern.make(url: "")), isNew: true, forcesRemote: true)
     }
 
-    /// Catalog §3.12: fixed at open time.
+    /// Fixed at open time.
     public var windowTitle: String { isNew ? EditTarget.addTitle : EditTarget.editTitle(name) }
 }

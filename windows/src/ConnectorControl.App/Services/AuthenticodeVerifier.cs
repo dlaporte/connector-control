@@ -33,7 +33,7 @@ public static class AuthenticodeVerifier
         var signer = SignerSubject(exePath);
         if (signer.Problem is not null)
         {
-            return signer.Problem + " Choose Claude Desktop's own claude.exe under Settings ▸ Claude.";
+            return signer.Problem + " " + ClaudePublisher.ChooseClaude;
         }
         return ClaudePublisher.SubjectProblem(signer.Identity!, name);
     }

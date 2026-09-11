@@ -1,5 +1,5 @@
 /// The four ways the Remote form can authenticate an `npx mcp-remote`
-/// invocation (catalog §3.2), in picker order.
+/// invocation, in picker order.
 public enum RemoteAuthKind: String, CaseIterable, Sendable {
     case automatic, bearer, header, oauthClient
 

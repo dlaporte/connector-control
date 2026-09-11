@@ -2,8 +2,14 @@ import XCTest
 @testable import ConnectorControlCore
 
 final class AppPathsTests: XCTestCase {
+    /// The real default `appSupport`, for tests that want AppPaths.live's
+    /// actual home-directory behavior rather than a throwaway one.
+    private var realAppSupport: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+    }
+
     func testLiveDefaultsPointAtClaudeAndConnectorControl() {
-        let paths = AppPaths.live(environment: [:])
+        let paths = AppPaths.live(environment: [:], appSupport: realAppSupport)
         XCTAssertTrue(paths.claudeConfigURL.path.hasSuffix(
             "Library/Application Support/Claude/claude_desktop_config.json"))
         XCTAssertTrue(paths.storeDirURL.path.hasSuffix(
@@ -16,12 +22,25 @@ final class AppPathsTests: XCTestCase {
         let paths = AppPaths.live(environment: [
             "CONNECTOR_CONTROL_CLAUDE_CONFIG": "/tmp/x/claude.json",
             "CONNECTOR_CONTROL_STORE_DIR": "/tmp/x/store",
-        ])
+        ], appSupport: realAppSupport)
         XCTAssertEqual(paths.claudeConfigURL.path, "/tmp/x/claude.json")
         XCTAssertEqual(paths.storeDirURL.path, "/tmp/x/store")
         XCTAssertEqual(paths.masterStoreURL.path, "/tmp/x/store/mcps.json")
         XCTAssertEqual(paths.backupsDirURL.path, "/tmp/x/store/backups")
         XCTAssertEqual(paths.stagingDirURL.path, "/tmp/x/store/.staging")
+    }
+
+    /// A CI/sandbox environment that inherits the variable but leaves it unset
+    /// must not shadow the real default.
+    func testEmptyOverridesCountAsAbsent() {
+        let paths = AppPaths.live(environment: [
+            "CONNECTOR_CONTROL_CLAUDE_CONFIG": "",
+            "CONNECTOR_CONTROL_STORE_DIR": "",
+        ], appSupport: realAppSupport)
+        XCTAssertTrue(paths.claudeConfigURL.path.hasSuffix(
+            "Library/Application Support/Claude/claude_desktop_config.json"))
+        XCTAssertTrue(paths.storeDirURL.path.hasSuffix(
+            "Library/Application Support/Connector Control"))
     }
 
     func testExplicitBackupsDirURLIsHonoredIndependentlyOfStoreDir() {

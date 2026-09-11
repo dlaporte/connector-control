@@ -19,6 +19,8 @@ wiped or mangled config is always one click from restored.
   <img src="docs/screenshots/mac-popover.png" width="344" alt="The Connector Control popover on macOS: a profile chip, a list of connectors with on/off toggles, and an edit pencil on every row.">
 </p>
 
+<p align="center"><sub>Pending: equivalent Windows tray-flyout screenshots.</sub></p>
+
 ## Features
 
 - **One-click enable/disable** — toggle any connector from the menu bar or
@@ -62,14 +64,15 @@ The editor's two views of the same connector:
 
 Profiles are full, independent connector snapshots — each has its own
 complete list of connectors and enabled flags. A chip in the header of the
-popover (Mac) or flyout (Windows) (`<profile name> ▾`) shows the active profile and opens a menu to switch
-profiles, or to create, rename, or delete one. Switching applies immediately,
+popover (Mac) or flyout (Windows) — `<profile name> ▾` — shows the active
+profile and opens a menu to switch profiles, or to create, rename, or delete
+one. Switching applies immediately,
 same as any other change, and raises **Restart Required** just like a toggle
 would. New profiles start as a copy of the active profile's connectors.
 
 The master list file (mcps.json) is v2 (profile-aware); older files from a
 pre-Profiles build are simply rebuilt from Claude's current config the same
-way any corrupted file is (see Building from source). **If you sync
+way any corrupted file is (see How it works). **If you sync
 mcps.json across machines, every machine must run a Profiles-capable
 version** — an older app can't parse the v2 file and will treat it as
 corrupt.
@@ -125,11 +128,11 @@ then **Run anyway**. The warning goes away as the signature earns reputation.
    takes the permanent snapshot of the original config.
 
 Left-click the tray icon for the connector list; right-click it for
-**Settings…** and **Quit**. Updates are automatic: the app checks GitHub for
-new releases, downloads them in the background, and offers **Install and
-Relaunch** (Settings ▸ General ▸ Updates has the switch and a **Check for
-Updates…** button). Turn on **Launch at startup** there to have it always
-available.
+**Settings…** and **Quit**. Updates are offered, not installed silently: the
+app checks GitHub for new releases and shows **Install and Relaunch** when
+one is available (Settings ▸ General ▸ Updates has a switch to download and
+install them automatically, and a **Check for Updates…** button). Turn on
+**Launch at startup** there to have it always available.
 
 #### Uninstalling
 
@@ -202,7 +205,7 @@ shows whether the launchers connectors depend on are installed.
 
 ### Syncing across machines
 
-Settings → Storage → **Master List Location** → choose a folder inside your
+Settings ▸ Storage ▸ **Master List Location** ▸ choose a folder inside your
 synced location (a git repo, iCloud Drive, OneDrive, Dropbox). The app adopts an
 mcps.json already there, or seeds the folder with your current list. Other
 machines running Connector Control point at the same folder and pick up
@@ -236,7 +239,7 @@ app but cannot run the test suite.
 
     git clone https://github.com/dlaporte/connector-control.git
     cd connector-control
-    swift test                # 304 tests, no network, never touches your real config
+    swift test                # the full suite, no network, never touches your real config
     ./scripts/build-app.sh    # → build/Connector Control.app (ad-hoc signed)
     cp -R "build/Connector Control.app" /Applications/
 
@@ -259,8 +262,9 @@ the same SDK, which is how the shared Core tests run on both.
 
 The same `CONNECTOR_CONTROL_CLAUDE_CONFIG` and `CONNECTOR_CONTROL_STORE_DIR`
 overrides point a development run at a throwaway config. Installers are
-built by `windows/scripts/package.ps1` (Velopack, `vpk` 1.2.0), which is
-also what the in-app updater consumes.
+built by `windows/scripts/package.ps1` (Velopack, `vpk` at the version
+pinned in `windows/.config/dotnet-tools.json`), which is also what the
+in-app updater consumes.
 
 Releases are produced by [`.github/workflows/release.yml`](.github/workflows/release.yml)
 on version tags — both platforms from one tag, onto one GitHub release: the
@@ -274,7 +278,29 @@ the Mac update feed) come from
 either by a `windows-preview-<n>` tag or by hand from the Actions tab
 (Run workflow, with the preview number; a dry run by default). All three
 Windows workflows share one build definition,
-[`windows-build.yml`](.github/workflows/windows-build.yml).
+[`windows-build.yml`](.github/workflows/windows-build.yml), and every
+workflow's own YAML and shell/PowerShell scripts are linted by
+[`infra-ci.yml`](.github/workflows/infra-ci.yml).
+
+### Scripts
+
+| Script | What it does | Who calls it |
+| --- | --- | --- |
+| `scripts/build-app.sh` | Assembles `build/Connector Control.app` from the SwiftPM build products, embedding Sparkle and the app icon. | `mac-ci.yml`, `release.yml` |
+| `scripts/make-dmg.sh` | Packages the app bundle into a drag-to-Applications DMG. | `mac-ci.yml`, `release.yml` |
+| `scripts/test-mac.sh` | Runs the Swift suite the way CI gates it (no test may skip or fail). | `mac-ci.yml`, `release.yml` |
+| `scripts/generate-icon.swift` | Renders the app icon — macOS `.icns` or Windows `.ico`, chosen by the output extension. | `scripts/build-app.sh`; the `.ico` path is run by hand, on a Mac |
+| `scripts/mac/import-signing-cert.sh` | Imports the Developer ID certificate into a throwaway CI keychain. | `release.yml` |
+| `scripts/mac/notarize.sh` | Submits a binary or app bundle for Apple notarization and staples the ticket. | `release.yml` |
+| `scripts/mac/make-appcast.sh` | Builds and EdDSA-signs the Sparkle appcast for one release. | `release.yml` |
+| `scripts/release/changelog-section.sh` | Prints one version's CHANGELOG.md section. | `release.yml` |
+| `scripts/release/preview-notes.sh` | Prints the release notes for a Windows preview build. | `windows-preview.yml` |
+| `scripts/release/ensure-release.sh` | Creates a GitHub release, or reuses one a previous run already created. | `release.yml`, `windows-preview.yml` |
+| `scripts/release/upload-release-assets.sh` | Uploads one build's Velopack assets to an existing release. | `release.yml`, `windows-preview.yml` |
+| `scripts/release/verify-release.sh` | Verifies a release's draft/prerelease flags and asset set. | `release.yml`, `windows-preview.yml` |
+| `windows/scripts/package.ps1` | Publishes and Velopack-packs one Windows runtime. | `windows-build.yml` |
+| `windows/scripts/smoke-test.ps1` | Installs a packed `Setup.exe` and proves the app starts, stays up, and (with `-SignatureOnly`) is signed. | `windows-build.yml` |
+| `windows/tools/probe-claude.ps1` | Manual diagnostic for how Claude Desktop installs and is found on a PC. | run by hand, on Windows |
 
 ## Scope and caveats
 
@@ -284,7 +310,7 @@ Windows workflows share one build definition,
 - Neither app is sandboxed: each needs to read and write Claude Desktop's
   config file and to quit and relaunch Claude.
 - Restarting Claude interrupts any in-progress conversation; the app asks
-  first by default (Settings → General).
+  first by default (Settings ▸ General).
 - Windows: Claude Desktop is found by its app package (`Claude_pzs8sxrjxfjjc`)
   or, for older installs, its program folder; if Claude does not come back
   after a restart the app says so rather than guessing.

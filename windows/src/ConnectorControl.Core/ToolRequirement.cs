@@ -1,7 +1,7 @@
 namespace ConnectorControl.Core;
 
 /// <summary>
-/// Which of the four tools a connector's command needs (spec §3.3): the first token by
+/// Which of the four tools a connector's command needs: the first token by
 /// basename, case-insensitive, <c>.cmd</c>/<c>.exe</c> stripped, one <c>cmd /c</c> unwrapped.
 /// A command written as a path (<c>C:\Program Files\nodejs\npx.cmd</c>) is left alone — the
 /// user chose it deliberately and PATH lookup does not apply.
@@ -22,32 +22,12 @@ public static class ToolRequirement
     }
 
     /// <summary>The rule applied to a config object's <c>command</c> and string <c>args</c> (any non-string arg empties the list). Non-objects → null.</summary>
-    public static Tool? RequiredTool(JsonValue config)
-    {
-        if (config.Kind != JsonKind.Object || config["command"] is not { Kind: JsonKind.String } command)
-        {
-            return null;
-        }
-        var args = new List<string>();
-        if (config["args"] is { Kind: JsonKind.Array } raw)
-        {
-            foreach (var item in raw.ArrayItems)
-            {
-                if (item.Kind != JsonKind.String)
-                {
-                    args.Clear();
-                    break;
-                }
-                args.Add(item.StringValue);
-            }
-        }
-        return RequiredTool(command.StringValue, args);
-    }
+    public static Tool? RequiredTool(JsonValue config) =>
+        CommandLine.TryRead(config, out var command, out var args) ? RequiredTool(command, args) : null;
 
     /// <summary>
     /// Every tool the given configs need, deduplicated and in <see cref="ToolInfo.All"/> order —
-    /// what the flyout must have probed before it can decide which rows carry a warning
-    /// (addendum 2026-09-06-row-glyph §3).
+    /// what the flyout must have probed before it can decide which rows carry a warning.
     /// </summary>
     public static IReadOnlyList<Tool> RequiredTools(IEnumerable<JsonValue> configs)
     {

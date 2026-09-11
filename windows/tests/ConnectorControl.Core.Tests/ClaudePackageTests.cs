@@ -3,6 +3,17 @@ namespace ConnectorControl.Core.Tests;
 public class ClaudePackageTests
 {
     [Theory]
+    [InlineData("Claude_pzs8sxrjxfjjc", true)]
+    [InlineData("Anthropic.ClaudeDesktop_h6f0761", true)]
+    [InlineData("Claude_abcdefghjkmnp", false)]   // another publisher's package named Claude: the launch rule already refused it, so detection must not find it
+    [InlineData("Microsoft.WindowsTerminal_8wekyb3d8bbwe", false)]
+    [InlineData("claude_lowercase", false)]
+    public void IsClaudeFamily(string family, bool expected)
+    {
+        Assert.Equal(expected, ClaudePackage.IsClaudeFamily(family));
+    }
+
+    [Theory]
     [InlineData("Claude_pzs8sxrjxfjjc!Claude", true)]
     [InlineData("Anthropic.ClaudeDesktop_8wekyb3d8bbwe!App", true)]
     [InlineData("Claude_abcdefghjkmnp!Claude", false)]                 // a sideloaded "Claude" from another publisher

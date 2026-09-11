@@ -28,21 +28,6 @@ public sealed class MarshalQueue
     }
 
     /// <summary>Pumps until the condition holds or the timeout passes.</summary>
-    public bool PumpUntil(Func<bool> condition, TimeSpan timeout)
-    {
-        var deadline = DateTime.UtcNow + timeout;
-        while (true)
-        {
-            Pump();
-            if (condition())
-            {
-                return true;
-            }
-            if (DateTime.UtcNow >= deadline)
-            {
-                return false;
-            }
-            Thread.Sleep(50);
-        }
-    }
+    public bool PumpUntil(Func<bool> condition, TimeSpan timeout) =>
+        Wait.Until(() => { Pump(); return condition(); }, timeout);
 }

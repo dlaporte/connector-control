@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Assembles build/Connector Control.app from the SwiftPM build products.
 #
 # Environment knobs (all optional; defaults produce a local dev build):
 #   VERSION           marketing version for Info.plist        (default: 1.0)
-#   BUILD_NUMBER      CFBundleVersion                         (default: 1)
+#   BUILD_NUMBER      CFBundleVersion                         (default: derived from VERSION)
 #   SIGNING_IDENTITY  codesign identity                       (default: "-", ad-hoc)
 #                     A real Developer ID identity also enables the hardened
 #                     runtime + secure timestamp that notarization requires.
@@ -29,10 +29,10 @@ if [ -z "${BUILD_NUMBER:-}" ]; then
 fi
 
 if [ "${UNIVERSAL:-0}" = "1" ]; then
-    swift build -c release --arch arm64 --arch x86_64
+    swift build -c release --product ConnectorControl --arch arm64 --arch x86_64
     BIN=".build/apple/Products/Release/ConnectorControl"
 else
-    swift build -c release
+    swift build -c release --product ConnectorControl
     BIN=".build/release/ConnectorControl"
 fi
 

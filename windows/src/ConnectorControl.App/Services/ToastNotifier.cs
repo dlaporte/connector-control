@@ -6,7 +6,7 @@ using Microsoft.Toolkit.Uwp.Notifications;
 namespace ConnectorControl.App.Services;
 
 /// <summary>
-/// UNUserNotificationCenter's role (spec §6.4): toasts via the Community
+/// UNUserNotificationCenter's role on Windows: toasts via the Community
 /// Toolkit's unpackaged-app support, with a Restart Claude button on the
 /// restart category routed back through <c>marshal</c> (the UI thread).
 /// Notifications are best effort: if the toast platform is unavailable the
@@ -53,8 +53,8 @@ public sealed class ToastNotifier : INotifier, IDisposable
 
     /// <summary>
     /// The toast itself: title, body, and — for the restart category only — the
-    /// Restart Claude button carrying the action this class routes back
-    /// (spec §6.4). Separate from Show() so the content is testable.
+    /// Restart Claude button carrying the action this class routes back.
+    /// Separate from Show() so the content is testable.
     /// </summary>
     internal static ToastContentBuilder Build(string title, string body, string? category)
     {
@@ -62,7 +62,7 @@ public sealed class ToastNotifier : INotifier, IDisposable
         if (category == Notifications.RestartCategory)
         {
             builder.AddButton(new ToastButton()
-                .SetContent(Notifications.RestartButton)
+                .SetContent(Notifications.RestartToastButton)
                 .AddArgument(ActionKey, Notifications.RestartAction));
         }
         return builder;

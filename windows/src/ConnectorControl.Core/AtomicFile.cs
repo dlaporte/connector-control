@@ -22,19 +22,43 @@ public static class AtomicFile
     /// </summary>
     public static AtomicWriteResult Write(byte[] data, string path)
     {
-        var fullPath = Path.GetFullPath(path);
-        var dir = Path.GetDirectoryName(fullPath)
+        var target = Path.GetFullPath(path);
+        // A target that is itself a symlink (a config synced into a dotfiles repo, say) is
+        // written through to the real file, not replaced by a plain file in the rename below —
+        // mirrors the Mac writer's realpath resolution. LinkTarget (unlike File.Exists) reads
+        // the reparse point itself, so a link whose target does not exist yet — the common
+        // first-run case for a config linked into a dotfiles repo before the real file is ever
+        // created — is still followed instead of being silently replaced. A path that is not a
+        // link at all (including one that does not exist yet) leaves target as is.
+        var targetInfo = new FileInfo(target);
+        if (targetInfo.LinkTarget is not null)
+        {
+            try
+            {
+                if (targetInfo.ResolveLinkTarget(returnFinalTarget: true)?.FullName is { } real)
+                {
+                    target = real;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // the target vanished, or was replaced by something that is not a link, between
+                // the LinkTarget check above and the resolve: write to the literal path instead
+                // of failing the write. (DirectoryNotFoundException derives from IOException.)
+            }
+        }
+        var dir = Path.GetDirectoryName(target)
             ?? throw new ArgumentException("Path has no parent directory.", nameof(path));
         // Throws IOException when a file sits where the directory should be —
         // before any temp file exists.
         OwnerOnlyAcl.CreateDirectoryProtected(dir);
-        var tmp = Path.Combine(dir, $".{Path.GetFileName(fullPath)}.tmp-{Guid.NewGuid():N}");
+        var tmp = Path.Combine(dir, $".{Path.GetFileName(target)}.tmp-{Guid.NewGuid().ToString("D").ToUpperInvariant()}");
         try
         {
             var isProtected = OwnerOnlyAcl.WriteNewProtectedFile(tmp, data);
             // A same-volume rename keeps the temp file's own DACL; MOVEFILE_REPLACE_EXISTING
             // makes it atomic over an existing target.
-            File.Move(tmp, fullPath, overwrite: true);
+            File.Move(tmp, target, overwrite: true);
             return new AtomicWriteResult(isProtected);
         }
         finally

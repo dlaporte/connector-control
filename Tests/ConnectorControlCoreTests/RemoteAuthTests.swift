@@ -1,13 +1,9 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 final class RemoteAuthTests: XCTestCase {
     private let url = "https://x.dev/mcp"
-
-    private func args(_ v: JSONValue) -> [String]? {
-        guard case .object(let o) = v, case .array(let a)? = o["args"] else { return nil }
-        return a.compactMap { if case .string(let s) = $0 { return s }; return nil }
-    }
 
     private func env(_ v: JSONValue) -> [String: String] {
         guard case .object(let o) = v, case .object(let e)? = o["env"] else { return [:] }
@@ -21,14 +17,14 @@ final class RemoteAuthTests: XCTestCase {
     func testAutomaticRoundTrips() {
         let rc = RemoteConfig(url: url, auth: .automatic)
         let encoded = RemotePattern.encode(rc)
-        XCTAssertEqual(args(encoded), ["-y", "mcp-remote", url])
+        XCTAssertEqual(args(of: encoded), ["-y", "mcp-remote", url])
         XCTAssertEqual(RemotePattern.decode(encoded), rc)
     }
 
     func testBearerRoundTrips() {
         let rc = RemoteConfig(url: url, auth: .bearer(token: "secret-tok"))
         let encoded = RemotePattern.encode(rc)
-        XCTAssertEqual(args(encoded),
+        XCTAssertEqual(args(of: encoded),
                        ["-y", "mcp-remote", url, "--header", "Authorization:${AUTH_HEADER}"])
         XCTAssertEqual(env(encoded), ["AUTH_HEADER": "Bearer secret-tok"])
         XCTAssertEqual(RemotePattern.decode(encoded), rc)
@@ -37,7 +33,7 @@ final class RemoteAuthTests: XCTestCase {
     func testHeaderRoundTrips() {
         let rc = RemoteConfig(url: url, auth: .header(name: "X-API-Key", value: "k123"))
         let encoded = RemotePattern.encode(rc)
-        XCTAssertEqual(args(encoded),
+        XCTAssertEqual(args(of: encoded),
                        ["-y", "mcp-remote", url, "--header", "X-API-Key:${AUTH_HEADER}"])
         XCTAssertEqual(env(encoded), ["AUTH_HEADER": "k123"])
         XCTAssertEqual(RemotePattern.decode(encoded), rc)
@@ -48,7 +44,7 @@ final class RemoteAuthTests: XCTestCase {
                                auth: .oauthClient(clientID: "cid", clientSecret: "csecret",
                                                    scopes: "read write"))
         let encoded = RemotePattern.encode(rc)
-        XCTAssertEqual(args(encoded), [
+        XCTAssertEqual(args(of: encoded), [
             "-y", "mcp-remote", url,
             "--static-oauth-client-info", "{\"client_id\":\"cid\",\"client_secret\":\"csecret\"}",
             "--static-oauth-client-metadata", "{\"scope\":\"read write\"}",
@@ -89,7 +85,7 @@ final class RemoteAuthTests: XCTestCase {
         let rc = RemoteConfig(url: url,
                                auth: .oauthClient(clientID: "cid", clientSecret: "", scopes: ""))
         let encoded = RemotePattern.encode(rc)
-        XCTAssertEqual(args(encoded), [
+        XCTAssertEqual(args(of: encoded), [
             "-y", "mcp-remote", url,
             "--static-oauth-client-info", "{\"client_id\":\"cid\",\"client_secret\":\"\"}",
         ])
@@ -117,7 +113,7 @@ final class RemoteAuthTests: XCTestCase {
                       "the bearer's AUTH_HEADER is consumed; nothing else leaks")
         // Re-encode keeps both headers.
         let re = RemotePattern.encode(decoded!)
-        let a = args(re) ?? []
+        let a = args(of: re) ?? []
         XCTAssertTrue(a.contains("Authorization:${AUTH_HEADER}"))
         XCTAssertTrue(a.contains("X-Tenant:acme"))
         XCTAssertEqual(env(re)["AUTH_HEADER"], "Bearer secret-tok")
@@ -143,7 +139,7 @@ final class RemoteAuthTests: XCTestCase {
     func testExtraArgsPreserved() {
         let rc = RemoteConfig(url: url, auth: .automatic, extraArgs: ["--transport", "http-only"])
         let encoded = RemotePattern.encode(rc)
-        XCTAssertEqual(args(encoded), ["-y", "mcp-remote", url, "--transport", "http-only"])
+        XCTAssertEqual(args(of: encoded), ["-y", "mcp-remote", url, "--transport", "http-only"])
         XCTAssertEqual(RemotePattern.decode(encoded), rc)
     }
 
@@ -180,7 +176,7 @@ final class RemoteAuthTests: XCTestCase {
         let decoded = RemotePattern.decode(config)
         XCTAssertEqual(decoded?.package, "mcp-remote@0.1.16")
         XCTAssertEqual(decoded.map(RemotePattern.encode), config)
-        XCTAssertEqual(args(RemotePattern.encode(RemoteConfig(url: url, auth: .automatic))), ["-y", "mcp-remote", url], "the default is still unpinned")
+        XCTAssertEqual(args(of: RemotePattern.encode(RemoteConfig(url: url, auth: .automatic))), ["-y", "mcp-remote", url], "the default is still unpinned")
     }
 
     // MARK: rejection

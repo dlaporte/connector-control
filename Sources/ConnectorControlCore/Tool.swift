@@ -2,8 +2,7 @@ import Foundation
 
 /// The four launchers a connector's command can name — what `npx mcp-remote`
 /// and most local servers run through. When one is missing from the PATH
-/// Claude Desktop uses, Claude shows only "server disconnected"
-/// (spec 2026-09-05-tool-probe §3.1).
+/// Claude Desktop uses, Claude shows only "server disconnected".
 public enum Tool: String, CaseIterable, Sendable {
     case npx, node, uvx, uv
 
@@ -19,15 +18,12 @@ public enum Tool: String, CaseIterable, Sendable {
 
     /// Case-insensitive lookup by basename.
     public init?(name: String) {
-        guard let tool = Tool.allCases.first(where: { $0.rawValue == name.lowercased() }) else {
-            return nil
-        }
-        self = tool
+        self.init(rawValue: name.lowercased())
     }
 }
 
 /// What installs a tool: Node.js brings node and npx; uv brings uv and uvx.
-public enum ToolFamily: Sendable {
+public enum ToolFamily: Equatable, Sendable {
     case nodeJS, uv
 
     public var linkTitle: String {
@@ -44,8 +40,8 @@ public enum ToolFamily: Sendable {
         }
     }
 
-    /// The macOS install command; the Windows port shows its own package manager's
-    /// command instead (spec §6 D3). Homebrew installs into the PATH floor Claude
+    /// The macOS install command; the Windows port shows winget's command
+    /// instead. Homebrew installs into the PATH floor Claude
     /// Desktop adds for itself, so running this clears the note.
     public var installCommand: String {
         switch self {
@@ -55,7 +51,7 @@ public enum ToolFamily: Sendable {
     }
 }
 
-/// Where a probe found a tool, if anywhere (spec §3.2.3).
+/// Where a probe found a tool, if anywhere.
 public enum ToolStatus: Equatable, Sendable {
     /// State C: nowhere this probe looked.
     case notFound

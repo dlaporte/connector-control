@@ -1,8 +1,7 @@
-import Foundation
 import Combine
 import ConnectorControlCore
 
-/// Catalog §2 PopoverView, minus pixels: header, error banner, rows, footer,
+/// PopoverView, minus pixels: header, error banner, rows, footer,
 /// and every action it wires. Everything is computed from AppState; the model
 /// only forwards AppState's objectWillChange so the view re-reads.
 @MainActor
@@ -34,7 +33,7 @@ public final class PopoverModel: ObservableObject {
         subscription = state.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
-    // MARK: header (catalog §2.2)
+    // MARK: header
 
     public var subtitle: String { state.headerSubtitle }
 
@@ -51,18 +50,15 @@ public final class PopoverModel: ObservableObject {
 
     public var canDeleteProfile: Bool { state.profileNames.count >= 2 }
 
-    // MARK: banner (catalog §2.3)
+    // MARK: banner
 
     public var errorMessage: String? { state.lastError }
 
-    public var hasError: Bool { state.lastError != nil }
-
-    // MARK: rows (catalog §2.4)
+    // MARK: rows
 
     public var rows: [ConnectorRow] {
-        state.sortedNames.compactMap { name in
-            guard let entry = state.store.mcps[name] else { return nil }
-            return ConnectorRow(name: name, enabled: entry.enabled, toolWarning: warning(for: entry))
+        state.store.mcps.sorted { $0.key < $1.key }.map { name, entry in
+            ConnectorRow(name: name, enabled: entry.enabled, toolWarning: warning(for: entry))
         }
     }
 
@@ -75,21 +71,21 @@ public final class PopoverModel: ObservableObject {
         return ToolNote.rowWarning(tool: tool, status: state.toolStatuses[tool])
     }
 
-    // MARK: footer (catalog §2.5)
+    // MARK: footer
 
     public var footer: FooterKind {
         if state.applyRetryNeeded { return .retryApply }
         if state.needsClaudeRestart { return .restartRequired }
-        return FooterKind.none
+        return .hidden
     }
 
-    public var showFooter: Bool { footer != FooterKind.none }
+    public var showFooter: Bool { footer != .hidden }
 
     public var footerTitle: String { footer == .retryApply ? PopoverModel.retryTitle : PopoverModel.restartTitle }
 
     public var footerGlyph: String { footer == .retryApply ? PopoverModel.retryGlyph : PopoverModel.restartGlyph }
 
-    // MARK: actions (catalog §2.6)
+    // MARK: actions
 
     /// The popover's onAppear: a routine reload on every open, then the rows' launchers.
     public func opened() {
@@ -97,9 +93,9 @@ public final class PopoverModel: ObservableObject {
         probeRowTools()
     }
 
-    /// The tools the listed connectors need that are not cached yet (addendum
-    /// 2026-09-06-row-glyph §3). Nothing required, or everything cached,
-    /// spawns no process; AppState coalesces a tool already in flight.
+    /// The tools the listed connectors need that are not cached yet. Nothing
+    /// required, or everything cached, spawns no process; AppState coalesces
+    /// a tool already in flight.
     private func probeRowTools() {
         let needed = ToolRequirement.requiredTools(for: state.store.mcps.values.map(\.config))
             .filter { state.toolStatuses[$0] == nil }
@@ -129,7 +125,7 @@ public final class PopoverModel: ObservableObject {
         }
     }
 
-    /// The pencil button opens the editor only if the entry still exists in the store (catalog §2.4).
+    /// The pencil button opens the editor only if the entry still exists in the store.
     public func entryFor(_ name: String) -> MCPEntry? { state.store.mcps[name] }
 
     /// Stops listening to AppState. The app does not call this: the

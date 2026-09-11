@@ -39,17 +39,17 @@ final class ToolNoteTests: XCTestCase {
         XCTAssertEqual(ToolNote.statusText(.notFound), "Not found")
     }
 
-    func testStringsAndOrderMatchTheSpec() {
+    /// Ordering, name mapping, and lookup — behavior StringCatalogTests
+    /// doesn't cover (it pins strings, not enum order or lookup logic).
+    func testOrderNameMappingAndFamilyLookup() {
         XCTAssertEqual(Tool.allCases, [.npx, .node, .uvx, .uv])
         XCTAssertEqual(Tool.allCases.map(\.name), ["npx", "node", "uvx", "uv"])
         XCTAssertEqual(Tool(name: "NPX"), .npx)
         XCTAssertNil(Tool(name: "python"))
-        XCTAssertEqual(ToolFamily.nodeJS.installCommand, "brew install node")
-        XCTAssertEqual(ToolFamily.uv.installCommand, "brew install uv")
-        XCTAssertEqual(ToolNote.shellOnlyStatusText, "Not visible to Claude Desktop")
-        XCTAssertEqual(ToolNote.orRun, "or run")
-        XCTAssertEqual(ToolNote.settingsHeader, "Tools")
-        XCTAssertEqual(ToolNote.settingsCaption, "Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them.")
+        XCTAssertEqual(Tool.npx.family, .nodeJS)
+        XCTAssertEqual(Tool.node.family, .nodeJS)
+        XCTAssertEqual(Tool.uvx.family, .uv)
+        XCTAssertEqual(Tool.uv.family, .uv)
     }
 
     func testRowWarningIsTheRowTooltipForEachStatus() {

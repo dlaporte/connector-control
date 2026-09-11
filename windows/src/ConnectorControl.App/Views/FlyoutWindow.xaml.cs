@@ -4,7 +4,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
-using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.Core.State;
 using H.NotifyIcon.Core;
@@ -14,7 +13,7 @@ using DrawingPoint = System.Drawing.Point;
 namespace ConnectorControl.App.Views;
 
 /// <summary>
-/// Spec §7.1: the Mac popover as a borderless, topmost, taskbar-less window
+/// The Mac popover as a borderless, topmost, taskbar-less window
 /// sized to content (240–380 wide), rounded on Windows 11, anchored beside the
 /// notification area, closed on deactivate or Escape, reloading on every open.
 /// </summary>
@@ -22,6 +21,9 @@ public partial class FlyoutWindow : Window
 {
     /// <summary>Clicking the tray icon deactivates (hides) an open flyout before the click arrives; ignore that click so it toggles instead of reopening.</summary>
     public static readonly TimeSpan ReopenGuard = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>Where the window sits before <see cref="ShowFlyout"/> repositions it, so SizeToContent settles unseen.</summary>
+    public const double OffScreen = -10000;
 
     private readonly FlyoutModel model;
     private readonly WindowRegistry windows;
@@ -46,7 +48,7 @@ public partial class FlyoutWindow : Window
     /// Popup, which SetWindowPos would misread. Null means "ask the cursor instead".
     /// Settable so a test can pin the anchor without a shell.
     /// </summary>
-    public Func<DrawingPoint?> TrayAnchor { get; set; } = ShellTrayAnchor;
+    public Func<DrawingPoint?> TrayAnchor { get; internal set; } = ShellTrayAnchor;
 
     private static DrawingPoint? ShellTrayAnchor()
     {
@@ -120,8 +122,8 @@ public partial class FlyoutWindow : Window
     /// Deactivation normally dismisses the flyout — but a WPF ContextMenu lives in its
     /// own top-level window, so opening the profile chip's menu deactivates us, and
     /// hiding here would take the menu's PlacementTarget away with it and leave profiles
-    /// unreachable (catalog §2.2: the chip menu is the only way to switch, create,
-    /// rename or delete a profile). Ignore those; the check is repeated once the menu
+    /// unreachable — the chip menu is the only way to switch, create, rename or delete a
+    /// profile. Ignore those; the check is repeated once the menu
     /// closes. Internal so a test can raise it without a real focus change.
     /// </summary>
     internal void HandleDeactivated()
@@ -180,7 +182,7 @@ public partial class FlyoutWindow : Window
 
     private void OnProfileChip(object sender, RoutedEventArgs e) => OpenProfileMenu();
 
-    /// <summary>Catalog §2.2 profile chip menu: profiles (check on the active), separator, New / Rename / Delete.</summary>
+    /// <summary>The profile chip menu: profiles (check on the active), separator, New / Rename / Delete.</summary>
     internal ContextMenu OpenProfileMenu()
     {
         var menu = new ContextMenu { PlacementTarget = ProfileChip, Placement = PlacementMode.Bottom, StaysOpen = false };
@@ -196,9 +198,9 @@ public partial class FlyoutWindow : Window
             menu.Items.Add(entry);
         }
         menu.Items.Add(new Separator());
-        menu.Items.Add(MenuItemFor(FlyoutModel.NewProfileTitle, model.NewProfile));
-        menu.Items.Add(MenuItemFor(model.RenameProfileTitle, model.RenameProfile));
-        var delete = MenuItemFor(model.DeleteProfileTitle, model.DeleteProfile);
+        menu.Items.Add(MenuItemFor(FlyoutModel.NewProfileMenuItem, model.NewProfile));
+        menu.Items.Add(MenuItemFor(model.RenameProfileMenuItem, model.RenameProfile));
+        var delete = MenuItemFor(model.DeleteProfileMenuItem, model.DeleteProfile);
         delete.IsEnabled = model.CanDeleteProfile;
         menu.Items.Add(delete);
         // The reference, not an Opened/Closed counter: ContextMenu.Closed can be deferred by

@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
@@ -75,6 +76,26 @@ public class BackupManagerTests : IDisposable
         Assert.Equal("v2", File.ReadAllText(kept[2]));
     }
 
+    /// <summary>Pruning is best effort: a stale backup that refuses deletion must not fail the write it trails.</summary>
+    [Fact]
+    public void RotationSkipsAStaleBackupThatCannotBeDeleted()
+    {
+        // A locked file blocks File.Delete on Windows; on Unix, unlink succeeds on an open
+        // file, so this scenario cannot be forced there.
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        File.WriteAllText(source, "v0");
+        var oldest = manager.BackUp(source, Series, At(1_752_600_000));
+        Assert.NotNull(oldest);
+        using var locked = new FileStream(oldest!, FileMode.Open, FileAccess.Read, FileShare.Read);
+        for (int i = 1; i <= 3; i++)
+        {
+            File.WriteAllText(source, $"v{i}");
+            manager.BackUp(source, Series, At(1_752_600_000 + i));   // must not throw even though pruning oldest fails
+        }
+        Assert.True(File.Exists(oldest));                 // the locked backup survives the failed prune
+        Assert.Equal(4, manager.Backups(Series).Count);   // one more than KeepCount, because the oldest refused deletion
+    }
+
     [Fact]
     public void OriginalSnapshotWrittenOnceAndNeverPruned()
     {
@@ -109,29 +130,49 @@ public class BackupManagerTests : IDisposable
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void BackupsArePrivate()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Windows only");
-            return;   // CA1416: the analyzer needs an explicit exit after the guard
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         var made = manager.BackUp(source, "mcps");
         Assert.NotNull(made);
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(made));
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void BackupsDirectoryAndOriginalSnapshotArePrivate()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Windows only");
-            return;   // CA1416: the analyzer needs an explicit exit after the guard
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         manager.EnsureOriginalSnapshot(source);
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(manager.BackupsDir));
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.Combine(manager.BackupsDir, "claude_desktop_config.original.json")));
+    }
+
+    /// <summary>A config symlinked into a dotfiles repo: the backup must be a snapshot of the bytes,
+    /// not a copy of the link (which would read the live file forever, so no restore could ever go back).</summary>
+    [Fact]
+    public void BackupOfASymlinkedSourceIsARealSnapshot()
+    {
+        var real = dir.File(Path.Combine("dotfiles", "claude.json"));
+        Directory.CreateDirectory(Path.GetDirectoryName(real)!);
+        File.WriteAllText(real, "v1");
+        var link = dir.File("linked_config.json");
+        try
+        {
+            File.CreateSymbolicLink(link, real);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            // Creating a symlink needs Developer Mode or elevation; GitHub's hosted Windows runners are elevated, so under FailSkips=true (ci.runsettings) this skip would surface as a failure if that ever changed.
+            Assert.Skip("symlink creation is not permitted in this environment");
+            return;
+        }
+        var made = manager.BackUp(link, Series);
+        Assert.NotNull(made);
+        Assert.Null(new FileInfo(made!).LinkTarget);   // the backup is a regular file, not a link
+        File.WriteAllText(real, "v2");
+        Assert.Equal("v1", File.ReadAllText(made!));   // the snapshot does not follow the live file
     }
 
     [Fact]
@@ -150,6 +191,7 @@ public class BackupManagerTests : IDisposable
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void AFreshBackupsTreeIsOwnerOnlyFromTheParentDown()
     {
         // First run with an empty Claude config: the backups dir is the first thing the app creates,
@@ -159,11 +201,9 @@ public class BackupManagerTests : IDisposable
         var made = fresh.BackUp(source, Series, At(1_752_600_000));
         Assert.NotNull(made);
         Assert.Equal(File.ReadAllBytes(source), File.ReadAllBytes(made));
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.GetDirectoryName(backups)!), "the parent this call created is private");
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(backups));
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(made), "the copy is private from its create call, not a fix-up");
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.GetDirectoryName(backups)!), "the parent this call created is private");
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(backups));
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(made), "the copy is private from its create call, not a fix-up");
     }
 }

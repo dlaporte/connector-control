@@ -72,7 +72,7 @@ public static class FormMapper
         }
         if (model.Env.Count > 0)
         {
-            props["env"] = JsonValue.Object(model.Env.Select(kv => new KeyValuePair<string, JsonValue>(kv.Key, JsonValue.String(kv.Value))));
+            props["env"] = JsonValue.FromObject(model.Env);
         }
         return JsonValue.Object(props);
     }

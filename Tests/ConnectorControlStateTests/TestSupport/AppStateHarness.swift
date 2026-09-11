@@ -1,5 +1,6 @@
 import Foundation
 import ConnectorControlCore
+import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
 /// A real on-disk layout (a throwaway ~/Library/Application Support), the real
@@ -71,8 +72,7 @@ final class AppStateHarness {
     }
 
     static func remote(_ url: String) -> JSONValue {
-        .object(["command": .string("npx"),
-                 "args": .array([.string("-y"), .string("mcp-remote"), .string(url)])])
+        RemotePattern.make(url: url)
     }
 
     /// Disposes every AppState this harness created (stops their watchers) and deletes the temp dir.
@@ -80,5 +80,32 @@ final class AppStateHarness {
         created.forEach { $0.dispose() }
         created.removeAll()
         dir.dispose()
+    }
+
+    /// The harness plus its AppState, in one call — the shape most tests
+    /// need. `let (h, state) = AppStateHarness.started(); defer { h.dispose() }`.
+    /// A test that must act on the harness BEFORE the AppState exists (seed a
+    /// fake's state, change a setting) still uses `AppStateHarness()` +
+    /// `h.create()` directly.
+    static func started(seedClaudeConfig: Bool = true, createClaudeDirectory: Bool = true)
+        -> (AppStateHarness, AppState) {
+        let h = AppStateHarness(seedClaudeConfig: seedClaudeConfig, createClaudeDirectory: createClaudeDirectory)
+        return (h, h.create())
+    }
+
+    /// Advances the mtime of Claude's config and the master store (whichever
+    /// currently exist) past whatever they currently are — called after an
+    /// action (direct or through AppState) that must be observably distinct,
+    /// to the watchers, from whatever they last saw at arm time. Replaces
+    /// `Thread.sleep` used only to separate two writes' mtimes by real
+    /// wall-clock time.
+    func touchWatchedFiles() throws {
+        let fm = FileManager.default
+        if fm.fileExists(atPath: claudeConfigURL.path) {
+            try TempDir.bumpModificationDate(of: claudeConfigURL)
+        }
+        if fm.fileExists(atPath: masterStoreURL.path) {
+            try TempDir.bumpModificationDate(of: masterStoreURL)
+        }
     }
 }

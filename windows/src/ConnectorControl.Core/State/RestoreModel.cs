@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace ConnectorControl.Core.State;
 
-/// <summary>Catalog §5 RestoreSheetView state.</summary>
+/// <summary>RestoreSheetView state.</summary>
 public sealed class RestoreModel : ObservableObject
 {
     public const string Headline = "Restore Claude config from a backup";
@@ -11,6 +11,8 @@ public sealed class RestoreModel : ObservableObject
     public const string RestoreTitle = "Restore…";
     public const string RestoreButton = "Restore";
     private const string Series = "claude_desktop_config";
+
+    public static string ConfirmMessage(string fileName) => $"Replace Claude's config with {fileName}?";
 
     private readonly AppState state;
     private readonly IDialogs dialogs;
@@ -26,7 +28,7 @@ public sealed class RestoreModel : ObservableObject
 
     public event Action? CloseRequested;
 
-    /// <summary>Full paths, newest first; the permanent .original snapshot last (catalog §5).</summary>
+    /// <summary>Full paths, newest first; the permanent .original snapshot last.</summary>
     public IReadOnlyList<string> Backups => backups;
 
     public IReadOnlyList<string> BackupNames => backups.Select(Path.GetFileName).Select(n => n ?? "").ToList();
@@ -77,12 +79,12 @@ public sealed class RestoreModel : ObservableObject
     /// <summary>Confirm, then restore through AppState (which syncs the baseline). True when restored and closing.</summary>
     public bool Restore()
     {
-        RestoreError = null;   // a fresh attempt starts with a clean sheet (catalog §5 shows the error only after a failure)
+        RestoreError = null;   // a fresh attempt starts with a clean sheet; the error shows only after a failure
         if (selection is not { } backup)
         {
             return false;
         }
-        if (!dialogs.Confirm($"Replace Claude's config with {Path.GetFileName(backup)}?", null, RestoreButton, destructive: true))
+        if (!dialogs.Confirm(ConfirmMessage(Path.GetFileName(backup)), null, RestoreButton, destructive: true))
         {
             return false;
         }
@@ -94,7 +96,7 @@ public sealed class RestoreModel : ObservableObject
         }
         catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException or JsonException)
         {
-            RestoreError = ex.Message;         // raw message, not Friendly(): catalog §5
+            RestoreError = ex.Message;         // raw message, not Friendly()
             state.LastError = ex.Message;
             return false;
         }

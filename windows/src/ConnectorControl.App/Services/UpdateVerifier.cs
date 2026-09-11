@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
 using System.Runtime.Versioning;
 using ConnectorControl.Core;
@@ -63,13 +64,9 @@ public static class UpdateVerifier
         {
             return null;
         }
-        if (identity.Unsigned)
+        if (!TryExpectedOrganization(identity, out var expected, out var organizationProblem))
         {
-            return null;
-        }
-        if (identity.Organization is not { } expected)
-        {
-            return CannotValidateSelf + NotInstalledSuffix;
+            return organizationProblem;
         }
         if (updateExePath is not null && File.Exists(updateExePath)
             && VerifyFile(updateExePath, expected, "Update.exe", mustBeOurs: true) is { } updaterProblem)
@@ -99,7 +96,7 @@ public static class UpdateVerifier
                 // written to disk, where the signature check needs it; anything else is counted.
                 var name = Path.GetFileName(entry.FullName);
                 using var content = entry.Open();
-                var magicLength = content.ReadAtLeast(magic, 2, throwOnEndOfStream: false);
+                var magicLength = ReadMagic(content, magic);
                 if (!IsMZ(magic.AsSpan(0, magicLength)))
                 {
                     var counted = magicLength + CountBytes(content, buffer);
@@ -147,7 +144,7 @@ public static class UpdateVerifier
         }
         finally
         {
-            try { scratch.Delete(recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            FileSystemErrors.TryDelete(scratch.FullName);
         }
     }
 
@@ -161,15 +158,36 @@ public static class UpdateVerifier
         {
             return null;
         }
-        if (identity.Unsigned)
+        if (!TryExpectedOrganization(identity, out var expected, out var problem))
         {
-            return null;
-        }
-        if (identity.Organization is not { } expected)
-        {
-            return CannotValidateSelf + NotInstalledSuffix;
+            return problem;
         }
         return VerifyFile(updateExePath, expected, "The installed Update.exe", mustBeOurs: true);
+    }
+
+    /// <summary>
+    /// True when there is an organization to check a file's signer against; <paramref name="expected"/>
+    /// carries it. False and <paramref name="expected"/> null either because the running app is
+    /// unsigned (a dev build: <paramref name="problem"/> is also null, meaning skip every check) or
+    /// because its own signature could not be validated (<paramref name="problem"/> carries why).
+    /// </summary>
+    private static bool TryExpectedOrganization(RunningIdentity identity, [NotNullWhen(true)] out string? expected, out string? problem)
+    {
+        if (identity.Unsigned)
+        {
+            expected = null;
+            problem = null;
+            return false;
+        }
+        if (identity.Organization is not { } organization)
+        {
+            expected = null;
+            problem = CannotValidateSelf + NotInstalledSuffix;
+            return false;
+        }
+        expected = organization;
+        problem = null;
+        return true;
     }
 
     /// <summary>The running app's signer organization, normalized; <c>Unsigned</c> when it carries no signature at all.</summary>
@@ -207,45 +225,44 @@ public static class UpdateVerifier
     /// <summary>
     /// The version baked into the signed executable is the one the attacker cannot rewrite: it must
     /// equal what the feed advertises (no relabeling an old release as new) and must not be older
-    /// than what is running (no downgrade to a build without this check).
+    /// than what is running (no downgrade to a build without this check). <paramref name="runningVersion"/>
+    /// and <paramref name="feedVersion"/> are already major.minor.patch (<see cref="VelopackUpdater"/>'s
+    /// own NumericVersion normalizes them before this is ever called).
     /// </summary>
     internal static string? VersionProblem(string mainExecutablePath, Version runningVersion, Version feedVersion)
     {
-        var info = FileVersionInfo.GetVersionInfo(mainExecutablePath);
-        var embedded = new Version(info.FileMajorPart, info.FileMinorPart, info.FileBuildPart);
-        var feed = Numeric(feedVersion);
-        var running = Numeric(runningVersion);
-        if (embedded != feed)
+        var embedded = EmbeddedVersion(mainExecutablePath);
+        if (embedded != feedVersion)
         {
-            return $"{MainExecutable} inside the update is version {embedded}, but the update feed says {feed}{NotInstalledSuffix}";
+            return $"{MainExecutable} inside the update is version {embedded}, but the update feed says {feedVersion}{NotInstalledSuffix}";
         }
-        if (embedded < running)
+        if (embedded < runningVersion)
         {
-            return $"{MainExecutable} inside the update is version {embedded}, older than the installed {running}{NotInstalledSuffix}";
+            return $"{MainExecutable} inside the update is version {embedded}, older than the installed {runningVersion}{NotInstalledSuffix}";
         }
         return null;
     }
 
-    /// <summary>Major.minor.patch only: previews share the numeric part of the release they lead to.</summary>
-    internal static Version Numeric(Version v) => new(Math.Max(v.Major, 0), Math.Max(v.Minor, 0), Math.Max(v.Build, 0));
+    /// <summary>The file version baked into a signed executable, major.minor.build.</summary>
+    internal static Version EmbeddedVersion(string path)
+    {
+        var info = FileVersionInfo.GetVersionInfo(path);
+        return new Version(info.FileMajorPart, info.FileMinorPart, info.FileBuildPart);
+    }
 
     private static string SizeProblem(ZipArchiveEntry entry, long actual) =>
         $"The update package entry \"{entry.FullName}\" declares {entry.Length} bytes but holds {actual}{NotInstalledSuffix}";
+
+    /// <summary>Reads up to the first two bytes of <paramref name="stream"/> into <paramref name="magic"/>; a shorter stream returns the shorter count.</summary>
+    private static int ReadMagic(Stream stream, Span<byte> magic) => stream.ReadAtLeast(magic, 2, throwOnEndOfStream: false);
 
     /// <summary>
     /// By content, not name: every Windows executable starts with "MZ". A .dll that is not one cannot
     /// be loaded; a program under any other name still can, and Velopack's extractor lets Windows
     /// trim a trailing dot from a name, so "ConnectorControl.exe." lands as the real thing.
+    /// The two bytes every Windows executable starts with; a shorter read is not one.
     /// </summary>
-    internal static bool IsPortableExecutable(ZipArchiveEntry entry)
-    {
-        using var stream = entry.Open();   // the inflated bytes, whatever the directory declares
-        var magic = new byte[2];
-        return IsMZ(magic.AsSpan(0, stream.ReadAtLeast(magic, 2, throwOnEndOfStream: false)));
-    }
-
-    /// <summary>The two bytes every Windows executable starts with; a shorter read is not one.</summary>
-    private static bool IsMZ(ReadOnlySpan<byte> magic) => magic.Length == 2 && magic[0] == (byte)'M' && magic[1] == (byte)'Z';
+    internal static bool IsMZ(ReadOnlySpan<byte> magic) => magic.Length == 2 && magic[0] == (byte)'M' && magic[1] == (byte)'Z';
 
     /// <summary>Inflates the rest of <paramref name="stream"/> without keeping it: what the entry actually holds.</summary>
     private static long CountBytes(Stream stream, byte[] buffer)

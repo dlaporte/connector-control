@@ -1,26 +1,17 @@
 import AppKit
 import Security
+import ConnectorControlState
 
 enum ClaudeRestarter {
-    static let bundleID = "com.anthropic.claudefordesktop"
-    /// Anthropic PBC's Developer ID team, as on every shipped Claude.app.
-    static let teamIdentifier = "Q6L2SF6YDW"
-    /// Claude Desktop, signed by Anthropic — under either a Developer ID or an
-    /// App Store certificate chained to Apple. The path this app launches is a
-    /// plain string in UserDefaults, so before it quits Claude and starts
-    /// whatever sits at that path, the bundle has to prove it is Claude.
-    static let requirement =
-        "anchor apple generic and identifier \"\(bundleID)\" and certificate leaf[subject.OU] = \"\(teamIdentifier)\""
+    static let quitTimeout: TimeInterval = 15
+    static let pollInterval: TimeInterval = 0.25
 
-    /// Gracefully terminate Claude (never force-kill), wait up to 15 s, relaunch.
-    /// Calls completion on the main queue with nil on success or an error message.
-    static func restart(
-        appURL: URL = URL(fileURLWithPath: "/Applications/Claude.app"),
-        completion: @escaping (String?) -> Void) {
+    /// Gracefully terminate Claude (never force-kill), wait up to quitTimeout,
+    /// relaunch. Calls completion with nil on success or an error message; the
+    /// ClaudeProcess protocol says any thread is fine — AppState marshals it.
+    static func restart(appURL: URL, completion: @escaping (String?) -> Void) {
         guard FileManager.default.fileExists(atPath: appURL.path) else {
-            DispatchQueue.main.async {
-                completion("Claude.app was not found at \(appURL.path).")
-            }
+            completion(ClaudeSignature.notFoundMessage(path: appURL.path))
             return
         }
         // Verified BEFORE anything is quit: a bundle that fails the check must
@@ -28,10 +19,10 @@ enum ClaudeRestarter {
         // whole bundle, so it runs off the main thread.
         DispatchQueue.global().async {
             if let problem = verifyIsClaude(at: appURL) {
-                DispatchQueue.main.async { completion(problem) }
+                completion(problem)
                 return
             }
-            DispatchQueue.main.async { terminateAndRelaunch(appURL: appURL, completion: completion) }
+            terminateAndRelaunch(appURL: appURL, completion: completion)
         }
     }
 
@@ -42,12 +33,12 @@ enum ClaudeRestarter {
         var staticCode: SecStaticCode?
         guard SecStaticCodeCreateWithPath(appURL as CFURL, [], &staticCode) == errSecSuccess,
               let code = staticCode else {
-            return "\(appURL.lastPathComponent) is not an app bundle this app can inspect."
+            return ClaudeSignature.uninspectableMessage(name: appURL.lastPathComponent)
         }
         var compiled: SecRequirement?
-        guard SecRequirementCreateWithString(requirement as CFString, [], &compiled) == errSecSuccess,
+        guard SecRequirementCreateWithString(ClaudeSignature.requirement as CFString, [], &compiled) == errSecSuccess,
               let requirement = compiled else {
-            return "The Claude Desktop signing requirement could not be compiled."
+            return ClaudeSignature.requirementCompileFailure
         }
         var error: Unmanaged<CFError>?
         let status = SecStaticCodeCheckValidityWithErrors(code, [], requirement, &error)
@@ -60,40 +51,36 @@ enum ClaudeRestarter {
         } else {
             detail = "code \(status)"
         }
-        return "\(appURL.lastPathComponent) is not Claude Desktop signed by Anthropic (\(detail)). "
-            + "Choose the real Claude.app under Settings ▸ Claude."
+        return ClaudeSignature.refusalMessage(name: appURL.lastPathComponent, detail: detail)
     }
 
+    /// Runs on the background queue `restart` dispatched to; only the actual
+    /// `terminate()` calls are pushed onto main, as AppKit expects.
     private static func terminateAndRelaunch(appURL: URL, completion: @escaping (String?) -> Void) {
-        let running = NSRunningApplication.runningApplications(
-            withBundleIdentifier: bundleID)
-        running.forEach { $0.terminate() }
+        DispatchQueue.main.sync {
+            NSRunningApplication.runningApplications(withBundleIdentifier: ClaudeSignature.bundleID)
+                .forEach { $0.terminate() }
+        }
 
-        DispatchQueue.global().async {
-            let deadline = Date().addingTimeInterval(15)
-            while Date() < deadline {
-                let still = NSRunningApplication.runningApplications(
-                    withBundleIdentifier: bundleID)
-                if still.allSatisfy(\.isTerminated) || still.isEmpty { break }
-                Thread.sleep(forTimeInterval: 0.25)
-            }
-            let stillRunning = !NSRunningApplication.runningApplications(
-                withBundleIdentifier: bundleID).isEmpty
-            DispatchQueue.main.async {
-                if stillRunning {
-                    completion("Claude didn’t quit (it may be showing a dialog). "
-                               + "Quit it manually, then click Restart Claude again.")
-                    return
-                }
-                NSWorkspace.shared.openApplication(
-                    at: appURL,
-                    configuration: NSWorkspace.OpenConfiguration()
-                ) { _, error in
-                    DispatchQueue.main.async {
-                        completion(error?.localizedDescription)
-                    }
-                }
-            }
+        let deadline = Date().addingTimeInterval(quitTimeout)
+        while Date() < deadline {
+            let still = NSRunningApplication.runningApplications(
+                withBundleIdentifier: ClaudeSignature.bundleID)
+            if still.allSatisfy(\.isTerminated) || still.isEmpty { break }
+            Thread.sleep(forTimeInterval: pollInterval)
+        }
+        let stillRunning = !NSRunningApplication.runningApplications(
+            withBundleIdentifier: ClaudeSignature.bundleID).isEmpty
+        if stillRunning {
+            completion("Claude didn’t quit (it may be showing a dialog). "
+                       + "Quit it manually, then click Restart Claude again.")
+            return
+        }
+        NSWorkspace.shared.openApplication(
+            at: appURL,
+            configuration: NSWorkspace.OpenConfiguration()
+        ) { _, error in
+            completion(error?.localizedDescription)
         }
     }
 }

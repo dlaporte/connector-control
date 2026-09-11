@@ -1,8 +1,8 @@
 import SwiftUI
 import ConnectorControlState
 
-/// Catalog §2.4: layout only — the row's facts arrive in a ConnectorRow and
-/// its two actions go back through the closures.
+/// Layout only — the row's facts arrive in a ConnectorRow and its two actions
+/// go back through the closures.
 struct MCPRow: View {
     let row: ConnectorRow
     var onToggle: (Bool) -> Void

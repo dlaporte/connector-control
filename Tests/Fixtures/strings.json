@@ -1,0 +1,323 @@
+{
+  "AlertDialogs.okTitle": "OK",
+  "AppState.chooseClaude": "Choose the real Claude Desktop under Settings ▸ Claude.",
+  "AppState.claudeConfigChangedBody": "Claude's config changed outside Connector Control.",
+  "AppState.claudeConfigRegeneratedBody": "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up.",
+  "AppState.connectorListChangedBody.noRestart": "The connector list changed outside Connector Control — Claude's config was regenerated. Claude will use it the next time it starts.",
+  "AppState.connectorListChangedBody.restart": "The connector list changed outside Connector Control — Claude's config was regenerated. Restart Claude to pick it up.",
+  "AppState.defaultClaudeAppPath": {
+    "mac": "/Applications/Claude.app"
+  },
+  "AppState.deleteButton": "Delete",
+  "AppState.deleteProfileInformative": "Its connector list is removed; backups keep prior states.",
+  "AppState.deleteProfileMessage": {
+    "format": "Delete Profile “{0}”?"
+  },
+  "AppState.duplicateNameError": {
+    "format": "A connector named “{0}” already exists."
+  },
+  "AppState.enabledSubtitle": {
+    "format": "{0} of {1} enabled"
+  },
+  "AppState.malformedConfigMessage": {
+    "format": "Claude's config file is not valid JSON ({0}). Nothing was written. Use Backups ▸ Restore… to recover it."
+  },
+  "AppState.nameEmptyError": "Name must not be empty.",
+  "AppState.newProfileTitle": "New Profile",
+  "AppState.noConnectorsSubtitle": "No connectors configured",
+  "AppState.quitButton": "Quit",
+  "AppState.quitMessage": "Quit Connector Control?",
+  "AppState.regenerationFailedBody": "The connector configuration changed, but Claude's config could not be updated — open Connector Control to retry.",
+  "AppState.relaunchFailedMessage": {
+    "win": "Claude didn’t come back after the restart. Start Claude yourself, then try again."
+  },
+  "AppState.renameProfileTitle": "Rename Profile",
+  "AppState.restartButton": "Restart",
+  "AppState.restartInformative": "Any in-progress Claude conversation will be interrupted.",
+  "AppState.restartMessage": "Restart Claude Desktop now?",
+  "AppState.storeChangedBody": "The connector list changed outside Connector Control — review it before your next change is applied.",
+  "ClaudeConfigIO.mcpServersNotObjectError": "mcpServers is not a JSON object",
+  "ClaudeConfigIO.topLevelNotObjectError": "top level is not a JSON object",
+  "ClaudeProcess.notAClaudePackageError": {
+    "win": {
+      "format": "{0} is not a Claude Desktop package. Choose the real Claude Desktop under Settings ▸ Claude."
+    }
+  },
+  "ClaudeProcess.notInstalledMessage": {
+    "win": "Claude Desktop was not found on this PC."
+  },
+  "ClaudePublisher.subjectNoOrganizationError": {
+    "win": {
+      "format": "{0} is signed by \"{1}\", which names no organization. Choose the real Claude Desktop under Settings ▸ Claude."
+    }
+  },
+  "ClaudePublisher.subjectNotAnthropicError": {
+    "win": "X is signed by \"O=Y\", not by Anthropic. Choose the real Claude Desktop under Settings ▸ Claude."
+  },
+  "ClaudeRestarter.didNotQuitMessage": "Claude didn’t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again.",
+  "ClaudeSignature.notFoundMessage": {
+    "format": "Claude Desktop was not found at {0}."
+  },
+  "ClaudeSignature.refusalMessage": {
+    "mac": {
+      "format": "{0} is not Claude Desktop signed by Anthropic ({1}). Choose the real Claude Desktop under Settings ▸ Claude."
+    }
+  },
+  "ClaudeSignature.requirementCompileFailure": {
+    "mac": "The Claude Desktop signing requirement could not be compiled."
+  },
+  "ClaudeSignature.uninspectableMessage": {
+    "mac": {
+      "format": "{0} is not an app bundle this app can inspect."
+    }
+  },
+  "ConfigService.corruptStoreNote": {
+    "format": "The MCP list file was unreadable; it was preserved as {0} and rebuilt from Claude's config."
+  },
+  "ConfigService.invalidBackupError": {
+    "format": "backup {0} is not a valid config file ({1})"
+  },
+  "ConfigService.invalidBackupMcpServersError": {
+    "format": "backup {0} has an invalid mcpServers section"
+  },
+  "ConfigService.malformedClaudeConfigNote": "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore… to repair the file.",
+  "ConnectorRow.editTooltip": {
+    "format": "Edit “{0}”"
+  },
+  "Dialogs.cancelTitle": "Cancel",
+  "EditTarget.addTitle": "Add Connector",
+  "EditTarget.editTitle": {
+    "format": "Edit “{0}”"
+  },
+  "EditorModel.addArgumentTitle": "＋ Add argument",
+  "EditorModel.addVariableTitle": "＋ Add variable",
+  "EditorModel.additionalTitle": {
+    "format": "{0} field(s) not editable here: {1} — switch to JSON to edit"
+  },
+  "EditorModel.automaticCaption": "Uses the server's OAuth (a browser window opens on first use), or no auth if the server is open.",
+  "EditorModel.bearerCaption": "Sent as Authorization: Bearer …",
+  "EditorModel.bearerTokenError": "Enter a bearer token.",
+  "EditorModel.changedOutsideDetail": "Saving will overwrite that change with this editor's version.",
+  "EditorModel.changedOutsideMessage": {
+    "format": "“{0}” changed outside this editor."
+  },
+  "EditorModel.clientIDError": "Enter a client ID.",
+  "EditorModel.cmdPercentCaution": {
+    "win": "This URL has more than one %, which cmd.exe can expand as a variable. If the connector fails to start, check its JSON view."
+  },
+  "EditorModel.cmdUnsafeError": {
+    "win": {
+      "format": "{0} must not contain & | < > ^ \" or spaces: on Windows the cmd /c launcher hands it to cmd.exe, which treats those as commands."
+    }
+  },
+  "EditorModel.commandError": "Command must not be empty.",
+  "EditorModel.duplicateEnvError": {
+    "format": "Duplicate environment variable name: {0}"
+  },
+  "EditorModel.envNamelessError": "An environment variable value is missing its name.",
+  "EditorModel.headerNameError": "Enter a header name.",
+  "EditorModel.headerValueError": "Enter a header value.",
+  "EditorModel.invalidURLError": "Server URL must be a valid http(s) URL.",
+  "EditorModel.jsonTip": "Tip: paste a README snippet or an mcpServers stanza — a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in.",
+  "EditorModel.lossWarningPrefix": "Switching to Form view can’t fully represent this configuration. These elements would be lost or altered:\n",
+  "EditorModel.notValidJSON": "Not valid JSON — check for a stray brace, missing comma, or unquoted value.",
+  "EditorModel.oauthSecretCaption": {
+    "mac": "Passed to mcp-remote on its command line, which other programs running on this Mac can read.",
+    "win": "Passed to mcp-remote on its command line, which other programs running on this PC can read."
+  },
+  "EditorModel.remoteFooter": "Runs via npx mcp-remote — managed for you.",
+  "EditorModel.removeButton": "Remove",
+  "EditorModel.removeInformative": "A copy remains in Backups.",
+  "EditorModel.removeMessage": {
+    "format": "Remove “{0}”? A copy remains in Backups."
+  },
+  "EditorModel.removedOutsideDetail": "Saving will add it back.",
+  "EditorModel.removedOutsideMessage": {
+    "format": "“{0}” was removed outside this editor."
+  },
+  "EditorModel.saveAnywayButton": "Save Anyway",
+  "EditorModel.stayInJSONButton": "Stay in JSON",
+  "EditorModel.switchAnywayButton": "Switch Anyway",
+  "EditorModel.urlHint": "Enter a valid http(s) URL, e.g. https://example.com/mcp",
+  "FirstRunTip.body": {
+    "win": "Connector Control lives in the system tray. Drag its icon out of the overflow (^) to keep it visible."
+  },
+  "FlyoutModel.settingsNotSavedCaution": {
+    "win": {
+      "format": "Settings could not be saved ({0}); changes apply until the app quits."
+    }
+  },
+  "FlyoutModel.storeNotPrivateCaution": {
+    "win": "The master list could not be made private: its folder refused the permission change, so connector secrets in it are readable by anyone who can read that folder."
+  },
+  "MasterStore.deleteLastProfileError": "Can’t delete the last profile.",
+  "MasterStore.duplicateProfileNameError": {
+    "format": "A profile named “{0}” already exists."
+  },
+  "MasterStore.nameEmptyError": "Name must not be empty.",
+  "MasterStore.unknownProfileError": {
+    "format": "No profile named “{0}”."
+  },
+  "Notifications.restartToastButton": "Restart Claude",
+  "Notifications.title": "Connector Control",
+  "PopoverModel.addTooltip": "Add Connector",
+  "PopoverModel.deleteProfileTitle": {
+    "format": "Delete “{0}”…"
+  },
+  "PopoverModel.emptyText": "No connectors configured yet — add one below.",
+  "PopoverModel.newProfileTitle": "New Profile…",
+  "PopoverModel.profileChipText": {
+    "format": "{0} ▾"
+  },
+  "PopoverModel.quitTooltip": "Quit Connector Control",
+  "PopoverModel.renameProfileTitle": {
+    "format": "Rename “{0}”…"
+  },
+  "PopoverModel.restartTitle": "Restart Required",
+  "PopoverModel.retryTitle": "Apply Failed — Retry",
+  "PopoverModel.settingsTooltip": "Settings",
+  "PopoverModel.title": "Connector Control",
+  "RemoteAuthKind.automatic.title": "Automatic (OAuth / none)",
+  "RemoteAuthKind.bearer.title": "Bearer token",
+  "RemoteAuthKind.header.title": "Custom header",
+  "RemoteAuthKind.oauthClient.title": "OAuth client ID/secret",
+  "RestoreModel.cancelTitle": "Cancel",
+  "RestoreModel.caption": "The current file is backed up first, then replaced by the selected backup.",
+  "RestoreModel.confirmMessage": {
+    "format": "Replace Claude's config with {0}?"
+  },
+  "RestoreModel.headline": "Restore Claude config from a backup",
+  "RestoreModel.restoreButton": "Restore",
+  "RestoreModel.restoreTitle": "Restore…",
+  "SettingsModel.autoUpdateTitle": "Automatically download and install updates",
+  "SettingsModel.backupsCaption": "Both config files are backed up automatically before every change.",
+  "SettingsModel.backupsHeader": "Backups",
+  "SettingsModel.checkForUpdatesTitle": "Check for Updates…",
+  "SettingsModel.chooseTitle": "Choose…",
+  "SettingsModel.claudeAppHeader": "Claude App",
+  "SettingsModel.claudeAppRejectedTitle": {
+    "mac": "That app can’t be used as Claude Desktop",
+    "win": "That program can’t be used as Claude Desktop"
+  },
+  "SettingsModel.claudeTab": "Claude",
+  "SettingsModel.configPathLabel": {
+    "win": "Config file"
+  },
+  "SettingsModel.confirmQuitTitle": "Confirm before quitting",
+  "SettingsModel.confirmRestartTitle": "Confirm before restarting Claude",
+  "SettingsModel.generalTab": "General",
+  "SettingsModel.installKindLegacyText": {
+    "win": "Legacy installer"
+  },
+  "SettingsModel.installKindMsixText": {
+    "win": "MSIX package"
+  },
+  "SettingsModel.keepCountLabel": {
+    "format": "Keep {0} backups of each file"
+  },
+  "SettingsModel.launchAtLoginTitle": {
+    "mac": "Launch at login",
+    "win": "Launch at startup"
+  },
+  "SettingsModel.launchTargetLabel": {
+    "win": "Launch target"
+  },
+  "SettingsModel.loginItemApprovalNote": {
+    "mac": "Approve Connector Control under System Settings → General → Login Items."
+  },
+  "SettingsModel.loginItemFailureNote": {
+    "mac": {
+      "format": "Couldn't update login item: {0}"
+    },
+    "win": {
+      "format": "Couldn't update startup entry: {0}"
+    }
+  },
+  "SettingsModel.masterListHeader": "Master List Location",
+  "SettingsModel.notifyCaption": "Covers edits to Claude's config and synced connector-list changes, including when a remote change needs a Claude restart.",
+  "SettingsModel.notifyTitle": "Notify about changes made outside Connector Control",
+  "SettingsModel.restoreTitle": {
+    "mac": "Restore…"
+  },
+  "SettingsModel.revealInFinderTitle": {
+    "mac": "Reveal in Finder",
+    "win": "Show in Explorer"
+  },
+  "SettingsModel.storageTab": "Storage",
+  "SettingsModel.toolsCaption": {
+    "mac": "Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them."
+  },
+  "SettingsModel.toolsHeader": {
+    "mac": "Tools"
+  },
+  "SettingsModel.updatesHeader": "Updates",
+  "SettingsModel.useDefaultTitle": "Use Default",
+  "SettingsModel.versionText": {
+    "format": "Version {0}"
+  },
+  "ToolFamily.nodeJS.installCommand": {
+    "mac": "brew install node",
+    "win": "winget install OpenJS.NodeJS.LTS"
+  },
+  "ToolFamily.nodeJS.linkTitle": "Install Node.js",
+  "ToolFamily.nodeJS.linkURL": "https://nodejs.org/en/download",
+  "ToolFamily.uv.installCommand": {
+    "mac": "brew install uv",
+    "win": "winget install astral-sh.uv"
+  },
+  "ToolFamily.uv.linkTitle": "Install uv",
+  "ToolFamily.uv.linkURL": "https://docs.astral.sh/uv/getting-started/installation/",
+  "ToolNote.checkingText": "Checking…",
+  "ToolNote.foundText": "Found",
+  "ToolNote.missingText": "npx wasn’t found, so Claude Desktop won’t be able to start this connector.",
+  "ToolNote.notFoundText": "Not found",
+  "ToolNote.orRun": "or run",
+  "ToolNote.rowMissingText": "Needs npx, which wasn’t found. Edit to see how to install it.",
+  "ToolNote.rowShellOnlyText": {
+    "mac": "Needs npx, which Claude Desktop may not see. Edit to see how to fix it."
+  },
+  "ToolNote.settingsCaption": "Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them.",
+  "ToolNote.settingsHeader": "Tools",
+  "ToolNote.shellOnlyAdvice": {
+    "mac": "Install it with Homebrew or the official installer, which put it where Claude Desktop looks; version managers such as nvm install elsewhere."
+  },
+  "ToolNote.shellOnlyStatusText": {
+    "mac": "Not visible to Claude Desktop"
+  },
+  "ToolNote.shellOnlyText": {
+    "mac": {
+      "format": "npx is at {0} in your shell, but Claude Desktop launches connectors with its own PATH and may not see it there."
+    }
+  },
+  "UpdateCoordinator.availableDetail": {
+    "win": {
+      "format": "Connector Control {0} is now available — you have {1}. Would you like to install it now?"
+    }
+  },
+  "UpdateCoordinator.availableHeadline": {
+    "win": "A new version of Connector Control is available!"
+  },
+  "UpdateCoordinator.checkFailedMessage": {
+    "win": "Couldn’t check for updates."
+  },
+  "UpdateCoordinator.installButton": {
+    "win": "Install and Relaunch"
+  },
+  "UpdateCoordinator.laterButton": {
+    "win": "Later"
+  },
+  "UpdateCoordinator.readyToastBody": {
+    "win": "An update to Connector Control is ready and will install when you quit."
+  },
+  "UpdateCoordinator.upToDateDetail": {
+    "win": {
+      "format": "Connector Control {0} is currently the newest version available."
+    }
+  },
+  "UpdateCoordinator.upToDateMessage": {
+    "win": "You're up to date."
+  },
+  "UpdateCoordinator.updateRefusedMessage": {
+    "win": "The update was not installed."
+  }
+}

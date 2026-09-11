@@ -5,8 +5,8 @@ namespace ConnectorControl.Core;
 
 /// <summary>
 /// Resolves the four tools the way Claude Desktop would — on the PATH this process was launched
-/// with, honouring PATHEXT on Windows — and reads each one's <c>--version</c> best-effort
-/// (spec §3.2). Never throws: every failure degrades to "not found" or "found, version unknown".
+/// with, honouring PATHEXT on Windows — and reads each one's <c>--version</c> best-effort.
+/// Never throws: every failure degrades to "not found" or "found, version unknown".
 /// The Core tests run this on the Mac too, so the Unix branches are real, not dead code.
 /// </summary>
 public sealed class ToolProbe : IToolProbe
@@ -25,8 +25,6 @@ public sealed class ToolProbe : IToolProbe
         this.environment = environment;
         this.versionTimeout = versionTimeout ?? DefaultVersionTimeout;
     }
-
-    public ToolStatus Probe(Tool tool) => Probe([tool])[tool];
 
     public IReadOnlyDictionary<Tool, ToolStatus> Probe(IReadOnlyList<Tool> tools)
     {

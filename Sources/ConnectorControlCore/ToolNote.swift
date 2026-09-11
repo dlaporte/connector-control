@@ -1,7 +1,7 @@
 import Foundation
 
-/// The editor note and the Settings row text for one tool (spec §3.4, §3.5,
-/// strings §5). Both platforms carry these strings verbatim.
+/// The editor note and the Settings row text for one tool. Both platforms
+/// carry these strings verbatim.
 public struct ToolNote: Equatable, Sendable {
     public static let orRun = "or run"
     public static let checkingText = "Checking…"
@@ -17,14 +17,14 @@ public struct ToolNote: Equatable, Sendable {
     /// Line 1: what is wrong.
     public let text: String
     /// Line 2, shell-only state only: how to move the tool to where Claude
-    /// Desktop looks. nil in every other state (spec §3.4).
+    /// Desktop looks. nil in every other state.
     public let advice: String?
     /// The install line: `linkTitle` (a link to `linkURL`), then "or run", then `installCommand`.
     public let linkTitle: String
     public let linkURL: URL
     public let installCommand: String
 
-    public static func missingText(_ tool: Tool) -> String {
+    static func missingText(_ tool: Tool) -> String {
         "\(tool.name) wasn’t found, so Claude Desktop won’t be able to start this connector."
     }
 
@@ -37,33 +37,33 @@ public struct ToolNote: Equatable, Sendable {
     /// Both problem states offer the family's ordinary install command: it puts
     /// the tool in the PATH floor, which is what makes the note go away.
     public static func make(tool: Tool, status: ToolStatus?) -> ToolNote? {
+        let text: String
+        let advice: String?
         switch status {
         case nil, .found?:
             return nil
         case .notFound?:
-            return ToolNote(text: missingText(tool),
-                            advice: nil,
-                            linkTitle: tool.family.linkTitle,
-                            linkURL: tool.family.linkURL,
-                            installCommand: tool.family.installCommand)
+            text = missingText(tool)
+            advice = nil
         case .foundInShellOnly(let path, _)?:
-            return ToolNote(text: shellOnlyText(tool, path: path),
-                            advice: shellOnlyAdvice,
-                            linkTitle: tool.family.linkTitle,
-                            linkURL: tool.family.linkURL,
-                            installCommand: tool.family.installCommand)
+            text = shellOnlyText(tool, path: path)
+            advice = shellOnlyAdvice
         }
+        return ToolNote(text: text, advice: advice,
+                        linkTitle: tool.family.linkTitle,
+                        linkURL: tool.family.linkURL,
+                        installCommand: tool.family.installCommand)
     }
 
-    /// The row glyph's tooltip in the popover (addendum 2026-09-06-row-glyph §2).
-    /// Short on purpose: it names the launcher and sends the user to the editor,
-    /// where the full note (spec §3.4) and the install line live.
+    /// The row glyph's tooltip in the popover. Short on purpose: it names the
+    /// launcher and sends the user to the editor, where the full note and the
+    /// install line live.
     public static func rowMissingText(_ tool: Tool) -> String {
         "Needs \(tool.name), which wasn’t found. Edit to see how to install it."
     }
 
     /// macOS only: the tool is on the login shell's PATH but not where Claude
-    /// Desktop looks (spec §3.2.3 state B). Windows has no such state (§6 D1).
+    /// Desktop looks. Windows has no such state.
     public static func rowShellOnlyText(_ tool: Tool) -> String {
         "Needs \(tool.name), which Claude Desktop may not see. Edit to see how to fix it."
     }

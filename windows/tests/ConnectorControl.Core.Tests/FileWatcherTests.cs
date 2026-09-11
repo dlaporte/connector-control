@@ -1,4 +1,3 @@
-using ConnectorControl.Core.Services;
 using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
@@ -21,31 +20,24 @@ public class FileWatcherTests : IDisposable
         private int count;
         public int Count => Volatile.Read(ref count);
         public void Hit() => Interlocked.Increment(ref count);
-        public bool WaitFor(int expected, TimeSpan timeout)
-        {
-            var deadline = DateTime.UtcNow + timeout;
-            while (DateTime.UtcNow < deadline)
-            {
-                if (Count >= expected) { return true; }
-                Thread.Sleep(50);
-            }
-            return Count >= expected;
-        }
     }
 
-    private static readonly TimeSpan Wait = TimeSpan.FromSeconds(8);
+    private static readonly TimeSpan WaitTimeout = TimeSpan.FromSeconds(8);
+
+    /// <summary>Gives a just-started FileSystemWatcher's own background thread a moment to
+    /// finish arming before a test relies on it observing the very next change.</summary>
+    private static readonly TimeSpan Settle = TimeSpan.FromMilliseconds(300);
 
     [Fact]
     public void FiresOnInPlaceWrite()
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
         Assert.True(watcher.IsArmed);
-        Thread.Sleep(1100);   // mtime resolution on some file systems is 1 s
-        File.WriteAllText(path, "two");
-        Assert.True(counter.WaitFor(1, Wait), "expected a change callback after an in-place write");
+        TempDir.Touch(path, "two");
+        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "expected a change callback after an in-place write");
     }
 
     [Fact]
@@ -53,11 +45,11 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
-        Thread.Sleep(1100);
         AtomicFile.Write("two"u8.ToArray(), path);
-        Assert.True(counter.WaitFor(1, Wait), "expected a change callback after an atomic replace");
+        TempDir.BumpModificationTime(path);   // the write's own mtime may tie with "one"'s on a coarse file system
+        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "expected a change callback after an atomic replace");
     }
 
     [Fact]
@@ -65,14 +57,14 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
-        Thread.Sleep(300);
+        Thread.Sleep(Settle);
         File.Delete(path);
-        Assert.True(counter.WaitFor(1, Wait), "expected a callback for delete");
-        Thread.Sleep(300);
+        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "expected a callback for delete");
+        Thread.Sleep(Settle);
         File.WriteAllText(path, "again");
-        Assert.True(counter.WaitFor(2, Wait), "expected a callback for recreate");
+        Assert.True(Wait.Until(() => counter.Count >= 2, WaitTimeout), "expected a callback for recreate");
     }
 
     [Fact]
@@ -80,10 +72,9 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
         watcher.Stop();
-        Thread.Sleep(1100);
         File.WriteAllText(path, "two");
         Thread.Sleep(1500);
         Assert.Equal(0, counter.Count);
@@ -94,9 +85,8 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a(), debounce: TimeSpan.FromMilliseconds(500));
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, debounce: TimeSpan.FromMilliseconds(500));
         watcher.Start();
-        Thread.Sleep(1100);
         File.WriteAllText(path, "two");   // the debounce timer is now armed
         Thread.Sleep(100);
         watcher.Stop();                   // before the 500 ms debounce elapses
@@ -109,17 +99,17 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a(), debounce: TimeSpan.FromMilliseconds(500));
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, debounce: TimeSpan.FromMilliseconds(500));
         watcher.Start();
-        Thread.Sleep(1100);
-        File.WriteAllText(path, "two");
+        Thread.Sleep(Settle);
+        TempDir.Touch(path, "two");
         Thread.Sleep(100);
         watcher.Stop();
         watcher.Start();                  // new generation; the old timer's work must not leak through
         Thread.Sleep(1500);
         Assert.Equal(0, counter.Count);
         File.WriteAllText(path, "three"); // the re-armed watcher still works
-        Assert.True(counter.WaitFor(1, Wait));
+        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout));
     }
 
     [Fact]
@@ -127,15 +117,16 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "0");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a(), debounce: TimeSpan.FromMilliseconds(400));
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, debounce: TimeSpan.FromMilliseconds(400));
         watcher.Start();
-        Thread.Sleep(1100);
+        Thread.Sleep(Settle);
         for (int i = 1; i <= 5; i++)
         {
             File.WriteAllText(path, i.ToString());
             Thread.Sleep(20);
         }
-        Assert.True(counter.WaitFor(1, Wait));
+        TempDir.BumpModificationTime(path);   // guarantee the burst's final mtime differs from "0"'s on a coarse file system
+        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout));
         Thread.Sleep(1500);
         Assert.True(counter.Count <= 2, $"expected the burst to coalesce, got {counter.Count} callbacks");
     }
@@ -145,9 +136,9 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
-        Thread.Sleep(300);
+        Thread.Sleep(Settle);
         File.WriteAllText(dir.File("other.json"), "x");
         Thread.Sleep(1500);
         Assert.Equal(0, counter.Count);
@@ -158,15 +149,15 @@ public class FileWatcherTests : IDisposable
     {
         var nested = dir.File(System.IO.Path.Combine("later", "file.json"));
         var counter = new Counter();
-        using var watcher = new FileWatcher(nested, counter.Hit, a => a());
+        using var watcher = new FileWatcher(nested, a => a(), counter.Hit);
         watcher.Start();
         Assert.False(watcher.IsArmed);
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(nested)!);
         watcher.Start();   // re-arm attempt, as AppState does on each reload
         Assert.True(watcher.IsArmed);
-        Thread.Sleep(300);
+        Thread.Sleep(Settle);
         File.WriteAllText(nested, "hello");
-        Assert.True(counter.WaitFor(1, Wait));
+        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout));
     }
 
     /// <summary>
@@ -192,7 +183,7 @@ public class FileWatcherTests : IDisposable
     {
         var missing = dir.File(System.IO.Path.Combine("gone", "watched.json"));
         var counter = new Counter();
-        using var watcher = new FileWatcher(missing, counter.Hit, a => a());
+        using var watcher = new FileWatcher(missing, a => a(), counter.Hit);
         Assert.False(watcher.IsArmed);
         watcher.HandleError();      // what the FileSystemWatcher raises when its directory goes
         Assert.False(watcher.IsArmed);
@@ -226,7 +217,7 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
         Assert.True(watcher.IsArmed);
         var parent = System.IO.Path.GetDirectoryName(path)!;
@@ -239,16 +230,16 @@ public class FileWatcherTests : IDisposable
         // a condition-based wait rather than an exact synchronous count.
         // HandleErrorWithTheDirectoryGoneDisarmsAndDeliversExactlyOnce above is the
         // deterministic proof that exactly one callback fires.
-        Assert.True(counter.WaitFor(1, Wait), "expected the deletion to be delivered, not swallowed by Stop() (R2)");
+        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "expected the deletion to be delivered, not swallowed by Stop() (R2)");
         watcher.Start();            // AppState retries on each reload; the directory is still gone
         Assert.False(watcher.IsArmed);
         Directory.CreateDirectory(parent);
         watcher.Start();
         Assert.True(watcher.IsArmed);
-        Thread.Sleep(300);
+        Thread.Sleep(Settle);
         var before = counter.Count;   // a possible earlier extra delivery must not mask a missing one here
         File.WriteAllText(path, "two");
-        Assert.True(counter.WaitFor(before + 1, Wait), "the re-armed watcher must still report changes");
+        Assert.True(Wait.Until(() => counter.Count >= before + 1, WaitTimeout), "the re-armed watcher must still report changes");
     }
 
     [Fact]
@@ -256,13 +247,12 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
         watcher.HandleError();      // a buffer overflow: re-check, but stay armed
         Assert.True(watcher.IsArmed);
-        Thread.Sleep(1100);
-        File.WriteAllText(path, "two");
-        Assert.True(counter.WaitFor(1, Wait));
+        TempDir.Touch(path, "two");
+        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout));
     }
 
     [Fact]
@@ -271,11 +261,10 @@ public class FileWatcherTests : IDisposable
         File.WriteAllText(path, "one");
         var counter = new Counter();
         var marshalled = 0;
-        using var watcher = new FileWatcher(path, counter.Hit, a => { Interlocked.Increment(ref marshalled); a(); });
+        using var watcher = new FileWatcher(path, a => { Interlocked.Increment(ref marshalled); a(); }, counter.Hit);
         watcher.Start();
-        Thread.Sleep(1100);
-        File.WriteAllText(path, "two");
-        Assert.True(counter.WaitFor(1, Wait));
+        TempDir.Touch(path, "two");
+        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout));
         Assert.True(Volatile.Read(ref marshalled) >= 1);
     }
 }

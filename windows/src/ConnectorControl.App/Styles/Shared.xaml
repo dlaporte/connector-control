@@ -1,9 +1,28 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:views="clr-namespace:ConnectorControl.App.Views"
+                    xmlns:system="clr-namespace:System;assembly=System.Runtime">
 
   <!-- Segoe Fluent Icons ships with Windows 11; Segoe MDL2 Assets is the Windows 10 fallback with the same code points. -->
   <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
   <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas, Courier New</FontFamily>
+
+  <!-- Every window used its own local copy of this; one instance, shared app-wide. -->
+  <BooleanToVisibilityConverter x:Key="Vis" />
+
+  <!-- The segmented-button/radio-group binding an enum-valued property drives (EditorModel.View). -->
+  <views:EnumToBoolConverter x:Key="EnumToBool" />
+
+  <Style x:Key="SectionTitle" TargetType="TextBlock">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Margin" Value="0,0,0,8" />
+  </Style>
+
+  <!-- The Cancel/primary button row every modal dialog ends with. -->
+  <Style x:Key="DialogButtons" TargetType="StackPanel">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+  </Style>
 
   <Style x:Key="CaptionText" TargetType="TextBlock">
     <Setter Property="FontSize" Value="12" />
@@ -17,7 +36,7 @@
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
-  <!-- The tool note's first line (spec 2026-09-05-tool-probe §3.4): a warning, not an error. -->
+  <!-- The tool note's first line: a warning, not an error. -->
   <Style x:Key="CautionText" TargetType="TextBlock">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
@@ -120,6 +139,61 @@
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter Property="Opacity" Value="0.4" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!--
+    Replaces Placeholder.cs's attached property + PlaceholderAdorner's AdornerLayer overlay
+    with a Tag-bound watermark baked into the template. The chrome (background, border, corner
+    radius, hover/focus/disabled states) mirrors the Fluent theme's own TextBoxBase template —
+    same DynamicResource keys, from the .NET 10 WPF source — so a watermarked box looks like every
+    other text field; only the watermark TextBlock is new.
+  -->
+  <Style x:Key="Watermarked" TargetType="TextBox">
+    <Setter Property="Foreground" Value="{DynamicResource TextControlForeground}" />
+    <Setter Property="CaretBrush" Value="{DynamicResource TextControlForeground}" />
+    <Setter Property="Background" Value="{DynamicResource TextControlBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextControlElevationBorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource TextControlBorderThemeThickness}" />
+    <Setter Property="Padding" Value="{DynamicResource TextControlThemePadding}" />
+    <Setter Property="Border.CornerRadius" Value="{DynamicResource ControlCornerRadius}" />
+    <!-- Lost by replacing the template without BasedOn — restored to what a plain (unwatermarked) TextBox gets from the Fluent theme's own TextBox style. -->
+    <Setter Property="MinHeight" Value="{DynamicResource TextControlThemeMinHeight}" />
+    <Setter Property="MinWidth" Value="{DynamicResource TextControlThemeMinWidth}" />
+    <Setter Property="VerticalContentAlignment" Value="Top" />
+    <Setter Property="SelectionBrush" Value="{DynamicResource TextControlSelectionHighlightColor}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="TextBox">
+          <Grid>
+            <Border x:Name="ContentBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding Border.CornerRadius}" />
+            <TextBlock x:Name="Watermark" Text="{TemplateBinding Tag}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" IsHitTestVisible="False"
+                       Margin="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}" VerticalAlignment="Center" Visibility="Collapsed" />
+            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}"
+                          HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                          VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}" />
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="Text" Value="{x:Static system:String.Empty}">
+              <Setter TargetName="Watermark" Property="Visibility" Value="Visible" />
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource TextControlBackgroundPointerOver}" />
+              <Setter TargetName="ContentBorder" Property="BorderBrush" Value="{DynamicResource TextControlBorderBrushPointerOver}" />
+            </Trigger>
+            <Trigger Property="IsFocused" Value="True">
+              <Setter TargetName="ContentBorder" Property="BorderThickness" Value="{DynamicResource TextControlBorderThemeThicknessFocused}" />
+              <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource TextControlBackgroundFocused}" />
+              <Setter TargetName="ContentBorder" Property="BorderBrush" Value="{DynamicResource TextControlBorderBrushFocused}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource TextControlBackgroundDisabled}" />
+              <Setter TargetName="ContentBorder" Property="BorderBrush" Value="{DynamicResource TextControlBorderBrushDisabled}" />
+              <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>

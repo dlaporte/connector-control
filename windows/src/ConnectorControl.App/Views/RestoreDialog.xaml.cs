@@ -4,8 +4,8 @@ using ConnectorControl.Core.State;
 
 namespace ConnectorControl.App.Views;
 
-/// <summary>Catalog §5: modal, 460 wide, a 180-high list of backups, Cancel / Restore…, confirmation, inline error.</summary>
-public partial class RestoreDialog : Window
+/// <summary>Modal, 460 wide, a 180-high list of backups, Cancel / Restore…, confirmation, inline error.</summary>
+public partial class RestoreDialog : DialogWindow
 {
     public RestoreDialog(AppState state)
     {
@@ -14,10 +14,12 @@ public partial class RestoreDialog : Window
         Model.Load();
         DataContext = Model;
         BackupList.ItemsSource = Model.BackupNames;
-        Model.CloseRequested += () => Dispatcher.BeginInvoke(new Action(Close));
+        CloseWhenModelAsks(handler => Model.CloseRequested += handler);
     }
 
     public RestoreModel Model { get; }
+
+    public static void Show(Window? owner, AppState state) => WpfDialogs.Present(new RestoreDialog(state), owner);
 
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {

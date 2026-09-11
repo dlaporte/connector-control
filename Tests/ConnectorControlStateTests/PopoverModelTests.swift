@@ -1,6 +1,7 @@
 import Combine
 import XCTest
 import ConnectorControlCore
+import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
 /// windows/tests/ConnectorControl.Core.Tests/State/FlyoutModelTests.cs. Rows are
@@ -9,25 +10,21 @@ import ConnectorControlCore
 @MainActor
 final class PopoverModelTests: XCTestCase {
     func testHeaderTextsFollowTheStore() {
-        let h = AppStateHarness(seedClaudeConfig: false)
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
-        XCTAssertEqual(PopoverModel.title, "Connector Control")
         XCTAssertEqual(popover.subtitle, "No connectors configured")
         XCTAssertEqual(popover.profileChipText, "Default ▾")
         XCTAssertTrue(popover.isEmpty)
-        XCTAssertEqual(PopoverModel.emptyText, "No connectors configured yet — add one below.")
         XCTAssertNil(state.upsert(name: "z", entry: MCPEntry(config: AppStateHarness.remote("https://z.example/mcp")), renamedFrom: nil))
         XCTAssertEqual(popover.subtitle, "1 of 1 enabled")
         XCTAssertFalse(popover.isEmpty)
     }
 
     func testRowsAreSortedOrdinallyWithEditTooltips() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         XCTAssertNil(state.upsert(name: "Zebra", entry: MCPEntry(config: AppStateHarness.remote("https://zebra.example/mcp")), renamedFrom: nil))
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
@@ -37,9 +34,8 @@ final class PopoverModelTests: XCTestCase {
     }
 
     func testTogglingARowPersistsAndAppliesThroughAppState() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         popover.setEnabled("aws-mcp", false)
@@ -50,9 +46,8 @@ final class PopoverModelTests: XCTestCase {
     }
 
     func testRowsFollowExternalStateChanges() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         // The rows read through to AppState; the republish in init is what makes
@@ -76,9 +71,8 @@ final class PopoverModelTests: XCTestCase {
     }
 
     func testProfileMenuItemsAndTitles() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertEqual(popover.profileItems, [ProfileMenuItem(name: "Default", isActive: true)])
@@ -104,7 +98,7 @@ final class PopoverModelTests: XCTestCase {
         let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
-        XCTAssertEqual(popover.footer, FooterKind.none)
+        XCTAssertEqual(popover.footer, FooterKind.hidden)
         XCTAssertFalse(popover.showFooter)
 
         state.setEnabled("aws-mcp", false)
@@ -118,7 +112,7 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(popover.footer, .retryApply)
         XCTAssertEqual(popover.footerTitle, "Apply Failed — Retry")
         XCTAssertEqual(popover.footerGlyph, "exclamationmark.arrow.circlepath")
-        XCTAssertTrue(popover.hasError)
+        XCTAssertNotNil(popover.errorMessage)
 
         try Data(Fixtures.realisticClaudeConfig.utf8).write(to: h.claudeConfigURL)
         popover.footerAction()   // retry
@@ -141,9 +135,8 @@ final class PopoverModelTests: XCTestCase {
     }
 
     func testOpenedRunsARoutineReload() throws {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         try h.writeClaudeServers([("scoutbook", try XCTUnwrap(state.store.mcps["scoutbook"]).config)])
@@ -153,9 +146,8 @@ final class PopoverModelTests: XCTestCase {
     }
 
     func testEntryForReturnsTheLiveEntryOrNull() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertEqual(popover.entryFor("scoutbook"), state.store.mcps["scoutbook"])
@@ -169,30 +161,27 @@ final class PopoverModelTests: XCTestCase {
         let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
-        XCTAssertTrue(popover.rows.allSatisfy { !$0.hasToolWarning })   // nothing probed yet: no glyph
-        XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == nil })
+        XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == nil })   // nothing probed yet: no glyph
 
         state.refreshTools([.npx])
         XCTAssertTrue(h.ui.pumpUntil({ state.toolStatuses[.npx] != nil }, timeout: 5))
         // All three seeded connectors run `npx -y mcp-remote`.
-        XCTAssertTrue(popover.rows.allSatisfy(\.hasToolWarning))
         XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == "Needs npx, which wasn’t found. Edit to see how to install it." })
 
         // A connector whose command is a full path needs no PATH lookup, so it never warns.
         XCTAssertNil(state.upsert(name: "pathed", entry: MCPEntry(config: .object(["command": .string("/usr/local/bin/node")])), renamedFrom: nil))
         let pathed = popover.rows.first { $0.name == "pathed" }
-        XCTAssertEqual(pathed?.hasToolWarning, false)
         XCTAssertNil(pathed?.toolWarning)
-        XCTAssertEqual(popover.rows.first { $0.name == "aws-mcp" }?.hasToolWarning, true)   // the others are unchanged
+        XCTAssertNotNil(popover.rows.first { $0.name == "aws-mcp" }?.toolWarning)   // the others are unchanged
 
         // Installing npx: the next probe publishes found and every glyph clears.
         h.tools.statuses[.npx] = .found(path: "/opt/homebrew/bin/npx", version: "10.9.2")
         state.refreshTools([.npx])
-        XCTAssertTrue(h.ui.pumpUntil({ popover.rows.allSatisfy { !$0.hasToolWarning } }, timeout: 5))
+        XCTAssertTrue(h.ui.pumpUntil({ popover.rows.allSatisfy { $0.toolWarning == nil } }, timeout: 5))
         XCTAssertTrue(popover.rows.allSatisfy(\.enabled))   // the glyph never touched the switch
     }
 
-    /// macOS only (addendum 2026-09-06-row-glyph, S19): a launcher only the login shell can see.
+    /// macOS only: a launcher only the login shell can see.
     func testRowsCarryTheShellOnlyWarning() {
         let h = AppStateHarness()
         defer { h.dispose() }
@@ -201,15 +190,14 @@ final class PopoverModelTests: XCTestCase {
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         popover.opened()
-        XCTAssertTrue(h.ui.pumpUntil({ popover.rows.allSatisfy(\.hasToolWarning) }, timeout: 5))
+        XCTAssertTrue(h.ui.pumpUntil({ popover.rows.allSatisfy { $0.toolWarning != nil } }, timeout: 5))
         XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == "Needs npx, which Claude Desktop may not see. Edit to see how to fix it." })
         XCTAssertTrue(popover.rows.allSatisfy(\.enabled))
     }
 
     func testOpenedProbesOnlyTheToolsTheRowsNeedAndOnlyOnce() {
-        let h = AppStateHarness()
+        let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertEqual(h.tools.batches, 0)   // building the model probes nothing
@@ -226,9 +214,8 @@ final class PopoverModelTests: XCTestCase {
     }
 
     func testOpenedProbesNothingWhenNoRowNeedsATool() {
-        let h = AppStateHarness(seedClaudeConfig: false)
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         popover.opened()   // an empty catalog
@@ -239,24 +226,15 @@ final class PopoverModelTests: XCTestCase {
         popover.opened()   // a full path and an unknown launcher both need no PATH lookup
         XCTAssertEqual(h.tools.batches, 0)
         XCTAssertTrue(h.tools.probed.isEmpty)
-        XCTAssertTrue(popover.rows.allSatisfy { !$0.hasToolWarning })
+        XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == nil })
     }
 
-    func testStringsMatchTheCatalog() {
-        XCTAssertEqual(PopoverModel.title, "Connector Control")
-        XCTAssertEqual(PopoverModel.addTooltip, "Add Connector")
-        XCTAssertEqual(PopoverModel.settingsTooltip, "Settings")
-        XCTAssertEqual(PopoverModel.quitTooltip, "Quit Connector Control")
-        XCTAssertEqual(PopoverModel.emptyText, "No connectors configured yet — add one below.")
-        XCTAssertEqual(PopoverModel.retryTitle, "Apply Failed — Retry")
-        XCTAssertEqual(PopoverModel.restartTitle, "Restart Required")
-        XCTAssertEqual(PopoverModel.newProfileTitle, "New Profile…")
-        XCTAssertEqual(PopoverModel.profileChipText("Work"), "Work ▾")
-        XCTAssertEqual(PopoverModel.renameProfileTitle("Work"), "Rename “Work”…")
-        XCTAssertEqual(PopoverModel.deleteProfileTitle("Work"), "Delete “Work”…")
+    /// SF Symbol names: platform-specific glyph identifiers, deliberately out
+    /// of the shared string catalog (Windows uses Segoe Fluent Icons code
+    /// points instead), so pinned here instead.
+    func testGlyphNamesAreSessionLocalAndStable() {
         XCTAssertEqual(PopoverModel.retryGlyph, "exclamationmark.arrow.circlepath")
         XCTAssertEqual(PopoverModel.restartGlyph, "arrow.clockwise")
         XCTAssertEqual(PopoverModel.toolWarningGlyph, "exclamationmark.triangle.fill")
-        XCTAssertEqual(ConnectorRow(name: "x", enabled: true, toolWarning: nil).editTooltip, "Edit “x”")
     }
 }

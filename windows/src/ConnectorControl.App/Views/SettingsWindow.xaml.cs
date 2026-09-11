@@ -2,19 +2,19 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using ConnectorControl.Core.State;
 using Microsoft.Win32;
 using ConnectorControl.App.Services;
-using AppServices = ConnectorControl.App.Services.Services;
 
 namespace ConnectorControl.App.Views;
 
-/// <summary>Catalog §4 / spec §7.3: single instance, 480×500, three tabs; autostart re-read whenever the window activates.</summary>
+/// <summary>Single instance, 480×560, three tabs; autostart re-read whenever the window activates.</summary>
 public partial class SettingsWindow : Window
 {
     private readonly AppState state;
 
-    public SettingsWindow(AppState state, AppServices services, UpdateCoordinator updates)
+    public SettingsWindow(AppState state, PlatformServices services, UpdateCoordinator updates)
     {
         InitializeComponent();
         this.state = state;
@@ -22,10 +22,27 @@ public partial class SettingsWindow : Window
         DataContext = Model;
         GeneralTabItem.Header = TabHeader("", null, SettingsModel.GeneralTab);
         StorageTabItem.Header = TabHeader("", null, SettingsModel.StorageTab);
-        ClaudeTabItem.Header = TabHeader("", ClaudeIconLoader.Load(services.ClaudeInstall.Detect()), SettingsModel.ClaudeTab);
+        ClaudeTabItem.Header = TabHeader("", null, SettingsModel.ClaudeTab);
         Activated += (_, _) => Model.Refresh();
         Closed += (_, _) => Model.Dispose();
-        Model.RefreshTools();   // spec §6 D4: probe all four when the window opens
+        Model.RefreshTools();   // probe all four when the window opens
+        // The Claude tab's icon needs a package walk plus an icon extraction (ClaudeIconLoader),
+        // slow enough that doing it inline used to make opening Settings visibly stall; deferred to
+        // Background priority (below layout/render) and run off the UI thread so the window shows
+        // and its text is usable immediately, with the icon popping in a moment later.
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(async () =>
+        {
+            try
+            {
+                var icon = await Task.Run(() => ClaudeIconLoader.Load(services.ClaudeInstall.Detect()));
+                ClaudeTabItem.Header = TabHeader("", icon, SettingsModel.ClaudeTab);
+            }
+            catch (Exception)
+            {
+                // async void: an unhandled exception here would crash the app. Leave the plain-text
+                // glyph header already in place rather than rethrow for a popped-in icon that failed.
+            }
+        }));
     }
 
     public SettingsModel Model { get; }
@@ -80,11 +97,9 @@ public partial class SettingsWindow : Window
         }
     }
 
-    private void OnRestore(object sender, RoutedEventArgs e)
-    {
-        var dialog = new RestoreDialog(state) { Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner };
-        dialog.ShowDialog();
-    }
+    // RestoreDialog.Show presents through WpfDialogs.Present, which activates the dialog; that is fine
+    // here because this window is the owner and the dialog is shown modally (ShowDialog).
+    private void OnRestore(object sender, RoutedEventArgs e) => RestoreDialog.Show(this, state);
 
     private void OnChooseClaudeConfig(object sender, RoutedEventArgs e)
     {
@@ -97,20 +112,23 @@ public partial class SettingsWindow : Window
 
     private void OnUseDefaultClaudeConfig(object sender, RoutedEventArgs e) => Model.UseDefaultClaudeConfig();
 
-    private void OnChooseLaunchTarget(object sender, RoutedEventArgs e)
+    private async void OnChooseLaunchTarget(object sender, RoutedEventArgs e)
     {
         var picker = new OpenFileDialog { Title = "Choose", Filter = "Programs (*.exe)|*.exe|All files (*.*)|*.*" };
         if (picker.ShowDialog(this) == true)
         {
             // The path is trusted at every Restart Claude from now on, so a file that is not
             // Claude signed by Anthropic is refused here, with the reason, rather than at the
-            // next restart click.
-            if (AuthenticodeVerifier.VerifyClaude(picker.FileName) is { } problem)
+            // next restart click. WinVerifyTrust reads the whole file and can stall on a slow or
+            // network path, so it runs off the UI thread rather than freezing the window.
+            var path = picker.FileName;
+            var problem = await Task.Run(() => AuthenticodeVerifier.VerifyClaude(path));
+            if (problem is not null)
             {
                 ConfirmDialog.Show(this, SettingsModel.LaunchTargetRejectedTitle, problem, "OK", null, destructive: false);
                 return;
             }
-            Model.ChooseLaunchTarget(picker.FileName);
+            Model.ChooseLaunchTarget(path);
         }
     }
 

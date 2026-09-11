@@ -4,7 +4,7 @@ using Microsoft.Win32;
 namespace ConnectorControl.App.Tray;
 
 /// <summary>
-/// Spec §7.1: the tray icon color follows the TASKBAR theme (SystemUsesLightTheme),
+/// The tray icon color follows the TASKBAR theme (SystemUsesLightTheme),
 /// which is independent of the app theme (AppsUseLightTheme). Missing value = dark
 /// taskbar, the Windows 10/11 default.
 /// </summary>

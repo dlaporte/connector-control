@@ -3,16 +3,17 @@
 #
 # Jobs:
 #   prepare          (ubuntu)   version from the tag; CHANGELOG section -> notes.md (gate 1);
-#                               the tagged commit is on master (gate 2); all six Windows
-#                               signing secrets exist (gate 3) — a release is never unsigned
+#                               the tagged commit is on master (gate 2)
 #   mac-test         (macos-15) swift test; a failed test, or a skipped one other than the
 #                               deliberate goldens-regeneration skip, stops the run here
 #   mac              (macos-15) build, sign, notarize, DMG, appcast   -> artifact "mac"
 #   windows          (windows)  .github/workflows/windows-build.yml with require-signing: true —
-#                               test, then matrix win-x64/win-arm64 publish + signed vpk pack
-#                               -> "velopack-<rid>", then silent install + launch of the x64
-#                               package with the signature required and the arm64 Setup.exe
-#                               signature checked. windows-preview.yml calls the same file.
+#                               that file's own gate job proves all six Windows signing secrets
+#                               exist (a release is never unsigned) before test, then matrix
+#                               win-x64/win-arm64 publish + signed vpk pack -> "velopack-<rid>",
+#                               then silent install + launch of the x64 package with the
+#                               signature required and the arm64 Setup.exe signature checked.
+#                               windows-preview.yml calls the same file.
 #   publish          (ubuntu)   the ONLY writer: creates the release WITH the DMG and appcast
 #                               attached (so it is never "latest" without its feed), uploads the
 #                               Windows assets (never overwriting a published one), verifies
@@ -26,8 +27,9 @@
 # Required secrets. The Mac set belongs in the "signing" GitHub Environment (Settings ▸
 # Environments), which only the mac job names: with required reviewers and a deployment
 # policy of the master branch plus v* tags on that environment, no job GitHub has not shown
-# a human can read them. The Windows set stays a repository secret set: both prepare jobs
-# check for it before any build minutes are spent, and a preview may be cut from any branch.
+# a human can read them. The Windows set stays a repository secret set: windows-build.yml's
+# own gate job checks for it before the signed packaging jobs start (the unsigned test job
+# runs in parallel), and a preview may be cut from any branch.
 #   Mac (same names as the trailcache repo):
 #   APPLE_CERTIFICATE          base64-encoded Developer ID Application .p12
 #   APPLE_CERTIFICATE_PASSWORD password for the .p12
@@ -37,20 +39,12 @@
 #   APPLE_TEAM_ID              10-character team identifier
 #   KEYCHAIN_PASSWORD          any string; protects the throwaway CI keychain
 #   SPARKLE_ED_PRIVATE_KEY     EdDSA private key that signs the appcast (backup: login Keychain)
-#   Windows (Azure Artifact Signing, design spec §8.4) — ALL SIX are required:
-#   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET   service principal with the
-#                                                          "Trusted Signing Certificate Profile Signer"
-#                                                          role (DefaultAzureCredential, Azure.Identity)
-#   AZURE_SIGNING_ENDPOINT                                 e.g. https://eus.codesigning.azure.net
-#   AZURE_SIGNING_ACCOUNT                                  the signing account name
-#   AZURE_SIGNING_PROFILE                                  the certificate profile name
+#   Windows (Azure Artifact Signing) — ALL SIX are required, and documented
+#   once, with windows-build.yml's gate job:
+#   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SIGNING_ENDPOINT,
+#   AZURE_SIGNING_ACCOUNT, AZURE_SIGNING_PROFILE
 
 name: Release
-
-# A rehearsal dispatch and a tag push must never build side by side; runs queue instead.
-concurrency:
-  group: release
-  cancel-in-progress: false
 
 on:
   push:
@@ -71,10 +65,23 @@ on:
 permissions:
   contents: read
 
+# A rehearsal dispatch and a tag push must never build side by side; runs queue instead.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
   prepare:
     name: Version, notes, and gates
-    runs-on: ubuntu-latest
+    # ubuntu-24.04 is pinned deliberately (as are the macos-15 and windows-2025 images used
+    # elsewhere in this repo's workflows): a runner-image rollover is a deliberate version bump
+    # here, not something that happens under a floating "-latest" label. Dependabot does not
+    # manage these.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       tag: ${{ steps.derive.outputs.tag }}
@@ -112,12 +119,7 @@ jobs:
         env:
           TAG: ${{ steps.derive.outputs.tag }}
         run: |
-          awk -v ver="## ${TAG}" '$0 == ver {found=1; next}
-               /^## / && found {exit} found {print}' CHANGELOG.md > notes.md
-          if ! grep -q '[^[:space:]]' notes.md; then
-            echo "::error::CHANGELOG.md has no '## ${TAG}' section — write one before tagging."
-            exit 1
-          fi
+          ./scripts/release/changelog-section.sh "$TAG" > notes.md
           cat notes.md
 
       # Releases build from master only. A v* tag pushed from another branch would
@@ -128,29 +130,6 @@ jobs:
           git merge-base --is-ancestor HEAD origin/master \
             || { echo "::error::$(git rev-parse --short HEAD) is not on master — tag releases from master only."; exit 1; }
           echo "$(git rev-parse --short HEAD) is on master"
-
-      # A release is never built unsigned, and neither is a preview: both workflows call
-      # windows-build.yml with require-signing: true, and both prove the secrets are there
-      # first, so their absence fails the run before any build starts.
-      - name: Require the Windows signing secrets
-        env:
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
-          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
-          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
-        run: |
-          missing=""
-          for name in AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET \
-                      AZURE_SIGNING_ENDPOINT AZURE_SIGNING_ACCOUNT AZURE_SIGNING_PROFILE; do
-            [ -n "${!name}" ] || missing="$missing $name"
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::Windows signing secrets missing:$missing. A release is never built unsigned — add them under Settings ▸ Secrets and variables ▸ Actions, then re-run."
-            exit 1
-          fi
-          echo "All six AZURE_* signing secrets are present."
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -166,8 +145,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Same gate as mac-ci.yml (scripts/test-mac.sh): the suite must pass with exactly the
-      # one deliberate skip before any signing or notarization minutes are spent.
+      # Same gate as mac-ci.yml (scripts/test-mac.sh): no test may skip or fail
+      # before any signing or notarization minutes are spent.
       - name: Test
         run: ./scripts/test-mac.sh
 
@@ -193,34 +172,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # notes.md lands in the working directory so the appcast step reads it
-      # exactly as it always has.
+      # notes/notes.md is read directly by the appcast step below.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: notes
-          path: .
+          path: notes
 
       - name: Import signing certificate
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          # The decoded .p12 lives under RUNNER_TEMP, never in the checkout,
-          # and is removed by a trap so an import failure cannot leave it on
-          # disk; the throwaway keychain is deleted by the always() step below.
-          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain-db
-          P12="$RUNNER_TEMP/certificate.p12"
-          trap 'rm -f "$P12"' EXIT
-          echo "$APPLE_CERTIFICATE" | base64 --decode > "$P12"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$P12" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security -A
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security list-keychains -d user -s "$KEYCHAIN_PATH"
-          security default-keychain -s "$KEYCHAIN_PATH"
-          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+        run: ./scripts/mac/import-signing-cert.sh
 
       - name: Build and sign
         env:
@@ -236,17 +199,13 @@ jobs:
             UNIVERSAL=1 SIGNING_IDENTITY="$APPLE_SIGNING_IDENTITY" \
             ./scripts/build-app.sh
 
-      - name: Notarize and staple
+      - name: Notarize and staple the app
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          ditto -c -k --keepParent "build/Connector Control.app" notarize.zip
-          xcrun notarytool submit notarize.zip \
-            --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" --wait
-          xcrun stapler staple "build/Connector Control.app"
+          ./scripts/mac/notarize.sh "build/Connector Control.app"
           spctl --assess --type execute --verbose=2 "build/Connector Control.app"
 
       - name: Package and notarize DMG
@@ -262,60 +221,20 @@ jobs:
           # end-to-end (hdiutil does not sign what it creates).
           codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" \
             "ConnectorControl_${VERSION}.dmg"
-          xcrun notarytool submit "ConnectorControl_${VERSION}.dmg" \
-            --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" --wait
-          xcrun stapler staple "ConnectorControl_${VERSION}.dmg"
+          ./scripts/mac/notarize.sh "ConnectorControl_${VERSION}.dmg"
 
       - name: Generate Sparkle appcast
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           VERSION="${TAG#v}"
-          # Must run AFTER stapling — the EdDSA signature covers the final
-          # DMG bytes. Tools version pinned to match Package.resolved.
-          # -f: an HTTP error page must fail here, not reach tar as a bogus
-          # archive with a misleading "Unrecognized archive format" error.
-          #
-          # The private key is piped into a binary from this archive, so the
-          # archive is pinned by content, not just by URL: a GitHub release
-          # asset can be deleted and re-uploaded under the same name. The
-          # digest below is Sparkle-2.9.6.tar.xz as published (it matches the
-          # asset digest GitHub reports for that release); bumping the Sparkle
-          # tools means bumping this literal in the same commit. It is
-          # extracted under RUNNER_TEMP so a hostile archive could not plant
-          # files in the checkout that later steps read.
-          SPARKLE_SHA256=52bf9e88cdd972fc0c81501377a880e90d47031bd8ca5462488f843e2609e192
-          SPARKLE_TOOLS="$RUNNER_TEMP/sparkle-tools"
-          curl -sfL --retry 3 --retry-delay 5 -o "$RUNNER_TEMP/sparkle-tools.tar.xz" \
-            "https://github.com/sparkle-project/Sparkle/releases/download/2.9.6/Sparkle-2.9.6.tar.xz"
-          echo "$SPARKLE_SHA256  $RUNNER_TEMP/sparkle-tools.tar.xz" | shasum -a 256 -c - \
-            || { echo "::error::Sparkle-2.9.6.tar.xz does not match the pinned SHA-256; refusing to sign with its tools."; exit 1; }
-          mkdir "$SPARKLE_TOOLS" && tar -xf "$RUNNER_TEMP/sparkle-tools.tar.xz" -C "$SPARKLE_TOOLS"
-          mkdir appcast-work
-          cp "ConnectorControl_${VERSION}.dmg" appcast-work/
-          # Render the changelog to HTML (GitHub's markdown renderer) and drop
-          # it next to the DMG; --embed-release-notes inlines it into the
-          # appcast item so the update dialog shows it.
-          # Emit an HTML FRAGMENT (no DOCTYPE/body) — that's what
-          # generate_appcast embeds into the item's description CDATA.
-          gh api -X POST /markdown -f mode=markdown -f text="$(cat notes.md)" > notes-body.html
-          {
-            echo '<style>body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; margin: 12px; }</style>'
-            cat notes-body.html
-          } > "appcast-work/ConnectorControl_${VERSION}.html"
-          printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | "$SPARKLE_TOOLS/bin/generate_appcast" \
-            --ed-key-file - \
-            --embed-release-notes \
-            --download-url-prefix "https://github.com/dlaporte/connector-control/releases/download/${TAG}/" \
-            --link "https://github.com/dlaporte/connector-control/releases" \
-            -o appcast.xml appcast-work
-          cat appcast.xml
+          # Must run AFTER stapling — the EdDSA signature covers the final DMG bytes.
+          ./scripts/mac/make-appcast.sh "$VERSION" "$TAG" notes/notes.md
 
       # The publish job posts these; nothing is uploaded to GitHub from here.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: mac
+          name: mac-dmg-appcast
           path: |
             ConnectorControl_*.dmg
             appcast.xml
@@ -334,15 +253,13 @@ jobs:
     needs: prepare
     # test -> package (win-x64, win-arm64) -> smoke, the same file windows-preview.yml and
     # windows-ci.yml call. require-signing is stated here rather than derived from a secret:
-    # prepare has already failed the run if any of the six AZURE_* secrets is missing, and the
-    # smoke job therefore installs with -ExpectSigned and checks the arm64 Setup.exe signature.
-    # prerelease: false — "previous", for the delta package, is the newest full v* release
-    # carrying releases.<rid>.json (none before v1.3.0, so the first release shipped without a
-    # delta package and v1.3.1 gets one against v1.3.0).
+    # windows-build.yml's own gate job fails the run before the signed packaging jobs start
+    # (the unsigned test job runs in parallel) if any of the six AZURE_* secrets is missing,
+    # and the smoke job therefore installs with -ExpectSigned and checks the arm64 Setup.exe
+    # signature.
     uses: ./.github/workflows/windows-build.yml
     with:
       version: ${{ needs.prepare.outputs.version }}
-      prerelease: false
       require-signing: true
     # Only the six Windows signing secrets, by name. `secrets: inherit` would
     # also hand the called workflow the Apple certificate and the Sparkle key,
@@ -360,7 +277,7 @@ jobs:
     needs: [prepare, mac, windows]
     # The only job that writes anything. A workflow_dispatch rehearsal never reaches it.
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
@@ -368,7 +285,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ needs.prepare.outputs.tag }}
       VERSION: ${{ needs.prepare.outputs.version }}
-      REPO_URL: https://github.com/dlaporte/connector-control
+      REPO_URL: ${{ github.server_url }}/${{ github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -379,7 +296,7 @@ jobs:
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: mac
+          name: mac-dmg-appcast
           path: mac
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -392,9 +309,8 @@ jobs:
           name: velopack-win-arm64
           path: artifacts/win-arm64
 
-      - name: Create the release, with the Mac assets already attached
+      - name: Build release notes body
         run: |
-          set -o pipefail
           # The GitHub release body is the changelog section between a download paragraph and
           # the compare link. Only the body gets the paragraph: the appcast and the Windows
           # packages embedded notes.md as it was, and their update dialogs must not tell the
@@ -404,75 +320,48 @@ jobs:
             printf '**Download:** on a Mac, **ConnectorControl_%s.dmg**; on a Windows PC, **ConnectorControl-win-x64-Setup.exe** (Intel and AMD) or **ConnectorControl-win-arm64-Setup.exe** (Arm). Everything else listed below (appcast.xml, the .nupkg packages, releases.*.json) is read by the apps'\'' built-in updaters and never needs downloading.\n\n' "$VERSION"
             cat notes/notes.md
           } > body.md
-          # Drafts and prereleases must not be the compare base.
-          PREV=$(gh release list --limit 1 --exclude-drafts --exclude-pre-releases \
-            --json tagName --jq '.[0].tagName' || true)
-          if [ -n "$PREV" ] && [ "$PREV" != "$TAG" ]; then
+          # Drafts and prereleases must not be the compare base. A transient API hiccup must not
+          # silently drop the compare link (the old `|| true` did exactly that) — retry a few
+          # times instead. LISTED tracks whether a call ever succeeded, distinct from PREV being
+          # empty because there genuinely is no previous release, so 5 straight failures fail the
+          # job instead of quietly publishing without a compare link.
+          PREV=""
+          LISTED=0
+          for i in $(seq 1 5); do
+            PREV=$(gh release list --limit 1 --exclude-drafts --exclude-pre-releases --json tagName --jq '.[0].tagName') && { LISTED=1; break; }
+            echo "gh release list failed, retrying ($i/5)"
+            sleep 5
+          done
+          [ "${LISTED:-0}" = 1 ] || { echo "::error::gh release list failed 5 times"; exit 1; }
+          if [ -n "$PREV" ] && [ "$PREV" != "null" ] && [ "$PREV" != "$TAG" ]; then
             printf '\n**Full changelog**: %s/compare/%s...%s\n' "$REPO_URL" "$PREV" "$TAG" >> body.md
           fi
-          # Stale drafts under this tag would make GitHub refuse to publish anything else under
-          # it; the script explains why they can go.
-          ./windows/scripts/delete-stale-drafts.sh "$TAG"
-          if EXISTING=$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease 2>/dev/null); then
-            if [ "$EXISTING" != "false" ]; then
-              echo "::error::Release $TAG exists and IS a prerelease; a v* tag must be a full release. Delete it and re-run."
-              exit 1
-            fi
-            # Re-run path: the release is already published and already "latest". A published
-            # binary is never overwritten — a re-run has rebuilt the DMG, and a different DMG
-            # under the same version and build number with a fresh valid signature is exactly
-            # what an update system must never see. Both Mac assets are uploaded only when
-            # neither is there yet. Half a pair is an error, not something to complete: the
-            # appcast's EdDSA signature covers the DMG bytes, and this run's DMG is not the one
-            # already published. The body is not refreshed on a re-run: notes.md came from the
-            # same CHANGELOG section.
-            echo "Release $TAG already exists (re-run); reusing it."
-            gh release view "$TAG" --json assets --jq '.assets[].name' > existing-assets.txt
-            HAVE_DMG=false; HAVE_APPCAST=false
-            grep -qx "ConnectorControl_$VERSION.dmg" existing-assets.txt && HAVE_DMG=true
-            grep -qx "appcast.xml" existing-assets.txt && HAVE_APPCAST=true
-            if [ "$HAVE_DMG" = true ] && [ "$HAVE_APPCAST" = true ]; then
-              echo "Both Mac assets are already published; leaving them untouched."
-            elif [ "$HAVE_DMG" = false ] && [ "$HAVE_APPCAST" = false ]; then
-              gh release upload "$TAG" "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml
-            else
-              echo "::error::$TAG carries one Mac asset but not the other (dmg=$HAVE_DMG appcast=$HAVE_APPCAST). Published assets are never replaced: remove the stray one with 'gh release delete-asset $TAG <name> --yes' and re-run, or delete the release and re-tag."
-              exit 1
-            fi
-          else
-            # The DMG and the appcast are positional arguments to `gh release create`, NOT a
-            # follow-up upload: with assets to attach, gh creates the release as a draft, uploads
-            # them, and only then publishes it. That matters because SUFeedURL is
-            # releases/latest/download/appcast.xml, GitHub moves releases/latest the instant a
-            # full release is published, and a missing asset under that path is a hard 404 — not
-            # a fall-back to the previous release. Creating the release first and uploading after
-            # would leave every polling Mac with a broken feed for the length of the upload, and
-            # forever if the job died in between.
-            # No --prerelease and no --latest: GitHub marks the newest full release
-            # "latest" on its own, which is exactly what SUFeedURL relies on.
-            gh release create "$TAG" --title "Connector Control $VERSION" --notes-file body.md \
-              "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml
-          fi
+
+      # ensure-release.sh deletes any stale draft under $TAG first (it would otherwise make
+      # GitHub refuse to publish anything else under it), then creates the release WITH the DMG
+      # and appcast already attached — so it is never "latest" without its feed — or, on a
+      # re-run, reuses it and uploads only whichever of the two Mac assets is not already there
+      # (never replacing a published one; see the script for why).
+      - name: Create the release, with the Mac assets already attached
+        run: |
+          ./scripts/release/ensure-release.sh "$TAG" --full \
+            --title "Connector Control $VERSION" --notes body.md \
+            "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml
 
       # gh, not vpk, uploads everything, a re-run skips a RID whose assets are all published
-      # (and refuses to complete a half-published one), and the pack-time releases.<rid>.json
-      # is filtered to this build's own packages first — all of it, with the reasons, in the
+      # (and refuses to complete a half-published one) — all of it, with the reasons, in the
       # script windows-preview.yml calls too.
       - name: Upload the Windows assets
-        run: ./windows/scripts/upload-release-assets.sh "$TAG" "$VERSION" artifacts
+        run: ./scripts/release/upload-release-assets.sh "$TAG" "$VERSION" artifacts
 
       - name: Verify the release
         run: |
-          set -o pipefail
-          gh release view "$TAG" --json isPrerelease,isDraft,assets --jq '{prerelease: .isPrerelease, draft: .isDraft, assets: [.assets[].name]}' | tee release.json
-          [ "$(jq -r .prerelease release.json)" = "false" ] || { echo "::error::$TAG is a prerelease"; exit 1; }
-          [ "$(jq -r .draft release.json)" = "false" ] || { echo "::error::$TAG is a draft"; exit 1; }
-          for a in "ConnectorControl_$VERSION.dmg" appcast.xml \
-                   ConnectorControl-win-x64-Setup.exe ConnectorControl-win-arm64-Setup.exe \
-                   "ConnectorControl-$VERSION-win-x64-full.nupkg" "ConnectorControl-$VERSION-win-arm64-full.nupkg" \
-                   releases.win-x64.json releases.win-arm64.json; do
-            jq -e --arg a "$a" '.assets | index($a) != null' release.json >/dev/null || { echo "::error::asset $a missing from $TAG"; exit 1; }
-          done
+          ./scripts/release/verify-release.sh "$TAG" --full \
+            "ConnectorControl_$VERSION.dmg" appcast.xml \
+            ConnectorControl-win-x64-Setup.exe ConnectorControl-win-arm64-Setup.exe \
+            "ConnectorControl-$VERSION-win-x64-full.nupkg" "ConnectorControl-$VERSION-win-arm64-full.nupkg" \
+            releases.win-x64.json releases.win-arm64.json
+
           # This release must now be releases/latest: the Mac appcast URL
           # (releases/latest/download/appcast.xml) resolves through it. GitHub can take a few
           # seconds to move the pointer and the download redirect, hence the retry.
@@ -501,10 +390,7 @@ jobs:
           # the release page — the failure mode is "1.3.0 is live, nobody's Mac updates".
           grep -q 'sparkle:edSignature="[^"][^"]*"' served-appcast.xml || { echo "::error::served appcast item carries no EdDSA signature"; exit 1; }
           {
-            echo "## Release $TAG ($VERSION)"
+            echo "## Sparkle appcast for $TAG"
             echo
-            echo "- Release: $REPO_URL/releases/tag/$TAG"
             echo "- releases/latest: $LATEST; appcast redirect: $REDIRECT; build $BUILD"
-            echo "- Assets:"
-            jq -r '.assets[] | "  - " + .' release.json
           } >> "$GITHUB_STEP_SUMMARY"

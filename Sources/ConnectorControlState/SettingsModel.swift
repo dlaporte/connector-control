@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import ConnectorControlCore
 
-/// Catalog §4 SettingsView state: three tabs, every toggle, path, and button.
+/// SettingsView state: three tabs, every toggle, path, and button.
 /// Pass-through settings are computed properties that write the seam and send
 /// objectWillChange (the C# Raise()).
 @MainActor
@@ -73,9 +73,9 @@ public final class SettingsModel: ObservableObject {
         objectWillChange.send()
     }
 
-    // MARK: - General (catalog §4.2)
+    // MARK: - General
 
-    /// Catalog §4.2: no-op when the OS already agrees; on failure revert the
+    /// No-op when the OS already agrees; on failure revert the
     /// toggle and show the note; when approval is pending, say where.
     @Published public var launchAtLogin: Bool {
         didSet {
@@ -86,8 +86,6 @@ public final class SettingsModel: ObservableObject {
     }
 
     @Published public private(set) var loginItemNote: String?
-
-    public var hasLoginItemNote: Bool { loginItemNote != nil }
 
     private func setLaunchAtLoginSilently(_ value: Bool) {
         settingLaunchAtLoginSilently = true
@@ -150,9 +148,9 @@ public final class SettingsModel: ObservableObject {
 
     public func checkForUpdates() { updater.checkForUpdates() }
 
-    // MARK: - Storage (catalog §4.3)
+    // MARK: - Storage
 
-    public var storeDirPath: String { state.service.paths.storeDirURL.path }
+    public var storeDir: URL { state.service.paths.storeDirURL }
 
     public var canUseDefaultStore: Bool { !(settings.masterStoreDir ?? "").isEmpty }
 
@@ -185,11 +183,11 @@ public final class SettingsModel: ObservableObject {
 
     public var backupsDir: URL { state.service.backups.backupsDir }
 
-    // MARK: - Claude (catalog §4.4)
+    // MARK: - Claude
 
-    public var claudeAppPath: String { settings.claudeAppPath ?? AppState.defaultClaudeAppPath }
+    public var claudeApp: URL { URL(fileURLWithPath: settings.claudeAppPath ?? AppState.defaultClaudeAppPath) }
 
-    public var canUseDefaultClaudeApp: Bool { claudeAppPath != AppState.defaultClaudeAppPath }
+    public var canUseDefaultClaudeApp: Bool { claudeApp.path != AppState.defaultClaudeAppPath }
 
     public func chooseClaudeApp(_ app: URL) {
         objectWillChange.send()
@@ -201,13 +199,13 @@ public final class SettingsModel: ObservableObject {
         settings.claudeAppPath = nil
     }
 
-    // MARK: - Tools (spec 2026-09-05-tool-probe §3.5)
+    // MARK: - Tools
 
     public var toolRows: [ToolRow] {
         Tool.allCases.map { ToolRow.make(tool: $0, status: state.toolStatuses[$0]) }
     }
 
-    /// Spec §6 D4: the Mac probes all four when the Claude tab appears.
+    /// The Mac probes all four when the Claude tab appears.
     public func refreshTools() { state.refreshTools() }
 
     /// Stops listening to AppState and the updater. The app does not call

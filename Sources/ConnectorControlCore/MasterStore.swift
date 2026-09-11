@@ -1,10 +1,10 @@
 import Foundation
 
-public enum EditView: String, Codable, Hashable {
+public enum EditView: String, Codable, Hashable, Sendable {
     case form, json
 }
 
-public struct MCPEntry: Equatable, Hashable, Codable {
+public struct MCPEntry: Equatable, Hashable, Codable, Sendable {
     public var enabled: Bool
     public var config: JSONValue
     public var lastEditView: EditView
@@ -17,7 +17,7 @@ public struct MCPEntry: Equatable, Hashable, Codable {
 }
 
 /// A full, independent snapshot of connectors: its own configs + enabled flags.
-public struct Profile: Equatable, Codable {
+public struct Profile: Equatable, Codable, Sendable {
     public var mcps: [String: MCPEntry]
     public init(mcps: [String: MCPEntry] = [:]) { self.mcps = mcps }
 }
@@ -25,7 +25,7 @@ public struct Profile: Equatable, Codable {
 /// Schema v2 only — no v1 fallback. A v1 (or otherwise malformed) file on
 /// disk fails to decode and is handled by `MasterStoreIO.load`'s existing
 /// corrupt-file path: moved aside and rebuilt fresh from Claude's config.
-public struct MasterStore: Equatable, Codable {
+public struct MasterStore: Equatable, Codable, Sendable {
     public var version: Int
     public var activeProfile: String
     public var profiles: [String: Profile]
@@ -44,20 +44,13 @@ public struct MasterStore: Equatable, Codable {
     }
 
     public static let empty = MasterStore(
-        version: 2, activeProfile: "Default",
+        activeProfile: "Default",
         profiles: ["Default": Profile()])
 
-    public init(version: Int, activeProfile: String, profiles: [String: Profile]) {
-        self.version = version
+    public init(activeProfile: String, profiles: [String: Profile]) {
+        self.version = 2
         self.activeProfile = activeProfile
         self.profiles = profiles
-    }
-
-    /// Convenience used across existing tests: a single-profile store. The
-    /// `version` parameter is ignored/normalized — the store is always v2.
-    public init(version: Int, mcps: [String: MCPEntry]) {
-        self.init(version: 2, activeProfile: "Default",
-                   profiles: ["Default": Profile(mcps: mcps)])
     }
 
     /// nil on success, else a user-facing error message.
@@ -87,7 +80,7 @@ public struct MasterStore: Equatable, Codable {
     public mutating func deleteActiveProfile() -> String? {
         guard profiles.count > 1 else { return "Can\u{2019}t delete the last profile." }
         profiles.removeValue(forKey: activeProfile)
-        activeProfile = profiles.keys.sorted().first!
+        activeProfile = profiles.keys.min() ?? "Default"
         return nil
     }
 
@@ -138,10 +131,8 @@ public enum MasterStoreIO {
         }
     }
 
-    public static func save(_ store: MasterStore, to url: URL) throws {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try AtomicFile.write(try encoder.encode(store), to: url)
+    public static func save(_ store: MasterStore, to url: URL, staging: URL? = nil) throws {
+        try AtomicFile.write(try JSONEncoder.canonical.encode(store), to: url, staging: staging)
     }
 
     /// Side-effect-free peek: nil when the file is missing or undecodable.
@@ -151,19 +142,5 @@ public enum MasterStoreIO {
     public static func read(from url: URL) -> MasterStore? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(MasterStore.self, from: data)
-    }
-}
-
-public enum BackupTimestamp {
-    /// UTC, not local time: backup recency is derived from a lexicographic
-    /// sort of these stamps, and local wall-clock repeats an hour every DST
-    /// fall-back — during which newer backups would sort older, breaking
-    /// dedup's newest-snapshot comparison and prune's keep-newest contract.
-    public static func string(from date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = "yyyy-MM-dd'T'HH-mm-ss-SSS'Z'"
-        return f.string(from: date)
     }
 }

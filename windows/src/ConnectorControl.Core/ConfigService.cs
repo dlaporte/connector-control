@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace ConnectorControl.Core;
 
 /// <summary>
@@ -11,7 +9,7 @@ public sealed class ConfigService
     public AppPaths Paths { get; }
     public BackupManager Backups { get; }
 
-    public ConfigService(AppPaths paths, int keepCount = 20)
+    public ConfigService(AppPaths paths, int keepCount = BackupManager.DefaultKeepCount)
     {
         Paths = paths;
         Backups = new BackupManager(paths.BackupsDir, keepCount);
@@ -19,11 +17,18 @@ public sealed class ConfigService
 
     /// <summary>
     /// Load the master store (handling corruption), read Claude's servers,
-    /// reconcile, persist the store if reconciliation changed it. A malformed
-    /// Claude config skips reconciliation entirely and returns the store as-is.
-    /// With <paramref name="storeAuthoritative"/>, the file's own servers act as
-    /// the baseline so every rule resolves store-wins (adopting a synced store).
+    /// reconcile, persist the store if reconciliation changed it.
     /// </summary>
+    /// <remarks>
+    /// The master store is loaded FIRST so it is always available: if Claude's
+    /// config turns out to be malformed, reconciliation is skipped entirely
+    /// (nothing is written) and the store just loaded is returned as-is, so the
+    /// UI keeps showing the user's MCP list instead of going blank.
+    /// With <paramref name="storeAuthoritative"/>, the file's own current
+    /// servers act as the baseline, so every reconciliation rule resolves
+    /// store-wins — used when adopting a pre-existing (e.g. synced) store that
+    /// must not be overwritten by this machine's state.
+    /// </remarks>
     public LoadResult LoadAndReconcile(
         IReadOnlyDictionary<string, JsonValue>? baseline = null,
         bool storeAuthoritative = false)
@@ -46,7 +51,10 @@ public sealed class ConfigService
                 + "use Backups ▸ Restore… to repair the file.");
             return new LoadResult(store, notes, null);
         }
-        // A corrupt store is rebuilt with fresh-launch (null-baseline) import semantics.
+        // A corrupt store is rebuilt with fresh-launch (null-baseline) import
+        // semantics: reconciling the empty replacement against a baseline would
+        // classify every server as a pending removal, rebuild an empty list,
+        // and set up the next apply to wipe Claude's config.
         IReadOnlyDictionary<string, JsonValue>? effectiveBaseline;
         if (corruptPath is not null)
         {
@@ -54,6 +62,14 @@ public sealed class ConfigService
         }
         else if (storeAuthoritative)
         {
+            // The caller's baseline (last-applied servers) still classifies
+            // additions correctly during an adoption: an entry matching it is
+            // this machine's own applied state (never imported into the
+            // adopted store), one differing from it is a genuine external
+            // addition racing the adoption — ingest it rather than letting the
+            // regeneration erase it. Without a baseline (adoption of a
+            // repointed store before any apply), the file itself is the
+            // baseline: nothing is imported, the adopted store wins totally.
             effectiveBaseline = baseline ?? servers;
         }
         else
@@ -95,15 +111,11 @@ public sealed class ConfigService
         JsonValue root;
         try
         {
-            root = JsonValue.Parse(data);
+            root = ClaudeConfigIO.ParseRoot(data);
         }
-        catch (JsonException)
+        catch (ClaudeConfigException ex)
         {
-            throw new ClaudeConfigException($"backup {name} is not a valid config file");
-        }
-        if (root.Kind != JsonKind.Object)
-        {
-            throw new ClaudeConfigException($"backup {name} is not a valid config file");
+            throw new ClaudeConfigException($"backup {name} is not a valid config file ({ex.Detail})");
         }
         var rawServers = root["mcpServers"];
         if (rawServers is not null && rawServers.Kind != JsonKind.Object)
@@ -112,7 +124,11 @@ public sealed class ConfigService
         }
         Backups.BackUp(Paths.ClaudeConfigPath, "claude_desktop_config");
         AtomicFile.Write(data, Paths.ClaudeConfigPath);
-        var servers = ClaudeConfigIO.ReadMcpServers(Paths.ClaudeConfigPath);
+        // The bytes just written are what was already parsed above — reading the servers back off
+        // the disk file would just reparse the same bytes a second time.
+        IReadOnlyDictionary<string, JsonValue> servers = rawServers is null
+            ? new Dictionary<string, JsonValue>(StringComparer.Ordinal)
+            : rawServers.ObjectProperties;
         var outcome = Reconciler.AdoptSnapshot(store, servers);
         if (outcome.StoreChanged)
         {

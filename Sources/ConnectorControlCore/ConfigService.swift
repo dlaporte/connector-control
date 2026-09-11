@@ -2,13 +2,14 @@ import Foundation
 
 /// Orchestrates every stateful operation, guaranteeing the backup-before-write
 /// invariant. The UI layer calls only this type for file operations.
-public struct ConfigService {
+public struct ConfigService: Sendable {
     public let paths: AppPaths
     public let backups: BackupManager
 
-    public init(paths: AppPaths, keepCount: Int = 20) {
+    public init(paths: AppPaths, keepCount: Int = BackupManager.defaultKeepCount) {
         self.paths = paths
-        self.backups = BackupManager(backupsDir: paths.backupsDirURL, keepCount: keepCount)
+        self.backups = BackupManager(backupsDir: paths.backupsDirURL, keepCount: keepCount,
+                                     stagingDir: paths.stagingDirURL)
     }
 
     /// Load master store (handling corruption), read Claude's servers,
@@ -74,7 +75,7 @@ public struct ConfigService {
     /// Backup mcps.json (if present), then atomically save the store.
     public func saveStore(_ store: MasterStore) throws {
         try backups.backUp(fileAt: paths.masterStoreURL, series: "mcps")
-        try MasterStoreIO.save(store, to: paths.masterStoreURL)
+        try MasterStoreIO.save(store, to: paths.masterStoreURL, staging: paths.stagingDirURL)
     }
 
     /// Snapshot original (first run), backup Claude's config, then write the
@@ -82,7 +83,8 @@ public struct ConfigService {
     public func apply(_ store: MasterStore) throws {
         try backups.ensureOriginalSnapshot(of: paths.claudeConfigURL)
         try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config")
-        try ClaudeConfigIO.write(mcpServers: store.enabledServers, to: paths.claudeConfigURL)
+        try ClaudeConfigIO.write(mcpServers: store.enabledServers, to: paths.claudeConfigURL,
+                                 staging: paths.stagingDirURL)
     }
 
     /// Backup the current file, copy the chosen backup over it, then adopt the
@@ -97,10 +99,12 @@ public struct ConfigService {
                                     mergedWith store: MasterStore) throws
         -> [String: JSONValue] {
         let data = try Data(contentsOf: backup)
-        guard let parsed = try? JSONSerialization.jsonObject(with: data),
-              let root = parsed as? [String: Any] else {
+        let root: [String: Any]
+        do {
+            root = try ClaudeConfigIO.parseRoot(data)
+        } catch ClaudeConfigError.malformed(let detail) {
             throw ClaudeConfigError.malformed(
-                "backup \(backup.lastPathComponent) is not a valid config file")
+                "backup \(backup.lastPathComponent) is not a valid config file (\(detail))")
         }
         // Validate the section this app depends on BEFORE writing: a wrong-typed
         // mcpServers would otherwise clobber the live file and only then throw
@@ -110,8 +114,8 @@ public struct ConfigService {
                 "backup \(backup.lastPathComponent) has an invalid mcpServers section")
         }
         try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config")
-        try AtomicFile.write(data, to: paths.claudeConfigURL)
-        let servers = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
+        try AtomicFile.write(data, to: paths.claudeConfigURL, staging: paths.stagingDirURL)
+        let servers = (root["mcpServers"] as? [String: Any] ?? [:]).mapValues(JSONValue.init(any:))
         let outcome = Reconciler.adoptSnapshot(store: store, servers: servers)
         if outcome.storeChanged { try saveStore(outcome.store) }
         return servers

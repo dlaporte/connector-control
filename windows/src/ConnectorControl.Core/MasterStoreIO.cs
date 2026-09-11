@@ -17,21 +17,11 @@ public static class MasterStoreIO
         }
         try
         {
+            // A decoded-but-inconsistent activeProfile (hand-edited or corrupted
+            // file) is self-healed by the MasterStore constructor itself — see
+            // its comment — so FromJson always returns a store whose
+            // ActiveProfile names an existing profile.
             var store = MasterStore.FromJson(JsonValue.Parse(File.ReadAllBytes(path)));
-            // Self-heal a decoded-but-inconsistent activeProfile: never crash.
-            if (!store.Profiles.ContainsKey(store.ActiveProfile))
-            {
-                var fallback = store.Profiles.Keys.Order(StringComparer.Ordinal).FirstOrDefault();
-                if (fallback is not null)
-                {
-                    store.ActiveProfile = fallback;
-                }
-                else
-                {
-                    store.Profiles["Default"] = new Profile();
-                    store.ActiveProfile = "Default";
-                }
-            }
             return (store, null);
         }
         catch (Exception ex) when (ex is JsonException or FormatException or IOException or UnauthorizedAccessException)
@@ -52,7 +42,12 @@ public static class MasterStoreIO
 
     public static AtomicWriteResult Save(MasterStore store, string path) => AtomicFile.Write(store.ToJson().Serialize(), path);
 
-    /// <summary>Side-effect-free peek: null when missing or undecodable. Never moves a corrupt file.</summary>
+    /// <summary>
+    /// Side-effect-free peek: null when missing or undecodable. Unlike
+    /// <see cref="Load"/>, never moves a corrupt file aside — used by the
+    /// store watcher to classify an on-disk change (own write echo, external
+    /// edit, or a sync tool's mid-write partial) before deciding to adopt it.
+    /// </summary>
     public static MasterStore? Read(string path)
     {
         try

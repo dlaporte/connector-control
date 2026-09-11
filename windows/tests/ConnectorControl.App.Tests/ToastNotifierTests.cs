@@ -36,7 +36,7 @@ public class ToastNotifierTests
             .GetToastContent().GetContent();
         Assert.Contains("Backups pruned.", xml, StringComparison.Ordinal);
         Assert.DoesNotContain("<action", xml, StringComparison.Ordinal);
-        Assert.DoesNotContain(Notifications.RestartButton, xml, StringComparison.Ordinal);
+        Assert.DoesNotContain(Notifications.RestartToastButton, xml, StringComparison.Ordinal);
         Assert.DoesNotContain(Notifications.RestartAction, xml, StringComparison.Ordinal);
     }
 

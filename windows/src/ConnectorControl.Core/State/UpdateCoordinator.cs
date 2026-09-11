@@ -3,10 +3,13 @@ using ConnectorControl.Core.Services;
 namespace ConnectorControl.Core.State;
 
 /// <summary>
-/// Spec §6.7: check 10 s after launch and every 24 h; with autoUpdate on,
+/// Checks 10 s after launch and every 24 h; with autoUpdate on,
 /// download silently, stage for quit, and toast once per version; otherwise —
-/// and always for Check for Updates… — show the update dialog. Manual checks
-/// report "up to date" and failures; background checks stay silent.
+/// and always for Check for Updates… — show the update dialog. A version the
+/// user declines from a background offer is not re-offered by later
+/// background checks (Sparkle's Skip This Version is the Mac counterpart);
+/// Check for Updates… always offers, even a version already declined. Manual
+/// checks report "up to date" and failures; background checks stay silent.
 /// </summary>
 public sealed class UpdateCoordinator : IDisposable
 {
@@ -52,6 +55,13 @@ public sealed class UpdateCoordinator : IDisposable
 
     /// <summary>The version whose package failed verification and was announced, so the daily check does not toast it again.</summary>
     public string? RefusedVersion { get; private set; }
+
+    /// <summary>
+    /// The version the user declined via a non-interactive offer, so the background check does not
+    /// re-offer it; Settings ▸ Check for Updates… always offers regardless. Backed by
+    /// <see cref="ISettings.DeclinedUpdateVersion"/> so a decline survives a relaunch.
+    /// </summary>
+    public string? DeclinedVersion => settings.DeclinedUpdateVersion;
 
     public void Start()
     {
@@ -152,18 +162,12 @@ public sealed class UpdateCoordinator : IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Network and feed failures come in many exception types; none may crash a tray app.
-            if (interactive)
-            {
-                host.Marshal(() => dialogs.Inform(CheckFailedMessage, ex.Message));
-            }
+            InformIf(interactive, CheckFailedMessage, ex.Message);
             return UpdateOutcome.Failed;
         }
         if (update is null)
         {
-            if (interactive)
-            {
-                host.Marshal(() => dialogs.Inform(UpToDateMessage, UpToDateDetail(updater.VersionDisplay)));
-            }
+            InformIf(interactive, UpToDateMessage, UpToDateDetail(updater.VersionDisplay));
             return UpdateOutcome.UpToDate;
         }
         if (!interactive && settings.AutoUpdate)
@@ -217,6 +221,12 @@ public sealed class UpdateCoordinator : IDisposable
             }).ConfigureAwait(false);
             return UpdateOutcome.StagedForQuit;
         }
+        // A background check does not re-offer a version the user already sent Later on;
+        // Settings ▸ Check for Updates… always offers, declined or not.
+        if (!interactive && DeclinedVersion == update.Version)
+        {
+            return UpdateOutcome.Deferred;
+        }
         // MarshalAsync, not Marshal-then-read-a-captured-local: AppHost.Marshal only POSTS,
         // so the answer is not there when it returns.
         bool install;
@@ -226,14 +236,19 @@ public sealed class UpdateCoordinator : IDisposable
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            if (interactive)
-            {
-                host.Marshal(() => dialogs.Inform(CheckFailedMessage, ex.Message));
-            }
+            InformIf(interactive, CheckFailedMessage, ex.Message);
             return UpdateOutcome.Failed;
         }
         if (!install)
         {
+            if (!interactive)
+            {
+                await host.MarshalAsync(() =>
+                {
+                    settings.DeclinedUpdateVersion = update.Version;
+                    return true;
+                }).ConfigureAwait(false);
+            }
             return UpdateOutcome.Deferred;
         }
         try
@@ -258,6 +273,15 @@ public sealed class UpdateCoordinator : IDisposable
         // teardown), which is why there is nothing to flush here.
         host.Marshal(() => updater.ApplyAndRestart(update));
         return UpdateOutcome.Installing;
+    }
+
+    /// <summary>A background check stays silent; only an interactive one (Check for Updates…) shows the result.</summary>
+    private void InformIf(bool interactive, string message, string detail)
+    {
+        if (interactive)
+        {
+            host.Marshal(() => dialogs.Inform(message, detail));
+        }
     }
 
     public void Dispose() => disposed = true;

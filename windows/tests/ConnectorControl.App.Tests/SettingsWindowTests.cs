@@ -1,26 +1,23 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using ConnectorControl.App.Services;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
 using ConnectorControl.Core;
 using ConnectorControl.Core.State;
 using ConnectorControl.Core.Tests.TestSupport;
-using AppServices = ConnectorControl.App.Services.Services;
 
 namespace ConnectorControl.App.Tests;
 
 public class SettingsWindowTests
 {
-    private static AppServices Services(AppStateHarness h) =>
-        new(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
-
     [Fact]
     public void SettingsWindowLoadsAllThreeTabs()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var services = Services(h);
+        var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
@@ -35,6 +32,45 @@ public class SettingsWindowTests
             Assert.Equal(h.StoreDir, window.Model.StoreDirPath);
             Assert.Equal("MSIX package", window.Model.InstallKindText);
         });
+    }
+
+    /// <summary>The Claude tab's icon (a package walk plus an icon extraction) must not run
+    /// inside the constructor, or opening Settings would stall on it every time.</summary>
+    [Fact]
+    public void TheClaudeTabIconIsLoadedOffTheUiThreadAfterConstruction()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var install = new FakeClaudeInstall();
+        var services = new PlatformServices(h.Settings, install, h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            var window = new SettingsWindow(state, services, updates);
+            var afterConstruction = install.DetectCalls;
+            // The deferred load's Task.Run hop means one Background-priority pump only starts it;
+            // pump repeatedly (a nested message loop, not a blocking wait, so its own continuation
+            // can still reach the dispatcher) until the async work actually completes.
+            Assert.True(PumpUntil(window.Dispatcher, () => install.DetectCalls > afterConstruction, TimeSpan.FromSeconds(5)),
+                "the icon's Detect()+Load() must be deferred, not run inside the constructor");
+            window.Close();
+        });
+    }
+
+    private static bool PumpUntil(Dispatcher dispatcher, Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!condition())
+        {
+            if (DateTime.UtcNow >= deadline)
+            {
+                return false;
+            }
+            var frame = new DispatcherFrame();
+            dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => frame.Continue = false));
+            Dispatcher.PushFrame(frame);
+        }
+        return true;
     }
 
     [Fact]
@@ -68,7 +104,7 @@ public class SettingsWindowTests
         h.Tools.Statuses[Tool.Uvx] = ToolStatus.NotFound;
         h.Tools.Statuses[Tool.Uv] = ToolStatus.NotFound;
         using var state = h.Create();
-        var services = Services(h);
+        var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {

@@ -8,10 +8,13 @@ namespace ConnectorControl.Core;
 /// </summary>
 public sealed class BackupManager
 {
+    /// <summary>The keep count ConfigService and SettingsStore fall back to.</summary>
+    public const int DefaultKeepCount = 20;
+
     public string BackupsDir { get; }
     public int KeepCount { get; }
 
-    public BackupManager(string backupsDir, int keepCount = 20)
+    public BackupManager(string backupsDir, int keepCount = DefaultKeepCount)
     {
         BackupsDir = backupsDir;
         KeepCount = keepCount;
@@ -34,9 +37,12 @@ public sealed class BackupManager
     }
 
     /// <summary>
-    /// Returns the existing newest backup instead of writing a duplicate when the
-    /// file's content is unchanged (dedup against the newest snapshot only, so an
-    /// A → B → A sequence still records the return to A). Null when the source is missing.
+    /// Returns the existing newest backup instead of writing a duplicate when
+    /// the file's content is unchanged: regeneration backs up without user
+    /// action, and identical snapshots would only churn real history out of
+    /// the retention window. Dedup is against the newest snapshot only, so an
+    /// A → B → A sequence still records the return to A. Null when the source
+    /// is missing.
     /// </summary>
     public string? BackUp(string path, string series, DateTime? now = null)
     {
@@ -86,7 +92,9 @@ public sealed class BackupManager
     {
         foreach (var stale in Backups(series).Skip(KeepCount))
         {
-            File.Delete(stale);
+            // Best effort: a backup that briefly refuses deletion (locked by a scanner, say) is
+            // pruned next time; a rotation must never fail the write it is cleaning up after.
+            FileSystemErrors.TryDelete(stale);
         }
     }
 
@@ -96,11 +104,7 @@ public sealed class BackupManager
         {
             return File.ReadAllBytes(a).AsSpan().SequenceEqual(File.ReadAllBytes(b));
         }
-        catch (IOException)
-        {
-            return false;
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             return false;
         }

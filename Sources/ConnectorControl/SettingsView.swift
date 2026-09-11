@@ -2,10 +2,9 @@ import SwiftUI
 import AppKit
 import CoreImage
 import UniformTypeIdentifiers
-import ConnectorControlCore
 import ConnectorControlState
 
-/// Catalog §4: three tabs of bindings; every rule and string is SettingsModel's.
+/// Three tabs of bindings; every rule and string is SettingsModel's.
 struct SettingsView: View {
     @StateObject private var model: SettingsModel
     private let state: AppState
@@ -44,8 +43,8 @@ struct SettingsView: View {
         .sheet(isPresented: $showRestore) {
             RestoreSheetView(state: state)
         }
-        .onChange(of: model.claudeAppPath) {
-            claudeTabIcon = SettingsView.makeClaudeTabIcon(appPath: model.claudeAppPath)
+        .onChange(of: model.claudeApp) {
+            claudeTabIcon = SettingsView.makeClaudeTabIcon(appPath: model.claudeApp.path)
         }
     }
 
@@ -89,7 +88,7 @@ struct SettingsView: View {
     private var storageTab: some View {
         Form {
             Section(SettingsModel.masterListHeader) {
-                Text(model.storeDirPath)
+                Text(model.storeDir.path)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack {
@@ -121,7 +120,7 @@ struct SettingsView: View {
     private var claudeTab: some View {
         Form {
             Section(SettingsModel.claudeAppHeader) {
-                Text(model.claudeAppPath)
+                Text(model.claudeApp.path)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack {
@@ -141,7 +140,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        // Spec §6 D4: the Mac refreshes when this tab appears.
+        // The Mac refreshes when this tab appears.
         .onAppear { model.refreshTools() }
     }
 
@@ -165,13 +164,9 @@ struct SettingsView: View {
         guard let tiff = icon.tiffRepresentation,
               let ciImage = CIImage(data: tiff),
               let filter = CIFilter(name: "CIColorControls",
-                                    parameters: [kCIInputImageKey: ciImage,
-                                                 kCIInputSaturationKey: 0])
+                                    parameters: [kCIInputImageKey: ciImage, kCIInputSaturationKey: 0]),
+              let output = filter.outputImage
         else {
-            icon.size = size
-            return icon
-        }
-        guard let output = filter.outputImage else {
             icon.size = size
             return icon
         }

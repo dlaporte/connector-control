@@ -1,31 +1,29 @@
 using System.Windows;
+using ConnectorControl.App.Services;
 using ConnectorControl.App.Views;
 using ConnectorControl.Core.State;
-using AppServices = ConnectorControl.App.Services.Services;
 
 namespace ConnectorControl.App;
 
 /// <summary>
-/// Catalog §0: one editor window per target id (an existing connector's id is
+/// One editor window per target id (an existing connector's id is
 /// its name; a new one gets a fresh GUID each time), brought forward if
 /// already open; one Settings window.
 /// </summary>
 public sealed class WindowRegistry
 {
     private readonly AppState state;
-    private readonly AppServices services;
+    private readonly PlatformServices services;
     private readonly UpdateCoordinator updates;
     private readonly Dictionary<string, EditorWindow> editors = new(StringComparer.Ordinal);
     private SettingsWindow? settings;
 
-    public WindowRegistry(AppState state, AppServices services, UpdateCoordinator updates)
+    public WindowRegistry(AppState state, PlatformServices services, UpdateCoordinator updates)
     {
         this.state = state;
         this.services = services;
         this.updates = updates;
     }
-
-    public int OpenEditorCount => editors.Count;
 
     public void OpenEditor(EditTarget target)
     {
