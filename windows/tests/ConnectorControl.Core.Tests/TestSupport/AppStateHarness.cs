@@ -14,7 +14,7 @@ public sealed class AppStateHarness : IDisposable
     public string Local => Dir.File("Local");
     public string Roaming => Dir.File("Roaming");
     public string ClaudeConfigPath => Path.Combine(Roaming, "Claude", "claude_desktop_config.json");
-    public string StoreDir => Path.Combine(Local, AppPathsResolver.DataDirName);
+    public string StoreDir => Path.Combine(Local, AppPaths.DataDirName);
     public string MasterStorePath => Path.Combine(StoreDir, "mcps.json");
     public string BackupsDir => Path.Combine(StoreDir, "backups");
 

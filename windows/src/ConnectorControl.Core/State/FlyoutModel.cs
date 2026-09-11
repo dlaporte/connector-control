@@ -7,14 +7,14 @@ namespace ConnectorControl.Core.State;
 /// <summary>Catalog §2 PopoverView, minus pixels: header, error banner, rows, footer, and every action it wires.</summary>
 public sealed class FlyoutModel : ObservableObject, IDisposable
 {
-    public const string Title = "Connector Control";
+    public const string Title = Product.Name;
     public const string AddTooltip = "Add Connector";
     public const string SettingsTooltip = "Settings";
     public const string QuitTooltip = "Quit Connector Control";
     public const string EmptyText = "No connectors configured yet — add one below.";
     public const string RetryTitle = "Apply Failed — Retry";
     public const string RestartTitle = "Restart Required";
-    public const string NewProfileTitle = "New Profile…";
+    public const string NewProfileMenuItem = "New Profile…";
     /// <summary>Segoe Fluent Icons: Warning (exclamationmark.arrow.circlepath's nearest) and Refresh (arrow.clockwise).</summary>
     public const string RetryGlyph = "\ue7ba";
     public const string RestartGlyph = "\ue72c";
@@ -52,9 +52,13 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public IReadOnlyList<ProfileMenuItem> ProfileItems => profileItems;
 
-    public string RenameProfileTitle => $"Rename “{state.ActiveProfile}”…";
+    public static string RenameProfileTitle(string active) => $"Rename “{active}”…";
 
-    public string DeleteProfileTitle => $"Delete “{state.ActiveProfile}”…";
+    public static string DeleteProfileTitle(string active) => $"Delete “{active}”…";
+
+    public string RenameProfileMenuItem => RenameProfileTitle(state.ActiveProfile);
+
+    public string DeleteProfileMenuItem => DeleteProfileTitle(state.ActiveProfile);
 
     public bool CanDeleteProfile => state.Store.Profiles.Count >= 2;
 
@@ -70,9 +74,9 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public FooterKind Footer => state.ApplyRetryNeeded ? FooterKind.RetryApply
         : state.NeedsClaudeRestart ? FooterKind.RestartRequired
-        : FooterKind.None;
+        : FooterKind.Hidden;
 
-    public bool ShowFooter => Footer != FooterKind.None;
+    public bool ShowFooter => Footer != FooterKind.Hidden;
 
     public string FooterTitle => Footer == FooterKind.RetryApply ? RetryTitle : RestartTitle;
 

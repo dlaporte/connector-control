@@ -204,7 +204,7 @@ public class SettingsModelTests
         Assert.Equal("Choose…", SettingsModel.ChooseTitle);
         Assert.Equal("Both config files are backed up automatically before every change.", SettingsModel.BackupsCaption);
         Assert.Equal("Show in Explorer", SettingsModel.ShowInExplorerTitle);
-        Assert.Equal("Restore…", SettingsModel.RestoreTitle);
+        Assert.Equal("Restore…", RestoreModel.RestoreTitle);
         Assert.Equal("Claude App", SettingsModel.ClaudeAppHeader);
         Assert.Equal("Couldn't update startup entry: Access is denied.", SettingsModel.StartupEntryFailureNote("Access is denied."));
     }
@@ -220,7 +220,7 @@ public class SettingsModelTests
         Assert.Equal(["npx", "node", "uvx", "uv"], rig.Model.ToolRows.Select(r => r.Name).ToArray());
         Assert.All(rig.Model.ToolRows, r => Assert.Equal("Checking…", r.StatusText));
         Assert.All(rig.Model.ToolRows, r => Assert.False(r.IsProblem));
-        Assert.All(rig.Model.ToolRows, r => Assert.False(r.HasNote));
+        Assert.All(rig.Model.ToolRows, r => Assert.Null(r.Note));
         rig.Model.RefreshTools();
         Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses.Count == 4, TimeSpan.FromSeconds(5)));
         var rows = rig.Model.ToolRows;
@@ -275,8 +275,8 @@ public class SettingsModelTests
     [Fact]
     public void ToolStringsMatchTheSpec()
     {
-        Assert.Equal("Tools", SettingsModel.ToolsHeader);
-        Assert.Equal("Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them.", SettingsModel.ToolsCaption);
-        Assert.Equal(ToolRow.For(Tool.Npx, ToolStatus.NotFound), new ToolRow("npx", "Not found", true, ToolNote.For(Tool.Npx, ToolStatus.NotFound)));
+        Assert.Equal("Tools", ToolNote.SettingsHeader);
+        Assert.Equal("Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them.", ToolNote.SettingsCaption);
+        Assert.Equal(ToolRow.Make(Tool.Npx, ToolStatus.NotFound), new ToolRow("npx", "Not found", true, ToolNote.Make(Tool.Npx, ToolStatus.NotFound)));
     }
 }

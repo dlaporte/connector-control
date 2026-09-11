@@ -8,7 +8,7 @@ namespace ConnectorControl.Core.Services;
 /// <see cref="ConnectorControl.Core.State.AppState.RefreshRestartState"/> needs both at once and
 /// used to pay for each separately.
 /// </summary>
-public readonly record struct ClaudeProcessSnapshot(bool IsRunning, DateTime? LaunchTime);
+public readonly record struct ClaudeProcessSnapshot(bool IsRunning, DateTime? LaunchDate);
 
 /// <summary>Replaces the Mac's NSRunningApplication + ClaudeRestarter.</summary>
 public interface IClaudeProcess

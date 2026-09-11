@@ -1,3 +1,4 @@
+using ConnectorControl.Core;
 using ConnectorControl.Core.Services;
 using Velopack;
 using Velopack.Locators;
@@ -144,18 +145,20 @@ public sealed class VelopackUpdater : IUpdater
         var packagePath = Path.Combine(location.PackagesDir ?? "", info.TargetFullRelease.FileName);
         if (verify(packagePath, location.UpdateExePath, identity, NumericVersion(manager.CurrentVersion), NumericVersion(info.TargetFullRelease.Version)) is { } problem)
         {
-            try { File.Delete(packagePath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            FileSystemErrors.TryDelete(packagePath);
             if (location.UpdateExePath is { } updateExe)
             {
                 // Put back the updater that was there before the download; when there was none,
                 // the one there now came from the refused package and goes too.
-                try
+                if (knownGoodUpdater is not null)
                 {
-                    if (knownGoodUpdater is not null) { File.WriteAllBytes(updateExe, knownGoodUpdater); }
-                    else if (File.Exists(updateExe)) { File.Delete(updateExe); }
+                    try { File.WriteAllBytes(updateExe, knownGoodUpdater); }
+                    catch (Exception ex) when (FileSystemErrors.IsTransient(ex)) { }
                 }
-                catch (IOException) { }
-                catch (UnauthorizedAccessException) { }
+                else
+                {
+                    FileSystemErrors.TryDelete(updateExe);
+                }
             }
             throw new UpdateVerificationException(problem);
         }

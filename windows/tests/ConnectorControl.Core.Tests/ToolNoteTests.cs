@@ -5,20 +5,20 @@ public class ToolNoteTests
     [Fact]
     public void MissingToolNoteCarriesTheInstallLinkAndCommand()
     {
-        var note = ToolNote.For(Tool.Npx, ToolStatus.NotFound);
+        var note = ToolNote.Make(Tool.Npx, ToolStatus.NotFound);
         Assert.NotNull(note);
         Assert.Equal("npx wasn’t found, so Claude Desktop won’t be able to start this connector.", note.Text);
         Assert.Equal("Install Node.js", note.LinkTitle);
         Assert.Equal("https://nodejs.org/en/download", note.LinkUrl);
         Assert.Equal("winget install OpenJS.NodeJS.LTS", note.InstallCommand);
-        var uv = ToolNote.For(Tool.Uv, ToolStatus.NotFound);
+        var uv = ToolNote.Make(Tool.Uv, ToolStatus.NotFound);
         Assert.NotNull(uv);
         Assert.Equal("uv wasn’t found, so Claude Desktop won’t be able to start this connector.", uv.Text);
         Assert.Equal("Install uv", uv.LinkTitle);
         Assert.Equal("https://docs.astral.sh/uv/getting-started/installation/", uv.LinkUrl);
         Assert.Equal("winget install astral-sh.uv", uv.InstallCommand);
-        Assert.Null(ToolNote.For(Tool.Node, new ToolStatus(@"C:\Program Files\nodejs\node.exe", "22.11.0")));
-        Assert.Null(ToolNote.For(Tool.Node, null));   // unknown is not a problem yet
+        Assert.Null(ToolNote.Make(Tool.Node, new ToolStatus(@"C:\Program Files\nodejs\node.exe", "22.11.0")));
+        Assert.Null(ToolNote.Make(Tool.Node, null));   // unknown is not a problem yet
     }
 
     [Fact]

@@ -38,6 +38,13 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public const string RemoveInformative = "A copy remains in Backups.";
     public const string AddArgumentTitle = "＋ Add argument";
     public const string AddVariableTitle = "＋ Add variable";
+    public const string ChangedOutsideDetail = "Saving will overwrite that change with this editor's version.";
+    public const string RemovedOutsideDetail = "Saving will add it back.";
+
+    public static string DuplicateEnvError(string name) => $"Duplicate environment variable name: {name}";
+    public static string RemoveMessage(string name) => $"Remove “{name}”? {RemoveInformative}";
+    public static string ChangedOutsideMessage(string name) => $"“{name}” changed outside this editor.";
+    public static string RemovedOutsideMessage(string name) => $"“{name}” was removed outside this editor.";
 
     /// <summary>The picker's order, as an array so <see cref="AuthKindIndex"/> can search it without allocating.</summary>
     private static readonly RemoteAuthKind[] AuthKindOrder =
@@ -45,16 +52,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public static readonly IReadOnlyList<RemoteAuthKind> AuthKinds = AuthKindOrder;
 
-    public static readonly IReadOnlyList<string> AuthKindTitles = AuthKinds.Select(AuthKindTitle).ToList();
-
-    public static string AuthKindTitle(RemoteAuthKind kind) => kind switch
-    {
-        RemoteAuthKind.Automatic => "Automatic (OAuth / none)",
-        RemoteAuthKind.Bearer => "Bearer token",
-        RemoteAuthKind.Header => "Custom header",
-        RemoteAuthKind.OAuthClient => "OAuth client ID/secret",
-        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
-    };
+    public static readonly IReadOnlyList<string> AuthKindTitles = AuthKinds.Select(k => k.Title()).ToList();
 
     private readonly AppState state;
     private readonly IDialogs dialogs;
@@ -386,7 +384,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     /// <summary>Null while the tool is unknown (not probed yet) or found. Never blocks Save.</summary>
     public ToolNote? ToolNote =>
-        requiredTool is { } tool && state.ToolStatuses.TryGetValue(tool, out var status) ? Core.ToolNote.For(tool, status) : null;
+        requiredTool is { } tool && state.ToolStatuses.TryGetValue(tool, out var status) ? Core.ToolNote.Make(tool, status) : null;
 
     public bool HasToolNote => ToolNote is not null;
 
@@ -704,7 +702,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
             }
             if (!seen.Add(row.Name))
             {
-                return $"Duplicate environment variable name: {row.Name}";
+                return DuplicateEnvError(row.Name);
             }
         }
         return null;
@@ -782,8 +780,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
             if (current?.Config != Target.Entry.Config)
             {
                 var missing = current is null;
-                var message = missing ? $"“{Target.Name}” was removed outside this editor." : $"“{Target.Name}” changed outside this editor.";
-                var detail = missing ? "Saving will add it back." : "Saving will overwrite that change with this editor's version.";
+                var message = missing ? RemovedOutsideMessage(Target.Name) : ChangedOutsideMessage(Target.Name);
+                var detail = missing ? RemovedOutsideDetail : ChangedOutsideDetail;
                 if (!dialogs.Confirm(message, detail, SaveAnywayButton))
                 {
                     return false;
@@ -804,7 +802,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// <summary>Remove and apply in the same turn: a watcher-driven reload between the two once resurrected the connector.</summary>
     public void Remove()
     {
-        if (!dialogs.Confirm($"Remove “{Target.Name}”? {RemoveInformative}", null, RemoveButton, destructive: true))
+        if (!dialogs.Confirm(RemoveMessage(Target.Name), null, RemoveButton, destructive: true))
         {
             return;
         }

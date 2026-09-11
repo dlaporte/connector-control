@@ -62,7 +62,7 @@ public sealed class ToastNotifier : INotifier, IDisposable
         if (category == Notifications.RestartCategory)
         {
             builder.AddButton(new ToastButton()
-                .SetContent(Notifications.RestartButton)
+                .SetContent(Notifications.RestartToastButton)
                 .AddArgument(ActionKey, Notifications.RestartAction));
         }
         return builder;

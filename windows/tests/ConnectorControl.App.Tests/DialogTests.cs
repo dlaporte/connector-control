@@ -1,11 +1,11 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using ConnectorControl.App.Services;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
 using ConnectorControl.Core.State;
 using ConnectorControl.Core.Tests.TestSupport;
-using AppServices = ConnectorControl.App.Services.Services;
 
 namespace ConnectorControl.App.Tests;
 
@@ -137,7 +137,7 @@ public class DialogTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var services = new AppServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        var services = new PlatformServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {

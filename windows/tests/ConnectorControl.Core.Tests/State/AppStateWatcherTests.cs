@@ -44,7 +44,7 @@ public class AppStateWatcherTests
     {
         using var h = new AppStateHarness();
         h.Claude.IsRunning = true;
-        h.Claude.LaunchTime = h.Now.AddHours(-1);
+        h.Claude.LaunchDate = h.Now.AddHours(-1);
         using var state = h.Create();
         Thread.Sleep(300);
         var synced = h.StoreOnDisk();

@@ -1,4 +1,4 @@
-namespace ConnectorControl.Core.Services;
+namespace ConnectorControl.Core;
 
 /// <summary>
 /// Watches one file for modification-time changes (the Mac FileWatcher's
@@ -15,9 +15,10 @@ public sealed class FileWatcher : IDisposable
     private readonly string path;
     private readonly string directory;
     private readonly string fileName;
-    private readonly Action onChange;
     private readonly Action<Action> marshal;
+    private readonly Action onChange;
     private readonly TimeSpan debounce;
+    private readonly IPathProbe probe;
     private readonly object gate = new();
 
     private FileSystemWatcher? watcher;
@@ -26,14 +27,15 @@ public sealed class FileWatcher : IDisposable
     private bool disposed;
     private int generation;
 
-    public FileWatcher(string path, Action onChange, Action<Action> marshal, TimeSpan? debounce = null)
+    public FileWatcher(string path, Action<Action> marshal, Action onChange, TimeSpan? debounce = null, IPathProbe? probe = null)
     {
         this.path = Path.GetFullPath(path);
         directory = Path.GetDirectoryName(this.path) ?? throw new ArgumentException("Path has no parent directory.", nameof(path));
         fileName = Path.GetFileName(this.path);
-        this.onChange = onChange;
         this.marshal = marshal;
+        this.onChange = onChange;
         this.debounce = debounce ?? DefaultDebounce;
+        this.probe = probe ?? new RealPathProbe();
     }
 
     /// <summary>True while a FileSystemWatcher is active on the parent directory.</summary>
@@ -191,13 +193,9 @@ public sealed class FileWatcher : IDisposable
     {
         try
         {
-            return File.Exists(path) ? File.GetLastWriteTimeUtc(path) : null;
+            return probe.FileExists(path) ? probe.LastWriteTimeUtc(path) : null;
         }
-        catch (IOException)
-        {
-            return null;
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             return null;
         }

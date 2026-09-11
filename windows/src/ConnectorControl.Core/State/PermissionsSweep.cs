@@ -21,7 +21,7 @@ namespace ConnectorControl.Core.State;
 /// A drive root or a well-known shell folder is refused outright, whatever
 /// role it was given.
 /// </remarks>
-public static class AclSweep
+public static class PermissionsSweep
 {
     /// <summary>True when the sweep ran (first time only).</summary>
     public static bool RunOnce(ISettings settings, AppPaths paths) =>

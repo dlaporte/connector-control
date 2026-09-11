@@ -26,8 +26,6 @@ public sealed class ToolProbe : IToolProbe
         this.versionTimeout = versionTimeout ?? DefaultVersionTimeout;
     }
 
-    public ToolStatus Probe(Tool tool) => Probe([tool])[tool];
-
     public IReadOnlyDictionary<Tool, ToolStatus> Probe(IReadOnlyList<Tool> tools)
     {
         var results = new Dictionary<Tool, ToolStatus>();

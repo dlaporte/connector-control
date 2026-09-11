@@ -19,7 +19,7 @@ public class ToolRequirementTests
     }
 
     [Fact]
-    public void CmdSlashCIsUnwrappedOnce()
+    public void UnwrapsOneCmdSlashC()
     {
         Assert.Equal(Tool.Npx, ToolRequirement.RequiredTool("cmd", ["/c", "npx", "-y", "mcp-remote", "https://x.dev/mcp"]));
         Assert.Equal(Tool.Uvx, ToolRequirement.RequiredTool("cmd.exe", ["/C", "uvx"]));
@@ -29,7 +29,7 @@ public class ToolRequirementTests
     }
 
     [Fact]
-    public void PathsAreLeftAlone()
+    public void LeavesPathsAlone()
     {
         Assert.Null(ToolRequirement.RequiredTool("/usr/local/bin/npx", []));
         Assert.Null(ToolRequirement.RequiredTool(@"C:\Program Files\nodejs\npx.cmd", []));

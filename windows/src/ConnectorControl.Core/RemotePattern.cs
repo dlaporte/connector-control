@@ -12,7 +12,7 @@ public static class RemotePattern
     public const string DefaultPackage = "mcp-remote";
 
     /// <summary>True when <paramref name="s"/> is the mcp-remote package specifier, with or without a version tag.</summary>
-    public static bool IsMarker(string s) => s == DefaultPackage || s.StartsWith(DefaultPackage + "@", StringComparison.Ordinal);
+    internal static bool IsMarker(string s) => s == DefaultPackage || s.StartsWith(DefaultPackage + "@", StringComparison.Ordinal);
 
     /// <summary>Swift's <c>URL(string:)</c> + http(s) scheme + non-empty host.</summary>
     public static bool IsValidHttpUrl(string s) =>
@@ -85,26 +85,13 @@ public static class RemotePattern
     /// </summary>
     internal static (RemoteLaunchStyle Style, List<string> Args)? LauncherArgs(JsonValue config)
     {
-        if (config.Kind != JsonKind.Object)
+        // A missing/invalid args array degrades to empty rather than failing the read; every
+        // caller below already treats an empty list the same as "not recognized".
+        if (!CommandLine.TryRead(config, out var cmd, out var rawArgs))
         {
             return null;
         }
-        var command = config["command"];
-        var rawArgs = config["args"];
-        if (command is not { Kind: JsonKind.String } || rawArgs is not { Kind: JsonKind.Array })
-        {
-            return null;
-        }
-        var args = new List<string>();
-        foreach (var raw in rawArgs.ArrayItems)
-        {
-            if (raw.Kind != JsonKind.String)
-            {
-                return null;
-            }
-            args.Add(raw.StringValue);
-        }
-        var cmd = command.StringValue;
+        var args = rawArgs.ToList();
         if (cmd == "npx")
         {
             return (RemoteLaunchStyle.Npx, args);
@@ -175,7 +162,7 @@ public static class RemotePattern
         }
         if (env is { Count: > 0 })
         {
-            props["env"] = JsonValue.Object(env.Select(kv => new KeyValuePair<string, JsonValue>(kv.Key, JsonValue.String(kv.Value))));
+            props["env"] = JsonValue.FromObject(env);
         }
         return JsonValue.Object(props);
     }

@@ -16,6 +16,11 @@ public sealed class RegistryAutostart : IAutostart
 {
     public const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     public const string StartupApprovedKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
+    /// <summary>
+    /// A registry value name, not a display string: it happens to match <see cref="Product.Name"/>
+    /// today, but must not be rewired to it — an existing install's Run entry is keyed on this exact
+    /// text, and a rename here would leave a stale, unmanaged autostart entry behind.
+    /// </summary>
     public const string DefaultValueName = "Connector Control";
 
     private readonly string valueName;

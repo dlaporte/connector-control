@@ -27,6 +27,11 @@ public sealed class AppState : ObservableObject, IDisposable
     public const string DeleteButton = "Delete";
     /// <summary>Coined here, not taken from the Mac catalog: on macOS a relaunch cannot fail silently.</summary>
     public const string RelaunchFailedMessage = "Claude didn’t come back after the restart. Start Claude yourself, then try again.";
+    public const string NameEmptyError = "Name must not be empty.";
+    public static string DuplicateNameError(string name) => $"A connector named “{name}” already exists.";
+    public static string DeleteProfileMessage(string profile) => $"Delete Profile “{profile}”?";
+    public static string MalformedConfigMessage(string detail) =>
+        $"Claude's config file is not valid JSON ({detail}). Nothing was written. Use Backups ▸ Restore… to recover it.";
     /// <summary>Catalog §1.17: Claude's launch time is re-read 3 s after the restart completes.</summary>
     public static readonly TimeSpan RestartRecheckDelay = TimeSpan.FromSeconds(3);
     /// <summary>
@@ -74,7 +79,7 @@ public sealed class AppState : ObservableObject, IDisposable
         toolProbe = tools;
         service = MakeService(settings, this.paths);
         // Sweep the RESOLVED paths (a repointed store lives outside the default dir).
-        AclSweep.RunOnce(settings, service.Paths);
+        PermissionsSweep.RunOnce(settings, service.Paths);
         // The toast's Restart Claude button routes back here. Skipping the confirm-before-restart
         // dialog is deliberate: clicking the explicit action IS the confirmation. Stale-click guard:
         // an old toast must not restart a Claude that already picked up the config.
@@ -122,9 +127,11 @@ public sealed class AppState : ObservableObject, IDisposable
         get
         {
             var total = Store.Mcps.Count;
-            return total == 0 ? NoConnectorsSubtitle : $"{Store.EnabledCount} of {total} enabled";
+            return total == 0 ? NoConnectorsSubtitle : EnabledSubtitle(Store.EnabledCount, total);
         }
     }
+
+    public static string EnabledSubtitle(int enabled, int total) => $"{enabled} of {total} enabled";
 
     // MARK: tools (spec 2026-09-05-tool-probe §3.6)
 
@@ -187,9 +194,9 @@ public sealed class AppState : ObservableObject, IDisposable
     {
         watcher?.Dispose();
         storeWatcher?.Dispose();
-        watcher = new FileWatcher(Service.Paths.ClaudeConfigPath, () => RunWatcherCallback(() => Reload()), host.Marshal);
+        watcher = new FileWatcher(Service.Paths.ClaudeConfigPath, host.Marshal, () => RunWatcherCallback(() => Reload()));
         watcher.Start();
-        storeWatcher = new FileWatcher(Service.Paths.MasterStorePath, () => RunWatcherCallback(AdoptExternalStoreChange), host.Marshal);
+        storeWatcher = new FileWatcher(Service.Paths.MasterStorePath, host.Marshal, () => RunWatcherCallback(AdoptExternalStoreChange));
         storeWatcher.Start();
     }
 
@@ -331,7 +338,7 @@ public sealed class AppState : ObservableObject, IDisposable
         var servers = Service.RestoreClaudeConfig(backupPath, Store);
         AppliedServers = servers;
         hasLoadedOnce = true;
-        settings.LastApplyDate = host.UtcNow();
+        settings.LastApplyDate = host.Now();
         // ConfigService already merged and persisted the store; a quiet adoption takes it as-is.
         Reload(ReloadTrigger.QuietStoreAdoption);
     }
@@ -340,7 +347,7 @@ public sealed class AppState : ObservableObject, IDisposable
 
     public static ConfigService MakeService(ISettings settings, PathContext paths)
     {
-        var resolved = AppPathsResolver.Resolve(
+        var resolved = AppPaths.Resolve(
             paths.Environment,
             new PathOverrides(settings.ClaudeConfigPath, settings.MasterStoreDir),
             paths.Folders,
@@ -479,7 +486,7 @@ public sealed class AppState : ObservableObject, IDisposable
             Service.Apply(Store);
             var enabled = Store.EnabledServers;
             AppliedServers = enabled;
-            settings.LastApplyDate = host.UtcNow();   // ISettings setters never throw, so this cannot turn a good apply into a failed one
+            settings.LastApplyDate = host.Now();   // ISettings setters never throw, so this cannot turn a good apply into a failed one
             RefreshRestartState();
             LastError = null;
             ApplyRetryNeeded = false;
@@ -539,11 +546,11 @@ public sealed class AppState : ObservableObject, IDisposable
         var trimmed = name.TrimSpaces();
         if (trimmed.Length == 0)
         {
-            return "Name must not be empty.";
+            return NameEmptyError;
         }
         if (trimmed != renamedFrom && Store.Mcps.ContainsKey(trimmed))
         {
-            return $"A connector named “{trimmed}” already exists.";
+            return DuplicateNameError(trimmed);
         }
         if (renamedFrom is { } old && old != trimmed)
         {
@@ -569,11 +576,11 @@ public sealed class AppState : ObservableObject, IDisposable
     public void RefreshRestartState()
     {
         var lastApply = settings.LastApplyDate;
-        var snapshot = claude.Snapshot();   // one enumeration instead of separate IsRunning/LaunchTime reads
+        var snapshot = claude.Snapshot();   // one enumeration instead of separate IsRunning/LaunchDate reads
         NeedsClaudeRestart = lastApply is { } applied
             && snapshot.IsRunning
-            && snapshot.LaunchTime is { } launchTime
-            && launchTime.ToUniversalTime() < applied.ToUniversalTime();
+            && snapshot.LaunchDate is { } launchDate
+            && launchDate.ToUniversalTime() < applied.ToUniversalTime();
     }
 
     // MARK: quit (catalog §1.16)
@@ -697,7 +704,7 @@ public sealed class AppState : ObservableObject, IDisposable
 
     public void DeleteProfile()
     {
-        if (!dialogs.Confirm($"Delete Profile “{Store.ActiveProfile}”?", DeleteProfileInformative, DeleteButton, destructive: true))
+        if (!dialogs.Confirm(DeleteProfileMessage(Store.ActiveProfile), DeleteProfileInformative, DeleteButton, destructive: true))
         {
             return;
         }
@@ -739,7 +746,7 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>friendly(): the malformed-config case gets the guided message; everything else its own text.</summary>
     public static string Friendly(Exception error) => error is ClaudeConfigException malformed
-        ? $"Claude's config file is not valid JSON ({malformed.Detail}). Nothing was written. Use Backups ▸ Restore… to recover it."
+        ? MalformedConfigMessage(malformed.Detail)
         : error.Message;
 
     public void Dispose()

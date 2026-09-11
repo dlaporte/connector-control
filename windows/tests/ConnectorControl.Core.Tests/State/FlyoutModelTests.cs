@@ -69,9 +69,9 @@ public class FlyoutModelTests
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal([new ProfileMenuItem("Default", true)], flyout.ProfileItems);
-        Assert.Equal("New Profile…", FlyoutModel.NewProfileTitle);
-        Assert.Equal("Rename “Default”…", flyout.RenameProfileTitle);
-        Assert.Equal("Delete “Default”…", flyout.DeleteProfileTitle);
+        Assert.Equal("New Profile…", FlyoutModel.NewProfileMenuItem);
+        Assert.Equal("Rename “Default”…", flyout.RenameProfileMenuItem);
+        Assert.Equal("Delete “Default”…", flyout.DeleteProfileMenuItem);
         Assert.False(flyout.CanDeleteProfile);
 
         h.Dialogs.NextPromptAnswer = "Work";
@@ -88,10 +88,10 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         h.Claude.IsRunning = true;
-        h.Claude.LaunchTime = h.Now.AddHours(-1);
+        h.Claude.LaunchDate = h.Now.AddHours(-1);
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
-        Assert.Equal(FooterKind.None, flyout.Footer);
+        Assert.Equal(FooterKind.Hidden, flyout.Footer);
         Assert.False(flyout.ShowFooter);
 
         state.SetEnabled("aws-mcp", false);
@@ -117,7 +117,7 @@ public class FlyoutModelTests
         using var h = new AppStateHarness();
         h.Settings.ConfirmBeforeRestart = false;
         h.Claude.IsRunning = true;
-        h.Claude.LaunchTime = h.Now.AddHours(-1);
+        h.Claude.LaunchDate = h.Now.AddHours(-1);
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
         state.SetEnabled("aws-mcp", false);

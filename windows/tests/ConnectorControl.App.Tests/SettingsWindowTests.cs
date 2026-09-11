@@ -1,18 +1,18 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using ConnectorControl.App.Services;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
 using ConnectorControl.Core;
 using ConnectorControl.Core.State;
 using ConnectorControl.Core.Tests.TestSupport;
-using AppServices = ConnectorControl.App.Services.Services;
 
 namespace ConnectorControl.App.Tests;
 
 public class SettingsWindowTests
 {
-    private static AppServices Services(AppStateHarness h) =>
+    private static PlatformServices Services(AppStateHarness h) =>
         new(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
 
     [Fact]
@@ -45,7 +45,7 @@ public class SettingsWindowTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var install = new FakeClaudeInstall();
-        var services = new AppServices(h.Settings, install, h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        var services = new PlatformServices(h.Settings, install, h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {

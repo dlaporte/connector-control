@@ -12,6 +12,8 @@ public sealed class RestoreModel : ObservableObject
     public const string RestoreButton = "Restore";
     private const string Series = "claude_desktop_config";
 
+    public static string ConfirmMessage(string fileName) => $"Replace Claude's config with {fileName}?";
+
     private readonly AppState state;
     private readonly IDialogs dialogs;
     private IReadOnlyList<string> backups = [];
@@ -82,7 +84,7 @@ public sealed class RestoreModel : ObservableObject
         {
             return false;
         }
-        if (!dialogs.Confirm($"Replace Claude's config with {Path.GetFileName(backup)}?", null, RestoreButton, destructive: true))
+        if (!dialogs.Confirm(ConfirmMessage(Path.GetFileName(backup) ?? backup), null, RestoreButton, destructive: true))
         {
             return false;
         }

@@ -5,6 +5,10 @@ public interface ISettings
 {
     string? MasterStoreDir { get; set; }
     string? ClaudeConfigPath { get; set; }
+    /// <summary>
+    /// Broader than the Mac's <c>claudeAppPath</c>: the detected target can be an MSIX app
+    /// identity, the stored override is always an exe path.
+    /// </summary>
     string? ClaudeLaunchTarget { get; set; }
     int BackupKeepCount { get; set; }
     bool NotifyExternalChanges { get; set; }

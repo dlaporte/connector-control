@@ -2,13 +2,13 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using ConnectorControl.App.Services;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Tray;
 using ConnectorControl.App.Views;
 using ConnectorControl.Core;
 using ConnectorControl.Core.State;
 using ConnectorControl.Core.Tests.TestSupport;
-using AppServices = ConnectorControl.App.Services.Services;
 
 namespace ConnectorControl.App.Tests;
 
@@ -30,7 +30,7 @@ public class FlyoutWindowTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var services = new AppServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        var services = new PlatformServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
@@ -56,7 +56,7 @@ public class FlyoutWindowTests
         using var state = h.Create();
         File.WriteAllText(h.ClaudeConfigPath, "{oops");
         state.SetEnabled("aws-mcp", false);
-        var services = new AppServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        var services = new PlatformServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
@@ -74,7 +74,7 @@ public class FlyoutWindowTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var services = new AppServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        var services = new PlatformServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
@@ -111,7 +111,7 @@ public class FlyoutWindowTests
         using var state = h.Create();
         h.Dialogs.NextPromptAnswer = "Work";
         state.NewProfile();   // Default + Work, with Work active
-        var services = new AppServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        var services = new PlatformServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
@@ -166,7 +166,7 @@ public class FlyoutWindowTests
             ("args", JsonValue.Array([JsonValue.String("server.js")])))), null);
         state.RefreshToolsAsync([Tool.Npx, Tool.Node]);
         Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 2, TimeSpan.FromSeconds(5)));
-        var services = new AppServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        var services = new PlatformServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {

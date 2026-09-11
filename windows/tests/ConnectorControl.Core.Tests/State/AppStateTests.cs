@@ -54,20 +54,20 @@ public class AppStateTests
     }
 
     [Fact]
-    public void RestartRequiredFollowsClaudeLaunchTime()
+    public void RestartRequiredFollowsClaudeLaunchDate()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
         h.Claude.IsRunning = true;
-        h.Claude.LaunchTime = h.Now.AddHours(-1);
+        h.Claude.LaunchDate = h.Now.AddHours(-1);
         state.SetEnabled("aws-mcp", false);
         Assert.True(state.NeedsClaudeRestart);
 
-        h.Claude.LaunchTime = h.Now.AddMinutes(1);   // Claude relaunched after our write
+        h.Claude.LaunchDate = h.Now.AddMinutes(1);   // Claude relaunched after our write
         state.RefreshRestartState();
         Assert.False(state.NeedsClaudeRestart);
 
-        h.Claude.LaunchTime = h.Now.AddHours(-1);
+        h.Claude.LaunchDate = h.Now.AddHours(-1);
         h.Claude.IsRunning = false;                  // not running ⇒ never "required"
         state.RefreshRestartState();
         Assert.False(state.NeedsClaudeRestart);
@@ -79,7 +79,7 @@ public class AppStateTests
         using var h = new AppStateHarness();
         h.Settings.LastApplyDate = h.Now;
         h.Claude.IsRunning = true;
-        h.Claude.LaunchTime = h.Now.AddHours(-1);
+        h.Claude.LaunchDate = h.Now.AddHours(-1);
         using var state = h.Create();
         Assert.True(state.NeedsClaudeRestart);
     }

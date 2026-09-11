@@ -7,7 +7,7 @@ namespace ConnectorControl.App.Services;
 /// the services it owns, which today means the notifier: ToastNotifier holds a
 /// toast-activation subscription. App.OnExit disposes this one object.
 /// </summary>
-public sealed record Services(
+public sealed record PlatformServices(
     ISettings Settings,
     IClaudeInstall ClaudeInstall,
     IClaudeProcess ClaudeProcess,

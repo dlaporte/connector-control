@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows.Controls;
 using ConnectorControl.App.Views;
+using ConnectorControl.Core;
 using ConnectorControl.Core.State;
 using H.NotifyIcon;
 using Microsoft.Win32;
@@ -15,7 +16,7 @@ namespace ConnectorControl.App.Tray;
 /// </summary>
 public sealed class TrayController : IDisposable
 {
-    public const string ToolTip = "Connector Control";
+    public const string ToolTip = Product.Name;
 
     private readonly TaskbarIcon icon = new();
     private readonly AppState state;

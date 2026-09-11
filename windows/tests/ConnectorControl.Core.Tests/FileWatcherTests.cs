@@ -1,4 +1,3 @@
-using ConnectorControl.Core.Services;
 using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
@@ -40,7 +39,7 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
         Assert.True(watcher.IsArmed);
         Thread.Sleep(1100);   // mtime resolution on some file systems is 1 s
@@ -53,7 +52,7 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
         Thread.Sleep(1100);
         AtomicFile.Write("two"u8.ToArray(), path);
@@ -65,7 +64,7 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
         Thread.Sleep(300);
         File.Delete(path);
@@ -80,7 +79,7 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
         watcher.Stop();
         Thread.Sleep(1100);
@@ -94,7 +93,7 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a(), debounce: TimeSpan.FromMilliseconds(500));
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, debounce: TimeSpan.FromMilliseconds(500));
         watcher.Start();
         Thread.Sleep(1100);
         File.WriteAllText(path, "two");   // the debounce timer is now armed
@@ -109,7 +108,7 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a(), debounce: TimeSpan.FromMilliseconds(500));
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, debounce: TimeSpan.FromMilliseconds(500));
         watcher.Start();
         Thread.Sleep(1100);
         File.WriteAllText(path, "two");
@@ -127,7 +126,7 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "0");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a(), debounce: TimeSpan.FromMilliseconds(400));
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, debounce: TimeSpan.FromMilliseconds(400));
         watcher.Start();
         Thread.Sleep(1100);
         for (int i = 1; i <= 5; i++)
@@ -145,7 +144,7 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
         Thread.Sleep(300);
         File.WriteAllText(dir.File("other.json"), "x");
@@ -158,7 +157,7 @@ public class FileWatcherTests : IDisposable
     {
         var nested = dir.File(System.IO.Path.Combine("later", "file.json"));
         var counter = new Counter();
-        using var watcher = new FileWatcher(nested, counter.Hit, a => a());
+        using var watcher = new FileWatcher(nested, a => a(), counter.Hit);
         watcher.Start();
         Assert.False(watcher.IsArmed);
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(nested)!);
@@ -192,7 +191,7 @@ public class FileWatcherTests : IDisposable
     {
         var missing = dir.File(System.IO.Path.Combine("gone", "watched.json"));
         var counter = new Counter();
-        using var watcher = new FileWatcher(missing, counter.Hit, a => a());
+        using var watcher = new FileWatcher(missing, a => a(), counter.Hit);
         Assert.False(watcher.IsArmed);
         watcher.HandleError();      // what the FileSystemWatcher raises when its directory goes
         Assert.False(watcher.IsArmed);
@@ -226,7 +225,7 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
         Assert.True(watcher.IsArmed);
         var parent = System.IO.Path.GetDirectoryName(path)!;
@@ -256,7 +255,7 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, counter.Hit, a => a());
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
         watcher.HandleError();      // a buffer overflow: re-check, but stay armed
         Assert.True(watcher.IsArmed);
@@ -271,7 +270,7 @@ public class FileWatcherTests : IDisposable
         File.WriteAllText(path, "one");
         var counter = new Counter();
         var marshalled = 0;
-        using var watcher = new FileWatcher(path, counter.Hit, a => { Interlocked.Increment(ref marshalled); a(); });
+        using var watcher = new FileWatcher(path, a => { Interlocked.Increment(ref marshalled); a(); }, counter.Hit);
         watcher.Start();
         Thread.Sleep(1100);
         File.WriteAllText(path, "two");

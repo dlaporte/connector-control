@@ -17,7 +17,7 @@ public class AppPathsTests
     public void LiveDefaultsPointAtClaudeAndConnectorControl()
     {
         // testLiveDefaultsPointAtClaudeAndConnectorControl, Windows edition (no MSIX package present).
-        var paths = AppPathsResolver.Resolve(NoEnv, NoOverrides, Folders, new FakePathProbe());
+        var paths = AppPaths.Resolve(NoEnv, NoOverrides, Folders, new FakePathProbe());
         Assert.Equal(Path.Combine(Roaming, "Claude", "claude_desktop_config.json"), paths.ClaudeConfigPath);
         Assert.Equal(Path.Combine(Local, "Connector Control"), paths.StoreDir);
         Assert.Equal("mcps.json", Path.GetFileName(paths.MasterStorePath));
@@ -31,10 +31,10 @@ public class AppPathsTests
         var x = Path.Combine(Path.GetTempPath(), "x");
         var env = new Dictionary<string, string>
         {
-            [AppPathsResolver.ClaudeConfigEnv] = Path.Combine(x, "claude.json"),
-            [AppPathsResolver.StoreDirEnv] = Path.Combine(x, "store"),
+            [AppPaths.ClaudeConfigEnv] = Path.Combine(x, "claude.json"),
+            [AppPaths.StoreDirEnv] = Path.Combine(x, "store"),
         };
-        var paths = AppPathsResolver.Resolve(env, new PathOverrides(ClaudeConfigPath: "ignored", MasterStoreDir: "ignored"), Folders, new FakePathProbe());
+        var paths = AppPaths.Resolve(env, new PathOverrides(ClaudeConfigPath: "ignored", MasterStoreDir: "ignored"), Folders, new FakePathProbe());
         Assert.Equal(Path.Combine(x, "claude.json"), paths.ClaudeConfigPath);
         Assert.Equal(Path.Combine(x, "store"), paths.StoreDir);
         Assert.Equal(Path.Combine(x, "store", "mcps.json"), paths.MasterStorePath);
@@ -54,7 +54,7 @@ public class AppPathsTests
     public void CustomMasterStoreDirKeepsBackupsAtTheDefault()
     {
         var custom = Path.Combine(Path.GetTempPath(), "Dropbox", "cc");
-        var paths = AppPathsResolver.Resolve(NoEnv, new PathOverrides(MasterStoreDir: custom), Folders, new FakePathProbe());
+        var paths = AppPaths.Resolve(NoEnv, new PathOverrides(MasterStoreDir: custom), Folders, new FakePathProbe());
         Assert.Equal(custom, paths.StoreDir);
         Assert.Equal(Path.Combine(Local, "Connector Control", "backups"), paths.BackupsDir);
     }
@@ -63,7 +63,7 @@ public class AppPathsTests
     public void MsixPackageWithConfigWins()
     {
         var probe = new FakePathProbe().AddFile(PkgConfig("Claude_pzs8sxrjxfjjc"));
-        var paths = AppPathsResolver.Resolve(NoEnv, NoOverrides, Folders, probe);
+        var paths = AppPaths.Resolve(NoEnv, NoOverrides, Folders, probe);
         Assert.Equal(PkgConfig("Claude_pzs8sxrjxfjjc"), paths.ClaudeConfigPath);
     }
 
@@ -71,9 +71,7 @@ public class AppPathsTests
     public void MsixPackageWithoutConfigFallsBackToRoaming()
     {
         var probe = new FakePathProbe().AddDirectory(Pkg("Claude_pzs8sxrjxfjjc"));
-        Assert.Null(AppPathsResolver.ResolveMsixClaudeConfig(Folders, probe));
-        var paths = AppPathsResolver.Resolve(NoEnv, NoOverrides, Folders, probe);
-        Assert.Equal(Path.Combine(Roaming, "Claude", "claude_desktop_config.json"), paths.ClaudeConfigPath);
+        Assert.Equal(Path.Combine(Roaming, "Claude", "claude_desktop_config.json"), AppPaths.ResolveClaudeConfig(Folders, probe));
     }
 
     [Fact]
@@ -82,14 +80,14 @@ public class AppPathsTests
         var probe = new FakePathProbe()
             .AddDirectory(Pkg("Anthropic.ClaudeDesktop_h6f0761"))
             .AddFile(PkgConfig("Claude_pzs8sxrjxfjjc"));
-        Assert.Equal(PkgConfig("Claude_pzs8sxrjxfjjc"), AppPathsResolver.ResolveMsixClaudeConfig(Folders, probe));
+        Assert.Equal(PkgConfig("Claude_pzs8sxrjxfjjc"), AppPaths.ResolveClaudeConfig(Folders, probe));
     }
 
     [Fact]
     public void UnrelatedPackagesAreIgnored()
     {
         var probe = new FakePathProbe().AddDirectory(Pkg("Microsoft.WindowsTerminal_8wekyb3d8bbwe"));
-        Assert.Null(AppPathsResolver.ResolveMsixClaudeConfig(Folders, probe));
+        Assert.Equal(Path.Combine(Roaming, "Claude", "claude_desktop_config.json"), AppPaths.ResolveClaudeConfig(Folders, probe));
     }
 
     [Fact]
@@ -100,10 +98,10 @@ public class AppPathsTests
         var newer = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
 
         var staleLocalCache = new FakePathProbe().AddFile(PkgConfig("Claude_pzs8sxrjxfjjc"), older).AddFile(roaming, newer);
-        Assert.Equal(roaming, AppPathsResolver.Resolve(NoEnv, NoOverrides, Folders, staleLocalCache).ClaudeConfigPath);
+        Assert.Equal(roaming, AppPaths.Resolve(NoEnv, NoOverrides, Folders, staleLocalCache).ClaudeConfigPath);
 
         var liveLocalCache = new FakePathProbe().AddFile(PkgConfig("Claude_pzs8sxrjxfjjc"), newer).AddFile(roaming, older);
-        Assert.Equal(PkgConfig("Claude_pzs8sxrjxfjjc"), AppPathsResolver.Resolve(NoEnv, NoOverrides, Folders, liveLocalCache).ClaudeConfigPath);
+        Assert.Equal(PkgConfig("Claude_pzs8sxrjxfjjc"), AppPaths.Resolve(NoEnv, NoOverrides, Folders, liveLocalCache).ClaudeConfigPath);
     }
 
     [Fact]
@@ -112,7 +110,7 @@ public class AppPathsTests
         var roaming = Path.Combine(Roaming, "Claude", "claude_desktop_config.json");
         var same = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
         var probe = new FakePathProbe().AddFile(PkgConfig("Claude_pzs8sxrjxfjjc"), same).AddFile(roaming, same);
-        Assert.Equal(roaming, AppPathsResolver.Resolve(NoEnv, NoOverrides, Folders, probe).ClaudeConfigPath);
+        Assert.Equal(roaming, AppPaths.Resolve(NoEnv, NoOverrides, Folders, probe).ClaudeConfigPath);
     }
 
     [Fact]
@@ -120,10 +118,10 @@ public class AppPathsTests
     {
         var probe = new FakePathProbe().AddFile(PkgConfig("Claude_pzs8sxrjxfjjc"));
         var custom = Path.Combine(Path.GetTempPath(), "custom.json");
-        var fromSettings = AppPathsResolver.Resolve(NoEnv, new PathOverrides(ClaudeConfigPath: custom), Folders, probe);
+        var fromSettings = AppPaths.Resolve(NoEnv, new PathOverrides(ClaudeConfigPath: custom), Folders, probe);
         Assert.Equal(custom, fromSettings.ClaudeConfigPath);
-        var fromEnv = AppPathsResolver.Resolve(
-            new Dictionary<string, string> { [AppPathsResolver.ClaudeConfigEnv] = "/env/claude.json" },
+        var fromEnv = AppPaths.Resolve(
+            new Dictionary<string, string> { [AppPaths.ClaudeConfigEnv] = "/env/claude.json" },
             new PathOverrides(ClaudeConfigPath: custom), Folders, probe);
         Assert.Equal("/env/claude.json", fromEnv.ClaudeConfigPath);
     }
@@ -131,8 +129,8 @@ public class AppPathsTests
     [Fact]
     public void EmptyOverridesCountAsAbsent()
     {
-        var paths = AppPathsResolver.Resolve(
-            new Dictionary<string, string> { [AppPathsResolver.StoreDirEnv] = "" },
+        var paths = AppPaths.Resolve(
+            new Dictionary<string, string> { [AppPaths.StoreDirEnv] = "" },
             new PathOverrides(ClaudeConfigPath: "", MasterStoreDir: ""), Folders, new FakePathProbe());
         Assert.Equal(Path.Combine(Local, "Connector Control"), paths.StoreDir);
         Assert.Equal(Path.Combine(Roaming, "Claude", "claude_desktop_config.json"), paths.ClaudeConfigPath);

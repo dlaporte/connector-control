@@ -16,7 +16,7 @@ public class ClaudeProcessTests
         var p = new ClaudeProcess(() => ClaudeInstallInfo.NotFound with { ProcessName = NoSuchProcess }, () => null);
         var snapshot = p.Snapshot();
         Assert.False(snapshot.IsRunning);
-        Assert.Null(snapshot.LaunchTime);
+        Assert.Null(snapshot.LaunchDate);
     }
 
     [Fact]
@@ -71,9 +71,9 @@ public class ClaudeProcessTests
         var p = new ClaudeProcess(() => info, () => null);
         var snapshot = p.Snapshot();
         Assert.True(snapshot.IsRunning);
-        Assert.NotNull(snapshot.LaunchTime);
-        Assert.Equal(DateTimeKind.Utc, snapshot.LaunchTime.Value.Kind);
-        Assert.Equal(self.StartTime.ToUniversalTime(), snapshot.LaunchTime.Value, TimeSpan.FromSeconds(1));
+        Assert.NotNull(snapshot.LaunchDate);
+        Assert.Equal(DateTimeKind.Utc, snapshot.LaunchDate.Value.Kind);
+        Assert.Equal(self.StartTime.ToUniversalTime(), snapshot.LaunchDate.Value, TimeSpan.FromSeconds(1));
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class ClaudeProcessTests
         var p = new ClaudeProcess(() => info, () => null);
         var snapshot = p.Snapshot();
         Assert.False(snapshot.IsRunning);
-        Assert.Null(snapshot.LaunchTime);
+        Assert.Null(snapshot.LaunchDate);
     }
 
     [Fact]

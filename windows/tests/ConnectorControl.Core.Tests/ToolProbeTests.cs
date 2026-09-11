@@ -106,7 +106,7 @@ public class ToolProbeTests : IDisposable
         Assert.True(results[Tool.Npx].Found);
         Assert.Equal(ToolStatus.NotFound, results[Tool.Uvx]);
         Assert.False(results[Tool.Uvx].Found);
-        Assert.Equal(results[Tool.Npx], probe.Probe(Tool.Npx));
+        Assert.Equal(results[Tool.Npx], probe.Probe([Tool.Npx])[Tool.Npx]);
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public class ToolProbeTests : IDisposable
     {
         var exe = Stub("uv", "bin", windowsBody: "@ping -n 6 127.0.0.1 > nul\r\n@echo 0.4.30\r\n", unixBody: "exec sleep 5");
         var started = Stopwatch.StartNew();
-        var status = new ToolProbe(Env(Bin), TimeSpan.FromMilliseconds(200)).Probe(Tool.Uv);
+        var status = new ToolProbe(Env(Bin), TimeSpan.FromMilliseconds(200)).Probe([Tool.Uv])[Tool.Uv];
         Assert.Equal(new ToolStatus(exe, null), status);
         Assert.True(started.Elapsed < TimeSpan.FromSeconds(3));   // abandoned, not waited for
     }
@@ -122,11 +122,11 @@ public class ToolProbeTests : IDisposable
     [Fact]
     public void ProbeNeverThrowsOnGarbage()
     {
-        Assert.Equal(ToolStatus.NotFound, new ToolProbe(new Dictionary<string, string>(StringComparer.Ordinal)).Probe(Tool.Node));
+        Assert.Equal(ToolStatus.NotFound, new ToolProbe(new Dictionary<string, string>(StringComparer.Ordinal)).Probe([Tool.Node])[Tool.Node]);
         var weird = "::" + dir.File("missing dir with spaces") + Path.PathSeparator + dir.File("nope");
-        Assert.Equal(ToolStatus.NotFound, new ToolProbe(Env(weird)).Probe(Tool.Npx));
+        Assert.Equal(ToolStatus.NotFound, new ToolProbe(Env(weird)).Probe([Tool.Npx])[Tool.Npx]);
         // exits without printing: found, version unknown
         var silent = Stub("uvx", "bin", windowsBody: "@exit /b 3\r\n", unixBody: "exit 3");
-        Assert.Equal(new ToolStatus(silent, null), new ToolProbe(Env(Bin)).Probe(Tool.Uvx));
+        Assert.Equal(new ToolStatus(silent, null), new ToolProbe(Env(Bin)).Probe([Tool.Uvx])[Tool.Uvx]);
     }
 }

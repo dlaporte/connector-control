@@ -2,7 +2,7 @@ using System.Collections;
 
 namespace ConnectorControl.Core.State;
 
-/// <summary>Everything AppPathsResolver needs from the machine, injectable for tests.</summary>
+/// <summary>Everything AppPaths.Resolve needs from the machine, injectable for tests.</summary>
 public sealed record PathContext(IReadOnlyDictionary<string, string> Environment, KnownFolders Folders, IPathProbe Probe)
 {
     public static PathContext Live()

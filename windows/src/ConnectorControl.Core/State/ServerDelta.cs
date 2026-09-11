@@ -8,8 +8,6 @@ namespace ConnectorControl.Core.State;
 /// </summary>
 public sealed record ServerDelta(IReadOnlyList<string> Added, IReadOnlyList<string> Removed, IReadOnlyList<string> Changed)
 {
-    public static readonly ServerDelta Empty = new([], [], []);
-
     public static ServerDelta Between(IReadOnlyDictionary<string, JsonValue> before, IReadOnlyDictionary<string, JsonValue> after)
     {
         var added = after.Keys.Where(k => !before.ContainsKey(k)).Order(StringComparer.Ordinal).ToList();

@@ -172,7 +172,7 @@ public static class OwnerOnlyAcl
 
     /// <summary>True when the DACL is protected and every rule names the current user.</summary>
     [SupportedOSPlatform("windows")]
-    public static bool IsOwnerOnly(string path)
+    internal static bool IsOwnerOnly(string path)
     {
         var user = CurrentUser();
         FileSystemSecurity security = Directory.Exists(path)

@@ -72,7 +72,7 @@ public class AppStateCommandTests
         h.Settings.ConfirmBeforeRestart = false;
         h.Settings.LastApplyDate = h.Now;
         h.Claude.IsRunning = true;
-        h.Claude.LaunchTime = h.Now.AddHours(-1);
+        h.Claude.LaunchDate = h.Now.AddHours(-1);
         using var state = h.Create();
         Assert.True(state.NeedsClaudeRestart);
         h.Claude.RestartResult = "Claude didn’t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again.";
@@ -110,13 +110,13 @@ public class AppStateCommandTests
         h.Settings.ConfirmBeforeRestart = false;
         h.Settings.LastApplyDate = h.Now;
         h.Claude.IsRunning = true;
-        h.Claude.LaunchTime = h.Now.AddHours(-1);
+        h.Claude.LaunchDate = h.Now.AddHours(-1);
         using var state = h.Create();
         // RestartAsync reports success: explorer.exe accepted the AUMID. Claude never appeared.
         h.Claude.OnRestart = () =>
         {
             h.Claude.IsRunning = false;
-            h.Claude.LaunchTime = null;
+            h.Claude.LaunchDate = null;
         };
         await state.RestartClaudeAsync();
         h.Ui.Pump();
@@ -138,10 +138,10 @@ public class AppStateCommandTests
         h.Settings.ConfirmBeforeRestart = false;
         h.Settings.LastApplyDate = h.Now;
         h.Claude.IsRunning = true;
-        h.Claude.LaunchTime = h.Now.AddHours(-1);
+        h.Claude.LaunchDate = h.Now.AddHours(-1);
         using var state = h.Create();
         state.LastError = "old banner";
-        h.Claude.OnRestart = () => h.Claude.LaunchTime = h.Now.AddSeconds(1);
+        h.Claude.OnRestart = () => h.Claude.LaunchDate = h.Now.AddSeconds(1);
         await state.RestartClaudeAsync();
         h.Ui.Pump();
         Assert.Null(state.LastError);
@@ -157,7 +157,7 @@ public class AppStateCommandTests
         Assert.Equal(0, h.Claude.RestartCalls);
 
         h.Claude.IsRunning = true;
-        h.Claude.LaunchTime = h.Now.AddHours(-1);
+        h.Claude.LaunchDate = h.Now.AddHours(-1);
         state.SetEnabled("aws-mcp", false);
         Assert.True(state.NeedsClaudeRestart);
         h.Notifier.ActivateRestart();
@@ -171,7 +171,7 @@ public class AppStateCommandTests
         using var h = new AppStateHarness();
         var state = h.Create();
         h.Claude.IsRunning = true;
-        h.Claude.LaunchTime = h.Now.AddHours(-1);
+        h.Claude.LaunchDate = h.Now.AddHours(-1);
         state.SetEnabled("aws-mcp", false);
         Assert.True(state.NeedsClaudeRestart);   // a pending restart, so ActivateRestart would act if still wired up
         state.Dispose();
@@ -186,7 +186,7 @@ public class AppStateCommandTests
         h.Settings.ConfirmBeforeRestart = false;
         h.Settings.LastApplyDate = h.Now;
         h.Claude.IsRunning = true;
-        h.Claude.LaunchTime = h.Now.AddHours(-1);
+        h.Claude.LaunchDate = h.Now.AddHours(-1);
         var state = h.Create();
         await state.RestartClaudeAsync();
         h.Ui.Pump();

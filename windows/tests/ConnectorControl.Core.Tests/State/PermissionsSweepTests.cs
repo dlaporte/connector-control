@@ -3,7 +3,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests.State;
 
-public class AclSweepTests : IDisposable
+public class PermissionsSweepTests : IDisposable
 {
     private readonly TempDir dir = new("acl");
 
@@ -19,7 +19,7 @@ public class AclSweepTests : IDisposable
         File.WriteAllText(nestedFile, "{}");
         var settings = new FakeSettings();
 
-        Assert.True(AclSweep.RunOnce(settings, paths));
+        Assert.True(PermissionsSweep.RunOnce(settings, paths));
         Assert.True(settings.AclSweepDone);
         if (OperatingSystem.IsWindows())
         {
@@ -28,7 +28,7 @@ public class AclSweepTests : IDisposable
             Assert.True(OwnerOnlyAcl.IsOwnerOnly(paths.BackupsDir));
             Assert.True(OwnerOnlyAcl.IsOwnerOnly(nestedFile));
         }
-        Assert.False(AclSweep.RunOnce(settings, paths));   // gated by the flag from now on
+        Assert.False(PermissionsSweep.RunOnce(settings, paths));   // gated by the flag from now on
     }
 
     /// <summary>
@@ -55,7 +55,7 @@ public class AclSweepTests : IDisposable
         }
         var settings = new FakeSettings { MasterStoreDir = chosen };
 
-        Assert.True(AclSweep.RunOnce(settings, paths));
+        Assert.True(PermissionsSweep.RunOnce(settings, paths));
         Assert.True(settings.AclSweepDone);
         if (OperatingSystem.IsWindows())
         {
@@ -90,7 +90,7 @@ public class AclSweepTests : IDisposable
         File.WriteAllText(backup, "{}");
         var settings = new FakeSettings { MasterStoreDir = shellFolder };
 
-        Assert.True(AclSweep.RunOnce(settings, paths, [shellFolder]));
+        Assert.True(PermissionsSweep.RunOnce(settings, paths, [shellFolder]));
         Assert.True(settings.AclSweepDone);
         if (OperatingSystem.IsWindows())
         {
@@ -105,11 +105,11 @@ public class AclSweepTests : IDisposable
     public void DriveRootsAndListedFoldersAreProtectedByExactMatchOnly()
     {
         var shellFolder = dir.File("Documents");
-        Assert.True(AclSweep.IsProtected(Path.GetPathRoot(dir.File("x"))!, []));
-        Assert.True(AclSweep.IsProtected(shellFolder, [shellFolder]));
-        Assert.True(AclSweep.IsProtected(shellFolder + Path.DirectorySeparatorChar, [shellFolder]), "a trailing separator is the same folder");
-        Assert.False(AclSweep.IsProtected(Path.Combine(shellFolder, "Connector Control"), [shellFolder]), "a folder below a protected one is the app's to judge on its own");
-        Assert.False(AclSweep.IsProtected(dir.File("elsewhere"), [shellFolder]));
+        Assert.True(PermissionsSweep.IsProtected(Path.GetPathRoot(dir.File("x"))!, []));
+        Assert.True(PermissionsSweep.IsProtected(shellFolder, [shellFolder]));
+        Assert.True(PermissionsSweep.IsProtected(shellFolder + Path.DirectorySeparatorChar, [shellFolder]), "a trailing separator is the same folder");
+        Assert.False(PermissionsSweep.IsProtected(Path.Combine(shellFolder, "Connector Control"), [shellFolder]), "a folder below a protected one is the app's to judge on its own");
+        Assert.False(PermissionsSweep.IsProtected(dir.File("elsewhere"), [shellFolder]));
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public class AclSweepTests : IDisposable
         var settings = new FakeSettings { MasterStoreDir = shellFolder };
 
         // Both roots refused: the store directory is the shell folder, the backups directory is listed too.
-        Assert.True(AclSweep.RunOnce(settings, paths, [shellFolder, paths.BackupsDir]));
+        Assert.True(PermissionsSweep.RunOnce(settings, paths, [shellFolder, paths.BackupsDir]));
         Assert.True(settings.AclSweepDone, "nothing was attempted, so there is nothing left to retry");
         if (OperatingSystem.IsWindows())
         {
@@ -135,11 +135,11 @@ public class AclSweepTests : IDisposable
     [Fact]
     public void StoreFileNamesAreTheAppsOwn()
     {
-        Assert.True(AclSweep.IsStoreFile("mcps.json"));
-        Assert.True(AclSweep.IsStoreFile("mcps.corrupt.2026-09-10T00-00-00-000Z.json"));
-        Assert.False(AclSweep.IsStoreFile("mcps.json.bak"));
-        Assert.False(AclSweep.IsStoreFile("settings.json"));
-        Assert.False(AclSweep.IsStoreFile("notes.txt"));
+        Assert.True(PermissionsSweep.IsStoreFile("mcps.json"));
+        Assert.True(PermissionsSweep.IsStoreFile("mcps.corrupt.2026-09-10T00-00-00-000Z.json"));
+        Assert.False(PermissionsSweep.IsStoreFile("mcps.json.bak"));
+        Assert.False(PermissionsSweep.IsStoreFile("settings.json"));
+        Assert.False(PermissionsSweep.IsStoreFile("notes.txt"));
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public class AclSweepTests : IDisposable
     {
         var paths = new AppPaths(dir.File("claude.json"), dir.File("never-created"));
         var settings = new FakeSettings();
-        Assert.True(AclSweep.RunOnce(settings, paths));
+        Assert.True(PermissionsSweep.RunOnce(settings, paths));
         Assert.True(settings.AclSweepDone);
     }
 }

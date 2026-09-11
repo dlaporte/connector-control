@@ -11,6 +11,10 @@ public sealed record EditTarget(string Id, string Name, McpEntry Entry, bool IsN
     public static EditTarget NewRemote(RemoteLaunchStyle style) =>
         new(Guid.NewGuid().ToString(), "", new McpEntry(RemotePattern.Make("", style)), IsNew: true, ForcesRemote: true);
 
+    public const string AddTitle = "Add Connector";
+
+    public static string EditTitle(string name) => $"Edit “{name}”";
+
     /// <summary>Catalog §3.12: fixed at open time.</summary>
-    public string WindowTitle => IsNew ? "Add Connector" : $"Edit “{Name}”";
+    public string WindowTitle => IsNew ? AddTitle : EditTitle(Name);
 }

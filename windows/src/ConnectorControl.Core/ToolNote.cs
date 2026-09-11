@@ -33,7 +33,7 @@ public sealed record ToolNote(string Text, string LinkTitle, string LinkUrl, str
         status is null || status.Found ? null : RowMissingText(tool);
 
     /// <summary>Null while the status is unknown or the tool is found.</summary>
-    public static ToolNote? For(Tool tool, ToolStatus? status)
+    public static ToolNote? Make(Tool tool, ToolStatus? status)
     {
         if (status is null || status.Found)
         {

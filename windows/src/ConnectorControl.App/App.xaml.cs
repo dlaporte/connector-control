@@ -5,7 +5,6 @@ using ConnectorControl.App.Tray;
 using ConnectorControl.App.Views;
 using ConnectorControl.Core;
 using ConnectorControl.Core.State;
-using AppServices = ConnectorControl.App.Services.Services;
 
 namespace ConnectorControl.App;
 
@@ -18,7 +17,7 @@ namespace ConnectorControl.App;
 public partial class App : Application
 {
     private SingleInstance? instance;
-    private AppServices? services;
+    private PlatformServices? services;
     private AppState? state;
     private UpdateCoordinator? updates;
     private FlyoutModel? flyoutModel;

@@ -152,18 +152,12 @@ public sealed class UpdateCoordinator : IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Network and feed failures come in many exception types; none may crash a tray app.
-            if (interactive)
-            {
-                host.Marshal(() => dialogs.Inform(CheckFailedMessage, ex.Message));
-            }
+            InformIf(interactive, CheckFailedMessage, ex.Message);
             return UpdateOutcome.Failed;
         }
         if (update is null)
         {
-            if (interactive)
-            {
-                host.Marshal(() => dialogs.Inform(UpToDateMessage, UpToDateDetail(updater.VersionDisplay)));
-            }
+            InformIf(interactive, UpToDateMessage, UpToDateDetail(updater.VersionDisplay));
             return UpdateOutcome.UpToDate;
         }
         if (!interactive && settings.AutoUpdate)
@@ -226,10 +220,7 @@ public sealed class UpdateCoordinator : IDisposable
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            if (interactive)
-            {
-                host.Marshal(() => dialogs.Inform(CheckFailedMessage, ex.Message));
-            }
+            InformIf(interactive, CheckFailedMessage, ex.Message);
             return UpdateOutcome.Failed;
         }
         if (!install)
@@ -258,6 +249,15 @@ public sealed class UpdateCoordinator : IDisposable
         // teardown), which is why there is nothing to flush here.
         host.Marshal(() => updater.ApplyAndRestart(update));
         return UpdateOutcome.Installing;
+    }
+
+    /// <summary>A background check stays silent; only an interactive one (Check for Updates…) shows the result.</summary>
+    private void InformIf(bool interactive, string message, string detail)
+    {
+        if (interactive)
+        {
+            host.Marshal(() => dialogs.Inform(message, detail));
+        }
     }
 
     public void Dispose() => disposed = true;

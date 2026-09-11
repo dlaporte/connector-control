@@ -75,6 +75,30 @@ public class BackupManagerTests : IDisposable
         Assert.Equal("v2", File.ReadAllText(kept[2]));
     }
 
+    /// <summary>Pruning is best effort: a stale backup that refuses deletion must not fail the write it trails.</summary>
+    [Fact]
+    public void RotationSkipsAStaleBackupThatCannotBeDeleted()
+    {
+        // A locked file blocks File.Delete on Windows; on Unix, unlink succeeds on an open
+        // file, so this scenario cannot be forced there.
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows only");
+            return;   // CA1416: the analyzer needs an explicit exit after the guard
+        }
+        File.WriteAllText(source, "v0");
+        var oldest = manager.BackUp(source, Series, At(1_752_600_000));
+        Assert.NotNull(oldest);
+        using var locked = new FileStream(oldest!, FileMode.Open, FileAccess.Read, FileShare.Read);
+        for (int i = 1; i <= 3; i++)
+        {
+            File.WriteAllText(source, $"v{i}");
+            manager.BackUp(source, Series, At(1_752_600_000 + i));   // must not throw even though pruning oldest fails
+        }
+        Assert.True(File.Exists(oldest));                 // the locked backup survives the failed prune
+        Assert.Equal(4, manager.Backups(Series).Count);   // one more than KeepCount, because the oldest refused deletion
+    }
+
     [Fact]
     public void OriginalSnapshotWrittenOnceAndNeverPruned()
     {

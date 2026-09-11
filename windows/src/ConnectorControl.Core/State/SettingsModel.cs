@@ -23,14 +23,10 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string BackupsHeader = "Backups";
     public const string BackupsCaption = "Both config files are backed up automatically before every change.";
     public const string ShowInExplorerTitle = "Show in Explorer";
-    public const string RestoreTitle = "Restore…";
     public const string ClaudeAppHeader = "Claude App";
     public const string ConfigPathLabel = "Config file";
     public const string LaunchTargetLabel = "Launch target";
-    public const string NotFoundText = "Not found";
     public const string LaunchTargetRejectedTitle = "That program can’t be used as Claude Desktop";
-    public const string ToolsHeader = ToolNote.SettingsHeader;
-    public const string ToolsCaption = ToolNote.SettingsCaption;
     public const int MinKeepCount = 5;
     public const int MaxKeepCount = 100;
 
@@ -194,7 +190,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     {
         ClaudeInstallKind.Msix => "MSIX package",
         ClaudeInstallKind.Legacy => "Legacy installer",
-        _ => NotFoundText,
+        _ => ToolNote.NotFoundText,
     };
 
     public string ClaudeConfigPath => state.Service.Paths.ClaudeConfigPath;
@@ -214,7 +210,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     }
 
     public string LaunchTargetText =>
-        settings.ClaudeLaunchTarget is { Length: > 0 } overridden ? overridden : installInfo.LaunchTarget ?? NotFoundText;
+        settings.ClaudeLaunchTarget is { Length: > 0 } overridden ? overridden : installInfo.LaunchTarget ?? ToolNote.NotFoundText;
 
     public bool CanUseDefaultLaunchTarget => !string.IsNullOrEmpty(settings.ClaudeLaunchTarget);
 
@@ -233,7 +229,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     // MARK: Tools (spec 2026-09-05-tool-probe §3.5)
 
     public IReadOnlyList<ToolRow> ToolRows =>
-        ToolInfo.All.Select(tool => ToolRow.For(tool, state.ToolStatuses.TryGetValue(tool, out var status) ? status : null)).ToList();
+        ToolInfo.All.Select(tool => ToolRow.Make(tool, state.ToolStatuses.TryGetValue(tool, out var status) ? status : null)).ToList();
 
     /// <summary>Spec §6 D4: Windows probes all four when the window opens.</summary>
     public void RefreshTools() => _ = state.RefreshToolsAsync();

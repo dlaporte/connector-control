@@ -47,6 +47,6 @@ public class ServerDeltaTests
             AppState.ConnectorListChangedBody(new ServerDelta(["evil"], ["fs"], []), restartRequired: true));
         Assert.Equal(
             "The connector list changed outside Connector Control — Claude's config was regenerated. Claude will use it the next time it starts.",
-            AppState.ConnectorListChangedBody(ServerDelta.Empty, restartRequired: false));
+            AppState.ConnectorListChangedBody(new ServerDelta([], [], []), restartRequired: false));
     }
 }

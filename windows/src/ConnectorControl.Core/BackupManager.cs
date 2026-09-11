@@ -86,7 +86,9 @@ public sealed class BackupManager
     {
         foreach (var stale in Backups(series).Skip(KeepCount))
         {
-            File.Delete(stale);
+            // Best effort: a backup that briefly refuses deletion (locked by a scanner, say) is
+            // pruned next time; a rotation must never fail the write it is cleaning up after.
+            FileSystemErrors.TryDelete(stale);
         }
     }
 
@@ -96,11 +98,7 @@ public sealed class BackupManager
         {
             return File.ReadAllBytes(a).AsSpan().SequenceEqual(File.ReadAllBytes(b));
         }
-        catch (IOException)
-        {
-            return false;
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             return false;
         }

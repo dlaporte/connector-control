@@ -6,7 +6,6 @@ using System.Windows.Threading;
 using ConnectorControl.Core.State;
 using Microsoft.Win32;
 using ConnectorControl.App.Services;
-using AppServices = ConnectorControl.App.Services.Services;
 
 namespace ConnectorControl.App.Views;
 
@@ -15,7 +14,7 @@ public partial class SettingsWindow : Window
 {
     private readonly AppState state;
 
-    public SettingsWindow(AppState state, AppServices services, UpdateCoordinator updates)
+    public SettingsWindow(AppState state, PlatformServices services, UpdateCoordinator updates)
     {
         InitializeComponent();
         this.state = state;

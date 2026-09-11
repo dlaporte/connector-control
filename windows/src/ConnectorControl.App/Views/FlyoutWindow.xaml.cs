@@ -48,7 +48,7 @@ public partial class FlyoutWindow : Window
     /// Popup, which SetWindowPos would misread. Null means "ask the cursor instead".
     /// Settable so a test can pin the anchor without a shell.
     /// </summary>
-    public Func<DrawingPoint?> TrayAnchor { get; set; } = ShellTrayAnchor;
+    public Func<DrawingPoint?> TrayAnchor { get; internal set; } = ShellTrayAnchor;
 
     private static DrawingPoint? ShellTrayAnchor()
     {
@@ -198,9 +198,9 @@ public partial class FlyoutWindow : Window
             menu.Items.Add(entry);
         }
         menu.Items.Add(new Separator());
-        menu.Items.Add(MenuItemFor(FlyoutModel.NewProfileTitle, model.NewProfile));
-        menu.Items.Add(MenuItemFor(model.RenameProfileTitle, model.RenameProfile));
-        var delete = MenuItemFor(model.DeleteProfileTitle, model.DeleteProfile);
+        menu.Items.Add(MenuItemFor(FlyoutModel.NewProfileMenuItem, model.NewProfile));
+        menu.Items.Add(MenuItemFor(model.RenameProfileMenuItem, model.RenameProfile));
+        var delete = MenuItemFor(model.DeleteProfileMenuItem, model.DeleteProfile);
         delete.IsEnabled = model.CanDeleteProfile;
         menu.Items.Add(delete);
         // The reference, not an Opened/Closed counter: ContextMenu.Closed can be deferred by

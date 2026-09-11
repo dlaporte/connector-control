@@ -71,6 +71,10 @@ public sealed class JsonValue : IEquatable<JsonValue>
     public static JsonValue Object(params (string Key, JsonValue Value)[] properties) =>
         Object(properties.Select(p => new KeyValuePair<string, JsonValue>(p.Key, p.Value)));
 
+    /// <summary>A JSON object of string values, the shape an env dictionary always takes.</summary>
+    public static JsonValue FromObject(IReadOnlyDictionary<string, string> properties) =>
+        Object(properties.Select(kv => new KeyValuePair<string, JsonValue>(kv.Key, String(kv.Value))));
+
     public bool BoolValue => Kind == JsonKind.Bool ? boolValue : throw Mismatch(JsonKind.Bool);
     public long IntValue => Kind == JsonKind.Int ? intValue : throw Mismatch(JsonKind.Int);
     public double DoubleValue => Kind == JsonKind.Double ? doubleValue : throw Mismatch(JsonKind.Double);

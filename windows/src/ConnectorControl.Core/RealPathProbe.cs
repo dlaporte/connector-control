@@ -18,11 +18,7 @@ public sealed class RealPathProbe : IPathProbe
         {
             return Directory.EnumerateDirectories(path).ToList();
         }
-        catch (IOException)
-        {
-            return [];
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             return [];
         }
