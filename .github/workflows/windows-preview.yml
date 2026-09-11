@@ -1,4 +1,4 @@
-# Windows preview builds (design spec §3, §8.3): a GitHub PRERELEASE carrying Velopack
+# Windows preview builds: a GitHub PRERELEASE carrying Velopack
 # packages for win-x64 and win-arm64, versioned <next>-preview.<n>, where <next> is the top
 # "## vX.Y.Z" heading of CHANGELOG.md and <n> names the preview.
 #
@@ -27,8 +27,8 @@
 # The build itself — test, package (win-x64, win-arm64), smoke — is
 # .github/workflows/windows-build.yml, the same file release.yml calls. A preview is signed
 # exactly like a release: windows-build.yml's own gate job proves all six Azure Artifact Signing
-# secrets (spec §8.4) are there before any build minutes are spent, so nothing here is ever
-# unsigned.
+# secrets are there — the gate runs before the signed packaging jobs; the unsigned test job runs
+# in parallel. Nothing here is ever unsigned.
 #   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET   service principal with the
 #                                                          "Trusted Signing Certificate Profile Signer"
 #                                                          role (DefaultAzureCredential, Azure.Identity)
@@ -115,7 +115,7 @@ jobs:
             TAG="$GITHUB_REF_NAME"
           fi
           case "$N" in ''|*[!0-9]*) echo "::error::preview number must be digits; got '$N'"; exit 1;; esac
-          # The next Mac+Windows version is the top "## vX.Y.Z" heading of CHANGELOG.md (spec §8.3).
+          # The next Mac+Windows version is the top "## vX.Y.Z" heading of CHANGELOG.md.
           NEXT=$(sed -n 's/^## v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$/\1/p' CHANGELOG.md | head -1)
           if [ -z "$NEXT" ]; then
             echo "::error::CHANGELOG.md has no '## vX.Y.Z' heading."

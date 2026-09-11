@@ -39,7 +39,7 @@
 #   APPLE_TEAM_ID              10-character team identifier
 #   KEYCHAIN_PASSWORD          any string; protects the throwaway CI keychain
 #   SPARKLE_ED_PRIVATE_KEY     EdDSA private key that signs the appcast (backup: login Keychain)
-#   Windows (Azure Artifact Signing, design spec §8.4) — ALL SIX are required, and documented
+#   Windows (Azure Artifact Signing) — ALL SIX are required, and documented
 #   once, with windows-build.yml's gate job:
 #   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SIGNING_ENDPOINT,
 #   AZURE_SIGNING_ACCOUNT, AZURE_SIGNING_PROFILE

@@ -61,8 +61,9 @@ echo "### Changes planned for v$NEXT (CHANGELOG.md)"
 echo
 # A preview can be cut before CHANGELOG.md grows its "## v$NEXT" section (that section is
 # written when the release itself is prepared), so tolerate changelog-section.sh's exit 1 for a
-# section that doesn't exist yet rather than failing the preview over it.
-scripts/release/changelog-section.sh "v$NEXT" || true
+# section that doesn't exist yet rather than failing the preview over it; --quiet keeps that
+# from rendering as a GitHub error annotation.
+scripts/release/changelog-section.sh --quiet "v$NEXT" || true
 echo
 echo "### Commits since $BASE_LABEL"
 echo

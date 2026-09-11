@@ -46,8 +46,8 @@ on:
         type: boolean
     # The Azure Artifact Signing secrets, read only by the gate and package jobs. Optional at the
     # declaration so windows-ci.yml (package: false) can keep passing none; a caller that
-    # packages with require-signing: true is proven by the gate job below to hold all six before
-    # any build minutes are spent.
+    # packages with require-signing: true is proven by the gate job below to hold all six — the
+    # gate runs before the signed packaging jobs; the unsigned test job runs in parallel.
     secrets:
       AZURE_TENANT_ID:
         required: false

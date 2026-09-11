@@ -142,7 +142,7 @@ Hardening from a security review of the app and its release pipeline.
   the same mcps.json, so a master list synced between a Mac and a PC
   serves both — local-server commands stay OS-specific, see the README.
 - Both platforms: missing-tool warnings for a connector that starts through npx, node,
-  uvx or uv now shows a caution glyph in the connector list when that
+  uvx or uv now show a caution glyph in the connector list when that
   tool isn't installed where Claude Desktop can find it. The editor explains
   what to install, with a download link and the brew (or winget)
   command, and Settings ▸ Claude ▸ Tools lists all four tools with their
