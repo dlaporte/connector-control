@@ -158,4 +158,33 @@ public class RemotePatternTests
     {
         Assert.Equal(expected, RemotePattern.HasCmdExpansionRisk(value));
     }
+
+    private const string SafeUrl = "https://x.dev/mcp";
+
+    public static TheoryData<RemoteConfig, RemoteField?> CmdUnsafeFields => new()
+    {
+        { new RemoteConfig("https://127.0.0.1:1/mcp&ver", RemoteAuth.Auto, RemoteLaunchStyle.CmdNpx), RemoteField.Url },
+        { new RemoteConfig(SafeUrl, new RemoteAuth.Header("X-Key&calc", "v"), RemoteLaunchStyle.CmdNpx), RemoteField.HeaderName },
+        { new RemoteConfig(SafeUrl, new RemoteAuth.OAuthClient("id|calc", "s", ""), RemoteLaunchStyle.CmdNpx), RemoteField.ClientId },
+        { new RemoteConfig(SafeUrl, new RemoteAuth.OAuthClient("id", "s^calc", ""), RemoteLaunchStyle.CmdNpx), RemoteField.ClientSecret },
+        { new RemoteConfig(SafeUrl, new RemoteAuth.OAuthClient("id", "s", "openid&calc"), RemoteLaunchStyle.CmdNpx), RemoteField.Scopes },
+        { new RemoteConfig(SafeUrl, new RemoteAuth.OAuthClient("id", "s", "openid profile"), RemoteLaunchStyle.CmdNpx), null },   // scopes are space-separated by definition
+        { new RemoteConfig(SafeUrl, new RemoteAuth.Bearer("tok&calc"), RemoteLaunchStyle.CmdNpx), null },                        // the token travels in env
+        { new RemoteConfig(SafeUrl, new RemoteAuth.Header("X-Key", "v&calc"), RemoteLaunchStyle.CmdNpx), null },                 // so does a header VALUE
+        { new RemoteConfig("https://127.0.0.1:1/mcp&ver", RemoteAuth.Auto, RemoteLaunchStyle.Npx), null },                       // bare npx: cross-spawn escapes for us
+    };
+
+    [Theory]
+    [MemberData(nameof(CmdUnsafeFields))]
+    public void CmdUnsafeFieldNamesTheFirstArgThatCmdWouldReparse(RemoteConfig config, RemoteField? expected)
+    {
+        Assert.Equal(expected, RemotePattern.CmdUnsafeField(config));
+    }
+
+    [Fact]
+    public void DefaultPackageIsTheMarkerAndWhatMakeWrites()
+    {
+        Assert.True(RemotePattern.IsMarker(RemotePattern.DefaultPackage));
+        Assert.Equal(RemotePattern.DefaultPackage, RemotePattern.Decode(RemotePattern.Make(SafeUrl, RemoteLaunchStyle.Npx))!.Package);
+    }
 }

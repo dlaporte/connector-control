@@ -27,8 +27,8 @@ public static class UpdateVerifier
 
     private const string CannotValidateSelf = "This app's own signature could not be validated, so an update cannot be checked against it";
 
-    /// <summary>What the running app's signature says about who may sign an update.</summary>
-    internal readonly record struct RunningIdentity(string? Organization, bool Unsigned);
+    /// <summary>What the running app's signature says about who may sign an update; read once per download.</summary>
+    public readonly record struct RunningIdentity(string? Organization, bool Unsigned);
 
     /// <summary>
     /// Null when the update may be staged; otherwise a user-facing reason. Only an UNSIGNED running
@@ -36,13 +36,12 @@ public static class UpdateVerifier
     /// inert there anyway. A running app whose signature cannot be validated refuses: that is the
     /// machine, not the build, and an unverifiable identity must not become "accept everything".
     /// </summary>
-    public static string? Verify(string packagePath, string? updateExePath, string runningExePath, Version runningVersion, Version feedVersion)
+    public static string? Verify(string packagePath, string? updateExePath, RunningIdentity identity, Version runningVersion, Version feedVersion)
     {
         if (!OperatingSystem.IsWindows())
         {
             return null;
         }
-        var identity = ExpectedIdentity(runningExePath);
         if (identity.Unsigned)
         {
             return null;
@@ -60,7 +59,8 @@ public static class UpdateVerifier
         try
         {
             using var zip = ZipFile.OpenRead(packagePath);
-            var index = 0;
+            var magic = new byte[2];
+            var buffer = new byte[81920];
             string? mainExecutable = null;
             foreach (var entry in zip.Entries)
             {
@@ -72,20 +72,32 @@ public static class UpdateVerifier
                 {
                     continue;   // a directory entry
                 }
-                // Every entry is unpacked in full: the declared size in the zip's directory is the
+                // Every entry is inflated in full: the declared size in the zip's directory is the
                 // attacker's to write, so a program hidden behind a declared size of zero is found
-                // by what actually inflates, not by what the directory claims.
+                // by what actually inflates, not by what the directory claims. Only a program is
+                // written to disk, where the signature check needs it; anything else is counted.
                 var name = Path.GetFileName(entry.FullName);
-                var extracted = Path.Combine(scratch.FullName, $"{index++}-{name}");
-                entry.ExtractToFile(extracted, overwrite: true);
+                using var content = entry.Open();
+                var magicLength = content.ReadAtLeast(magic, 2, throwOnEndOfStream: false);
+                if (!IsMZ(magic.AsSpan(0, magicLength)))
+                {
+                    var counted = magicLength + CountBytes(content, buffer);
+                    if (counted != entry.Length)
+                    {
+                        return SizeProblem(entry, counted);
+                    }
+                    continue;
+                }
+                var extracted = Path.Combine(scratch.FullName, $"{Guid.NewGuid():N}-{name}");
+                using (var file = File.Create(extracted))
+                {
+                    file.Write(magic, 0, magicLength);
+                    content.CopyTo(file);
+                }
                 var actual = new FileInfo(extracted).Length;
                 if (actual != entry.Length)
                 {
-                    return $"The update package entry \"{entry.FullName}\" declares {entry.Length} bytes but holds {actual}{NotInstalledSuffix}";
-                }
-                if (!IsPortableExecutable(extracted))
-                {
-                    continue;
+                    return SizeProblem(entry, actual);
                 }
                 if (VerifyFile(extracted, expected, name + " inside the update") is { } problem)
                 {
@@ -122,13 +134,12 @@ public static class UpdateVerifier
     /// Before anything is downloaded: Velopack would run the INSTALLED Update.exe to apply a delta,
     /// so it must already be ours. Null when it is (or when there is no identity to compare against).
     /// </summary>
-    public static string? VerifyInstalledUpdater(string? updateExePath, string runningExePath)
+    public static string? VerifyInstalledUpdater(string? updateExePath, RunningIdentity identity)
     {
         if (!OperatingSystem.IsWindows() || updateExePath is null || !File.Exists(updateExePath))
         {
             return null;
         }
-        var identity = ExpectedIdentity(runningExePath);
         if (identity.Unsigned)
         {
             return null;
@@ -145,24 +156,7 @@ public static class UpdateVerifier
     internal static RunningIdentity ExpectedIdentity(string runningExePath)
     {
         var signer = AuthenticodeVerifier.SignerSubject(runningExePath);
-        if (signer.Unsigned)
-        {
-            return new RunningIdentity(null, true);
-        }
-        if (signer.Problem is not null || signer.Subject is null)
-        {
-            return new RunningIdentity(null, false);
-        }
-        string? organization;
-        try
-        {
-            organization = ClaudePublisher.OrganizationOf(signer.Subject);
-        }
-        catch (System.Security.Cryptography.CryptographicException)
-        {
-            organization = null;
-        }
-        return new RunningIdentity(organization is null ? null : ClaudePublisher.NormalizeOrganization(organization), false);
+        return new RunningIdentity(signer.Identity?.Organization, signer.Unsigned);
     }
 
     /// <summary>Null when <paramref name="path"/> is validly signed by <paramref name="expectedOrganization"/>; else why not.</summary>
@@ -170,22 +164,13 @@ public static class UpdateVerifier
     internal static string? VerifyFile(string path, string expectedOrganization, string displayName)
     {
         var signer = AuthenticodeVerifier.SignerSubject(path);
-        if (signer.Problem is not null || signer.Subject is null)
+        if (signer.Identity is not { } identity)
         {
             return $"{displayName} is not validly signed{NotInstalledSuffix}";
         }
-        string? organization;
-        try
+        if (identity.Organization != expectedOrganization)
         {
-            organization = ClaudePublisher.OrganizationOf(signer.Subject);
-        }
-        catch (System.Security.Cryptography.CryptographicException)
-        {
-            organization = null;
-        }
-        if (organization is null || ClaudePublisher.NormalizeOrganization(organization) != expectedOrganization)
-        {
-            return $"{displayName} is signed by \"{signer.Subject}\", not by this app's publisher{NotInstalledSuffix}";
+            return $"{displayName} is signed by \"{identity.Subject}\", not by this app's publisher{NotInstalledSuffix}";
         }
         return null;
     }
@@ -215,6 +200,9 @@ public static class UpdateVerifier
     /// <summary>Major.minor.patch only: previews share the numeric part of the release they lead to.</summary>
     internal static Version Numeric(Version v) => new(Math.Max(v.Major, 0), Math.Max(v.Minor, 0), Math.Max(v.Build, 0));
 
+    private static string SizeProblem(ZipArchiveEntry entry, long actual) =>
+        $"The update package entry \"{entry.FullName}\" declares {entry.Length} bytes but holds {actual}{NotInstalledSuffix}";
+
     /// <summary>
     /// By content, not name: every Windows executable starts with "MZ". A .dll that is not one cannot
     /// be loaded; a program under any other name still can, and Velopack's extractor lets Windows
@@ -223,21 +211,23 @@ public static class UpdateVerifier
     internal static bool IsPortableExecutable(ZipArchiveEntry entry)
     {
         using var stream = entry.Open();   // the inflated bytes, whatever the directory declares
-        return StartsWithMZ(stream);
+        var magic = new byte[2];
+        return IsMZ(magic.AsSpan(0, stream.ReadAtLeast(magic, 2, throwOnEndOfStream: false)));
     }
 
-    /// <summary>The extracted-file form of <see cref="IsPortableExecutable(ZipArchiveEntry)"/>.</summary>
-    internal static bool IsPortableExecutable(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return StartsWithMZ(stream);
-    }
+    /// <summary>The two bytes every Windows executable starts with; a shorter read is not one.</summary>
+    private static bool IsMZ(ReadOnlySpan<byte> magic) => magic.Length == 2 && magic[0] == (byte)'M' && magic[1] == (byte)'Z';
 
-    private static bool StartsWithMZ(Stream stream)
+    /// <summary>Inflates the rest of <paramref name="stream"/> without keeping it: what the entry actually holds.</summary>
+    private static long CountBytes(Stream stream, byte[] buffer)
     {
-        var header = new byte[2];
-        var read = stream.ReadAtLeast(header, 2, throwOnEndOfStream: false);
-        return read == 2 && header[0] == (byte)'M' && header[1] == (byte)'Z';
+        long total = 0;
+        int read;
+        while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            total += read;
+        }
+        return total;
     }
 
     /// <summary>A path segment Windows would rewrite on extraction (trailing dot or space), an NTFS stream (colon), or a walk upward.</summary>

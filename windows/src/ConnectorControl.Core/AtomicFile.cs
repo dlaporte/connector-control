@@ -3,6 +3,11 @@ namespace ConnectorControl.Core;
 /// <summary>What <see cref="AtomicFile.Write"/> achieved beyond the bytes: whether the file ended up owner-only (always true off Windows).</summary>
 public readonly record struct AtomicWriteResult(bool Protected);
 
+/// <summary>
+/// The one way this app writes a file. Unlike the Mac writer, which throws when it cannot make a file
+/// private, this one reports the outcome (<see cref="AtomicWriteResult.Protected"/>): ACL support varies
+/// by volume and share on Windows, and a save must not fail for it.
+/// </summary>
 public static class AtomicFile
 {
     /// <summary>
@@ -10,7 +15,10 @@ public static class AtomicFile
     /// file. Mirrors Swift AtomicFile.write: the temp file is created owner-only in the create
     /// call itself (never with the folder's inherited permissions, not even briefly), a
     /// directory this call has to create is owner-only too, and the rename carries the temp
-    /// file's DACL onto the target — ReplaceFile would have kept the replaced file's.
+    /// file's DACL onto the target — ReplaceFile would have kept the replaced file's. When the
+    /// create-time DACL is refused, <see cref="OwnerOnlyAcl.WriteNewProtectedFile"/> has already
+    /// retried on the temp file, in the same directory under the same identity, so the outcome
+    /// it reports is final.
     /// </summary>
     public static AtomicWriteResult Write(byte[] data, string path)
     {
@@ -27,11 +35,6 @@ public static class AtomicFile
             // A same-volume rename keeps the temp file's own DACL; MOVEFILE_REPLACE_EXISTING
             // makes it atomic over an existing target.
             File.Move(tmp, fullPath, overwrite: true);
-            if (!isProtected)
-            {
-                // The create-time DACL was refused: one more try on the file now in place.
-                isProtected = OwnerOnlyAcl.TryApply(fullPath);
-            }
             return new AtomicWriteResult(isProtected);
         }
         finally

@@ -35,20 +35,20 @@ public static class AuthenticodeVerifier
         {
             return signer.Problem + " Choose Claude Desktop's own claude.exe under Settings ▸ Claude.";
         }
-        return ClaudePublisher.SubjectProblem(signer.Subject!, name);
+        return ClaudePublisher.SubjectProblem(signer.Identity!, name);
     }
 
     /// <summary>
     /// <see cref="Unsigned"/> is TRUST_E_NOSIGNATURE — the file carries no Authenticode signature at
     /// all (a dev build). Every other failure (untrusted root, tampered file, unreadable signer)
-    /// is a <see cref="Problem"/> with a null <see cref="Subject"/>.
+    /// is a <see cref="Problem"/> with a null <see cref="Identity"/>; a null Problem always carries one.
     /// </summary>
-    public sealed record SignerResult(string? Subject, string? Problem, bool Unsigned);
+    public sealed record SignerResult(SignerIdentity? Identity, string? Problem, bool Unsigned);
 
     private const int TrustENoSignature = unchecked((int)0x800B0100);
 
     /// <summary>
-    /// The subject DN of <paramref name="exePath"/>'s signer once WinVerifyTrust has accepted the
+    /// The identity of <paramref name="exePath"/>'s signer once WinVerifyTrust has accepted the
     /// signature and its chain; otherwise a user-facing problem naming the file. Shared by the
     /// Claude launch check and the update-package check.
     /// </summary>
@@ -69,7 +69,7 @@ public static class AuthenticodeVerifier
 #pragma warning disable SYSLIB0057
             using var certificate = X509Certificate.CreateFromSignedFile(exePath);
 #pragma warning restore SYSLIB0057
-            return new SignerResult(certificate.Subject, null, false);
+            return new SignerResult(SignerIdentity.Parse(certificate.Subject), null, false);
         }
         catch (CryptographicException ex)
         {

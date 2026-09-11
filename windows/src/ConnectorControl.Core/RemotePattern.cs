@@ -8,8 +8,11 @@ namespace ConnectorControl.Core;
 /// </summary>
 public static class RemotePattern
 {
+    /// <summary>The bridge package as this app writes it when the user has not pinned a version.</summary>
+    public const string DefaultPackage = "mcp-remote";
+
     /// <summary>True when <paramref name="s"/> is the mcp-remote package specifier, with or without a version tag.</summary>
-    public static bool IsMarker(string s) => s == "mcp-remote" || s.StartsWith("mcp-remote@", StringComparison.Ordinal);
+    public static bool IsMarker(string s) => s == DefaultPackage || s.StartsWith(DefaultPackage + "@", StringComparison.Ordinal);
 
     /// <summary>Swift's <c>URL(string:)</c> + http(s) scheme + non-empty host.</summary>
     public static bool IsValidHttpUrl(string s) =>
@@ -48,6 +51,32 @@ public static class RemotePattern
     /// two or more percent signs. A lone <c>%20</c> is left alone; <c>%41x%42</c> is not.
     /// </summary>
     public static bool HasCmdExpansionRisk(string value) => value.Count(c => c == '%') >= 2;
+
+    /// <summary>
+    /// The field of <paramref name="r"/> cmd.exe would re-parse under the <see cref="RemoteLaunchStyle.CmdNpx"/>
+    /// launcher, or null. Only fields <see cref="Encode"/> places in <c>args</c> count: the URL, a header NAME,
+    /// and the OAuth client JSON; bearer tokens and header VALUES travel in env, which cmd.exe never parses.
+    /// Scopes are space-separated by definition, so whitespace is allowed there alone.
+    /// </summary>
+    public static RemoteField? CmdUnsafeField(RemoteConfig r)
+    {
+        if (r.LaunchStyle != RemoteLaunchStyle.CmdNpx)
+        {
+            return null;
+        }
+        if (CmdUnsafeCharacter(r.Url) is not null)
+        {
+            return RemoteField.Url;
+        }
+        return r.Auth switch
+        {
+            RemoteAuth.Header h when CmdUnsafeCharacter(h.Name) is not null => RemoteField.HeaderName,
+            RemoteAuth.OAuthClient o when CmdUnsafeCharacter(o.ClientId) is not null => RemoteField.ClientId,
+            RemoteAuth.OAuthClient o when CmdUnsafeCharacter(o.ClientSecret) is not null => RemoteField.ClientSecret,
+            RemoteAuth.OAuthClient o when CmdUnsafeCharacter(o.Scopes, allowWhitespace: true) is not null => RemoteField.Scopes,
+            _ => null,
+        };
+    }
 
     /// <summary>
     /// Strips the launcher — <c>npx</c> or <c>cmd /c npx</c> — and returns the style
@@ -115,7 +144,7 @@ public static class RemotePattern
     }
 
     public static JsonValue Make(string url, RemoteLaunchStyle style) =>
-        BuildConfig(style, ["-y", "mcp-remote", url], null);
+        BuildConfig(style, ["-y", DefaultPackage, url], null);
 
     /// <summary>An mcp-remote invocation regardless of URL validity.</summary>
     public static bool IsRemoteShaped(JsonValue config)

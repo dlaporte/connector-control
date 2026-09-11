@@ -71,7 +71,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     private string oauthClientId = "";
     private string oauthClientSecret = "";
     private string oauthScopes = "";
-    private string remotePackage = "mcp-remote";
+    private string remotePackage = RemotePattern.DefaultPackage;
     private IReadOnlyList<string> remoteExtraArgs = [];
     private IReadOnlyDictionary<string, string> remotePassthroughEnv = new Dictionary<string, string>(StringComparer.Ordinal);
     private RemoteLaunchStyle remoteLaunchStyle;
@@ -194,7 +194,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
             }
             Raise(nameof(IsLocal));
             Raise(nameof(CanSave));
-            if (Target.IsNew && !value && View == EditView.Form && (Args.Any(a => a.Value == "mcp-remote") || Command.Length == 0))
+            if (Target.IsNew && !value && View == EditView.Form && (Args.Any(a => a.Value == RemotePattern.DefaultPackage) || Command.Length == 0))
             {
                 Command = "npx";
                 Args.Clear();
@@ -236,11 +236,25 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public bool RemoteUrlCmdSafe => remoteLaunchStyle != RemoteLaunchStyle.CmdNpx || RemotePattern.CmdUnsafeCharacter(remoteUrl) is null;
 
     /// <summary>Under the URL field: the hard reason Save is disabled, a soft caution about % expansion, or null.</summary>
-    public string? UrlCaution =>
-        remoteUrl.Length == 0 || !RemoteUrlValid ? null
-        : !RemoteUrlCmdSafe ? CmdUnsafeError("Server URL")
-        : remoteLaunchStyle == RemoteLaunchStyle.CmdNpx && RemotePattern.HasCmdExpansionRisk(remoteUrl) ? CmdPercentCaution
-        : null;
+    public string? UrlCaution
+    {
+        get
+        {
+            if (remoteUrl.Length == 0 || !RemoteUrlValid)
+            {
+                return null;
+            }
+            if (!RemoteUrlCmdSafe)
+            {
+                return CmdUnsafeError(Label(RemoteField.Url));
+            }
+            if (remoteLaunchStyle == RemoteLaunchStyle.CmdNpx && RemotePattern.HasCmdExpansionRisk(remoteUrl))
+            {
+                return CmdPercentCaution;
+            }
+            return null;
+        }
+    }
 
     public bool ShowUrlCaution => UrlCaution is not null;
 
@@ -544,7 +558,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
                 OAuthScopes = "";
                 remoteExtraArgs = [];
                 remotePassthroughEnv = new Dictionary<string, string>(StringComparer.Ordinal);
-                remotePackage = "mcp-remote";
+                remotePackage = RemotePattern.DefaultPackage;
             }
         }
         finally
@@ -619,36 +633,30 @@ public sealed class EditorModel : ObservableObject, IDisposable
         _ => RemoteAuth.Auto,
     };
 
-    /// <summary>
-    /// The remote-form field cmd.exe would re-parse under the cmd /c launcher, or null. Only fields that
-    /// land in <c>args</c> count: the URL, a header NAME, and the OAuth client JSON; bearer tokens and
-    /// header VALUES travel in env, which cmd.exe never parses.
-    /// </summary>
-    private string? CmdUnsafeField()
+    /// <summary>The remote form as an mcp-remote invocation: what Save encodes and what the cmd.exe check judges.</summary>
+    private RemoteConfig CurrentRemoteConfig() =>
+        new(remoteUrl, CurrentRemoteAuth(), remoteLaunchStyle, remoteExtraArgs, remotePassthroughEnv, remotePackage);
+
+    /// <summary>The label of the remote-form field cmd.exe would re-parse (<see cref="RemotePattern.CmdUnsafeField"/>), or null.</summary>
+    private string? CmdUnsafeField() =>
+        RemotePattern.CmdUnsafeField(CurrentRemoteConfig()) is { } field ? Label(field) : null;
+
+    /// <summary>The field's caption in the Remote form, as the validation message names it.</summary>
+    private static string Label(RemoteField field) => field switch
     {
-        if (remoteLaunchStyle != RemoteLaunchStyle.CmdNpx)
-        {
-            return null;
-        }
-        if (RemotePattern.CmdUnsafeCharacter(remoteUrl) is not null)
-        {
-            return "Server URL";
-        }
-        return authKind switch
-        {
-            RemoteAuthKind.Header when RemotePattern.CmdUnsafeCharacter(headerName) is not null => "Header name",
-            RemoteAuthKind.OAuthClient when RemotePattern.CmdUnsafeCharacter(oauthClientId) is not null => "Client ID",
-            RemoteAuthKind.OAuthClient when RemotePattern.CmdUnsafeCharacter(oauthClientSecret) is not null => "Client Secret",
-            RemoteAuthKind.OAuthClient when RemotePattern.CmdUnsafeCharacter(oauthScopes, allowWhitespace: true) is not null => "Scopes",
-            _ => null,
-        };
-    }
+        RemoteField.Url => "Server URL",
+        RemoteField.HeaderName => "Header name",
+        RemoteField.ClientId => "Client ID",
+        RemoteField.ClientSecret => "Client Secret",
+        RemoteField.Scopes => "Scopes",
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
+    };
 
     private JsonValue CurrentFormConfig()
     {
         if (isRemote)
         {
-            var encoded = RemotePattern.Encode(new RemoteConfig(remoteUrl, CurrentRemoteAuth(), remoteLaunchStyle, remoteExtraArgs, remotePassthroughEnv, remotePackage));
+            var encoded = RemotePattern.Encode(CurrentRemoteConfig());
             // Preserve any unmodeled top-level keys (they can never collide with command/args/env).
             foreach (var (key, value) in additional)
             {

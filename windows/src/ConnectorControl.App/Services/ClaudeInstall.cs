@@ -62,10 +62,6 @@ public sealed class ClaudeInstall : IClaudeInstall
         internal static MsixLookup Found(ClaudeInstallInfo info) => new(true, info);
     }
 
-    internal static bool IsClaudeFamily(string family) =>
-        family.StartsWith("Claude_", StringComparison.Ordinal)
-        || family.StartsWith("Anthropic.Claude", StringComparison.Ordinal);
-
     private static MsixLookup DetectMsixViaPackageManager()
     {
         try
@@ -74,7 +70,7 @@ public sealed class ClaudeInstall : IClaudeInstall
             foreach (var package in manager.FindPackagesForUser(string.Empty))
             {
                 var family = package.Id.FamilyName;
-                if (!IsClaudeFamily(family))
+                if (!ClaudePackage.IsClaudeFamily(family))
                 {
                     continue;
                 }
@@ -132,7 +128,7 @@ public sealed class ClaudeInstall : IClaudeInstall
         }
         var family = probe.EnumerateDirectories(packages)
             .Select(dir => Path.GetFileName(dir))
-            .Where(name => name is not null && IsClaudeFamily(name))
+            .Where(name => name is not null && ClaudePackage.IsClaudeFamily(name))
             .OrderBy(name => name, StringComparer.Ordinal)
             .FirstOrDefault();
         return family is null
