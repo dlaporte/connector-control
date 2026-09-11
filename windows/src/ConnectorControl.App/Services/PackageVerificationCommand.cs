@@ -34,14 +34,24 @@ internal static partial class PackageVerificationCommand
     internal static bool TryRun(string[] args, Func<string, string?, Version, Version, string?> verify, string? processPath, out int exitCode)
     {
         exitCode = 0;
-        if (!TryValue(args, "--verify-package", out var nupkgPath))
+        if (!Contains(args, "--verify-package"))
         {
             return false;   // not this command: fall through to the app's normal startup
         }
         // Past this point the caller is clearly attempting this command, so every remaining
         // problem is reported through this command's own exit code rather than by pretending
         // the launch never happened.
-        if (!TryValue(args, "--report", out var reportPath))
+        _ = TryValue(args, "--report", out var reportPath);
+        if (!TryValue(args, "--verify-package", out var nupkgPath))
+        {
+            exitCode = 2;   // "--verify-package" was given with nothing after it: a usage error
+            if (reportPath is not null)
+            {
+                WriteReport(reportPath, "\"--verify-package\" requires a value.");
+            }
+            return true;
+        }
+        if (reportPath is null)
         {
             exitCode = 2;   // nowhere to write the reason: there is no report path to write it to
             return true;
@@ -66,11 +76,33 @@ internal static partial class PackageVerificationCommand
         }
         var runningVersion = UpdateVerifier.EmbeddedVersion(processPath);
         var updateExePath = FindUpdateExe(processPath);
-        var problem = verify(nupkgPath, updateExePath, runningVersion, feedVersion);
-        WriteReport(reportPath, problem ?? "OK");
+        string? problem;
+        try
+        {
+            problem = verify(nupkgPath, updateExePath, runningVersion, feedVersion);
+        }
+        catch (Exception ex)
+        {
+            // The app's unhandled-exception handler (App.OnUnhandledException) is not armed this
+            // early in startup, so a throw here would otherwise crash with no report written at all.
+            WriteReport(reportPath, ex.ToString());
+            exitCode = 1;
+            return true;
+        }
+        WriteReport(reportPath, problem ?? OkReport(updateExePath));
         exitCode = problem is null ? 0 : 1;
         return true;
     }
+
+    /// <summary>
+    /// The success report names which checks actually ran, so a layout the checks silently skip
+    /// (no installed Update.exe found) is visible in the report rather than looking identical to
+    /// a full pass.
+    /// </summary>
+    private static string OkReport(string? updateExePath) =>
+        updateExePath is null
+            ? "OK\nchecked: package entries, main executable version (no installed updater found)"
+            : "OK\nchecked: package entries, main executable version, installed updater";
 
     /// <summary>Builds the running app's identity and defers to the real check.</summary>
     private static string? ProductionVerify(string packagePath, string? updateExePath, Version runningVersion, Version feedVersion)
@@ -121,7 +153,7 @@ internal static partial class PackageVerificationCommand
         File.WriteAllText(reportPath, text);
     }
 
-    /// <summary>The token after the first occurrence of <paramref name="flag"/>, wherever it sits in <paramref name="args"/>.</summary>
+    /// <summary>The token after the first occurrence of <paramref name="flag"/>, wherever it sits in <paramref name="args"/>. False both when <paramref name="flag"/> is absent and when it is the last token (present but valueless) — callers that must tell those apart use <see cref="Contains"/> first.</summary>
     private static bool TryValue(string[] args, string flag, [NotNullWhen(true)] out string? value)
     {
         for (var i = 0; i < args.Length - 1; i++)
@@ -135,4 +167,7 @@ internal static partial class PackageVerificationCommand
         value = null;
         return false;
     }
+
+    /// <summary>Whether <paramref name="flag"/> appears anywhere in <paramref name="args"/>, value or not.</summary>
+    private static bool Contains(string[] args, string flag) => Array.IndexOf(args, flag) >= 0;
 }

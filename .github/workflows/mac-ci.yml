@@ -1,7 +1,5 @@
-# Build and test the Mac app on every push that touches it. This is where `swift test`
-# runs in CI: the release build (scripts/build-app.sh) runs `swift build` alone, and
-# GoldenFileTests.testGoldensAreCurrent — the Mac half of the JSON byte contract the
-# Windows suite asserts against — has no other gate.
+# Runs the Swift suite and an ad-hoc build on every push; release.yml re-runs the suite
+# before signing.
 #
 # No pull_request trigger: every push in this repository is to a branch of the same repo (no
 # forks), so the push trigger below already runs on every branch, including PR branches.

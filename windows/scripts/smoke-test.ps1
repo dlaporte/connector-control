@@ -13,8 +13,8 @@
     The full flow:
       1. INSTALL assertions, always run. Setup.exe --silent →
          %LOCALAPPDATA%\ConnectorControl\{Update.exe, current\ConnectorControl.exe, current\sq.version},
-         with the version and channel read back out of sq.version. Spec §6.6 relies on
-         current\ConnectorControl.exe being the stable path the Run key records: asserted here.
+         with the version and channel read back out of sq.version. The Run key relies on
+         current\ConnectorControl.exe being the stable path it records: asserted here.
       2. LAUNCH assertions. This starts current\ConnectorControl.exe against a throwaway Claude
          config and master-list folder (CONNECTOR_CONTROL_CLAUDE_CONFIG / CONNECTOR_CONTROL_STORE_DIR
          — the same env overrides AppPathsResolver honours), polls up to -Seconds for the first-run
@@ -85,8 +85,8 @@ if ($SignatureOnly) {
     exit 0
 }
 
-$installRoot = Join-Path $env:LOCALAPPDATA 'ConnectorControl'          # Velopack app id (spec §4.2)
-$dataDir = Join-Path $env:LOCALAPPDATA 'Connector Control'             # app data (spec §4.2)
+$installRoot = Join-Path $env:LOCALAPPDATA 'ConnectorControl'          # Velopack app id: the install root
+$dataDir = Join-Path $env:LOCALAPPDATA 'Connector Control'             # app data
 $sandbox = Join-Path ([System.IO.Path]::GetTempPath()) "cc-smoke-$([guid]::NewGuid().ToString('N'))"
 $store = Join-Path $sandbox 'store'
 New-Item -ItemType Directory -Force -Path $sandbox, $store, $LogDir | Out-Null
@@ -126,7 +126,8 @@ if ($ExpectSigned) {
     $reportText = if (Test-Path $report) { (Get-Content $report -Raw).Trim() } else { '(no report written)' }
     Write-Host "     $reportText"
     Assert-True ($verify.ExitCode -eq 0) "--verify-package exited 0 (got $($verify.ExitCode))"
-    Assert-True ($reportText -eq 'OK') "the package verification report says OK (got '$reportText')"
+    # A passing report is "OK" followed by a line naming which checks ran; only the first line matters here.
+    Assert-True ($reportText -match '^OK') "the package verification report says OK (got '$reportText')"
 }
 
 Write-Host "== Launch against a sandbox config"

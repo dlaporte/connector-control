@@ -9,7 +9,7 @@
          ConnectorControl-<Runtime>-Setup.exe
          ConnectorControl-<Version>-<Runtime>-full.nupkg
          releases.<Runtime>.json  RELEASES-<Runtime>  assets.<Runtime>.json
-    The channel name IS the runtime identifier (spec §8.2): an installed app asks GitHub for
+    The channel name IS the runtime identifier: an installed app asks GitHub for
     releases.win-x64.json or releases.win-arm64.json and nothing else. Never a delta package:
     VelopackUpdater sets MaximumDeltasBeforeFallback = 0, so an installed client would never apply
     one anyway — producing one here would just be extra upload weight nobody downloads.
@@ -28,10 +28,6 @@
     win-x64 or win-arm64.
 .PARAMETER ReleaseNotes
     Markdown file embedded in the package and shown by the in-app update dialog.
-.PARAMETER RepoUrl
-    The GitHub repository this build's update feed lives in: $env:GITHUB_REPOSITORY (every GitHub
-    Actions runner sets it) mapped to its https URL, or the literal below for a local run off CI.
-    Must agree with VelopackUpdater.RepoUrl — the app checks that URL's releases, not this one.
 .PARAMETER AzureTrustedSignFile
     Azure Artifact Signing metadata.json ({Endpoint, CodeSigningAccountName, CertificateProfileName}).
     Windows only. Needs AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET in the environment.
@@ -58,10 +54,6 @@ param(
     [string] $Runtime,
 
     [string] $ReleaseNotes,
-    [string] $RepoUrl = $(
-        if ($env:GITHUB_REPOSITORY) { "https://github.com/$env:GITHUB_REPOSITORY" }
-        else { 'https://github.com/dlaporte/connector-control' }
-    ),
     [string] $AzureTrustedSignFile,
     [string] $Vpk = 'dotnet vpk',
     [switch] $CrossCompile
@@ -95,7 +87,7 @@ $vpkParts = $Vpk.Split([char[]]' ', 2)
 $vpkExe = $vpkParts[0]
 $vpkPrefixArgs = if ($vpkParts.Count -gt 1) { @($vpkParts[1]) } else { @() }
 
-Write-Host "== Publish $Runtime, version $Version (feed: $RepoUrl)"
+Write-Host "== Publish $Runtime, version $Version"
 if (Test-Path $publishDir) { Remove-Item -Recurse -Force $publishDir }
 Invoke-Native 'dotnet publish' 'dotnet' @(
     'publish', $project, '-c', 'Release', '-r', $Runtime, '--self-contained', 'true', "-p:Version=$Version", '-o', $publishDir)
@@ -109,7 +101,7 @@ if ($CrossCompile) { $vpkGlobal = @('[win]') + $vpkGlobal }
 Write-Host "== vpk pack $Runtime"
 $packArgs = $vpkGlobal + @(
     'pack',
-    '--packId', 'ConnectorControl',            # install root %LOCALAPPDATA%\ConnectorControl (spec §4.2)
+    '--packId', 'ConnectorControl',            # install root %LOCALAPPDATA%\ConnectorControl
     '--packVersion', $Version,
     '--packDir', $publishDir,
     '--mainExe', 'ConnectorControl.exe',
@@ -120,7 +112,7 @@ $packArgs = $vpkGlobal + @(
     '--channel', $Runtime,                     # channel = RID: releases.<rid>.json on the GitHub release
     '--outputDir', $outputDir,
     '--shortcuts', 'StartMenuRoot',            # a tray app: Start menu entry, no desktop icon
-    '--noPortable'                             # spec §8.2 lists Setup.exe + nupkgs + index only
+    '--noPortable'                             # the asset set is Setup.exe + nupkgs + index only
 )
 if ($ReleaseNotes) { $packArgs += @('--releaseNotes', (Resolve-Path $ReleaseNotes).Path) }
 if ($AzureTrustedSignFile) { $packArgs += @('--azureTrustedSignFile', (Resolve-Path $AzureTrustedSignFile).Path) }

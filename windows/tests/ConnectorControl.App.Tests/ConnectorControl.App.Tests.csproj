@@ -18,10 +18,8 @@
     <ProjectReference Include="../../src/ConnectorControl.App/ConnectorControl.App.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Shared with the Core tests; linked, not copied. WriteBlock.cs holds a Windows-only file
-         lock helper the Core tests use to force an IOException; it is excluded here because this
-         project already gets its Windows file-locking coverage elsewhere and the file would only
-         add an unused compile unit. -->
+    <!-- Shared with the Core tests; linked, not copied. WriteBlock.cs is excluded because this
+         project never uses it. -->
     <Compile Include="../ConnectorControl.Core.Tests/TestSupport/*.cs" Exclude="../ConnectorControl.Core.Tests/TestSupport/WriteBlock.cs" Link="TestSupport/%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>

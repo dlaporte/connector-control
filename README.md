@@ -289,8 +289,7 @@ workflow's own YAML and shell/PowerShell scripts are linted by
 | `scripts/build-app.sh` | Assembles `build/Connector Control.app` from the SwiftPM build products, embedding Sparkle and the app icon. | `mac-ci.yml`, `release.yml` |
 | `scripts/make-dmg.sh` | Packages the app bundle into a drag-to-Applications DMG. | `mac-ci.yml`, `release.yml` |
 | `scripts/test-mac.sh` | Runs the Swift suite the way CI gates it (every test must run; one deliberate skip is allowed). | `mac-ci.yml`, `release.yml` |
-| `scripts/generate-icon.swift` | Renders the macOS `.icns` app icon. | `scripts/build-app.sh` |
-| `scripts/generate-ico.swift` | Renders the Windows `.ico` app icon. | run by hand, on a Mac |
+| `scripts/generate-icon.swift` | Renders the app icon — macOS `.icns` or Windows `.ico`, chosen by the output extension. | `scripts/build-app.sh`; the `.ico` path is run by hand, on a Mac |
 | `scripts/mac/import-signing-cert.sh` | Imports the Developer ID certificate into a throwaway CI keychain. | `release.yml` |
 | `scripts/mac/notarize.sh` | Submits a binary or app bundle for Apple notarization and staples the ticket. | `release.yml` |
 | `scripts/mac/make-appcast.sh` | Builds and EdDSA-signs the Sparkle appcast for one release. | `release.yml` |
@@ -301,7 +300,7 @@ workflow's own YAML and shell/PowerShell scripts are linted by
 | `scripts/release/verify-release.sh` | Verifies a release's draft/prerelease flags and asset set. | `release.yml`, `windows-preview.yml` |
 | `windows/scripts/package.ps1` | Publishes and Velopack-packs one Windows runtime. | `windows-build.yml` |
 | `windows/scripts/smoke-test.ps1` | Installs a packed `Setup.exe` and proves the app starts, stays up, and (with `-SignatureOnly`) is signed. | `windows-build.yml` |
-| `windows/scripts/probe-claude.ps1`, `probe-claude-quit.ps1` | Manual diagnostics for how Claude Desktop installs, is found, and quits on a PC. | run by hand, on Windows |
+| `windows/tools/probe-claude.ps1` | Manual diagnostic for how Claude Desktop installs and is found on a PC. | run by hand, on Windows |
 
 ## Scope and caveats
 

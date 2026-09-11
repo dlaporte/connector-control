@@ -44,6 +44,27 @@ public class PackageVerificationCommandTests : IDisposable
     }
 
     [Fact]
+    public void AValuelessFlagIsAUsageError()
+    {
+        var report = dir.File("report.txt");
+        var handled = PackageVerificationCommand.TryRun(["--verify-package"], NeverCalled, RunningExe, out var exitCode);
+        Assert.True(handled);
+        Assert.Equal(2, exitCode);
+        Assert.False(File.Exists(report));   // no --report given: exits silently, with nowhere to write the reason
+    }
+
+    [Fact]
+    public void AValuelessFlagWithAReportPathWritesTheReason()
+    {
+        var report = dir.File("report.txt");
+        // "--verify-package" is the last token here, so it has nothing after it.
+        var handled = PackageVerificationCommand.TryRun(["--report", report, "--verify-package"], NeverCalled, RunningExe, out var exitCode);
+        Assert.True(handled);
+        Assert.Equal(2, exitCode);
+        Assert.Contains("requires a value", File.ReadAllText(report));
+    }
+
+    [Fact]
     public void MissingNupkgIsAUsageError()
     {
         var report = dir.File("report.txt");
@@ -86,7 +107,9 @@ public class PackageVerificationCommandTests : IDisposable
             RunningExe, out var exitCode);
         Assert.True(handled);
         Assert.Equal(0, exitCode);
-        Assert.Equal("OK", File.ReadAllText(report));
+        // RunningExe (a real assembly on disk, not a Velopack install layout) has no Update.exe
+        // two directories up, so FindUpdateExe reports none found.
+        Assert.Equal("OK\nchecked: package entries, main executable version (no installed updater found)", File.ReadAllText(report));
     }
 
     [Fact]
@@ -124,5 +147,75 @@ public class PackageVerificationCommandTests : IDisposable
         Assert.Equal(nupkg, seenPackage);
         Assert.Equal(UpdateVerifier.EmbeddedVersion(RunningExe), seenRunning);
         Assert.Equal(new Version(1, 3, 3), seenFeed);
+    }
+
+    [Fact]
+    public void AnExceptionInVerificationLandsInTheReport()
+    {
+        var nupkg = Nupkg("ConnectorControl-1.0.0-win-x64-full.nupkg");
+        var report = dir.File("report.txt");
+        var handled = PackageVerificationCommand.TryRun(
+            ["--verify-package", nupkg, "--report", report],
+            (_, _, _, _) => throw new InvalidOperationException("boom"),
+            RunningExe, out var exitCode);
+        Assert.True(handled);
+        Assert.Equal(1, exitCode);
+        var reportText = File.ReadAllText(report);
+        Assert.Contains(nameof(InvalidOperationException), reportText);
+        Assert.Contains("boom", reportText);
+    }
+
+    /// <summary>
+    /// A Velopack install layout: `&lt;temp&gt;/current/ConnectorControl.exe` with
+    /// `&lt;temp&gt;/Update.exe` beside `current/`. The exe is a copy of a real assembly so
+    /// <see cref="UpdateVerifier.EmbeddedVersion"/> has something genuine to read.
+    /// </summary>
+    private string MakeCurrentExe()
+    {
+        var currentDir = Directory.CreateDirectory(dir.File("current")).FullName;
+        var processPath = Path.Combine(currentDir, "ConnectorControl.exe");
+        File.Copy(RunningExe, processPath);
+        return processPath;
+    }
+
+    [Fact]
+    public void UpdateExeBesideTheInstallRootIsPassedToTheVerifier()
+    {
+        var processPath = MakeCurrentExe();
+        var updateExePath = dir.File("Update.exe");
+        File.WriteAllBytes(updateExePath, []);
+
+        var nupkg = Nupkg("ConnectorControl-1.0.0-win-x64-full.nupkg");
+        var report = dir.File("report.txt");
+        string? seenUpdateExe = "not set";
+        PackageVerificationCommand.TryRun(
+            ["--verify-package", nupkg, "--report", report],
+            (_, updateExe, _, _) =>
+            {
+                seenUpdateExe = updateExe;
+                return null;
+            },
+            processPath, out _);
+        Assert.Equal(updateExePath, seenUpdateExe);
+    }
+
+    [Fact]
+    public void AMissingUpdateExeIsPassedAsNull()
+    {
+        var processPath = MakeCurrentExe();
+        // No Update.exe written at dir.File("Update.exe").
+
+        var nupkg = Nupkg("ConnectorControl-1.0.0-win-x64-full.nupkg");
+        var report = dir.File("report.txt");
+        string? seenUpdateExe = "not set";
+        PackageVerificationCommand.TryRun(
+            ["--verify-package", nupkg, "--report", report],
+            (_, updateExe, _, _) =>
+            {
+                seenUpdateExe = updateExe;
+                return null;
+            },
+            processPath, out _);
+        Assert.Null(seenUpdateExe);
     }
 }

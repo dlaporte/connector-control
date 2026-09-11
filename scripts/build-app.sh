@@ -3,7 +3,7 @@
 #
 # Environment knobs (all optional; defaults produce a local dev build):
 #   VERSION           marketing version for Info.plist        (default: 1.0)
-#   BUILD_NUMBER      CFBundleVersion                         (default: 1)
+#   BUILD_NUMBER      CFBundleVersion                         (default: derived from VERSION)
 #   SIGNING_IDENTITY  codesign identity                       (default: "-", ad-hoc)
 #                     A real Developer ID identity also enables the hardened
 #                     runtime + secure timestamp that notarization requires.
