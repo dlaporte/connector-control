@@ -48,7 +48,9 @@ jobs:
           shopt -s globstar nullglob
           mapfile -t files < <(printf '%s\n' scripts/*.sh scripts/**/*.sh windows/scripts/*.sh windows/scripts/**/*.sh | sort -u)
           [ "${#files[@]}" -gt 0 ] || { echo "::error::no .sh files found under scripts/ or windows/scripts/"; exit 1; }
-          shellcheck "${files[@]}"
+          # warning and above: info/style notes differ between shellcheck versions, and the runner image
+          # ships a different one than a developer machine.
+          shellcheck --severity=warning "${files[@]}"
 
       - name: PSScriptAnalyzer
         shell: pwsh
