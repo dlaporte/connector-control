@@ -110,6 +110,21 @@ final class AtomicFileTests: XCTestCase {
         XCTAssertEqual(mode, 0o600)
     }
 
+    /// windows/tests/ConnectorControl.Core.Tests/AtomicFileTests.cs —
+    /// WritesThroughADanglingSymlinkedTarget. A link whose target does not
+    /// exist yet (created but never populated) is still written through, not
+    /// replaced by a plain file.
+    func testWritesThroughADanglingSymlinkedTarget() throws {
+        let fm = FileManager.default
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let real = dir.appendingPathComponent("real.json")   // never created — the link's target does not exist yet
+        let link = dir.appendingPathComponent("link.json")
+        try fm.createSymbolicLink(at: link, withDestinationURL: real)
+        try AtomicFile.write(Data("through".utf8), to: link)
+        XCTAssertEqual(try fm.destinationOfSymbolicLink(atPath: link.path), real.path, "the link is still a link")
+        XCTAssertEqual(try String(contentsOf: real, encoding: .utf8), "through")
+    }
+
     func testNoTempFilesLeftBehind() throws {
         let url = dir.appendingPathComponent("file.json")
         try AtomicFile.write(Data("x".utf8), to: url)

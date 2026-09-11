@@ -25,24 +25,25 @@ public static class AtomicFile
         var target = Path.GetFullPath(path);
         // A target that is itself a symlink (a config synced into a dotfiles repo, say) is
         // written through to the real file, not replaced by a plain file in the rename below —
-        // mirrors the Mac writer's realpath resolution. ResolveLinkTarget throws rather than
-        // returning null when the path (or a missing parent directory) doesn't exist yet, which
-        // is the common first-run case, so it is only ever asked about a path already on disk;
-        // one that is not there yet, or exists but is not a link, leaves target as is.
-        if (File.Exists(target))
+        // mirrors the Mac writer's realpath resolution. LinkTarget (unlike File.Exists) reads
+        // the reparse point itself, so a link whose target does not exist yet — the common
+        // first-run case for a config linked into a dotfiles repo before the real file is ever
+        // created — is still followed instead of being silently replaced. A path that is not a
+        // link at all (including one that does not exist yet) leaves target as is.
+        if (new FileInfo(target).LinkTarget is not null)
         {
             try
             {
-                if (new FileInfo(target).ResolveLinkTarget(returnFinalTarget: true) is { FullName: var real })
+                if (new FileInfo(target).ResolveLinkTarget(returnFinalTarget: true)?.FullName is { } real)
                 {
                     target = real;
                 }
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // the target vanished, or was replaced by something that is not a link, between
-                // the exists check above and the resolve: write to the literal path instead of
-                // failing the write. (DirectoryNotFoundException derives from IOException.)
+                // the LinkTarget check above and the resolve: write to the literal path instead
+                // of failing the write. (DirectoryNotFoundException derives from IOException.)
             }
         }
         var dir = Path.GetDirectoryName(target)

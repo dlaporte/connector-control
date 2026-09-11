@@ -108,6 +108,24 @@ public class EditorModelViewSwitchTests
         Assert.Empty(editor.EnvRows);
     }
 
+    /// <summary>The template-discard rule fires once, at the first switch to Local; a second
+    /// Type toggle must not re-derive it and wipe what the user typed.</summary>
+
+    [Fact]
+    public void TogglingTheTypeTwiceKeepsATypedLocalCommand()
+    {
+        using var rig = new EditorRig();
+        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        editor.IsRemote = false;
+        editor.Command = "node";
+        editor.Args.Clear();
+        editor.Args.Add(new ArgRow("server.js"));
+        editor.IsRemote = true;
+        editor.IsRemote = false;
+        Assert.Equal("node", editor.Command);
+        Assert.Equal(["server.js"], editor.Args.Select(a => a.Value).ToArray());
+    }
+
     [Fact]
     public void JsonValidationErrorDisablesSave()
     {

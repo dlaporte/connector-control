@@ -111,6 +111,21 @@ final class EditorModelViewSwitchTests: XCTestCase {
         XCTAssertTrue(rig.h.dialogs.confirms.isEmpty)   // a sheet, not an NSAlert
     }
 
+    /// The template-discard rule fires once, at the first switch to Local; a
+    /// second Type toggle must not re-derive it and wipe what the user typed.
+    func testTogglingTheTypeTwiceKeepsATypedLocalCommand() {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let editor = rig.editor(.newRemote())
+        editor.isRemote = false
+        editor.command = "node"
+        editor.args = [ArgRow(value: "server.js")]
+        editor.isRemote = true
+        editor.isRemote = false
+        XCTAssertEqual(editor.command, "node")
+        XCTAssertEqual(editor.args.map(\.value), ["server.js"])
+    }
+
     func testJsonValidationErrorDisablesSave() {
         let rig = EditorRig()
         defer { rig.dispose() }

@@ -52,9 +52,12 @@ public final class EditorModel: ObservableObject {
     private var subscription: AnyCancellable?
     private var suppressToolEvaluation = false
     /// True only for a brand-new connector still showing the remote
-    /// template's placeholder command/args — set once at open, never
-    /// re-derived from the current field values.
-    private let isUntouchedTemplate: Bool
+    /// template's placeholder command/args. Set at open; cleared the first
+    /// time the template is discarded (below), since from then on the
+    /// command/args are the user's own local form, not a re-derivable
+    /// property of the current fields — a second Type toggle must not
+    /// wipe what they typed.
+    private var isUntouchedTemplate: Bool
 
     // MARK: - Fields
 
@@ -214,9 +217,13 @@ public final class EditorModel: ObservableObject {
         guard oldValue != isRemote else { return }
         if !isRemote, view == .form, isUntouchedTemplate {
             // Discard the remote template's bridge invocation — a local
-            // server has nothing to do with mcp-remote.
+            // server has nothing to do with mcp-remote. The template is
+            // consumed by this one discard; from here on the fields are
+            // the user's own local form, so a later switch back and forth
+            // must not re-derive and repeat it.
             command = "npx"
             args = [ArgRow(value: "-y"), ArgRow(value: "")]
+            isUntouchedTemplate = false
         }
         evaluateRequiredTool()
     }

@@ -62,9 +62,11 @@ public sealed class EditorModel : ObservableObject, IDisposable
     private readonly IDialogs dialogs;
     /// <summary>
     /// True only for a brand-new connector still showing the remote template's placeholder
-    /// command/args — set once at open, never re-derived from the current field values.
+    /// command/args. Set at open; cleared the first time the template is discarded (below),
+    /// since from then on the command/args are the user's own local form, not a re-derivable
+    /// property of the current fields — a second Type toggle must not wipe what they typed.
     /// </summary>
-    private readonly bool isUntouchedTemplate;
+    private bool isUntouchedTemplate;
 
     private EditView view;
     private string name;
@@ -173,11 +175,15 @@ public sealed class EditorModel : ObservableObject, IDisposable
             Raise(nameof(CanSave));
             if (!isRemote && View == EditView.Form && isUntouchedTemplate)
             {
-                // Discard the remote template's bridge invocation — a local server has nothing to do with mcp-remote.
+                // Discard the remote template's bridge invocation — a local server has nothing
+                // to do with mcp-remote. The template is consumed by this one discard; from here
+                // on the fields are the user's own local form, so a later switch back and forth
+                // must not re-derive and repeat it.
                 Command = "npx";
                 Args.Clear();
                 Args.Add(new ArgRow("-y"));
                 Args.Add(new ArgRow(""));
+                isUntouchedTemplate = false;
             }
             EvaluateRequiredTool();
         }

@@ -329,6 +329,46 @@ public class UpdateCoordinatorTests
     }
 
     [Fact]
+    public async Task ADeclinedVersionIsNotOfferedAgainByTheBackgroundCheck()
+    {
+        settings.AutoUpdate = false;
+        updater.Next = Update();
+        dialogs.NextOffer = false;
+        using var coordinator = Coordinator();
+
+        Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: false));
+        Assert.Single(dialogs.Offers);
+        Assert.Equal("1.3.0", coordinator.DeclinedVersion);
+
+        // A later scheduled check for the same version does not re-offer it.
+        Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: false));
+        Assert.Single(dialogs.Offers);
+
+        // A newer version is offered again.
+        updater.Next = Update("1.4.0");
+        Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: false));
+        Assert.Equal(2, dialogs.Offers.Count);
+        Assert.Equal("1.4.0", coordinator.DeclinedVersion);
+    }
+
+    [Fact]
+    public async Task AManualCheckStillOffersADeclinedVersion()
+    {
+        settings.AutoUpdate = false;
+        updater.Next = Update();
+        dialogs.NextOffer = false;
+        using var coordinator = Coordinator();
+
+        Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: false));
+        Assert.Single(dialogs.Offers);
+        Assert.Equal("1.3.0", coordinator.DeclinedVersion);
+
+        // Settings ▸ Check for Updates… always offers, even a version the user already declined.
+        Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: true));
+        Assert.Equal(2, dialogs.Offers.Count);
+    }
+
+    [Fact]
     public async Task ARefusedUpdateTellsTheUserWhyWhenTheyAsked()
     {
         updater.Next = Update();

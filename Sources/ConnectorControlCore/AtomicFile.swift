@@ -34,7 +34,7 @@ public enum AtomicFile {
         // renamed over the real file either way, so the link survives and the
         // bytes land where every other reader of the link finds them.
         // Components that do not exist yet are left as given.
-        let target = url.resolvingSymlinksInPath()
+        let target = resolveWriteTarget(url)
         let dir = target.deletingLastPathComponent()
         // A directory this call has to create holds a private file, so it is
         // owner-only from the start (the sweep would only catch it on the
@@ -84,6 +84,30 @@ public enum AtomicFile {
                 _ = try fm.replaceItemAt(target, withItemAt: tmp, options: .usingNewMetadataOnly)
             }
         }
+    }
+
+    /// `resolvingSymlinksInPath()` for every case but one: a symlink whose
+    /// target does not exist yet. `resolvingSymlinksInPath()` (like
+    /// `realpath(3)`) requires the fully resolved path to already exist and
+    /// otherwise leaves the whole URL unresolved — which would make the
+    /// rename below collide with the dangling link and fail (or, off this
+    /// codebase, replace it outright), instead of writing through it. This
+    /// is the read side of the same shape of bug `File.Exists` guards
+    /// against in the Windows writer. Walked by hand, like
+    /// ResolveLinkTarget(returnFinalTarget: true), one readlink at a time,
+    /// so a config linked into a dotfiles repo before its real file is ever
+    /// created still gets written through the link.
+    static func resolveWriteTarget(_ url: URL) -> URL {
+        var current = url
+        for _ in 0..<32 {   // a bound against a symlink cycle, not a realistic chain depth
+            guard let destination = try? FileManager.default.destinationOfSymbolicLink(atPath: current.path) else {
+                return current.resolvingSymlinksInPath()
+            }
+            current = destination.hasPrefix("/")
+                ? URL(fileURLWithPath: destination)
+                : URL(fileURLWithPath: destination, relativeTo: current.deletingLastPathComponent()).standardizedFileURL
+        }
+        return current   // a link cycle: give up resolving further and let the write fail on it
     }
 
     /// Removes every ACL entry from the object `fd` refers to. `open(…, 0600)` cannot refuse

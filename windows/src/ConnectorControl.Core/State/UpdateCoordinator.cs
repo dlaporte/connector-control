@@ -5,8 +5,11 @@ namespace ConnectorControl.Core.State;
 /// <summary>
 /// Checks 10 s after launch and every 24 h; with autoUpdate on,
 /// download silently, stage for quit, and toast once per version; otherwise —
-/// and always for Check for Updates… — show the update dialog. Manual checks
-/// report "up to date" and failures; background checks stay silent.
+/// and always for Check for Updates… — show the update dialog. A version the
+/// user declines from a background offer is not re-offered by later
+/// background checks (Sparkle's Skip This Version is the Mac counterpart);
+/// Check for Updates… always offers, even a version already declined. Manual
+/// checks report "up to date" and failures; background checks stay silent.
 /// </summary>
 public sealed class UpdateCoordinator : IDisposable
 {
@@ -52,6 +55,9 @@ public sealed class UpdateCoordinator : IDisposable
 
     /// <summary>The version whose package failed verification and was announced, so the daily check does not toast it again.</summary>
     public string? RefusedVersion { get; private set; }
+
+    /// <summary>The version the user declined via a non-interactive offer, so the background check does not re-offer it; Settings ▸ Check for Updates… always offers regardless.</summary>
+    public string? DeclinedVersion { get; private set; }
 
     public void Start()
     {
@@ -211,6 +217,12 @@ public sealed class UpdateCoordinator : IDisposable
             }).ConfigureAwait(false);
             return UpdateOutcome.StagedForQuit;
         }
+        // A background check does not re-offer a version the user already sent Later on;
+        // Settings ▸ Check for Updates… always offers, declined or not.
+        if (!interactive && DeclinedVersion == update.Version)
+        {
+            return UpdateOutcome.Deferred;
+        }
         // MarshalAsync, not Marshal-then-read-a-captured-local: AppHost.Marshal only POSTS,
         // so the answer is not there when it returns.
         bool install;
@@ -225,6 +237,14 @@ public sealed class UpdateCoordinator : IDisposable
         }
         if (!install)
         {
+            if (!interactive)
+            {
+                await host.MarshalAsync(() =>
+                {
+                    DeclinedVersion = update.Version;
+                    return true;
+                }).ConfigureAwait(false);
+            }
             return UpdateOutcome.Deferred;
         }
         try

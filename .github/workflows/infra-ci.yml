@@ -10,6 +10,7 @@ on:
       - '.github/**'
       - 'scripts/**'
       - 'windows/scripts/**'
+      - 'windows/tools/**'
 
 permissions:
   contents: read
@@ -46,8 +47,8 @@ jobs:
         shell: bash
         run: |
           shopt -s globstar nullglob
-          mapfile -t files < <(printf '%s\n' scripts/*.sh scripts/**/*.sh windows/scripts/*.sh windows/scripts/**/*.sh | sort -u)
-          [ "${#files[@]}" -gt 0 ] || { echo "::error::no .sh files found under scripts/ or windows/scripts/"; exit 1; }
+          mapfile -t files < <(printf '%s\n' scripts/*.sh scripts/**/*.sh | sort -u)
+          [ "${#files[@]}" -gt 0 ] || { echo "::error::no .sh files found under scripts/"; exit 1; }
           # warning and above: info/style notes differ between shellcheck versions, and the runner image
           # ships a different one than a developer machine.
           shellcheck --severity=warning "${files[@]}"
@@ -56,4 +57,4 @@ jobs:
         shell: pwsh
         run: |
           Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
-          Invoke-ScriptAnalyzer -Path windows/scripts -Recurse -Severity Error -EnableExit
+          Invoke-ScriptAnalyzer -Path windows/scripts,windows/tools -Recurse -Severity Error -EnableExit

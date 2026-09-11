@@ -116,4 +116,31 @@ public class AtomicFileTests : IDisposable
         Assert.Equal("through", File.ReadAllText(real));
         Assert.Equal("through", File.ReadAllText(link));
     }
+
+    /// <summary>A link whose target does not exist yet (a config linked into a dotfiles repo
+    /// before the real file is ever created) is still written through, not replaced by a plain
+    /// file. File.Exists is false for a dangling link, which must not be mistaken for "not a
+    /// link at all".</summary>
+    [Fact]
+    public void WritesThroughADanglingSymlinkedTarget()
+    {
+        var real = dir.File("real.json");   // never created — the link's target does not exist yet
+        var link = dir.File("link.json");
+        try
+        {
+            File.CreateSymbolicLink(link, real);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            // Creating a symlink on Windows needs Developer Mode or elevation; a CI agent
+            // without either cannot exercise this, so there is nothing to assert.
+            // GitHub's hosted Windows runners are elevated, so under FailSkips=true (ci.runsettings) this skip would surface as a failure if that ever changed.
+            Assert.Skip("symlink creation is not permitted in this environment");
+            return;
+        }
+        AtomicFile.Write(Encoding.UTF8.GetBytes("through"), link);
+        Assert.NotNull(new FileInfo(link).LinkTarget);   // the link itself survives, not replaced by a plain file
+        Assert.Equal("through", File.ReadAllText(real));
+        Assert.Equal("through", File.ReadAllText(link));
+    }
 }
