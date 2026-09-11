@@ -50,7 +50,6 @@ final class RestoreModelTests: XCTestCase {
         model.requestRestore()
         XCTAssertTrue(model.confirming)
         XCTAssertEqual(model.confirmMessage, "Replace Claude's config with \(model.backups[0].lastPathComponent)?")
-        XCTAssertEqual(RestoreModel.restoreButton, "Restore")
         model.cancelRestore()
         XCTAssertFalse(model.confirming)
         XCTAssertEqual(state.store.mcps["aws-mcp"]?.enabled, false)   // cancelled: nothing restored
@@ -108,13 +107,10 @@ final class RestoreModelTests: XCTestCase {
         XCTAssertNil(model.restoreError)
     }
 
-    func testStringsMatchTheMacApp() {
-        XCTAssertEqual(RestoreModel.headline, "Restore Claude config from a backup")
-        XCTAssertEqual(RestoreModel.caption, "The current file is backed up first, then replaced by the selected backup.")
-        XCTAssertEqual(RestoreModel.cancelTitle, "Cancel")
-        XCTAssertEqual(RestoreModel.restoreTitle, "Restore…")
-        XCTAssertEqual(RestoreModel.restoreButton, "Restore")
+    /// The backup-file series name: an internal identifier, deliberately out
+    /// of the shared string catalog (it names an on-disk file series, not
+    /// anything the user reads).
+    func testSeriesNameIsSessionLocalAndStable() {
         XCTAssertEqual(RestoreModel.series, "claude_desktop_config")
-        XCTAssertEqual(RestoreModel.confirmMessage(fileName: "x.json"), "Replace Claude's config with x.json?")
     }
 }

@@ -14,11 +14,9 @@ final class PopoverModelTests: XCTestCase {
         defer { h.dispose() }
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
-        XCTAssertEqual(PopoverModel.title, "Connector Control")
         XCTAssertEqual(popover.subtitle, "No connectors configured")
         XCTAssertEqual(popover.profileChipText, "Default ▾")
         XCTAssertTrue(popover.isEmpty)
-        XCTAssertEqual(PopoverModel.emptyText, "No connectors configured yet — add one below.")
         XCTAssertNil(state.upsert(name: "z", entry: MCPEntry(config: AppStateHarness.remote("https://z.example/mcp")), renamedFrom: nil))
         XCTAssertEqual(popover.subtitle, "1 of 1 enabled")
         XCTAssertFalse(popover.isEmpty)
@@ -231,21 +229,12 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == nil })
     }
 
-    func testStringsMatchTheCatalog() {
-        XCTAssertEqual(PopoverModel.title, "Connector Control")
-        XCTAssertEqual(PopoverModel.addTooltip, "Add Connector")
-        XCTAssertEqual(PopoverModel.settingsTooltip, "Settings")
-        XCTAssertEqual(PopoverModel.quitTooltip, "Quit Connector Control")
-        XCTAssertEqual(PopoverModel.emptyText, "No connectors configured yet — add one below.")
-        XCTAssertEqual(PopoverModel.retryTitle, "Apply Failed — Retry")
-        XCTAssertEqual(PopoverModel.restartTitle, "Restart Required")
-        XCTAssertEqual(PopoverModel.newProfileTitle, "New Profile…")
-        XCTAssertEqual(PopoverModel.profileChipText("Work"), "Work ▾")
-        XCTAssertEqual(PopoverModel.renameProfileTitle("Work"), "Rename “Work”…")
-        XCTAssertEqual(PopoverModel.deleteProfileTitle("Work"), "Delete “Work”…")
+    /// SF Symbol names: platform-specific glyph identifiers, deliberately out
+    /// of the shared string catalog (Windows uses Segoe Fluent Icons code
+    /// points instead), so pinned here instead.
+    func testGlyphNamesAreSessionLocalAndStable() {
         XCTAssertEqual(PopoverModel.retryGlyph, "exclamationmark.arrow.circlepath")
         XCTAssertEqual(PopoverModel.restartGlyph, "arrow.clockwise")
         XCTAssertEqual(PopoverModel.toolWarningGlyph, "exclamationmark.triangle.fill")
-        XCTAssertEqual(ConnectorRow(name: "x", enabled: true, toolWarning: nil).editTooltip, "Edit “x”")
     }
 }

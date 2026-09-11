@@ -559,16 +559,11 @@ public class EditorModelTests
     }
 
     [Fact]
-    public void AuthKindTitlesMatchTheMacApp()
+    public void AuthKindPickerOrder()
     {
-        Assert.Equal(["Automatic (OAuth / none)", "Bearer token", "Custom header", "OAuth client ID/secret"], EditorModel.AuthKindTitles.ToArray());
-        Assert.Equal("Runs via npx mcp-remote — managed for you.", EditorModel.RemoteFooter);
-        Assert.Equal("Enter a valid http(s) URL, e.g. https://example.com/mcp", EditorModel.UrlHint);
-        Assert.Equal("Uses the server's OAuth (a browser window opens on first use), or no auth if the server is open.", EditorModel.AutomaticCaption);
-        Assert.Equal("Sent as Authorization: Bearer …", EditorModel.BearerCaption);
-        Assert.Equal("＋ Add argument", EditorModel.AddArgumentTitle);
-        Assert.Equal("＋ Add variable", EditorModel.AddVariableTitle);
-        Assert.Equal("Tip: paste a README snippet or an mcpServers stanza — a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in.", EditorModel.JsonTip);
+        // The picker's case order: behavior StringCatalogTests doesn't cover
+        // (it pins each case's title, not AuthKinds' order).
+        Assert.Equal([RemoteAuthKind.Automatic, RemoteAuthKind.Bearer, RemoteAuthKind.Header, RemoteAuthKind.OAuthClient], EditorModel.AuthKinds);
     }
 
     [Fact]

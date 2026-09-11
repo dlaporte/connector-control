@@ -96,8 +96,6 @@ final class EditorModelViewSwitchTests: XCTestCase {
         XCTAssertEqual(editor.lossWarning, ["args[1] (number)", "command (number)", "env.K (boolean)"])
         XCTAssertEqual(editor.lossWarningMessage,
                        "Switching to Form view can’t fully represent this configuration. These elements would be lost or altered:\nargs[1] (number)\ncommand (number)\nenv.K (boolean)")
-        XCTAssertEqual(EditorModel.switchAnywayButton, "Switch Anyway")
-        XCTAssertEqual(EditorModel.stayInJSONButton, "Stay in JSON")
         editor.stayInJSON()
         XCTAssertNil(editor.lossWarning)
         XCTAssertEqual(editor.view, .json)

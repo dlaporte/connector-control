@@ -191,25 +191,6 @@ public class SettingsModelTests
     }
 
     [Fact]
-    public void StringsMatchTheMacApp()
-    {
-        Assert.Equal("Launch at startup", SettingsModel.LaunchAtStartupTitle);
-        Assert.Equal("Confirm before restarting Claude", SettingsModel.ConfirmRestartTitle);
-        Assert.Equal("Confirm before quitting", SettingsModel.ConfirmQuitTitle);
-        Assert.Equal("Notify about changes made outside Connector Control", SettingsModel.NotifyTitle);
-        Assert.Equal("Covers edits to Claude's config and synced connector-list changes, including when a remote change needs a Claude restart.", SettingsModel.NotifyCaption);
-        Assert.Equal("Automatically download and install updates", SettingsModel.AutoUpdateTitle);
-        Assert.Equal("Check for Updates…", SettingsModel.CheckForUpdatesTitle);
-        Assert.Equal("Master List Location", SettingsModel.MasterListHeader);
-        Assert.Equal("Choose…", SettingsModel.ChooseTitle);
-        Assert.Equal("Both config files are backed up automatically before every change.", SettingsModel.BackupsCaption);
-        Assert.Equal("Show in Explorer", SettingsModel.ShowInExplorerTitle);
-        Assert.Equal("Restore…", RestoreModel.RestoreTitle);
-        Assert.Equal("Claude App", SettingsModel.ClaudeAppHeader);
-        Assert.Equal("Couldn't update startup entry: Access is denied.", SettingsModel.StartupEntryFailureNote("Access is denied."));
-    }
-
-    [Fact]
     public void ToolRowsStartAsCheckingAndFillInAfterARefresh()
     {
         using var rig = new Rig();
@@ -273,10 +254,8 @@ public class SettingsModelTests
     }
 
     [Fact]
-    public void ToolStringsMatchTheSpec()
+    public void ToolRowsCarryTheNoteFromToolNote()
     {
-        Assert.Equal("Tools", ToolNote.SettingsHeader);
-        Assert.Equal("Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them.", ToolNote.SettingsCaption);
         Assert.Equal(ToolRow.Make(Tool.Npx, ToolStatus.NotFound), new ToolRow("npx", "Not found", true, ToolNote.Make(Tool.Npx, ToolStatus.NotFound)));
     }
 }

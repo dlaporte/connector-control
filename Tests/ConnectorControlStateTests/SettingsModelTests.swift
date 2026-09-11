@@ -180,31 +180,8 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertFalse(rig.model.canUseDefaultClaudeApp, "Use Default stays disabled when the stored path IS the default")
     }
 
-    func testStringsMatchTheMacApp() {
-        XCTAssertEqual(SettingsModel.generalTab, "General")
-        XCTAssertEqual(SettingsModel.storageTab, "Storage")
-        XCTAssertEqual(SettingsModel.claudeTab, "Claude")
-        XCTAssertEqual(SettingsModel.launchAtLoginTitle, "Launch at login")
-        XCTAssertEqual(SettingsModel.confirmRestartTitle, "Confirm before restarting Claude")
-        XCTAssertEqual(SettingsModel.confirmQuitTitle, "Confirm before quitting")
-        XCTAssertEqual(SettingsModel.notifyTitle, "Notify about changes made outside Connector Control")
-        XCTAssertEqual(SettingsModel.notifyCaption,
-                       "Covers edits to Claude's config and synced connector-list changes, including when a remote change needs a Claude restart.")
-        XCTAssertEqual(SettingsModel.updatesHeader, "Updates")
-        XCTAssertEqual(SettingsModel.autoUpdateTitle, "Automatically download and install updates")
-        XCTAssertEqual(SettingsModel.checkForUpdatesTitle, "Check for Updates…")
-        XCTAssertEqual(SettingsModel.versionText("1.3.0 (10300)"), "Version 1.3.0 (10300)")
-        XCTAssertEqual(SettingsModel.masterListHeader, "Master List Location")
-        XCTAssertEqual(SettingsModel.chooseTitle, "Choose…")
-        XCTAssertEqual(SettingsModel.useDefaultTitle, "Use Default")
-        XCTAssertEqual(SettingsModel.backupsHeader, "Backups")
-        XCTAssertEqual(SettingsModel.backupsCaption, "Both config files are backed up automatically before every change.")
-        XCTAssertEqual(SettingsModel.keepCountLabel(7), "Keep 7 backups of each file")
-        XCTAssertEqual(SettingsModel.revealInFinderTitle, "Reveal in Finder")
-        XCTAssertEqual(SettingsModel.restoreTitle, "Restore…")
-        XCTAssertEqual(SettingsModel.claudeAppHeader, "Claude App")
-        XCTAssertEqual(SettingsModel.loginItemFailureNote("x"), "Couldn't update login item: x")
-        XCTAssertEqual(SettingsModel.loginItemApprovalNote, "Approve Connector Control under System Settings → General → Login Items.")
+    /// The two numeric bounds: not strings, so StringCatalogTests can't cover them.
+    func testKeepCountBoundsAreSessionLocalAndStable() {
         XCTAssertEqual(SettingsModel.minKeepCount, 5)
         XCTAssertEqual(SettingsModel.maxKeepCount, 100)
     }

@@ -311,15 +311,6 @@ public class UpdateCoordinatorTests
     }
 
     [Fact]
-    public void DialogStringsMatchTheSpec()
-    {
-        Assert.Equal("A new version of Connector Control is available!", UpdateCoordinator.AvailableHeadline);
-        Assert.Equal("Connector Control 1.3.0 is now available — you have 1.2.2. Would you like to install it now?", UpdateCoordinator.AvailableDetail("1.3.0", "1.2.2"));
-        Assert.Equal("Install and Relaunch", UpdateCoordinator.InstallButton);
-        Assert.Equal("Later", UpdateCoordinator.LaterButton);
-    }
-
-    [Fact]
     public async Task ARefusedUpdateIsAnnouncedOncePerVersionAndNeverStaged()
     {
         // A package that fails authenticity verification is the one failure a background check must not keep quiet about.

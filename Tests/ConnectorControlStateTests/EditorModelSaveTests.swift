@@ -36,26 +36,10 @@ final class EditorModelSaveTests: XCTestCase {
         XCTAssertEqual(state.store.mcps["pasted"]?.lastEditView, .json)
     }
 
-    func testAuthKindTitlesMatchTheMacApp() {
-        XCTAssertEqual(RemoteAuthKind.allCases.map(\.title),
-                       ["Automatic (OAuth / none)", "Bearer token", "Custom header", "OAuth client ID/secret"])
-        XCTAssertEqual(EditorModel.remoteFooter, "Runs via npx mcp-remote — managed for you.")
-        XCTAssertEqual(EditorModel.urlHint, "Enter a valid http(s) URL, e.g. https://example.com/mcp")
-        XCTAssertEqual(EditorModel.automaticCaption,
-                       "Uses the server's OAuth (a browser window opens on first use), or no auth if the server is open.")
-        XCTAssertEqual(EditorModel.bearerCaption, "Sent as Authorization: Bearer …")
-        XCTAssertEqual(EditorModel.addArgumentTitle, "＋ Add argument")
-        XCTAssertEqual(EditorModel.addVariableTitle, "＋ Add variable")
-        XCTAssertEqual(EditorModel.jsonTip,
-                       "Tip: paste a README snippet or an mcpServers stanza — a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in.")
-        XCTAssertEqual(EditorModel.removeMessage("x"), "Remove “x”? A copy remains in Backups.")
-        XCTAssertEqual(EditorModel.changedOutsideMessage("x"), "“x” changed outside this editor.")
-        XCTAssertEqual(EditorModel.removedOutsideMessage("x"), "“x” was removed outside this editor.")
-        XCTAssertEqual(EditorModel.changedOutsideDetail, "Saving will overwrite that change with this editor's version.")
-        XCTAssertEqual(EditorModel.removedOutsideDetail, "Saving will add it back.")
-        XCTAssertEqual(EditorModel.saveAnywayButton, "Save Anyway")
-        XCTAssertEqual(EditTarget.addTitle, "Add Connector")
-        XCTAssertEqual(EditTarget.editTitle("x"), "Edit “x”")
+    /// The picker's case order: behavior StringCatalogTests doesn't cover
+    /// (it pins each case's title, not `allCases`' order).
+    func testAuthKindPickerOrder() {
+        XCTAssertEqual(RemoteAuthKind.allCases, [.automatic, .bearer, .header, .oauthClient])
     }
 
     func testEnvNamesReachTheStoreVerbatim() throws {
@@ -260,7 +244,6 @@ final class EditorModelSaveTests: XCTestCase {
         editor.requestRemove()
         XCTAssertTrue(editor.removeConfirmationPending)
         XCTAssertEqual(editor.removeConfirmationMessage, "Remove “scoutbook”? A copy remains in Backups.")
-        XCTAssertEqual(EditorModel.removeButton, "Remove")
         editor.cancelRemove()
         XCTAssertFalse(editor.removeConfirmationPending)
         XCTAssertNotNil(state.store.mcps["scoutbook"])

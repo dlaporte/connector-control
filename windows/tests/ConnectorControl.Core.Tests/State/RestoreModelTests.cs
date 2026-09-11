@@ -80,13 +80,4 @@ public class RestoreModelTests
         Assert.Equal(1, closed);
         Assert.Empty(h.Dialogs.Confirms);
     }
-
-    [Fact]
-    public void StringsMatchTheMacApp()
-    {
-        Assert.Equal("Restore Claude config from a backup", RestoreModel.Headline);
-        Assert.Equal("The current file is backed up first, then replaced by the selected backup.", RestoreModel.Caption);
-        Assert.Equal("Restore…", RestoreModel.RestoreTitle);
-        Assert.Equal("Restore", RestoreModel.RestoreButton);
-    }
 }

@@ -348,45 +348,19 @@ final class AppStateTests: XCTestCase {
         XCTAssertTrue(h.ui.pumpUntil({ h.tools.probed.count == 3 }, timeout: 5))
     }
 
-    /// Every string AppState shows, byte for byte as the views showed them.
-    func testStringsMatchTheCatalog() {
-        XCTAssertEqual(Notifications.title, "Connector Control")
+    /// The pieces StringCatalogTests can't cover: the internal notification
+    /// identifiers (excluded from the shared catalog on purpose), the delta
+    /// summary's real formatting for non-empty adds/removes/changes, and the
+    /// numeric recheck delay.
+    func testConnectorListChangedBodySummarizesTheDeltaAndInternalIdentifiersStayStable() {
         XCTAssertEqual(Notifications.restartCategory, "restartPending")
         XCTAssertEqual(Notifications.restartAction, "restartClaude")
-        XCTAssertEqual(Notifications.restartToastButton, "Restart Claude")
-        XCTAssertEqual(AppState.noConnectorsSubtitle, "No connectors configured")
-        XCTAssertEqual(AppState.enabledSubtitle(enabled: 2, total: 3), "2 of 3 enabled")
-        XCTAssertEqual(AppState.claudeConfigRegeneratedBody,
-                       "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up.")
         XCTAssertEqual(
             AppState.connectorListChangedBody(ServerDelta(added: ["evil"], removed: ["fs"]), restartRequired: true),
             "The connector list changed outside Connector Control — Claude's config now adds evil; removes fs. Restart Claude to pick it up.")
         XCTAssertEqual(
             AppState.connectorListChangedBody(ServerDelta(changed: ["aws-mcp"]), restartRequired: false),
             "The connector list changed outside Connector Control — Claude's config now changes aws-mcp. Claude will use it the next time it starts.")
-        XCTAssertEqual(
-            AppState.connectorListChangedBody(ServerDelta(), restartRequired: false),
-            "The connector list changed outside Connector Control — Claude's config was regenerated. Claude will use it the next time it starts.")
-        XCTAssertEqual(AppState.regenerationFailedBody,
-                       "The connector configuration changed, but Claude's config could not be updated — open Connector Control to retry.")
-        XCTAssertEqual(AppState.claudeConfigChangedBody, "Claude's config changed outside Connector Control.")
-        XCTAssertEqual(AppState.storeChangedBody,
-                       "The connector list changed outside Connector Control — review it before your next change is applied.")
-        XCTAssertEqual(AppState.quitMessage, "Quit Connector Control?")
-        XCTAssertEqual(AppState.quitButton, "Quit")
-        XCTAssertEqual(AppState.restartMessage, "Restart Claude Desktop now?")
-        XCTAssertEqual(AppState.restartInformative, "Any in-progress Claude conversation will be interrupted.")
-        XCTAssertEqual(AppState.restartButton, "Restart")
-        XCTAssertEqual(AppState.newProfileTitle, "New Profile")
-        XCTAssertEqual(AppState.renameProfileTitle, "Rename Profile")
-        XCTAssertEqual(AppState.deleteProfileMessage("Work"), "Delete Profile “Work”?")
-        XCTAssertEqual(AppState.deleteProfileInformative, "Its connector list is removed; backups keep prior states.")
-        XCTAssertEqual(AppState.deleteButton, "Delete")
-        XCTAssertEqual(AppState.nameEmptyError, "Name must not be empty.")
-        XCTAssertEqual(AppState.duplicateNameError("x"), "A connector named “x” already exists.")
-        XCTAssertEqual(AppState.malformedConfigMessage(detail: "d"),
-                       "Claude's config file is not valid JSON (d). Nothing was written. Use Backups ▸ Restore… to recover it.")
-        XCTAssertEqual(AppState.defaultClaudeAppPath, "/Applications/Claude.app")
         XCTAssertEqual(AppState.restartRecheckDelay, 3)
     }
 }
