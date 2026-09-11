@@ -14,11 +14,12 @@ public class ClaudeInstallTests
     [Theory]
     [InlineData("Claude_pzs8sxrjxfjjc", true)]
     [InlineData("Anthropic.ClaudeDesktop_h6f0761", true)]
+    [InlineData("Claude_abcdefghjkmnp", false)]   // another publisher's package named Claude: the launch rule already refused it, so detection must not find it
     [InlineData("Microsoft.WindowsTerminal_8wekyb3d8bbwe", false)]
     [InlineData("claude_lowercase", false)]
     public void IsClaudeFamily(string family, bool expected)
     {
-        Assert.Equal(expected, ClaudeInstall.IsClaudeFamily(family));
+        Assert.Equal(expected, ClaudePackage.IsClaudeFamily(family));
     }
 
     [Fact]

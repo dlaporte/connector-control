@@ -1,7 +1,3 @@
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-
 namespace ConnectorControl.Core;
 
 /// <summary>
@@ -13,8 +9,8 @@ namespace ConnectorControl.Core;
 public static class ClaudePublisher
 {
     /// <summary>
-    /// Accepted organizations after <see cref="NormalizeOrganization"/>. Anthropic's public spellings are
-    /// "Anthropic" and "Anthropic, PBC"; the exact value on a real claude.exe is what
+    /// Accepted organizations after <see cref="SignerIdentity.NormalizeOrganization"/>. Anthropic's public
+    /// spellings are "Anthropic" and "Anthropic, PBC"; the exact value on a real claude.exe is what
     /// windows/scripts/probe-claude.ps1 (section "Signer") prints — a rotation to another spelling is a
     /// one-line addition here.
     /// </summary>
@@ -27,68 +23,19 @@ public static class ClaudePublisher
     /// renders it — names Anthropic as the organization; otherwise the user-facing reason
     /// <paramref name="fileName"/> must not be launched.
     /// </summary>
-    public static string? SubjectProblem(string subject, string fileName)
+    public static string? SubjectProblem(string subject, string fileName) => SubjectProblem(SignerIdentity.Parse(subject), fileName);
+
+    /// <summary>The <see cref="SignerIdentity"/> form, for a caller that has already parsed the signer.</summary>
+    public static string? SubjectProblem(SignerIdentity signer, string fileName)
     {
-        string? organization;
-        try
+        if (signer.Organization is not { } organization)
         {
-            organization = OrganizationOf(subject);
+            return $"{fileName} is signed by \"{signer.Subject}\", which names no organization. {ChooseClaude}";
         }
-        catch (CryptographicException)
+        if (!ExpectedOrganizations.Contains(organization, StringComparer.Ordinal))
         {
-            return $"{fileName}'s signer has a subject that could not be read (\"{subject}\"). {ChooseClaude}";
-        }
-        if (organization is null)
-        {
-            return $"{fileName} is signed by \"{subject}\", which names no organization. {ChooseClaude}";
-        }
-        if (!ExpectedOrganizations.Contains(NormalizeOrganization(organization), StringComparer.Ordinal))
-        {
-            return $"{fileName} is signed by \"{subject}\", not by Anthropic. {ChooseClaude}";
+            return $"{fileName} is signed by \"{signer.Subject}\", not by Anthropic. {ChooseClaude}";
         }
         return null;
-    }
-
-    /// <summary>The value of the O= (id-at-organizationName, 2.5.4.10) attribute — exactly one, or null. Two organizations is nobody's identity.</summary>
-    public static string? OrganizationOf(string subject)
-    {
-        var name = new X500DistinguishedName(subject);
-        string? organization = null;
-        foreach (var rdn in name.EnumerateRelativeDistinguishedNames())
-        {
-            if (!rdn.HasMultipleElements && rdn.GetSingleElementType().Value == "2.5.4.10")
-            {
-                if (organization is not null)
-                {
-                    return null;
-                }
-                organization = rdn.GetSingleElementValue();
-            }
-        }
-        return organization;
-    }
-
-    /// <summary>Lower-case, punctuation dropped, whitespace collapsed: "Anthropic, PBC" and "ANTHROPIC P.B.C." compare equal.</summary>
-    public static string NormalizeOrganization(string organization)
-    {
-        var normalized = new StringBuilder(organization.Length);
-        var pendingSpace = false;
-        foreach (var c in organization)
-        {
-            if (char.IsLetterOrDigit(c))
-            {
-                if (pendingSpace && normalized.Length > 0)
-                {
-                    normalized.Append(' ');
-                }
-                pendingSpace = false;
-                normalized.Append(char.ToLowerInvariant(c));
-            }
-            else if (char.IsWhiteSpace(c))
-            {
-                pendingSpace = true;
-            }
-        }
-        return normalized.ToString();
     }
 }

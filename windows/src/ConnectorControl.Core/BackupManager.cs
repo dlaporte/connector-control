@@ -1,5 +1,11 @@
 namespace ConnectorControl.Core;
 
+/// <summary>
+/// Backups hold the same secrets as the file they copy, and the backups tree is always the app's own
+/// (never the synced folder), so every copy goes through <see cref="AtomicFile.Write"/>: the file is
+/// owner-only from its create call, and any directory that has to be created — the default store dir
+/// included, when this is the first write of a fresh install — is private too, like the Mac's 0700.
+/// </summary>
 public sealed class BackupManager
 {
     public string BackupsDir { get; }
@@ -24,9 +30,7 @@ public sealed class BackupManager
         {
             return;
         }
-        EnsureBackupsDir();
-        // Backups hold the same secrets as the file they copy: private from the create call.
-        OwnerOnlyAcl.WriteNewProtectedFile(dest, File.ReadAllBytes(path));
+        AtomicFile.Write(File.ReadAllBytes(path), dest);
     }
 
     /// <summary>
@@ -45,7 +49,6 @@ public sealed class BackupManager
         {
             return newest;
         }
-        EnsureBackupsDir();
         var stamp = BackupTimestamp.From(now ?? DateTime.UtcNow);
         var dest = Path.Combine(BackupsDir, $"{series}.{stamp}.json");
         int counter = 2;
@@ -54,11 +57,8 @@ public sealed class BackupManager
             dest = Path.Combine(BackupsDir, $"{series}.{stamp}-{counter}.json");
             counter++;
         }
-        if (File.Exists(dest))
-        {
-            File.Delete(dest);   // bound exhausted: overwrite rather than throw
-        }
-        OwnerOnlyAcl.WriteNewProtectedFile(dest, File.ReadAllBytes(path));
+        // Bound exhausted: the write replaces the last candidate rather than throwing.
+        AtomicFile.Write(File.ReadAllBytes(path), dest);
         Prune(series);
         return dest;
     }
@@ -81,13 +81,6 @@ public sealed class BackupManager
             .OrderByDescending(Path.GetFileName, StringComparer.Ordinal)
             .ToList();
     }
-
-    /// <summary>
-    /// The backups tree is always the app's own (never the synced folder), so every directory this
-    /// creates — the default store dir included, when this is the first write of a fresh install — is
-    /// private from the create call, like the Mac's 0700.
-    /// </summary>
-    private void EnsureBackupsDir() => OwnerOnlyAcl.CreateDirectoryProtected(BackupsDir);
 
     private void Prune(string series)
     {

@@ -24,7 +24,7 @@ public sealed class RemoteConfig : IEquatable<RemoteConfig>
         RemoteLaunchStyle launchStyle,
         IEnumerable<string>? extraArgs = null,
         IEnumerable<KeyValuePair<string, string>>? passthroughEnv = null,
-        string package = "mcp-remote")
+        string package = RemotePattern.DefaultPackage)
     {
         Url = url;
         Auth = auth;

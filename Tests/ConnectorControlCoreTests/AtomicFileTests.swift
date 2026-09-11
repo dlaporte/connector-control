@@ -133,12 +133,7 @@ final class AtomicFileTests: XCTestCase {
     func testInheritedACLEntriesAreStrippedFromTheFileAndCreatedDirectories() throws {
         let fm = FileManager.default
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        let chmod = Process()
-        chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
-        chmod.arguments = ["+a", "group:everyone allow read,file_inherit,directory_inherit", dir.path]
-        try chmod.run()
-        chmod.waitUntilExit()
-        XCTAssertEqual(chmod.terminationStatus, 0)
+        try grantEveryoneRead(at: dir.path, inheritable: true)
         // Control: a plain write DOES inherit, so the assertions below cannot pass vacuously.
         let control = dir.appendingPathComponent("control.json")
         try Data("{}".utf8).write(to: control)
@@ -168,12 +163,7 @@ final class AtomicFileTests: XCTestCase {
         AtomicFile.privateStagingDirectory = dir.appendingPathComponent("staging")
         let shared = dir.appendingPathComponent("shared")
         try FileManager.default.createDirectory(at: shared, withIntermediateDirectories: true)
-        let chmod = Process()
-        chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
-        chmod.arguments = ["+a", "group:everyone allow read,file_inherit,directory_inherit", shared.path]
-        try chmod.run()
-        chmod.waitUntilExit()
-        XCTAssertEqual(chmod.terminationStatus, 0)
+        try grantEveryoneRead(at: shared.path, inheritable: true)
         let url = shared.appendingPathComponent("secret.json")
         try AtomicFile.write(Data("one".utf8), to: url)
         try AtomicFile.write(Data("two".utf8), to: url)

@@ -32,6 +32,9 @@ public class UpdateVerifierTests : IDisposable
 
     private static readonly Version Older = new(1, 0, 0);
 
+    /// <summary>The identity every signed-app test pins updates to: the framework's own signer, read once.</summary>
+    private static readonly UpdateVerifier.RunningIdentity Identity = UpdateVerifier.ExpectedIdentity(RunningExe);
+
     private string Package(params (string Entry, string Source)[] files)
     {
         var path = dir.File($"ConnectorControl-{Guid.NewGuid():N}-win-x64-full.nupkg");
@@ -57,7 +60,7 @@ public class UpdateVerifierTests : IDisposable
     private static void RequireSignedFramework()
     {
         var signer = AuthenticodeVerifier.SignerSubject(RunningExe);
-        Assert.True(UpdateVerifier.ExpectedIdentity(RunningExe).Organization is not null, $"the shared framework must be Authenticode-signed for these tests: {signer.Problem ?? "no organization in the subject"}");
+        Assert.True(Identity.Organization is not null, $"the shared framework must be Authenticode-signed for these tests: {signer.Problem ?? "no organization in the subject"}");
     }
 
     [Fact]
@@ -65,7 +68,7 @@ public class UpdateVerifierTests : IDisposable
     {
         RequireSignedFramework();
         var package = Package(("lib/app/ConnectorControl.exe", RunningExe), ("lib/app/Squirrel.exe", SignedSibling));
-        Assert.Null(UpdateVerifier.Verify(package, updateExePath: SignedSibling, RunningExe, Older, FrameworkVersion));
+        Assert.Null(UpdateVerifier.Verify(package, updateExePath: SignedSibling, Identity, Older, FrameworkVersion));
     }
 
     [Fact]
@@ -73,7 +76,7 @@ public class UpdateVerifierTests : IDisposable
     {
         RequireSignedFramework();
         var package = Package(("lib/app/ConnectorControl.exe", RunningExe), ("lib/app/ConnectorControl.dll", UnsignedBinary));
-        var problem = UpdateVerifier.Verify(package, updateExePath: null, RunningExe, Older, FrameworkVersion);
+        var problem = UpdateVerifier.Verify(package, updateExePath: null, Identity, Older, FrameworkVersion);
         Assert.NotNull(problem);
         Assert.Contains("ConnectorControl.dll", problem);
     }
@@ -83,7 +86,7 @@ public class UpdateVerifierTests : IDisposable
     {
         RequireSignedFramework();
         var package = Package(("lib/app/ConnectorControl.exe", RunningExe));
-        var problem = UpdateVerifier.Verify(package, updateExePath: UnsignedBinary, RunningExe, Older, FrameworkVersion);
+        var problem = UpdateVerifier.Verify(package, updateExePath: UnsignedBinary, Identity, Older, FrameworkVersion);
         Assert.NotNull(problem);
         Assert.Contains("Update.exe", problem);
     }
@@ -92,7 +95,7 @@ public class UpdateVerifierTests : IDisposable
     public void APackageWithoutTheMainExecutableIsRefused()
     {
         RequireSignedFramework();
-        var problem = UpdateVerifier.Verify(Package(("lib/app/Squirrel.exe", SignedSibling)), updateExePath: null, RunningExe, Older, FrameworkVersion);
+        var problem = UpdateVerifier.Verify(Package(("lib/app/Squirrel.exe", SignedSibling)), updateExePath: null, Identity, Older, FrameworkVersion);
         Assert.NotNull(problem);
         Assert.Contains(UpdateVerifier.MainExecutable, problem);
     }
@@ -102,7 +105,7 @@ public class UpdateVerifierTests : IDisposable
     {
         // The replay: yesterday's signed release relabeled in the feed as tomorrow's.
         RequireSignedFramework();
-        var problem = UpdateVerifier.Verify(Package(("lib/app/ConnectorControl.exe", RunningExe)), updateExePath: null, RunningExe, Older, new Version(99, 0, 0));
+        var problem = UpdateVerifier.Verify(Package(("lib/app/ConnectorControl.exe", RunningExe)), updateExePath: null, Identity, Older, new Version(99, 0, 0));
         Assert.NotNull(problem);
         Assert.Contains("update feed says", problem);
     }
@@ -111,7 +114,7 @@ public class UpdateVerifierTests : IDisposable
     public void ADowngradeIsRefused()
     {
         RequireSignedFramework();
-        var problem = UpdateVerifier.Verify(Package(("lib/app/ConnectorControl.exe", RunningExe)), updateExePath: null, RunningExe, new Version(999, 0, 0), FrameworkVersion);
+        var problem = UpdateVerifier.Verify(Package(("lib/app/ConnectorControl.exe", RunningExe)), updateExePath: null, Identity, new Version(999, 0, 0), FrameworkVersion);
         Assert.NotNull(problem);
         Assert.Contains("older than", problem);
     }
@@ -120,7 +123,7 @@ public class UpdateVerifierTests : IDisposable
     public void AnExecutableUnderAnotherNameIsStillChecked()
     {
         RequireSignedFramework();
-        var problem = UpdateVerifier.Verify(PackageWithBytes("lib/app/notes.txt", File.ReadAllBytes(UnsignedBinary)), updateExePath: null, RunningExe, Older, FrameworkVersion);
+        var problem = UpdateVerifier.Verify(PackageWithBytes("lib/app/notes.txt", File.ReadAllBytes(UnsignedBinary)), updateExePath: null, Identity, Older, FrameworkVersion);
         Assert.NotNull(problem);
         Assert.Contains("notes.txt", problem);
     }
@@ -129,18 +132,19 @@ public class UpdateVerifierTests : IDisposable
     public void AnUnsignedRunningAppCannotPinAndSkipsVerification()
     {
         // A dev build has no identity to compare against; the updater is inert there anyway.
-        Assert.True(UpdateVerifier.ExpectedIdentity(UnsignedBinary).Unsigned);
-        Assert.Null(UpdateVerifier.Verify(Package(("lib/app/x.dll", UnsignedBinary)), updateExePath: UnsignedBinary, UnsignedBinary, Older, FrameworkVersion));
-        Assert.Null(UpdateVerifier.VerifyInstalledUpdater(UnsignedBinary, UnsignedBinary));
+        var unsigned = UpdateVerifier.ExpectedIdentity(UnsignedBinary);
+        Assert.True(unsigned.Unsigned);
+        Assert.Null(UpdateVerifier.Verify(Package(("lib/app/x.dll", UnsignedBinary)), updateExePath: UnsignedBinary, unsigned, Older, FrameworkVersion));
+        Assert.Null(UpdateVerifier.VerifyInstalledUpdater(UnsignedBinary, unsigned));
     }
 
     [Fact]
     public void TheInstalledUpdaterMustBeOursBeforeAnythingIsDownloaded()
     {
         RequireSignedFramework();
-        Assert.Null(UpdateVerifier.VerifyInstalledUpdater(SignedSibling, RunningExe));
-        Assert.Null(UpdateVerifier.VerifyInstalledUpdater(null, RunningExe));
-        var problem = UpdateVerifier.VerifyInstalledUpdater(UnsignedBinary, RunningExe);
+        Assert.Null(UpdateVerifier.VerifyInstalledUpdater(SignedSibling, Identity));
+        Assert.Null(UpdateVerifier.VerifyInstalledUpdater(null, Identity));
+        var problem = UpdateVerifier.VerifyInstalledUpdater(UnsignedBinary, Identity);
         Assert.NotNull(problem);
         Assert.Contains("installed Update.exe", problem);
     }
@@ -150,7 +154,7 @@ public class UpdateVerifierTests : IDisposable
     {
         // Two copies (say, an old signed one and the advertised one) would leave the version check bound to whichever came last.
         RequireSignedFramework();
-        var problem = UpdateVerifier.Verify(Package(("lib/app/ConnectorControl.exe", RunningExe), ("lib/other/ConnectorControl.exe", RunningExe)), updateExePath: null, RunningExe, Older, FrameworkVersion);
+        var problem = UpdateVerifier.Verify(Package(("lib/app/ConnectorControl.exe", RunningExe), ("lib/other/ConnectorControl.exe", RunningExe)), updateExePath: null, Identity, Older, FrameworkVersion);
         Assert.NotNull(problem);
         Assert.Contains("more than once", problem);
     }
@@ -158,9 +162,9 @@ public class UpdateVerifierTests : IDisposable
     [Fact]
     public void NonExecutableEntriesAreUnpackedAndLeftAlone()
     {
-        // sq.version and friends are extracted for the size check but never fail signature verification.
+        // sq.version and friends are inflated and counted for the size check, never written to disk or signature-checked.
         RequireSignedFramework();
-        Assert.Null(UpdateVerifier.Verify(PackageWithBytes("lib/app/readme.txt", "hello"u8.ToArray()), updateExePath: null, RunningExe, Older, FrameworkVersion));
+        Assert.Null(UpdateVerifier.Verify(PackageWithBytes("lib/app/readme.txt", "hello"u8.ToArray()), updateExePath: null, Identity, Older, FrameworkVersion));
     }
 
     [Theory]

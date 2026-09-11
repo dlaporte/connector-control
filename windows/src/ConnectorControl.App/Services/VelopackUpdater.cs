@@ -24,8 +24,9 @@ public sealed class VelopackUpdater : IUpdater
     }
 
     private readonly LocatingUpdateManager? manager;
-    private readonly Func<string, string?, string, Version, Version, string?> verify;
-    private readonly Func<string?, string, string?> verifyInstalled;
+    private readonly Func<string, UpdateVerifier.RunningIdentity> identify;
+    private readonly Func<string, string?, UpdateVerifier.RunningIdentity, Version, Version, string?> verify;
+    private readonly Func<string?, UpdateVerifier.RunningIdentity, string?> verifyInstalled;
 
     public VelopackUpdater() : this(RepoUrl)
     {
@@ -40,10 +41,16 @@ public sealed class VelopackUpdater : IUpdater
     /// Test seam. <paramref name="source"/> builds the feed for a given "include prereleases"
     /// flag (GithubSource in the app); <paramref name="locator"/> describes the install
     /// (Velopack's TestVelopackLocator in tests; null = inspect the real install layout);
-    /// <paramref name="verify"/> replaces <see cref="UpdateVerifier.Verify"/> in tests and
-    /// <paramref name="verifyInstalled"/> replaces <see cref="UpdateVerifier.VerifyInstalledUpdater"/>.
+    /// <paramref name="verify"/> replaces <see cref="UpdateVerifier.Verify"/> in tests,
+    /// <paramref name="verifyInstalled"/> replaces <see cref="UpdateVerifier.VerifyInstalledUpdater"/>
+    /// and <paramref name="identify"/> replaces <see cref="UpdateVerifier.ExpectedIdentity"/>.
     /// </summary>
-    internal VelopackUpdater(Func<bool, IUpdateSource> source, IVelopackLocator? locator, Func<string, string?, string, Version, Version, string?>? verify = null, Func<string?, string, string?>? verifyInstalled = null)
+    internal VelopackUpdater(
+        Func<bool, IUpdateSource> source,
+        IVelopackLocator? locator,
+        Func<string, string?, UpdateVerifier.RunningIdentity, Version, Version, string?>? verify = null,
+        Func<string?, UpdateVerifier.RunningIdentity, string?>? verifyInstalled = null,
+        Func<string, UpdateVerifier.RunningIdentity>? identify = null)
     {
         LocatingUpdateManager? resolved = null;
         var followsPrereleases = false;
@@ -68,6 +75,7 @@ public sealed class VelopackUpdater : IUpdater
         manager = resolved;
         FollowsPrereleases = followsPrereleases;
         VersionDisplay = manager?.CurrentVersion?.ToString() ?? DevelopmentBuild;
+        this.identify = identify ?? UpdateVerifier.ExpectedIdentity;
         this.verify = verify ?? UpdateVerifier.Verify;
         this.verifyInstalled = verifyInstalled ?? UpdateVerifier.VerifyInstalledUpdater;
     }
@@ -106,24 +114,27 @@ public sealed class VelopackUpdater : IUpdater
         var location = manager.Location;
         var runningExe = Environment.ProcessPath
             ?? throw new UpdateVerificationException("This app's own location is unknown, so an update cannot be checked" + UpdateVerifier.NotInstalledSuffix);
+        // The running app's identity is read once per download and decides both checks below.
+        var identity = identify(runningExe);
         // Velopack may run the installed Update.exe during a download; it must already be ours,
         // and a copy of it is kept so a refused package cannot leave its own updater behind.
-        if (verifyInstalled(location.UpdateExePath, runningExe) is { } installedProblem)
+        if (verifyInstalled(location.UpdateExePath, identity) is { } installedProblem)
         {
             throw new UpdateVerificationException(installedProblem);
         }
         var knownGoodUpdater = location.UpdateExePath is { } updateExe && File.Exists(updateExe) ? File.ReadAllBytes(updateExe) : null;
         await manager.DownloadUpdatesAsync(info, percent => progress?.Report(percent), cancellationToken).ConfigureAwait(false);
-        VerifyDownloaded(info, knownGoodUpdater, runningExe);
+        VerifyDownloaded(info, knownGoodUpdater, identity);
     }
 
     /// <summary>
     /// Velopack has checked the feed checksum and already overwritten Update.exe from the package.
     /// Before anything is staged, that Update.exe and every binary in the package must be signed by
-    /// this app's own publisher and carry the advertised version. A refused package is deleted and
-    /// the previous Update.exe put back, so neither can be picked up by a later apply or uninstall.
+    /// this app's own publisher (<paramref name="identity"/>) and carry the advertised version. A
+    /// refused package is deleted and the previous Update.exe put back, so neither can be picked up
+    /// by a later apply or uninstall.
     /// </summary>
-    internal void VerifyDownloaded(UpdateInfo info, byte[]? knownGoodUpdater, string? runningExe = null)
+    internal void VerifyDownloaded(UpdateInfo info, byte[]? knownGoodUpdater, UpdateVerifier.RunningIdentity identity)
     {
         if (manager is null)
         {
@@ -131,9 +142,7 @@ public sealed class VelopackUpdater : IUpdater
         }
         var location = manager.Location;
         var packagePath = Path.Combine(location.PackagesDir ?? "", info.TargetFullRelease.FileName);
-        var running = Numeric(manager.CurrentVersion);
-        var feed = Numeric(info.TargetFullRelease.Version);
-        if (verify(packagePath, location.UpdateExePath, runningExe ?? Environment.ProcessPath ?? "", running, feed) is { } problem)
+        if (verify(packagePath, location.UpdateExePath, identity, NumericVersion(manager.CurrentVersion), NumericVersion(info.TargetFullRelease.Version)) is { } problem)
         {
             try { File.Delete(packagePath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             if (location.UpdateExePath is { } updateExe)
@@ -152,9 +161,6 @@ public sealed class VelopackUpdater : IUpdater
         }
     }
 
-    private static Version Numeric(SemanticVersion? version) =>
-        version is null ? new Version(0, 0, 0) : new Version(version.Major, version.Minor, version.Patch);
-
     public void ApplyOnQuit(UpdateCheck update)
     {
         if (manager is not null && update.Token is UpdateInfo info)
@@ -170,4 +176,8 @@ public sealed class VelopackUpdater : IUpdater
             manager.ApplyUpdatesAndRestart(info.TargetFullRelease);
         }
     }
+
+    /// <summary>Major.minor.patch of a Velopack version as a System.Version; a missing version is 0.0.0.</summary>
+    private static Version NumericVersion(SemanticVersion? version) =>
+        new(version?.Major ?? 0, version?.Minor ?? 0, version?.Patch ?? 0);
 }

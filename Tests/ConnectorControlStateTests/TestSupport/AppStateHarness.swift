@@ -16,6 +16,7 @@ final class AppStateHarness {
     var storeDir: URL { appSupport.appendingPathComponent("Connector Control") }
     var masterStoreURL: URL { storeDir.appendingPathComponent("mcps.json") }
     var backupsDir: URL { storeDir.appendingPathComponent("backups") }
+    var stagingDir: URL { storeDir.appendingPathComponent(".staging") }
 
     let settings = FakeSettings()
     let claude = FakeClaudeProcess()

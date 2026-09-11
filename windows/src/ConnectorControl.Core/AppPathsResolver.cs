@@ -85,9 +85,9 @@ public static class AppPathsResolver
         MsixClaudeConfigCandidates(folders, probe).FirstOrDefault(probe.FileExists);
 
     /// <summary>
-    /// Every LocalCache config path a <c>Claude_*</c> or <c>Anthropic.Claude*</c>
-    /// MSIX package folder could produce, in ordinal folder-name order. Existence
-    /// of the file or the package folder is not implied — callers probe for that.
+    /// Every LocalCache config path a Claude MSIX package folder (one whose name passes
+    /// <see cref="ClaudePackage.IsClaudeFamily"/>) could produce, in ordinal folder-name
+    /// order. Existence of the file or the package folder is not implied — callers probe for that.
     /// </summary>
     internal static IReadOnlyList<string> MsixClaudeConfigCandidates(KnownFolders folders, IPathProbe probe)
     {
@@ -97,12 +97,7 @@ public static class AppPathsResolver
             return [];
         }
         return probe.EnumerateDirectories(packages)
-            .Where(dir =>
-            {
-                var name = Path.GetFileName(dir);
-                return name.StartsWith("Claude_", StringComparison.Ordinal)
-                    || name.StartsWith("Anthropic.Claude", StringComparison.Ordinal);
-            })
+            .Where(dir => ClaudePackage.IsClaudeFamily(Path.GetFileName(dir)))
             .OrderBy(dir => dir, StringComparer.Ordinal)
             .Select(dir => Path.Combine(dir, "LocalCache", "Roaming", "Claude", "claude_desktop_config.json"))
             .ToList();

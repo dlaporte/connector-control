@@ -21,6 +21,7 @@ final class AppPathsTests: XCTestCase {
         XCTAssertEqual(paths.storeDirURL.path, "/tmp/x/store")
         XCTAssertEqual(paths.masterStoreURL.path, "/tmp/x/store/mcps.json")
         XCTAssertEqual(paths.backupsDirURL.path, "/tmp/x/store/backups")
+        XCTAssertEqual(paths.stagingDirURL.path, "/tmp/x/store/.staging")
     }
 
     func testExplicitBackupsDirURLIsHonoredIndependentlyOfStoreDir() {
@@ -30,6 +31,18 @@ final class AppPathsTests: XCTestCase {
             backupsDirURL: URL(fileURLWithPath: "/tmp/machine-local/backups"))
         XCTAssertEqual(paths.backupsDirURL.path, "/tmp/machine-local/backups")
         XCTAssertEqual(paths.masterStoreURL.path, "/tmp/x/store/mcps.json")
+        XCTAssertEqual(paths.stagingDirURL.path, "/tmp/x/store/.staging", "defaults under the store dir")
+    }
+
+    /// The staging folder is the app's own, like backups: a chosen (synced) store dir never
+    /// gets it, so `makeService` passes the machine-local one explicitly.
+    func testExplicitStagingDirURLIsHonoredIndependentlyOfStoreDir() {
+        let paths = AppPaths(
+            claudeConfigURL: URL(fileURLWithPath: "/tmp/x/claude.json"),
+            storeDirURL: URL(fileURLWithPath: "/tmp/x/store"),
+            stagingDirURL: URL(fileURLWithPath: "/tmp/machine-local/.staging"))
+        XCTAssertEqual(paths.stagingDirURL.path, "/tmp/machine-local/.staging")
+        XCTAssertEqual(paths.backupsDirURL.path, "/tmp/x/store/backups")
     }
 
     func testLiveHonoursTheAppSupportDirectory() {

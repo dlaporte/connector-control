@@ -278,10 +278,10 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             try
             {
-                // A directory this app creates is private from the start; one the user chose is
-                // left as it is (the sweep's rule). The seeded copy is owner-only from its create call.
-                OwnerOnlyAcl.CreateDirectoryProtected(rebuilt.Paths.StoreDir);
-                OwnerOnlyAcl.WriteNewProtectedFile(newStorePath, File.ReadAllBytes(previousStorePath));
+                // Exactly the Mac's seed: a directory this app creates is private from the start, one
+                // the user chose is left as it is (the sweep's rule), and the copy is owner-only from
+                // its create call.
+                AtomicFile.Write(File.ReadAllBytes(previousStorePath), newStorePath);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

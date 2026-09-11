@@ -9,11 +9,14 @@ namespace ConnectorControl.Core;
 /// granting the current user full control and nobody else. Connector configs
 /// can hold env-var secrets, so every file this app writes gets this — in the
 /// create call itself where possible (<see cref="WriteNewProtectedFile"/>,
-/// <see cref="CreateDirectoryProtected"/>), after the fact only as a repair
-/// (<see cref="TryApply"/>).
+/// <see cref="CreateDirectoryProtected"/>, both reached through <see cref="AtomicFile"/>),
+/// after the fact only as a repair (<see cref="TryApply"/>).
 /// </summary>
 public static class OwnerOnlyAcl
 {
+    /// <summary>The process identity never changes, and every DACL this class builds names it.</summary>
+    private static SecurityIdentifier? currentUser;
+
     /// <summary>
     /// Best effort, like Swift's <c>try?</c>: errors swallowed. Returns true when the ACL was
     /// applied (or there was nothing to do: off Windows), false when the attempt failed, so a
@@ -30,7 +33,7 @@ public static class OwnerOnlyAcl
             Apply(path);
             return true;
         }
-        catch (Exception ex) when (IsAclFailure(ex))
+        catch (Exception ex) when (IsAclRepairFailure(ex))
         {
             // Best effort, like Swift's `try?`: the write itself must never fail
             // because the ACL could not be tightened. Programming errors still surface.
@@ -46,7 +49,7 @@ public static class OwnerOnlyAcl
     /// object) the file is created plainly and <see cref="TryApply"/> repairs it. Returns whether
     /// the file ended up owner-only; file errors throw as they would from File.WriteAllBytes.
     /// </summary>
-    public static bool WriteNewProtectedFile(string path, byte[] data)
+    internal static bool WriteNewProtectedFile(string path, byte[] data)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -55,7 +58,7 @@ public static class OwnerOnlyAcl
             {
                 protectedStream = new FileInfo(path).Create(FileMode.CreateNew, FileSystemRights.Write, FileShare.None, 4096, FileOptions.None, FileSecurityForCurrentUser());
             }
-            catch (Exception ex) when (IsAclMachineryFailure(ex))
+            catch (Exception ex) when (IsAclUnavailable(ex))
             {
                 // fall through to the plain create below
             }
@@ -81,7 +84,7 @@ public static class OwnerOnlyAcl
     /// exists — a folder the user chose — is never rewritten (the sweep's rule too). Throws
     /// IOException when a file sits where the directory should be.
     /// </summary>
-    public static void CreateDirectoryProtected(string dir)
+    internal static void CreateDirectoryProtected(string dir)
     {
         if (Directory.Exists(dir))
         {
@@ -94,7 +97,7 @@ public static class OwnerOnlyAcl
                 new DirectoryInfo(dir).Create(DirectorySecurityForCurrentUser());
                 return;
             }
-            catch (Exception ex) when (IsAclMachineryFailure(ex))
+            catch (Exception ex) when (IsAclUnavailable(ex))
             {
                 // fall through to the plain create below
             }
@@ -105,7 +108,7 @@ public static class OwnerOnlyAcl
 
     /// <summary>A protected DACL (no inheritance) granting the current user full control and nobody else.</summary>
     [SupportedOSPlatform("windows")]
-    public static FileSecurity FileSecurityForCurrentUser()
+    private static FileSecurity FileSecurityForCurrentUser()
     {
         var security = new FileSecurity();
         security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
@@ -115,7 +118,7 @@ public static class OwnerOnlyAcl
 
     /// <summary>The directory form of <see cref="FileSecurityForCurrentUser"/>: the rule inherits to what is created inside.</summary>
     [SupportedOSPlatform("windows")]
-    public static DirectorySecurity DirectorySecurityForCurrentUser()
+    private static DirectorySecurity DirectorySecurityForCurrentUser()
     {
         var security = new DirectorySecurity();
         security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
@@ -127,9 +130,15 @@ public static class OwnerOnlyAcl
     }
 
     [SupportedOSPlatform("windows")]
-    private static SecurityIdentifier CurrentUser() =>
-        WindowsIdentity.GetCurrent().User
-            ?? throw new InvalidOperationException("The current Windows identity has no SID.");
+    private static SecurityIdentifier CurrentUser()
+    {
+        if (currentUser is null)
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            currentUser = identity.User ?? throw new InvalidOperationException("The current Windows identity has no SID.");
+        }
+        return currentUser;
+    }
 
     [SupportedOSPlatform("windows")]
     private static void Apply(string path)
@@ -145,20 +154,21 @@ public static class OwnerOnlyAcl
     }
 
     /// <summary>
-    /// The ACL machinery failing on its own terms — no SID, an object or volume without security
+    /// The ACL machinery is unavailable on its own terms — no SID, an object or volume without security
     /// (NotSupportedException is what .NET raises for ERROR_NO_SECURITY_ON_OBJECT on FAT/exFAT and
     /// some shares) — as opposed to the file operation it was attached to failing.
     /// </summary>
-    private static bool IsAclMachineryFailure(Exception ex) => ex is InvalidOperationException
+    private static bool IsAclUnavailable(Exception ex) => ex is InvalidOperationException
         or PlatformNotSupportedException
         or NotSupportedException
         or System.Security.SecurityException
         or IdentityNotMappedException;
 
-    /// <summary>Everything <see cref="TryApply"/> swallows: the machinery, plus the file being gone or locked.</summary>
-    private static bool IsAclFailure(Exception ex) => ex is IOException
-        or UnauthorizedAccessException            // includes PrivilegeNotHeldException
-        || IsAclMachineryFailure(ex);
+    /// <summary>Everything a repair (<see cref="TryApply"/>) swallows: the machinery being unavailable, plus the file being gone or locked.</summary>
+    private static bool IsAclRepairFailure(Exception ex) =>
+        IsAclUnavailable(ex)
+        || ex is IOException
+        || ex is UnauthorizedAccessException;   // includes PrivilegeNotHeldException
 
     /// <summary>True when the DACL is protected and every rule names the current user.</summary>
     [SupportedOSPlatform("windows")]

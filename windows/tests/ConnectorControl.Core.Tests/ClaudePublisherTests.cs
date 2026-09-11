@@ -56,14 +56,23 @@ public class ClaudePublisherTests
     [InlineData("  Anthropic  ", "anthropic")]
     public void NormalizationFoldsCasePunctuationAndSpacing(string organization, string expected)
     {
-        Assert.Equal(expected, ClaudePublisher.NormalizeOrganization(organization));
+        Assert.Equal(expected, SignerIdentity.NormalizeOrganization(organization));
     }
 
     [Fact]
     public void OrganizationIsTheSoleOAttribute()
     {
-        Assert.Equal("Anthropic, PBC", ClaudePublisher.OrganizationOf("CN=\"Anthropic, PBC\", O=\"Anthropic, PBC\", C=US"));
-        Assert.Null(ClaudePublisher.OrganizationOf("CN=Anthropic, OU=Anthropic"));
-        Assert.Null(ClaudePublisher.OrganizationOf("O=Anthropic, O=Evil Corp"));   // two organizations is nobody's identity
+        Assert.Equal("Anthropic, PBC", SignerIdentity.OrganizationOf("CN=\"Anthropic, PBC\", O=\"Anthropic, PBC\", C=US"));
+        Assert.Null(SignerIdentity.OrganizationOf("CN=Anthropic, OU=Anthropic"));
+        Assert.Null(SignerIdentity.OrganizationOf("O=Anthropic, O=Evil Corp"));   // two organizations is nobody's identity
+        Assert.Null(SignerIdentity.OrganizationOf("not a distinguished name at all"));
+    }
+
+    [Fact]
+    public void ParseKeepsTheSubjectAndNormalizesTheOrganization()
+    {
+        var subject = "CN=\"Anthropic, PBC\", O=\"Anthropic, PBC\", C=US";
+        Assert.Equal(new SignerIdentity(subject, "anthropic pbc"), SignerIdentity.Parse(subject));
+        Assert.Null(SignerIdentity.Parse("CN=Anthropic").Organization);
     }
 }
