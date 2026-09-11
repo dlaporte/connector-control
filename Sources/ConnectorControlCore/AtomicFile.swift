@@ -14,9 +14,13 @@ public enum AtomicFile {
         guard let staging else { return nil }
         let fm = FileManager.default
         if !fm.fileExists(atPath: staging.path) {
-            guard (try? fm.createDirectory(at: staging, withIntermediateDirectories: true,
-                                           attributes: [.posixPermissions: 0o700])) != nil,
-                  (try? stripACL(atPath: staging.path)) != nil else { return nil }
+            do {
+                try fm.createDirectory(at: staging, withIntermediateDirectories: true,
+                                       attributes: [.posixPermissions: 0o700])
+                try stripACL(atPath: staging.path)
+            } catch {
+                return nil
+            }
         }
         var a = stat(), b = stat()
         guard stat(dir.path, &a) == 0, stat(staging.path, &b) == 0, a.st_dev == b.st_dev else { return nil }
@@ -26,10 +30,11 @@ public enum AtomicFile {
     public static func write(_ data: Data, to url: URL) throws {
         let fm = FileManager.default
         // A symlinked destination (a config kept in a dotfiles repo) is written
-        // through: the temp file is created beside the real file and renamed
-        // over it, so the link survives and the bytes land where every other
-        // reader of the link finds them. Components that do not exist yet are
-        // left as given.
+        // through: the temp file is created in the private staging folder when
+        // that shares the real file's volume, else beside the real file, and is
+        // renamed over the real file either way, so the link survives and the
+        // bytes land where every other reader of the link finds them.
+        // Components that do not exist yet are left as given.
         let target = url.resolvingSymlinksInPath()
         let dir = target.deletingLastPathComponent()
         // A directory this call has to create holds a private file, so it is
@@ -84,19 +89,23 @@ public enum AtomicFile {
 
     /// Removes every ACL entry from the object `fd` refers to. `open(…, 0600)` cannot refuse
     /// the ACEs a parent folder hands down, and macOS consults ACEs before the mode bits, so
-    /// a file in a shared folder is only private once its ACL is gone. A volume without ACLs
-    /// at all (exFAT, some network shares) answers ENOTSUP: nothing to strip, so success.
+    /// a file in a shared folder is only private once its ACL is gone.
     public static func stripACL(fd: Int32) throws {
-        guard let empty = acl_init(0) else { throw posixError() }
-        defer { acl_free(UnsafeMutableRawPointer(empty)) }
-        guard acl_set_fd_np(fd, empty, ACL_TYPE_EXTENDED) == 0 || errno == ENOTSUP else { throw posixError() }
+        try withEmptyACL { acl_set_fd_np(fd, $0, ACL_TYPE_EXTENDED) }
     }
 
     /// `stripACL(fd:)` for a path: directories, and the sweep's repair of existing files.
     public static func stripACL(atPath path: String) throws {
+        try withEmptyACL { acl_set_link_np(path, ACL_TYPE_EXTENDED, $0) }
+    }
+
+    /// Hands a freshly allocated empty ACL to `apply` (one of the `acl_set_*` calls) and frees
+    /// it afterwards. A volume without ACLs at all (exFAT, some network shares) answers
+    /// ENOTSUP: nothing to strip, so success; any other failure surfaces as the POSIX error.
+    private static func withEmptyACL(_ apply: (acl_t) -> Int32) throws {
         guard let empty = acl_init(0) else { throw posixError() }
         defer { acl_free(UnsafeMutableRawPointer(empty)) }
-        guard acl_set_link_np(path, ACL_TYPE_EXTENDED, empty) == 0 || errno == ENOTSUP else { throw posixError() }
+        guard apply(empty) == 0 || errno == ENOTSUP else { throw posixError() }
     }
 
     /// True when the object carries any ACL entry (inherited or explicit).

@@ -316,6 +316,7 @@ final class AppStateTests: XCTestCase {
         let service = AppState.makeService(settings: h.settings, paths: h.context)
         XCTAssertEqual(service.paths.storeDirURL.path, h.dir.file("synced").path)
         XCTAssertEqual(service.paths.backupsDirURL.path, h.backupsDir.path)
+        XCTAssertEqual(service.paths.stagingDirURL.path, h.stagingDir.path, "temp files are never born in the synced folder")
         XCTAssertEqual(service.paths.claudeConfigURL.path, h.claudeConfigURL.path)
         XCTAssertEqual(service.backups.keepCount, 7)
     }

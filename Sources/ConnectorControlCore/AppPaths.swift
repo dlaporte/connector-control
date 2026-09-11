@@ -4,13 +4,17 @@ public struct AppPaths {
     public let claudeConfigURL: URL
     public let storeDirURL: URL
     public let backupsDirURL: URL
+    /// Where `AtomicFile` creates its temp files (see `AtomicFile.privateStagingDirectory`).
+    /// Like backups, always the app's own machine-local folder, never a chosen store folder.
+    public let stagingDirURL: URL
 
     public var masterStoreURL: URL { storeDirURL.appendingPathComponent("mcps.json") }
 
-    public init(claudeConfigURL: URL, storeDirURL: URL, backupsDirURL: URL? = nil) {
+    public init(claudeConfigURL: URL, storeDirURL: URL, backupsDirURL: URL? = nil, stagingDirURL: URL? = nil) {
         self.claudeConfigURL = claudeConfigURL
         self.storeDirURL = storeDirURL
         self.backupsDirURL = backupsDirURL ?? storeDirURL.appendingPathComponent("backups")
+        self.stagingDirURL = stagingDirURL ?? storeDirURL.appendingPathComponent(".staging")
     }
 
     /// `appSupport` is `~/Library/Application Support` in the app; the state

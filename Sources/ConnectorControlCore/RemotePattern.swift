@@ -5,10 +5,14 @@ import Foundation
 /// (env, headers, …) don't disqualify — they surface in the form's read-only
 /// Additional fields.
 public enum RemotePattern {
+    /// The bridge package as this app writes it when the user has not pinned a
+    /// version; `isMarker` also accepts a `@version` suffix on it.
+    public static let defaultPackage = "mcp-remote"
+
     /// True when `s` is the mcp-remote bridge package specifier, with or
     /// without a version tag (e.g. `mcp-remote@latest`).
     static func isMarker(_ s: String) -> Bool {
-        s == "mcp-remote" || s.hasPrefix("mcp-remote@")
+        s == defaultPackage || s.hasPrefix(defaultPackage + "@")
     }
 
     /// The rule the URL argument must meet (catalog §3.4 remoteURLValid): an
@@ -38,7 +42,7 @@ public enum RemotePattern {
 
     public static func make(url: String) -> JSONValue {
         .object(["command": .string("npx"),
-                 "args": .array([.string("-y"), .string("mcp-remote"), .string(url)])])
+                 "args": .array([.string("-y"), .string(defaultPackage), .string(url)])])
     }
 
     /// True when the config is an `npx [-y] mcp-remote… …` invocation, regardless
@@ -104,7 +108,7 @@ public struct RemoteConfig: Equatable {
 
     public init(url: String, auth: RemoteAuth,
                 extraArgs: [String] = [], passthroughEnv: [String: String] = [:],
-                package: String = "mcp-remote") {
+                package: String = RemotePattern.defaultPackage) {
         self.url = url
         self.auth = auth
         self.extraArgs = extraArgs

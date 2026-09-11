@@ -73,7 +73,7 @@ public final class EditorModel: ObservableObject {
     @Published public var oauthScopes = ""
     private var remoteExtraArgs: [String] = []
     private var remotePassthroughEnv: [String: String] = [:]
-    private var remotePackage = "mcp-remote"
+    private var remotePackage = RemotePattern.defaultPackage
     @Published public var command: String {
         didSet { if oldValue != command { evaluateRequiredTool() } }
     }
@@ -213,7 +213,7 @@ public final class EditorModel: ObservableObject {
     private func isRemoteChanged(from oldValue: Bool) {
         guard oldValue != isRemote else { return }
         if target.isNew, !isRemote, view == .form,
-           args.contains(where: { $0.value == "mcp-remote" }) || command.isEmpty {
+           args.contains(where: { $0.value == RemotePattern.defaultPackage }) || command.isEmpty {
             // Discard the remote template's bridge invocation — a local
             // server has nothing to do with mcp-remote.
             command = "npx"
@@ -302,7 +302,7 @@ public final class EditorModel: ObservableObject {
             resetRemoteFields()
             remoteExtraArgs = []
             remotePassthroughEnv = [:]
-            remotePackage = "mcp-remote"
+            remotePackage = RemotePattern.defaultPackage
         }
         suppressToolEvaluation = false
         evaluateRequiredTool()

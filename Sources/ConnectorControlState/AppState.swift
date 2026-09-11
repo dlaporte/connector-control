@@ -102,12 +102,12 @@ public final class AppState: ObservableObject {
         self.paths = paths
         self.host = host
         self.toolProbe = toolProbe
-        // Temp files for every write are born in the app's own folder (same volume permitting),
-        // never beside a synced/shared target — see AtomicFile.privateStagingDirectory.
-        AtomicFile.privateStagingDirectory = AppPaths.live(environment: paths.environment, appSupport: paths.appSupport)
-            .storeDirURL.appendingPathComponent(".staging")
         let resolved = AppState.makeService(settings: settings, paths: paths)
         service = resolved
+        // Temp files for every write are born in the app's own folder (same volume permitting),
+        // never beside a synced/shared target — see AtomicFile.privateStagingDirectory. Set
+        // before the first write: makeService only builds values, the sweep and reload write.
+        AtomicFile.privateStagingDirectory = resolved.paths.stagingDirURL
         // Sweep the RESOLVED paths (a repointed store lives outside the default dir).
         PermissionsSweep.runOnce(settings: settings, paths: resolved.paths)
         // The notification's Restart Claude button routes back here. Skipping the
@@ -147,11 +147,15 @@ public final class AppState: ObservableObject {
         // Env override (dev sandboxing) beats the user setting.
         if paths.environment["CONNECTOR_CONTROL_STORE_DIR"] == nil, let custom = settings.masterStoreDir {
             // Backups always stay machine-local: a synced store directory must
-            // not fill the user's repo/cloud folder with rotating backups.
+            // not fill the user's repo/cloud folder with rotating backups. The
+            // staging folder stays there too: temp files must never be born in
+            // the synced folder (see AtomicFile.privateStagingDirectory).
+            let machineLocal = AppPaths.live(environment: [:], appSupport: paths.appSupport)
             resolved = AppPaths(
                 claudeConfigURL: resolved.claudeConfigURL,
                 storeDirURL: URL(fileURLWithPath: custom),
-                backupsDirURL: AppPaths.live(environment: [:], appSupport: paths.appSupport).backupsDirURL)
+                backupsDirURL: machineLocal.backupsDirURL,
+                stagingDirURL: machineLocal.stagingDirURL)
         }
         return ConfigService(paths: resolved, keepCount: settings.backupKeepCount)
     }

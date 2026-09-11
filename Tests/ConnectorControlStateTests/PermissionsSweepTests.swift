@@ -88,10 +88,7 @@ final class PermissionsSweepTests: XCTestCase {
         let backup = paths.backupsDirURL.appendingPathComponent("mcps.2026-09-10T00-00-00-000Z.json")
         try Data("{}".utf8).write(to: backup)
         for url in [paths.masterStoreURL, backup] {
-            let chmod = Process()
-            chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
-            chmod.arguments = ["+a", "group:everyone allow read", url.path]
-            try chmod.run(); chmod.waitUntilExit()
+            try grantEveryoneRead(at: url.path, inheritable: false)
             XCTAssertTrue(AtomicFile.hasACL(atPath: url.path))
         }
         let settings = FakeSettings()
