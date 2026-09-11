@@ -57,5 +57,12 @@ jobs:
         shell: pwsh
         run: |
           Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
-          # -Path takes one string; analyze the two folders in turn (-EnableExit fails the step on a finding).
-          foreach ($folder in 'windows/scripts', 'windows/tools') { Invoke-ScriptAnalyzer -Path $folder -Recurse -Severity Error -EnableExit }
+          # -Path takes one string, and -EnableExit sets the host's exit code per call, so a clean
+          # second folder would mask a finding in the first: collect both folders, then fail once.
+          $findings = @(foreach ($folder in 'windows/scripts', 'windows/tools') {
+            Invoke-ScriptAnalyzer -Path $folder -Recurse -Severity Error
+          })
+          if ($findings.Count -gt 0) {
+            $findings | Format-Table -AutoSize | Out-String | Write-Host
+            exit 1
+          }
