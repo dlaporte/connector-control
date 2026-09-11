@@ -15,16 +15,12 @@ final class MarshalQueue: @unchecked Sendable {
         lock.withLock { queue.append(action) }
     }
 
-    /// Runs everything queued so far (and anything they queue); returns how many ran.
+    /// Runs everything queued so far (and anything they queue).
     @MainActor
-    @discardableResult
-    func pump() -> Int {
-        var ran = 0
+    func pump() {
         while let action = lock.withLock({ queue.isEmpty ? nil : queue.removeFirst() }) {
             action()
-            ran += 1
         }
-        return ran
     }
 
     /// Pumps until the condition holds or the timeout passes.

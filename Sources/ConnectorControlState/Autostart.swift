@@ -1,5 +1,3 @@
-import Foundation
-
 /// SMAppService (catalog §4.2) as a seam.
 public protocol Autostart: AnyObject {
     /// Read fresh each time: the user may change it in System Settings.

@@ -1,9 +1,5 @@
 import Foundation
 
-public enum JSONValueError: Error, Equatable {
-    case unsupported(String)
-}
-
 public enum JSONValue: Equatable, Hashable {
     case null
     case bool(Bool)
@@ -75,7 +71,7 @@ public extension JSONValue {
         }
     }
 
-    init(any: Any) throws {
+    init(any: Any) {
         switch any {
         case is NSNull:
             self = .null
@@ -93,11 +89,11 @@ public extension JSONValue {
         case let s as String:
             self = .string(s)
         case let a as [Any]:
-            self = .array(try a.map(JSONValue.init(any:)))
+            self = .array(a.map(JSONValue.init(any:)))
         case let o as [String: Any]:
-            self = .object(try o.mapValues(JSONValue.init(any:)))
+            self = .object(o.mapValues(JSONValue.init(any:)))
         default:
-            throw JSONValueError.unsupported(String(describing: type(of: any)))
+            preconditionFailure("JSONSerialization produced \(type(of: any))")
         }
     }
 

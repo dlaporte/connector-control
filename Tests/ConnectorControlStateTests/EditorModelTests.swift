@@ -46,7 +46,7 @@ final class EditorModelTests: XCTestCase {
         let h = AppStateHarness()
         defer { h.dispose() }
         let state = h.create()
-        let editor = editor(h, state, .existing(name: "scoutbook", entry: MCPEntry(config: local("npx", ["-y", "mcp-remote", url]))))
+        let editor = editor(h, state, .existing(name: "scoutbook", entry: MCPEntry(config: RemotePattern.make(url: url))))
         XCTAssertEqual(editor.windowTitle, "Edit “scoutbook”")
         XCTAssertFalse(editor.showTypePicker)
         XCTAssertTrue(editor.isRemote)
@@ -122,7 +122,7 @@ final class EditorModelTests: XCTestCase {
         let h = AppStateHarness()
         defer { h.dispose() }
         let state = h.create()
-        let editor = editor(h, state, .existing(name: "scoutbook", entry: MCPEntry(config: local("npx", ["-y", "mcp-remote", url]))))
+        let editor = editor(h, state, .existing(name: "scoutbook", entry: MCPEntry(config: RemotePattern.make(url: url))))
         XCTAssertEqual(editor.view, .form)
         XCTAssertTrue(editor.isRemote)
         editor.isRemote = false
@@ -449,7 +449,7 @@ final class EditorModelTests: XCTestCase {
         let entry = try XCTUnwrap(state.store.mcps["new-remote"])
         XCTAssertTrue(entry.enabled)
         XCTAssertEqual(entry.lastEditView, .form)
-        XCTAssertEqual(entry.config, local("npx", ["-y", "mcp-remote", "https://new.example/mcp"]))
+        XCTAssertEqual(entry.config, RemotePattern.make(url: "https://new.example/mcp"))
         XCTAssertNotNil(try h.claudeServers()["new-remote"])
         XCTAssertEqual(h.settings.lastApplyDate, h.now)
     }
@@ -491,7 +491,7 @@ final class EditorModelTests: XCTestCase {
         let entry = try XCTUnwrap(state.store.mcps["scoutbook"])
         XCTAssertFalse(entry.enabled)
         XCTAssertEqual(entry.lastEditView, .json)
-        XCTAssertEqual(entry.config, local("npx", ["-y", "mcp-remote", "https://moved.example/mcp"]))   // decoded as bare npx, re-encoded as bare npx
+        XCTAssertEqual(entry.config, RemotePattern.make(url: "https://moved.example/mcp"))   // decoded as bare npx, re-encoded as bare npx
         XCTAssertNil(try h.claudeServers()["scoutbook"])   // disabled: not applied to Claude
     }
 
@@ -546,7 +546,7 @@ final class EditorModelTests: XCTestCase {
 
         h.dialogs.nextConfirm = true
         XCTAssertTrue(editor.save())
-        XCTAssertEqual(state.store.mcps["scoutbook"]?.config, local("npx", ["-y", "mcp-remote", "https://mine.example/mcp"]))
+        XCTAssertEqual(state.store.mcps["scoutbook"]?.config, RemotePattern.make(url: "https://mine.example/mcp"))
     }
 
     func testSaveConflictWhenTheEntryWasRemovedOutsideTheEditor() throws {
@@ -635,8 +635,7 @@ final class EditorModelTests: XCTestCase {
         defer { editor.dispose() }
         XCTAssertEqual(editor.requiredTool, .npx)
         XCTAssertNil(editor.toolNote)   // not probed yet: no note, and nothing blocks
-        XCTAssertFalse(editor.hasToolNote)
-        XCTAssertTrue(h.ui.pumpUntil({ editor.hasToolNote }, timeout: 5))
+        XCTAssertTrue(h.ui.pumpUntil({ editor.toolNote != nil }, timeout: 5))
         let note = try XCTUnwrap(editor.toolNote)
         XCTAssertEqual(note.text, "npx wasn’t found, so Claude Desktop won’t be able to start this connector.")
         XCTAssertEqual(note.linkTitle, "Install Node.js")
@@ -658,25 +657,25 @@ final class EditorModelTests: XCTestCase {
         defer { editor.dispose() }
         XCTAssertEqual(editor.requiredTool, .node)
         XCTAssertTrue(h.ui.pumpUntil({ state.toolStatuses[.node] != nil }, timeout: 5))
-        XCTAssertFalse(editor.hasToolNote)   // node is installed on this (fake) machine
+        XCTAssertNil(editor.toolNote)   // node is installed on this (fake) machine
         var raised = 0
         let subscription = editor.objectWillChange.sink { _ in raised += 1 }
         defer { subscription.cancel() }
         editor.command = "uvx"
         XCTAssertEqual(editor.requiredTool, .uvx)
         XCTAssertGreaterThan(raised, 0)
-        XCTAssertTrue(h.ui.pumpUntil({ editor.hasToolNote }, timeout: 5))
+        XCTAssertTrue(h.ui.pumpUntil({ editor.toolNote != nil }, timeout: 5))
         XCTAssertTrue(try XCTUnwrap(editor.toolNote).text.hasPrefix("uvx wasn’t found"))
         editor.command = "/usr/local/bin/uvx"   // a path is the user's deliberate choice: no PATH lookup, no note
         XCTAssertNil(editor.requiredTool)
-        XCTAssertFalse(editor.hasToolNote)
+        XCTAssertNil(editor.toolNote)
         editor.command = "python"
         XCTAssertNil(editor.requiredTool)
         XCTAssertEqual(h.tools.probed.count, 2)   // node once, uvx once — the non-tools cost nothing
         editor.command = "uvx"
         // Back to a tool that is cached: probed again anyway — it may have been installed meanwhile.
         XCTAssertTrue(h.ui.pumpUntil({ h.tools.probed.count == 3 }, timeout: 5))
-        XCTAssertTrue(editor.hasToolNote)
+        XCTAssertNotNil(editor.toolNote)
     }
 
     func testJsonViewEvaluatesTheParsedConfig() {
@@ -690,10 +689,10 @@ final class EditorModelTests: XCTestCase {
         XCTAssertEqual(editor.requiredTool, .node)   // the same config, now read from the text
         editor.jsonText = "{\"command\": \"uv\", \"args\": [\"run\", \"server.py\"]}"
         XCTAssertEqual(editor.requiredTool, .uv)
-        XCTAssertTrue(h.ui.pumpUntil({ editor.hasToolNote }, timeout: 5))
+        XCTAssertTrue(h.ui.pumpUntil({ editor.toolNote != nil }, timeout: 5))
         editor.jsonText = "{ not json"
         XCTAssertNil(editor.requiredTool)   // unparseable: nothing to evaluate
-        XCTAssertFalse(editor.hasToolNote)
+        XCTAssertNil(editor.toolNote)
         editor.jsonText = "{\"command\": \"npx\", \"args\": [\"-y\", \"mcp-remote\", \"" + url + "\"]}"
         XCTAssertEqual(editor.requiredTool, .npx)
         editor.requestView(.form)   // a bare bridge invocation: the remote form, still npx
@@ -710,12 +709,12 @@ final class EditorModelTests: XCTestCase {
         XCTAssertTrue(h.ui.pumpUntil({ state.toolStatuses[.npx] != nil }, timeout: 5))
         let batches = h.tools.batches
         let remote = editor(h, state, .existing(name: "scoutbook", entry: try XCTUnwrap(state.store.mcps["scoutbook"])))   // bare npx mcp-remote
-        XCTAssertTrue(remote.hasToolNote)          // straight from the cache, no wait
+        XCTAssertNotNil(remote.toolNote)          // straight from the cache, no wait
         XCTAssertEqual(h.tools.batches, batches)   // and no re-probe on open
         let localEditor = editor(h, state, .existing(name: "local", entry: MCPEntry(config: local("node", ["x.js"]))))
         defer { localEditor.dispose() }
         XCTAssertEqual(localEditor.requiredTool, .node)
-        XCTAssertFalse(localEditor.hasToolNote)
+        XCTAssertNil(localEditor.toolNote)
         XCTAssertEqual(h.tools.batches, batches)
         remote.dispose()
         state.refreshTools([.npx])   // a disposed editor no longer listens
@@ -728,7 +727,7 @@ final class EditorModelTests: XCTestCase {
         h.tools.statuses[.npx] = .notFound
         let state = h.create()
         let editor = editor(h, state, .newRemote())
-        XCTAssertTrue(h.ui.pumpUntil({ editor.hasToolNote }, timeout: 5))
+        XCTAssertTrue(h.ui.pumpUntil({ editor.toolNote != nil }, timeout: 5))
 
         editor.dispose()
         var raised = 0
@@ -750,7 +749,7 @@ final class EditorModelTests: XCTestCase {
         let state = h.create()
         let editor = editor(h, state, .newRemote())
         defer { editor.dispose() }
-        XCTAssertTrue(h.ui.pumpUntil({ editor.hasToolNote }, timeout: 5))
+        XCTAssertTrue(h.ui.pumpUntil({ editor.toolNote != nil }, timeout: 5))
         let note = try XCTUnwrap(editor.toolNote)
         XCTAssertEqual(note.text, "npx is at /Users/me/.nvm/versions/node/v22/bin/npx in your shell, but Claude Desktop launches connectors with its own PATH and may not see it there.")
         XCTAssertEqual(note.advice, ToolNote.shellOnlyAdvice)

@@ -27,10 +27,6 @@ public struct EditTarget: Identifiable, Codable, Hashable {
         EditTarget(id: name, name: name, entry: entry, isNew: false)
     }
 
-    public static func new(template: JSONValue) -> EditTarget {
-        EditTarget(id: UUID().uuidString, name: "", entry: MCPEntry(config: template), isNew: true)
-    }
-
     /// Add-Remote flow: the template has an empty URL that detect() cannot
     /// classify, so the remote form is forced explicitly.
     public static func newRemote() -> EditTarget {

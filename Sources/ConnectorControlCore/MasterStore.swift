@@ -44,20 +44,13 @@ public struct MasterStore: Equatable, Codable {
     }
 
     public static let empty = MasterStore(
-        version: 2, activeProfile: "Default",
+        activeProfile: "Default",
         profiles: ["Default": Profile()])
 
-    public init(version: Int, activeProfile: String, profiles: [String: Profile]) {
-        self.version = version
+    public init(activeProfile: String, profiles: [String: Profile]) {
+        self.version = 2
         self.activeProfile = activeProfile
         self.profiles = profiles
-    }
-
-    /// Convenience used across existing tests: a single-profile store. The
-    /// `version` parameter is ignored/normalized — the store is always v2.
-    public init(version: Int, mcps: [String: MCPEntry]) {
-        self.init(version: 2, activeProfile: "Default",
-                   profiles: ["Default": Profile(mcps: mcps)])
     }
 
     /// nil on success, else a user-facing error message.

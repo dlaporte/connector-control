@@ -22,7 +22,20 @@ let package = Package(
                 "ConnectorControlState",
                 .product(name: "Sparkle", package: "Sparkle"),
             ]),
-        .testTarget(name: "ConnectorControlCoreTests", dependencies: ["ConnectorControlCore"]),
-        .testTarget(name: "ConnectorControlStateTests", dependencies: ["ConnectorControlState"]),
+        // Test support shared by both test targets (TempDir, fixtures, ACL
+        // helpers, …). A regular target, not a test target, so it can be a
+        // dependency of both; it imports XCTest itself for the helpers that
+        // need to fail a test (e.g. grantEveryoneRead). Not a dependency of
+        // the executable, so XCTest never links into the shipped app.
+        .target(
+            name: "ConnectorControlTestSupport",
+            dependencies: ["ConnectorControlCore"],
+            path: "Tests/ConnectorControlTestSupport"),
+        .testTarget(
+            name: "ConnectorControlCoreTests",
+            dependencies: ["ConnectorControlCore", "ConnectorControlTestSupport"]),
+        .testTarget(
+            name: "ConnectorControlStateTests",
+            dependencies: ["ConnectorControlState", "ConnectorControlTestSupport"]),
     ]
 )

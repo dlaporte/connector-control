@@ -1,31 +1,30 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 final class ProfileTests: XCTestCase {
+    var tempDir: TempDir!
     var dir: URL!
     var url: URL { dir.appendingPathComponent("mcps.json") }
 
     override func setUpWithError() throws {
-        dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("profile-store-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        tempDir = TempDir(prefix: "profile-store")
+        dir = tempDir.url
     }
 
     override func tearDownWithError() throws {
-        try? FileManager.default.removeItem(at: dir)
+        tempDir.dispose()
     }
 
     private func entry(_ url: String) -> MCPEntry {
-        MCPEntry(config: .object(["command": .string("npx"),
-                                   "args": .array([.string("-y"), .string("mcp-remote"),
-                                                    .string(url)])]))
+        MCPEntry(config: RemotePattern.make(url: url))
     }
 
     // MARK: - Decoding
 
     func testV2RoundTripPreservesTwoProfiles() throws {
         var store = MasterStore(
-            version: 2, activeProfile: "Work",
+            activeProfile: "Work",
             profiles: [
                 "Work": Profile(mcps: ["a": entry("https://a.example/mcp")]),
                 "Personal": Profile(mcps: ["b": entry("https://b.example/mcp")]),
@@ -71,7 +70,7 @@ final class ProfileTests: XCTestCase {
 
     func testMcpsAccessorReadsAndWritesOnlyActiveProfile() {
         var store = MasterStore(
-            version: 2, activeProfile: "Work",
+            activeProfile: "Work",
             profiles: [
                 "Work": Profile(mcps: ["a": entry("https://a.example/mcp")]),
                 "Personal": Profile(mcps: ["b": entry("https://b.example/mcp")]),
@@ -84,7 +83,7 @@ final class ProfileTests: XCTestCase {
     // MARK: - Profile management
 
     func testAddProfileCopyingCurrent() {
-        var store = MasterStore(version: 1, mcps: ["a": entry("https://a.example/mcp")])
+        var store = MasterStore.single(["a": entry("https://a.example/mcp")])
         let error = store.addProfile(named: "Copy", copyingCurrent: true)
         XCTAssertNil(error)
         XCTAssertEqual(store.activeProfile, "Copy")
@@ -93,7 +92,7 @@ final class ProfileTests: XCTestCase {
     }
 
     func testAddProfileEmptyStartsBlank() {
-        var store = MasterStore(version: 1, mcps: ["a": entry("https://a.example/mcp")])
+        var store = MasterStore.single(["a": entry("https://a.example/mcp")])
         let error = store.addProfile(named: "Fresh", copyingCurrent: false)
         XCTAssertNil(error)
         XCTAssertEqual(store.profiles["Fresh"]?.mcps, [:])
@@ -119,7 +118,7 @@ final class ProfileTests: XCTestCase {
 
     func testRenameActiveProfileRejectsCollision() {
         var store = MasterStore(
-            version: 2, activeProfile: "Work",
+            activeProfile: "Work",
             profiles: ["Work": Profile(), "Personal": Profile()])
         XCTAssertNotNil(store.renameActiveProfile(to: "Personal"))
         XCTAssertEqual(store.activeProfile, "Work", "unchanged on error")
@@ -132,7 +131,7 @@ final class ProfileTests: XCTestCase {
 
     func testDeleteActiveProfileSwitchesToFirstRemaining() {
         var store = MasterStore(
-            version: 2, activeProfile: "Work",
+            activeProfile: "Work",
             profiles: ["Work": Profile(), "Alpha": Profile(), "Zeta": Profile()])
         let error = store.deleteActiveProfile()
         XCTAssertNil(error)
@@ -148,7 +147,7 @@ final class ProfileTests: XCTestCase {
 
     func testSwitchProfile() {
         var store = MasterStore(
-            version: 2, activeProfile: "Work",
+            activeProfile: "Work",
             profiles: ["Work": Profile(), "Personal": Profile()])
         XCTAssertNil(store.switchProfile(to: "Personal"))
         XCTAssertEqual(store.activeProfile, "Personal")

@@ -1,16 +1,18 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 final class AtomicFileTests: XCTestCase {
+    var tempDir: TempDir!
     var dir: URL!
 
     override func setUpWithError() throws {
-        dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("atomic-\(UUID().uuidString)")
+        tempDir = TempDir(prefix: "atomic")
+        dir = tempDir.file("target")   // not created — tests exercise AtomicFile creating it
     }
 
     override func tearDownWithError() throws {
-        try? FileManager.default.removeItem(at: dir)
+        tempDir.dispose()
         AtomicFile.privateStagingDirectory = nil
     }
 
@@ -137,12 +139,12 @@ final class AtomicFileTests: XCTestCase {
         // Control: a plain write DOES inherit, so the assertions below cannot pass vacuously.
         let control = dir.appendingPathComponent("control.json")
         try Data("{}".utf8).write(to: control)
-        XCTAssertTrue(AtomicFile.hasACL(atPath: control.path), "the folder's ACE is inheritable")
+        XCTAssertTrue(hasACL(atPath: control.path), "the folder's ACE is inheritable")
 
         let url = dir.appendingPathComponent("nested/secret.json")
         try AtomicFile.write(Data("token".utf8), to: url)
-        XCTAssertFalse(AtomicFile.hasACL(atPath: url.path))
-        XCTAssertFalse(AtomicFile.hasACL(atPath: dir.appendingPathComponent("nested").path))
+        XCTAssertFalse(hasACL(atPath: url.path))
+        XCTAssertFalse(hasACL(atPath: dir.appendingPathComponent("nested").path))
         XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "token")
     }
 
@@ -170,7 +172,7 @@ final class AtomicFileTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "two")
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("staging").path), [])
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("shared").path), ["secret.json"])
-        XCTAssertFalse(AtomicFile.hasACL(atPath: url.path))
+        XCTAssertFalse(hasACL(atPath: url.path))
     }
 
     /// exFAT and other ACL-less volumes have nothing to strip: ENOTSUP from the ACL calls is
@@ -208,6 +210,6 @@ final class AtomicFileTests: XCTestCase {
         try AtomicFile.write(Data("{}".utf8), to: url)
         try AtomicFile.write(Data("{\"v\":2}".utf8), to: url)
         XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "{\"v\":2}")
-        XCTAssertFalse(AtomicFile.hasACL(atPath: url.path))
+        XCTAssertFalse(hasACL(atPath: url.path))
     }
 }

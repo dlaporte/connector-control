@@ -1,25 +1,27 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 final class ConfigServiceTests: XCTestCase {
+    var tempDir: TempDir!
     var dir: URL!
     var paths: AppPaths!
     var service: ConfigService!
 
     override func setUpWithError() throws {
-        dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("svc-\(UUID().uuidString)")
+        tempDir = TempDir(prefix: "svc")
+        dir = tempDir.url
         let claudeDir = dir.appendingPathComponent("Claude")
         try FileManager.default.createDirectory(at: claudeDir, withIntermediateDirectories: true)
         paths = AppPaths(
             claudeConfigURL: claudeDir.appendingPathComponent("claude_desktop_config.json"),
-            storeDirURL: dir.appendingPathComponent("MCP Enabler"))
+            storeDirURL: dir.appendingPathComponent("store"))
         try Data(Fixtures.realisticClaudeConfig.utf8).write(to: paths.claudeConfigURL)
         service = ConfigService(paths: paths)
     }
 
     override func tearDownWithError() throws {
-        try? FileManager.default.removeItem(at: dir)
+        tempDir.dispose()
     }
 
     func testFirstLoadImportsAllServersEnabled() throws {

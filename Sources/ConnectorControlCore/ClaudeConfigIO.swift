@@ -11,7 +11,7 @@ public enum ClaudeConfigIO {
         guard let dict = raw as? [String: Any] else {
             throw ClaudeConfigError.malformed("mcpServers is not a JSON object")
         }
-        return try dict.mapValues(JSONValue.init(any:))
+        return dict.mapValues(JSONValue.init(any:))
     }
 
     /// Reads the file fresh, replaces ONLY the mcpServers key, preserves every

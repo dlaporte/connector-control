@@ -18,6 +18,4 @@ public struct ConnectorRow: Identifiable, Equatable, Sendable {
     public var id: String { name }
 
     public var editTooltip: String { "Edit “\(name)”" }
-
-    public var hasToolWarning: Bool { toolWarning != nil }
 }

@@ -87,8 +87,6 @@ public final class SettingsModel: ObservableObject {
 
     @Published public private(set) var loginItemNote: String?
 
-    public var hasLoginItemNote: Bool { loginItemNote != nil }
-
     private func setLaunchAtLoginSilently(_ value: Bool) {
         settingLaunchAtLoginSilently = true
         launchAtLogin = value

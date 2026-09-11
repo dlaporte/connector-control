@@ -8,7 +8,7 @@ import Foundation
 /// the version call is best-effort with a timeout.
 public struct ToolProbe: Sendable {
     public static let defaultVersionTimeout: TimeInterval = 2
-    public static let defaultShellTimeout: TimeInterval = 2
+    private static let defaultShellTimeout: TimeInterval = 2
 
     /// The directories Claude Desktop's bundle adds to its own PATH (spec
     /// §3.2.3). A tool in one of these counts as visible even when this app's
@@ -43,10 +43,6 @@ public struct ToolProbe: Sendable {
         return ToolProbe(environment: environment, shellPath: {
             loginShellPath(shell: shell, timeout: defaultShellTimeout)
         })
-    }
-
-    public func probe(_ tool: Tool) -> ToolStatus {
-        probe([tool])[tool] ?? .notFound
     }
 
     /// Probes several tools at once; the login shell is consulted at most once

@@ -2,7 +2,6 @@ import SwiftUI
 import AppKit
 import CoreImage
 import UniformTypeIdentifiers
-import ConnectorControlCore
 import ConnectorControlState
 
 /// Catalog §4: three tabs of bindings; every rule and string is SettingsModel's.

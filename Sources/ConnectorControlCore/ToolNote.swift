@@ -24,7 +24,7 @@ public struct ToolNote: Equatable, Sendable {
     public let linkURL: URL
     public let installCommand: String
 
-    public static func missingText(_ tool: Tool) -> String {
+    static func missingText(_ tool: Tool) -> String {
         "\(tool.name) wasn’t found, so Claude Desktop won’t be able to start this connector."
     }
 

@@ -1,22 +1,23 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 final class BackupManagerTests: XCTestCase {
+    var tempDir: TempDir!
     var dir: URL!
     var source: URL!
     var manager: BackupManager!
 
     override func setUpWithError() throws {
-        dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("backups-\(UUID().uuidString)")
+        tempDir = TempDir(prefix: "backups")
+        dir = tempDir.url
         source = dir.appendingPathComponent("claude_desktop_config.json")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try Data(#"{"mcpServers": {}}"#.utf8).write(to: source)
         manager = BackupManager(backupsDir: dir.appendingPathComponent("backups"), keepCount: 3)
     }
 
     override func tearDownWithError() throws {
-        try? FileManager.default.removeItem(at: dir)
+        tempDir.dispose()
     }
 
     func testBackupsDirectoryIsCreatedPrivate() throws {

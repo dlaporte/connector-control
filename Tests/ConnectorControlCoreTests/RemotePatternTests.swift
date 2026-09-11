@@ -9,8 +9,7 @@ final class RemotePatternTests: XCTestCase {
 
     func testDetectsCanonicalPattern() {
         XCTAssertEqual(
-            RemotePattern.detect(config(
-                args: ["-y", "mcp-remote", "https://example.com/mcp"])),
+            RemotePattern.detect(RemotePattern.make(url: "https://example.com/mcp")),
             "https://example.com/mcp")
     }
 

@@ -18,8 +18,6 @@ public struct ToolRow: Equatable, Sendable {
         self.isShellOnly = isShellOnly
     }
 
-    public var hasNote: Bool { note != nil }
-
     public static func make(tool: Tool, status: ToolStatus?) -> ToolRow {
         let isProblem: Bool
         let isShellOnly: Bool

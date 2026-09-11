@@ -166,8 +166,6 @@ public final class EditorModel: ObservableObject {
 
     public var jsonStatusText: String { jsonError ?? EditorModel.jsonTip }
 
-    public var hasValidationError: Bool { validationError != nil }
-
     public var lossWarningMessage: String {
         EditorModel.lossWarningPrefix + (lossWarning ?? []).joined(separator: "\n")
     }
@@ -188,8 +186,6 @@ public final class EditorModel: ObservableObject {
         guard let tool = requiredTool else { return nil }
         return ToolNote.make(tool: tool, status: state.toolStatuses[tool])
     }
-
-    public var hasToolNote: Bool { toolNote != nil }
 
     private func computeRequiredTool() -> Tool? {
         if view == .json {

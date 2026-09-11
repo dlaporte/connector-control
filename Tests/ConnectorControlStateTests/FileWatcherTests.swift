@@ -1,4 +1,5 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
 /// Catalog §6.2 on the marshalled watcher: the callback is posted, never

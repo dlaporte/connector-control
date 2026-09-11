@@ -1,4 +1,5 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 final class ReconcilerTests: XCTestCase {
@@ -6,7 +7,7 @@ final class ReconcilerTests: XCTestCase {
     private let configB = JSONValue.object(["command": .string("b")])
 
     private func store(_ mcps: [String: MCPEntry]) -> MasterStore {
-        MasterStore(version: 1, mcps: mcps)
+        MasterStore.single(mcps)
     }
 
     // MARK: ingestion — the only file→store flow

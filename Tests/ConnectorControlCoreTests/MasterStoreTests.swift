@@ -1,22 +1,23 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 final class MasterStoreTests: XCTestCase {
+    var tempDir: TempDir!
     var dir: URL!
     var url: URL { dir.appendingPathComponent("mcps.json") }
 
     override func setUpWithError() throws {
-        dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("store-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        tempDir = TempDir(prefix: "store")
+        dir = tempDir.url
     }
 
     override func tearDownWithError() throws {
-        try? FileManager.default.removeItem(at: dir)
+        tempDir.dispose()
     }
 
     func testEnabledServersRendersEnabledSubset() {
-        let store = MasterStore(version: 2, mcps: [
+        let store = MasterStore.single([
             "on": MCPEntry(enabled: true, config: .object(["command": .string("a")])),
             "off": MCPEntry(enabled: false, config: .object(["command": .string("b")]))])
         XCTAssertEqual(store.enabledServers, ["on": .object(["command": .string("a")])])
@@ -32,9 +33,7 @@ final class MasterStoreTests: XCTestCase {
         var store = MasterStore.empty
         store.mcps["scoutbook"] = MCPEntry(
             enabled: false,
-            config: .object(["command": .string("npx"),
-                             "args": .array([.string("-y"), .string("mcp-remote"),
-                                             .string("https://example.com/mcp")])]),
+            config: RemotePattern.make(url: "https://example.com/mcp"),
             lastEditView: .json)
         try MasterStoreIO.save(store, to: url)
         let result = MasterStoreIO.load(from: url)

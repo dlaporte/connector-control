@@ -1,6 +1,4 @@
-import Foundation
-
-public struct ReconcileOutcome: Equatable {
+public struct ReconcileOutcome {
     public var store: MasterStore
     public var storeChanged: Bool
 }

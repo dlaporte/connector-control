@@ -16,9 +16,10 @@ final class RestoreModelTests: XCTestCase {
         let model = RestoreModel(state: state)
         model.load()
         XCTAssertEqual(model.backups.count, 3)
-        XCTAssertTrue(model.backupNames[0].hasPrefix("claude_desktop_config."))
-        XCTAssertGreaterThan(model.backupNames[0], model.backupNames[1])   // newest first
-        XCTAssertEqual(model.backupNames[2], "claude_desktop_config.original.json")
+        let names = model.backups.map(\.lastPathComponent)
+        XCTAssertTrue(names[0].hasPrefix("claude_desktop_config."))
+        XCTAssertGreaterThan(names[0], names[1])   // newest first
+        XCTAssertEqual(names[2], "claude_desktop_config.original.json")
         XCTAssertNil(model.selection)
         XCTAssertFalse(model.canRestore)
     }
@@ -36,7 +37,7 @@ final class RestoreModelTests: XCTestCase {
 
         model.load()
         XCTAssertTrue(model.backups.isEmpty)
-        XCTAssertTrue(model.hasRestoreError)
+        XCTAssertNotNil(model.restoreError)
     }
 
     func testRestoreConfirmsWithTheFileNameAndRestoresThroughAppState() {
@@ -51,7 +52,7 @@ final class RestoreModelTests: XCTestCase {
 
         model.requestRestore()
         XCTAssertTrue(model.confirming)
-        XCTAssertEqual(model.confirmMessage, "Replace Claude's config with \(model.backupNames[0])?")
+        XCTAssertEqual(model.confirmMessage, "Replace Claude's config with \(model.backups[0].lastPathComponent)?")
         XCTAssertEqual(RestoreModel.restoreButton, "Restore")
         model.cancelRestore()
         XCTAssertFalse(model.confirming)
@@ -79,7 +80,6 @@ final class RestoreModelTests: XCTestCase {
         XCTAssertFalse(model.confirmRestore())
         XCTAssertEqual(model.restoreError, "backup claude_desktop_config.2026-09-04T00-00-00-000Z.json is not a valid config file")
         XCTAssertEqual(state.lastError, model.restoreError)
-        XCTAssertTrue(model.hasRestoreError)
         XCTAssertFalse(model.confirming)
     }
 

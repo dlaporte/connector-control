@@ -4,9 +4,8 @@ import ConnectorControlCore
 
 /// The app's state (catalog §1). Main-actor only; everything that arrives
 /// from another thread comes through `AppHost.marshal`. Init sequence
-/// (catalog §1.2 minus the legacy migration, which LiveServices runs first):
-/// resolve the service, one-time permissions sweep, route the notification's
-/// Restart Claude action, reload, arm the watchers.
+/// (catalog §1.2): resolve the service, one-time permissions sweep, route
+/// the notification's Restart Claude action, reload, arm the watchers.
 @MainActor
 public final class AppState: ObservableObject {
     // MARK: - Strings (catalog §1.8, §1.10, §1.16–§1.18, §2.2)
@@ -59,7 +58,7 @@ public final class AppState: ObservableObject {
     /// after reload() refreshes lastError.
     @Published public private(set) var applyRetryNeeded = false
     /// mcpServers as last read from / written to Claude's file, for dirty tracking.
-    @Published public private(set) var appliedServers: [String: JSONValue] = [:]
+    @Published private(set) var appliedServers: [String: JSONValue] = [:]
     @Published public private(set) var service: ConfigService
     /// Which of the four launchers Claude Desktop can start (spec
     /// 2026-09-05-tool-probe §3.6): probed on demand and cached for the run.
@@ -125,7 +124,7 @@ public final class AppState: ObservableObject {
 
     // MARK: - Derived (catalog §1.1, §2.2)
 
-    public var isDirty: Bool { store.enabledServers != appliedServers }
+    var isDirty: Bool { store.enabledServers != appliedServers }
 
     public var sortedNames: [String] { store.mcps.keys.sorted() }
 
@@ -288,7 +287,7 @@ public final class AppState: ObservableObject {
     /// Claude needs a restart iff it is running on a config older than our last
     /// write. Derived from the process launch date, so it self-clears however
     /// Claude gets restarted — via us, by hand, or by an update.
-    public func refreshRestartState() {
+    func refreshRestartState() {
         guard let lastApply = settings.lastApplyDate, claude.isRunning, let launched = claude.launchDate else {
             needsClaudeRestart = false
             return

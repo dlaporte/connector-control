@@ -1,5 +1,6 @@
 import XCTest
 import ConnectorControlCore
+import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
 final class PermissionsSweepTests: XCTestCase {
@@ -89,15 +90,15 @@ final class PermissionsSweepTests: XCTestCase {
         try Data("{}".utf8).write(to: backup)
         for url in [paths.masterStoreURL, backup] {
             try grantEveryoneRead(at: url.path, inheritable: false)
-            XCTAssertTrue(AtomicFile.hasACL(atPath: url.path))
+            XCTAssertTrue(hasACL(atPath: url.path))
         }
         let settings = FakeSettings()
         settings.permissionsSweepDone = true   // a pre-ACL build already did the modes
 
         XCTAssertTrue(PermissionsSweep.runOnce(settings: settings, paths: paths))
         XCTAssertTrue(settings.aclSweepDone)
-        XCTAssertFalse(AtomicFile.hasACL(atPath: paths.masterStoreURL.path))
-        XCTAssertFalse(AtomicFile.hasACL(atPath: backup.path))
+        XCTAssertFalse(hasACL(atPath: paths.masterStoreURL.path))
+        XCTAssertFalse(hasACL(atPath: backup.path))
         XCTAssertFalse(PermissionsSweep.runOnce(settings: settings, paths: paths), "both flags set: gated")
     }
 

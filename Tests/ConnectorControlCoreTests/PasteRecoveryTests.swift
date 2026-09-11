@@ -1,4 +1,5 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 final class PasteRecoveryTests: XCTestCase {
@@ -77,11 +78,6 @@ final class PasteRecoveryTests: XCTestCase {
         XCTAssertNil(PasteRecovery.recover("   "))
     }
 
-    private func args(_ v: JSONValue?) -> [String]? {
-        guard case .object(let o)? = v, case .array(let a)? = o["args"] else { return nil }
-        return a.compactMap { if case .string(let s) = $0 { return s }; return nil }
-    }
-
     func testCurlyClosingQuoteIsNormalized() {
         // Splunk-style paste from Slack/Notion/Notes: autocorrect curled the
         // closing quote of the last arg to a typographic right double quote.
@@ -90,7 +86,7 @@ final class PasteRecoveryTests: XCTestCase {
         let r = PasteRecovery.recover(text)
         XCTAssertEqual(r?.name, "splunk")
         XCTAssertEqual(command(r?.config), "npx")
-        XCTAssertEqual(args(r?.config), ["-y", "mcp-remote@latest"])
+        XCTAssertEqual(args(of: r!.config), ["-y", "mcp-remote@latest"])
     }
 
     func testValidStraightQuoteConfigIsUnaffectedByNormalization() {
@@ -100,6 +96,6 @@ final class PasteRecoveryTests: XCTestCase {
         let r = PasteRecovery.recover(text)
         XCTAssertNil(r?.name)
         XCTAssertEqual(command(r?.config), "npx")
-        XCTAssertEqual(args(r?.config), ["-y", "pkg"])
+        XCTAssertEqual(args(of: r!.config), ["-y", "pkg"])
     }
 }

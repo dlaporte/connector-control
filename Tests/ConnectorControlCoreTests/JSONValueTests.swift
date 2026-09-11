@@ -23,7 +23,7 @@ final class JSONValueTests: XCTestCase {
     func testAnyValueRoundTrip() throws {
         let any: [String: Any] = ["s": "x", "i": 7, "d": 1.5, "b": true,
                                   "n": NSNull(), "a": [1, "y"], "o": ["k": false]]
-        let value = try JSONValue(any: any)
+        let value = JSONValue(any: any)
         let back = try XCTUnwrap(value.anyValue as? [String: Any])
         let data = try JSONSerialization.data(withJSONObject: back, options: [.sortedKeys])
         let expected = try JSONSerialization.data(
@@ -32,12 +32,12 @@ final class JSONValueTests: XCTestCase {
     }
 
     func testBoolIsNotConfusedWithInt() throws {
-        let value = try JSONValue(any: ["t": true, "one": 1])
+        let value = JSONValue(any: ["t": true, "one": 1])
         XCTAssertEqual(value, .object(["t": .bool(true), "one": .int(1)]))
     }
 
     func testWholeValuedFloatsCanonicalizeToInt() throws {
-        let value = try JSONValue(any: ["x": 2.0, "y": 2.5])
+        let value = JSONValue(any: ["x": 2.0, "y": 2.5])
         XCTAssertEqual(value, .object(["x": .int(2), "y": .double(2.5)]))
 
         // Parse round-trip stability: re-parsing a serialized whole-valued

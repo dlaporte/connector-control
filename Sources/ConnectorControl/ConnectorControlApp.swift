@@ -1,5 +1,4 @@
 import SwiftUI
-import ConnectorControlCore
 import ConnectorControlState
 
 @main

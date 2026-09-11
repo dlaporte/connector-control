@@ -3,8 +3,8 @@ import ConnectorControlCore
 import ConnectorControlState
 
 /// The composition root (catalog §0, §1.2): the platform services, then the
-/// one AppState, in the order the old AppState.init did it — the legacy
-/// migration before any defaults read, Sparkle started only with a bundle.
+/// one AppState, in the order the old AppState.init did it — Sparkle started
+/// only with a bundle.
 @MainActor
 final class LiveServices {
     static let shared = LiveServices()
@@ -19,7 +19,6 @@ final class LiveServices {
     let state: AppState
 
     private init() {
-        LegacyMigration.run()
         settings = UserDefaultsSettings()
         dialogs = AlertDialogs()
         notifier = UserNotificationsNotifier()

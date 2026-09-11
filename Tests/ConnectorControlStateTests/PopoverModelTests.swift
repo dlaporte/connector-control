@@ -1,6 +1,7 @@
 import Combine
 import XCTest
 import ConnectorControlCore
+import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
 /// windows/tests/ConnectorControl.Core.Tests/State/FlyoutModelTests.cs. Rows are
@@ -118,7 +119,7 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(popover.footer, .retryApply)
         XCTAssertEqual(popover.footerTitle, "Apply Failed — Retry")
         XCTAssertEqual(popover.footerGlyph, "exclamationmark.arrow.circlepath")
-        XCTAssertTrue(popover.hasError)
+        XCTAssertNotNil(popover.errorMessage)
 
         try Data(Fixtures.realisticClaudeConfig.utf8).write(to: h.claudeConfigURL)
         popover.footerAction()   // retry
@@ -169,26 +170,23 @@ final class PopoverModelTests: XCTestCase {
         let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
-        XCTAssertTrue(popover.rows.allSatisfy { !$0.hasToolWarning })   // nothing probed yet: no glyph
-        XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == nil })
+        XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == nil })   // nothing probed yet: no glyph
 
         state.refreshTools([.npx])
         XCTAssertTrue(h.ui.pumpUntil({ state.toolStatuses[.npx] != nil }, timeout: 5))
         // All three seeded connectors run `npx -y mcp-remote`.
-        XCTAssertTrue(popover.rows.allSatisfy(\.hasToolWarning))
         XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == "Needs npx, which wasn’t found. Edit to see how to install it." })
 
         // A connector whose command is a full path needs no PATH lookup, so it never warns.
         XCTAssertNil(state.upsert(name: "pathed", entry: MCPEntry(config: .object(["command": .string("/usr/local/bin/node")])), renamedFrom: nil))
         let pathed = popover.rows.first { $0.name == "pathed" }
-        XCTAssertEqual(pathed?.hasToolWarning, false)
         XCTAssertNil(pathed?.toolWarning)
-        XCTAssertEqual(popover.rows.first { $0.name == "aws-mcp" }?.hasToolWarning, true)   // the others are unchanged
+        XCTAssertNotNil(popover.rows.first { $0.name == "aws-mcp" }?.toolWarning)   // the others are unchanged
 
         // Installing npx: the next probe publishes found and every glyph clears.
         h.tools.statuses[.npx] = .found(path: "/opt/homebrew/bin/npx", version: "10.9.2")
         state.refreshTools([.npx])
-        XCTAssertTrue(h.ui.pumpUntil({ popover.rows.allSatisfy { !$0.hasToolWarning } }, timeout: 5))
+        XCTAssertTrue(h.ui.pumpUntil({ popover.rows.allSatisfy { $0.toolWarning == nil } }, timeout: 5))
         XCTAssertTrue(popover.rows.allSatisfy(\.enabled))   // the glyph never touched the switch
     }
 
@@ -201,7 +199,7 @@ final class PopoverModelTests: XCTestCase {
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         popover.opened()
-        XCTAssertTrue(h.ui.pumpUntil({ popover.rows.allSatisfy(\.hasToolWarning) }, timeout: 5))
+        XCTAssertTrue(h.ui.pumpUntil({ popover.rows.allSatisfy { $0.toolWarning != nil } }, timeout: 5))
         XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == "Needs npx, which Claude Desktop may not see. Edit to see how to fix it." })
         XCTAssertTrue(popover.rows.allSatisfy(\.enabled))
     }
@@ -239,7 +237,7 @@ final class PopoverModelTests: XCTestCase {
         popover.opened()   // a full path and an unknown launcher both need no PATH lookup
         XCTAssertEqual(h.tools.batches, 0)
         XCTAssertTrue(h.tools.probed.isEmpty)
-        XCTAssertTrue(popover.rows.allSatisfy { !$0.hasToolWarning })
+        XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == nil })
     }
 
     func testStringsMatchTheCatalog() {

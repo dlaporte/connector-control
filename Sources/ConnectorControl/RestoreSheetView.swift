@@ -1,5 +1,4 @@
 import SwiftUI
-import ConnectorControlCore
 import ConnectorControlState
 
 /// Catalog §5: layout only; every rule and string is RestoreModel's.

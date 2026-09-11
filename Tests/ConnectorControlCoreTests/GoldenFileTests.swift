@@ -1,4 +1,5 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 /// The golden files under Tests/Fixtures/golden are Apple Foundation's output for

@@ -108,13 +108,6 @@ public enum AtomicFile {
         guard apply(empty) == 0 || errno == ENOTSUP else { throw posixError() }
     }
 
-    /// True when the object carries any ACL entry (inherited or explicit).
-    public static func hasACL(atPath path: String) -> Bool {
-        guard let acl = acl_get_link_np(path, ACL_TYPE_EXTENDED) else { return false }
-        acl_free(UnsafeMutableRawPointer(acl))
-        return true
-    }
-
     private static func posixError() -> NSError {
         NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
     }

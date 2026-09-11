@@ -1,18 +1,19 @@
 import XCTest
+import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 final class ClaudeConfigIOTests: XCTestCase {
+    var tempDir: TempDir!
     var dir: URL!
     var url: URL { dir.appendingPathComponent("claude_desktop_config.json") }
 
     override func setUpWithError() throws {
-        dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("claude-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        tempDir = TempDir(prefix: "claude")
+        dir = tempDir.url
     }
 
     override func tearDownWithError() throws {
-        try? FileManager.default.removeItem(at: dir)
+        tempDir.dispose()
     }
 
     private func write(_ s: String) throws { try Data(s.utf8).write(to: url) }
@@ -26,11 +27,7 @@ final class ClaudeConfigIOTests: XCTestCase {
         try write(Fixtures.realisticClaudeConfig)
         let servers = try ClaudeConfigIO.readMCPServers(at: url)
         XCTAssertEqual(Set(servers.keys), ["scoutbook", "aws-mcp", "service-now"])
-        XCTAssertEqual(servers["scoutbook"], .object([
-            "command": .string("npx"),
-            "args": .array([.string("-y"), .string("mcp-remote"),
-                            .string("https://scoutbook.example.com/mcp")]),
-        ]))
+        XCTAssertEqual(servers["scoutbook"], RemotePattern.make(url: "https://scoutbook.example.com/mcp"))
     }
 
     func testReadMissingFileReturnsEmpty() throws {

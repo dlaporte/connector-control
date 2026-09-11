@@ -1,6 +1,5 @@
 import Foundation
 import Combine
-import ConnectorControlCore
 
 /// Catalog §5 RestoreSheetView state. The confirmation is a sheet:
 /// requestRestore opens it (and clears the previous attempt's error),
@@ -29,11 +28,7 @@ public final class RestoreModel: ObservableObject {
         self.state = state
     }
 
-    public var backupNames: [String] { backups.map(\.lastPathComponent) }
-
     public var canRestore: Bool { selection != nil }
-
-    public var hasRestoreError: Bool { restoreError != nil }
 
     public var confirmMessage: String {
         RestoreModel.confirmMessage(fileName: selection?.lastPathComponent ?? "")

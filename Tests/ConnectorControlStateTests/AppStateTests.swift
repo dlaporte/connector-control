@@ -1,5 +1,6 @@
 import XCTest
 import ConnectorControlCore
+import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
 /// windows/tests/ConnectorControl.Core.Tests/State/AppStateTests.cs, line for line.

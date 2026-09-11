@@ -1,5 +1,6 @@
 import Foundation
 import ConnectorControlCore
+import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
 /// A real on-disk layout (a throwaway ~/Library/Application Support), the real
@@ -71,8 +72,7 @@ final class AppStateHarness {
     }
 
     static func remote(_ url: String) -> JSONValue {
-        .object(["command": .string("npx"),
-                 "args": .array([.string("-y"), .string("mcp-remote"), .string(url)])])
+        RemotePattern.make(url: url)
     }
 
     /// Disposes every AppState this harness created (stops their watchers) and deletes the temp dir.

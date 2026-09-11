@@ -1,4 +1,3 @@
-import Foundation
 import Combine
 import ConnectorControlCore
 
@@ -54,8 +53,6 @@ public final class PopoverModel: ObservableObject {
     // MARK: banner (catalog §2.3)
 
     public var errorMessage: String? { state.lastError }
-
-    public var hasError: Bool { state.lastError != nil }
 
     // MARK: rows (catalog §2.4)
 

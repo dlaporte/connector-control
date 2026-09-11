@@ -14,7 +14,7 @@ public struct FormModel: Equatable {
     }
 }
 
-public struct FormAnalysis: Equatable {
+public struct FormAnalysis {
     public var model: FormModel
     /// Human-readable descriptions of elements the form CANNOT represent.
     /// Empty means switching JSON → Form loses nothing.

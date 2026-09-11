@@ -54,7 +54,7 @@ final class SettingsModelTests: XCTestCase {
     func testLaunchAtLoginFailureRevertsAndNotes() {
         let rig = Rig()
         defer { rig.dispose() }
-        XCTAssertFalse(rig.model.hasLoginItemNote)
+        XCTAssertNil(rig.model.loginItemNote)
         rig.autostart.failWith = "Access is denied."
         var raised = 0
         let subscription = rig.model.objectWillChange.sink { _ in raised += 1 }
@@ -62,12 +62,10 @@ final class SettingsModelTests: XCTestCase {
         rig.model.launchAtLogin = true
         XCTAssertFalse(rig.model.launchAtLogin)
         XCTAssertEqual(rig.model.loginItemNote, "Couldn't update login item: Access is denied.")
-        XCTAssertTrue(rig.model.hasLoginItemNote)
         XCTAssertGreaterThan(raised, 0)
         rig.autostart.failWith = nil
         rig.model.launchAtLogin = true
         XCTAssertNil(rig.model.loginItemNote)
-        XCTAssertFalse(rig.model.hasLoginItemNote)
     }
 
     /// macOS only (catalog §4.2): registered, but System Settings has not approved it yet.
@@ -223,7 +221,7 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertEqual(rig.model.toolRows.map(\.name), ["npx", "node", "uvx", "uv"])
         XCTAssertTrue(rig.model.toolRows.allSatisfy { $0.statusText == "Checking…" })
         XCTAssertTrue(rig.model.toolRows.allSatisfy { !$0.isProblem })
-        XCTAssertTrue(rig.model.toolRows.allSatisfy { !$0.hasNote })
+        XCTAssertTrue(rig.model.toolRows.allSatisfy { $0.note == nil })
         rig.model.refreshTools()
         XCTAssertTrue(rig.h.ui.pumpUntil({ rig.state.toolStatuses.count == 4 }, timeout: 5))
         let rows = rig.model.toolRows
