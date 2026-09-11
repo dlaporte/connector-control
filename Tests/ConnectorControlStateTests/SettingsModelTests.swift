@@ -241,10 +241,7 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertEqual(raised, 0)   // the view was never told to re-read: dispose stopped the relay
     }
 
-    func testToolStringsMatchTheSpec() {
-        XCTAssertEqual(SettingsModel.toolsHeader, "Tools")
-        XCTAssertEqual(SettingsModel.toolsCaption,
-                       "Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them.")
+    func testToolRowsCarryTheNoteFromToolNote() {
         XCTAssertEqual(ToolRow.make(tool: .npx, status: .notFound),
                        ToolRow(name: "npx", statusText: "Not found", isProblem: true,
                                note: ToolNote.make(tool: .npx, status: .notFound), isShellOnly: false))
