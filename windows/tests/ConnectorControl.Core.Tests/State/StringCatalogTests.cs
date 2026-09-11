@@ -81,7 +81,7 @@ public class StringCatalogTests
         ["ClaudePublisher.subjectNoOrganizationError"] = ["X", "Y"],
         ["ClaudeSignature.notFoundMessage"] = ["X"],
         ["ConfigService.corruptStoreNote"] = ["X"],
-        ["ConfigService.invalidBackupError"] = ["X"],
+        ["ConfigService.invalidBackupError"] = ["X", "Y"],
         ["ConfigService.invalidBackupMcpServersError"] = ["X"],
         ["ConnectorRow.editTooltip"] = ["X"],
         ["EditTarget.editTitle"] = ["X"],
@@ -175,7 +175,7 @@ public class StringCatalogTests
 
         actual["ConfigService.corruptStoreNote"] =
             "The MCP list file was unreadable; it was preserved as X and rebuilt from Claude's config.";
-        actual["ConfigService.invalidBackupError"] = "backup X is not a valid config file";
+        actual["ConfigService.invalidBackupError"] = "backup X is not a valid config file (Y)";
         actual["ConfigService.invalidBackupMcpServersError"] = "backup X has an invalid mcpServers section";
         actual["ConfigService.malformedClaudeConfigNote"] =
             "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore… to repair the file.";

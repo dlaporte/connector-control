@@ -11,6 +11,15 @@ public class GoldenFileTests
             .Select(p => System.IO.Path.GetFileName(p))
             .OrderBy(n => n, StringComparer.Ordinal));
 
+    /// <summary>Swift's testGoldensAreCurrent pins this count inline; the Theory-per-input
+    /// shape here needs its own guard so a dropped or forgotten fixture fails loudly instead
+    /// of just shrinking the Theory's row count.</summary>
+    [Fact]
+    public void FourGoldenInputs()
+    {
+        Assert.Equal(4, Directory.GetFiles(Fixtures.Path("golden/inputs"), "*.json").Length);
+    }
+
     [Theory]
     [MemberData(nameof(AllInputs))]
     public void EncoderFormatMatchesApple(string name)
@@ -37,12 +46,21 @@ public class GoldenFileTests
 
     [Theory]
     [MemberData(nameof(AllInputs))]
+    public void SerializationCompactFormatMatchesApple(string name)
+    {
+        var value = JsonValue.Parse(Fixtures.Bytes($"golden/inputs/{name}"));
+        AssertSameBytes(Fixtures.Bytes($"golden/serialization-compact/{name}"), AppleJsonWriter.WriteUtf8(value, AppleJsonFormat.SerializationCompact));
+    }
+
+    [Theory]
+    [MemberData(nameof(AllInputs))]
     public void GoldensReparseToTheSameValue(string name)
     {
         var value = JsonValue.Parse(Fixtures.Bytes($"golden/inputs/{name}"));
         Assert.Equal(value, JsonValue.Parse(Fixtures.Bytes($"golden/encoder/{name}")));
         Assert.Equal(value, JsonValue.Parse(Fixtures.Bytes($"golden/editor/{name}")));
         Assert.Equal(value, JsonValue.Parse(Fixtures.Bytes($"golden/serialization/{name}")));
+        Assert.Equal(value, JsonValue.Parse(Fixtures.Bytes($"golden/serialization-compact/{name}")));
     }
 
     private static void AssertSameBytes(byte[] expected, byte[] actual)

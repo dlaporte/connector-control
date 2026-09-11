@@ -14,23 +14,14 @@ namespace ConnectorControl.App.Tests;
 
 public class FlyoutWindowTests
 {
-    private static void Layout(Window window)
-    {
-        // WPF defers a binding's first target update to DataBind priority; the test host runs
-        // the body synchronously, so pump that queue before reading any bound state (the
-        // pattern in EditorWindowTests.Layout).
-        window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
-        window.Measure(new Size(380, 800));
-        window.Arrange(new Rect(0, 0, 380, 800));
-        window.UpdateLayout();
-    }
+    private static void Layout(Window window) => WindowTestSupport.Layout(window, new Size(380, 800));
 
     [Fact]
     public void FlyoutShowsHeaderRowsAndNoFooterWhenNothingIsPending()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var services = new PlatformServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
@@ -56,7 +47,7 @@ public class FlyoutWindowTests
         using var state = h.Create();
         File.WriteAllText(h.ClaudeConfigPath, "{oops");
         state.SetEnabled("aws-mcp", false);
-        var services = new PlatformServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
@@ -74,7 +65,7 @@ public class FlyoutWindowTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var services = new PlatformServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
@@ -111,7 +102,7 @@ public class FlyoutWindowTests
         using var state = h.Create();
         h.Dialogs.NextPromptAnswer = "Work";
         state.NewProfile();   // Default + Work, with Work active
-        var services = new PlatformServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
@@ -166,7 +157,7 @@ public class FlyoutWindowTests
             ("args", JsonValue.Array([JsonValue.String("server.js")])))), null);
         state.RefreshToolsAsync([Tool.Npx, Tool.Node]);
         Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 2, TimeSpan.FromSeconds(5)));
-        var services = new PlatformServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {

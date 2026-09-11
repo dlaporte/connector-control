@@ -68,6 +68,11 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>Test probe: both watchers are live. Should be true after every reload.</summary>
     internal bool WatchersArmed => watcher is { IsArmed: true } && storeWatcher is { IsArmed: true };
 
+    /// <summary>Test probe: reference identity of both watchers, so a test can confirm a
+    /// redundant reload leaves an already-armed watcher alone instead of tearing it down
+    /// and re-baselining its mtime.</summary>
+    internal (object? Claude, object? Store) WatcherIdentities => (watcher, storeWatcher);
+
     public AppState(ISettings settings, IClaudeProcess claude, INotifier notifier, IDialogs dialogs, PathContext paths, AppHost host, IToolProbe tools)
     {
         this.settings = settings;

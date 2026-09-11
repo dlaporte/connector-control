@@ -26,7 +26,7 @@ public class ClaudeIconLoaderTests
     [Fact]
     public void DesaturateKeepsAlphaAndGreysColor()
     {
-        var (color, transparentAlpha) = StaRunner.Run(() =>
+        var (color, transparentAlpha) = WpfApp.Invoke(() =>
         {
             byte[] pixels = [0, 0, 255, 255, 0, 0, 0, 0];   // BGRA: one opaque red pixel, one transparent
             var source = BitmapSource.Create(2, 1, 96, 96, PixelFormats.Bgra32, null, pixels, 8);

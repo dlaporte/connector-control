@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
@@ -12,15 +11,7 @@ namespace ConnectorControl.App.Tests;
 
 public class EditorWindowTests
 {
-    private static void Layout(Window window)
-    {
-        // WPF defers a binding's first target update to DataBind priority; the test host runs
-        // the body synchronously, so pump that queue before reading any bound state.
-        window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
-        window.Measure(new Size(540, 620));
-        window.Arrange(new Rect(0, 0, 540, 620));
-        window.UpdateLayout();
-    }
+    private static void Layout(Window window) => WindowTestSupport.Layout(window, new Size(540, 620));
 
     [Fact]
     public void NewRemoteTargetShowsTheRemoteFormWithTheTypePicker()
@@ -141,7 +132,7 @@ public class EditorWindowTests
 
             var container = window.EnvList.ItemContainerGenerator.ContainerFromItem(row);
             Assert.NotNull(container);
-            var box = FindDescendant<PasswordBox>(container);
+            var box = VisualTree.FindDescendant<PasswordBox>(container);
             Assert.NotNull(box);
 
             box.Password = "typed-into-the-mask";
@@ -149,24 +140,6 @@ public class EditorWindowTests
             Assert.Equal("typed-into-the-mask", row.Value);
             window.Close();
         });
-    }
-
-    private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
-    {
-        var count = VisualTreeHelper.GetChildrenCount(root);
-        for (int i = 0; i < count; i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            if (child is T match)
-            {
-                return match;
-            }
-            if (FindDescendant<T>(child) is { } deeper)
-            {
-                return deeper;
-            }
-        }
-        return null;
     }
 
     /// <summary>

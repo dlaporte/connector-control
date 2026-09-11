@@ -237,7 +237,10 @@ public class ConfigServiceTests : IDisposable
         File.WriteAllText(bad, "{not json");
         var before = File.ReadAllBytes(paths.ClaudeConfigPath);
         var ex = Assert.Throws<ClaudeConfigException>(() => service.RestoreClaudeConfig(bad, store));
-        Assert.Equal("backup bad-backup.json is not a valid config file", ex.Detail);
+        Assert.Equal(
+            "backup bad-backup.json is not a valid config file "
+                + "('n' is an invalid start of a property name. Expected a '\"'. LineNumber: 0 | BytePositionInLine: 1.)",
+            ex.Detail);
         Assert.Equal(before, File.ReadAllBytes(paths.ClaudeConfigPath));
     }
 }

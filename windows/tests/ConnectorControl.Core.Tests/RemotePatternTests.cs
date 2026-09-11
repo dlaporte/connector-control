@@ -99,6 +99,7 @@ public class RemotePatternTests
     [InlineData("HTTPS://X.DEV/mcp", true)]
     [InlineData("ftp://x.dev", false)]
     [InlineData("not a url", false)]
+    [InlineData("nope", false)]
     [InlineData("", false)]
     [InlineData("https://", false)]
     public void IsValidHttpUrl(string url, bool expected)

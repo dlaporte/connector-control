@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using ConnectorControl.Core.Services;
 using ConnectorControl.Core.State;
 using ConnectorControl.Core.Tests.TestSupport;
@@ -8,6 +9,10 @@ public class AppStateWatcherTests
 {
     private static readonly TimeSpan Wait = TimeSpan.FromSeconds(8);
     private static readonly TimeSpan Settle = TimeSpan.FromMilliseconds(1500);
+
+    /// <summary>Gives a just-created AppState's freshly-armed watchers a moment to finish
+    /// arming before a test relies on them observing the very next change.</summary>
+    private static readonly TimeSpan WatcherSettle = TimeSpan.FromMilliseconds(300);
     private static readonly string[] Fixture = ["aws-mcp", "scoutbook", "service-now"];
 
     [Fact]
@@ -15,7 +20,7 @@ public class AppStateWatcherTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Thread.Sleep(300);
+        Thread.Sleep(WatcherSettle);
         h.WriteClaudeServers(("scoutbook", state.Store.Mcps["scoutbook"].Config));
         Assert.True(h.Ui.PumpUntil(() => h.Notifier.Sent.Count == 1, Wait));
         Assert.Equal(AppState.ClaudeConfigRegeneratedBody, h.Notifier.Sent[0].Body);
@@ -32,7 +37,7 @@ public class AppStateWatcherTests
         using var h = new AppStateHarness();
         h.Settings.NotifyExternalChanges = false;
         using var state = h.Create();
-        Thread.Sleep(300);
+        Thread.Sleep(WatcherSettle);
         h.WriteClaudeServers(("scoutbook", state.Store.Mcps["scoutbook"].Config));
         Assert.True(h.Ui.PumpUntil(() => AppStateHarness.Keys(h.ClaudeServers().Keys).SequenceEqual(Fixture), Wait));
         h.Ui.PumpUntil(() => false, Settle);   // give the regenerating write's own echo a chance to fire too
@@ -46,7 +51,7 @@ public class AppStateWatcherTests
         h.Claude.IsRunning = true;
         h.Claude.LaunchDate = h.Now.AddHours(-1);
         using var state = h.Create();
-        Thread.Sleep(300);
+        Thread.Sleep(WatcherSettle);
         var synced = h.StoreOnDisk();
         synced.Mcps["scoutbook"] = synced.Mcps["scoutbook"] with { Enabled = false };
         MasterStoreIO.Save(synced, h.MasterStorePath);   // another machine's list arrives via sync
@@ -69,7 +74,7 @@ public class AppStateWatcherTests
         using var h = new AppStateHarness();
         h.Claude.IsRunning = false;
         using var state = h.Create();
-        Thread.Sleep(300);
+        Thread.Sleep(WatcherSettle);
         var synced = h.StoreOnDisk();
         synced.Mcps["evil"] = new McpEntry(JsonValue.Object(("command", JsonValue.String("curl")), ("args", JsonValue.Array([JsonValue.String("https://x.example/run")]))));
         MasterStoreIO.Save(synced, h.MasterStorePath);   // another machine's list arrives via sync
@@ -85,7 +90,7 @@ public class AppStateWatcherTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Thread.Sleep(300);
+        Thread.Sleep(WatcherSettle);
         state.SetEnabled("aws-mcp", false);
         h.Ui.PumpUntil(() => false, Settle);
         Assert.Empty(h.Notifier.Sent);
@@ -97,7 +102,7 @@ public class AppStateWatcherTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Thread.Sleep(300);
+        Thread.Sleep(WatcherSettle);
         File.WriteAllText(h.MasterStorePath, "{\"version\": 2, \"acti");   // a sync tool mid-write
         h.Ui.PumpUntil(() => false, Settle);
         Assert.Equal(Fixture, state.SortedNames);
@@ -110,7 +115,7 @@ public class AppStateWatcherTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Thread.Sleep(300);
+        Thread.Sleep(WatcherSettle);
         File.Delete(h.MasterStorePath);
         Assert.True(h.Ui.PumpUntil(() => File.Exists(h.MasterStorePath), Wait));
         Assert.Equal(state.Store, h.StoreOnDisk());
@@ -133,7 +138,15 @@ public class AppStateWatcherTests
         Assert.True(File.Exists(later));
         Assert.True(state.WatchersArmed);
 
-        Thread.Sleep(300);
+        // A further reload leaves the now-armed watchers alone instead of tearing them
+        // down and re-baselining their mtimes.
+        var armed = state.WatcherIdentities;
+        state.Reload();
+        Assert.True(state.WatchersArmed);
+        Assert.Same(armed.Claude, state.WatcherIdentities.Claude);
+        Assert.Same(armed.Store, state.WatcherIdentities.Store);
+
+        Thread.Sleep(WatcherSettle);
         ClaudeConfigIO.Write(new Dictionary<string, JsonValue> { ["only"] = AppStateHarness.Remote("https://only.example/mcp") }, later);
         Assert.True(h.Ui.PumpUntil(() => h.Notifier.Sent.Count == 1, Wait));   // the new location really is watched
         Assert.Equal(AppState.ClaudeConfigRegeneratedBody, h.Notifier.Sent[0].Body);
@@ -153,7 +166,7 @@ public class AppStateWatcherTests
         Assert.True(File.Exists(h.MasterStorePath));   // the previous file is never deleted
         Assert.Empty(h.Notifier.Sent);
 
-        Thread.Sleep(300);
+        Thread.Sleep(WatcherSettle);
         var edited = state.Store.Clone();
         edited.Mcps["aws-mcp"] = edited.Mcps["aws-mcp"] with { Enabled = false };
         MasterStoreIO.Save(edited, Path.Combine(synced, "mcps.json"));
@@ -273,7 +286,10 @@ public class AppStateWatcherTests
         File.WriteAllText(bad, "{not json");
         var before = File.ReadAllBytes(h.ClaudeConfigPath);
         var ex = Assert.Throws<ClaudeConfigException>(() => state.RestoreClaudeConfig(bad));
-        Assert.Equal("backup bad.json is not a valid config file", ex.Detail);
+        Assert.Equal(
+            "backup bad.json is not a valid config file "
+                + "('n' is an invalid start of a property name. Expected a '\"'. LineNumber: 0 | BytePositionInLine: 1.)",
+            ex.Detail);
         Assert.Equal(before, File.ReadAllBytes(h.ClaudeConfigPath));
     }
 
@@ -282,7 +298,7 @@ public class AppStateWatcherTests
     {
         using var h = new AppStateHarness();
         var state = h.Create();
-        Thread.Sleep(300);
+        Thread.Sleep(WatcherSettle);
         state.Dispose();
         h.WriteClaudeServers(("scoutbook", state.Store.Mcps["scoutbook"].Config));
         h.Ui.PumpUntil(() => false, Settle);
@@ -291,6 +307,7 @@ public class AppStateWatcherTests
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void RepointStoreSeedsPrivatelyAndLeavesAChosenFolderAsItWas()
     {
         using var h = new AppStateHarness();
@@ -301,13 +318,11 @@ public class AppStateWatcherTests
         Directory.CreateDirectory(chosen);   // pre-existing, inherits the temp dir's permissive ACL
         state.RepointStore(chosen);
         Assert.True(File.Exists(Path.Combine(chosen, "mcps.json")));
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(fresh), "a folder the app created is private from the start");
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.Combine(fresh, "mcps.json")));
-            Assert.False(OwnerOnlyAcl.IsOwnerOnly(chosen), "a folder the user chose keeps its own permissions, as the sweep's rule says");
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.Combine(chosen, "mcps.json")), "the seeded copy inside it is still private");
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(fresh), "a folder the app created is private from the start");
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.Combine(fresh, "mcps.json")));
+        Assert.False(OwnerOnlyAcl.IsOwnerOnly(chosen), "a folder the user chose keeps its own permissions, as the sweep's rule says");
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.Combine(chosen, "mcps.json")), "the seeded copy inside it is still private");
     }
 
     [Fact]

@@ -75,12 +75,7 @@
     "format": "The MCP list file was unreadable; it was preserved as {0} and rebuilt from Claude's config."
   },
   "ConfigService.invalidBackupError": {
-    "mac": {
-      "format": "backup {0} is not a valid config file ({1})"
-    },
-    "win": {
-      "format": "backup {0} is not a valid config file"
-    }
+    "format": "backup {0} is not a valid config file ({1})"
   },
   "ConfigService.invalidBackupMcpServersError": {
     "format": "backup {0} has an invalid mcpServers section"

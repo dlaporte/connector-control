@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.Core;
 using ConnectorControl.Core.State;
@@ -79,27 +78,9 @@ public partial class EditorWindow : Window
     {
         EnvList.UpdateLayout();
         if (EnvList.ItemContainerGenerator.ContainerFromItem(row) is DependencyObject container
-            && FindDescendant<TextBox>(container) is { } nameBox)
+            && VisualTree.FindDescendant<TextBox>(container) is { } nameBox)
         {
             nameBox.Focus();
         }
-    }
-
-    private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
-    {
-        var count = VisualTreeHelper.GetChildrenCount(root);
-        for (int i = 0; i < count; i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            if (child is T match)
-            {
-                return match;
-            }
-            if (FindDescendant<T>(child) is { } deeper)
-            {
-                return deeper;
-            }
-        }
-        return null;
     }
 }

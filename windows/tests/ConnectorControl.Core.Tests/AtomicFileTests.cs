@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using System.Text;
 using ConnectorControl.Core.Tests.TestSupport;
 
@@ -27,28 +28,22 @@ public class AtomicFileTests : IDisposable
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void WritesArePrivate()
     {
         // testWritesArePrivate: mode 0600 on Mac; an owner-only DACL on Windows.
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Windows only");
-            return;
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         var path = dir.File("secret.json");
         AtomicFile.Write(Encoding.UTF8.GetBytes("token"), path);
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(path));
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void ReplacingAnExistingFileMakesItOwnerOnly()
     {
         // ReplaceFile keeps the replaced file's DACL; Write must still end owner-only.
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Windows only");
-            return;
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         var path = dir.File("existing.json");
         File.WriteAllText(path, "{}");   // inherits the temp dir's permissive ACL
         Assert.False(OwnerOnlyAcl.IsOwnerOnly(path));
@@ -87,13 +82,10 @@ public class AtomicFileTests : IDisposable
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void ADirectoryWriteCreatesIsOwnerOnlyWhileAnExistingParentIsUntouched()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Windows only");
-            return;
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         var path = dir.File(Path.Combine("fresh", "settings.json"));
         AtomicFile.Write(Encoding.UTF8.GetBytes("{}"), path);
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.GetDirectoryName(path)!), "the app's own directory is private from the start, like the Mac's 0700");
@@ -123,12 +115,5 @@ public class AtomicFileTests : IDisposable
         Assert.NotNull(new FileInfo(link).LinkTarget);   // the link itself survives, not replaced by a plain file
         Assert.Equal("through", File.ReadAllText(real));
         Assert.Equal("through", File.ReadAllText(link));
-    }
-
-    [Fact]
-    public void SaveStoreReportsTheOutcome()
-    {
-        var store = new MasterStore([]);
-        Assert.True(MasterStoreIO.Save(store, dir.File("mcps.json")).Protected);
     }
 }

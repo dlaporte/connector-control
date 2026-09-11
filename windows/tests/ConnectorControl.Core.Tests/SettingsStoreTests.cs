@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using System.Text;
 using ConnectorControl.Core.Services;
 using ConnectorControl.Core.Tests.TestSupport;
@@ -29,25 +30,68 @@ public class SettingsStoreTests : IDisposable
         Assert.False(File.Exists(Path));   // reading never creates the file
     }
 
+    /// <summary>Every ISettings property round-trips through a second instance over the same
+    /// file — the Windows counterpart of UserDefaultsSettingsTests.testEveryKeyRoundTripsAndDefaultsApplyWhenAbsent,
+    /// widened to the two properties Windows has that the Mac does not (ClaudeConfigPath,
+    /// AutoUpdate, TrayTipShown; ClaudeLaunchTarget replaces the Mac's claudeAppPath).</summary>
     [Fact]
     public void SettersPersistImmediatelyAndReloadRoundTrips()
     {
         var s = new SettingsStore(Path);
         s.MasterStoreDir = @"D:\Dropbox\cc";
+        s.ClaudeConfigPath = @"D:\custom\claude_desktop_config.json";
+        s.ClaudeLaunchTarget = @"D:\Claude\Claude.exe";
         s.BackupKeepCount = 7;
         s.NotifyExternalChanges = false;
+        s.ConfirmBeforeRestart = false;
+        s.ConfirmBeforeQuit = false;
         s.LastApplyDate = new DateTime(2026, 9, 3, 12, 34, 56, DateTimeKind.Utc);
         s.SweepVersion = 1;
+        s.AutoUpdate = true;
+        s.TrayTipShown = true;
         Assert.True(File.Exists(Path));
 
         var again = new SettingsStore(Path);
         Assert.Equal(@"D:\Dropbox\cc", again.MasterStoreDir);
+        Assert.Equal(@"D:\custom\claude_desktop_config.json", again.ClaudeConfigPath);
+        Assert.Equal(@"D:\Claude\Claude.exe", again.ClaudeLaunchTarget);
         Assert.Equal(7, again.BackupKeepCount);
         Assert.False(again.NotifyExternalChanges);
+        Assert.False(again.ConfirmBeforeRestart);
+        Assert.False(again.ConfirmBeforeQuit);
         Assert.Equal(new DateTime(2026, 9, 3, 12, 34, 56, DateTimeKind.Utc), again.LastApplyDate);
         Assert.Equal(DateTimeKind.Utc, again.LastApplyDate!.Value.Kind);
         Assert.Equal(1, again.SweepVersion);
-        Assert.True(again.ConfirmBeforeQuit);   // untouched keys keep their defaults
+        Assert.True(again.AutoUpdate);
+        Assert.True(again.TrayTipShown);
+    }
+
+    /// <summary>Pins the on-disk key set so a renamed or forgotten property is caught here
+    /// rather than by a diff against the Mac's UserDefaults keys.</summary>
+    [Fact]
+    public void JsonKeysMatchTheDocumentedSet()
+    {
+        var s = new SettingsStore(Path);
+        s.MasterStoreDir = "x";
+        s.ClaudeConfigPath = "y";
+        s.ClaudeLaunchTarget = "z";
+        s.BackupKeepCount = 1;
+        s.NotifyExternalChanges = false;
+        s.ConfirmBeforeRestart = false;
+        s.ConfirmBeforeQuit = false;
+        s.LastApplyDate = DateTime.UtcNow;
+        s.SweepVersion = 1;
+        s.AutoUpdate = true;
+        s.TrayTipShown = true;
+
+        var root = JsonValue.Parse(File.ReadAllBytes(Path));
+        Assert.Equal(
+            [
+                "autoUpdate", "backupKeepCount", "claudeConfigPath", "claudeLaunchTarget",
+                "confirmBeforeQuit", "confirmBeforeRestart", "lastApplyDate", "masterStoreDir",
+                "notifyExternalChanges", "sweepVersion", "trayTipShown",
+            ],
+            root.ObjectProperties.Keys.ToArray());
     }
 
     [Fact]
@@ -128,13 +172,10 @@ public class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void FileIsOwnerOnlyOnWindows()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Windows only");
-            return;
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         var s = new SettingsStore(Path);
         s.TrayTipShown = true;
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path));

@@ -18,7 +18,7 @@ public sealed class FakeDialogs : IDialogs
     public List<InformCall> Informs { get; } = [];
     public List<OfferCall> Offers { get; } = [];
 
-    public bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle = "Cancel", bool destructive = false)
+    public bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle, bool destructive)
     {
         Confirms.Add(new ConfirmCall(message, informativeText, primaryTitle, cancelTitle, destructive));
         return NextConfirm;

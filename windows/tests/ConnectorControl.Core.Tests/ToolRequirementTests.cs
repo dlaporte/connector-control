@@ -12,6 +12,7 @@ public class ToolRequirementTests
     [InlineData(" Uvx ", Tool.Uvx)]
     [InlineData("python", null)]
     [InlineData("", null)]
+    [InlineData("   ", null)]
     [InlineData("npx.cmd.exe", null)]   // only one suffix is stripped
     public void RecognisesTheFourToolsByBasename(string command, Tool? expected)
     {

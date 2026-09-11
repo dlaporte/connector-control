@@ -33,9 +33,9 @@ public class ToolNoteTests
     [Fact]
     public void OrderNameMappingAndFamilyLookup()
     {
-        // Order, name mapping, lookup, and the Windows-only PATHEXT constant:
-        // behavior StringCatalogTests doesn't cover (it pins strings, not
-        // enum order or lookup logic).
+        // Order, name mapping, and lookup: behavior StringCatalogTests doesn't
+        // cover (it pins strings, not enum order or lookup logic). The Windows-only
+        // PATHEXT constant is ToolProbe's own, and is pinned in ToolProbeTests.
         Assert.Equal([Tool.Npx, Tool.Node, Tool.Uvx, Tool.Uv], ToolInfo.All.ToArray());
         Assert.Equal(["npx", "node", "uvx", "uv"], ToolInfo.All.Select(ToolInfo.Name).ToArray());
         Assert.Equal(Tool.Npx, ToolInfo.Parse("NPX"));
@@ -44,7 +44,6 @@ public class ToolNoteTests
         Assert.Equal(ToolFamily.NodeJs, ToolInfo.Family(Tool.Node));
         Assert.Equal(ToolFamily.Uv, ToolInfo.Family(Tool.Uvx));
         Assert.Equal(ToolFamily.Uv, ToolInfo.Family(Tool.Uv));
-        Assert.Equal(".COM;.EXE;.BAT;.CMD", ToolProbe.DefaultPathExt);
     }
 
     [Fact]

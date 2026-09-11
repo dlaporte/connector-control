@@ -12,15 +12,12 @@ namespace ConnectorControl.App.Tests;
 
 public class SettingsWindowTests
 {
-    private static PlatformServices Services(AppStateHarness h) =>
-        new(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
-
     [Fact]
     public void SettingsWindowLoadsAllThreeTabs()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var services = Services(h);
+        var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {
@@ -107,7 +104,7 @@ public class SettingsWindowTests
         h.Tools.Statuses[Tool.Uvx] = ToolStatus.NotFound;
         h.Tools.Statuses[Tool.Uv] = ToolStatus.NotFound;
         using var state = h.Create();
-        var services = Services(h);
+        var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {

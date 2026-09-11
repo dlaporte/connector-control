@@ -121,23 +121,11 @@ public class DialogTests
     }
 
     [Fact]
-    public void WpfDialogsMatchesTheSeamTheFakeMirrors()
-    {
-        // The fake in Core.Tests supplies the same defaults; if these drift apart, a call
-        // site compiles against one shape and is tested against another.
-        var confirm = typeof(WpfDialogs).GetMethod(nameof(IDialogs.Confirm))!;
-        Assert.Equal("Cancel", confirm.GetParameters()[3].DefaultValue);
-        Assert.Equal(false, confirm.GetParameters()[4].DefaultValue);
-        Assert.True(typeof(WpfDialogs).IsSealed);
-        Assert.True(typeof(IDialogs).IsAssignableFrom(typeof(WpfDialogs)));
-    }
-
-    [Fact]
     public void WpfDialogsFallsBackToTheActiveWindowWhenNoOwnerWasGiven()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var services = new PlatformServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), new FakeUpdater());
+        var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
         {

@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
@@ -15,13 +16,10 @@ public class OwnerOnlyAclTests : IDisposable
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void FileBecomesOwnerOnly()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Windows only");
-            return;
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         var path = dir.File("f.json");
         File.WriteAllText(path, "{}");
         Assert.False(OwnerOnlyAcl.IsOwnerOnly(path), "a fresh file inherits the temp dir's ACL");
@@ -31,13 +29,10 @@ public class OwnerOnlyAclTests : IDisposable
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void DirectoryBecomesOwnerOnly()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Windows only");
-            return;
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         var path = dir.File("sub");
         Directory.CreateDirectory(path);
         OwnerOnlyAcl.TryApply(path);
@@ -46,15 +41,14 @@ public class OwnerOnlyAclTests : IDisposable
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void WriteNewProtectedFileWritesTheBytesOwnerOnly()
     {
         var path = dir.File("created.json");
         Assert.True(OwnerOnlyAcl.WriteNewProtectedFile(path, "{}"u8.ToArray()));
         Assert.Equal("{}", File.ReadAllText(path));
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(path));
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(path));
     }
 
     [Fact]
@@ -68,6 +62,7 @@ public class OwnerOnlyAclTests : IDisposable
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void CreateDirectoryProtectedMakesANewDirectoryOwnerOnlyAndLeavesAnExistingOneAlone()
     {
         var fresh = dir.File(Path.Combine("a", "b"));
@@ -77,11 +72,9 @@ public class OwnerOnlyAclTests : IDisposable
         Directory.CreateDirectory(existing);
         OwnerOnlyAcl.CreateDirectoryProtected(existing);
         Assert.True(Directory.Exists(existing));
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(fresh), "a directory the app creates is private from the start, like the Mac's 0700");
-            Assert.False(OwnerOnlyAcl.IsOwnerOnly(existing), "a folder that already existed is not the app's to rewrite");
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(fresh), "a directory the app creates is private from the start, like the Mac's 0700");
+        Assert.False(OwnerOnlyAcl.IsOwnerOnly(existing), "a folder that already existed is not the app's to rewrite");
     }
 
     [Fact]

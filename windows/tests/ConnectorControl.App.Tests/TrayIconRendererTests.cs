@@ -13,7 +13,7 @@ public class TrayIconRendererTests
     [InlineData(TrayGlyph.Warning, false, 16)]
     public void RendersVisiblePixelsAtTheRequestedSize(TrayGlyph glyph, bool light, int size)
     {
-        var (width, height, visible, iconHandle, iconWidth) = StaRunner.Run(() =>
+        var (width, height, visible, iconHandle, iconWidth) = WpfApp.Invoke(() =>
         {
             var bitmap = TrayIconRenderer.Render(glyph, light, size);
             // The tray takes a System.Drawing.Icon and RenderIcon is the only conversion that
@@ -35,7 +35,7 @@ public class TrayIconRendererTests
     [Fact]
     public void LightTaskbarGetsABlackGlyphAndDarkTaskbarAWhiteOne()
     {
-        var (light, dark) = StaRunner.Run(() => (
+        var (light, dark) = WpfApp.Invoke(() => (
             BitmapAssertions.DominantColor(TrayIconRenderer.Render(TrayGlyph.Plug, lightTaskbar: true, 32)),
             BitmapAssertions.DominantColor(TrayIconRenderer.Render(TrayGlyph.Plug, lightTaskbar: false, 32))));
         Assert.Equal(Colors.Black, light);

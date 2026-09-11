@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using ConnectorControl.Core.State;
 using ConnectorControl.Core.Tests.TestSupport;
 
@@ -10,6 +11,7 @@ public class PermissionsSweepTests : IDisposable
     public void Dispose() => dir.Dispose();
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void SweepsEveryFileAndDirectoryOnceAndSetsTheFlag()
     {
         var paths = new AppPaths(dir.File("claude.json"), dir.File("store"));
@@ -21,14 +23,12 @@ public class PermissionsSweepTests : IDisposable
 
         Assert.True(PermissionsSweep.RunOnce(settings, paths));
         Assert.Equal(PermissionsSweep.CurrentVersion, settings.SweepVersion);
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(paths.StoreDir));
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(paths.MasterStorePath));
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(paths.BackupsDir));
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(nestedFile));
-        }
         Assert.False(PermissionsSweep.RunOnce(settings, paths));   // gated by the version from now on
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(paths.StoreDir));
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(paths.MasterStorePath));
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(paths.BackupsDir));
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(nestedFile));
     }
 
     [Fact]
@@ -56,6 +56,7 @@ public class PermissionsSweepTests : IDisposable
     /// alone. The backups directory is always the app's and is swept in full.
     /// </summary>
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void AChosenStoreDirectoryKeepsItsOwnFilesAndAcl()
     {
         var chosen = dir.File(Path.Combine("OneDrive", "connectors"));
@@ -76,17 +77,15 @@ public class PermissionsSweepTests : IDisposable
 
         Assert.True(PermissionsSweep.RunOnce(settings, paths));
         Assert.Equal(PermissionsSweep.CurrentVersion, settings.SweepVersion);
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.False(OwnerOnlyAcl.IsOwnerOnly(chosen), "a chosen folder's own DACL is not the app's to rewrite");
-            Assert.False(OwnerOnlyAcl.IsOwnerOnly(strangerFile), "other files in the chosen folder are untouched");
-            Assert.False(OwnerOnlyAcl.IsOwnerOnly(strangerDir), "nothing below the chosen folder is touched");
-            Assert.False(OwnerOnlyAcl.IsOwnerOnly(nestedStranger));
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(paths.MasterStorePath));
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(corrupt));
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(backups));
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(backup));
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        Assert.False(OwnerOnlyAcl.IsOwnerOnly(chosen), "a chosen folder's own DACL is not the app's to rewrite");
+        Assert.False(OwnerOnlyAcl.IsOwnerOnly(strangerFile), "other files in the chosen folder are untouched");
+        Assert.False(OwnerOnlyAcl.IsOwnerOnly(strangerDir), "nothing below the chosen folder is touched");
+        Assert.False(OwnerOnlyAcl.IsOwnerOnly(nestedStranger));
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(paths.MasterStorePath));
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(corrupt));
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(backups));
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(backup));
     }
 
     /// <summary>
@@ -97,6 +96,7 @@ public class PermissionsSweepTests : IDisposable
     /// default store location, which sits one level below LocalAppData.
     /// </summary>
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void AStoreDirectoryThatIsAShellFolderIsRefusedWhileTheBackupsDirectoryIsStillRepaired()
     {
         var shellFolder = dir.File("Documents");
@@ -111,13 +111,11 @@ public class PermissionsSweepTests : IDisposable
 
         Assert.True(PermissionsSweep.RunOnce(settings, paths, [shellFolder]));
         Assert.Equal(PermissionsSweep.CurrentVersion, settings.SweepVersion);
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.False(OwnerOnlyAcl.IsOwnerOnly(shellFolder), "a shell folder is never rewritten");
-            Assert.False(OwnerOnlyAcl.IsOwnerOnly(paths.MasterStorePath), "nor is anything inside it, the app's own file included");
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(backups), "the app-owned backups directory is still repaired");
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(backup));
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        Assert.False(OwnerOnlyAcl.IsOwnerOnly(shellFolder), "a shell folder is never rewritten");
+        Assert.False(OwnerOnlyAcl.IsOwnerOnly(paths.MasterStorePath), "nor is anything inside it, the app's own file included");
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(backups), "the app-owned backups directory is still repaired");
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(backup));
     }
 
     [Fact]
@@ -132,6 +130,7 @@ public class PermissionsSweepTests : IDisposable
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void NothingToAttemptStillMarksTheSweepDone()
     {
         var shellFolder = dir.File("Documents");
@@ -143,12 +142,10 @@ public class PermissionsSweepTests : IDisposable
         // Both roots refused: the store directory is the shell folder, the backups directory is listed too.
         Assert.True(PermissionsSweep.RunOnce(settings, paths, [shellFolder, paths.BackupsDir]));
         Assert.Equal(PermissionsSweep.CurrentVersion, settings.SweepVersion);   // nothing was attempted, so there is nothing left to retry
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.False(OwnerOnlyAcl.IsOwnerOnly(shellFolder));
-            Assert.False(OwnerOnlyAcl.IsOwnerOnly(paths.MasterStorePath));
-            Assert.False(OwnerOnlyAcl.IsOwnerOnly(paths.BackupsDir));
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        Assert.False(OwnerOnlyAcl.IsOwnerOnly(shellFolder));
+        Assert.False(OwnerOnlyAcl.IsOwnerOnly(paths.MasterStorePath));
+        Assert.False(OwnerOnlyAcl.IsOwnerOnly(paths.BackupsDir));
     }
 
     [Fact]

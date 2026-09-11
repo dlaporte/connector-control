@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
@@ -81,11 +82,7 @@ public class BackupManagerTests : IDisposable
     {
         // A locked file blocks File.Delete on Windows; on Unix, unlink succeeds on an open
         // file, so this scenario cannot be forced there.
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Windows only");
-            return;   // CA1416: the analyzer needs an explicit exit after the guard
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         File.WriteAllText(source, "v0");
         var oldest = manager.BackUp(source, Series, At(1_752_600_000));
         Assert.NotNull(oldest);
@@ -133,26 +130,20 @@ public class BackupManagerTests : IDisposable
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void BackupsArePrivate()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Windows only");
-            return;   // CA1416: the analyzer needs an explicit exit after the guard
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         var made = manager.BackUp(source, "mcps");
         Assert.NotNull(made);
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(made));
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void BackupsDirectoryAndOriginalSnapshotArePrivate()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Windows only");
-            return;   // CA1416: the analyzer needs an explicit exit after the guard
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         manager.EnsureOriginalSnapshot(source);
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(manager.BackupsDir));
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.Combine(manager.BackupsDir, "claude_desktop_config.original.json")));
@@ -200,6 +191,7 @@ public class BackupManagerTests : IDisposable
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void AFreshBackupsTreeIsOwnerOnlyFromTheParentDown()
     {
         // First run with an empty Claude config: the backups dir is the first thing the app creates,
@@ -209,11 +201,9 @@ public class BackupManagerTests : IDisposable
         var made = fresh.BackUp(source, Series, At(1_752_600_000));
         Assert.NotNull(made);
         Assert.Equal(File.ReadAllBytes(source), File.ReadAllBytes(made));
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.GetDirectoryName(backups)!), "the parent this call created is private");
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(backups));
-            Assert.True(OwnerOnlyAcl.IsOwnerOnly(made), "the copy is private from its create call, not a fix-up");
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(Path.GetDirectoryName(backups)!), "the parent this call created is private");
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(backups));
+        Assert.True(OwnerOnlyAcl.IsOwnerOnly(made), "the copy is private from its create call, not a fix-up");
     }
 }

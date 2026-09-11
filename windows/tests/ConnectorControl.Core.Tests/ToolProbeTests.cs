@@ -5,7 +5,7 @@ namespace ConnectorControl.Core.Tests;
 
 public class ToolProbeTests : IDisposable
 {
-    private const string PathExt = ".COM;.EXE;.BAT;.CMD";
+    private const string PathExt = ToolProbe.DefaultPathExt;
     private readonly TempDir dir = new("toolprobe");
 
     public void Dispose() => dir.Dispose();
@@ -39,6 +39,12 @@ public class ToolProbeTests : IDisposable
         var file = Path.Combine(folder, name + ".cmd");
         File.WriteAllText(file, windowsBody ?? "@echo 10.9.2\r\n");
         return file;
+    }
+
+    [Fact]
+    public void DefaultPathExtIsTheWindowsExecutableSuffixList()
+    {
+        Assert.Equal(".COM;.EXE;.BAT;.CMD", ToolProbe.DefaultPathExt);
     }
 
     [Theory]
@@ -123,7 +129,12 @@ public class ToolProbeTests : IDisposable
     public void ProbeNeverThrowsOnGarbage()
     {
         Assert.Equal(ToolStatus.NotFound, new ToolProbe(new Dictionary<string, string>(StringComparer.Ordinal)).Probe([Tool.Node])[Tool.Node]);
-        var weird = "::" + dir.File("missing dir with spaces") + Path.PathSeparator + dir.File("nope");
+        // A regular file where a PATH entry should be a directory (the Mac vector is /dev/null,
+        // always a file, never a directory) must not throw when the probe tries to enumerate it.
+        var notADirectory = dir.File("not-a-directory.txt");
+        File.WriteAllText(notADirectory, "");
+        var weird = "::" + dir.File("missing dir with spaces") + Path.PathSeparator + dir.File("nope")
+            + Path.PathSeparator + notADirectory;
         Assert.Equal(ToolStatus.NotFound, new ToolProbe(Env(weird)).Probe([Tool.Npx])[Tool.Npx]);
         // exits without printing: found, version unknown
         var silent = Stub("uvx", "bin", windowsBody: "@exit /b 3\r\n", unixBody: "exit 3");

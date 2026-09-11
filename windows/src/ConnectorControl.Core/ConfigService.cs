@@ -113,9 +113,9 @@ public sealed class ConfigService
         {
             root = ClaudeConfigIO.ParseRoot(data);
         }
-        catch (ClaudeConfigException)
+        catch (ClaudeConfigException ex)
         {
-            throw new ClaudeConfigException($"backup {name} is not a valid config file");
+            throw new ClaudeConfigException($"backup {name} is not a valid config file ({ex.Detail})");
         }
         var rawServers = root["mcpServers"];
         if (rawServers is not null && rawServers.Kind != JsonKind.Object)

@@ -51,9 +51,7 @@ public sealed class AppStateHarness : IDisposable
     public void WriteClaudeServers(params (string Name, JsonValue Config)[] servers) =>
         ClaudeConfigIO.Write(servers.ToDictionary(s => s.Name, s => s.Config, StringComparer.Ordinal), ClaudeConfigPath);
 
-    public static JsonValue Remote(string url) => JsonValue.Object(
-        ("command", JsonValue.String("npx")),
-        ("args", JsonValue.Array([JsonValue.String("-y"), JsonValue.String("mcp-remote"), JsonValue.String(url)])));
+    public static JsonValue Remote(string url) => RemotePattern.Make(url, RemoteLaunchStyle.Npx);
 
     public static string[] Keys(IEnumerable<string> keys) => keys.Order(StringComparer.Ordinal).ToArray();
 
