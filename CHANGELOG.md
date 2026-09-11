@@ -17,14 +17,53 @@ section is about to ship.
 
 ### macOS
 
+- The one-time permissions repair no longer records itself done when every repair
+  failed; it retries at the next launch. It is tracked by a version number now, so an
+  upgraded install runs it once more.
+- The Restore… sheet reports a failure to list backups instead of showing an empty list.
+- Repointing the master list to a folder that cannot be written keeps the current
+  location and reports the failure instead of switching to an empty list.
+- Deleting the folder that holds Claude's config or the connector list no longer
+  leaves the file watcher stuck; it recovers when the folder reappears.
+- An empty `CONNECTOR_CONTROL_CLAUDE_CONFIG` or `CONNECTOR_CONTROL_STORE_DIR`
+  variable, or an empty stored master-list path, now counts as unset.
+- The migration from the pre-1.0 app names is gone; no released build ever needed it.
+
 ### Windows
 
-- Windows: the tray icon is now the same plug as the Mac's menu bar icon,
-  prongs to the right and cable to the left; it used to stand upright.
+- Updates are offered, not installed silently, matching the Mac; the switch under
+  Settings ▸ General ▸ Updates turns automatic installation back on.
+- A Claude config reached through a symlink is written through to the real file
+  instead of being replaced by a plain copy.
+- The editor clears a bearer token, header or OAuth client secret when a JSON edit
+  switches the auth type, instead of keeping it behind the new one.
+- The Settings window no longer stalls while the Claude tab's icon loads or while a
+  chosen launch target is verified.
+- Previews of a connector's extra fields no longer show escaped slashes.
+- Repointing the master list to a folder that refuses the write keeps the current
+  location and reports the failure.
+- A failed settings save shows in the flyout banner instead of passing silently.
+- The one-time owner-only permissions repair is tracked by a version number; an
+  upgraded install runs it once more.
+- The tray icon is now the same plug as the Mac's menu bar icon, prongs to the right
+  and cable to the left; it used to stand upright.
 
 ### Both platforms
 
+- A stale backup that cannot be deleted no longer fails the save; it is retried at
+  the next rotation.
+- The messages for a Claude app that is not found, or not signed by Anthropic, end
+  with the same sentence on both platforms.
+
 ### Release pipeline
+
+- The Windows build no longer downloads the previous release or builds a delta
+  package; no client has applied one since v1.3.2.
+- The smoke test asks the installed app to verify its own package with the code the
+  updater runs, instead of re-implementing the publisher policy in PowerShell.
+- The release and preview workflows share one secrets gate and one set of publish
+  scripts; a new lint workflow checks every workflow and script on push; the Mac CI
+  build also produces the DMG. vpk is pinned in a tool manifest that Dependabot tracks.
 
 ## v1.3.2
 
