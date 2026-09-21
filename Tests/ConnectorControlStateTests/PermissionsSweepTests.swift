@@ -184,4 +184,9 @@ final class PermissionsSweepTests: XCTestCase {
         XCTAssertEqual(settings.sweepVersion, PermissionsSweep.currentVersion,
                        "a clean run with the real repairs completes both passes")
     }
+
+    func testTheCollectionsSidecarIsAStoreFile() {
+        XCTAssertTrue(PermissionsSweep.isStoreFile("collections.json"))
+        XCTAssertFalse(PermissionsSweep.isStoreFile("collections-local.json"))
+    }
 }

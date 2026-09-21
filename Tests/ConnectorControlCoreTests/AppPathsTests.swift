@@ -64,6 +64,14 @@ final class AppPathsTests: XCTestCase {
         XCTAssertEqual(paths.backupsDirURL.path, "/tmp/x/store/backups")
     }
 
+    func testCollectionsFileSitsBesideTheStoreAndTheCacheStaysMachineLocal() {
+        let paths = AppPaths.live(environment: [AppPaths.storeDirEnv: "/Volumes/Sync/cc"],
+                                  appSupport: URL(fileURLWithPath: "/Users/d/Library/Application Support"))
+        XCTAssertEqual(paths.collectionsFileURL.path, "/Volumes/Sync/cc/collections.json")
+        XCTAssertEqual(paths.collectionsCacheURL.path,
+                       "/Users/d/Library/Application Support/Connector Control/collections-local.json")
+    }
+
     func testLiveHonoursTheAppSupportDirectory() {
         let home = URL(fileURLWithPath: "/tmp/fake-home/Library/Application Support")
         let paths = AppPaths.live(environment: [:], appSupport: home)

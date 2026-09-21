@@ -12,14 +12,22 @@ public struct AppPaths: Sendable {
     /// store dir; `AppState.makeService` relocates it to the machine-local folder when a
     /// custom store dir is set — like backups, it must never live in a chosen (synced) folder.
     public let stagingDirURL: URL
+    /// The machine-local bindings cache. Like backups, it never follows a chosen (synced)
+    /// store dir: the paths in it are true on this machine only.
+    public let collectionsCacheURL: URL
 
     public var masterStoreURL: URL { storeDirURL.appendingPathComponent("mcps.json") }
 
-    public init(claudeConfigURL: URL, storeDirURL: URL, backupsDirURL: URL? = nil, stagingDirURL: URL? = nil) {
+    /// The sidecar travels with the master list, so it sits beside it wherever that is.
+    public var collectionsFileURL: URL { storeDirURL.appendingPathComponent(CollectionsFile.fileName) }
+
+    public init(claudeConfigURL: URL, storeDirURL: URL, backupsDirURL: URL? = nil, stagingDirURL: URL? = nil,
+                collectionsCacheURL: URL? = nil) {
         self.claudeConfigURL = claudeConfigURL
         self.storeDirURL = storeDirURL
         self.backupsDirURL = backupsDirURL ?? storeDirURL.appendingPathComponent("backups")
         self.stagingDirURL = stagingDirURL ?? storeDirURL.appendingPathComponent(".staging")
+        self.collectionsCacheURL = collectionsCacheURL ?? storeDirURL.appendingPathComponent(CollectionsLocalCache.fileName)
     }
 
     /// `appSupport` is `~/Library/Application Support` in the app; the state
@@ -34,8 +42,12 @@ public struct AppPaths: Sendable {
         // PermissionsSweep apply the same rule to the stored setting).
         let claude = environment[claudeConfigEnv].flatMap { $0.isEmpty ? nil : $0 }.map(URL.init(fileURLWithPath:))
             ?? appSupport.appendingPathComponent("Claude/claude_desktop_config.json")
+        let defaultStore = appSupport.appendingPathComponent(dataDirName)
         let store = environment[storeDirEnv].flatMap { $0.isEmpty ? nil : $0 }.map(URL.init(fileURLWithPath:))
-            ?? appSupport.appendingPathComponent(dataDirName)
-        return AppPaths(claudeConfigURL: claude, storeDirURL: store)
+            ?? defaultStore
+        // The cache is computed from the default store dir, never the overridden one, so a
+        // store dir pointed at a synced folder still leaves the per-machine bindings here.
+        return AppPaths(claudeConfigURL: claude, storeDirURL: store,
+                        collectionsCacheURL: defaultStore.appendingPathComponent(CollectionsLocalCache.fileName))
     }
 }

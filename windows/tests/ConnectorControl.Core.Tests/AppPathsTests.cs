@@ -60,6 +60,14 @@ public class AppPathsTests
     }
 
     [Fact]
+    public void CollectionsFileSitsBesideTheStoreAndTheCacheStaysMachineLocal()
+    {
+        var paths = AppPaths.Resolve(NoEnv, new PathOverrides(MasterStoreDir: @"D:\Sync\cc"), Folders, new FakePathProbe());
+        Assert.Equal(Path.Combine(@"D:\Sync\cc", "collections.json"), paths.CollectionsFilePath);
+        Assert.Equal(Path.Combine(Local, "Connector Control", "collections-local.json"), paths.CollectionsCachePath);
+    }
+
+    [Fact]
     public void MsixPackageWithConfigWins()
     {
         var probe = new FakePathProbe().AddFile(PkgConfig("Claude_pzs8sxrjxfjjc"));

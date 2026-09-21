@@ -1,0 +1,58 @@
+{
+  "collections" : {
+    "Consulting" : {
+      "kind" : "local",
+      "publish" : {
+        "hints" : {
+          "tax" : {
+            "ANTHROPIC_API_KEY" : "console.anthropic.com ▸ API keys"
+          }
+        },
+        "origin" : "0c9b7d1e-5a3f-4f2c-8e6d-2b1a9c8d7e6f",
+        "paths" : {
+          "ledger" : {
+            "\/args\/1" : {
+              "hint" : "your ledger clone, then dist\/index.js",
+              "name" : "server_path"
+            }
+          }
+        },
+        "shareValues" : {
+          "tax" : [
+            "LOG_LEVEL"
+          ]
+        },
+        "slug" : "consulting"
+      }
+    },
+    "Data team" : {
+      "fileName" : "data-team.json",
+      "kind" : "synced",
+      "needs" : {
+        "dbt" : {
+          "DBT_TOKEN" : {
+            "hint" : "cloud.getdbt.com ▸ Account ▸ API tokens",
+            "path" : "\/env\/DBT_TOKEN"
+          },
+          "server_path" : {
+            "hint" : "your ledger clone, then dist\/index.js",
+            "path" : "\/args\/1"
+          }
+        }
+      },
+      "origin" : "6f1c4a2e-1b8d-4b0e-9f0a-3c2d7e8a91e2",
+      "relativeToStore" : "..\/mcp\/data-team.json"
+    },
+    "Personal" : {
+      "kind" : "local",
+      "provenance" : {
+        "dbt" : {
+          "author" : "Acme Data Platform",
+          "date" : "2026-09-21",
+          "from" : "Data team"
+        }
+      }
+    }
+  },
+  "version" : 1
+}

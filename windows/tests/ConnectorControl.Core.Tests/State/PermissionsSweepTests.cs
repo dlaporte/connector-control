@@ -159,6 +159,13 @@ public class PermissionsSweepTests : IDisposable
     }
 
     [Fact]
+    public void TheCollectionsSidecarIsAStoreFile()
+    {
+        Assert.True(PermissionsSweep.IsStoreFile("collections.json"));
+        Assert.False(PermissionsSweep.IsStoreFile("collections-local.json"));
+    }
+
+    [Fact]
     public void MissingDirectoriesAreToleratedAndStillMarkTheSweepDone()
     {
         var paths = new AppPaths(dir.File("claude.json"), dir.File("never-created"));

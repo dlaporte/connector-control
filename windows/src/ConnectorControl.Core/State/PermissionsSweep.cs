@@ -88,9 +88,14 @@ public static class PermissionsSweep
         return true;
     }
 
-    /// <summary>mcps.json and the <c>mcps.corrupt.&lt;timestamp&gt;.json</c> asides MasterStoreIO leaves beside it.</summary>
+    /// <summary>
+    /// mcps.json, the <c>mcps.corrupt.&lt;timestamp&gt;.json</c> asides MasterStoreIO leaves beside
+    /// it, and the collections sidecar: the sidecar carries hints and origins, no secrets, but it
+    /// is written and swept like the store so the two never differ in who can read them.
+    /// </summary>
     internal static bool IsStoreFile(string name) =>
         string.Equals(name, "mcps.json", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(name, CollectionsFile.FileName, StringComparison.OrdinalIgnoreCase)
         || (name.StartsWith("mcps.corrupt.", StringComparison.OrdinalIgnoreCase)
             && name.EndsWith(".json", StringComparison.OrdinalIgnoreCase));
 

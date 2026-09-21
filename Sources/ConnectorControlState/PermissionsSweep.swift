@@ -90,8 +90,11 @@ public enum PermissionsSweep {
         return true
     }
 
-    /// mcps.json and the `mcps.corrupt.<timestamp>.json` asides MasterStoreIO leaves beside it.
+    /// mcps.json, the `mcps.corrupt.<timestamp>.json` asides MasterStoreIO leaves beside it, and
+    /// the collections sidecar: the sidecar carries hints and origins, no secrets, but it is
+    /// written and swept like the store so the two never differ in who can read them.
     static func isStoreFile(_ name: String) -> Bool {
-        name == "mcps.json" || (name.hasPrefix("mcps.corrupt.") && name.hasSuffix(".json"))
+        name == "mcps.json" || name == CollectionsFile.fileName
+            || (name.hasPrefix("mcps.corrupt.") && name.hasSuffix(".json"))
     }
 }
