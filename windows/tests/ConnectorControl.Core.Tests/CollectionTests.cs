@@ -2,9 +2,9 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
 
-public class ProfileTests : IDisposable
+public class CollectionTests : IDisposable
 {
-    private readonly TempDir dir = new("profile-store");
+    private readonly TempDir dir = new("collection-store");
     private string Url => dir.File("mcps.json");
 
     public void Dispose() => dir.Dispose();
@@ -13,34 +13,34 @@ public class ProfileTests : IDisposable
         ("command", JsonValue.String("npx")),
         ("args", JsonValue.Array([JsonValue.String("-y"), JsonValue.String("mcp-remote"), JsonValue.String(url)]))));
 
-    private static string[] Keys(Profile? p) => p is null ? [] : p.Mcps.Keys.Order(StringComparer.Ordinal).ToArray();
+    private static string[] Keys(Collection? c) => c is null ? [] : c.Mcps.Keys.Order(StringComparer.Ordinal).ToArray();
 
-    private static MasterStore TwoProfiles() => new(2, "Work",
+    private static MasterStore TwoCollections() => new(2, "Work",
     [
-        new("Work", new Profile(new Dictionary<string, McpEntry> { ["a"] = Entry("https://a.example/mcp") })),
-        new("Personal", new Profile(new Dictionary<string, McpEntry> { ["b"] = Entry("https://b.example/mcp") })),
+        new("Work", new Collection(new Dictionary<string, McpEntry> { ["a"] = Entry("https://a.example/mcp") })),
+        new("Personal", new Collection(new Dictionary<string, McpEntry> { ["b"] = Entry("https://b.example/mcp") })),
     ]);
 
     // Decoding
 
     [Fact]
-    public void V2RoundTripPreservesTwoProfiles()
+    public void V2RoundTripPreservesTwoCollections()
     {
-        var store = TwoProfiles();
+        var store = TwoCollections();
         var decoded = MasterStore.FromJson(JsonValue.Parse(store.ToJson().Serialize()));
         Assert.Equal(store, decoded);
-        Assert.Equal("Work", decoded.ActiveProfile);
-        Assert.Equal(["a"], Keys(decoded.Profiles["Work"]));
-        Assert.Equal(["b"], Keys(decoded.Profiles["Personal"]));
+        Assert.Equal("Work", decoded.ActiveCollection);
+        Assert.Equal(["a"], Keys(decoded.Collections["Work"]));
+        Assert.Equal(["b"], Keys(decoded.Collections["Personal"]));
     }
 
     [Fact]
-    public void UnknownActiveProfileFallsBackToExistingProfile()
+    public void UnknownActiveCollectionFallsBackToExistingCollection()
     {
         File.WriteAllText(Url, "{\"version\":2,\"activeProfile\":\"Ghost\",\"profiles\":{\"Alpha\":{\"mcps\":{}},\"Beta\":{\"mcps\":{}}}}");
         var (store, corrupt) = MasterStoreIO.Load(Url);
         Assert.Null(corrupt);
-        Assert.Equal("Alpha", store.ActiveProfile);
+        Assert.Equal("Alpha", store.ActiveCollection);
     }
 
     [Fact]
@@ -70,122 +70,122 @@ public class ProfileTests : IDisposable
     public void UnknownKeysAreIgnored()
     {
         var store = MasterStore.FromJson(JsonValue.Parse("{\"version\":2,\"activeProfile\":\"D\",\"future\":1,\"profiles\":{\"D\":{\"mcps\":{},\"note\":\"x\"}}}"));
-        Assert.Equal("D", store.ActiveProfile);
+        Assert.Equal("D", store.ActiveCollection);
     }
 
     // mcps accessor scoping
 
     [Fact]
-    public void McpsAccessorReadsAndWritesOnlyActiveProfile()
+    public void McpsAccessorReadsAndWritesOnlyActiveCollection()
     {
-        var store = TwoProfiles();
+        var store = TwoCollections();
         store.Mcps["c"] = Entry("https://c.example/mcp");
-        Assert.Equal(["a", "c"], Keys(store.Profiles["Work"]));
-        Assert.Equal(["b"], Keys(store.Profiles["Personal"]));
+        Assert.Equal(["a", "c"], Keys(store.Collections["Work"]));
+        Assert.Equal(["b"], Keys(store.Collections["Personal"]));
     }
 
-    // Profile management
+    // Collection management
 
     [Fact]
-    public void AddProfileCopyingCurrent()
+    public void AddCollectionCopyingCurrent()
     {
         var store = new MasterStore(new Dictionary<string, McpEntry> { ["a"] = Entry("https://a.example/mcp") });
-        Assert.Null(store.AddProfile("Copy", copyingCurrent: true));
-        Assert.Equal("Copy", store.ActiveProfile);
-        Assert.Equal(["a"], Keys(store.Profiles["Copy"]));
-        Assert.Equal(["a"], Keys(store.Profiles["Default"]));
+        Assert.Null(store.AddCollection("Copy", copyingCurrent: true));
+        Assert.Equal("Copy", store.ActiveCollection);
+        Assert.Equal(["a"], Keys(store.Collections["Copy"]));
+        Assert.Equal(["a"], Keys(store.Collections["Default"]));
     }
 
     [Fact]
-    public void AddProfileEmptyStartsBlank()
+    public void AddCollectionEmptyStartsBlank()
     {
         var store = new MasterStore(new Dictionary<string, McpEntry> { ["a"] = Entry("https://a.example/mcp") });
-        Assert.Null(store.AddProfile("Fresh", copyingCurrent: false));
-        Assert.Empty(store.Profiles["Fresh"].Mcps);
+        Assert.Null(store.AddCollection("Fresh", copyingCurrent: false));
+        Assert.Empty(store.Collections["Fresh"].Mcps);
     }
 
     [Fact]
-    public void AddProfileRejectsEmptyName()
+    public void AddCollectionRejectsEmptyName()
     {
-        Assert.Equal("Name must not be empty.", MasterStore.Empty().AddProfile("   ", false));
+        Assert.Equal("Name must not be empty.", MasterStore.Empty().AddCollection("   ", false));
     }
 
     [Fact]
-    public void AddProfileRejectsDuplicateName()
+    public void AddCollectionRejectsDuplicateName()
     {
-        Assert.Equal("A profile named \u201CDefault\u201D already exists.", MasterStore.Empty().AddProfile("Default", false));
+        Assert.Equal("A collection named “Default” already exists.", MasterStore.Empty().AddCollection("Default", false));
     }
 
     [Fact]
-    public void RenameActiveProfile()
-    {
-        var store = MasterStore.Empty();
-        Assert.Null(store.RenameActiveProfile("Main"));
-        Assert.Equal("Main", store.ActiveProfile);
-        Assert.Equal(["Main"], store.Profiles.Keys.ToArray());
-    }
-
-    [Fact]
-    public void RenameActiveProfileRejectsCollision()
-    {
-        var store = new MasterStore(2, "Work", [new("Work", new Profile()), new("Personal", new Profile())]);
-        Assert.Equal("A profile named \u201CPersonal\u201D already exists.", store.RenameActiveProfile("Personal"));
-        Assert.Equal("Work", store.ActiveProfile);
-    }
-
-    [Fact]
-    public void RenameActiveProfileRejectsEmptyName()
-    {
-        Assert.NotNull(MasterStore.Empty().RenameActiveProfile("  "));
-    }
-
-    [Fact]
-    public void DeleteActiveProfileSwitchesToFirstRemaining()
-    {
-        var store = new MasterStore(2, "Work", [new("Work", new Profile()), new("Alpha", new Profile()), new("Zeta", new Profile())]);
-        Assert.Null(store.DeleteActiveProfile());
-        Assert.Equal("Alpha", store.ActiveProfile);
-        Assert.False(store.Profiles.ContainsKey("Work"));
-    }
-
-    [Fact]
-    public void DeleteActiveProfileRejectsLastProfile()
+    public void RenameActiveCollection()
     {
         var store = MasterStore.Empty();
-        Assert.Equal("Can\u2019t delete the last profile.", store.DeleteActiveProfile());
-        Assert.Single(store.Profiles);
+        Assert.Null(store.RenameActiveCollection("Main"));
+        Assert.Equal("Main", store.ActiveCollection);
+        Assert.Equal(["Main"], store.Collections.Keys.ToArray());
     }
 
     [Fact]
-    public void SwitchProfile()
+    public void RenameActiveCollectionRejectsCollision()
     {
-        var store = new MasterStore(2, "Work", [new("Work", new Profile()), new("Personal", new Profile())]);
-        Assert.Null(store.SwitchProfile("Personal"));
-        Assert.Equal("Personal", store.ActiveProfile);
+        var store = new MasterStore(2, "Work", [new("Work", new Collection()), new("Personal", new Collection())]);
+        Assert.Equal("A collection named “Personal” already exists.", store.RenameActiveCollection("Personal"));
+        Assert.Equal("Work", store.ActiveCollection);
     }
 
     [Fact]
-    public void SwitchProfileRejectsUnknownName()
+    public void RenameActiveCollectionRejectsEmptyName()
+    {
+        Assert.NotNull(MasterStore.Empty().RenameActiveCollection("  "));
+    }
+
+    [Fact]
+    public void DeleteActiveCollectionSwitchesToFirstRemaining()
+    {
+        var store = new MasterStore(2, "Work", [new("Work", new Collection()), new("Alpha", new Collection()), new("Zeta", new Collection())]);
+        Assert.Null(store.DeleteActiveCollection());
+        Assert.Equal("Alpha", store.ActiveCollection);
+        Assert.False(store.Collections.ContainsKey("Work"));
+    }
+
+    [Fact]
+    public void DeleteActiveCollectionRejectsLastCollection()
     {
         var store = MasterStore.Empty();
-        Assert.Equal("No profile named \u201CNope\u201D.", store.SwitchProfile("Nope"));
-        Assert.Equal("Default", store.ActiveProfile);
+        Assert.Equal("Can’t delete the last collection.", store.DeleteActiveCollection());
+        Assert.Single(store.Collections);
+    }
+
+    [Fact]
+    public void SwitchCollection()
+    {
+        var store = new MasterStore(2, "Work", [new("Work", new Collection()), new("Personal", new Collection())]);
+        Assert.Null(store.SwitchCollection("Personal"));
+        Assert.Equal("Personal", store.ActiveCollection);
+    }
+
+    [Fact]
+    public void SwitchCollectionRejectsUnknownName()
+    {
+        var store = MasterStore.Empty();
+        Assert.Equal("No collection named “Nope”.", store.SwitchCollection("Nope"));
+        Assert.Equal("Default", store.ActiveCollection);
     }
 
     [Fact]
     public void ErrorMessagesUseTypographicPunctuationLikeTheMacApp()
     {
         var store = MasterStore.Empty();
-        var duplicate = store.AddProfile("Default", false)!;
-        Assert.Equal('\u201C', duplicate[duplicate.IndexOf("Default", StringComparison.Ordinal) - 1]);
-        Assert.Equal('\u201D', duplicate[duplicate.IndexOf("Default", StringComparison.Ordinal) + "Default".Length]);
-        Assert.Contains('\u2019', store.DeleteActiveProfile()!);
+        var duplicate = store.AddCollection("Default", false)!;
+        Assert.Equal('“', duplicate[duplicate.IndexOf("Default", StringComparison.Ordinal) - 1]);
+        Assert.Equal('”', duplicate[duplicate.IndexOf("Default", StringComparison.Ordinal) + "Default".Length]);
+        Assert.Contains('’', store.DeleteActiveCollection()!);
     }
 
     [Fact]
     public void CloneIsDeepAndEqual()
     {
-        var store = TwoProfiles();
+        var store = TwoCollections();
         var clone = store.Clone();
         Assert.Equal(store, clone);
         clone.Mcps["z"] = Entry("https://z.example/mcp");

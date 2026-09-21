@@ -67,7 +67,7 @@ final class StringCatalogTests: XCTestCase {
     /// parameters, and the joined-keys rendering for a factory that takes a
     /// list of keys — matching the convention the C# test also follows.
     private static let argsByKey: [String: [String]] = [
-        "AppState.deleteProfileMessage": ["X"],
+        "AppState.deleteCollectionMessage": ["X"],
         "AppState.duplicateNameError": ["X"],
         "AppState.enabledSubtitle": ["3", "7"],
         "AppState.malformedConfigMessage": ["X"],
@@ -84,11 +84,11 @@ final class StringCatalogTests: XCTestCase {
         "EditorModel.duplicateEnvError": ["X"],
         "EditorModel.removeMessage": ["X"],
         "EditorModel.removedOutsideMessage": ["X"],
-        "MasterStore.duplicateProfileNameError": ["X"],
-        "MasterStore.unknownProfileError": ["X"],
-        "PopoverModel.deleteProfileTitle": ["X"],
-        "PopoverModel.profileChipText": ["X"],
-        "PopoverModel.renameProfileTitle": ["X"],
+        "MasterStore.duplicateCollectionNameError": ["X"],
+        "MasterStore.unknownCollectionError": ["X"],
+        "PopoverModel.collectionChipText": ["X"],
+        "PopoverModel.deleteCollectionTitle": ["X"],
+        "PopoverModel.renameCollectionTitle": ["X"],
         "RestoreModel.confirmMessage": ["X"],
         "SettingsModel.keepCountLabel": ["3"],
         "SettingsModel.loginItemFailureNote": ["X"],
@@ -111,18 +111,18 @@ final class StringCatalogTests: XCTestCase {
             AppState.connectorListChangedBody(ServerDelta(), restartRequired: true)
         actual["AppState.defaultClaudeAppPath"] = AppState.defaultClaudeAppPath
         actual["AppState.deleteButton"] = AppState.deleteButton
-        actual["AppState.deleteProfileInformative"] = AppState.deleteProfileInformative
-        actual["AppState.deleteProfileMessage"] = AppState.deleteProfileMessage("X")
+        actual["AppState.deleteCollectionInformative"] = AppState.deleteCollectionInformative
+        actual["AppState.deleteCollectionMessage"] = AppState.deleteCollectionMessage("X")
         actual["AppState.duplicateNameError"] = AppState.duplicateNameError("X")
         actual["AppState.enabledSubtitle"] = AppState.enabledSubtitle(enabled: 3, total: 7)
         actual["AppState.malformedConfigMessage"] = AppState.malformedConfigMessage(detail: "X")
         actual["AppState.nameEmptyError"] = AppState.nameEmptyError
-        actual["AppState.newProfileTitle"] = AppState.newProfileTitle
+        actual["AppState.newCollectionTitle"] = AppState.newCollectionTitle
         actual["AppState.noConnectorsSubtitle"] = AppState.noConnectorsSubtitle
         actual["AppState.quitButton"] = AppState.quitButton
         actual["AppState.quitMessage"] = AppState.quitMessage
         actual["AppState.regenerationFailedBody"] = AppState.regenerationFailedBody
-        actual["AppState.renameProfileTitle"] = AppState.renameProfileTitle
+        actual["AppState.renameCollectionTitle"] = AppState.renameCollectionTitle
         actual["AppState.restartButton"] = AppState.restartButton
         actual["AppState.restartInformative"] = AppState.restartInformative
         actual["AppState.restartMessage"] = AppState.restartMessage
@@ -209,25 +209,25 @@ final class StringCatalogTests: XCTestCase {
         // the reason this key names.
 
         var nameEmptyStore = MasterStore.empty
-        actual["MasterStore.nameEmptyError"] = nameEmptyStore.addProfile(named: "   ", copyingCurrent: false)
-        var duplicateStore = MasterStore(activeProfile: "X", profiles: ["X": Profile()])
-        actual["MasterStore.duplicateProfileNameError"] = duplicateStore.addProfile(named: "X", copyingCurrent: false)
+        actual["MasterStore.nameEmptyError"] = nameEmptyStore.addCollection(named: "   ", copyingCurrent: false)
+        var duplicateStore = MasterStore(activeCollection: "X", collections: ["X": Collection()])
+        actual["MasterStore.duplicateCollectionNameError"] = duplicateStore.addCollection(named: "X", copyingCurrent: false)
         var deleteLastStore = MasterStore.empty
-        actual["MasterStore.deleteLastProfileError"] = deleteLastStore.deleteActiveProfile()
-        var unknownProfileStore = MasterStore.empty
-        actual["MasterStore.unknownProfileError"] = unknownProfileStore.switchProfile(to: "X")
+        actual["MasterStore.deleteLastCollectionError"] = deleteLastStore.deleteActiveCollection()
+        var unknownCollectionStore = MasterStore.empty
+        actual["MasterStore.unknownCollectionError"] = unknownCollectionStore.switchCollection(to: "X")
 
         // MARK: Notifications / PopoverModel
 
         actual["Notifications.restartToastButton"] = Notifications.restartToastButton
         actual["Notifications.title"] = Notifications.title
         actual["PopoverModel.addTooltip"] = PopoverModel.addTooltip
-        actual["PopoverModel.deleteProfileTitle"] = PopoverModel.deleteProfileTitle("X")
+        actual["PopoverModel.collectionChipText"] = PopoverModel.collectionChipText("X")
+        actual["PopoverModel.deleteCollectionTitle"] = PopoverModel.deleteCollectionTitle("X")
         actual["PopoverModel.emptyText"] = PopoverModel.emptyText
-        actual["PopoverModel.newProfileTitle"] = PopoverModel.newProfileTitle
-        actual["PopoverModel.profileChipText"] = PopoverModel.profileChipText("X")
+        actual["PopoverModel.newCollectionTitle"] = PopoverModel.newCollectionTitle
         actual["PopoverModel.quitTooltip"] = PopoverModel.quitTooltip
-        actual["PopoverModel.renameProfileTitle"] = PopoverModel.renameProfileTitle("X")
+        actual["PopoverModel.renameCollectionTitle"] = PopoverModel.renameCollectionTitle("X")
         actual["PopoverModel.restartTitle"] = PopoverModel.restartTitle
         actual["PopoverModel.retryTitle"] = PopoverModel.retryTitle
         actual["PopoverModel.settingsTooltip"] = PopoverModel.settingsTooltip

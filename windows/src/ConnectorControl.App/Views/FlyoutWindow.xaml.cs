@@ -62,7 +62,7 @@ public partial class FlyoutWindow : Window
         }
     }
 
-    /// <summary>True while a menu this window owns is on screen (the profile chip's).</summary>
+    /// <summary>True while a menu this window owns is on screen (the collection chip's).</summary>
     internal bool HasOpenPopup => openMenu is { IsOpen: true };
 
     public void Toggle()
@@ -120,10 +120,10 @@ public partial class FlyoutWindow : Window
 
     /// <summary>
     /// Deactivation normally dismisses the flyout — but a WPF ContextMenu lives in its
-    /// own top-level window, so opening the profile chip's menu deactivates us, and
-    /// hiding here would take the menu's PlacementTarget away with it and leave profiles
+    /// own top-level window, so opening the collection chip's menu deactivates us, and
+    /// hiding here would take the menu's PlacementTarget away with it and leave collections
     /// unreachable — the chip menu is the only way to switch, create, rename or delete a
-    /// profile. Ignore those; the check is repeated once the menu
+    /// collection. Ignore those; the check is repeated once the menu
     /// closes. Internal so a test can raise it without a real focus change.
     /// </summary>
     internal void HandleDeactivated()
@@ -180,28 +180,28 @@ public partial class FlyoutWindow : Window
 
     private void OnFooter(object sender, RoutedEventArgs e) => model.FooterAction();
 
-    private void OnProfileChip(object sender, RoutedEventArgs e) => OpenProfileMenu();
+    private void OnCollectionChip(object sender, RoutedEventArgs e) => OpenCollectionMenu();
 
-    /// <summary>The profile chip menu: profiles (check on the active), separator, New / Rename / Delete.</summary>
-    internal ContextMenu OpenProfileMenu()
+    /// <summary>The collection chip menu: collections (check on the active), separator, New / Rename / Delete.</summary>
+    internal ContextMenu OpenCollectionMenu()
     {
-        var menu = new ContextMenu { PlacementTarget = ProfileChip, Placement = PlacementMode.Bottom, StaysOpen = false };
-        foreach (var item in model.ProfileItems)
+        var menu = new ContextMenu { PlacementTarget = CollectionChip, Placement = PlacementMode.Bottom, StaysOpen = false };
+        foreach (var item in model.CollectionItems)
         {
             var name = item.Name;
             // IsCheckable, not just IsChecked: the Fluent MenuItem template gives an item its check
-            // column only when it is checkable, so the active profile's mark would not be drawn.
+            // column only when it is checkable, so the active collection's mark would not be drawn.
             // Clicking toggles the mark before Click runs, which is harmless — the menu closes and
-            // the next open rebuilds every item from ProfileItems.
+            // the next open rebuilds every item from CollectionItems.
             var entry = new MenuItem { Header = new TextBlock { Text = name }, IsCheckable = true, IsChecked = item.IsActive };
-            entry.Click += (_, _) => model.SwitchProfile(name);
+            entry.Click += (_, _) => model.SwitchCollection(name);
             menu.Items.Add(entry);
         }
         menu.Items.Add(new Separator());
-        menu.Items.Add(MenuItemFor(FlyoutModel.NewProfileMenuItem, model.NewProfile));
-        menu.Items.Add(MenuItemFor(model.RenameProfileMenuItem, model.RenameProfile));
-        var delete = MenuItemFor(model.DeleteProfileMenuItem, model.DeleteProfile);
-        delete.IsEnabled = model.CanDeleteProfile;
+        menu.Items.Add(MenuItemFor(FlyoutModel.NewCollectionTitle, model.NewCollection));
+        menu.Items.Add(MenuItemFor(model.RenameCollectionMenuItem, model.RenameCollection));
+        var delete = MenuItemFor(model.DeleteCollectionMenuItem, model.DeleteCollection);
+        delete.IsEnabled = model.CanDeleteCollection;
         menu.Items.Add(delete);
         // The reference, not an Opened/Closed counter: ContextMenu.Closed can be deferred by
         // the menu's fade animation, and HasOpenPopup must never be wrong in the meantime.

@@ -29,7 +29,7 @@
           <StackPanel>
             <TextBlock Text="{x:Static state:FlyoutModel.Title}" FontSize="14" FontWeight="SemiBold" />
             <TextBlock x:Name="SubtitleText" Text="{Binding Subtitle}" Style="{StaticResource CaptionText}" FontSize="11" />
-            <Button x:Name="ProfileChip" Content="{Binding ProfileChipText}" Style="{StaticResource LinkButton}" FontSize="11" FontWeight="SemiBold" Padding="0,1,0,0" Click="OnProfileChip" />
+            <Button x:Name="CollectionChip" Content="{Binding CollectionChipText}" Style="{StaticResource LinkButton}" FontSize="11" FontWeight="SemiBold" Padding="0,1,0,0" Click="OnCollectionChip" />
           </StackPanel>
           <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="20,0,0,0">
             <Button Style="{StaticResource IconButton}" Content="&#xE710;" ToolTip="{x:Static state:FlyoutModel.AddTooltip}" Click="OnAdd" />

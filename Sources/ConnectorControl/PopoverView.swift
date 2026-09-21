@@ -36,7 +36,7 @@ struct PopoverView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(PopoverModel.title).font(.headline)
                 Text(model.subtitle).font(.caption2).foregroundStyle(.secondary)
-                profileChip
+                collectionChip
             }
             Spacer(minLength: 20)
             HStack(spacing: 0) {
@@ -70,11 +70,11 @@ struct PopoverView: View {
         .background(.quinary)
     }
 
-    private var profileChip: some View {
+    private var collectionChip: some View {
         Menu {
-            ForEach(model.profileItems) { item in
+            ForEach(model.collectionItems) { item in
                 Button {
-                    model.switchProfile(item.name)
+                    model.switchCollection(item.name)
                 } label: {
                     if item.isActive {
                         Label(item.name, systemImage: "checkmark")
@@ -84,12 +84,12 @@ struct PopoverView: View {
                 }
             }
             Divider()
-            Button(PopoverModel.newProfileTitle) { model.newProfile() }
-            Button(model.renameProfileTitle) { model.renameProfile() }
-            Button(model.deleteProfileTitle) { model.deleteProfile() }
-                .disabled(!model.canDeleteProfile)
+            Button(PopoverModel.newCollectionTitle) { model.newCollection() }
+            Button(model.renameCollectionTitle) { model.renameCollection() }
+            Button(model.deleteCollectionTitle) { model.deleteCollection() }
+                .disabled(!model.canDeleteCollection)
         } label: {
-            Text(model.profileChipText)
+            Text(model.collectionChipText)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
         }

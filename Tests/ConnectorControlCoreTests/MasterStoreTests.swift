@@ -95,7 +95,7 @@ final class MasterStoreTests: XCTestCase {
         }
     }
 
-    func testUnknownActiveProfileFallsBackToExistingProfile() throws {
+    func testUnknownActiveCollectionFallsBackToExistingCollection() throws {
         let json = """
         {"version":2,"activeProfile":"Ghost",\
         "profiles":{"Alpha":{"mcps":{}},"Beta":{"mcps":{}}}}
@@ -103,7 +103,7 @@ final class MasterStoreTests: XCTestCase {
         try Data(json.utf8).write(to: url)
         let result = MasterStoreIO.load(from: url)
         XCTAssertNil(result.corruptFileURL)
-        XCTAssertEqual(result.store.activeProfile, "Alpha", "sorted-first existing profile")
+        XCTAssertEqual(result.store.activeCollection, "Alpha", "sorted-first existing collection")
     }
 
     func testV1FormatFileIsTreatedAsCorruptAndRebuilt() throws {

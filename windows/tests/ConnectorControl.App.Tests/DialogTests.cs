@@ -36,7 +36,7 @@ public class DialogTests
             var dialog = new ConfirmDialog("You're up to date.", null, "OK", null, destructive: false);
             Assert.Equal(Visibility.Collapsed, dialog.InformativeText.Visibility);
             Assert.Equal(Visibility.Collapsed, dialog.CancelButton.Visibility);
-            var destructive = new ConfirmDialog("Delete Profile “Work”?", "Its connector list is removed; backups keep prior states.", "Delete", "Cancel", destructive: true);
+            var destructive = new ConfirmDialog("Delete Collection “Work”?", "Its connector list is removed; backups keep prior states.", "Delete", "Cancel", destructive: true);
             Assert.Same(destructive.TryFindResource("DestructiveButton"), destructive.PrimaryButton.Style);
         });
     }
@@ -46,8 +46,8 @@ public class DialogTests
     {
         WpfApp.Invoke(() =>
         {
-            var dialog = new NamePromptDialog("Rename Profile", "Default");
-            Assert.Equal("Rename Profile", dialog.Title);
+            var dialog = new NamePromptDialog("Rename Collection", "Default");
+            Assert.Equal("Rename Collection", dialog.Title);
             Assert.Equal("Default", dialog.NameBox.Text);
             Assert.Null(dialog.Result);
         });
@@ -133,7 +133,7 @@ public class DialogTests
             Assert.Null(dialogs.ResolveOwner());   // nothing of ours is up: centred on screen, topmost
 
             // The flyout hides itself the moment something takes the focus, which is exactly what
-            // showing a modal does — so Quit / Restart Required / the profile prompts must never
+            // showing a modal does — so Quit / Restart Required / the collection prompts must never
             // be owned by it, however visible and active it is when they are raised.
             using var model = new FlyoutModel(state, h.Settings);
             var flyout = new FlyoutWindow(model, new WindowRegistry(state, services, updates)) { TrayAnchor = () => null };

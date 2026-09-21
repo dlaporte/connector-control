@@ -13,17 +13,17 @@ public final class PopoverModel: ObservableObject {
     public static let emptyText = "No connectors configured yet — add one below."
     public static let retryTitle = "Apply Failed — Retry"
     public static let restartTitle = "Restart Required"
-    public static let newProfileTitle = "New Profile…"
+    public static let newCollectionTitle = "New Collection…"
     /// SF Symbols: the retry footer, the restart footer, and the row caution glyph.
     public static let retryGlyph = "exclamationmark.arrow.circlepath"
     public static let restartGlyph = "arrow.clockwise"
     public static let toolWarningGlyph = "exclamationmark.triangle.fill"
 
-    public static func profileChipText(_ active: String) -> String { "\(active) ▾" }
+    public static func collectionChipText(_ active: String) -> String { "\(active) ▾" }
 
-    public static func renameProfileTitle(_ active: String) -> String { "Rename “\(active)”…" }
+    public static func renameCollectionTitle(_ active: String) -> String { "Rename “\(active)”…" }
 
-    public static func deleteProfileTitle(_ active: String) -> String { "Delete “\(active)”…" }
+    public static func deleteCollectionTitle(_ active: String) -> String { "Delete “\(active)”…" }
 
     private let state: AppState
     private var subscription: AnyCancellable?
@@ -37,18 +37,18 @@ public final class PopoverModel: ObservableObject {
 
     public var subtitle: String { state.headerSubtitle }
 
-    public var profileChipText: String { PopoverModel.profileChipText(state.activeProfile) }
+    public var collectionChipText: String { PopoverModel.collectionChipText(state.activeCollection) }
 
-    public var profileItems: [ProfileMenuItem] {
-        let active = state.activeProfile
-        return state.profileNames.map { ProfileMenuItem(name: $0, isActive: $0 == active) }
+    public var collectionItems: [CollectionMenuItem] {
+        let active = state.activeCollection
+        return state.collectionNames.map { CollectionMenuItem(name: $0, isActive: $0 == active) }
     }
 
-    public var renameProfileTitle: String { PopoverModel.renameProfileTitle(state.activeProfile) }
+    public var renameCollectionTitle: String { PopoverModel.renameCollectionTitle(state.activeCollection) }
 
-    public var deleteProfileTitle: String { PopoverModel.deleteProfileTitle(state.activeProfile) }
+    public var deleteCollectionTitle: String { PopoverModel.deleteCollectionTitle(state.activeCollection) }
 
-    public var canDeleteProfile: Bool { state.profileNames.count >= 2 }
+    public var canDeleteCollection: Bool { state.collectionNames.count >= 2 }
 
     // MARK: banner
 
@@ -106,13 +106,13 @@ public final class PopoverModel: ObservableObject {
     /// The row switch: persists and applies immediately.
     public func setEnabled(_ name: String, _ on: Bool) { state.setEnabled(name, on) }
 
-    public func switchProfile(_ name: String) { state.switchProfile(to: name) }
+    public func switchCollection(_ name: String) { state.switchCollection(to: name) }
 
-    public func newProfile() { state.newProfile() }
+    public func newCollection() { state.newCollection() }
 
-    public func renameProfile() { state.renameProfile() }
+    public func renameCollection() { state.renameCollection() }
 
-    public func deleteProfile() { state.deleteProfile() }
+    public func deleteCollection() { state.deleteCollection() }
 
     public func quit() { state.quitApp() }
 

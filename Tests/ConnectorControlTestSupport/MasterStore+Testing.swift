@@ -1,8 +1,8 @@
 import ConnectorControlCore
 
 public extension MasterStore {
-    /// Convenience used across tests: a single-profile store.
+    /// Convenience used across tests: a single-collection store.
     static func single(_ mcps: [String: MCPEntry]) -> MasterStore {
-        MasterStore(activeProfile: "Default", profiles: ["Default": Profile(mcps: mcps)])
+        MasterStore(activeCollection: "Default", collections: ["Default": Collection(mcps: mcps)])
     }
 }

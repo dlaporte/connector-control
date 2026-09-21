@@ -1,5 +1,5 @@
-/// One entry of the profile chip's menu; the active one carries the check mark.
-public struct ProfileMenuItem: Identifiable, Equatable, Sendable {
+/// One entry of the collection chip's menu; the active one carries the check mark.
+public struct CollectionMenuItem: Identifiable, Equatable, Sendable {
     public let name: String
     public let isActive: Bool
 

@@ -13,7 +13,7 @@ public class FlyoutModelTests
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal("Connector Control", FlyoutModel.Title);
         Assert.Equal("No connectors configured", flyout.Subtitle);
-        Assert.Equal("Default ▾", flyout.ProfileChipText);
+        Assert.Equal("Default ▾", flyout.CollectionChipText);
         Assert.True(flyout.IsEmpty);
         Assert.Equal("No connectors configured yet — add one below.", FlyoutModel.EmptyText);
         state.Upsert("z", new McpEntry(AppStateHarness.Remote("https://z.example/mcp")), null);
@@ -63,24 +63,24 @@ public class FlyoutModelTests
     }
 
     [Fact]
-    public void ProfileMenuItemsAndTitles()
+    public void CollectionMenuItemsAndTitles()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
-        Assert.Equal([new ProfileMenuItem("Default", true)], flyout.ProfileItems);
-        Assert.Equal("New Profile…", FlyoutModel.NewProfileMenuItem);
-        Assert.Equal("Rename “Default”…", flyout.RenameProfileMenuItem);
-        Assert.Equal("Delete “Default”…", flyout.DeleteProfileMenuItem);
-        Assert.False(flyout.CanDeleteProfile);
+        Assert.Equal([new CollectionMenuItem("Default", true)], flyout.CollectionItems);
+        Assert.Equal("New Collection…", FlyoutModel.NewCollectionTitle);
+        Assert.Equal("Rename “Default”…", flyout.RenameCollectionMenuItem);
+        Assert.Equal("Delete “Default”…", flyout.DeleteCollectionMenuItem);
+        Assert.False(flyout.CanDeleteCollection);
 
         h.Dialogs.NextPromptAnswer = "Work";
-        flyout.NewProfile();
-        Assert.Equal([new ProfileMenuItem("Default", false), new ProfileMenuItem("Work", true)], flyout.ProfileItems);
-        Assert.Equal("Work ▾", flyout.ProfileChipText);
-        Assert.True(flyout.CanDeleteProfile);
-        flyout.SwitchProfile("Default");
-        Assert.Equal("Default ▾", flyout.ProfileChipText);
+        flyout.NewCollection();
+        Assert.Equal([new CollectionMenuItem("Default", false), new CollectionMenuItem("Work", true)], flyout.CollectionItems);
+        Assert.Equal("Work ▾", flyout.CollectionChipText);
+        Assert.True(flyout.CanDeleteCollection);
+        flyout.SwitchCollection("Default");
+        Assert.Equal("Default ▾", flyout.CollectionChipText);
     }
 
     [Fact]

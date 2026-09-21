@@ -149,97 +149,97 @@ final class AppStateCommandTests: XCTestCase {
         XCTAssertEqual(state.needsClaudeRestart, needsRestartBefore)
     }
 
-    func testSwitchProfileAppliesImmediately() throws {
+    func testSwitchCollectionAppliesImmediately() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         h.dialogs.nextPromptAnswer = "Work"
-        state.newProfile()
-        XCTAssertEqual(state.activeProfile, "Work")
+        state.newCollection()
+        XCTAssertEqual(state.activeCollection, "Work")
         state.setEnabled("aws-mcp", false)
         XCTAssertEqual(try h.claudeServers().keys.sorted(), ["scoutbook", "service-now"])
 
         h.settings.lastApplyDate = nil
-        state.switchProfile(to: "Default")
-        XCTAssertEqual(state.activeProfile, "Default")
+        state.switchCollection(to: "Default")
+        XCTAssertEqual(state.activeCollection, "Default")
         XCTAssertEqual(try h.claudeServers().keys.sorted(), fixture)
         XCTAssertEqual(h.settings.lastApplyDate, h.now)
-        XCTAssertEqual(try h.storeOnDisk().activeProfile, "Default")
+        XCTAssertEqual(try h.storeOnDisk().activeCollection, "Default")
     }
 
-    func testSwitchProfileIgnoresAnUnknownName() {
+    func testSwitchCollectionIgnoresAnUnknownName() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        state.switchProfile(to: "Nope")
-        XCTAssertEqual(state.activeProfile, "Default")
+        state.switchCollection(to: "Nope")
+        XCTAssertEqual(state.activeCollection, "Default")
         XCTAssertNil(state.lastError)
         XCTAssertNil(h.settings.lastApplyDate)
     }
 
-    func testNewProfilePromptTextAndCancel() {
+    func testNewCollectionPromptTextAndCancel() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         h.dialogs.nextPromptAnswer = nil
-        state.newProfile()
-        XCTAssertEqual(h.dialogs.prompts[0], FakeDialogs.PromptCall(title: "New Profile", initial: ""))
-        XCTAssertEqual(state.profileNames, ["Default"])
+        state.newCollection()
+        XCTAssertEqual(h.dialogs.prompts[0], FakeDialogs.PromptCall(title: "New Collection", initial: ""))
+        XCTAssertEqual(state.collectionNames, ["Default"])
 
         h.dialogs.nextPromptAnswer = "Work"
-        state.newProfile()
-        XCTAssertEqual(state.profileNames, ["Default", "Work"])
-        XCTAssertEqual(state.sortedNames, fixture)   // a COPY of the active profile
+        state.newCollection()
+        XCTAssertEqual(state.collectionNames, ["Default", "Work"])
+        XCTAssertEqual(state.sortedNames, fixture)   // a COPY of the active collection
         XCTAssertEqual(h.settings.lastApplyDate, h.now)
     }
 
-    func testNewProfileErrorsGoToLastError() {
+    func testNewCollectionErrorsGoToLastError() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         h.dialogs.nextPromptAnswer = "Default"
-        state.newProfile()
-        XCTAssertEqual(state.lastError, "A profile named “Default” already exists.")
+        state.newCollection()
+        XCTAssertEqual(state.lastError, "A collection named “Default” already exists.")
         h.dialogs.nextPromptAnswer = "   "
-        state.newProfile()
+        state.newCollection()
         XCTAssertEqual(state.lastError, "Name must not be empty.")
-        XCTAssertEqual(state.profileNames, ["Default"])
+        XCTAssertEqual(state.collectionNames, ["Default"])
     }
 
-    func testRenameProfilePrefillsTheActiveName() throws {
+    func testRenameCollectionPrefillsTheActiveName() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         h.dialogs.nextPromptAnswer = "Main"
-        state.renameProfile()
-        XCTAssertEqual(h.dialogs.prompts[0], FakeDialogs.PromptCall(title: "Rename Profile", initial: "Default"))
-        XCTAssertEqual(state.activeProfile, "Main")
-        XCTAssertEqual(try h.storeOnDisk().activeProfile, "Main")
+        state.renameCollection()
+        XCTAssertEqual(h.dialogs.prompts[0], FakeDialogs.PromptCall(title: "Rename Collection", initial: "Default"))
+        XCTAssertEqual(state.activeCollection, "Main")
+        XCTAssertEqual(try h.storeOnDisk().activeCollection, "Main")
         XCTAssertEqual(h.settings.lastApplyDate, h.now)
     }
 
-    func testDeleteProfileConfirmTextAndLastProfileError() {
+    func testDeleteCollectionConfirmTextAndLastCollectionError() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        state.deleteProfile()
+        state.deleteCollection()
         XCTAssertEqual(h.dialogs.confirms[0], FakeDialogs.ConfirmCall(
-            message: "Delete Profile “Default”?",
+            message: "Delete Collection “Default”?",
             informative: "Its connector list is removed; backups keep prior states.",
             primary: "Delete", cancel: "Cancel", destructive: true))
-        XCTAssertEqual(state.lastError, "Can’t delete the last profile.")
-        XCTAssertEqual(state.profileNames, ["Default"])
+        XCTAssertEqual(state.lastError, "Can’t delete the last collection.")
+        XCTAssertEqual(state.collectionNames, ["Default"])
     }
 
-    func testDeleteProfileSwitchesToTheAlphabeticallyFirstRemaining() throws {
+    func testDeleteCollectionSwitchesToTheAlphabeticallyFirstRemaining() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         h.dialogs.nextPromptAnswer = "Zeta"
-        state.newProfile()
+        state.newCollection()
         h.dialogs.nextPromptAnswer = "Work"
-        state.newProfile()
-        XCTAssertEqual(state.activeProfile, "Work")
+        state.newCollection()
+        XCTAssertEqual(state.activeCollection, "Work")
         h.dialogs.nextConfirm = false
-        state.deleteProfile()
-        XCTAssertEqual(state.profileNames, ["Default", "Work", "Zeta"])   // cancelled
+        state.deleteCollection()
+        XCTAssertEqual(state.collectionNames, ["Default", "Work", "Zeta"])   // cancelled
         h.dialogs.nextConfirm = true
-        state.deleteProfile()
-        XCTAssertEqual(state.profileNames, ["Default", "Zeta"])
-        XCTAssertEqual(state.activeProfile, "Default")
-        XCTAssertEqual(try h.storeOnDisk().activeProfile, "Default")
+        state.deleteCollection()
+        XCTAssertEqual(state.collectionNames, ["Default", "Zeta"])
+        XCTAssertEqual(state.activeCollection, "Default")
+        XCTAssertEqual(try h.storeOnDisk().activeCollection, "Default")
     }
 }

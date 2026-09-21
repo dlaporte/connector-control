@@ -73,7 +73,7 @@ public class StringCatalogTests
     /// </summary>
     private static readonly Dictionary<string, string[]> ArgsByKey = new(StringComparer.Ordinal)
     {
-        ["AppState.deleteProfileMessage"] = ["X"],
+        ["AppState.deleteCollectionMessage"] = ["X"],
         ["AppState.duplicateNameError"] = ["X"],
         ["AppState.enabledSubtitle"] = ["3", "7"],
         ["AppState.malformedConfigMessage"] = ["X"],
@@ -92,11 +92,11 @@ public class StringCatalogTests
         ["EditorModel.removeMessage"] = ["X"],
         ["EditorModel.removedOutsideMessage"] = ["X"],
         ["FlyoutModel.settingsNotSavedCaution"] = ["X"],
-        ["MasterStore.duplicateProfileNameError"] = ["X"],
-        ["MasterStore.unknownProfileError"] = ["X"],
-        ["PopoverModel.deleteProfileTitle"] = ["X"],
-        ["PopoverModel.profileChipText"] = ["X"],
-        ["PopoverModel.renameProfileTitle"] = ["X"],
+        ["MasterStore.duplicateCollectionNameError"] = ["X"],
+        ["MasterStore.unknownCollectionError"] = ["X"],
+        ["PopoverModel.collectionChipText"] = ["X"],
+        ["PopoverModel.deleteCollectionTitle"] = ["X"],
+        ["PopoverModel.renameCollectionTitle"] = ["X"],
         ["RestoreModel.confirmMessage"] = ["X"],
         ["SettingsModel.keepCountLabel"] = ["3"],
         ["SettingsModel.loginItemFailureNote"] = ["X"],
@@ -125,19 +125,19 @@ public class StringCatalogTests
         actual["AppState.connectorListChangedBody.restart"] =
             AppState.ConnectorListChangedBody(new ServerDelta([], [], []), restartRequired: true);
         actual["AppState.deleteButton"] = AppState.DeleteButton;
-        actual["AppState.deleteProfileInformative"] = AppState.DeleteProfileInformative;
-        actual["AppState.deleteProfileMessage"] = AppState.DeleteProfileMessage("X");
+        actual["AppState.deleteCollectionInformative"] = AppState.DeleteCollectionInformative;
+        actual["AppState.deleteCollectionMessage"] = AppState.DeleteCollectionMessage("X");
         actual["AppState.duplicateNameError"] = AppState.DuplicateNameError("X");
         actual["AppState.enabledSubtitle"] = AppState.EnabledSubtitle(3, 7);
         actual["AppState.malformedConfigMessage"] = AppState.MalformedConfigMessage("X");
         actual["AppState.nameEmptyError"] = AppState.NameEmptyError;
-        actual["AppState.newProfileTitle"] = AppState.NewProfileTitle;
+        actual["AppState.newCollectionTitle"] = AppState.NewCollectionTitle;
         actual["AppState.noConnectorsSubtitle"] = AppState.NoConnectorsSubtitle;
         actual["AppState.quitButton"] = AppState.QuitButton;
         actual["AppState.quitMessage"] = AppState.QuitMessage;
         actual["AppState.regenerationFailedBody"] = AppState.RegenerationFailedBody;
         actual["AppState.relaunchFailedMessage"] = AppState.RelaunchFailedMessage;
-        actual["AppState.renameProfileTitle"] = AppState.RenameProfileTitle;
+        actual["AppState.renameCollectionTitle"] = AppState.RenameCollectionTitle;
         actual["AppState.restartButton"] = AppState.RestartButton;
         actual["AppState.restartInformative"] = AppState.RestartInformative;
         actual["AppState.restartMessage"] = AppState.RestartMessage;
@@ -237,26 +237,26 @@ public class StringCatalogTests
         // each store is set up so that mutation fails for exactly the reason this key names.
 
         var nameEmptyStore = MasterStore.Empty();
-        actual["MasterStore.nameEmptyError"] = nameEmptyStore.AddProfile("   ", false)!;
+        actual["MasterStore.nameEmptyError"] = nameEmptyStore.AddCollection("   ", false)!;
         var duplicateStore = new MasterStore(MasterStore.CurrentVersion, "X",
-            [new KeyValuePair<string, Profile>("X", new Profile())]);
-        actual["MasterStore.duplicateProfileNameError"] = duplicateStore.AddProfile("X", false)!;
+            [new KeyValuePair<string, Collection>("X", new Collection())]);
+        actual["MasterStore.duplicateCollectionNameError"] = duplicateStore.AddCollection("X", false)!;
         var deleteLastStore = MasterStore.Empty();
-        actual["MasterStore.deleteLastProfileError"] = deleteLastStore.DeleteActiveProfile()!;
-        var unknownProfileStore = MasterStore.Empty();
-        actual["MasterStore.unknownProfileError"] = unknownProfileStore.SwitchProfile("X")!;
+        actual["MasterStore.deleteLastCollectionError"] = deleteLastStore.DeleteActiveCollection()!;
+        var unknownCollectionStore = MasterStore.Empty();
+        actual["MasterStore.unknownCollectionError"] = unknownCollectionStore.SwitchCollection("X")!;
 
         // MARK: Notifications / PopoverModel (FlyoutModel on Windows)
 
         actual["Notifications.restartToastButton"] = Notifications.RestartToastButton;
         actual["Notifications.title"] = Notifications.Title;
         actual["PopoverModel.addTooltip"] = FlyoutModel.AddTooltip;
-        actual["PopoverModel.deleteProfileTitle"] = FlyoutModel.DeleteProfileTitle("X");
+        actual["PopoverModel.collectionChipText"] = FlyoutModel.CollectionChipTextFor("X");
+        actual["PopoverModel.deleteCollectionTitle"] = FlyoutModel.DeleteCollectionTitle("X");
         actual["PopoverModel.emptyText"] = FlyoutModel.EmptyText;
-        actual["PopoverModel.newProfileTitle"] = FlyoutModel.NewProfileMenuItem;
-        actual["PopoverModel.profileChipText"] = FlyoutModel.ProfileChipTextFor("X");
+        actual["PopoverModel.newCollectionTitle"] = FlyoutModel.NewCollectionTitle;
         actual["PopoverModel.quitTooltip"] = FlyoutModel.QuitTooltip;
-        actual["PopoverModel.renameProfileTitle"] = FlyoutModel.RenameProfileTitle("X");
+        actual["PopoverModel.renameCollectionTitle"] = FlyoutModel.RenameCollectionTitle("X");
         actual["PopoverModel.restartTitle"] = FlyoutModel.RestartTitle;
         actual["PopoverModel.retryTitle"] = FlyoutModel.RetryTitle;
         actual["PopoverModel.settingsTooltip"] = FlyoutModel.SettingsTooltip;

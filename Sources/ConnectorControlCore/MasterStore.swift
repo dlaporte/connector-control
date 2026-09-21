@@ -17,7 +17,7 @@ public struct MCPEntry: Equatable, Hashable, Codable, Sendable {
 }
 
 /// A full, independent snapshot of connectors: its own configs + enabled flags.
-public struct Profile: Equatable, Codable, Sendable {
+public struct Collection: Equatable, Codable, Sendable {
     public var mcps: [String: MCPEntry]
     public init(mcps: [String: MCPEntry] = [:]) { self.mcps = mcps }
 }
@@ -27,13 +27,21 @@ public struct Profile: Equatable, Codable, Sendable {
 /// corrupt-file path: moved aside and rebuilt fresh from Claude's config.
 public struct MasterStore: Equatable, Codable, Sendable {
     public var version: Int
-    public var activeProfile: String
-    public var profiles: [String: Profile]
+    public var activeCollection: String
+    public var collections: [String: Collection]
 
-    /// The active profile's connectors — the view the entire app operates on.
+    // The file keeps the v2 key names: machines on the current release share it through the
+    // synced master-list folder, and their decoder knows only these two keys.
+    enum CodingKeys: String, CodingKey {
+        case version
+        case activeCollection = "activeProfile"
+        case collections = "profiles"
+    }
+
+    /// The active collection's connectors — the view the entire app operates on.
     public var mcps: [String: MCPEntry] {
-        get { profiles[activeProfile]?.mcps ?? [:] }
-        set { profiles[activeProfile, default: Profile()].mcps = newValue }
+        get { collections[activeCollection]?.mcps ?? [:] }
+        set { collections[activeCollection, default: Collection()].mcps = newValue }
     }
 
     /// Claude's `mcpServers` section rendered from this store — the enabled
@@ -44,51 +52,51 @@ public struct MasterStore: Equatable, Codable, Sendable {
     }
 
     public static let empty = MasterStore(
-        activeProfile: "Default",
-        profiles: ["Default": Profile()])
+        activeCollection: "Default",
+        collections: ["Default": Collection()])
 
-    public init(activeProfile: String, profiles: [String: Profile]) {
+    public init(activeCollection: String, collections: [String: Collection]) {
         self.version = 2
-        self.activeProfile = activeProfile
-        self.profiles = profiles
+        self.activeCollection = activeCollection
+        self.collections = collections
     }
 
     /// nil on success, else a user-facing error message.
-    public mutating func addProfile(named name: String, copyingCurrent: Bool) -> String? {
+    public mutating func addCollection(named name: String, copyingCurrent: Bool) -> String? {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return "Name must not be empty." }
-        guard profiles[trimmed] == nil else {
-            return "A profile named \u{201C}\(trimmed)\u{201D} already exists."
+        guard collections[trimmed] == nil else {
+            return "A collection named \u{201C}\(trimmed)\u{201D} already exists."
         }
-        profiles[trimmed] = copyingCurrent ? Profile(mcps: mcps) : Profile()
-        activeProfile = trimmed
+        collections[trimmed] = copyingCurrent ? Collection(mcps: mcps) : Collection()
+        activeCollection = trimmed
         return nil
     }
 
-    public mutating func renameActiveProfile(to name: String) -> String? {
+    public mutating func renameActiveCollection(to name: String) -> String? {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return "Name must not be empty." }
-        if trimmed != activeProfile, profiles[trimmed] != nil {
-            return "A profile named \u{201C}\(trimmed)\u{201D} already exists."
+        if trimmed != activeCollection, collections[trimmed] != nil {
+            return "A collection named \u{201C}\(trimmed)\u{201D} already exists."
         }
-        guard let current = profiles.removeValue(forKey: activeProfile) else { return nil }
-        profiles[trimmed] = current
-        activeProfile = trimmed
+        guard let current = collections.removeValue(forKey: activeCollection) else { return nil }
+        collections[trimmed] = current
+        activeCollection = trimmed
         return nil
     }
 
-    public mutating func deleteActiveProfile() -> String? {
-        guard profiles.count > 1 else { return "Can\u{2019}t delete the last profile." }
-        profiles.removeValue(forKey: activeProfile)
-        activeProfile = profiles.keys.min() ?? "Default"
+    public mutating func deleteActiveCollection() -> String? {
+        guard collections.count > 1 else { return "Can\u{2019}t delete the last collection." }
+        collections.removeValue(forKey: activeCollection)
+        activeCollection = collections.keys.min() ?? "Default"
         return nil
     }
 
-    public mutating func switchProfile(to name: String) -> String? {
-        guard profiles[name] != nil else {
-            return "No profile named \u{201C}\(name)\u{201D}."
+    public mutating func switchCollection(to name: String) -> String? {
+        guard collections[name] != nil else {
+            return "No collection named \u{201C}\(name)\u{201D}."
         }
-        activeProfile = name
+        activeCollection = name
         return nil
     }
 }
@@ -105,15 +113,15 @@ public enum MasterStoreIO {
         do {
             let data = try Data(contentsOf: url)
             var store = try JSONDecoder().decode(MasterStore.self, from: data)
-            // Self-heal a decoded-but-inconsistent activeProfile (hand-edited
+            // Self-heal a decoded-but-inconsistent activeCollection (hand-edited
             // or corrupted file) — never crash; fall back to an existing
-            // profile (sorted first), or a fresh Default if none remain.
-            if store.profiles[store.activeProfile] == nil {
-                if let fallback = store.profiles.keys.sorted().first {
-                    store.activeProfile = fallback
+            // collection (sorted first), or a fresh Default if none remain.
+            if store.collections[store.activeCollection] == nil {
+                if let fallback = store.collections.keys.sorted().first {
+                    store.activeCollection = fallback
                 } else {
-                    store.profiles["Default"] = Profile()
-                    store.activeProfile = "Default"
+                    store.collections["Default"] = Collection()
+                    store.activeCollection = "Default"
                 }
             }
             return (store, nil)

@@ -32,13 +32,13 @@ public class MasterStoreTests : IDisposable
     }
 
     [Fact]
-    public void ReadingMcpsDoesNotCreateAProfile()
+    public void ReadingMcpsDoesNotCreateACollection()
     {
-        var store = new MasterStore(2, "Work", [new KeyValuePair<string, Profile>("Work", new Profile())]);
-        store.ActiveProfile = "Ghost";   // an active profile the store has no Profile object for
+        var store = new MasterStore(2, "Work", [new KeyValuePair<string, Collection>("Work", new Collection())]);
+        store.ActiveCollection = "Ghost";   // an active collection the store has no Collection object for
         Assert.Empty(store.Mcps);
-        Assert.False(store.Profiles.ContainsKey("Ghost"), "reading Mcps must not create a profile as a side effect");
-        Assert.Single(store.Profiles);
+        Assert.False(store.Collections.ContainsKey("Ghost"), "reading Mcps must not create a collection as a side effect");
+        Assert.Single(store.Collections);
     }
 
     [Fact]
@@ -106,14 +106,14 @@ public class MasterStoreTests : IDisposable
     }
 
     [Fact]
-    public void UnknownActiveProfileFallsBackToExistingProfile()
+    public void UnknownActiveCollectionFallsBackToExistingCollection()
     {
         File.WriteAllText(Url, """
             {"version":2,"activeProfile":"Ghost","profiles":{"Alpha":{"mcps":{}},"Beta":{"mcps":{}}}}
             """);
         var (store, corrupt) = MasterStoreIO.Load(Url);
         Assert.Null(corrupt);
-        Assert.Equal("Alpha", store.ActiveProfile);   // sorted-first existing profile
+        Assert.Equal("Alpha", store.ActiveCollection);   // sorted-first existing collection
     }
 
     [Fact]

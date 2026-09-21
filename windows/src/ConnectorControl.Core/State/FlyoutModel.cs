@@ -14,7 +14,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public const string EmptyText = "No connectors configured yet — add one below.";
     public const string RetryTitle = "Apply Failed — Retry";
     public const string RestartTitle = "Restart Required";
-    public const string NewProfileMenuItem = "New Profile…";
+    public const string NewCollectionTitle = "New Collection…";
     /// <summary>Segoe Fluent Icons: Warning (exclamationmark.arrow.circlepath's nearest) and Refresh (arrow.clockwise).</summary>
     public const string RetryGlyph = "\ue7ba";
     public const string RestartGlyph = "\ue72c";
@@ -35,7 +35,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     private readonly AppState state;
     private readonly ISettings settings;
     private readonly Dictionary<string, ConnectorRow> rowsByName = new(StringComparer.Ordinal);
-    private IReadOnlyList<ProfileMenuItem> profileItems = [];
+    private IReadOnlyList<CollectionMenuItem> collectionItems = [];
 
     public FlyoutModel(AppState state, ISettings settings)
     {
@@ -49,21 +49,21 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public string Subtitle => state.HeaderSubtitle;
 
     /// <summary>The Mac's static and an instance property of the same name can coexist there; C# forbids that, so the instance property below calls this.</summary>
-    public static string ProfileChipTextFor(string active) => $"{active} ▾";
+    public static string CollectionChipTextFor(string active) => $"{active} ▾";
 
-    public string ProfileChipText => ProfileChipTextFor(state.ActiveProfile);
+    public string CollectionChipText => CollectionChipTextFor(state.ActiveCollection);
 
-    public IReadOnlyList<ProfileMenuItem> ProfileItems => profileItems;
+    public IReadOnlyList<CollectionMenuItem> CollectionItems => collectionItems;
 
-    public static string RenameProfileTitle(string active) => $"Rename “{active}”…";
+    public static string RenameCollectionTitle(string active) => $"Rename “{active}”…";
 
-    public static string DeleteProfileTitle(string active) => $"Delete “{active}”…";
+    public static string DeleteCollectionTitle(string active) => $"Delete “{active}”…";
 
-    public string RenameProfileMenuItem => RenameProfileTitle(state.ActiveProfile);
+    public string RenameCollectionMenuItem => RenameCollectionTitle(state.ActiveCollection);
 
-    public string DeleteProfileMenuItem => DeleteProfileTitle(state.ActiveProfile);
+    public string DeleteCollectionMenuItem => DeleteCollectionTitle(state.ActiveCollection);
 
-    public bool CanDeleteProfile => state.Store.Profiles.Count >= 2;
+    public bool CanDeleteCollection => state.Store.Collections.Count >= 2;
 
     public string? ErrorMessage => state.LastError
         ?? (state.StoreNotPrivate ? StoreNotPrivateCaution : null)
@@ -122,13 +122,13 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
         return ToolNote.RowWarning(tool, status);
     }
 
-    public void SwitchProfile(string name) => state.SwitchProfile(name);
+    public void SwitchCollection(string name) => state.SwitchCollection(name);
 
-    public void NewProfile() => state.NewProfile();
+    public void NewCollection() => state.NewCollection();
 
-    public void RenameProfile() => state.RenameProfile();
+    public void RenameCollection() => state.RenameCollection();
 
-    public void DeleteProfile() => state.DeleteProfile();
+    public void DeleteCollection() => state.DeleteCollection();
 
     public void Quit() => state.QuitApp();
 
@@ -191,8 +191,8 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
                 Rows.Insert(i, row);
             }
         }
-        var active = state.ActiveProfile;
-        profileItems = state.ProfileNames.Select(n => new ProfileMenuItem(n, n == active)).ToList();
+        var active = state.ActiveCollection;
+        collectionItems = state.CollectionNames.Select(n => new CollectionMenuItem(n, n == active)).ToList();
         RaiseAll();
     }
 

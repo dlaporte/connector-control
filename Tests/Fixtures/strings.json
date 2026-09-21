@@ -9,9 +9,9 @@
     "mac": "/Applications/Claude.app"
   },
   "AppState.deleteButton": "Delete",
-  "AppState.deleteProfileInformative": "Its connector list is removed; backups keep prior states.",
-  "AppState.deleteProfileMessage": {
-    "format": "Delete Profile “{0}”?"
+  "AppState.deleteCollectionInformative": "Its connector list is removed; backups keep prior states.",
+  "AppState.deleteCollectionMessage": {
+    "format": "Delete Collection “{0}”?"
   },
   "AppState.duplicateNameError": {
     "format": "A connector named “{0}” already exists."
@@ -23,7 +23,7 @@
     "format": "Claude's config file is not valid JSON ({0}). Nothing was written. Use Backups ▸ Restore… to recover it."
   },
   "AppState.nameEmptyError": "Name must not be empty.",
-  "AppState.newProfileTitle": "New Profile",
+  "AppState.newCollectionTitle": "New Collection",
   "AppState.noConnectorsSubtitle": "No connectors configured",
   "AppState.quitButton": "Quit",
   "AppState.quitMessage": "Quit Connector Control?",
@@ -31,7 +31,7 @@
   "AppState.relaunchFailedMessage": {
     "win": "Claude didn’t come back after the restart. Start Claude yourself, then try again."
   },
-  "AppState.renameProfileTitle": "Rename Profile",
+  "AppState.renameCollectionTitle": "Rename Collection",
   "AppState.restartButton": "Restart",
   "AppState.restartInformative": "Any in-progress Claude conversation will be interrupted.",
   "AppState.restartMessage": "Restart Claude Desktop now?",
@@ -150,27 +150,27 @@
   "FlyoutModel.storeNotPrivateCaution": {
     "win": "The master list could not be made private: its folder refused the permission change, so connector secrets in it are readable by anyone who can read that folder."
   },
-  "MasterStore.deleteLastProfileError": "Can’t delete the last profile.",
-  "MasterStore.duplicateProfileNameError": {
-    "format": "A profile named “{0}” already exists."
+  "MasterStore.deleteLastCollectionError": "Can’t delete the last collection.",
+  "MasterStore.duplicateCollectionNameError": {
+    "format": "A collection named “{0}” already exists."
   },
   "MasterStore.nameEmptyError": "Name must not be empty.",
-  "MasterStore.unknownProfileError": {
-    "format": "No profile named “{0}”."
+  "MasterStore.unknownCollectionError": {
+    "format": "No collection named “{0}”."
   },
   "Notifications.restartToastButton": "Restart Claude",
   "Notifications.title": "Connector Control",
   "PopoverModel.addTooltip": "Add Connector",
-  "PopoverModel.deleteProfileTitle": {
+  "PopoverModel.collectionChipText": {
+    "format": "{0} ▾"
+  },
+  "PopoverModel.deleteCollectionTitle": {
     "format": "Delete “{0}”…"
   },
   "PopoverModel.emptyText": "No connectors configured yet — add one below.",
-  "PopoverModel.newProfileTitle": "New Profile…",
-  "PopoverModel.profileChipText": {
-    "format": "{0} ▾"
-  },
+  "PopoverModel.newCollectionTitle": "New Collection…",
   "PopoverModel.quitTooltip": "Quit Connector Control",
-  "PopoverModel.renameProfileTitle": {
+  "PopoverModel.renameCollectionTitle": {
     "format": "Rename “{0}”…"
   },
   "PopoverModel.restartTitle": "Restart Required",

@@ -33,7 +33,7 @@ public class FlyoutWindowTests
             Assert.Equal(Visibility.Collapsed, window.ErrorBanner.Visibility);
             Assert.Equal(Visibility.Collapsed, window.EmptyLabel.Visibility);
             Assert.Equal("3 of 3 enabled", window.SubtitleText.Text);
-            Assert.Equal("Default ▾", window.ProfileChip.Content);
+            Assert.Equal("Default ▾", window.CollectionChip.Content);
             Assert.False(window.ShowInTaskbar);
             Assert.True(window.Topmost);
             Assert.Equal(WindowStyle.None, window.WindowStyle);
@@ -61,7 +61,7 @@ public class FlyoutWindowTests
     }
 
     [Fact]
-    public void TheProfileMenuKeepsTheFlyoutOpenButAPlainDeactivationHidesIt()
+    public void TheCollectionMenuKeepsTheFlyoutOpenButAPlainDeactivationHidesIt()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -79,7 +79,7 @@ public class FlyoutWindowTests
 
             var withMenu = new FlyoutWindow(model, registry) { TrayAnchor = () => null };
             withMenu.Show();
-            var menu = withMenu.OpenProfileMenu();
+            var menu = withMenu.OpenCollectionMenu();
             Assert.True(withMenu.HasOpenPopup);
             withMenu.HandleDeactivated();                    // the menu's own window took the focus
             Assert.True(withMenu.IsVisible);                 // …which is not a dismissal
@@ -92,16 +92,16 @@ public class FlyoutWindowTests
     }
 
     /// <summary>
-    /// The profile chip menu puts a check mark on the active profile. The Fluent MenuItem template only
+    /// The collection chip menu puts a check mark on the active collection. The Fluent MenuItem template only
     /// gives an item a check column when it is checkable, so IsChecked alone drew nothing.
     /// </summary>
     [Fact]
-    public void TheProfileMenuChecksTheActiveProfileAndNothingElse()
+    public void TheCollectionMenuChecksTheActiveCollectionAndNothingElse()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
         h.Dialogs.NextPromptAnswer = "Work";
-        state.NewProfile();   // Default + Work, with Work active
+        state.NewCollection();   // Default + Work, with Work active
         var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
@@ -109,16 +109,16 @@ public class FlyoutWindowTests
             using var model = new FlyoutModel(state, h.Settings);
             var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates)) { TrayAnchor = () => null };
             window.Show();
-            var menu = window.OpenProfileMenu();
+            var menu = window.OpenCollectionMenu();
 
-            var profiles = menu.Items.OfType<MenuItem>().Take(model.ProfileItems.Count).ToList();
-            Assert.Equal(["Default", "Work"], profiles.Select(i => ((TextBlock)i.Header).Text).ToArray());
-            foreach (var (item, expected) in profiles.Zip(model.ProfileItems))
+            var collections = menu.Items.OfType<MenuItem>().Take(model.CollectionItems.Count).ToList();
+            Assert.Equal(["Default", "Work"], collections.Select(i => ((TextBlock)i.Header).Text).ToArray());
+            foreach (var (item, expected) in collections.Zip(model.CollectionItems))
             {
                 Assert.True(item.IsCheckable);
                 Assert.Equal(expected.IsActive, item.IsChecked);
             }
-            Assert.Equal(["Work"], profiles.Where(i => i.IsChecked).Select(i => ((TextBlock)i.Header).Text).ToArray());
+            Assert.Equal(["Work"], collections.Where(i => i.IsChecked).Select(i => ((TextBlock)i.Header).Text).ToArray());
 
             menu.IsOpen = false;   // leave nothing behind in the shared WPF host
             window.HideFlyout();

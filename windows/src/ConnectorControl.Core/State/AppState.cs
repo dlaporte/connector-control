@@ -21,15 +21,15 @@ public sealed class AppState : ObservableObject, IDisposable
     public const string RestartMessage = "Restart Claude Desktop now?";
     public const string RestartInformative = "Any in-progress Claude conversation will be interrupted.";
     public const string RestartButton = "Restart";
-    public const string NewProfileTitle = "New Profile";
-    public const string RenameProfileTitle = "Rename Profile";
-    public const string DeleteProfileInformative = "Its connector list is removed; backups keep prior states.";
+    public const string NewCollectionTitle = "New Collection";
+    public const string RenameCollectionTitle = "Rename Collection";
+    public const string DeleteCollectionInformative = "Its connector list is removed; backups keep prior states.";
     public const string DeleteButton = "Delete";
     /// <summary>Coined here, not taken from the Mac catalog: on macOS a relaunch cannot fail silently.</summary>
     public const string RelaunchFailedMessage = "Claude didn’t come back after the restart. Start Claude yourself, then try again.";
     public const string NameEmptyError = "Name must not be empty.";
     public static string DuplicateNameError(string name) => $"A connector named “{name}” already exists.";
-    public static string DeleteProfileMessage(string profile) => $"Delete Profile “{profile}”?";
+    public static string DeleteCollectionMessage(string collection) => $"Delete Collection “{collection}”?";
     public static string MalformedConfigMessage(string detail) =>
         $"Claude's config file is not valid JSON ({detail}). Nothing was written. Use Backups ▸ Restore… to recover it.";
     /// <summary>Claude's launch time is re-read 3 s after the restart completes.</summary>
@@ -46,7 +46,7 @@ public sealed class AppState : ObservableObject, IDisposable
     private readonly ISettings settings;
     private readonly IClaudeProcess claude;
     private readonly INotifier notifier;
-    /// <summary>The prompts AppState itself raises (quit, restart, profiles); editor/settings windows own their own.</summary>
+    /// <summary>The prompts AppState itself raises (quit, restart, collections); editor/settings windows own their own.</summary>
     private readonly IDialogs dialogs;
     private readonly PathContext paths;
     private readonly AppHost host;
@@ -122,9 +122,9 @@ public sealed class AppState : ObservableObject, IDisposable
 
     public IReadOnlyList<string> SortedNames => Store.Mcps.Keys.Order(StringComparer.Ordinal).ToList();
 
-    public IReadOnlyList<string> ProfileNames => Store.Profiles.Keys.Order(StringComparer.Ordinal).ToList();
+    public IReadOnlyList<string> CollectionNames => Store.Collections.Keys.Order(StringComparer.Ordinal).ToList();
 
-    public string ActiveProfile => Store.ActiveProfile;
+    public string ActiveCollection => Store.ActiveCollection;
 
     /// <summary>The header subtitle.</summary>
     public string HeaderSubtitle
@@ -675,12 +675,12 @@ public sealed class AppState : ObservableObject, IDisposable
         _ = PerformRestartClaudeAsync();
     }
 
-    // MARK: profiles
+    // MARK: collections
 
-    /// <summary>Switching profiles applies immediately, like every other change. An unknown name is silently ignored.</summary>
-    public void SwitchProfile(string name)
+    /// <summary>Switching collections applies immediately, like every other change. An unknown name is silently ignored.</summary>
+    public void SwitchCollection(string name)
     {
-        if (Store.SwitchProfile(name) is not null)
+        if (Store.SwitchCollection(name) is not null)
         {
             return;
         }
@@ -689,34 +689,34 @@ public sealed class AppState : ObservableObject, IDisposable
         RaiseAll();
     }
 
-    public void NewProfile()
+    public void NewCollection()
     {
-        if (dialogs.PromptForName(NewProfileTitle, "") is not { } name)
+        if (dialogs.PromptForName(NewCollectionTitle, "") is not { } name)
         {
             return;
         }
-        FinishProfileChange(Store.AddProfile(name, copyingCurrent: true));
+        FinishCollectionChange(Store.AddCollection(name, copyingCurrent: true));
     }
 
-    public void RenameProfile()
+    public void RenameCollection()
     {
-        if (dialogs.PromptForName(RenameProfileTitle, Store.ActiveProfile) is not { } name)
+        if (dialogs.PromptForName(RenameCollectionTitle, Store.ActiveCollection) is not { } name)
         {
             return;
         }
-        FinishProfileChange(Store.RenameActiveProfile(name));
+        FinishCollectionChange(Store.RenameActiveCollection(name));
     }
 
-    public void DeleteProfile()
+    public void DeleteCollection()
     {
-        if (!dialogs.Confirm(DeleteProfileMessage(Store.ActiveProfile), DeleteProfileInformative, DeleteButton, destructive: true))
+        if (!dialogs.Confirm(DeleteCollectionMessage(Store.ActiveCollection), DeleteCollectionInformative, DeleteButton, destructive: true))
         {
             return;
         }
-        FinishProfileChange(Store.DeleteActiveProfile());
+        FinishCollectionChange(Store.DeleteActiveCollection());
     }
 
-    private void FinishProfileChange(string? error)
+    private void FinishCollectionChange(string? error)
     {
         if (error is null)
         {

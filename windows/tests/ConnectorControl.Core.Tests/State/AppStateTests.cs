@@ -22,8 +22,8 @@ public class AppStateTests
         Assert.False(state.NeedsClaudeRestart);
         Assert.False(state.ApplyRetryNeeded);
         Assert.Equal("3 of 3 enabled", state.HeaderSubtitle);
-        Assert.Equal(["Default"], state.ProfileNames);
-        Assert.Equal("Default", state.ActiveProfile);
+        Assert.Equal(["Default"], state.CollectionNames);
+        Assert.Equal("Default", state.ActiveCollection);
         Assert.True(File.Exists(h.MasterStorePath));
         Assert.Equal(PermissionsSweep.CurrentVersion, h.Settings.SweepVersion);
     }

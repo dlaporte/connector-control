@@ -20,8 +20,8 @@ final class AppStateTests: XCTestCase {
         XCTAssertFalse(state.needsClaudeRestart)
         XCTAssertFalse(state.applyRetryNeeded)
         XCTAssertEqual(state.headerSubtitle, "3 of 3 enabled")
-        XCTAssertEqual(state.profileNames, ["Default"])
-        XCTAssertEqual(state.activeProfile, "Default")
+        XCTAssertEqual(state.collectionNames, ["Default"])
+        XCTAssertEqual(state.activeCollection, "Default")
         XCTAssertTrue(FileManager.default.fileExists(atPath: h.masterStoreURL.path))
         XCTAssertEqual(h.settings.sweepVersion, PermissionsSweep.currentVersion)
     }

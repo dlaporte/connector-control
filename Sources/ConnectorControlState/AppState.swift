@@ -30,9 +30,9 @@ public final class AppState: ObservableObject {
     public static let restartMessage = "Restart Claude Desktop now?"
     public static let restartInformative = "Any in-progress Claude conversation will be interrupted."
     public static let restartButton = "Restart"
-    public static let newProfileTitle = "New Profile"
-    public static let renameProfileTitle = "Rename Profile"
-    public static let deleteProfileInformative = "Its connector list is removed; backups keep prior states."
+    public static let newCollectionTitle = "New Collection"
+    public static let renameCollectionTitle = "Rename Collection"
+    public static let deleteCollectionInformative = "Its connector list is removed; backups keep prior states."
     public static let deleteButton = "Delete"
     public static let nameEmptyError = "Name must not be empty."
     public static let defaultClaudeAppPath = "/Applications/Claude.app"
@@ -40,7 +40,7 @@ public final class AppState: ObservableObject {
     /// Claude's launch date is re-read 3 s after the restart completes.
     public static let restartRecheckDelay: TimeInterval = 3
 
-    public static func deleteProfileMessage(_ profile: String) -> String { "Delete Profile “\(profile)”?" }
+    public static func deleteCollectionMessage(_ collection: String) -> String { "Delete Collection “\(collection)”?" }
 
     public static func duplicateNameError(_ name: String) -> String { "A connector named “\(name)” already exists." }
 
@@ -71,7 +71,7 @@ public final class AppState: ObservableObject {
     /// and cached for the run. A tool absent here has not been probed yet.
     @Published public private(set) var toolStatuses: [Tool: ToolStatus] = [:]
 
-    /// The prompts AppState itself raises (quit, restart, profiles); the editor owns its own.
+    /// The prompts AppState itself raises (quit, restart, collections); the editor owns its own.
     public let dialogs: Dialogs
     public let settings: AppSettings
     /// Raised when the app should terminate (after the optional confirmation).
@@ -130,9 +130,9 @@ public final class AppState: ObservableObject {
 
     public var sortedNames: [String] { store.mcps.keys.sorted() }
 
-    public var profileNames: [String] { store.profiles.keys.sorted() }
+    public var collectionNames: [String] { store.collections.keys.sorted() }
 
-    public var activeProfile: String { store.activeProfile }
+    public var activeCollection: String { store.activeCollection }
 
     /// The popover header's subtitle.
     public var headerSubtitle: String {
@@ -488,33 +488,33 @@ public final class AppState: ObservableObject {
         }
     }
 
-    // MARK: - Profiles
+    // MARK: - Collections
 
-    /// Switching profiles applies immediately, like every other change. An unknown name is silently ignored.
-    public func switchProfile(to name: String) {
-        guard store.switchProfile(to: name) == nil else { return }
+    /// Switching collections applies immediately, like every other change. An unknown name is silently ignored.
+    public func switchCollection(to name: String) {
+        guard store.switchCollection(to: name) == nil else { return }
         persistStore()
         performApply()
     }
 
-    public func newProfile() {
-        guard let name = dialogs.promptForName(title: AppState.newProfileTitle, initial: "") else { return }
-        finishProfileChange(store.addProfile(named: name, copyingCurrent: true))
+    public func newCollection() {
+        guard let name = dialogs.promptForName(title: AppState.newCollectionTitle, initial: "") else { return }
+        finishCollectionChange(store.addCollection(named: name, copyingCurrent: true))
     }
 
-    public func renameProfile() {
-        guard let name = dialogs.promptForName(title: AppState.renameProfileTitle, initial: store.activeProfile) else { return }
-        finishProfileChange(store.renameActiveProfile(to: name))
+    public func renameCollection() {
+        guard let name = dialogs.promptForName(title: AppState.renameCollectionTitle, initial: store.activeCollection) else { return }
+        finishCollectionChange(store.renameActiveCollection(to: name))
     }
 
-    public func deleteProfile() {
-        guard dialogs.confirm(message: AppState.deleteProfileMessage(store.activeProfile),
-                              informative: AppState.deleteProfileInformative,
+    public func deleteCollection() {
+        guard dialogs.confirm(message: AppState.deleteCollectionMessage(store.activeCollection),
+                              informative: AppState.deleteCollectionInformative,
                               primary: AppState.deleteButton, destructive: true) else { return }
-        finishProfileChange(store.deleteActiveProfile())
+        finishCollectionChange(store.deleteActiveCollection())
     }
 
-    private func finishProfileChange(_ error: String?) {
+    private func finishCollectionChange(_ error: String?) {
         if let error {
             lastError = error
         } else {

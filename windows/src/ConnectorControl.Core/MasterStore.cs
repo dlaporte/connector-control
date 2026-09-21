@@ -1,7 +1,7 @@
 namespace ConnectorControl.Core;
 
 /// <summary>
-/// The master list (schema v2, profile-aware). Mutable like the Swift struct's
+/// The master list (schema v2, collection-aware). Mutable like the Swift struct's
 /// `var` usage; structural equality like the Swift value type. Use
 /// <see cref="Clone"/> where Swift relied on copy semantics.
 /// </summary>
@@ -13,49 +13,49 @@ public sealed class MasterStore : IEquatable<MasterStore>
     public const long CurrentVersion = 2;
 
     public long Version { get; }
-    public string ActiveProfile { get; set; }
-    public Dictionary<string, Profile> Profiles { get; }
+    public string ActiveCollection { get; set; }
+    public Dictionary<string, Collection> Collections { get; }
 
-    public MasterStore(long version, string activeProfile, IEnumerable<KeyValuePair<string, Profile>> profiles)
+    public MasterStore(long version, string activeCollection, IEnumerable<KeyValuePair<string, Collection>> collections)
     {
         Version = version;
-        Profiles = new Dictionary<string, Profile>(profiles, StringComparer.Ordinal);
-        // The Mcps getter must never create a profile as a side effect, so this constructor is
-        // the one place that guarantees Profiles[ActiveProfile] exists — including a decoded
-        // file that names a profile it doesn't have (MasterStoreIO.Load relies on this).
-        if (Profiles.ContainsKey(activeProfile))
+        Collections = new Dictionary<string, Collection>(collections, StringComparer.Ordinal);
+        // The Mcps getter must never create a collection as a side effect, so this constructor is
+        // the one place that guarantees Collections[ActiveCollection] exists — including a decoded
+        // file that names a collection it doesn't have (MasterStoreIO.Load relies on this).
+        if (Collections.ContainsKey(activeCollection))
         {
-            ActiveProfile = activeProfile;
+            ActiveCollection = activeCollection;
         }
-        else if (Profiles.Keys.Order(StringComparer.Ordinal).FirstOrDefault() is { } fallback)
+        else if (Collections.Keys.Order(StringComparer.Ordinal).FirstOrDefault() is { } fallback)
         {
-            ActiveProfile = fallback;
+            ActiveCollection = fallback;
         }
         else
         {
-            Profiles["Default"] = new Profile();
-            ActiveProfile = "Default";
+            Collections["Default"] = new Collection();
+            ActiveCollection = "Default";
         }
     }
 
-    /// <summary>Swift <c>MasterStore(version:mcps:)</c>: a single "Default" profile; always v2.</summary>
+    /// <summary>Swift <c>MasterStore(version:mcps:)</c>: a single "Default" collection; always v2.</summary>
     public MasterStore(IEnumerable<KeyValuePair<string, McpEntry>> mcps)
-        : this(CurrentVersion, "Default", [new KeyValuePair<string, Profile>("Default", new Profile(mcps))])
+        : this(CurrentVersion, "Default", [new KeyValuePair<string, Collection>("Default", new Collection(mcps))])
     {
     }
 
     /// <summary>Swift <c>.empty</c>. A fresh instance every call — this type is mutable.</summary>
     public static MasterStore Empty() =>
-        new(CurrentVersion, "Default", [new KeyValuePair<string, Profile>("Default", new Profile())]);
+        new(CurrentVersion, "Default", [new KeyValuePair<string, Collection>("Default", new Collection())]);
 
     /// <summary>
-    /// The active profile's connectors — the view the entire app operates on. Side-effect free:
-    /// an active profile that somehow doesn't exist yet returns an empty, unstored dictionary
+    /// The active collection's connectors — the view the entire app operates on. Side-effect free:
+    /// an active collection that somehow doesn't exist yet returns an empty, unstored dictionary
     /// rather than creating one — the constructor is what normally guarantees
-    /// Profiles[ActiveProfile] exists.
+    /// Collections[ActiveCollection] exists.
     /// </summary>
     public Dictionary<string, McpEntry> Mcps =>
-        Profiles.TryGetValue(ActiveProfile, out var profile) ? profile.Mcps : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
+        Collections.TryGetValue(ActiveCollection, out var collection) ? collection.Mcps : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
 
     /// <summary>Claude's <c>mcpServers</c> section rendered from this store: the enabled subset's configs.</summary>
     public IReadOnlyDictionary<string, JsonValue> EnabledServers =>
@@ -65,76 +65,76 @@ public sealed class MasterStore : IEquatable<MasterStore>
     public int EnabledCount => Mcps.Count(p => p.Value.Enabled);
 
     /// <summary>null on success, else a user-facing error message.</summary>
-    public string? AddProfile(string name, bool copyingCurrent)
+    public string? AddCollection(string name, bool copyingCurrent)
     {
         var trimmed = name.TrimSpaces();
         if (trimmed.Length == 0)
         {
             return "Name must not be empty.";
         }
-        if (Profiles.ContainsKey(trimmed))
+        if (Collections.ContainsKey(trimmed))
         {
-            return $"A profile named \u201C{trimmed}\u201D already exists.";
+            return $"A collection named “{trimmed}” already exists.";
         }
-        Profiles[trimmed] = copyingCurrent ? new Profile(Mcps) : new Profile();
-        ActiveProfile = trimmed;
+        Collections[trimmed] = copyingCurrent ? new Collection(Mcps) : new Collection();
+        ActiveCollection = trimmed;
         return null;
     }
 
-    public string? RenameActiveProfile(string name)
+    public string? RenameActiveCollection(string name)
     {
         var trimmed = name.TrimSpaces();
         if (trimmed.Length == 0)
         {
             return "Name must not be empty.";
         }
-        if (trimmed != ActiveProfile && Profiles.ContainsKey(trimmed))
+        if (trimmed != ActiveCollection && Collections.ContainsKey(trimmed))
         {
-            return $"A profile named \u201C{trimmed}\u201D already exists.";
+            return $"A collection named “{trimmed}” already exists.";
         }
-        if (!Profiles.Remove(ActiveProfile, out var current))
+        if (!Collections.Remove(ActiveCollection, out var current))
         {
             return null;
         }
-        Profiles[trimmed] = current;
-        ActiveProfile = trimmed;
+        Collections[trimmed] = current;
+        ActiveCollection = trimmed;
         return null;
     }
 
-    public string? DeleteActiveProfile()
+    public string? DeleteActiveCollection()
     {
-        if (Profiles.Count <= 1)
+        if (Collections.Count <= 1)
         {
-            return "Can\u2019t delete the last profile.";
+            return "Can’t delete the last collection.";
         }
-        Profiles.Remove(ActiveProfile);
-        ActiveProfile = Profiles.Keys.Order(StringComparer.Ordinal).First();
+        Collections.Remove(ActiveCollection);
+        ActiveCollection = Collections.Keys.Order(StringComparer.Ordinal).First();
         return null;
     }
 
-    public string? SwitchProfile(string name)
+    public string? SwitchCollection(string name)
     {
-        if (!Profiles.ContainsKey(name))
+        if (!Collections.ContainsKey(name))
         {
-            return $"No profile named \u201C{name}\u201D.";
+            return $"No collection named “{name}”.";
         }
-        ActiveProfile = name;
+        ActiveCollection = name;
         return null;
     }
 
     public MasterStore Clone() =>
-        new(Version, ActiveProfile, Profiles.Select(p => new KeyValuePair<string, Profile>(p.Key, p.Value.Clone())));
+        new(Version, ActiveCollection, Collections.Select(p => new KeyValuePair<string, Collection>(p.Key, p.Value.Clone())));
 
     // MARK: JSON (the Swift Codable synthesis, made explicit)
 
     public JsonValue ToJson() => JsonValue.Object(
         ("version", JsonValue.Int(Version)),
-        ("activeProfile", JsonValue.String(ActiveProfile)),
-        ("profiles", JsonValue.Object(Profiles.Select(p =>
-            new KeyValuePair<string, JsonValue>(p.Key, ProfileToJson(p.Value))))));
+        ("activeProfile", JsonValue.String(ActiveCollection)),
+        ("profiles", JsonValue.Object(Collections.Select(p =>
+            new KeyValuePair<string, JsonValue>(p.Key, CollectionToJson(p.Value))))));
 
-    private static JsonValue ProfileToJson(Profile profile) => JsonValue.Object(
-        ("mcps", JsonValue.Object(profile.Mcps.Select(m =>
+    private static JsonValue CollectionToJson(Collection collection) => JsonValue.Object(
+        ("mcps", JsonValue.Object(collection.Mcps.Select(m =>
             new KeyValuePair<string, JsonValue>(m.Key, EntryToJson(m.Value))))));
 
     private static JsonValue EntryToJson(McpEntry entry) => JsonValue.Object(
@@ -152,21 +152,23 @@ public sealed class MasterStore : IEquatable<MasterStore>
         {
             throw new FormatException("master store: top level is not an object");
         }
+        // The file keeps the v2 key names: machines on the current release share it through the
+        // synced master-list folder, and their decoder knows only these two keys.
         var active = Require(json, "activeProfile", JsonKind.String).StringValue;
-        var profiles = Require(json, "profiles", JsonKind.Object).ObjectProperties
-            .Select(p => new KeyValuePair<string, Profile>(p.Key, ProfileFromJson(p.Value)));
-        return new MasterStore(Require(json, "version", JsonKind.Int).IntValue, active, profiles);
+        var collections = Require(json, "profiles", JsonKind.Object).ObjectProperties
+            .Select(p => new KeyValuePair<string, Collection>(p.Key, CollectionFromJson(p.Value)));
+        return new MasterStore(Require(json, "version", JsonKind.Int).IntValue, active, collections);
     }
 
-    private static Profile ProfileFromJson(JsonValue json)
+    private static Collection CollectionFromJson(JsonValue json)
     {
         if (json.Kind != JsonKind.Object)
         {
-            throw new FormatException("master store: profile is not an object");
+            throw new FormatException("master store: collection is not an object");
         }
         var mcps = Require(json, "mcps", JsonKind.Object).ObjectProperties
             .Select(m => new KeyValuePair<string, McpEntry>(m.Key, EntryFromJson(m.Value)));
-        return new Profile(mcps);
+        return new Collection(mcps);
     }
 
     private static McpEntry EntryFromJson(JsonValue json)
@@ -200,11 +202,11 @@ public sealed class MasterStore : IEquatable<MasterStore>
     public bool Equals(MasterStore? other) =>
         other is not null
         && Version == other.Version
-        && string.Equals(ActiveProfile, other.ActiveProfile, StringComparison.Ordinal)
-        && DictionaryEquality.Equal(Profiles, other.Profiles);
+        && string.Equals(ActiveCollection, other.ActiveCollection, StringComparison.Ordinal)
+        && DictionaryEquality.Equal(Collections, other.Collections);
 
     public override bool Equals(object? obj) => Equals(obj as MasterStore);
 
     public override int GetHashCode() =>
-        HashCode.Combine(Version, ActiveProfile.GetHashCode(StringComparison.Ordinal), DictionaryEquality.Hash(Profiles));
+        HashCode.Combine(Version, ActiveCollection.GetHashCode(StringComparison.Ordinal), DictionaryEquality.Hash(Collections));
 }

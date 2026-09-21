@@ -15,7 +15,7 @@ final class PopoverModelTests: XCTestCase {
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertEqual(popover.subtitle, "No connectors configured")
-        XCTAssertEqual(popover.profileChipText, "Default ▾")
+        XCTAssertEqual(popover.collectionChipText, "Default ▾")
         XCTAssertTrue(popover.isEmpty)
         XCTAssertNil(state.upsert(name: "z", entry: MCPEntry(config: AppStateHarness.remote("https://z.example/mcp")), renamedFrom: nil))
         XCTAssertEqual(popover.subtitle, "1 of 1 enabled")
@@ -70,24 +70,24 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(repaints, before)
     }
 
-    func testProfileMenuItemsAndTitles() {
+    func testCollectionMenuItemsAndTitles() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
-        XCTAssertEqual(popover.profileItems, [ProfileMenuItem(name: "Default", isActive: true)])
-        XCTAssertEqual(PopoverModel.newProfileTitle, "New Profile…")
-        XCTAssertEqual(popover.renameProfileTitle, "Rename “Default”…")
-        XCTAssertEqual(popover.deleteProfileTitle, "Delete “Default”…")
-        XCTAssertFalse(popover.canDeleteProfile)
+        XCTAssertEqual(popover.collectionItems, [CollectionMenuItem(name: "Default", isActive: true)])
+        XCTAssertEqual(PopoverModel.newCollectionTitle, "New Collection…")
+        XCTAssertEqual(popover.renameCollectionTitle, "Rename “Default”…")
+        XCTAssertEqual(popover.deleteCollectionTitle, "Delete “Default”…")
+        XCTAssertFalse(popover.canDeleteCollection)
 
         h.dialogs.nextPromptAnswer = "Work"
-        popover.newProfile()
-        XCTAssertEqual(popover.profileItems, [ProfileMenuItem(name: "Default", isActive: false), ProfileMenuItem(name: "Work", isActive: true)])
-        XCTAssertEqual(popover.profileChipText, "Work ▾")
-        XCTAssertTrue(popover.canDeleteProfile)
-        popover.switchProfile("Default")
-        XCTAssertEqual(popover.profileChipText, "Default ▾")
+        popover.newCollection()
+        XCTAssertEqual(popover.collectionItems, [CollectionMenuItem(name: "Default", isActive: false), CollectionMenuItem(name: "Work", isActive: true)])
+        XCTAssertEqual(popover.collectionChipText, "Work ▾")
+        XCTAssertTrue(popover.canDeleteCollection)
+        popover.switchCollection("Default")
+        XCTAssertEqual(popover.collectionChipText, "Default ▾")
     }
 
     func testFooterPrefersRetryOverRestart() throws {
