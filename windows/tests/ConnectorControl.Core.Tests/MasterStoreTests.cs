@@ -36,6 +36,8 @@ public class MasterStoreTests : IDisposable
         Assert.Null(store.RenameCollection("A", "Z"));
         Assert.Equal("Z", store.ActiveCollection);
         Assert.NotNull(store.RenameCollection("Z", "C"));   // a taken name is refused
+        Assert.Equal("No collection named “Nope”.", store.RenameCollection("Nope", "Q"));
+        Assert.Equal("No collection named “Nope”.", store.DeleteCollection("Nope"));
     }
 
     [Fact]

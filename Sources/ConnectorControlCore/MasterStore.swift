@@ -76,6 +76,7 @@ public struct MasterStore: Equatable, Codable, Sendable {
     /// nil on success, else a user-facing error message. Renaming the active
     /// collection keeps it active under its new name.
     public mutating func renameCollection(_ name: String, to newName: String) -> String? {
+        guard collections[name] != nil else { return Self.noCollectionError(name) }
         let trimmed = newName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return "Name must not be empty." }
         if trimmed != name, collections[trimmed] != nil {
@@ -95,6 +96,7 @@ public struct MasterStore: Equatable, Codable, Sendable {
     /// last remaining collection. Deleting the active collection hands the
     /// sorted-first remaining collection the active spot.
     public mutating func deleteCollection(named name: String) -> String? {
+        guard collections[name] != nil else { return Self.noCollectionError(name) }
         guard collections.count > 1 else { return "Can\u{2019}t delete the last collection." }
         collections.removeValue(forKey: name)
         if activeCollection == name { activeCollection = collections.keys.min() ?? "Default" }
@@ -105,10 +107,11 @@ public struct MasterStore: Equatable, Codable, Sendable {
         deleteCollection(named: activeCollection)
     }
 
+    /// The one wording for a name no collection has, shared by switch, rename and delete.
+    static func noCollectionError(_ name: String) -> String { "No collection named \u{201C}\(name)\u{201D}." }
+
     public mutating func switchCollection(to name: String) -> String? {
-        guard collections[name] != nil else {
-            return "No collection named \u{201C}\(name)\u{201D}."
-        }
+        guard collections[name] != nil else { return Self.noCollectionError(name) }
         activeCollection = name
         return nil
     }

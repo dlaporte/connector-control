@@ -31,6 +31,8 @@ final class MasterStoreTests: XCTestCase {
         XCTAssertNil(store.renameCollection("A", to: "Z"))
         XCTAssertEqual(store.activeCollection, "Z")
         XCTAssertNotNil(store.renameCollection("Z", to: "C"), "a taken name is refused")
+        XCTAssertEqual(store.renameCollection("Nope", to: "Q"), "No collection named \u{201C}Nope\u{201D}.")
+        XCTAssertEqual(store.deleteCollection(named: "Nope"), "No collection named \u{201C}Nope\u{201D}.")
     }
 
     func testDeletesANonActiveCollectionAndRefusesTheLast() {

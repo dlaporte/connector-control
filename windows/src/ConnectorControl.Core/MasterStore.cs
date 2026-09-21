@@ -84,6 +84,10 @@ public sealed class MasterStore : IEquatable<MasterStore>
     /// <summary>null on success, else a user-facing error message. Renaming the active collection keeps it active under its new name.</summary>
     public string? RenameCollection(string name, string newName)
     {
+        if (!Collections.ContainsKey(name))
+        {
+            return NoCollectionError(name);
+        }
         var trimmed = newName.TrimSpaces();
         if (trimmed.Length == 0)
         {
@@ -114,6 +118,10 @@ public sealed class MasterStore : IEquatable<MasterStore>
     /// </summary>
     public string? DeleteCollection(string name)
     {
+        if (!Collections.ContainsKey(name))
+        {
+            return NoCollectionError(name);
+        }
         if (Collections.Count <= 1)
         {
             return "Can’t delete the last collection.";
@@ -128,11 +136,14 @@ public sealed class MasterStore : IEquatable<MasterStore>
 
     public string? DeleteActiveCollection() => DeleteCollection(ActiveCollection);
 
+    /// <summary>The one wording for a name no collection has, shared by switch, rename and delete.</summary>
+    private static string NoCollectionError(string name) => $"No collection named “{name}”.";
+
     public string? SwitchCollection(string name)
     {
         if (!Collections.ContainsKey(name))
         {
-            return $"No collection named “{name}”.";
+            return NoCollectionError(name);
         }
         ActiveCollection = name;
         return null;
