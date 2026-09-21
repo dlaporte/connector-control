@@ -323,4 +323,269 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertTrue(state.sourceErrors.isEmpty)
         XCTAssertNil(state.publishError)
     }
+
+    // MARK: - Synced collections
+
+    /// The bytes an author's machine would have written, at a path this machine can read.
+    private func writeDocument(_ doc: CollectionDocument, at url: URL) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try doc.serialized().write(to: url)
+    }
+
+    /// One local connector, authored on `platform`, so a test can pin what a launcher from the
+    /// other platform (or a directory token) does without carrying the four-connector sample.
+    private func oneLocalConnector(_ name: String, command: String, args: [String],
+                                   platform: CollectionPlatform = .current) -> CollectionDocument {
+        CollectionDocument(
+            name: "Tools", author: nil, origin: "o-tools", exported: "2026-09-21T14:02:11Z",
+            connectors: [name: .init(launcher: .local(.init(command: command, args: args, platform: platform)))])
+    }
+
+    func testSubscribeCreatesADisabledReadOnlyMirror() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("data-team.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        XCTAssertEqual(state.kind(of: "Data team"), .synced)
+        let mcps = try XCTUnwrap(state.store.collections["Data team"]).mcps
+        XCTAssertEqual(mcps.count, 4)
+        XCTAssertTrue(mcps.values.allSatisfy { !$0.enabled })
+        XCTAssertEqual(mcps["dbt"]?.config.value(at: JSONPointer(["env", "DBT_TOKEN"])), .string("${CC_NEEDS:DBT_TOKEN}"))
+        XCTAssertEqual(state.sourceBinding(of: "Data team")?.path, url.path)
+        XCTAssertEqual(state.needs(of: "dbt", in: "Data team")["DBT_TOKEN"]?.hint, "cloud.getdbt.com ▸ API tokens")
+        XCTAssertTrue(state.pendingUpdates.isEmpty)
+        XCTAssertEqual(state.activeCollection, "Default",
+                       "everything in it arrives disabled, so subscribing must not empty Claude's config")
+        XCTAssertEqual(state.watchedSourceCollections, ["Data team"])
+    }
+
+    func testSubscribeNamesTheCollectionAndRefusesWhatItCannotRead() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("data-team.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: "Analytics"), "the caller's name beats the document's")
+        XCTAssertEqual(state.kind(of: "Analytics"), .synced)
+
+        let missing = h.dir.file("gone.json")
+        XCTAssertNotNil(state.subscribe(documentAt: missing.path, as: nil))
+        let half = h.dir.file("half.json")
+        try TempDir.touch(half, "{half")
+        XCTAssertEqual(state.subscribe(documentAt: half.path, as: nil)?.hasPrefix("half.json couldn’t be read: "), true)
+        var newer = CollectionDocumentSamples.dataTeam.encode()
+        newer = try XCTUnwrap(newer.replacing(at: JSONPointer(["connectorControlCollection"]), with: .int(2)))
+        let future = h.dir.file("future.json")
+        try newer.serialized().write(to: future)
+        XCTAssertEqual(state.subscribe(documentAt: future.path, as: nil), AppState.newerDocumentError)
+        XCTAssertEqual(state.collectionNames, ["Analytics", "Default"], "a refused document creates nothing")
+    }
+
+    func testSubscribingToYourOwnPublishedCollectionIsRefused() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        // What the publishing task will leave behind: a local collection whose document carries
+        // this origin. Reading it back in would make the app its own author.
+        try seed(h, state, file: CollectionsFile(collections: [
+            "Default": CollectionsFile.Entry(kind: .local, publish: CollectionsFile.PublishRecord(
+                slug: "data-team", origin: "6f1c4a2e-1b8d-4b0e-9f0a-3c2d7e8a91e2", intent: .none)),
+        ]))
+        let url = h.dir.file("data-team.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertEqual(state.subscribe(documentAt: url.path, as: nil), AppState.ownCollectionError)
+        XCTAssertEqual(state.collectionNames, ["Default"])
+    }
+
+    func testASourceChangeBecomesAPendingUpdateThatApplyLandsWithFilledValuesKept() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("data-team.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        // The user fills the token and turns dbt on.
+        state.switchCollection(to: "Data team")
+        var dbt = try XCTUnwrap(state.store.collections["Data team"]?.mcps["dbt"])
+        dbt.config = dbt.config.replacing(at: JSONPointer(["env", "DBT_TOKEN"]), with: .string("tok"))!
+        dbt.enabled = true
+        // Task 6 gives upsert a collection argument; until then the edit lands in the active one.
+        XCTAssertNil(state.upsert(name: "dbt", entry: dbt, renamedFrom: "dbt"))
+        XCTAssertTrue(state.pendingUpdates.isEmpty, "a filled marker is not a change to the collection")
+
+        // The author changes dbt's args and removes github.
+        var doc = CollectionDocumentSamples.dataTeam
+        doc.connectors["github"] = nil
+        doc.connectors["dbt"]?.launcher = .local(.init(command: "npx", args: ["-y", "@dbt/mcp@2"], platform: .mac))
+        try writeDocument(doc, at: url)
+        try TempDir.bumpModificationDate(of: url)
+        XCTAssertTrue(h.ui.pumpUntil({ state.pendingUpdates["Data team"] != nil }, timeout: 8))
+        XCTAssertEqual(state.pendingUpdates["Data team"]?.summary(), "removes github; changes dbt")
+        XCTAssertEqual(h.notifier.sent.last?.body,
+                       AppState.collectionUpdateNotificationBody("Data team", "removes github; changes dbt"))
+        let announced = h.notifier.sent.count
+        state.recomputePending()
+        XCTAssertEqual(h.notifier.sent.count, announced, "one document, one announcement")
+
+        XCTAssertNil(state.applyPendingUpdate(for: "Data team"))
+        let after = try XCTUnwrap(state.store.collections["Data team"]?.mcps["dbt"])
+        XCTAssertEqual(after.config.value(at: JSONPointer(["args", "1"])), .string("@dbt/mcp@2"))
+        XCTAssertEqual(after.config.value(at: JSONPointer(["env", "DBT_TOKEN"])), .string("tok"))
+        XCTAssertTrue(after.enabled)
+        XCTAssertNil(state.store.collections["Data team"]?.mcps["github"])
+        XCTAssertTrue(state.pendingUpdates.isEmpty)
+        XCTAssertEqual(try h.claudeServers()["dbt"]?.value(at: JSONPointer(["args", "1"])), .string("@dbt/mcp@2"),
+                       "the active collection's update reaches Claude")
+    }
+
+    func testAnUnreadableSourceIsTransientUntilRefreshedByHand() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("t.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: "T"))
+        try Data("{half".utf8).write(to: url)
+        try TempDir.bumpModificationDate(of: url)
+        _ = h.ui.pumpUntil({ !h.delays.pending.isEmpty }, timeout: 8)
+        XCTAssertTrue(state.sourceErrors.isEmpty, "the first failure schedules a retry instead of reporting")
+        XCTAssertEqual(h.delays.pending.count, 1)
+        XCTAssertEqual(h.delays.pending.first?.delay, 2)
+
+        state.refreshSource(for: "T")
+        XCTAssertNotNil(state.sourceErrors["T"])
+        XCTAssertEqual(h.delays.pending.count, 1, "Refresh answers now instead of waiting again")
+
+        // The half-written file lands in full: the next read clears the error and the collection
+        // is back to having nothing to say.
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        state.refreshSource(for: "T")
+        XCTAssertTrue(state.sourceErrors.isEmpty)
+        XCTAssertTrue(state.pendingUpdates.isEmpty)
+    }
+
+    func testLocateBindsAndTheRelativePathBindsAutomatically() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        // The document travels inside the store's own folder, as a shared master list does.
+        let inStore = h.storeDir.appendingPathComponent("shared/data-team.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: inStore)
+        XCTAssertNil(state.subscribe(documentAt: inStore.path, as: nil))
+        XCTAssertEqual(state.collectionsFile.collections["Data team"]?.relativeToStore, "shared/data-team.json")
+
+        // Another machine: the sidecar travels with the store, this machine's bindings do not.
+        try FileManager.default.removeItem(at: state.service.paths.collectionsCacheURL)
+        state.reload()
+        XCTAssertEqual(state.sourceBinding(of: "Data team")?.path, inStore.path, "found beside the store, with no prompt")
+
+        // A document somewhere the relative path cannot reach is pointed at by hand.
+        let elsewhere = h.dir.file("elsewhere/data-team.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: elsewhere)
+        XCTAssertNil(state.locateSource(for: "Data team", path: elsewhere.path))
+        XCTAssertEqual(state.sourceBinding(of: "Data team")?.path, elsewhere.path)
+        XCTAssertEqual(state.watchedSourceCollections, ["Data team"])
+        XCTAssertTrue(state.pendingUpdates.isEmpty, "the same document in a new place changes nothing")
+        XCTAssertNil(state.collectionBanner)
+        XCTAssertEqual(state.locateSource(for: "Data team", path: h.dir.file("nope.json").path)?
+            .hasPrefix("nope.json couldn’t be read: "), true)
+        XCTAssertEqual(state.sourceBinding(of: "Data team")?.path, elsewhere.path, "a file we cannot read is not bound")
+    }
+
+    func testStopSyncingKeepsContentAndDropsTheBinding() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("data-team.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let before = try XCTUnwrap(state.store.collections["Data team"]).mcps
+
+        state.stopSyncing("Data team")
+        XCTAssertEqual(state.kind(of: "Data team"), .local)
+        XCTAssertNil(state.sourceBinding(of: "Data team"))
+        XCTAssertNil(state.collectionsFile.collections["Data team"])
+        XCTAssertEqual(state.store.collections["Data team"]?.mcps, before, "the connectors are the user's now")
+        XCTAssertTrue(state.watchedSourceCollections.isEmpty)
+        XCTAssertTrue(state.needs(of: "ledger", in: "Data team").isEmpty, "the hints travelled with the document")
+        XCTAssertEqual(state.connectorCaution("ledger", in: "Data team"), AppState.needsValueCaution("server_path"),
+                       "an unfilled marker is still text in the config, so the row still says so")
+
+        // The author's next change reaches nobody: there is no binding left to watch.
+        var doc = CollectionDocumentSamples.dataTeam
+        doc.connectors["github"] = nil
+        try writeDocument(doc, at: url)
+        try TempDir.bumpModificationDate(of: url)
+        _ = h.ui.pumpUntil({ false }, timeout: 1.0)
+        XCTAssertTrue(state.pendingUpdates.isEmpty)
+    }
+
+    func testDeletingASyncedCollectionLeavesTheFileAlone() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("data-team.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+
+        XCTAssertNil(state.deleteCollection(named: "Data team"))
+        XCTAssertEqual(state.collectionNames, ["Default"])
+        XCTAssertNil(state.sourceBinding(of: "Data team"))
+        XCTAssertTrue(state.watchedSourceCollections.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "the source file is never ours to delete")
+    }
+
+    func testTheDirectoryTokenExpandsAgainstTheBoundFolderWhenApplied() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("tools/servers.json")
+        try writeDocument(oneLocalConnector("x", command: "node", args: ["\(Placeholder.directoryToken)/srv.js"]), at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        state.switchCollection(to: "Tools")
+        state.setEnabled("x", true)
+
+        let directory = url.deletingLastPathComponent().path
+        XCTAssertEqual(args(of: try XCTUnwrap(h.claudeServers()["x"]))?.first, directory + "/srv.js")
+        XCTAssertEqual(state.store.collections["Tools"]?.mcps["x"]?.config.value(at: JSONPointer(["args", "0"])),
+                       .string("\(Placeholder.directoryToken)/srv.js"),
+                       "the store keeps the token, so the same list resolves on the next machine too")
+        XCTAssertNil(state.connectorCaution("x", in: "Tools"))
+        XCTAssertFalse(state.applyRetryNeeded)
+        state.reload()
+        XCTAssertEqual(args(of: try XCTUnwrap(h.claudeServers()["x"]))?.first, directory + "/srv.js",
+                       "the expanded config is what we wrote, so a reload finds nothing to regenerate")
+    }
+
+    func testALocalConnectorAuthoredOnTheOtherPlatformIsFlagged() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let other: CollectionPlatform = CollectionPlatform.current == .mac ? .windows : .mac
+        let url = h.dir.file("tools.json")
+        try writeDocument(oneLocalConnector("x", command: "node", args: ["srv.js"], platform: other), at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        XCTAssertEqual(state.connectorCaution("x", in: "Tools"), AppState.authoredElsewhereCaution)
+
+        try writeDocument(oneLocalConnector("x", command: "node", args: ["srv.js"]), at: url)
+        state.refreshSource(for: "Tools")
+        XCTAssertNil(state.connectorCaution("x", in: "Tools"), "a launcher from this platform needs no warning")
+    }
+
+    // The cache records what a render excluded, and an excluded connector never shows as added.
+    // Only the Windows build's cmd /c launcher ever excludes anything, so that test lives in the
+    // mirror alone: windows/.../AppStateCollectionsTests.cs
+    // AnExcludedConnectorIsRecordedInTheCacheAndNeverShowsAsAdded.
+
+    func testACorruptSidecarAtLaunchKeepsTheCacheBindings() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        try seedStore(h, collections: ["Team"])
+        try seed(h, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]),
+                 cache: CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")], published: [:]))
+        let sidecar = h.storeDir.appendingPathComponent(CollectionsFile.fileName)
+        try TempDir.touch(sidecar, "{not json")
+
+        let state = h.create()
+        XCTAssertEqual(state.sourceBinding(of: "Team")?.path, "/shared/team.json",
+                       "a good cache outlives a sidecar a sync tool is halfway through writing")
+        XCTAssertEqual(state.kind(of: "Team"), .local, "with nothing readable to vouch for it, nothing is synced")
+
+        try CollectionsFile(collections: ["Team": synced(fileName: "team.json")]).save(to: sidecar, staging: nil)
+        state.reload()
+        XCTAssertEqual(state.kind(of: "Team"), .synced)
+        XCTAssertEqual(state.sourceBinding(of: "Team")?.path, "/shared/team.json")
+    }
 }

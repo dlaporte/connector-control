@@ -365,4 +365,325 @@ public class AppStateCollectionsTests
         Assert.Empty(state.SourceErrors);
         Assert.Null(state.PublishError);
     }
+
+    // MARK: synced collections
+
+    private static readonly TimeSpan Wait = TimeSpan.FromSeconds(8);
+
+    /// <summary>Gives a just-armed source watcher a moment before a test relies on it seeing the
+    /// very next write — the same arming race AppStateWatcherTests waits out.</summary>
+    private static readonly TimeSpan WatcherSettle = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>The bytes an author's machine would have written, at a path this machine can read.</summary>
+    private static void WriteDocument(CollectionDocument doc, string path)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, doc.Serialize());
+    }
+
+    /// <summary>One local connector, authored on <paramref name="platform"/>, so a test can pin
+    /// what a launcher from the other platform (or a directory token) does without carrying the
+    /// four-connector sample.</summary>
+    private static CollectionDocument OneLocalConnector(string name, string command, string[] args,
+        CollectionPlatform platform = CollectionPlatforms.Current) =>
+        new("Tools", null, "o-tools", "2026-09-21T14:02:11Z",
+            new Dictionary<string, CollectionDocument.Connector>
+            {
+                [name] = new(new CollectionDocument.Launcher.Local(command, args, platform)),
+            });
+
+    /// <summary>The sample with github gone and dbt's arguments changed — an author's next commit.</summary>
+    private static CollectionDocument ChangedSample()
+    {
+        var sample = CollectionDocumentSamples.DataTeam;
+        var connectors = new Dictionary<string, CollectionDocument.Connector>(sample.Connectors, StringComparer.Ordinal);
+        connectors.Remove("github");
+        var dbt = connectors["dbt"];
+        connectors["dbt"] = new CollectionDocument.Connector(
+            new CollectionDocument.Launcher.Local("npx", ["-y", "@dbt/mcp@2"], CollectionPlatform.Mac),
+            dbt.Env, dbt.Needs, dbt.Additional);
+        return new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors);
+    }
+
+    [Fact]
+    public void SubscribeCreatesADisabledReadOnlyMirror()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Subscribe(path, null));
+        Assert.Equal(CollectionKind.Synced, state.KindOf("Data team"));
+        var mcps = state.Store.Collections["Data team"].Mcps;
+        Assert.Equal(4, mcps.Count);
+        Assert.All(mcps.Values, entry => Assert.False(entry.Enabled));
+        Assert.Equal(JsonValue.String("${CC_NEEDS:DBT_TOKEN}"), mcps["dbt"].Config.ValueAt(JsonPointer.Parse("/env/DBT_TOKEN")!));
+        Assert.Equal(path, state.SourceBinding("Data team")?.Path);
+        Assert.Equal("cloud.getdbt.com ▸ API tokens", state.Needs("dbt", "Data team")["DBT_TOKEN"].Hint);
+        Assert.Empty(state.PendingUpdates);
+        // Everything in it arrives disabled, so subscribing must not empty Claude's config.
+        Assert.Equal("Default", state.ActiveCollection);
+        Assert.Equal(["Data team"], state.WatchedSourceCollections);
+    }
+
+    [Fact]
+    public void SubscribeNamesTheCollectionAndRefusesWhatItCannotRead()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Subscribe(path, "Analytics"));   // the caller's name beats the document's
+        Assert.Equal(CollectionKind.Synced, state.KindOf("Analytics"));
+
+        Assert.NotNull(state.Subscribe(h.Dir.File("gone.json"), null));
+        var half = h.Dir.File("half.json");
+        TempDir.Touch(half, "{half");
+        Assert.StartsWith("half.json couldn’t be read: ", state.Subscribe(half, null), StringComparison.Ordinal);
+        var newer = CollectionDocumentSamples.DataTeam.Encode()
+            .Replacing(JsonPointer.Parse("/connectorControlCollection")!, JsonValue.Int(2))!;
+        var future = h.Dir.File("future.json");
+        File.WriteAllBytes(future, newer.Serialize());
+        Assert.Equal(AppState.NewerDocumentError, state.Subscribe(future, null));
+        Assert.Equal(["Analytics", "Default"], state.CollectionNames);   // a refused document creates nothing
+    }
+
+    [Fact]
+    public void SubscribingToYourOwnPublishedCollectionIsRefused()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        // What the publishing task will leave behind: a local collection whose document carries
+        // this origin. Reading it back in would make the app its own author.
+        Seed(h, state, File_(("Default", new CollectionsFile.Entry(CollectionKind.Local,
+            publish: new CollectionsFile.PublishRecord("data-team", "6f1c4a2e-1b8d-4b0e-9f0a-3c2d7e8a91e2", PublishIntent.None)))));
+        var path = h.Dir.File("data-team.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        Assert.Equal(AppState.OwnCollectionError, state.Subscribe(path, null));
+        Assert.Equal(["Default"], state.CollectionNames);
+    }
+
+    [Fact]
+    public void ASourceChangeBecomesAPendingUpdateThatApplyLandsWithFilledValuesKept()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Subscribe(path, null));
+        Thread.Sleep(WatcherSettle);
+        // The user fills the token and turns dbt on.
+        state.SwitchCollection("Data team");
+        var token = JsonPointer.Parse("/env/DBT_TOKEN")!;
+        var dbt = state.Store.Collections["Data team"].Mcps["dbt"];
+        dbt = dbt with { Config = dbt.Config.Replacing(token, JsonValue.String("tok"))!, Enabled = true };
+        // Task 6 gives Upsert a collection argument; until then the edit lands in the active one.
+        Assert.Null(state.Upsert("dbt", dbt, "dbt"));
+        Assert.Empty(state.PendingUpdates);   // a filled marker is not a change to the collection
+
+        WriteDocument(ChangedSample(), path);
+        TempDir.BumpModificationTime(path);
+        Assert.True(h.Ui.PumpUntil(() => state.PendingUpdates.ContainsKey("Data team"), Wait));
+        Assert.Equal("removes github; changes dbt", state.PendingUpdates["Data team"].Summary());
+        Assert.Equal(AppState.CollectionUpdateNotificationBody("Data team", "removes github; changes dbt"), h.Notifier.Sent[^1].Body);
+        var announced = h.Notifier.Sent.Count;
+        state.RecomputePending();
+        Assert.Equal(announced, h.Notifier.Sent.Count);   // one document, one announcement
+
+        Assert.Null(state.ApplyPendingUpdate("Data team"));
+        var after = state.Store.Collections["Data team"].Mcps["dbt"];
+        Assert.Equal(JsonValue.String("@dbt/mcp@2"), after.Config.ValueAt(JsonPointer.Parse("/args/1")!));
+        Assert.Equal(JsonValue.String("tok"), after.Config.ValueAt(token));
+        Assert.True(after.Enabled);
+        Assert.False(state.Store.Collections["Data team"].Mcps.ContainsKey("github"));
+        Assert.Empty(state.PendingUpdates);
+        // The active collection's update reaches Claude.
+        Assert.Equal(JsonValue.String("@dbt/mcp@2"), h.ClaudeServers()["dbt"].ValueAt(JsonPointer.Parse("/args/1")!));
+    }
+
+    [Fact]
+    public void AnUnreadableSourceIsTransientUntilRefreshedByHand()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("t.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Subscribe(path, "T"));
+        Thread.Sleep(WatcherSettle);
+        File.WriteAllText(path, "{half");
+        TempDir.BumpModificationTime(path);
+        h.Ui.PumpUntil(() => h.Delays.Pending.Count > 0, Wait);
+        Assert.Empty(state.SourceErrors);   // the first failure schedules a retry instead of reporting
+        Assert.Single(h.Delays.Pending);
+        Assert.Equal(TimeSpan.FromSeconds(2), h.Delays.Pending[0].Delay);
+
+        state.RefreshSource("T");
+        Assert.NotNull(state.SourceErrors["T"]);
+        Assert.Single(h.Delays.Pending);   // Refresh answers now instead of waiting again
+
+        // The half-written file lands in full: the next read clears the error and the collection
+        // is back to having nothing to say.
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        state.RefreshSource("T");
+        Assert.Empty(state.SourceErrors);
+        Assert.Empty(state.PendingUpdates);
+    }
+
+    [Fact]
+    public void LocateBindsAndTheRelativePathBindsAutomatically()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        // The document travels inside the store's own folder, as a shared master list does.
+        var inStore = Path.Combine(h.StoreDir, "shared", "data-team.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, inStore);
+        Assert.Null(state.Subscribe(inStore, null));
+        Assert.Equal("shared/data-team.json", state.CollectionsFile.Collections["Data team"].RelativeToStore);
+
+        // Another machine: the sidecar travels with the store, this machine's bindings do not.
+        File.Delete(state.Service.Paths.CollectionsCachePath);
+        state.Reload();
+        Assert.Equal(inStore, state.SourceBinding("Data team")?.Path);   // found beside the store, with no prompt
+
+        // A document somewhere the relative path cannot reach is pointed at by hand.
+        var elsewhere = h.Dir.File(Path.Combine("elsewhere", "data-team.json"));
+        WriteDocument(CollectionDocumentSamples.DataTeam, elsewhere);
+        Assert.Null(state.LocateSource("Data team", elsewhere));
+        Assert.Equal(elsewhere, state.SourceBinding("Data team")?.Path);
+        Assert.Equal(["Data team"], state.WatchedSourceCollections);
+        Assert.Empty(state.PendingUpdates);   // the same document in a new place changes nothing
+        Assert.Null(state.CollectionBanner);
+        Assert.StartsWith("nope.json couldn’t be read: ", state.LocateSource("Data team", h.Dir.File("nope.json")), StringComparison.Ordinal);
+        // A file we cannot read is not bound.
+        Assert.Equal(elsewhere, state.SourceBinding("Data team")?.Path);
+    }
+
+    [Fact]
+    public void StopSyncingKeepsContentAndDropsTheBinding()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Subscribe(path, null));
+        Thread.Sleep(WatcherSettle);
+        var before = new Dictionary<string, McpEntry>(state.Store.Collections["Data team"].Mcps, StringComparer.Ordinal);
+
+        state.StopSyncing("Data team");
+        Assert.Equal(CollectionKind.Local, state.KindOf("Data team"));
+        Assert.Null(state.SourceBinding("Data team"));
+        Assert.False(state.CollectionsFile.Collections.ContainsKey("Data team"));
+        // The connectors are the user's now.
+        Assert.True(DictionaryEquality.Equal(before, state.Store.Collections["Data team"].Mcps));
+        Assert.Empty(state.WatchedSourceCollections);
+        Assert.Empty(state.Needs("ledger", "Data team"));   // the hints travelled with the document
+        // An unfilled marker is still text in the config, so the row still says so.
+        Assert.Equal(AppState.NeedsValueCaution("server_path"), state.ConnectorCaution("ledger", "Data team"));
+
+        // The author's next change reaches nobody: there is no binding left to watch.
+        WriteDocument(ChangedSample(), path);
+        TempDir.BumpModificationTime(path);
+        h.Ui.PumpUntil(() => false, TimeSpan.FromSeconds(1));
+        Assert.Empty(state.PendingUpdates);
+    }
+
+    [Fact]
+    public void DeletingASyncedCollectionLeavesTheFileAlone()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Subscribe(path, null));
+
+        Assert.Null(state.DeleteCollection("Data team"));
+        Assert.Equal(["Default"], state.CollectionNames);
+        Assert.Null(state.SourceBinding("Data team"));
+        Assert.Empty(state.WatchedSourceCollections);
+        Assert.True(File.Exists(path), "the source file is never ours to delete");
+    }
+
+    [Fact]
+    public void TheDirectoryTokenExpandsAgainstTheBoundFolderWhenApplied()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File(Path.Combine("tools", "servers.json"));
+        WriteDocument(OneLocalConnector("x", "node", [$"{Placeholder.DirectoryToken}/srv.js"]), path);
+        Assert.Null(state.Subscribe(path, null));
+        state.SwitchCollection("Tools");
+        state.SetEnabled("x", true);
+
+        var directory = Path.GetDirectoryName(path)!;
+        var argument = JsonPointer.Parse("/args/0")!;
+        Assert.Equal(JsonValue.String(directory + "/srv.js"), h.ClaudeServers()["x"].ValueAt(argument));
+        // The store keeps the token, so the same list resolves on the next machine too.
+        Assert.Equal(JsonValue.String($"{Placeholder.DirectoryToken}/srv.js"),
+            state.Store.Collections["Tools"].Mcps["x"].Config.ValueAt(argument));
+        Assert.Null(state.ConnectorCaution("x", "Tools"));
+        Assert.False(state.ApplyRetryNeeded);
+        state.Reload();
+        // The expanded config is what we wrote, so a reload finds nothing to regenerate.
+        Assert.Equal(JsonValue.String(directory + "/srv.js"), h.ClaudeServers()["x"].ValueAt(argument));
+    }
+
+    [Fact]
+    public void ALocalConnectorAuthoredOnTheOtherPlatformIsFlagged()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var other = CollectionPlatforms.Current == CollectionPlatform.Mac ? CollectionPlatform.Windows : CollectionPlatform.Mac;
+        var path = h.Dir.File("tools.json");
+        WriteDocument(OneLocalConnector("x", "node", ["srv.js"], other), path);
+        Assert.Null(state.Subscribe(path, null));
+        Assert.Equal(AppState.AuthoredElsewhereCaution, state.ConnectorCaution("x", "Tools"));
+
+        WriteDocument(OneLocalConnector("x", "node", ["srv.js"]), path);
+        state.RefreshSource("Tools");
+        Assert.Null(state.ConnectorCaution("x", "Tools"));   // a launcher from this platform needs no warning
+    }
+
+    [Fact]
+    public void AnExcludedConnectorIsRecordedInTheCacheAndNeverShowsAsAdded()
+    {
+        // The Mac has no cmd /c launcher, so it excludes nothing and this test exists only here;
+        // the Swift mirror says so where this test would sit.
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("risky.json");
+        WriteDocument(new CollectionDocument("Risky", null, "o-risky", "2026-09-21T14:02:11Z",
+            new Dictionary<string, CollectionDocument.Connector>
+            {
+                ["bad"] = new(new CollectionDocument.Launcher.Remote("https://h/mcp&calc", CollectionDocument.Auth.Auto, "mcp-remote", [])),
+                ["good"] = new(new CollectionDocument.Launcher.Remote("https://h/mcp", CollectionDocument.Auth.Auto, "mcp-remote", [])),
+            }), path);
+        Assert.Null(state.Subscribe(path, null));
+        Assert.Equal(["good"], state.Store.Collections["Risky"].Mcps.Keys);
+        Assert.Equal(RemotePattern.CmdUnsafeReason(RemoteField.Url), state.SourceBinding("Risky")?.Excluded["bad"]);
+        // A connector this platform cannot carry is not a connector it is missing.
+        Assert.Empty(state.PendingUpdates);
+        Assert.Equal(RemotePattern.CmdUnsafeReason(RemoteField.Url),
+            CollectionsLocalCache.Load(state.Service.Paths.CollectionsCachePath).Synced["Risky"].Excluded["bad"]);
+    }
+
+    [Fact]
+    public void ACorruptSidecarAtLaunchKeepsTheCacheBindings()
+    {
+        using var h = new AppStateHarness();
+        SeedStore(h, "Team");
+        Seed(h, null, File_(("Team", Synced("team.json"))), Cache([new("Team", Bound("/shared/team.json"))]));
+        var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
+        TempDir.Touch(sidecar, "{not json");
+
+        using var state = h.Create();
+        // A good cache outlives a sidecar a sync tool is halfway through writing.
+        Assert.Equal("/shared/team.json", state.SourceBinding("Team")?.Path);
+        // With nothing readable to vouch for it, nothing is synced.
+        Assert.Equal(CollectionKind.Local, state.KindOf("Team"));
+
+        File_(("Team", Synced("team.json"))).Save(sidecar);
+        state.Reload();
+        Assert.Equal(CollectionKind.Synced, state.KindOf("Team"));
+        Assert.Equal("/shared/team.json", state.SourceBinding("Team")?.Path);
+    }
 }

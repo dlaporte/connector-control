@@ -76,6 +76,7 @@ final class StringCatalogTests: XCTestCase {
         "AppState.enabledSubtitle": ["3", "7"],
         "AppState.malformedConfigMessage": ["X"],
         "AppState.needsValueCaution": ["X"],
+        "AppState.sourceUnreadableError": ["X", "Y"],
         "ClaudeSignature.notFoundMessage": ["X"],
         "ClaudeSignature.refusalMessage": ["X", "Y"],
         "ClaudeSignature.uninspectableMessage": ["X"],
@@ -94,6 +95,7 @@ final class StringCatalogTests: XCTestCase {
         "PopoverModel.collectionChipText": ["X"],
         "PopoverModel.locateButton": ["X"],
         "RestoreModel.confirmMessage": ["X"],
+        "ReviewModel.title": ["X"],
         "SettingsModel.keepCountLabel": ["3"],
         "SettingsModel.loginItemFailureNote": ["X"],
         "SettingsModel.versionText": ["X"],
@@ -106,6 +108,7 @@ final class StringCatalogTests: XCTestCase {
 
         // MARK: AppState
 
+        actual["AppState.authoredElsewhereCaution"] = AppState.authoredElsewhereCaution
         actual["AppState.chooseClaude"] = AppState.chooseClaude
         actual["AppState.claudeConfigChangedBody"] = AppState.claudeConfigChangedBody
         actual["AppState.claudeConfigRegeneratedBody"] = AppState.claudeConfigRegeneratedBody
@@ -129,7 +132,9 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.nameEmptyError"] = AppState.nameEmptyError
         actual["AppState.needsValueCaution"] = AppState.needsValueCaution("X")
         actual["AppState.newCollectionTitle"] = AppState.newCollectionTitle
+        actual["AppState.newerDocumentError"] = AppState.newerDocumentError
         actual["AppState.noConnectorsSubtitle"] = AppState.noConnectorsSubtitle
+        actual["AppState.ownCollectionError"] = AppState.ownCollectionError
         actual["AppState.quitButton"] = AppState.quitButton
         actual["AppState.quitMessage"] = AppState.quitMessage
         actual["AppState.regenerationFailedBody"] = AppState.regenerationFailedBody
@@ -137,6 +142,7 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.restartButton"] = AppState.restartButton
         actual["AppState.restartInformative"] = AppState.restartInformative
         actual["AppState.restartMessage"] = AppState.restartMessage
+        actual["AppState.sourceUnreadableError"] = AppState.sourceUnreadableError("X", "Y")
         actual["AppState.storeChangedBody"] = AppState.storeChangedBody
 
         // MARK: ClaudeConfigIO
@@ -260,6 +266,14 @@ final class StringCatalogTests: XCTestCase {
         actual["RestoreModel.headline"] = RestoreModel.headline
         actual["RestoreModel.restoreButton"] = RestoreModel.restoreButton
         actual["RestoreModel.restoreTitle"] = RestoreModel.restoreTitle
+
+        // MARK: ReviewModel
+
+        actual["ReviewModel.addedLabel"] = ReviewModel.addedLabel
+        actual["ReviewModel.applyButton"] = ReviewModel.applyButton
+        actual["ReviewModel.changedLabel"] = ReviewModel.changedLabel
+        actual["ReviewModel.removedLabel"] = ReviewModel.removedLabel
+        actual["ReviewModel.title"] = ReviewModel.title("X")
 
         // MARK: SettingsModel
 

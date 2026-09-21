@@ -1,5 +1,9 @@
 {
   "AlertDialogs.okTitle": "OK",
+  "AppState.authoredElsewhereCaution": {
+    "mac": "authored on Windows",
+    "win": "authored on macOS"
+  },
   "AppState.chooseClaude": "Choose the real Claude Desktop under Settings ▸ Claude.",
   "AppState.claudeConfigChangedBody": "Claude's config changed outside Connector Control.",
   "AppState.claudeConfigRegeneratedBody": "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up.",
@@ -46,7 +50,9 @@
     "format": "needs your value: {0}"
   },
   "AppState.newCollectionTitle": "New Collection",
+  "AppState.newerDocumentError": "This collection was made by a newer Connector Control.",
   "AppState.noConnectorsSubtitle": "No connectors configured",
+  "AppState.ownCollectionError": "This is your own published collection.",
   "AppState.quitButton": "Quit",
   "AppState.quitMessage": "Quit Connector Control?",
   "AppState.regenerationFailedBody": "The connector configuration changed, but Claude's config could not be updated — open Connector Control to retry.",
@@ -57,6 +63,9 @@
   "AppState.restartButton": "Restart",
   "AppState.restartInformative": "Any in-progress Claude conversation will be interrupted.",
   "AppState.restartMessage": "Restart Claude Desktop now?",
+  "AppState.sourceUnreadableError": {
+    "format": "{0} couldn’t be read: {1}"
+  },
   "AppState.storeChangedBody": "The connector list changed outside Connector Control — review it before your next change is applied.",
   "ClaudeConfigIO.mcpServersNotObjectError": "mcpServers is not a JSON object",
   "ClaudeConfigIO.topLevelNotObjectError": "top level is not a JSON object",
@@ -215,6 +224,13 @@
   "RestoreModel.headline": "Restore Claude config from a backup",
   "RestoreModel.restoreButton": "Restore",
   "RestoreModel.restoreTitle": "Restore…",
+  "ReviewModel.addedLabel": "Added",
+  "ReviewModel.applyButton": "Apply",
+  "ReviewModel.changedLabel": "Changed",
+  "ReviewModel.removedLabel": "Removed",
+  "ReviewModel.title": {
+    "format": "Update to {0}"
+  },
   "SettingsModel.autoUpdateTitle": "Automatically download and install updates",
   "SettingsModel.backupsCaption": "Both config files are backed up automatically before every change.",
   "SettingsModel.backupsHeader": "Backups",

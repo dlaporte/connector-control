@@ -82,6 +82,7 @@ public class StringCatalogTests
         ["AppState.enabledSubtitle"] = ["3", "7"],
         ["AppState.malformedConfigMessage"] = ["X"],
         ["AppState.needsValueCaution"] = ["X"],
+        ["AppState.sourceUnreadableError"] = ["X", "Y"],
         ["ClaudeProcess.notAClaudePackageError"] = ["X"],
         ["ClaudePublisher.subjectNoOrganizationError"] = ["X", "Y"],
         ["ClaudeSignature.notFoundMessage"] = ["X"],
@@ -105,6 +106,7 @@ public class StringCatalogTests
         // label one of them renders as rather than the usual "X".
         ["RemotePattern.cmdUnsafeReason"] = ["Server URL"],
         ["RestoreModel.confirmMessage"] = ["X"],
+        ["ReviewModel.title"] = ["X"],
         ["SettingsModel.keepCountLabel"] = ["3"],
         ["SettingsModel.loginItemFailureNote"] = ["X"],
         ["SettingsModel.versionText"] = ["X"],
@@ -124,6 +126,7 @@ public class StringCatalogTests
 
         // MARK: AppState
 
+        actual["AppState.authoredElsewhereCaution"] = AppState.AuthoredElsewhereCaution;
         actual["AppState.chooseClaude"] = ClaudePublisher.ChooseClaude;
         actual["AppState.claudeConfigChangedBody"] = AppState.ClaudeConfigChangedBody;
         actual["AppState.claudeConfigRegeneratedBody"] = AppState.ClaudeConfigRegeneratedBody;
@@ -146,7 +149,9 @@ public class StringCatalogTests
         actual["AppState.nameEmptyError"] = AppState.NameEmptyError;
         actual["AppState.needsValueCaution"] = AppState.NeedsValueCaution("X");
         actual["AppState.newCollectionTitle"] = AppState.NewCollectionTitle;
+        actual["AppState.newerDocumentError"] = AppState.NewerDocumentError;
         actual["AppState.noConnectorsSubtitle"] = AppState.NoConnectorsSubtitle;
+        actual["AppState.ownCollectionError"] = AppState.OwnCollectionError;
         actual["AppState.quitButton"] = AppState.QuitButton;
         actual["AppState.quitMessage"] = AppState.QuitMessage;
         actual["AppState.regenerationFailedBody"] = AppState.RegenerationFailedBody;
@@ -155,6 +160,7 @@ public class StringCatalogTests
         actual["AppState.restartButton"] = AppState.RestartButton;
         actual["AppState.restartInformative"] = AppState.RestartInformative;
         actual["AppState.restartMessage"] = AppState.RestartMessage;
+        actual["AppState.sourceUnreadableError"] = AppState.SourceUnreadableError("X", "Y");
         actual["AppState.storeChangedBody"] = AppState.StoreChangedBody;
 
         // MARK: ClaudeConfigIO
@@ -298,6 +304,14 @@ public class StringCatalogTests
         actual["RestoreModel.headline"] = RestoreModel.Headline;
         actual["RestoreModel.restoreButton"] = RestoreModel.RestoreButton;
         actual["RestoreModel.restoreTitle"] = RestoreModel.RestoreTitle;
+
+        // MARK: ReviewModel
+
+        actual["ReviewModel.addedLabel"] = ReviewModel.AddedLabel;
+        actual["ReviewModel.applyButton"] = ReviewModel.ApplyButton;
+        actual["ReviewModel.changedLabel"] = ReviewModel.ChangedLabel;
+        actual["ReviewModel.removedLabel"] = ReviewModel.RemovedLabel;
+        actual["ReviewModel.title"] = ReviewModel.Title("X");
 
         // MARK: SettingsModel
 

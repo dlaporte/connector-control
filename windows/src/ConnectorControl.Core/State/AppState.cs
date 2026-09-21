@@ -30,6 +30,10 @@ public sealed class AppState : ObservableObject, IDisposable
     public const string NameEmptyError = "Name must not be empty.";
     public const string LastLocalCollectionError = "The last local collection can\u2019t be deleted.";
     public const string LocateCaution = "Locate the collection file to resolve paths.";
+    public const string OwnCollectionError = "This is your own published collection.";
+    public const string NewerDocumentError = "This collection was made by a newer Connector Control.";
+    /// <summary>The platform named here is the platform-forced half: the caution names the OTHER one, so a PC flags a Mac-authored connector and the Mac mirror says "authored on Windows".</summary>
+    public const string AuthoredElsewhereCaution = "authored on macOS";
     public static string DuplicateNameError(string name) => $"A connector named “{name}” already exists.";
     public static string DeleteCollectionMessage(string collection) => $"Delete Collection “{collection}”?";
     public static string MalformedConfigMessage(string detail) =>
@@ -40,6 +44,7 @@ public sealed class AppState : ObservableObject, IDisposable
     public static string CollectionLocateBanner(string collection) => $"{collection}'s file isn\u2019t on this PC yet.";
     public static string CollectionPublishFailedBanner(string collection, string folder, string reason) => $"Couldn\u2019t publish {collection} to {folder}: {reason}";
     public static string CollectionUpdateNotificationBody(string collection, string summary) => $"{collection} changed at its source: {summary}. Review it in Connector Control.";
+    public static string SourceUnreadableError(string fileName, string detail) => $"{fileName} couldn\u2019t be read: {detail}";
     /// <summary>Claude's launch time is re-read 3 s after the restart completes.</summary>
     public static readonly TimeSpan RestartRecheckDelay = TimeSpan.FromSeconds(3);
     /// <summary>
@@ -78,7 +83,35 @@ public sealed class AppState : ObservableObject, IDisposable
     private CollectionPublishError? publishError;
     private FileWatcher? watcher;
     private FileWatcher? storeWatcher;
+    /// <summary>One watcher per bound synced collection, by collection name.</summary>
+    private readonly Dictionary<string, SourceWatch> sourceWatchers = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The last render of each synced collection's document, with the bytes it came from. Kept in
+    /// memory only: it is derived from a file this machine can read again at any time, and nothing
+    /// outside the review sheet and the row cautions needs it.
+    /// </summary>
+    private readonly Dictionary<string, RenderedSource> pendingRendered = new(StringComparer.Ordinal);
+    /// <summary>Consecutive failed reads per collection, which decide the backoff and when to speak up.</summary>
+    private readonly Dictionary<string, int> sourceFailures = new(StringComparer.Ordinal);
+    /// <summary>Collections with a retry already waiting on the clock, so a burst of watcher events over one half-written file leaves one chain of attempts rather than one per event.</summary>
+    private readonly HashSet<string> sourceRetryScheduled = new(StringComparer.Ordinal);
+    /// <summary>The document hash each collection's update was last announced for, so one change is announced once however many times it is re-derived.</summary>
+    private readonly Dictionary<string, string> notifiedSourceHashes = new(StringComparer.Ordinal);
+    /// <summary>True once the sidecar has been read successfully at least once this run. Until then there is no in-memory state for an unreadable sidecar to protect.</summary>
+    private bool hasLoadedCollectionsOnce;
     private bool disposed;
+
+    /// <summary>
+    /// A source watcher and the path it was armed on, so a binding that moves gets a new watcher
+    /// and one that did not is left alone (replacing it would re-baseline its last-seen mtime).
+    /// </summary>
+    private sealed record SourceWatch(string Path, FileWatcher Watcher);
+
+    /// <summary>
+    /// One collection document as this platform renders it, with the bytes and the origin it was
+    /// read from — what Apply needs, and what the row cautions read the author's platform from.
+    /// </summary>
+    private sealed record RenderedSource(RenderedCollection Rendered, string Hash, string? Origin);
 
     /// <summary>Test probe: both watchers are live. Should be true after every reload.</summary>
     internal bool WatchersArmed => watcher is { IsArmed: true } && storeWatcher is { IsArmed: true };
@@ -87,6 +120,9 @@ public sealed class AppState : ObservableObject, IDisposable
     /// redundant reload leaves an already-armed watcher alone instead of tearing it down
     /// and re-baselining its mtime.</summary>
     internal (object? Claude, object? Store) WatcherIdentities => (watcher, storeWatcher);
+
+    /// <summary>Test probe: which collections have a live source watcher.</summary>
+    internal IReadOnlyList<string> WatchedSourceCollections => sourceWatchers.Keys.Order(StringComparer.Ordinal).ToList();
 
     public AppState(ISettings settings, IClaudeProcess claude, INotifier notifier, IDialogs dialogs, PathContext paths, AppHost host, IToolProbe tools)
     {
@@ -152,7 +188,28 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>The last publish that failed, with the reason. Cleared by a write that succeeds.</summary>
     public CollectionPublishError? PublishError { get => publishError; internal set => Set(ref publishError, value); }
 
-    public bool IsDirty => !DictionaryEquality.Equal(Store.EnabledServers, AppliedServers);
+    public bool IsDirty => !DictionaryEquality.Equal(ExpandedServers, AppliedServers);
+
+    /// <summary>
+    /// The enabled connectors as Claude must see them. Inside a synced collection this machine
+    /// has located, <c>${COLLECTION_DIR}</c> resolves against the folder that document sits in;
+    /// the store itself keeps the token, so the same list still resolves on the next machine.
+    /// With nothing bound the token is written as it stands — guessing a folder would start the
+    /// wrong program — and the row carries the caution that says so.
+    /// </summary>
+    internal IReadOnlyDictionary<string, JsonValue> ExpandedServers
+    {
+        get
+        {
+            var servers = Store.EnabledServers;
+            if (!IsSynced(ActiveCollection) || SourceBinding(ActiveCollection)?.Path is not { } path)
+            {
+                return servers;
+            }
+            var directory = Path.GetDirectoryName(Path.GetFullPath(path)) ?? path;
+            return servers.ToDictionary(p => p.Key, p => Placeholder.ExpandDirectoryToken(p.Value, directory), StringComparer.Ordinal);
+        }
+    }
 
     public IReadOnlyList<string> SortedNames => Store.Mcps.Keys.Order(StringComparer.Ordinal).ToList();
 
@@ -237,6 +294,49 @@ public sealed class AppState : ObservableObject, IDisposable
         watcher.Start();
         storeWatcher = new FileWatcher(Service.Paths.MasterStorePath, host.Marshal, () => RunWatcherCallback(AdoptExternalStoreChange));
         storeWatcher.Start();
+        ArmSourceWatchers();
+    }
+
+    /// <summary>
+    /// One watcher per synced collection this machine has located, so a document changing in the
+    /// shared folder becomes a pending update without anyone asking. A binding that has not moved
+    /// keeps its watcher: replacing a live one re-baselines the last-seen mtime and opens a gap
+    /// where a write is simply lost.
+    /// </summary>
+    private void ArmSourceWatchers()
+    {
+        var wanted = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (name, entry) in CollectionsFile.Collections)
+        {
+            if (entry.Kind == CollectionKind.Synced && SourceBinding(name)?.Path is { } path)
+            {
+                wanted[name] = path;
+            }
+        }
+        foreach (var name in sourceWatchers.Keys.ToList())
+        {
+            if (!wanted.TryGetValue(name, out var path) || path != sourceWatchers[name].Path)
+            {
+                sourceWatchers[name].Watcher.Dispose();
+                sourceWatchers.Remove(name);
+            }
+        }
+        foreach (var (name, path) in wanted)
+        {
+            if (sourceWatchers.ContainsKey(name))
+            {
+                continue;
+            }
+            var created = new FileWatcher(path, host.Marshal, () => RunWatcherCallback(() => ReadSource(name, manual: false)));
+            created.Start();
+            sourceWatchers[name] = new SourceWatch(path, created);
+        }
+        // Same retry as the other two: arming fails while the folder is missing (a cloud folder
+        // not yet synced down), and the next load tries again.
+        foreach (var watch in sourceWatchers.Values)
+        {
+            ReArm(watch.Watcher);
+        }
     }
 
     private static void ReArm(FileWatcher? watcher)
@@ -443,7 +543,7 @@ public sealed class AppState : ObservableObject, IDisposable
             // The store is the source of truth; Claude's config is downstream. Any divergence from
             // the render is regenerated away, arming the same Restart Required footer as a user-made
             // change. No loop: the regenerating write satisfies the watcher-triggered follow-up reload.
-            var enabled = Store.EnabledServers;
+            var enabled = ExpandedServers;
             var regenerated = false;
             var regenerationFailed = false;
             if (result.ClaudeServers is { } fileServers && !DictionaryEquality.Equal(fileServers, enabled))
@@ -523,8 +623,8 @@ public sealed class AppState : ObservableObject, IDisposable
     {
         try
         {
-            Service.Apply(Store);
-            var enabled = Store.EnabledServers;
+            var enabled = ExpandedServers;
+            Service.Apply(enabled);
             AppliedServers = enabled;
             settings.LastApplyDate = host.Now();   // ISettings setters never throw, so this cannot turn a good apply into a failed one
             RefreshRestartState();
@@ -547,6 +647,9 @@ public sealed class AppState : ObservableObject, IDisposable
     /// </summary>
     private void PersistStore()
     {
+        // The store just changed, so what a source document would change with it may have too —
+        // and the excluded lists a re-render produces belong in the cache this save writes.
+        RecomputePending();
         try
         {
             StoreNotPrivate = !Service.SaveStore(Store).Protected;
@@ -557,6 +660,9 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             LastError = Friendly(ex);
         }
+        // Every binding change reaches disk through here: subscribe, locate, stop syncing,
+        // rename and delete all end in a save, so this is where the watchers follow them.
+        ArmSourceWatchers();
     }
 
     /// <summary>Toggles take effect immediately; the Restart Required button is the only follow-up step.</summary>
@@ -767,6 +873,13 @@ public sealed class AppState : ObservableObject, IDisposable
                 Moved(CollectionsCache.Synced, name, trimmed), Moved(CollectionsCache.Published, name, trimmed));
             PendingUpdates = Moved(PendingUpdates, name, trimmed);
             SourceErrors = Moved(SourceErrors, name, trimmed);
+            MoveInPlace(pendingRendered, name, trimmed);
+            MoveInPlace(sourceFailures, name, trimmed);
+            MoveInPlace(notifiedSourceHashes, name, trimmed);
+            if (sourceRetryScheduled.Remove(name))
+            {
+                sourceRetryScheduled.Add(trimmed);
+            }
             if (PublishError is { } failure && failure.Collection == name)
             {
                 PublishError = failure with { Collection = trimmed };
@@ -801,6 +914,7 @@ public sealed class AppState : ObservableObject, IDisposable
             Without(CollectionsCache.Synced, name), Without(CollectionsCache.Published, name));
         PendingUpdates = Without(PendingUpdates, name);
         SourceErrors = Without(SourceErrors, name);
+        ForgetSource(name);
         if (PublishError is { } failure && failure.Collection == name)
         {
             PublishError = null;
@@ -825,6 +939,39 @@ public sealed class AppState : ObservableObject, IDisposable
     {
         var copy = new Dictionary<string, TValue>(source, StringComparer.Ordinal);
         copy.Remove(name);
+        return copy;
+    }
+
+    private static void MoveInPlace<TValue>(Dictionary<string, TValue> dictionary, string name, string newName)
+    {
+        if (dictionary.Remove(name, out var value))
+        {
+            dictionary[newName] = value;
+        }
+    }
+
+    /// <summary>The Swift side mutates its published dictionaries in place; here each one is a
+    /// read-only view over a dictionary that has to be rebuilt to change one key.</summary>
+    private void SetPending(string collection, CollectionDiff? diff) =>
+        PendingUpdates = diff is null ? Without(PendingUpdates, collection) : With(PendingUpdates, collection, diff);
+
+    private void SetSourceError(string collection, string? message) =>
+        SourceErrors = message is null ? Without(SourceErrors, collection) : With(SourceErrors, collection, message);
+
+    private void SetSidecarEntry(string collection, CollectionsFile.Entry? entry) =>
+        CollectionsFile = new CollectionsFile(entry is null
+            ? Without(CollectionsFile.Collections, collection)
+            : With(CollectionsFile.Collections, collection, entry));
+
+    private void SetBinding(string collection, CollectionsLocalCache.SyncedBinding? binding) =>
+        CollectionsCache = new CollectionsLocalCache(
+            binding is null ? Without(CollectionsCache.Synced, collection) : With(CollectionsCache.Synced, collection, binding),
+            CollectionsCache.Published);
+
+    private static Dictionary<string, TValue> With<TValue>(IReadOnlyDictionary<string, TValue> source, string name, TValue value)
+    {
+        var copy = new Dictionary<string, TValue>(source, StringComparer.Ordinal);
+        copy[name] = value;
         return copy;
     }
 
@@ -861,8 +1008,9 @@ public sealed class AppState : ObservableObject, IDisposable
     /// sidecar's needs: a detached collection keeps its unfilled markers after the needs are
     /// gone, and the row must still say so.
     ///
-    /// The "authored on &lt;platform&gt;" caution needs the source document's launcher platform,
-    /// which only arrives once a bound source is rendered; it joins this list there.
+    /// The "authored on &lt;platform&gt;" caution reads the launcher platform out of the last
+    /// render of the bound document: only a local connector carries one, and only the other
+    /// platform's is worth saying anything about.
     /// </summary>
     public string? ConnectorCaution(string connector, string collection)
     {
@@ -877,12 +1025,336 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return NeedsValueCaution(string.Join(", ", unfilled));
         }
+        if (pendingRendered.GetValueOrDefault(collection)?.Rendered.Connectors.GetValueOrDefault(connector)?.AuthoredOn
+            is { } authored && authored != CollectionPlatforms.Current)
+        {
+            return AuthoredElsewhereCaution;
+        }
         if (Placeholder.UsesDirectoryToken(entry.Config) && IsSynced(collection) && SourceBinding(collection)?.Path is null)
         {
             return LocateCaution;
         }
         return null;
     }
+
+    // MARK: synced collections
+
+    /// <summary>Backoff for a source that could not be read: a sync tool's half-written file, or a cloud placeholder that has not hydrated yet, is the common case and fixes itself in seconds.</summary>
+    private static readonly TimeSpan[] SourceRetryDelays =
+        [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30)];
+
+    /// <summary>
+    /// Subscribes to a collection document: the collection is created with what the document
+    /// describes, every connector disabled, this machine's binding recorded, and the sidecar told
+    /// what each connector still asks the user for. null on success, else the message.
+    /// <para>
+    /// The new collection does not become the active one. Everything in it arrives disabled, so
+    /// switching would empty Claude's config the moment anyone subscribed.
+    /// </para>
+    /// </summary>
+    public string? Subscribe(string path, string? requestedName)
+    {
+        var full = Path.GetFullPath(path);
+        var (document, data, failure) = ReadDocument(full);
+        if (document is null)
+        {
+            return failure;
+        }
+        // Subscribing to what this machine publishes would make the app its own author: every
+        // local edit would come straight back as a pending update to itself.
+        if (document.Origin is { } origin && CollectionsFile.Collections.Values.Any(e => e.Publish?.Origin == origin))
+        {
+            return OwnCollectionError;
+        }
+        var requested = requestedName?.TrimSpaces() ?? string.Empty;
+        var name = requested.Length == 0 ? document.Name : requested;
+        var active = Store.ActiveCollection;
+        if (Store.AddCollection(name, copyingCurrent: false) is { } error)
+        {
+            return error;
+        }
+        Store.ActiveCollection = active;
+        var rendered = document.Render();
+        var result = CollectionApply.Apply(rendered, new Dictionary<string, McpEntry>(StringComparer.Ordinal), EmptyNeedsByConnector);
+        Store.Collections[name] = new Collection(result.Entries);
+        SetSidecarEntry(name, new CollectionsFile.Entry(
+            CollectionKind.Synced, Path.GetFileName(full), RelativeToStore(full), document.Origin, result.Needs));
+        var hash = ContentHash.Sha256(data!);
+        SetBinding(name, new CollectionsLocalCache.SyncedBinding(full, hash, rendered.Excluded));
+        pendingRendered[name] = new RenderedSource(rendered, hash, document.Origin);
+        notifiedSourceHashes[name] = hash;
+        PersistStore();
+        RaiseAll();
+        return null;
+    }
+
+    /// <summary>
+    /// Points a synced collection at its document on this machine. null on success, else the
+    /// message: a file that cannot be read or decoded is not bound, so the Locate banner stays.
+    /// </summary>
+    public string? LocateSource(string collection, string path)
+    {
+        // Only a synced collection has a document to point at; anything else is silently
+        // ignored, as switching to a collection that does not exist is.
+        if (!IsSynced(collection))
+        {
+            return null;
+        }
+        var full = Path.GetFullPath(path);
+        var (document, data, failure) = ReadDocument(full);
+        if (document is null)
+        {
+            return failure;
+        }
+        SetBinding(collection, new CollectionsLocalCache.SyncedBinding(
+            full, ContentHash.Sha256(data!), SourceBinding(collection)?.Excluded));
+        var entry = CollectionsFile.Collections[collection];
+        // relativeToStore is only ever set, never cleared: where the document sits relative to
+        // the store is a fact every machine shares, and this one finding it elsewhere does not
+        // make it untrue.
+        SetSidecarEntry(collection, new CollectionsFile.Entry(
+            entry.Kind, Path.GetFileName(full), RelativeToStore(full) ?? entry.RelativeToStore,
+            entry.Origin, entry.Needs, entry.Publish, entry.Provenance));
+        sourceFailures.Remove(collection);
+        sourceRetryScheduled.Remove(collection);
+        SetSourceError(collection, null);
+        // PersistStore re-derives what the newly bound document would change.
+        PersistStore();
+        RaiseAll();
+        return null;
+    }
+
+    /// <summary>The Refresh button: read the source now, and report a failure at once rather than giving it the three chances a watcher-driven read allows.</summary>
+    public void RefreshSource(string collection)
+    {
+        ReadSource(collection, manual: true);
+        RaiseAll();
+    }
+
+    /// <summary>
+    /// Adopts what the source says, through the normal store path: a value the user filled in
+    /// follows its marker wherever the author moved it, enabled flags survive, added connectors
+    /// arrive disabled, and the sidecar's needs are rewritten from the new render. null on
+    /// success; nothing pending is a no-op, so a second Apply cannot undo the first.
+    /// </summary>
+    public string? ApplyPendingUpdate(string collection)
+    {
+        if (!PendingUpdates.ContainsKey(collection) || pendingRendered.GetValueOrDefault(collection) is not { } source)
+        {
+            return null;
+        }
+        var current = Store.Collections.TryGetValue(collection, out var held)
+            ? held.Mcps
+            : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
+        var entry = CollectionsFile.Collections.GetValueOrDefault(collection) ?? CollectionsFile.Entry.Local;
+        var result = CollectionApply.Apply(source.Rendered, current, entry.Needs);
+        Store.Collections[collection] = new Collection(result.Entries);
+        SetSidecarEntry(collection, new CollectionsFile.Entry(
+            entry.Kind, entry.FileName, entry.RelativeToStore, source.Origin, result.Needs, entry.Publish, entry.Provenance));
+        SetBinding(collection, new CollectionsLocalCache.SyncedBinding(
+            SourceBinding(collection)?.Path, source.Hash, source.Rendered.Excluded));
+        // Cleared BEFORE the save: PersistStore re-derives what is pending from the document and
+        // the store it is about to write, and clearing afterwards would throw that answer away.
+        SetPending(collection, null);
+        notifiedSourceHashes[collection] = source.Hash;
+        PersistStore();
+        // Claude only runs the active collection, so only that one reaches its config.
+        if (collection == ActiveCollection)
+        {
+            PerformApply();
+        }
+        RaiseAll();
+        return null;
+    }
+
+    /// <summary>
+    /// Stop Syncing: the collection keeps its connectors, its filled values and its enabled flags
+    /// and becomes an ordinary local one. Unfilled markers stay as text, so a row still says what
+    /// it needs — without the hint, which travelled with the document.
+    /// </summary>
+    public void StopSyncing(string collection)
+    {
+        if (!IsSynced(collection))
+        {
+            return;
+        }
+        SetSidecarEntry(collection, null);
+        SetBinding(collection, null);
+        SetPending(collection, null);
+        SetSourceError(collection, null);
+        ForgetSource(collection);
+        PersistStore();
+        RaiseAll();
+    }
+
+    /// <summary>The document the review sheet lists, as this platform renders it.</summary>
+    public RenderedCollection? PendingDocument(string collection) => pendingRendered.GetValueOrDefault(collection)?.Rendered;
+
+    /// <summary>Every bound synced collection's pending update, re-derived from its document and the store as it stands now: pending is derived, never stored as a fact.</summary>
+    internal void RecomputePending()
+    {
+        foreach (var name in CollectionsFile.Collections.Keys.Order(StringComparer.Ordinal).ToList())
+        {
+            if (CollectionsFile.Collections[name].Kind == CollectionKind.Synced && SourceBinding(name)?.Path is not null)
+            {
+                ReadSource(name, manual: false);
+            }
+        }
+    }
+
+    /// <summary>Reads one collection's document and derives what it would change. Nothing here reaches Claude's config: that takes <see cref="ApplyPendingUpdate"/>.</summary>
+    private void ReadSource(string collection, bool manual)
+    {
+        if (SourceBinding(collection) is not { Path: { } path } binding)
+        {
+            return;
+        }
+        byte[] data;
+        try
+        {
+            data = File.ReadAllBytes(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            NoteSourceFailure(collection, SourceUnreadableError(Path.GetFileName(path), ex.Message), manual);
+            return;
+        }
+        var hash = ContentHash.Sha256(data);
+        if (hash == binding.LastHash
+            && pendingRendered.GetValueOrDefault(collection) is { } kept
+            && kept.Hash == hash
+            && PendingUpdates.ContainsKey(collection))
+        {
+            // The file is the one this collection was last rendered from and the review sheet
+            // already lists what it would change: there is nothing to decode again.
+            return;
+        }
+        CollectionDocument document;
+        try
+        {
+            document = CollectionDocument.Decode(data);
+        }
+        catch (CollectionDocumentException ex)
+        {
+            if (ex.NewerFormatVersion is not null)
+            {
+                // No amount of waiting makes this readable, so it is said at once and never retried.
+                sourceFailures.Remove(collection);
+                SetSourceError(collection, NewerDocumentError);
+                return;
+            }
+            NoteSourceFailure(collection, SourceUnreadableError(Path.GetFileName(path), ex.Message), manual);
+            return;
+        }
+        var rendered = document.Render();
+        pendingRendered[collection] = new RenderedSource(rendered, hash, document.Origin);
+        sourceFailures.Remove(collection);
+        sourceRetryScheduled.Remove(collection);
+        SetSourceError(collection, null);
+        SetBinding(collection, new CollectionsLocalCache.SyncedBinding(binding.Path, binding.LastHash, rendered.Excluded));
+        var current = Store.Collections.TryGetValue(collection, out var held)
+            ? held.Mcps
+            : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
+        var diff = CollectionDiff.Pending(rendered, current);
+        if (diff.IsEmpty)
+        {
+            SetPending(collection, null);
+            return;
+        }
+        SetPending(collection, diff);
+        // Once per document: the same change is re-derived on every store change, and the user
+        // hears about it once. Never on the first load either — the app has just opened, and the
+        // banner is already saying it.
+        if (!hasLoadedOnce || notifiedSourceHashes.GetValueOrDefault(collection) == hash)
+        {
+            return;
+        }
+        notifiedSourceHashes[collection] = hash;
+        Notify(CollectionUpdateNotificationBody(collection, diff.Summary()));
+    }
+
+    /// <summary>
+    /// A failed read. A watcher-driven one backs off and tries again — the third consecutive
+    /// failure is the one the user hears about; Refresh, with someone waiting for an answer,
+    /// reports the first.
+    /// </summary>
+    private void NoteSourceFailure(string collection, string message, bool manual)
+    {
+        var failures = sourceFailures.GetValueOrDefault(collection) + 1;
+        sourceFailures[collection] = failures;
+        if (manual || failures >= SourceRetryDelays.Length)
+        {
+            SetSourceError(collection, message);
+        }
+        if (manual || failures > SourceRetryDelays.Length || !sourceRetryScheduled.Add(collection))
+        {
+            return;
+        }
+        host.Delay(SourceRetryDelays[failures - 1], () =>
+        {
+            if (disposed)
+            {
+                return;
+            }
+            sourceRetryScheduled.Remove(collection);
+            // A read that succeeded in the meantime leaves nothing to retry.
+            if (!sourceFailures.ContainsKey(collection))
+            {
+                return;
+            }
+            ReadSource(collection, manual: false);
+            RaiseAll();
+        });
+    }
+
+    /// <summary>Everything this run knows about one collection's document, dropped when the collection stops being synced or goes away.</summary>
+    private void ForgetSource(string collection)
+    {
+        pendingRendered.Remove(collection);
+        sourceFailures.Remove(collection);
+        sourceRetryScheduled.Remove(collection);
+        notifiedSourceHashes.Remove(collection);
+    }
+
+    /// <summary>The document at <paramref name="path"/>, or the message to show for it. The tuple's document is null exactly when the failure is not.</summary>
+    private static (CollectionDocument? Document, byte[]? Data, string? Failure) ReadDocument(string path)
+    {
+        byte[] data;
+        try
+        {
+            data = File.ReadAllBytes(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return (null, null, SourceUnreadableError(Path.GetFileName(path), ex.Message));
+        }
+        try
+        {
+            return (CollectionDocument.Decode(data), data, null);
+        }
+        catch (CollectionDocumentException ex)
+        {
+            return (null, null, ex.NewerFormatVersion is null ? SourceUnreadableError(Path.GetFileName(path), ex.Message) : NewerDocumentError);
+        }
+    }
+
+    /// <summary>
+    /// Where <paramref name="path"/> sits inside the store's own folder, or null when it is
+    /// somewhere else. A document that travels with the master list is found again on every
+    /// machine from this, so the separator is the one the Mac writes: this value is shared.
+    /// </summary>
+    private string? RelativeToStore(string path)
+    {
+        var relative = Path.GetRelativePath(Service.Paths.StoreDir, path);
+        if (Path.IsPathRooted(relative) || relative.StartsWith("..", StringComparison.Ordinal) || relative == path)
+        {
+            return null;
+        }
+        return relative.Replace(Path.DirectorySeparatorChar, '/');
+    }
+
+    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, CollectionsFile.Need>> EmptyNeedsByConnector =
+        new Dictionary<string, IReadOnlyDictionary<string, CollectionsFile.Need>>(StringComparer.Ordinal);
 
     // MARK: collection banner
 
@@ -951,11 +1423,22 @@ public sealed class AppState : ObservableObject, IDisposable
         // costs only a prune deferred to the next load.
         if (loaded.Collections.Count == 0 && File.Exists(Service.Paths.CollectionsFilePath))
         {
+            // At launch there is no in-memory state to stand yet, so the cache is taken as it
+            // stands — unreconciled, since the sidecar that would vouch for it is the file that
+            // cannot be read. A good set of bindings then outlives a bad sidecar, and the first
+            // load that can read the sidecar again prunes whatever it no longer vouches for.
+            if (!hasLoadedCollectionsOnce)
+            {
+                CollectionsCache = CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath);
+            }
             return;
         }
         CollectionsFile = loaded.Reconciled(Store);
         CollectionsCache = CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath).Reconciled(CollectionsFile);
+        hasLoadedCollectionsOnce = true;
         BindSourcesBesideTheStore();
+        ArmSourceWatchers();
+        RecomputePending();
     }
 
     /// <summary>
@@ -1039,5 +1522,10 @@ public sealed class AppState : ObservableObject, IDisposable
         storeWatcher?.Dispose();
         watcher = null;
         storeWatcher = null;
+        foreach (var watch in sourceWatchers.Values)
+        {
+            watch.Watcher.Dispose();
+        }
+        sourceWatchers.Clear();
     }
 }

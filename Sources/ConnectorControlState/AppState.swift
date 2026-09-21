@@ -37,6 +37,11 @@ public final class AppState: ObservableObject {
     public static let nameEmptyError = "Name must not be empty."
     public static let lastLocalCollectionError = "The last local collection can’t be deleted."
     public static let locateCaution = "Locate the collection file to resolve paths."
+    public static let ownCollectionError = "This is your own published collection."
+    public static let newerDocumentError = "This collection was made by a newer Connector Control."
+    /// The platform named here is the platform-forced half: the caution names the OTHER one, so
+    /// a Mac flags a Windows-authored connector and the Windows mirror says "authored on macOS".
+    public static let authoredElsewhereCaution = "authored on Windows"
     public static let defaultClaudeAppPath = "/Applications/Claude.app"
     nonisolated public static let chooseClaude = "Choose the real Claude Desktop under Settings ▸ Claude."
     /// Claude's launch date is re-read 3 s after the restart completes.
@@ -60,6 +65,8 @@ public final class AppState: ObservableObject {
     public static func collectionPublishFailedBanner(_ collection: String, _ folder: String, _ reason: String) -> String { "Couldn’t publish \(collection) to \(folder): \(reason)" }
 
     public static func collectionUpdateNotificationBody(_ collection: String, _ summary: String) -> String { "\(collection) changed at its source: \(summary). Review it in Connector Control." }
+
+    public static func sourceUnreadableError(_ fileName: String, _ detail: String) -> String { "\(fileName) couldn’t be read: \(detail)" }
 
     /// A synced connector-list change was adopted and written into Claude's config: say what it runs now.
     public static func connectorListChangedBody(_ delta: ServerDelta, restartRequired: Bool) -> String {
@@ -110,11 +117,46 @@ public final class AppState: ObservableObject {
     private var toolsInFlight: Set<Tool> = []
     private var watcher: FileWatcher?
     private var storeWatcher: FileWatcher?
+    /// One watcher per bound synced collection, by collection name.
+    private var sourceWatchers: [String: SourceWatch] = [:]
+    /// The last render of each synced collection's document, with the bytes it came from. Kept
+    /// in memory only: it is derived from a file this machine can read again at any time, and
+    /// nothing outside the review sheet and the row cautions needs it.
+    private var pendingRendered: [String: RenderedSource] = [:]
+    /// Consecutive failed reads per collection, which decide the backoff and when to speak up.
+    private var sourceFailures: [String: Int] = [:]
+    /// Collections with a retry already waiting on the clock, so a burst of watcher events over
+    /// one half-written file leaves one chain of attempts rather than one per event.
+    private var sourceRetryScheduled: Set<String> = []
+    /// The document hash each collection's update was last announced for, so one change is
+    /// announced once however many times it is re-derived.
+    private var notifiedSourceHashes: [String: String] = [:]
     private var hasLoadedOnce = false
+    /// True once the sidecar has been read successfully at least once this run. Until then there
+    /// is no in-memory state for an unreadable sidecar to protect.
+    private var hasLoadedCollectionsOnce = false
     private var disposed = false
+
+    /// A source watcher and the path it was armed on, so a binding that moves gets a new watcher
+    /// and one that did not is left alone (replacing it would re-baseline its last-seen mtime).
+    private struct SourceWatch {
+        let path: String
+        let watcher: FileWatcher
+    }
+
+    /// One collection document as this platform renders it, with the bytes and the origin it was
+    /// read from — what Apply needs, and what the row cautions read the author's platform from.
+    private struct RenderedSource {
+        var rendered: RenderedCollection
+        var hash: String
+        var origin: String?
+    }
 
     /// Test probe: both watchers are live, which should hold true after every reload.
     var watchersArmed: Bool { (watcher?.isArmed ?? false) && (storeWatcher?.isArmed ?? false) }
+
+    /// Test probe: which collections have a live source watcher.
+    var watchedSourceCollections: [String] { sourceWatchers.keys.sorted() }
 
     /// Test probe: the watcher objects themselves, so a test can assert that a
     /// reload re-arms a dead watcher without replacing a live one (a
@@ -151,7 +193,19 @@ public final class AppState: ObservableObject {
 
     // MARK: - Derived
 
-    var isDirty: Bool { store.enabledServers != appliedServers }
+    var isDirty: Bool { expandedServers != appliedServers }
+
+    /// The enabled connectors as Claude must see them. Inside a synced collection this machine
+    /// has located, `${COLLECTION_DIR}` resolves against the folder that document sits in; the
+    /// store itself keeps the token, so the same list still resolves on the next machine. With
+    /// nothing bound the token is written as it stands — guessing a folder would start the
+    /// wrong program — and the row carries the caution that says so.
+    var expandedServers: [String: JSONValue] {
+        let servers = store.enabledServers
+        guard isSynced(activeCollection), let path = sourceBinding(of: activeCollection)?.path else { return servers }
+        let directory = URL(fileURLWithPath: path).deletingLastPathComponent().path
+        return servers.mapValues { Placeholder.expandDirectoryToken(in: $0, directory: directory) }
+    }
 
     public var sortedNames: [String] { store.mcps.keys.sorted() }
 
@@ -208,6 +262,32 @@ public final class AppState: ObservableObject {
             self?.adoptExternalStoreChange()
         }
         storeWatcher?.start()
+        armSourceWatchers()
+    }
+
+    /// One watcher per synced collection this machine has located, so a document changing in the
+    /// shared folder becomes a pending update without anyone asking. A binding that has not moved
+    /// keeps its watcher: replacing a live one re-baselines the last-seen mtime and opens a gap
+    /// where a write is simply lost.
+    private func armSourceWatchers() {
+        var wanted: [String: String] = [:]
+        for (name, entry) in collectionsFile.collections where entry.kind == .synced {
+            if let path = collectionsCache.synced[name]?.path { wanted[name] = path }
+        }
+        for (name, watch) in sourceWatchers where wanted[name] != watch.path {
+            watch.watcher.stop()
+            sourceWatchers.removeValue(forKey: name)
+        }
+        for (name, path) in wanted where sourceWatchers[name] == nil {
+            let watcher = FileWatcher(url: URL(fileURLWithPath: path), marshal: host.marshal) { [weak self] in
+                self?.readSource(for: name, manual: false)
+            }
+            watcher.start()
+            sourceWatchers[name] = SourceWatch(path: path, watcher: watcher)
+        }
+        // Same retry as the other two: arming fails while the folder is missing (a cloud folder
+        // not yet synced down), and the next load tries again.
+        for watch in sourceWatchers.values { AppState.reArm(watch.watcher) }
     }
 
     /// Only when arming previously failed (the parent directory did not exist).
@@ -376,7 +456,7 @@ public final class AppState: ObservableObject {
             // regenerating write satisfies the watcher-triggered follow-up reload.
             var regenerated = false
             var regenerationFailed = false
-            if let servers = result.claudeServers, servers != store.enabledServers {
+            if let servers = result.claudeServers, servers != expandedServers {
                 let alreadyFailing = applyRetryNeeded
                 performApply()
                 regenerated = !applyRetryNeeded
@@ -397,7 +477,7 @@ public final class AppState: ObservableObject {
                 // running on the older config the notification offers the
                 // restart; with Claude not running there is no restart to
                 // offer, but the user still learns what starts next launch.
-                let delta = ServerDelta(from: previousApplied, to: store.enabledServers)
+                let delta = ServerDelta(from: previousApplied, to: expandedServers)
                 if needsClaudeRestart {
                     notify(AppState.connectorListChangedBody(delta, restartRequired: true),
                            category: Notifications.restartCategory)
@@ -423,8 +503,9 @@ public final class AppState: ObservableObject {
 
     private func performApply() {
         do {
-            try service.apply(store)
-            appliedServers = store.enabledServers
+            let servers = expandedServers
+            try service.apply(servers: servers)
+            appliedServers = servers
             settings.lastApplyDate = host.now()
             refreshRestartState()
             lastError = nil
@@ -441,6 +522,9 @@ public final class AppState: ObservableObject {
     /// the three: the first failure stops the chain, since a sidecar written against a master
     /// list that never landed would describe collections that do not exist.
     private func persistStore() {
+        // The store just changed, so what a source document would change with it may have too —
+        // and the excluded lists a re-render produces belong in the cache this save writes.
+        recomputePending()
         do {
             try service.saveStore(store)
             try service.saveCollections(collectionsFile)
@@ -448,6 +532,9 @@ public final class AppState: ObservableObject {
         } catch {
             lastError = AppState.friendly(error)
         }
+        // Every binding change reaches disk through here: subscribe, locate, stop syncing,
+        // rename and delete all end in a save, so this is where the watchers follow them.
+        armSourceWatchers()
     }
 
     /// Toggles take effect immediately; the Restart Required button is the only follow-up step.
@@ -558,6 +645,9 @@ public final class AppState: ObservableObject {
             move(&collectionsCache.published, from: name, to: trimmed)
             move(&pendingUpdates, from: name, to: trimmed)
             move(&sourceErrors, from: name, to: trimmed)
+            move(&pendingRendered, from: name, to: trimmed)
+            move(&sourceFailures, from: name, to: trimmed)
+            move(&notifiedSourceHashes, from: name, to: trimmed)
             if let failure = publishError, failure.collection == name {
                 publishError = (collection: trimmed, message: failure.message)
             }
@@ -583,6 +673,7 @@ public final class AppState: ObservableObject {
         collectionsCache.published.removeValue(forKey: name)
         pendingUpdates.removeValue(forKey: name)
         sourceErrors.removeValue(forKey: name)
+        forgetSource(name)
         if publishError?.collection == name { publishError = nil }
         persistStore()
         performApply()
@@ -619,8 +710,9 @@ public final class AppState: ObservableObject {
     /// sidecar's `needs`: a detached collection keeps its unfilled markers after the needs are
     /// gone, and the row must still say so.
     ///
-    /// The "authored on <platform>" caution needs the source document's launcher platform,
-    /// which only arrives once a bound source is rendered; it joins this list there.
+    /// The "authored on <platform>" caution reads the launcher platform out of the last render
+    /// of the bound document: only a local connector carries one, and only the other platform's
+    /// is worth saying anything about.
     public func connectorCaution(_ connector: String, in collection: String) -> String? {
         guard let config = store.collections[collection]?.mcps[connector]?.config else { return nil }
         let unfilled = Placeholder.markers(in: config).flatMap(\.names)
@@ -630,10 +722,261 @@ public final class AppState: ObservableObject {
             var seen: Set<String> = []
             return AppState.needsValueCaution(unfilled.filter { seen.insert($0).inserted }.joined(separator: ", "))
         }
+        if let authored = pendingRendered[collection]?.rendered.connectors[connector]?.authoredOn,
+           authored != CollectionPlatform.current {
+            return AppState.authoredElsewhereCaution
+        }
         if Placeholder.usesDirectoryToken(config), isSynced(collection), sourceBinding(of: collection)?.path == nil {
             return AppState.locateCaution
         }
         return nil
+    }
+
+    // MARK: - Synced collections
+
+    /// Backoff for a source that could not be read: a sync tool's half-written file, or a cloud
+    /// placeholder that has not hydrated yet, is the common case and fixes itself in seconds.
+    private static let sourceRetryDelays: [TimeInterval] = [2, 10, 30]
+
+    /// Subscribes to a collection document: the collection is created with what the document
+    /// describes, every connector disabled, this machine's binding recorded, and the sidecar
+    /// told what each connector still asks the user for. nil on success, else the message.
+    ///
+    /// The new collection does not become the active one. Everything in it arrives disabled, so
+    /// switching would empty Claude's config the moment anyone subscribed.
+    public func subscribe(documentAt path: String, as requestedName: String?) -> String? {
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            return AppState.sourceUnreadableError(url.lastPathComponent, AppState.sourceDetail(error))
+        }
+        let document: CollectionDocument
+        do {
+            document = try CollectionDocument.decode(data)
+        } catch CollectionDocumentError.newerFormat {
+            return AppState.newerDocumentError
+        } catch {
+            return AppState.sourceUnreadableError(url.lastPathComponent, AppState.sourceDetail(error))
+        }
+        // Subscribing to what this machine publishes would make the app its own author: every
+        // local edit would come straight back as a pending update to itself.
+        if let origin = document.origin,
+           collectionsFile.collections.values.contains(where: { $0.publish?.origin == origin }) {
+            return AppState.ownCollectionError
+        }
+        let requested = requestedName?.trimmingCharacters(in: .whitespaces) ?? ""
+        let name = requested.isEmpty ? document.name : requested
+        let active = store.activeCollection
+        if let error = store.addCollection(named: name, copyingCurrent: false) { return error }
+        store.activeCollection = active
+        let rendered = document.render()
+        let result = CollectionApply.apply(rendered: rendered, current: [:], previousNeeds: [:])
+        store.collections[name] = Collection(mcps: result.entries)
+        collectionsFile.collections[name] = CollectionsFile.Entry(
+            kind: .synced, fileName: url.lastPathComponent, relativeToStore: relativeToStore(url),
+            origin: document.origin, needs: result.needs)
+        let hash = ContentHash.sha256(data)
+        collectionsCache.synced[name] = CollectionsLocalCache.SyncedBinding(
+            path: url.path, lastHash: hash, excluded: rendered.excluded)
+        pendingRendered[name] = RenderedSource(rendered: rendered, hash: hash, origin: document.origin)
+        notifiedSourceHashes[name] = hash
+        persistStore()
+        return nil
+    }
+
+    /// Points a synced collection at its document on this machine. nil on success, else the
+    /// message: a file that cannot be read or decoded is not bound, so the Locate banner stays.
+    public func locateSource(for collection: String, path: String) -> String? {
+        // Only a synced collection has a document to point at; anything else is silently
+        // ignored, as switching to a collection that does not exist is.
+        guard isSynced(collection) else { return nil }
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            return AppState.sourceUnreadableError(url.lastPathComponent, AppState.sourceDetail(error))
+        }
+        do {
+            _ = try CollectionDocument.decode(data)
+        } catch CollectionDocumentError.newerFormat {
+            return AppState.newerDocumentError
+        } catch {
+            return AppState.sourceUnreadableError(url.lastPathComponent, AppState.sourceDetail(error))
+        }
+        collectionsCache.synced[collection] = CollectionsLocalCache.SyncedBinding(
+            path: url.path, lastHash: ContentHash.sha256(data),
+            excluded: collectionsCache.synced[collection]?.excluded ?? [:])
+        // Only ever set, never cleared: where the document sits relative to the store is a fact
+        // every machine shares, and this one finding it elsewhere does not make it untrue.
+        if let relative = relativeToStore(url) {
+            collectionsFile.collections[collection]?.relativeToStore = relative
+        }
+        collectionsFile.collections[collection]?.fileName = url.lastPathComponent
+        sourceFailures.removeValue(forKey: collection)
+        sourceRetryScheduled.remove(collection)
+        sourceErrors.removeValue(forKey: collection)
+        // persistStore re-derives what the newly bound document would change.
+        persistStore()
+        return nil
+    }
+
+    /// The Refresh button: read the source now, and report a failure at once rather than giving
+    /// it the three chances a watcher-driven read allows.
+    public func refreshSource(for collection: String) {
+        readSource(for: collection, manual: true)
+    }
+
+    /// Adopts what the source says, through the normal store path: a value the user filled in
+    /// follows its marker wherever the author moved it, enabled flags survive, added connectors
+    /// arrive disabled, and the sidecar's needs are rewritten from the new render. nil on
+    /// success; nothing pending is a no-op, so a second Apply cannot undo the first.
+    @discardableResult
+    public func applyPendingUpdate(for collection: String) -> String? {
+        guard pendingUpdates[collection] != nil, let source = pendingRendered[collection] else { return nil }
+        let result = CollectionApply.apply(
+            rendered: source.rendered,
+            current: store.collections[collection]?.mcps ?? [:],
+            previousNeeds: collectionsFile.collections[collection]?.needs ?? [:])
+        store.collections[collection] = Collection(mcps: result.entries)
+        collectionsFile.collections[collection]?.needs = result.needs
+        collectionsFile.collections[collection]?.origin = source.origin
+        collectionsCache.synced[collection]?.lastHash = source.hash
+        collectionsCache.synced[collection]?.excluded = source.rendered.excluded
+        // Cleared BEFORE the save: persistStore re-derives what is pending from the document and
+        // the store it is about to write, and clearing afterwards would throw that answer away.
+        pendingUpdates.removeValue(forKey: collection)
+        notifiedSourceHashes[collection] = source.hash
+        persistStore()
+        // Claude only runs the active collection, so only that one reaches its config.
+        if collection == activeCollection { performApply() }
+        return nil
+    }
+
+    /// Stop Syncing: the collection keeps its connectors, its filled values and its enabled
+    /// flags and becomes an ordinary local one. Unfilled markers stay as text, so a row still
+    /// says what it needs — without the hint, which travelled with the document.
+    public func stopSyncing(_ collection: String) {
+        guard isSynced(collection) else { return }
+        collectionsFile.collections.removeValue(forKey: collection)
+        collectionsCache.synced.removeValue(forKey: collection)
+        pendingUpdates.removeValue(forKey: collection)
+        sourceErrors.removeValue(forKey: collection)
+        forgetSource(collection)
+        persistStore()
+    }
+
+    /// The document the review sheet lists, as this platform renders it.
+    public func pendingDocument(for collection: String) -> RenderedCollection? {
+        pendingRendered[collection]?.rendered
+    }
+
+    /// Every bound synced collection's pending update, re-derived from its document and the
+    /// store as it stands now: pending is derived, never stored as a fact.
+    func recomputePending() {
+        for name in collectionsFile.collections.keys.sorted()
+        where collectionsFile.collections[name]?.kind == .synced && collectionsCache.synced[name]?.path != nil {
+            readSource(for: name, manual: false)
+        }
+    }
+
+    /// Reads one collection's document and derives what it would change. Nothing here reaches
+    /// Claude's config: that takes `applyPendingUpdate`.
+    private func readSource(for collection: String, manual: Bool) {
+        guard let binding = collectionsCache.synced[collection], let path = binding.path else { return }
+        let url = URL(fileURLWithPath: path)
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            noteSourceFailure(collection, AppState.sourceUnreadableError(url.lastPathComponent, AppState.sourceDetail(error)),
+                              manual: manual)
+            return
+        }
+        let hash = ContentHash.sha256(data)
+        if hash == binding.lastHash, let kept = pendingRendered[collection], kept.hash == hash, pendingUpdates[collection] != nil {
+            // The file is the one this collection was last rendered from and the review sheet
+            // already lists what it would change: there is nothing to decode again.
+            return
+        }
+        let document: CollectionDocument
+        do {
+            document = try CollectionDocument.decode(data)
+        } catch CollectionDocumentError.newerFormat {
+            // No amount of waiting makes this readable, so it is said at once and never retried.
+            sourceFailures.removeValue(forKey: collection)
+            sourceErrors[collection] = AppState.newerDocumentError
+            return
+        } catch {
+            noteSourceFailure(collection, AppState.sourceUnreadableError(url.lastPathComponent, AppState.sourceDetail(error)),
+                              manual: manual)
+            return
+        }
+        let rendered = document.render()
+        pendingRendered[collection] = RenderedSource(rendered: rendered, hash: hash, origin: document.origin)
+        sourceFailures.removeValue(forKey: collection)
+        sourceRetryScheduled.remove(collection)
+        sourceErrors.removeValue(forKey: collection)
+        collectionsCache.synced[collection]?.excluded = rendered.excluded
+        let diff = CollectionDiff.pending(rendered: rendered, current: store.collections[collection]?.mcps ?? [:])
+        guard !diff.isEmpty else {
+            pendingUpdates.removeValue(forKey: collection)
+            return
+        }
+        pendingUpdates[collection] = diff
+        // Once per document: the same change is re-derived on every store change, and the user
+        // hears about it once. Never on the first load either — the app has just opened, and
+        // the banner is already saying it.
+        guard hasLoadedOnce, notifiedSourceHashes[collection] != hash else { return }
+        notifiedSourceHashes[collection] = hash
+        notify(AppState.collectionUpdateNotificationBody(collection, diff.summary()))
+    }
+
+    /// A failed read. A watcher-driven one backs off and tries again — the third consecutive
+    /// failure is the one the user hears about; Refresh, with someone waiting for an answer,
+    /// reports the first.
+    private func noteSourceFailure(_ collection: String, _ message: String, manual: Bool) {
+        let failures = (sourceFailures[collection] ?? 0) + 1
+        sourceFailures[collection] = failures
+        if manual || failures >= AppState.sourceRetryDelays.count {
+            sourceErrors[collection] = message
+        }
+        guard !manual, failures <= AppState.sourceRetryDelays.count,
+              sourceRetryScheduled.insert(collection).inserted else { return }
+        host.delay(AppState.sourceRetryDelays[failures - 1]) { [weak self] in
+            guard let self, !self.disposed else { return }
+            self.sourceRetryScheduled.remove(collection)
+            // A read that succeeded in the meantime leaves nothing to retry.
+            guard self.sourceFailures[collection] != nil else { return }
+            self.readSource(for: collection, manual: false)
+        }
+    }
+
+    /// Everything this run knows about one collection's document, dropped when the collection
+    /// stops being synced or goes away.
+    private func forgetSource(_ collection: String) {
+        pendingRendered.removeValue(forKey: collection)
+        sourceFailures.removeValue(forKey: collection)
+        sourceRetryScheduled.remove(collection)
+        notifiedSourceHashes.removeValue(forKey: collection)
+    }
+
+    /// Where `url` sits inside the store's own folder, or nil when it is somewhere else. A
+    /// document that travels with the master list is found again on every machine from this.
+    private func relativeToStore(_ url: URL) -> String? {
+        let base = service.paths.storeDirURL.standardizedFileURL.path
+        let path = url.standardizedFileURL.path
+        guard path.hasPrefix(base + "/") else { return nil }
+        return String(path.dropFirst(base.count + 1))
+    }
+
+    /// The detail half of a source failure: the document decoder's own words where it has any,
+    /// since "not JSON at line 3" is what tells the user which file to look at.
+    private static func sourceDetail(_ error: Error) -> String {
+        if case CollectionDocumentError.malformed(let detail) = error { return detail }
+        return error.localizedDescription
     }
 
     // MARK: - Collection banner
@@ -682,12 +1025,22 @@ public final class AppState: ObservableObject {
         // whatever is already in memory stands. A genuinely empty sidecar reads the same way and
         // costs only a prune deferred to the next load.
         if loaded.collections.isEmpty, FileManager.default.fileExists(atPath: service.paths.collectionsFileURL.path) {
+            // At launch there is no in-memory state to stand yet, so the cache is taken as it
+            // stands — unreconciled, since the sidecar that would vouch for it is the file that
+            // cannot be read. A good set of bindings then outlives a bad sidecar, and the first
+            // load that can read the sidecar again prunes whatever it no longer vouches for.
+            if !hasLoadedCollectionsOnce {
+                collectionsCache = CollectionsLocalCache.load(from: service.paths.collectionsCacheURL)
+            }
             return
         }
         collectionsFile = loaded.reconciled(with: store)
         collectionsCache = CollectionsLocalCache.load(from: service.paths.collectionsCacheURL)
             .reconciled(with: collectionsFile)
+        hasLoadedCollectionsOnce = true
         bindSourcesBesideTheStore()
+        armSourceWatchers()
+        recomputePending()
     }
 
     /// The last load rule: a synced collection nothing has bound on this machine tries the path
@@ -699,7 +1052,10 @@ public final class AppState: ObservableObject {
         var bound = false
         for (name, entry) in collectionsFile.collections where entry.kind == .synced {
             guard cache.synced[name]?.path == nil, let relative = entry.relativeToStore else { continue }
-            let url = URL(fileURLWithPath: relative, relativeTo: service.paths.storeDirURL).standardizedFileURL
+            // appendingPathComponent, not URL(fileURLWithPath:relativeTo:): the latter resolves
+            // against a base without a trailing slash by REPLACING its last component, and the
+            // store dir only carries that slash when it already exists on disk.
+            let url = service.paths.storeDirURL.appendingPathComponent(relative).standardizedFileURL
             guard let data = try? Data(contentsOf: url) else { continue }
             cache.synced[name] = CollectionsLocalCache.SyncedBinding(
                 path: url.path, lastHash: ContentHash.sha256(data),
@@ -738,5 +1094,7 @@ public final class AppState: ObservableObject {
         storeWatcher?.stop()
         watcher = nil
         storeWatcher = nil
+        sourceWatchers.values.forEach { $0.watcher.stop() }
+        sourceWatchers.removeAll()
     }
 }
