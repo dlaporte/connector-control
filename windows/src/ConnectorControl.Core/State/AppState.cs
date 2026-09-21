@@ -32,6 +32,7 @@ public sealed class AppState : ObservableObject, IDisposable
     public const string LocateCaution = "Locate the collection file to resolve paths.";
     public const string OwnCollectionError = "This is your own published collection.";
     public const string NewerDocumentError = "This collection was made by a newer Connector Control.";
+    public const string CollectionsNotSavedNote = "Collections could not be saved: the collections file is unreadable. Your change stays in memory until it can be read.";
     /// <summary>The platform named here is the platform-forced half: the caution names the OTHER one, so a PC flags a Mac-authored connector and the Mac mirror says "authored on Windows".</summary>
     public const string AuthoredElsewhereCaution = "authored on macOS";
     public static string DuplicateNameError(string name) => $"A connector named “{name}” already exists.";
@@ -105,8 +106,14 @@ public sealed class AppState : ObservableObject, IDisposable
     /// nothing writes it or the bindings that hang off it.
     /// </summary>
     private bool collectionsLoaded;
-    /// <summary>The hash of the sidecar bytes this app last wrote, so a save that would change nothing costs neither a write nor a backup rotation.</summary>
+    /// <summary>
+    /// The hash of the sidecar bytes on disk as this app last saw them — written or loaded — so a
+    /// save that would change nothing costs neither a write nor a backup rotation, and a file
+    /// another machine changed is still rewritten when our copy differs from it.
+    /// </summary>
     private string? lastSavedSidecarHash;
+    /// <summary>A persist skipped the sidecar because the last load could not read it, so what the user changed about collections is in memory only. Cleared by the next save that lands.</summary>
+    private bool collectionsNotSaved;
     /// <summary>A note from the collections load for <see cref="Reload"/> to join with the service's own, since it assigns LastError after LoadCollections has run and would otherwise erase it.</summary>
     private string? collectionsNote;
     private bool disposed;
@@ -555,7 +562,15 @@ public sealed class AppState : ObservableObject, IDisposable
             // the second one is the actionable one (Backups ▸ Restore… is the way out). The
             // collections load runs above and adds its own note here rather than setting
             // LastError itself, which this line would then overwrite.
-            var notes = collectionsNote is null ? result.Notes : [.. result.Notes, collectionsNote];
+            List<string> notes = [.. result.Notes];
+            if (collectionsNote is not null)
+            {
+                notes.Add(collectionsNote);
+            }
+            if (collectionsNotSaved)
+            {
+                notes.Add(CollectionsNotSavedNote);
+            }
             LastError = notes.Count > 0 ? string.Join(" ", notes) : null;
             if (!IsDirty)
             {
@@ -657,7 +672,9 @@ public sealed class AppState : ObservableObject, IDisposable
             AppliedServers = enabled;
             settings.LastApplyDate = host.Now();   // ISettings setters never throw, so this cannot turn a good apply into a failed one
             RefreshRestartState();
-            LastError = null;
+            // Clearing the banner keeps what the collections files still have to say: the apply
+            // succeeding does not mean the sidecar was written.
+            LastError = collectionsNotSaved ? CollectionsNotSavedNote : null;
             ApplyRetryNeeded = false;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ClaudeConfigException)
@@ -693,6 +710,19 @@ public sealed class AppState : ObservableObject, IDisposable
                 // refuses the owner-only permission refuses it for both: one caution covers them.
                 isProtected &= SaveCollectionsIfChanged();
                 CollectionsCache.Save(Service.Paths.CollectionsCachePath);
+                collectionsNotSaved = false;
+                if (LastError == CollectionsNotSavedNote)
+                {
+                    // Only ever our own note: a real failure's message stays where it is.
+                    LastError = null;
+                }
+            }
+            else
+            {
+                // Nothing was written. The user just changed something about collections and it
+                // exists only in memory, which is worth saying rather than looking like a save.
+                collectionsNotSaved = true;
+                LastError = CollectionsNotSavedNote;
             }
             StoreNotPrivate = !isProtected;
         }
@@ -711,6 +741,19 @@ public sealed class AppState : ObservableObject, IDisposable
     /// and churn a file that travels through someone's sync tool for nothing. Returns whether the
     /// bytes on disk are owner-only — true when there was nothing to write.
     /// </summary>
+    /// <summary>The sidecar's bytes as they are on disk, or null when it is not there to read.</summary>
+    private string? ReadSidecarHash()
+    {
+        try
+        {
+            return ContentHash.Sha256(File.ReadAllBytes(Service.Paths.CollectionsFilePath));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
     private bool SaveCollectionsIfChanged()
     {
         var hash = ContentHash.Sha256(CollectionsFile.Encode().Serialize());
@@ -1541,6 +1584,10 @@ public sealed class AppState : ObservableObject, IDisposable
         CollectionsCache = CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath).Reconciled(CollectionsFile);
         collectionsLoaded = true;
         hasLoadedCollectionsOnce = true;
+        // What is on disk NOW, not what this app last wrote: another machine's sidecar is the
+        // file the next save has to differ from, or a change that happens to restore our old
+        // bytes would be skipped and reverted by the reload after it.
+        lastSavedSidecarHash = ReadSidecarHash();
         BindSourcesBesideTheStore();
         ArmSourceWatchers();
         RecomputePending();

@@ -24,6 +24,7 @@
   "AppState.collectionUpdateNotificationBody": {
     "format": "{0} changed at its source: {1}. Review it in Connector Control."
   },
+  "AppState.collectionsNotSavedNote": "Collections could not be saved: the collections file is unreadable. Your change stays in memory until it can be read.",
   "AppState.connectorListChangedBody.noRestart": "The connector list changed outside Connector Control — Claude's config was regenerated. Claude will use it the next time it starts.",
   "AppState.connectorListChangedBody.restart": "The connector list changed outside Connector Control — Claude's config was regenerated. Restart Claude to pick it up.",
   "AppState.defaultClaudeAppPath": {

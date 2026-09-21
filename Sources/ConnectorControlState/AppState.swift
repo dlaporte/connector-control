@@ -39,6 +39,7 @@ public final class AppState: ObservableObject {
     public static let locateCaution = "Locate the collection file to resolve paths."
     public static let ownCollectionError = "This is your own published collection."
     public static let newerDocumentError = "This collection was made by a newer Connector Control."
+    public static let collectionsNotSavedNote = "Collections could not be saved: the collections file is unreadable. Your change stays in memory until it can be read."
     /// The platform named here is the platform-forced half: the caution names the OTHER one, so
     /// a Mac flags a Windows-authored connector and the Windows mirror says "authored on macOS".
     public static let authoredElsewhereCaution = "authored on Windows"
@@ -139,9 +140,13 @@ public final class AppState: ObservableObject {
     /// nothing to protect). While it is false our copy of the sidecar may be empty or stale, so
     /// nothing writes it or the bindings that hang off it.
     private var collectionsLoaded = false
-    /// The hash of the sidecar bytes this app last wrote, so a save that would change nothing
-    /// costs neither a write nor a backup rotation.
+    /// The hash of the sidecar bytes on disk as this app last saw them — written or loaded — so
+    /// a save that would change nothing costs neither a write nor a backup rotation, and a file
+    /// another machine changed is still rewritten when our copy differs from it.
     private var lastSavedSidecarHash: String?
+    /// A persist skipped the sidecar because the last load could not read it, so what the user
+    /// changed about collections is in memory only. Cleared by the next save that lands.
+    private var collectionsNotSaved = false
     /// A note from the collections load for `reload` to join with the service's own, since it
     /// assigns `lastError` after `loadCollections()` has run and would otherwise erase it.
     private var collectionsNote: String?
@@ -466,7 +471,8 @@ public final class AppState: ObservableObject {
             // (Backups ▸ Restore… is the way out). The collections load runs above and adds
             // its own note here rather than setting lastError itself, which this line would
             // then overwrite.
-            let notes = result.notes + [collectionsNote].compactMap { $0 }
+            let notes = result.notes + [collectionsNote, collectionsNotSaved ? AppState.collectionsNotSavedNote : nil]
+                .compactMap { $0 }
             lastError = notes.isEmpty ? nil : notes.joined(separator: " ")
             if !isDirty { applyRetryNeeded = false }
 
@@ -532,7 +538,9 @@ public final class AppState: ObservableObject {
             appliedServers = servers
             settings.lastApplyDate = host.now()
             refreshRestartState()
-            lastError = nil
+            // Clearing the banner keeps what the collections files still have to say: the apply
+            // succeeding does not mean the sidecar was written.
+            lastError = collectionsNotSaved ? AppState.collectionsNotSavedNote : nil
             applyRetryNeeded = false
         } catch {
             lastError = AppState.friendly(error)
@@ -559,6 +567,14 @@ public final class AppState: ObservableObject {
             if collectionsLoaded {
                 try saveCollectionsIfChanged()
                 try collectionsCache.save(to: service.paths.collectionsCacheURL, staging: service.paths.stagingDirURL)
+                collectionsNotSaved = false
+                // Only ever our own note: a real failure's message stays where it is.
+                if lastError == AppState.collectionsNotSavedNote { lastError = nil }
+            } else {
+                // Nothing was written. The user just changed something about collections and it
+                // exists only in memory, which is worth saying rather than looking like a save.
+                collectionsNotSaved = true
+                lastError = AppState.collectionsNotSavedNote
             }
         } catch {
             lastError = AppState.friendly(error)
@@ -1116,6 +1132,10 @@ public final class AppState: ObservableObject {
             .reconciled(with: collectionsFile)
         collectionsLoaded = true
         hasLoadedCollectionsOnce = true
+        // What is on disk NOW, not what this app last wrote: another machine's sidecar is the
+        // file the next save has to differ from, or a change that happens to restore our old
+        // bytes would be skipped and reverted by the reload after it.
+        lastSavedSidecarHash = (try? Data(contentsOf: service.paths.collectionsFileURL)).map(ContentHash.sha256)
         bindSourcesBesideTheStore()
         armSourceWatchers()
         recomputePending()

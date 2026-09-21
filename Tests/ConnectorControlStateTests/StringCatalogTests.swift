@@ -116,6 +116,7 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.collectionPublishFailedBanner"] = AppState.collectionPublishFailedBanner("X", "Y", "Z")
         actual["AppState.collectionUpdateBanner"] = AppState.collectionUpdateBanner("X", "Y")
         actual["AppState.collectionUpdateNotificationBody"] = AppState.collectionUpdateNotificationBody("X", "Y")
+        actual["AppState.collectionsNotSavedNote"] = AppState.collectionsNotSavedNote
         actual["AppState.connectorListChangedBody.noRestart"] =
             AppState.connectorListChangedBody(ServerDelta(), restartRequired: false)
         actual["AppState.connectorListChangedBody.restart"] =

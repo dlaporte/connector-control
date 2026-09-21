@@ -249,6 +249,7 @@ final class AppStateCollectionsTests: XCTestCase {
         try TempDir.touch(sidecar, "{half")
         state.reload()
         state.setEnabled("aws-mcp", false)
+        XCTAssertEqual(state.lastError, AppState.collectionsNotSavedNote, "a change that was not written says so")
         XCTAssertEqual(try String(contentsOf: sidecar, encoding: .utf8), "{half",
                        "a save must not land our copy of the sidecar on top of the real one")
         XCTAssertEqual(try Data(contentsOf: cacheURL), bindings, "the bindings that hang off it wait too")
@@ -261,6 +262,28 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.kind(of: "Data team"), .synced)
         state.stopSyncing("Data team")
         XCTAssertTrue(CollectionsFile.load(from: sidecar).collections.isEmpty)
+        XCTAssertNil(state.lastError, "the save landed, so the note goes with it")
+    }
+
+    func testASidecarChangedElsewhereIsRewrittenWhenOurBytesReturn() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("data-team.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let sidecar = h.storeDir.appendingPathComponent(CollectionsFile.fileName)
+
+        // Another machine writes the same collection under a different file name.
+        var entry = try XCTUnwrap(state.collectionsFile.collections["Data team"])
+        entry.fileName = "moved.json"
+        try CollectionsFile(collections: ["Data team": entry]).save(to: sidecar, staging: nil)
+        state.reload()
+        XCTAssertEqual(state.collectionsFile.collections["Data team"]?.fileName, "moved.json")
+
+        // Pointing it back at the file this machine has restores exactly the bytes we once wrote.
+        XCTAssertNil(state.locateSource(for: "Data team", path: url.path))
+        XCTAssertEqual(CollectionsFile.load(from: sidecar).collections["Data team"]?.fileName, "data-team.json",
+                       "what is in memory is what the file must hold, whatever this app last wrote")
     }
 
     func testASidecarSaveFailureSetsTheErrorAndStopsTheChain() throws {

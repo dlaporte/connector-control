@@ -282,6 +282,7 @@ public class AppStateCollectionsTests
         TempDir.Touch(sidecar, "{half");
         state.Reload();
         state.SetEnabled("aws-mcp", false);
+        Assert.Equal(AppState.CollectionsNotSavedNote, state.LastError);   // a change that was not written says so
         // A save must not land our copy of the sidecar on top of the real one, and the bindings
         // that hang off it wait too.
         Assert.Equal("{half", File.ReadAllText(sidecar));
@@ -294,6 +295,30 @@ public class AppStateCollectionsTests
         Assert.Equal(CollectionKind.Synced, state.KindOf("Data team"));
         state.StopSyncing("Data team");
         Assert.Empty(CollectionsFile.Load(sidecar).Collections);
+        Assert.Null(state.LastError);   // the save landed, so the note goes with it
+    }
+
+    [Fact]
+    public void ASidecarChangedElsewhereIsRewrittenWhenOurBytesReturn()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Subscribe(path, null));
+        var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
+
+        // Another machine writes the same collection under a different file name.
+        var entry = state.CollectionsFile.Collections["Data team"];
+        File_(("Data team", new CollectionsFile.Entry(entry.Kind, "moved.json", entry.RelativeToStore,
+            entry.Origin, entry.Needs, entry.Publish, entry.Provenance))).Save(sidecar);
+        state.Reload();
+        Assert.Equal("moved.json", state.CollectionsFile.Collections["Data team"].FileName);
+
+        // Pointing it back at the file this machine has restores exactly the bytes we once wrote.
+        Assert.Null(state.LocateSource("Data team", path));
+        // What is in memory is what the file must hold, whatever this app last wrote.
+        Assert.Equal("data-team.json", CollectionsFile.Load(sidecar).Collections["Data team"].FileName);
     }
 
     [Fact]

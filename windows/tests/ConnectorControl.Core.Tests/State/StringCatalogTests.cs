@@ -134,6 +134,7 @@ public class StringCatalogTests
         actual["AppState.collectionPublishFailedBanner"] = AppState.CollectionPublishFailedBanner("X", "Y", "Z");
         actual["AppState.collectionUpdateBanner"] = AppState.CollectionUpdateBanner("X", "Y");
         actual["AppState.collectionUpdateNotificationBody"] = AppState.CollectionUpdateNotificationBody("X", "Y");
+        actual["AppState.collectionsNotSavedNote"] = AppState.CollectionsNotSavedNote;
         actual["AppState.connectorListChangedBody.noRestart"] =
             AppState.ConnectorListChangedBody(new ServerDelta([], [], []), restartRequired: false);
         actual["AppState.connectorListChangedBody.restart"] =
