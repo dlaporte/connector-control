@@ -78,6 +78,37 @@ final class ReviewModelTests: XCTestCase {
         XCTAssertEqual(state.store.collections["Data team"]?.mcps["jira"]?.enabled, false, "an added connector arrives off")
     }
 
+    func testApplyRefusesWhenTheSourceMovedUnderTheSheet() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try pending(h, state)
+        let model = ReviewModel(state: state, collection: "Data team")
+        XCTAssertFalse(model.sourceMoved)
+        XCTAssertEqual(model.rows.map(\.name), ["github", "dbt"])
+
+        // The author commits again while the sheet is open.
+        var doc = CollectionDocumentSamples.dataTeam
+        doc.connectors["github"] = nil
+        doc.connectors["notion"] = nil
+        doc.connectors["dbt"]?.launcher = .local(.init(command: "npx", args: ["-y", "@dbt/mcp@3"], platform: .mac))
+        try writeDocument(doc, at: url)
+        try TempDir.bumpModificationDate(of: url)
+        XCTAssertTrue(h.ui.pumpUntil({ state.pendingUpdates["Data team"]?.removed == ["github", "notion"] }, timeout: 8))
+
+        XCTAssertFalse(model.apply(), "the rows on screen are not what would land")
+        XCTAssertTrue(model.sourceMoved)
+        XCTAssertNotNil(state.pendingUpdates["Data team"], "nothing was applied")
+        XCTAssertNotNil(state.store.collections["Data team"]?.mcps["notion"])
+
+        model.refresh()
+        XCTAssertFalse(model.sourceMoved)
+        XCTAssertEqual(model.rows.map(\.name), ["github", "notion", "dbt"])
+        XCTAssertTrue(model.apply())
+        XCTAssertTrue(state.pendingUpdates.isEmpty)
+        XCTAssertEqual(state.store.collections["Data team"]?.mcps["dbt"]?.config.value(at: JSONPointer(["args", "1"])),
+                       .string("@dbt/mcp@3"))
+    }
+
     func testACollectionWithNothingPendingHasNoRows() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

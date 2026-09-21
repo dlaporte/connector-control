@@ -616,6 +616,145 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.connectorCaution("x", in: "Tools"), "a launcher from this platform needs no warning")
     }
 
+    func testAnUnchangedSourceIsNotReRenderedButPendingIsReDerived() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("data-team.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        state.switchCollection(to: "Data team")
+        let renders = state.sourceRenders
+
+        // A local edit makes the collection differ from its source without the file moving.
+        var dbt = try XCTUnwrap(state.store.collections["Data team"]?.mcps["dbt"])
+        dbt.config = dbt.config.replacing(at: JSONPointer(["args", "1"]), with: .string("@dbt/mcp@local"))!
+        XCTAssertNil(state.upsert(name: "dbt", entry: dbt, renamedFrom: "dbt"))
+        XCTAssertEqual(state.pendingUpdates["Data team"]?.summary(), "changes dbt")
+        XCTAssertEqual(state.sourceRenders, renders, "the same bytes are never decoded twice")
+
+        // Another machine applies the source, and its master list arrives here.
+        var store = try h.storeOnDisk()
+        let rendered = try XCTUnwrap(state.pendingDocument(for: "Data team"))
+        let applied = CollectionApply.apply(rendered: rendered, current: store.collections["Data team"]?.mcps ?? [:],
+                                            previousNeeds: state.collectionsFile.collections["Data team"]?.needs ?? [:])
+        store.collections["Data team"] = Collection(mcps: applied.entries)
+        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        state.reload()
+        XCTAssertTrue(state.pendingUpdates.isEmpty, "the list already matches the document; the banner must not outlive it")
+        XCTAssertEqual(state.sourceRenders, renders, "and re-deriving it still costs no decode")
+    }
+
+    func testTheRetryChainReportsOnlyTheThirdFailure() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("t.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: "T"))
+        try Data("{half".utf8).write(to: url)
+        try TempDir.bumpModificationDate(of: url)
+        XCTAssertTrue(h.ui.pumpUntil({ !h.delays.pending.isEmpty }, timeout: 8))
+
+        XCTAssertEqual(h.delays.pending.map(\.delay), [2])
+        XCTAssertTrue(state.sourceErrors.isEmpty)
+        h.delays.runNext()
+        XCTAssertEqual(h.delays.pending.map(\.delay), [10])
+        XCTAssertTrue(state.sourceErrors.isEmpty, "the second failure is still worth waiting out")
+        h.delays.runNext()
+        XCTAssertEqual(h.delays.pending.map(\.delay), [30])
+        XCTAssertNotNil(state.sourceErrors["T"], "the third consecutive failure is the one to report")
+        h.delays.runNext()
+        XCTAssertTrue(h.delays.pending.isEmpty, "the backoff gives up after the third retry")
+        XCTAssertNotNil(state.sourceErrors["T"])
+
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        state.refreshSource(for: "T")
+        XCTAssertTrue(state.sourceErrors.isEmpty)
+    }
+
+    func testAPendingUpdateFoundAtLaunchIsNotAnnouncedTwice() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let url = h.dir.file("data-team.json")
+        let first = h.create()
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(first.subscribe(documentAt: url.path, as: nil))
+        first.dispose()
+
+        var doc = CollectionDocumentSamples.dataTeam
+        doc.connectors["github"] = nil
+        try writeDocument(doc, at: url)
+        h.notifier.clearSent()
+
+        let second = h.create()
+        XCTAssertEqual(second.pendingUpdates["Data team"]?.summary(), "removes github")
+        XCTAssertTrue(h.notifier.sent.isEmpty, "the banner already says it; a launch is not news")
+        second.reload()
+        XCTAssertTrue(h.notifier.sent.isEmpty, "and the reload behind it must not announce it either")
+    }
+
+    func testApplyingAnInactiveCollectionLeavesClaudesConfigAlone() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("data-team.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        XCTAssertEqual(state.activeCollection, "Default")
+        let before = try h.claudeServers()
+
+        var doc = CollectionDocumentSamples.dataTeam
+        doc.connectors["github"] = nil
+        try writeDocument(doc, at: url)
+        try TempDir.bumpModificationDate(of: url)
+        XCTAssertTrue(h.ui.pumpUntil({ state.pendingUpdates["Data team"] != nil }, timeout: 8))
+
+        XCTAssertNil(state.applyPendingUpdate(for: "Data team"))
+        XCTAssertNil(state.store.collections["Data team"]?.mcps["github"])
+        XCTAssertEqual(try h.claudeServers(), before, "Claude runs the active collection, and that one did not change")
+        XCTAssertFalse(state.needsClaudeRestart)
+    }
+
+    func testLocateAppliesTheExpandedPathAtOnce() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("tools/servers.json")
+        try writeDocument(oneLocalConnector("x", command: "node", args: ["\(Placeholder.directoryToken)/srv.js"]), at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        // A machine that has the collection but not the file yet: the bindings never travel.
+        try FileManager.default.removeItem(at: state.service.paths.collectionsCacheURL)
+        state.reload()
+        XCTAssertNil(state.sourceBinding(of: "Tools")?.path)
+        state.switchCollection(to: "Tools")
+        state.setEnabled("x", true)
+        XCTAssertEqual(args(of: try XCTUnwrap(h.claudeServers()["x"]))?.first, "\(Placeholder.directoryToken)/srv.js",
+                       "with nothing bound the token is written as it stands")
+        XCTAssertEqual(state.connectorCaution("x", in: "Tools"), AppState.locateCaution)
+
+        XCTAssertNil(state.locateSource(for: "Tools", path: url.path))
+        XCTAssertEqual(args(of: try XCTUnwrap(h.claudeServers()["x"]))?.first,
+                       url.deletingLastPathComponent().path + "/srv.js", "locating resolves it without another click")
+        XCTAssertNil(state.connectorCaution("x", in: "Tools"))
+    }
+
+    func testStopSyncingBakesTheExpandedPathIn() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("tools/servers.json")
+        try writeDocument(oneLocalConnector("x", command: "node", args: ["\(Placeholder.directoryToken)/srv.js"]), at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        state.switchCollection(to: "Tools")
+        state.setEnabled("x", true)
+        let expanded = url.deletingLastPathComponent().path + "/srv.js"
+        XCTAssertEqual(args(of: try XCTUnwrap(h.claudeServers()["x"]))?.first, expanded)
+
+        state.stopSyncing("Tools")
+        XCTAssertEqual(state.store.collections["Tools"]?.mcps["x"]?.config.value(at: JSONPointer(["args", "0"])),
+                       .string(expanded), "the folder it resolved to is the collection's own path now")
+        XCTAssertEqual(args(of: try XCTUnwrap(h.claudeServers()["x"]))?.first, expanded,
+                       "so what Claude runs does not change under the user")
+        XCTAssertNil(state.connectorCaution("x", in: "Tools"))
+        XCTAssertEqual(state.kind(of: "Tools"), .local)
+    }
+
     // The cache records what a render excluded, and an excluded connector never shows as added.
     // Only the Windows build's cmd /c launcher ever excludes anything, so that test lives in the
     // mirror alone: windows/.../AppStateCollectionsTests.cs

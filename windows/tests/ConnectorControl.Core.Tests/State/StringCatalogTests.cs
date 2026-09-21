@@ -311,6 +311,7 @@ public class StringCatalogTests
         actual["ReviewModel.applyButton"] = ReviewModel.ApplyButton;
         actual["ReviewModel.changedLabel"] = ReviewModel.ChangedLabel;
         actual["ReviewModel.removedLabel"] = ReviewModel.RemovedLabel;
+        actual["ReviewModel.sourceMovedMessage"] = ReviewModel.SourceMovedMessage;
         actual["ReviewModel.title"] = ReviewModel.Title("X");
 
         // MARK: SettingsModel

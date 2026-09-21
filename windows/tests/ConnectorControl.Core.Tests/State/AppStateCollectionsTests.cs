@@ -701,6 +701,162 @@ public class AppStateCollectionsTests
     }
 
     [Fact]
+    public void AnUnchangedSourceIsNotReRenderedButPendingIsReDerived()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Subscribe(path, null));
+        state.SwitchCollection("Data team");
+        var renders = state.SourceRenders;
+
+        // A local edit makes the collection differ from its source without the file moving.
+        var argument = JsonPointer.Parse("/args/1")!;
+        var dbt = state.Store.Collections["Data team"].Mcps["dbt"];
+        Assert.Null(state.Upsert("dbt", dbt with { Config = dbt.Config.Replacing(argument, JsonValue.String("@dbt/mcp@local"))! }, "dbt"));
+        Assert.Equal("changes dbt", state.PendingUpdates["Data team"].Summary());
+        Assert.Equal(renders, state.SourceRenders);   // the same bytes are never decoded twice
+
+        // Another machine applies the source, and its master list arrives here.
+        var store = h.StoreOnDisk();
+        var rendered = state.PendingDocument("Data team")!;
+        var applied = CollectionApply.Apply(rendered, store.Collections["Data team"].Mcps,
+            state.CollectionsFile.Collections["Data team"].Needs);
+        store.Collections["Data team"] = new Collection(applied.Entries);
+        MasterStoreIO.Save(store, h.MasterStorePath);
+        state.Reload();
+        // The list already matches the document; the banner must not outlive it.
+        Assert.Empty(state.PendingUpdates);
+        Assert.Equal(renders, state.SourceRenders);
+    }
+
+    [Fact]
+    public void TheRetryChainReportsOnlyTheThirdFailure()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("t.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Subscribe(path, "T"));
+        Thread.Sleep(WatcherSettle);
+        File.WriteAllText(path, "{half");
+        TempDir.BumpModificationTime(path);
+        Assert.True(h.Ui.PumpUntil(() => h.Delays.Pending.Count > 0, Wait));
+
+        Assert.Equal([TimeSpan.FromSeconds(2)], h.Delays.Pending.Select(p => p.Delay));
+        Assert.Empty(state.SourceErrors);
+        h.Delays.RunNext();
+        Assert.Equal([TimeSpan.FromSeconds(10)], h.Delays.Pending.Select(p => p.Delay));
+        Assert.Empty(state.SourceErrors);   // the second failure is still worth waiting out
+        h.Delays.RunNext();
+        Assert.Equal([TimeSpan.FromSeconds(30)], h.Delays.Pending.Select(p => p.Delay));
+        Assert.NotNull(state.SourceErrors["T"]);   // the third consecutive failure is the one to report
+        h.Delays.RunNext();
+        Assert.Empty(h.Delays.Pending);   // the backoff gives up after the third retry
+        Assert.NotNull(state.SourceErrors["T"]);
+
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        state.RefreshSource("T");
+        Assert.Empty(state.SourceErrors);
+    }
+
+    [Fact]
+    public void APendingUpdateFoundAtLaunchIsNotAnnouncedTwice()
+    {
+        using var h = new AppStateHarness();
+        var path = h.Dir.File("data-team.json");
+        using (var first = h.Create())
+        {
+            WriteDocument(CollectionDocumentSamples.DataTeam, path);
+            Assert.Null(first.Subscribe(path, null));
+        }
+
+        var sample = CollectionDocumentSamples.DataTeam;
+        var connectors = new Dictionary<string, CollectionDocument.Connector>(sample.Connectors, StringComparer.Ordinal);
+        connectors.Remove("github");
+        WriteDocument(new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors), path);
+        h.Notifier.Sent.Clear();
+
+        using var second = h.Create();
+        Assert.Equal("removes github", second.PendingUpdates["Data team"].Summary());
+        Assert.Empty(h.Notifier.Sent);   // the banner already says it; a launch is not news
+        second.Reload();
+        Assert.Empty(h.Notifier.Sent);   // and the reload behind it must not announce it either
+    }
+
+    [Fact]
+    public void ApplyingAnInactiveCollectionLeavesClaudesConfigAlone()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Subscribe(path, null));
+        Thread.Sleep(WatcherSettle);
+        Assert.Equal("Default", state.ActiveCollection);
+        var before = h.ClaudeServers();
+
+        WriteDocument(ChangedSample(), path);
+        TempDir.BumpModificationTime(path);
+        Assert.True(h.Ui.PumpUntil(() => state.PendingUpdates.ContainsKey("Data team"), Wait));
+
+        Assert.Null(state.ApplyPendingUpdate("Data team"));
+        Assert.False(state.Store.Collections["Data team"].Mcps.ContainsKey("github"));
+        // Claude runs the active collection, and that one did not change.
+        Assert.True(DictionaryEquality.Equal(before, h.ClaudeServers()));
+        Assert.False(state.NeedsClaudeRestart);
+    }
+
+    [Fact]
+    public void LocateAppliesTheExpandedPathAtOnce()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File(Path.Combine("tools", "servers.json"));
+        WriteDocument(OneLocalConnector("x", "node", [$"{Placeholder.DirectoryToken}/srv.js"]), path);
+        Assert.Null(state.Subscribe(path, null));
+        // A machine that has the collection but not the file yet: the bindings never travel.
+        File.Delete(state.Service.Paths.CollectionsCachePath);
+        state.Reload();
+        Assert.Null(state.SourceBinding("Tools")?.Path);
+        state.SwitchCollection("Tools");
+        state.SetEnabled("x", true);
+        var argument = JsonPointer.Parse("/args/0")!;
+        // With nothing bound the token is written as it stands.
+        Assert.Equal(JsonValue.String($"{Placeholder.DirectoryToken}/srv.js"), h.ClaudeServers()["x"].ValueAt(argument));
+        Assert.Equal(AppState.LocateCaution, state.ConnectorCaution("x", "Tools"));
+
+        Assert.Null(state.LocateSource("Tools", path));
+        // Locating resolves it without another click.
+        Assert.Equal(JsonValue.String(Path.GetDirectoryName(path) + "/srv.js"), h.ClaudeServers()["x"].ValueAt(argument));
+        Assert.Null(state.ConnectorCaution("x", "Tools"));
+    }
+
+    [Fact]
+    public void StopSyncingBakesTheExpandedPathIn()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File(Path.Combine("tools", "servers.json"));
+        WriteDocument(OneLocalConnector("x", "node", [$"{Placeholder.DirectoryToken}/srv.js"]), path);
+        Assert.Null(state.Subscribe(path, null));
+        state.SwitchCollection("Tools");
+        state.SetEnabled("x", true);
+        var argument = JsonPointer.Parse("/args/0")!;
+        var expanded = JsonValue.String(Path.GetDirectoryName(path) + "/srv.js");
+        Assert.Equal(expanded, h.ClaudeServers()["x"].ValueAt(argument));
+
+        state.StopSyncing("Tools");
+        // The folder it resolved to is the collection's own path now, so what Claude runs does
+        // not change under the user.
+        Assert.Equal(expanded, state.Store.Collections["Tools"].Mcps["x"].Config.ValueAt(argument));
+        Assert.Equal(expanded, h.ClaudeServers()["x"].ValueAt(argument));
+        Assert.Null(state.ConnectorCaution("x", "Tools"));
+        Assert.Equal(CollectionKind.Local, state.KindOf("Tools"));
+    }
+
+    [Fact]
     public void AnExcludedConnectorIsRecordedInTheCacheAndNeverShowsAsAdded()
     {
         // The Mac has no cmd /c launcher, so it excludes nothing and this test exists only here;

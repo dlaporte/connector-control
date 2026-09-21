@@ -273,6 +273,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ReviewModel.applyButton"] = ReviewModel.applyButton
         actual["ReviewModel.changedLabel"] = ReviewModel.changedLabel
         actual["ReviewModel.removedLabel"] = ReviewModel.removedLabel
+        actual["ReviewModel.sourceMovedMessage"] = ReviewModel.sourceMovedMessage
         actual["ReviewModel.title"] = ReviewModel.title("X")
 
         // MARK: SettingsModel

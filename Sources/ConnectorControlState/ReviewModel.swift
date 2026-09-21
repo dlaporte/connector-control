@@ -13,6 +13,7 @@ public final class ReviewModel: ObservableObject {
     public static let addedLabel = "Added"
     public static let removedLabel = "Removed"
     public static let changedLabel = "Changed"
+    public static let sourceMovedMessage = "The file changed while this was open. Review it again."
 
     public static func title(_ collection: String) -> String { "Update to \(collection)" }
 
@@ -38,8 +39,13 @@ public final class ReviewModel: ObservableObject {
 
     public let collection: String
     @Published public private(set) var rows: [Row] = []
+    /// The document moved under the sheet: what is listed is no longer what would land, so Apply
+    /// refuses until the rows are rebuilt. Cleared by `refresh()`.
+    @Published public private(set) var sourceMoved = false
 
     private let state: AppState
+    /// The document the rows were built from. Apply compares it with what the app holds now.
+    private var sourceHash: String?
 
     public init(state: AppState, collection: String) {
         self.state = state
@@ -53,9 +59,22 @@ public final class ReviewModel: ObservableObject {
     /// opened says what the thing they clicked said.
     public var summary: String { state.pendingUpdates[collection]?.summary() ?? "" }
 
+    /// Re-reads what the app holds now: the rows the sheet shows and the document they belong
+    /// to. The caller reaches for this after a refused Apply, and whenever it reopens the sheet.
+    public func refresh() {
+        sourceMoved = false
+        rebuild()
+    }
+
     /// True when the update landed. A sheet whose update has already been applied elsewhere
-    /// reports success too: there is nothing left to do and nothing went wrong.
+    /// reports success too: there is nothing left to do and nothing went wrong. A document that
+    /// changed while the sheet was open is refused instead — applying it would land connectors
+    /// nobody read, which is the one thing the review gate exists to prevent.
     public func apply() -> Bool {
+        guard state.pendingSourceHash(for: collection) == sourceHash else {
+            sourceMoved = true
+            return false
+        }
         let error = state.applyPendingUpdate(for: collection)
         rebuild()
         return error == nil
@@ -64,6 +83,7 @@ public final class ReviewModel: ObservableObject {
     /// Added first, then removed, then changed, each alphabetical — the order the summary
     /// sentence reads in, so the list under it is in the same order.
     private func rebuild() {
+        sourceHash = state.pendingSourceHash(for: collection)
         guard let diff = state.pendingUpdates[collection] else {
             rows = []
             return

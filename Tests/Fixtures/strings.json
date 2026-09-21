@@ -228,6 +228,7 @@
   "ReviewModel.applyButton": "Apply",
   "ReviewModel.changedLabel": "Changed",
   "ReviewModel.removedLabel": "Removed",
+  "ReviewModel.sourceMovedMessage": "The file changed while this was open. Review it again.",
   "ReviewModel.title": {
     "format": "Update to {0}"
   },

@@ -13,6 +13,7 @@ public sealed class ReviewModel : ObservableObject
     public const string AddedLabel = "Added";
     public const string RemovedLabel = "Removed";
     public const string ChangedLabel = "Changed";
+    public const string SourceMovedMessage = "The file changed while this was open. Review it again.";
 
     public static string Title(string collection) => $"Update to {collection}";
 
@@ -34,6 +35,9 @@ public sealed class ReviewModel : ObservableObject
 
     private readonly AppState state;
     private IReadOnlyList<Row> rows = [];
+    private bool sourceMoved;
+    /// <summary>The document the rows were built from. Apply compares it with what the app holds now.</summary>
+    private string? sourceHash;
 
     public ReviewModel(AppState state, string collection)
     {
@@ -46,6 +50,12 @@ public sealed class ReviewModel : ObservableObject
 
     public IReadOnlyList<Row> Rows { get => rows; private set => Set(ref rows, value); }
 
+    /// <summary>
+    /// The document moved under the sheet: what is listed is no longer what would land, so Apply
+    /// refuses until the rows are rebuilt. Cleared by <see cref="Refresh"/>.
+    /// </summary>
+    public bool SourceMoved { get => sourceMoved; private set => Set(ref sourceMoved, value); }
+
     /// <summary>The Mac calls this <c>title</c>; here the static factory already owns that name.</summary>
     public string SheetTitle => Title(Collection);
 
@@ -53,11 +63,29 @@ public sealed class ReviewModel : ObservableObject
     public string Summary => state.PendingUpdates.TryGetValue(Collection, out var diff) ? diff.Summary() : string.Empty;
 
     /// <summary>
+    /// Re-reads what the app holds now: the rows the sheet shows and the document they belong to.
+    /// The caller reaches for this after a refused Apply, and whenever it reopens the sheet.
+    /// </summary>
+    public void Refresh()
+    {
+        SourceMoved = false;
+        Rebuild();
+        RaiseAll();
+    }
+
+    /// <summary>
     /// True when the update landed. A sheet whose update has already been applied elsewhere
-    /// reports success too: there is nothing left to do and nothing went wrong.
+    /// reports success too: there is nothing left to do and nothing went wrong. A document that
+    /// changed while the sheet was open is refused instead — applying it would land connectors
+    /// nobody read, which is the one thing the review gate exists to prevent.
     /// </summary>
     public bool Apply()
     {
+        if (state.PendingSourceHash(Collection) != sourceHash)
+        {
+            SourceMoved = true;
+            return false;
+        }
         var error = state.ApplyPendingUpdate(Collection);
         Rebuild();
         RaiseAll();
@@ -67,6 +95,7 @@ public sealed class ReviewModel : ObservableObject
     /// <summary>Added first, then removed, then changed, each alphabetical — the order the summary sentence reads in, so the list under it is in the same order.</summary>
     private void Rebuild()
     {
+        sourceHash = state.PendingSourceHash(Collection);
         if (!state.PendingUpdates.TryGetValue(Collection, out var diff))
         {
             Rows = [];

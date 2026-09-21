@@ -98,6 +98,45 @@ public class ReviewModelTests
     }
 
     [Fact]
+    public void ApplyRefusesWhenTheSourceMovedUnderTheSheet()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Pending(h, state);
+        var model = new ReviewModel(state, "Data team");
+        Assert.False(model.SourceMoved);
+        Assert.Equal(["github", "dbt"], model.Rows.Select(r => r.Name));
+
+        // The author commits again while the sheet is open.
+        var sample = CollectionDocumentSamples.DataTeam;
+        var connectors = new Dictionary<string, CollectionDocument.Connector>(sample.Connectors, StringComparer.Ordinal);
+        connectors.Remove("github");
+        connectors.Remove("notion");
+        var dbt = connectors["dbt"];
+        connectors["dbt"] = new CollectionDocument.Connector(
+            new CollectionDocument.Launcher.Local("npx", ["-y", "@dbt/mcp@3"], CollectionPlatform.Mac),
+            dbt.Env, dbt.Needs, dbt.Additional);
+        var path = h.Dir.File("data-team.json");
+        WriteDocument(new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors), path);
+        TempDir.BumpModificationTime(path);
+        Assert.True(h.Ui.PumpUntil(
+            () => state.PendingUpdates.TryGetValue("Data team", out var d) && d.Removed.SequenceEqual(["github", "notion"]), Wait));
+
+        Assert.False(model.Apply(), "the rows on screen are not what would land");
+        Assert.True(model.SourceMoved);
+        Assert.True(state.PendingUpdates.ContainsKey("Data team"));   // nothing was applied
+        Assert.True(state.Store.Collections["Data team"].Mcps.ContainsKey("notion"));
+
+        model.Refresh();
+        Assert.False(model.SourceMoved);
+        Assert.Equal(["github", "notion", "dbt"], model.Rows.Select(r => r.Name));
+        Assert.True(model.Apply());
+        Assert.Empty(state.PendingUpdates);
+        Assert.Equal(JsonValue.String("@dbt/mcp@3"),
+            state.Store.Collections["Data team"].Mcps["dbt"].Config.ValueAt(JsonPointer.Parse("/args/1")!));
+    }
+
+    [Fact]
     public void ACollectionWithNothingPendingHasNoRows()
     {
         using var h = new AppStateHarness();

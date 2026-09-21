@@ -134,6 +134,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>Test probe: which collections have a live source watcher.</summary>
     internal IReadOnlyList<string> WatchedSourceCollections => sourceWatchers.Keys.Order(StringComparer.Ordinal).ToList();
 
+    /// <summary>
+    /// Test probe: how many times a source document has been decoded and rendered. Re-deriving
+    /// what is pending is cheap; decoding the same bytes again is what must not happen.
+    /// </summary>
+    internal int SourceRenders { get; private set; }
+
     public AppState(ISettings settings, IClaudeProcess claude, INotifier notifier, IDialogs dialogs, PathContext paths, AppHost host, IToolProbe tools)
     {
         this.settings = settings;
@@ -451,6 +457,8 @@ public sealed class AppState : ObservableObject, IDisposable
             }
         }
         Service = rebuilt;
+        // The saved-sidecar hash describes the file in the old folder; the new one has its own.
+        lastSavedSidecarHash = null;
         ArmWatchers();
         Reload(ReloadTrigger.QuietStoreAdoption);
     }
@@ -473,6 +481,7 @@ public sealed class AppState : ObservableObject, IDisposable
     public void RefreshServiceSettings()
     {
         Service = MakeService(settings, paths);
+        lastSavedSidecarHash = null;
         ArmWatchers();
         RaiseAll();
     }
@@ -627,6 +636,13 @@ public sealed class AppState : ObservableObject, IDisposable
         // intent at the call site rather than relying on that.)
         ReArm(watcher);
         ReArm(storeWatcher);
+        // The source watchers too: a load that could not read the sidecar returns before
+        // ArmSourceWatchers, so one that dropped during that blip would otherwise stay dead until
+        // the next save. ReArm only starts the ones that are not already armed.
+        foreach (var watch in sourceWatchers.Values)
+        {
+            ReArm(watch.Watcher);
+        }
         RaiseAll();
     }
 
@@ -1162,6 +1178,13 @@ public sealed class AppState : ObservableObject, IDisposable
         SetSourceError(collection, null);
         // PersistStore re-derives what the newly bound document would change.
         PersistStore();
+        // ${COLLECTION_DIR} resolves against the folder just bound, so what Claude runs changes
+        // the moment the file is found — with no second click. The dirty check keeps a locate
+        // that resolves to nothing new from rewriting Claude's config for the sake of it.
+        if (collection == ActiveCollection && IsDirty)
+        {
+            PerformApply();
+        }
         RaiseAll();
         return null;
     }
@@ -1220,17 +1243,46 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return;
         }
+        // The token resolved against the bound document's folder for as long as there was one. A
+        // local collection has no document, so the folder it resolved to is written into the
+        // configs once, exactly as an imported copy expands it — otherwise a path that worked a
+        // second ago would become the literal token, with nothing left to explain it.
+        if (SourceBinding(collection)?.Path is { } bound && Store.Collections.TryGetValue(collection, out var held))
+        {
+            var directory = Path.GetDirectoryName(Path.GetFullPath(bound)) ?? bound;
+            foreach (var (name, entry) in held.Mcps.ToList())
+            {
+                if (Placeholder.UsesDirectoryToken(entry.Config))
+                {
+                    held.Mcps[name] = entry with { Config = Placeholder.ExpandDirectoryToken(entry.Config, directory) };
+                }
+            }
+        }
         SetSidecarEntry(collection, null);
         SetBinding(collection, null);
         SetPending(collection, null);
         SetSourceError(collection, null);
         ForgetSource(collection);
         PersistStore();
+        // The expansion above changed what the collection holds; if it is the live one, that is
+        // a change to what Claude runs. Baking in the same folder the token already resolved to
+        // normally leaves the two identical, and the dirty check spares the write.
+        if (collection == ActiveCollection && IsDirty)
+        {
+            PerformApply();
+        }
         RaiseAll();
     }
 
     /// <summary>The document the review sheet lists, as this platform renders it.</summary>
     public RenderedCollection? PendingDocument(string collection) => pendingRendered.GetValueOrDefault(collection)?.Rendered;
+
+    /// <summary>
+    /// The identity of the bytes <see cref="PendingDocument"/> was rendered from. The review
+    /// sheet holds on to it so Apply can tell that the document it listed is still the document
+    /// it would land.
+    /// </summary>
+    public string? PendingSourceHash(string collection) => pendingRendered.GetValueOrDefault(collection)?.Hash;
 
     /// <summary>Every bound synced collection's pending update, re-derived from its document and the store as it stands now: pending is derived, never stored as a fact.</summary>
     internal void RecomputePending()
@@ -1262,34 +1314,37 @@ public sealed class AppState : ObservableObject, IDisposable
             return;
         }
         var hash = ContentHash.Sha256(data);
-        if (hash == binding.LastHash
-            && pendingRendered.GetValueOrDefault(collection) is { } kept
-            && kept.Hash == hash
-            && PendingUpdates.ContainsKey(collection))
+        RenderedCollection rendered;
+        if (pendingRendered.GetValueOrDefault(collection) is { } kept && kept.Hash == hash)
         {
-            // The file is the one this collection was last rendered from and the review sheet
-            // already lists what it would change: there is nothing to decode again.
-            return;
+            // The same bytes as last time: the render they produce cannot have changed, so only
+            // the diff below is re-derived. The store moves under it constantly — a local edit,
+            // another machine's apply arriving — and the answer has to follow it.
+            rendered = kept.Rendered;
         }
-        CollectionDocument document;
-        try
+        else
         {
-            document = CollectionDocument.Decode(data);
-        }
-        catch (CollectionDocumentException ex)
-        {
-            if (ex.NewerFormatVersion is not null)
+            CollectionDocument document;
+            try
             {
-                // No amount of waiting makes this readable, so it is said at once and never retried.
-                sourceFailures.Remove(collection);
-                SetSourceError(collection, NewerDocumentError);
+                document = CollectionDocument.Decode(data);
+            }
+            catch (CollectionDocumentException ex)
+            {
+                if (ex.NewerFormatVersion is not null)
+                {
+                    // No amount of waiting makes this readable, so it is said at once and never retried.
+                    sourceFailures.Remove(collection);
+                    SetSourceError(collection, NewerDocumentError);
+                    return;
+                }
+                NoteSourceFailure(collection, SourceUnreadableError(Path.GetFileName(path), ex.Message), manual);
                 return;
             }
-            NoteSourceFailure(collection, SourceUnreadableError(Path.GetFileName(path), ex.Message), manual);
-            return;
+            rendered = document.Render();
+            SourceRenders++;
+            pendingRendered[collection] = new RenderedSource(rendered, hash, document.Origin);
         }
-        var rendered = document.Render();
-        pendingRendered[collection] = new RenderedSource(rendered, hash, document.Origin);
         sourceFailures.Remove(collection);
         sourceRetryScheduled.Remove(collection);
         SetSourceError(collection, null);
@@ -1305,13 +1360,18 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         SetPending(collection, diff);
         // Once per document: the same change is re-derived on every store change, and the user
-        // hears about it once. Never on the first load either — the app has just opened, and the
-        // banner is already saying it.
-        if (!hasLoadedOnce || notifiedSourceHashes.GetValueOrDefault(collection) == hash)
+        // hears about it once.
+        if (notifiedSourceHashes.GetValueOrDefault(collection) == hash)
         {
             return;
         }
+        // Recorded before the first-load gate, not after it: an update that was already there
+        // when the app opened is not news, and it must not become news on the next reload.
         notifiedSourceHashes[collection] = hash;
+        if (!hasLoadedOnce)
+        {
+            return;
+        }
         Notify(CollectionUpdateNotificationBody(collection, diff.Summary()));
     }
 

@@ -168,6 +168,10 @@ public final class AppState: ObservableObject {
     /// Test probe: which collections have a live source watcher.
     var watchedSourceCollections: [String] { sourceWatchers.keys.sorted() }
 
+    /// Test probe: how many times a source document has been decoded and rendered. Re-deriving
+    /// what is pending is cheap; decoding the same bytes again is what must not happen.
+    private(set) var sourceRenders = 0
+
     /// Test probe: the watcher objects themselves, so a test can assert that a
     /// reload re-arms a dead watcher without replacing a live one (a
     /// replacement would re-baseline the last-seen mtime and lose an external
@@ -355,6 +359,8 @@ public final class AppState: ObservableObject {
             }
         }
         service = rebuilt
+        // The saved-sidecar hash describes the file in the old folder; the new one has its own.
+        lastSavedSidecarHash = nil
         armWatchers()
         // An adopted (pre-existing) store is authoritative — reconciling it
         // against the local Claude config with fresh-launch "file wins"
@@ -367,6 +373,7 @@ public final class AppState: ObservableObject {
     /// reconciliation baseline.
     public func refreshServiceSettings() {
         service = AppState.makeService(settings: settings, paths: paths)
+        lastSavedSidecarHash = nil
         armWatchers()
     }
 
@@ -510,6 +517,10 @@ public final class AppState: ObservableObject {
         refreshRestartState()
         AppState.reArm(watcher)
         AppState.reArm(storeWatcher)
+        // The source watchers too: a load that could not read the sidecar returns before
+        // armSourceWatchers, so one that dropped during that blip would otherwise stay dead
+        // until the next save. reArm only starts the ones that are not already armed.
+        for watch in sourceWatchers.values { AppState.reArm(watch.watcher) }
     }
 
     // MARK: - Apply / persist
@@ -851,6 +862,10 @@ public final class AppState: ObservableObject {
         sourceErrors.removeValue(forKey: collection)
         // persistStore re-derives what the newly bound document would change.
         persistStore()
+        // ${COLLECTION_DIR} resolves against the folder just bound, so what Claude runs changes
+        // the moment the file is found — with no second click. The dirty check keeps a locate
+        // that resolves to nothing new from rewriting Claude's config for the sake of it.
+        if collection == activeCollection, isDirty { performApply() }
         return nil
     }
 
@@ -891,17 +906,40 @@ public final class AppState: ObservableObject {
     /// says what it needs — without the hint, which travelled with the document.
     public func stopSyncing(_ collection: String) {
         guard isSynced(collection) else { return }
+        // The token resolved against the bound document's folder for as long as there was one.
+        // A local collection has no document, so the folder it resolved to is written into the
+        // configs once, exactly as an imported copy expands it — otherwise a path that worked a
+        // second ago would become the literal token, with nothing left to explain it.
+        if let path = collectionsCache.synced[collection]?.path {
+            let directory = URL(fileURLWithPath: path).deletingLastPathComponent().path
+            for (name, entry) in store.collections[collection]?.mcps ?? [:]
+            where Placeholder.usesDirectoryToken(entry.config) {
+                store.collections[collection]?.mcps[name]?.config =
+                    Placeholder.expandDirectoryToken(in: entry.config, directory: directory)
+            }
+        }
         collectionsFile.collections.removeValue(forKey: collection)
         collectionsCache.synced.removeValue(forKey: collection)
         pendingUpdates.removeValue(forKey: collection)
         sourceErrors.removeValue(forKey: collection)
         forgetSource(collection)
         persistStore()
+        // The expansion above changed what the collection holds; if it is the live one, that is
+        // a change to what Claude runs. Baking in the same folder the token already resolved to
+        // normally leaves the two identical, and the dirty check spares the write.
+        if collection == activeCollection, isDirty { performApply() }
     }
 
     /// The document the review sheet lists, as this platform renders it.
     public func pendingDocument(for collection: String) -> RenderedCollection? {
         pendingRendered[collection]?.rendered
+    }
+
+    /// The identity of the bytes `pendingDocument(for:)` was rendered from. The review sheet
+    /// holds on to it so Apply can tell that the document it listed is still the document it
+    /// would land.
+    public func pendingSourceHash(for collection: String) -> String? {
+        pendingRendered[collection]?.hash
     }
 
     /// Every bound synced collection's pending update, re-derived from its document and the
@@ -927,26 +965,30 @@ public final class AppState: ObservableObject {
             return
         }
         let hash = ContentHash.sha256(data)
-        if hash == binding.lastHash, let kept = pendingRendered[collection], kept.hash == hash, pendingUpdates[collection] != nil {
-            // The file is the one this collection was last rendered from and the review sheet
-            // already lists what it would change: there is nothing to decode again.
-            return
+        let rendered: RenderedCollection
+        if let kept = pendingRendered[collection], kept.hash == hash {
+            // The same bytes as last time: the render they produce cannot have changed, so only
+            // the diff below is re-derived. The store moves under it constantly — a local edit,
+            // another machine's apply arriving — and the answer has to follow it.
+            rendered = kept.rendered
+        } else {
+            let document: CollectionDocument
+            do {
+                document = try CollectionDocument.decode(data)
+            } catch CollectionDocumentError.newerFormat {
+                // No amount of waiting makes this readable, so it is said at once and never retried.
+                sourceFailures.removeValue(forKey: collection)
+                sourceErrors[collection] = AppState.newerDocumentError
+                return
+            } catch {
+                noteSourceFailure(collection, AppState.sourceUnreadableError(url.lastPathComponent, AppState.sourceDetail(error)),
+                                  manual: manual)
+                return
+            }
+            rendered = document.render()
+            sourceRenders += 1
+            pendingRendered[collection] = RenderedSource(rendered: rendered, hash: hash, origin: document.origin)
         }
-        let document: CollectionDocument
-        do {
-            document = try CollectionDocument.decode(data)
-        } catch CollectionDocumentError.newerFormat {
-            // No amount of waiting makes this readable, so it is said at once and never retried.
-            sourceFailures.removeValue(forKey: collection)
-            sourceErrors[collection] = AppState.newerDocumentError
-            return
-        } catch {
-            noteSourceFailure(collection, AppState.sourceUnreadableError(url.lastPathComponent, AppState.sourceDetail(error)),
-                              manual: manual)
-            return
-        }
-        let rendered = document.render()
-        pendingRendered[collection] = RenderedSource(rendered: rendered, hash: hash, origin: document.origin)
         sourceFailures.removeValue(forKey: collection)
         sourceRetryScheduled.remove(collection)
         sourceErrors.removeValue(forKey: collection)
@@ -958,10 +1000,12 @@ public final class AppState: ObservableObject {
         }
         pendingUpdates[collection] = diff
         // Once per document: the same change is re-derived on every store change, and the user
-        // hears about it once. Never on the first load either — the app has just opened, and
-        // the banner is already saying it.
-        guard hasLoadedOnce, notifiedSourceHashes[collection] != hash else { return }
+        // hears about it once.
+        guard notifiedSourceHashes[collection] != hash else { return }
+        // Recorded before the first-load gate, not after it: an update that was already there
+        // when the app opened is not news, and it must not become news on the next reload.
         notifiedSourceHashes[collection] = hash
+        guard hasLoadedOnce else { return }
         notify(AppState.collectionUpdateNotificationBody(collection, diff.summary()))
     }
 
