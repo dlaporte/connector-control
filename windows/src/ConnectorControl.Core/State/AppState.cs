@@ -99,6 +99,16 @@ public sealed class AppState : ObservableObject, IDisposable
     private readonly Dictionary<string, string> notifiedSourceHashes = new(StringComparer.Ordinal);
     /// <summary>True once the sidecar has been read successfully at least once this run. Until then there is no in-memory state for an unreadable sidecar to protect.</summary>
     private bool hasLoadedCollectionsOnce;
+    /// <summary>
+    /// Whether the LAST load could read the sidecar (a file that is not there counts: there is
+    /// nothing to protect). While it is false our copy of the sidecar may be empty or stale, so
+    /// nothing writes it or the bindings that hang off it.
+    /// </summary>
+    private bool collectionsLoaded;
+    /// <summary>The hash of the sidecar bytes this app last wrote, so a save that would change nothing costs neither a write nor a backup rotation.</summary>
+    private string? lastSavedSidecarHash;
+    /// <summary>A note from the collections load for <see cref="Reload"/> to join with the service's own, since it assigns LastError after LoadCollections has run and would otherwise erase it.</summary>
+    private string? collectionsNote;
     private bool disposed;
 
     /// <summary>
@@ -533,8 +543,11 @@ public sealed class AppState : ObservableObject, IDisposable
                 && !DictionaryEquality.Equal(result.Store.Mcps, previousStoreMcps)
                 && !claudeConfigChangedExternally;
             // Every note, not just the first: with a corrupt store AND a malformed Claude config,
-            // the second one is the actionable one (Backups ▸ Restore… is the way out).
-            LastError = result.Notes.Count > 0 ? string.Join(" ", result.Notes) : null;
+            // the second one is the actionable one (Backups ▸ Restore… is the way out). The
+            // collections load runs above and adds its own note here rather than setting
+            // LastError itself, which this line would then overwrite.
+            var notes = collectionsNote is null ? result.Notes : [.. result.Notes, collectionsNote];
+            LastError = notes.Count > 0 ? string.Join(" ", notes) : null;
             if (!IsDirty)
             {
                 ApplyRetryNeeded = false;
@@ -652,9 +665,20 @@ public sealed class AppState : ObservableObject, IDisposable
         RecomputePending();
         try
         {
-            StoreNotPrivate = !Service.SaveStore(Store).Protected;
-            Service.SaveCollections(CollectionsFile);
-            CollectionsCache.Save(Service.Paths.CollectionsCachePath);
+            var isProtected = Service.SaveStore(Store).Protected;
+            // A sidecar that the last load could not read is one something else is writing. Our
+            // copy of it may never have been filled, and saving that would land an empty sidecar
+            // — and, behind it, a cache pruned against nothing — on top of the real file the
+            // moment the other writer finishes. Both wait for a load that can read it. The
+            // master list is ours alone and always saves.
+            if (collectionsLoaded)
+            {
+                // The sidecar sits in the same folder as the master list, so a folder that
+                // refuses the owner-only permission refuses it for both: one caution covers them.
+                isProtected &= SaveCollectionsIfChanged();
+                CollectionsCache.Save(Service.Paths.CollectionsCachePath);
+            }
+            StoreNotPrivate = !isProtected;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -663,6 +687,24 @@ public sealed class AppState : ObservableObject, IDisposable
         // Every binding change reaches disk through here: subscribe, locate, stop syncing,
         // rename and delete all end in a save, so this is where the watchers follow them.
         ArmSourceWatchers();
+    }
+
+    /// <summary>
+    /// The sidecar only when it would differ: every connector change persists the store, and most
+    /// of them say nothing new about collections. Rewriting the same bytes would rotate a backup
+    /// and churn a file that travels through someone's sync tool for nothing. Returns whether the
+    /// bytes on disk are owner-only — true when there was nothing to write.
+    /// </summary>
+    private bool SaveCollectionsIfChanged()
+    {
+        var hash = ContentHash.Sha256(CollectionsFile.Encode().Serialize());
+        if (hash == lastSavedSidecarHash)
+        {
+            return true;
+        }
+        var result = Service.SaveCollections(CollectionsFile);
+        lastSavedSidecarHash = hash;
+        return result.Protected;
     }
 
     /// <summary>Toggles take effect immediately; the Restart Required button is the only follow-up step.</summary>
@@ -1416,6 +1458,7 @@ public sealed class AppState : ObservableObject, IDisposable
     private void LoadCollections()
     {
         var loaded = Service.LoadCollections();
+        collectionsNote = null;
         // An unreadable sidecar loads as empty (see CollectionsFile.Load). Reconciling the cache
         // against that would drop every binding on this machine over a file a sync tool is
         // halfway through writing, so a sidecar that exists yet loads as empty is left alone and
@@ -1423,6 +1466,7 @@ public sealed class AppState : ObservableObject, IDisposable
         // costs only a prune deferred to the next load.
         if (loaded.Collections.Count == 0 && File.Exists(Service.Paths.CollectionsFilePath))
         {
+            collectionsLoaded = false;
             // At launch there is no in-memory state to stand yet, so the cache is taken as it
             // stands — unreconciled, since the sidecar that would vouch for it is the file that
             // cannot be read. A good set of bindings then outlives a bad sidecar, and the first
@@ -1435,6 +1479,7 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         CollectionsFile = loaded.Reconciled(Store);
         CollectionsCache = CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath).Reconciled(CollectionsFile);
+        collectionsLoaded = true;
         hasLoadedCollectionsOnce = true;
         BindSourcesBesideTheStore();
         ArmSourceWatchers();
@@ -1486,7 +1531,7 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            LastError = Friendly(ex);
+            collectionsNote = Friendly(ex);
         }
     }
 

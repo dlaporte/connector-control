@@ -235,6 +235,58 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(second.sourceBinding(of: "Data")?.path, "/shared/team.json")
     }
 
+    func testAHalfWrittenSidecarIsNeverOverwrittenByASave() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("data-team.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let sidecar = h.storeDir.appendingPathComponent(CollectionsFile.fileName)
+        let cacheURL = state.service.paths.collectionsCacheURL
+        let bindings = try Data(contentsOf: cacheURL)
+
+        // A sync tool is halfway through writing the sidecar when the app next looks at it.
+        try TempDir.touch(sidecar, "{half")
+        state.reload()
+        state.setEnabled("aws-mcp", false)
+        XCTAssertEqual(try String(contentsOf: sidecar, encoding: .utf8), "{half",
+                       "a save must not land our copy of the sidecar on top of the real one")
+        XCTAssertEqual(try Data(contentsOf: cacheURL), bindings, "the bindings that hang off it wait too")
+        XCTAssertEqual(try h.storeOnDisk().mcps["aws-mcp"]?.enabled, false, "the master list is ours alone, and still saves")
+
+        // The write finishes: the next load reads it, and saves resume.
+        try CollectionsFile(collections: ["Data team": synced(fileName: "data-team.json")])
+            .save(to: sidecar, staging: nil)
+        state.reload()
+        XCTAssertEqual(state.kind(of: "Data team"), .synced)
+        state.stopSyncing("Data team")
+        XCTAssertTrue(CollectionsFile.load(from: sidecar).collections.isEmpty)
+    }
+
+    func testASidecarSaveFailureSetsTheErrorAndStopsTheChain() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("data-team.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let sidecar = h.storeDir.appendingPathComponent(CollectionsFile.fileName)
+        let cacheURL = state.service.paths.collectionsCacheURL
+        let bindings = try Data(contentsOf: cacheURL)
+
+        // Nothing can be written where a directory holds the name. Simpler than a permission
+        // change, and the same failure on both platforms.
+        try FileManager.default.removeItem(at: sidecar)
+        try FileManager.default.createDirectory(at: sidecar, withIntermediateDirectories: false)
+
+        // Stop Syncing changes the sidecar, so the save is really attempted, and it is the one
+        // collection action that does not re-apply afterwards and clear the error again.
+        state.stopSyncing("Data team")
+        XCTAssertNotNil(state.lastError)
+        XCTAssertEqual(try Data(contentsOf: cacheURL), bindings, "the cache save behind it never ran")
+        XCTAssertNotNil(try h.storeOnDisk().collections["Data team"], "the master list saved first, and is intact")
+        XCTAssertNil(state.collectionsFile.collections["Data team"], "the failure is the disk's, not a rollback")
+    }
+
     // MARK: - Queries
 
     func testTheCollectionQueriesReadTheSidecarAndTheStore() throws {

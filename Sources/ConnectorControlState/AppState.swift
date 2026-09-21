@@ -135,6 +135,16 @@ public final class AppState: ObservableObject {
     /// True once the sidecar has been read successfully at least once this run. Until then there
     /// is no in-memory state for an unreadable sidecar to protect.
     private var hasLoadedCollectionsOnce = false
+    /// Whether the LAST load could read the sidecar (a file that is not there counts: there is
+    /// nothing to protect). While it is false our copy of the sidecar may be empty or stale, so
+    /// nothing writes it or the bindings that hang off it.
+    private var collectionsLoaded = false
+    /// The hash of the sidecar bytes this app last wrote, so a save that would change nothing
+    /// costs neither a write nor a backup rotation.
+    private var lastSavedSidecarHash: String?
+    /// A note from the collections load for `reload` to join with the service's own, since it
+    /// assigns `lastError` after `loadCollections()` has run and would otherwise erase it.
+    private var collectionsNote: String?
     private var disposed = false
 
     /// A source watcher and the path it was armed on, so a binding that moves gets a new watcher
@@ -446,8 +456,11 @@ public final class AppState: ObservableObject {
                 && !claudeConfigChangedExternally
             // Every note, not just the first: with a corrupt store AND a
             // malformed Claude config, the second one is the actionable one
-            // (Backups ▸ Restore… is the way out).
-            lastError = result.notes.isEmpty ? nil : result.notes.joined(separator: " ")
+            // (Backups ▸ Restore… is the way out). The collections load runs above and adds
+            // its own note here rather than setting lastError itself, which this line would
+            // then overwrite.
+            let notes = result.notes + [collectionsNote].compactMap { $0 }
+            lastError = notes.isEmpty ? nil : notes.joined(separator: " ")
             if !isDirty { applyRetryNeeded = false }
 
             // The store is the source of truth; Claude's config is downstream.
@@ -527,14 +540,32 @@ public final class AppState: ObservableObject {
         recomputePending()
         do {
             try service.saveStore(store)
-            try service.saveCollections(collectionsFile)
-            try collectionsCache.save(to: service.paths.collectionsCacheURL, staging: service.paths.stagingDirURL)
+            // A sidecar that the last load could not read is one something else is writing.
+            // Our copy of it may never have been filled, and saving that would land an empty
+            // sidecar — and, behind it, a cache pruned against nothing — on top of the real
+            // file the moment the other writer finishes. Both wait for a load that can read it.
+            // The master list is ours alone and always saves.
+            if collectionsLoaded {
+                try saveCollectionsIfChanged()
+                try collectionsCache.save(to: service.paths.collectionsCacheURL, staging: service.paths.stagingDirURL)
+            }
         } catch {
             lastError = AppState.friendly(error)
         }
         // Every binding change reaches disk through here: subscribe, locate, stop syncing,
         // rename and delete all end in a save, so this is where the watchers follow them.
         armSourceWatchers()
+    }
+
+    /// The sidecar only when it would differ: every connector change persists the store, and
+    /// most of them say nothing new about collections. Rewriting the same bytes would rotate a
+    /// backup and churn a file that travels through someone's sync tool for nothing.
+    private func saveCollectionsIfChanged() throws {
+        let data = try collectionsFile.encode().serialized()
+        let hash = ContentHash.sha256(data)
+        guard hash != lastSavedSidecarHash else { return }
+        try service.saveCollections(collectionsFile)
+        lastSavedSidecarHash = hash
     }
 
     /// Toggles take effect immediately; the Restart Required button is the only follow-up step.
@@ -1024,7 +1055,9 @@ public final class AppState: ObservableObject {
         // halfway through writing, so a sidecar that exists yet loads as empty is left alone and
         // whatever is already in memory stands. A genuinely empty sidecar reads the same way and
         // costs only a prune deferred to the next load.
+        collectionsNote = nil
         if loaded.collections.isEmpty, FileManager.default.fileExists(atPath: service.paths.collectionsFileURL.path) {
+            collectionsLoaded = false
             // At launch there is no in-memory state to stand yet, so the cache is taken as it
             // stands — unreconciled, since the sidecar that would vouch for it is the file that
             // cannot be read. A good set of bindings then outlives a bad sidecar, and the first
@@ -1037,6 +1070,7 @@ public final class AppState: ObservableObject {
         collectionsFile = loaded.reconciled(with: store)
         collectionsCache = CollectionsLocalCache.load(from: service.paths.collectionsCacheURL)
             .reconciled(with: collectionsFile)
+        collectionsLoaded = true
         hasLoadedCollectionsOnce = true
         bindSourcesBesideTheStore()
         armSourceWatchers()
@@ -1067,7 +1101,7 @@ public final class AppState: ObservableObject {
         do {
             try cache.save(to: service.paths.collectionsCacheURL, staging: service.paths.stagingDirURL)
         } catch {
-            lastError = AppState.friendly(error)
+            collectionsNote = AppState.friendly(error)
         }
     }
 

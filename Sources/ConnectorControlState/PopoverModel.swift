@@ -54,6 +54,8 @@ public final class PopoverModel: ObservableObject {
 
     public var errorMessage: String? { state.lastError }
 
+    /// The Windows mirror also carries `HasCollectionBanner`: XAML cannot bind a row's visibility
+    /// to "this optional is not nil", where SwiftUI binds the optional itself.
     public var collectionBanner: CollectionBanner? { state.collectionBanner }
 
     public var collectionBannerText: String? {

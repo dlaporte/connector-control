@@ -266,6 +266,63 @@ public class AppStateCollectionsTests
         Assert.Equal("/shared/team.json", second.SourceBinding("Data")?.Path);
     }
 
+    [Fact]
+    public void AHalfWrittenSidecarIsNeverOverwrittenByASave()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Subscribe(path, null));
+        var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
+        var cachePath = state.Service.Paths.CollectionsCachePath;
+        var bindings = File.ReadAllBytes(cachePath);
+
+        // A sync tool is halfway through writing the sidecar when the app next looks at it.
+        TempDir.Touch(sidecar, "{half");
+        state.Reload();
+        state.SetEnabled("aws-mcp", false);
+        // A save must not land our copy of the sidecar on top of the real one, and the bindings
+        // that hang off it wait too.
+        Assert.Equal("{half", File.ReadAllText(sidecar));
+        Assert.Equal(bindings, File.ReadAllBytes(cachePath));
+        Assert.False(h.StoreOnDisk().Mcps["aws-mcp"].Enabled, "the master list is ours alone, and still saves");
+
+        // The write finishes: the next load reads it, and saves resume.
+        File_(("Data team", Synced("data-team.json"))).Save(sidecar);
+        state.Reload();
+        Assert.Equal(CollectionKind.Synced, state.KindOf("Data team"));
+        state.StopSyncing("Data team");
+        Assert.Empty(CollectionsFile.Load(sidecar).Collections);
+    }
+
+    [Fact]
+    public void ASidecarSaveFailureSetsTheErrorAndStopsTheChain()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Subscribe(path, null));
+        var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
+        var cachePath = state.Service.Paths.CollectionsCachePath;
+        var bindings = File.ReadAllBytes(cachePath);
+
+        // Nothing can be written where a directory holds the name. Simpler than a permission
+        // change, and the same failure on both platforms.
+        File.Delete(sidecar);
+        Directory.CreateDirectory(sidecar);
+
+        // Stop Syncing changes the sidecar, so the save is really attempted, and it is the one
+        // collection action that does not re-apply afterwards and clear the error again.
+        state.StopSyncing("Data team");
+        Assert.NotNull(state.LastError);
+        Assert.Equal(bindings, File.ReadAllBytes(cachePath));   // the cache save behind it never ran
+        Assert.True(h.StoreOnDisk().Collections.ContainsKey("Data team"), "the master list saved first, and is intact");
+        // The failure is the disk's, not a rollback.
+        Assert.False(state.CollectionsFile.Collections.ContainsKey("Data team"));
+    }
+
     // MARK: queries
 
     [Fact]
