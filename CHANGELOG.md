@@ -13,6 +13,12 @@ pipeline`; leave a sub-heading's bullets empty rather than removing the
 sub-heading, and drop any sub-heading that never got a bullet once the
 section is about to ship.
 
+## v1.4.0
+
+### Release pipeline
+
+- Preview builds now ship both apps: a `preview-<n>` tag, or Actions ▸ Preview ▸ Run workflow, publishes a signed, notarized Mac DMG beside the signed Windows installers as one GitHub prerelease versioned `1.4.0-preview.<n>`. Stable users see nothing: a prerelease is never `releases/latest`, so the Mac update feed is untouched, and a Windows preview install follows previews only.
+
 ## v1.3.3
 
 ### macOS
