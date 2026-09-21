@@ -1,6 +1,6 @@
 # The Windows half of every build in this repo, in one place: restore/build/test, and — for a
 # release or a preview — the Velopack packaging and the install smoke test. release.yml,
-# windows-preview.yml and windows-ci.yml all call this, so the three cannot drift apart again
+# preview.yml and windows-ci.yml all call this, so the three cannot drift apart again
 # (they had: one verify step without `set -o pipefail`, one smoke job without the arm64
 # signature check, two spellings of the same signing decision).
 #
@@ -66,7 +66,7 @@ on:
 # writes to the repository. The callers stay read-only; only their publish jobs raise that.
 
 jobs:
-  # The one copy of this gate: release.yml and windows-preview.yml each used to carry their own,
+  # The one copy of this gate: release.yml and preview.yml each used to carry their own,
   # identical, before their own build minutes were spent. Here it also gates package directly, so
   # a caller can never reach a signed package step with a secret missing.
   gate:

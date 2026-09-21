@@ -3,7 +3,7 @@
 # the goldens under Tests/Fixtures, so a Mac serialization change must re-run them here.
 #
 # The build itself is .github/workflows/windows-build.yml with package: false — the same
-# restore/build/test release.yml and windows-preview.yml run, without the packaging.
+# restore/build/test release.yml and preview.yml run, without the packaging.
 #
 # No pull_request trigger: every push in this repository is to a branch of the same repo (no
 # forks), so the push trigger below already runs on every branch, including PR branches.

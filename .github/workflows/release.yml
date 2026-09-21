@@ -13,7 +13,7 @@
 #                               win-x64/win-arm64 publish + signed vpk pack -> "velopack-<rid>",
 #                               then silent install + launch of the x64 package with the
 #                               signature required and the arm64 Setup.exe signature checked.
-#                               windows-preview.yml calls the same file.
+#                               preview.yml calls the same file.
 #   publish          (ubuntu)   the ONLY writer: creates the release WITH the DMG and appcast
 #                               attached (so it is never "latest" without its feed), uploads the
 #                               Windows assets (never overwriting a published one), verifies
@@ -251,7 +251,7 @@ jobs:
   windows:
     name: Windows
     needs: prepare
-    # test -> package (win-x64, win-arm64) -> smoke, the same file windows-preview.yml and
+    # test -> package (win-x64, win-arm64) -> smoke, the same file preview.yml and
     # windows-ci.yml call. require-signing is stated here rather than derived from a secret:
     # windows-build.yml's own gate job fails the run before the signed packaging jobs start
     # (the unsigned test job runs in parallel) if any of the six AZURE_* secrets is missing,
@@ -350,7 +350,7 @@ jobs:
 
       # gh, not vpk, uploads everything, a re-run skips a RID whose assets are all published
       # (and refuses to complete a half-published one) — all of it, with the reasons, in the
-      # script windows-preview.yml calls too.
+      # script preview.yml calls too.
       - name: Upload the Windows assets
         run: ./scripts/release/upload-release-assets.sh "$TAG" "$VERSION" artifacts
 
