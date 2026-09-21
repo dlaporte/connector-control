@@ -127,6 +127,8 @@ public sealed class MasterStore : IEquatable<MasterStore>
 
     // MARK: JSON (the Swift Codable synthesis, made explicit)
 
+    // The file keeps the v2 key names: machines on the current release share it through the
+    // synced master-list folder, and their decoder knows only these two keys.
     public JsonValue ToJson() => JsonValue.Object(
         ("version", JsonValue.Int(Version)),
         ("activeProfile", JsonValue.String(ActiveCollection)),
