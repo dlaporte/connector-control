@@ -1,16 +1,17 @@
 # Changelog
 
 Release notes for Connector Control on macOS and Windows. The section
-matching the tagged version becomes the GitHub release notes and the text
-both apps show in their update dialogs — the release build fails if the
-section is missing. The top section also names the version a preview build
-is cut from (a preview is versioned as that number followed by -preview.N,
-and the preview build fails if that version has already been released), so
-open the next version's section as soon as the previous one ships. A freshly opened section starts with four sub-headings, in this
-order: `### macOS`, `### Windows`, `### Both platforms`, `### Release
-pipeline`; leave a sub-heading's bullets empty rather than removing the
-sub-heading, and drop any sub-heading that never got a bullet once the
-section is about to ship.
+matching the tagged version becomes the GitHub release notes and the
+text both apps show in their update dialogs — the release build fails if
+the section is missing. The top section also names the version a preview
+build is cut from (a preview is versioned as that number followed by
+-preview.N, and the preview build fails if that version has already been
+released), so open the next version's section as soon as the previous
+one ships. A freshly opened section starts with four sub-headings, in
+this order: `### macOS`, `### Windows`, `### Both platforms`, `###
+Release pipeline`; leave a sub-heading's bullets empty rather than
+removing the sub-heading, and drop any sub-heading that never got a
+bullet once the section is about to ship.
 
 ## v1.4.0
 
