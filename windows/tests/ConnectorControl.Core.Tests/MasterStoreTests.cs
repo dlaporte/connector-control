@@ -24,6 +24,38 @@ public class MasterStoreTests : IDisposable
     }
 
     [Fact]
+    public void RenamesANonActiveCollectionAndKeepsTheActiveName()
+    {
+        var store = new MasterStore(2, "A", [
+            new KeyValuePair<string, Collection>("A", new Collection()),
+            new KeyValuePair<string, Collection>("B", new Collection()),
+        ]);
+        Assert.Null(store.RenameCollection("B", "C"));
+        Assert.Equal(new HashSet<string>(["A", "C"], StringComparer.Ordinal), store.Collections.Keys.ToHashSet(StringComparer.Ordinal));
+        Assert.Equal("A", store.ActiveCollection);
+        Assert.Null(store.RenameCollection("A", "Z"));
+        Assert.Equal("Z", store.ActiveCollection);
+        Assert.NotNull(store.RenameCollection("Z", "C"));   // a taken name is refused
+    }
+
+    [Fact]
+    public void DeletesANonActiveCollectionAndRefusesTheLast()
+    {
+        var store = new MasterStore(2, "A", [
+            new KeyValuePair<string, Collection>("A", new Collection()),
+            new KeyValuePair<string, Collection>("B", new Collection()),
+        ]);
+        Assert.Null(store.DeleteCollection("B"));
+        Assert.NotNull(store.DeleteCollection("A"));   // the last collection stays
+        store = new MasterStore(2, "B", [
+            new KeyValuePair<string, Collection>("A", new Collection()),
+            new KeyValuePair<string, Collection>("B", new Collection()),
+        ]);
+        Assert.Null(store.DeleteCollection("B"));
+        Assert.Equal("A", store.ActiveCollection);   // deleting the active one moves to the sorted-first remaining
+    }
+
+    [Fact]
     public void LoadMissingFileReturnsEmptyStore()
     {
         var (store, corrupt) = MasterStoreIO.Load(Url);

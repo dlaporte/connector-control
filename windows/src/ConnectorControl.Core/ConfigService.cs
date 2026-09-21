@@ -91,12 +91,25 @@ public sealed class ConfigService
         return MasterStoreIO.Save(store, Paths.MasterStorePath);
     }
 
-    /// <summary>Snapshot original (first run), backup Claude's config, then write the enabled subset into it.</summary>
-    public void Apply(MasterStore store)
+    /// <summary>Snapshot original (first run), backup Claude's config, then write the given servers into it.</summary>
+    public void Apply(IReadOnlyDictionary<string, JsonValue> servers)
     {
         Backups.EnsureOriginalSnapshot(Paths.ClaudeConfigPath);
         Backups.BackUp(Paths.ClaudeConfigPath, "claude_desktop_config");
-        ClaudeConfigIO.Write(store.EnabledServers, Paths.ClaudeConfigPath);
+        ClaudeConfigIO.Write(servers, Paths.ClaudeConfigPath);
+    }
+
+    /// <summary>The active collection's enabled subset — see <see cref="Apply(IReadOnlyDictionary{string,JsonValue})"/>.</summary>
+    public void Apply(MasterStore store) => Apply(store.EnabledServers);
+
+    /// <summary>The sidecar beside the master list; a missing or unreadable file loads as empty (see <see cref="CollectionsFile.Load"/>).</summary>
+    public CollectionsFile LoadCollections() => CollectionsFile.Load(Paths.CollectionsFilePath);
+
+    /// <summary>Backup the existing sidecar (skipped when it doesn't exist yet), then atomically save the new one.</summary>
+    public AtomicWriteResult SaveCollections(CollectionsFile file)
+    {
+        Backups.BackUp(Paths.CollectionsFilePath, "collections");
+        return file.Save(Paths.CollectionsFilePath);
     }
 
     /// <summary>

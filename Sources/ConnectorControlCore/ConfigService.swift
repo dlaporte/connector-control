@@ -79,12 +79,30 @@ public struct ConfigService: Sendable {
     }
 
     /// Snapshot original (first run), backup Claude's config, then write the
-    /// enabled subset into it, preserving all other keys.
-    public func apply(_ store: MasterStore) throws {
+    /// given servers into it, preserving all other keys.
+    public func apply(servers: [String: JSONValue]) throws {
         try backups.ensureOriginalSnapshot(of: paths.claudeConfigURL)
         try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config")
-        try ClaudeConfigIO.write(mcpServers: store.enabledServers, to: paths.claudeConfigURL,
+        try ClaudeConfigIO.write(mcpServers: servers, to: paths.claudeConfigURL,
                                  staging: paths.stagingDirURL)
+    }
+
+    /// The active collection's enabled subset — see `apply(servers:)`.
+    public func apply(_ store: MasterStore) throws {
+        try apply(servers: store.enabledServers)
+    }
+
+    /// The sidecar beside the master list; a missing or unreadable file loads as empty (see
+    /// `CollectionsFile.load`), so there is nothing else for this method to handle.
+    public func loadCollections() -> CollectionsFile {
+        CollectionsFile.load(from: paths.collectionsFileURL)
+    }
+
+    /// Backup the existing sidecar (skipped when it doesn't exist yet — nothing to protect on
+    /// the very first save), then atomically save the new one.
+    public func saveCollections(_ file: CollectionsFile) throws {
+        try backups.backUp(fileAt: paths.collectionsFileURL, series: "collections")
+        try file.save(to: paths.collectionsFileURL, staging: paths.stagingDirURL)
     }
 
     /// Backup the current file, copy the chosen backup over it, then adopt the

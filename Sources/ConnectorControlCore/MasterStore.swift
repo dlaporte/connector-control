@@ -73,23 +73,36 @@ public struct MasterStore: Equatable, Codable, Sendable {
         return nil
     }
 
-    public mutating func renameActiveCollection(to name: String) -> String? {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
+    /// nil on success, else a user-facing error message. Renaming the active
+    /// collection keeps it active under its new name.
+    public mutating func renameCollection(_ name: String, to newName: String) -> String? {
+        let trimmed = newName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return "Name must not be empty." }
-        if trimmed != activeCollection, collections[trimmed] != nil {
+        if trimmed != name, collections[trimmed] != nil {
             return "A collection named \u{201C}\(trimmed)\u{201D} already exists."
         }
-        guard let current = collections.removeValue(forKey: activeCollection) else { return nil }
+        guard let current = collections.removeValue(forKey: name) else { return nil }
         collections[trimmed] = current
-        activeCollection = trimmed
+        if activeCollection == name { activeCollection = trimmed }
+        return nil
+    }
+
+    public mutating func renameActiveCollection(to name: String) -> String? {
+        renameCollection(activeCollection, to: name)
+    }
+
+    /// nil on success, else a user-facing error message. Refuses to delete the
+    /// last remaining collection. Deleting the active collection hands the
+    /// sorted-first remaining collection the active spot.
+    public mutating func deleteCollection(named name: String) -> String? {
+        guard collections.count > 1 else { return "Can\u{2019}t delete the last collection." }
+        collections.removeValue(forKey: name)
+        if activeCollection == name { activeCollection = collections.keys.min() ?? "Default" }
         return nil
     }
 
     public mutating func deleteActiveCollection() -> String? {
-        guard collections.count > 1 else { return "Can\u{2019}t delete the last collection." }
-        collections.removeValue(forKey: activeCollection)
-        activeCollection = collections.keys.min() ?? "Default"
-        return nil
+        deleteCollection(named: activeCollection)
     }
 
     public mutating func switchCollection(to name: String) -> String? {

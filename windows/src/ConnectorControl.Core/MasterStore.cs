@@ -81,36 +81,52 @@ public sealed class MasterStore : IEquatable<MasterStore>
         return null;
     }
 
-    public string? RenameActiveCollection(string name)
+    /// <summary>null on success, else a user-facing error message. Renaming the active collection keeps it active under its new name.</summary>
+    public string? RenameCollection(string name, string newName)
     {
-        var trimmed = name.TrimSpaces();
+        var trimmed = newName.TrimSpaces();
         if (trimmed.Length == 0)
         {
             return "Name must not be empty.";
         }
-        if (trimmed != ActiveCollection && Collections.ContainsKey(trimmed))
+        if (trimmed != name && Collections.ContainsKey(trimmed))
         {
             return $"A collection named “{trimmed}” already exists.";
         }
-        if (!Collections.Remove(ActiveCollection, out var current))
+        if (!Collections.Remove(name, out var current))
         {
             return null;
         }
         Collections[trimmed] = current;
-        ActiveCollection = trimmed;
+        if (ActiveCollection == name)
+        {
+            ActiveCollection = trimmed;
+        }
         return null;
     }
 
-    public string? DeleteActiveCollection()
+    public string? RenameActiveCollection(string name) => RenameCollection(ActiveCollection, name);
+
+    /// <summary>
+    /// null on success, else a user-facing error message. Refuses to delete the last remaining
+    /// collection. Deleting the active collection hands the sorted-first remaining collection
+    /// the active spot.
+    /// </summary>
+    public string? DeleteCollection(string name)
     {
         if (Collections.Count <= 1)
         {
             return "Can’t delete the last collection.";
         }
-        Collections.Remove(ActiveCollection);
-        ActiveCollection = Collections.Keys.Order(StringComparer.Ordinal).First();
+        Collections.Remove(name);
+        if (ActiveCollection == name)
+        {
+            ActiveCollection = Collections.Keys.Order(StringComparer.Ordinal).First();
+        }
         return null;
     }
+
+    public string? DeleteActiveCollection() => DeleteCollection(ActiveCollection);
 
     public string? SwitchCollection(string name)
     {

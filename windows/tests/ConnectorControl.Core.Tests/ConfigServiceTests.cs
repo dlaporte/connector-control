@@ -54,6 +54,27 @@ public class ConfigServiceTests : IDisposable
     }
 
     [Fact]
+    public void SaveCollectionsBacksUpTheSidecarAndLoadsItBack()
+    {
+        var file = new CollectionsFile([
+            new KeyValuePair<string, CollectionsFile.Entry>("X", new CollectionsFile.Entry(CollectionKind.Synced, fileName: "x.json")),
+        ]);
+        service.SaveCollections(file);
+        service.SaveCollections(new CollectionsFile([]));
+        Assert.Equal(new CollectionsFile([]), service.LoadCollections());
+        // the first save had nothing to back up; the second backed up the first
+        Assert.Single(service.Backups.Backups("collections"));
+    }
+
+    [Fact]
+    public void ApplyServersWritesExactlyWhatItIsGiven()
+    {
+        service.Apply(new Dictionary<string, JsonValue> { ["a"] = JsonValue.Object(("command", JsonValue.String("x"))) });
+        Assert.Equal(new Dictionary<string, JsonValue> { ["a"] = JsonValue.Object(("command", JsonValue.String("x"))) },
+            ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath));
+    }
+
+    [Fact]
     public void WipeRecoveryFlow()
     {
         var store = service.LoadAndReconcile().Store;

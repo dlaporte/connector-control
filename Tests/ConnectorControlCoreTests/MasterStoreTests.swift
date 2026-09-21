@@ -23,6 +23,25 @@ final class MasterStoreTests: XCTestCase {
         XCTAssertEqual(store.enabledServers, ["on": .object(["command": .string("a")])])
     }
 
+    func testRenamesANonActiveCollectionAndKeepsTheActiveName() {
+        var store = MasterStore(activeCollection: "A", collections: ["A": Collection(), "B": Collection()])
+        XCTAssertNil(store.renameCollection("B", to: "C"))
+        XCTAssertEqual(Set(store.collections.keys), ["A", "C"])
+        XCTAssertEqual(store.activeCollection, "A")
+        XCTAssertNil(store.renameCollection("A", to: "Z"))
+        XCTAssertEqual(store.activeCollection, "Z")
+        XCTAssertNotNil(store.renameCollection("Z", to: "C"), "a taken name is refused")
+    }
+
+    func testDeletesANonActiveCollectionAndRefusesTheLast() {
+        var store = MasterStore(activeCollection: "A", collections: ["A": Collection(), "B": Collection()])
+        XCTAssertNil(store.deleteCollection(named: "B"))
+        XCTAssertNotNil(store.deleteCollection(named: "A"), "the last collection stays")
+        store = MasterStore(activeCollection: "B", collections: ["A": Collection(), "B": Collection()])
+        XCTAssertNil(store.deleteCollection(named: "B"))
+        XCTAssertEqual(store.activeCollection, "A", "deleting the active one moves to the sorted-first remaining")
+    }
+
     func testLoadMissingFileReturnsEmptyStore() {
         let result = MasterStoreIO.load(from: url)
         XCTAssertEqual(result.store, .empty)

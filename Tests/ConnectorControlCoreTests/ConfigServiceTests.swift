@@ -58,6 +58,19 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(try service.backups.backups(series: "mcps").count, 1)
     }
 
+    func testSaveCollectionsBacksUpTheSidecarAndLoadsItBack() throws {
+        let file = CollectionsFile(collections: ["X": .init(kind: .synced, fileName: "x.json", relativeToStore: nil, origin: nil, needs: [:], publish: nil, provenance: [:])])
+        try service.saveCollections(file)
+        try service.saveCollections(CollectionsFile(collections: [:]))
+        XCTAssertEqual(service.loadCollections(), CollectionsFile(collections: [:]))
+        XCTAssertEqual(try service.backups.backups(series: "collections").count, 1, "the first save had nothing to back up; the second backed up the first")
+    }
+
+    func testApplyServersWritesExactlyWhatItIsGiven() throws {
+        try service.apply(servers: ["a": .object(["command": .string("x")])])
+        XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL), ["a": .object(["command": .string("x")])])
+    }
+
     func testWipeRecoveryFlow() throws {
         let store = try service.loadAndReconcile().store
         // Claude wipes the file to a preferences-only stub (issue #32345 shape)
