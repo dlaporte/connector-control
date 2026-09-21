@@ -100,8 +100,7 @@ public class FlyoutWindowTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        h.Dialogs.NextPromptAnswer = "Work";
-        state.NewCollection();   // Default + Work, with Work active
+        Assert.Null(state.CreateCollection("Work"));   // Default + Work, with Work active
         var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>

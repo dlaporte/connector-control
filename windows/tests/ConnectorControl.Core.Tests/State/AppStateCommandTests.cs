@@ -215,8 +215,7 @@ public class AppStateCommandTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        h.Dialogs.NextPromptAnswer = "Work";
-        state.NewCollection();
+        Assert.Null(state.CreateCollection("Work"));
         Assert.Equal("Work", state.ActiveCollection);
         state.SetEnabled("aws-mcp", false);
         Assert.Equal(["scoutbook", "service-now"], AppStateHarness.Keys(h.ClaudeServers().Keys));
@@ -238,80 +237,5 @@ public class AppStateCommandTests
         Assert.Equal("Default", state.ActiveCollection);
         Assert.Null(state.LastError);
         Assert.Null(h.Settings.LastApplyDate);
-    }
-
-    [Fact]
-    public void NewCollectionPromptTextAndCancel()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        h.Dialogs.NextPromptAnswer = null;
-        state.NewCollection();
-        Assert.Equal(new FakeDialogs.PromptCall("New Collection", ""), h.Dialogs.Prompts[0]);
-        Assert.Equal(["Default"], state.CollectionNames);
-
-        h.Dialogs.NextPromptAnswer = "Work";
-        state.NewCollection();
-        Assert.Equal(["Default", "Work"], state.CollectionNames);
-        Assert.Equal(["aws-mcp", "scoutbook", "service-now"], state.SortedNames);   // a COPY of the active collection
-        Assert.Equal(h.Now, h.Settings.LastApplyDate);
-    }
-
-    [Fact]
-    public void NewCollectionErrorsGoToLastError()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        h.Dialogs.NextPromptAnswer = "Default";
-        state.NewCollection();
-        Assert.Equal("A collection named “Default” already exists.", state.LastError);
-        h.Dialogs.NextPromptAnswer = "   ";
-        state.NewCollection();
-        Assert.Equal("Name must not be empty.", state.LastError);
-        Assert.Equal(["Default"], state.CollectionNames);
-    }
-
-    [Fact]
-    public void RenameCollectionPrefillsTheActiveName()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        h.Dialogs.NextPromptAnswer = "Main";
-        state.RenameCollection();
-        Assert.Equal(new FakeDialogs.PromptCall("Rename Collection", "Default"), h.Dialogs.Prompts[0]);
-        Assert.Equal("Main", state.ActiveCollection);
-        Assert.Equal("Main", h.StoreOnDisk().ActiveCollection);
-        Assert.Equal(h.Now, h.Settings.LastApplyDate);
-    }
-
-    [Fact]
-    public void DeleteCollectionConfirmTextAndLastCollectionError()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        state.DeleteCollection();
-        Assert.Equal(new FakeDialogs.ConfirmCall("Delete Collection “Default”?", "Its connector list is removed; backups keep prior states.", "Delete", "Cancel", true), h.Dialogs.Confirms[0]);
-        Assert.Equal("Can’t delete the last collection.", state.LastError);
-        Assert.Equal(["Default"], state.CollectionNames);
-    }
-
-    [Fact]
-    public void DeleteCollectionSwitchesToTheAlphabeticallyFirstRemaining()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        h.Dialogs.NextPromptAnswer = "Zeta";
-        state.NewCollection();
-        h.Dialogs.NextPromptAnswer = "Work";
-        state.NewCollection();
-        Assert.Equal("Work", state.ActiveCollection);
-        h.Dialogs.NextConfirm = false;
-        state.DeleteCollection();
-        Assert.Equal(["Default", "Work", "Zeta"], state.CollectionNames);   // cancelled
-        h.Dialogs.NextConfirm = true;
-        state.DeleteCollection();
-        Assert.Equal(["Default", "Zeta"], state.CollectionNames);
-        Assert.Equal("Default", state.ActiveCollection);
-        Assert.Equal("Default", h.StoreOnDisk().ActiveCollection);
     }
 }

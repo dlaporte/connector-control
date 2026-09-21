@@ -152,8 +152,7 @@ final class AppStateCommandTests: XCTestCase {
     func testSwitchCollectionAppliesImmediately() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        h.dialogs.nextPromptAnswer = "Work"
-        state.newCollection()
+        XCTAssertNil(state.createCollection(named: "Work"))
         XCTAssertEqual(state.activeCollection, "Work")
         state.setEnabled("aws-mcp", false)
         XCTAssertEqual(try h.claudeServers().keys.sorted(), ["scoutbook", "service-now"])
@@ -173,73 +172,5 @@ final class AppStateCommandTests: XCTestCase {
         XCTAssertEqual(state.activeCollection, "Default")
         XCTAssertNil(state.lastError)
         XCTAssertNil(h.settings.lastApplyDate)
-    }
-
-    func testNewCollectionPromptTextAndCancel() {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        h.dialogs.nextPromptAnswer = nil
-        state.newCollection()
-        XCTAssertEqual(h.dialogs.prompts[0], FakeDialogs.PromptCall(title: "New Collection", initial: ""))
-        XCTAssertEqual(state.collectionNames, ["Default"])
-
-        h.dialogs.nextPromptAnswer = "Work"
-        state.newCollection()
-        XCTAssertEqual(state.collectionNames, ["Default", "Work"])
-        XCTAssertEqual(state.sortedNames, fixture)   // a COPY of the active collection
-        XCTAssertEqual(h.settings.lastApplyDate, h.now)
-    }
-
-    func testNewCollectionErrorsGoToLastError() {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        h.dialogs.nextPromptAnswer = "Default"
-        state.newCollection()
-        XCTAssertEqual(state.lastError, "A collection named “Default” already exists.")
-        h.dialogs.nextPromptAnswer = "   "
-        state.newCollection()
-        XCTAssertEqual(state.lastError, "Name must not be empty.")
-        XCTAssertEqual(state.collectionNames, ["Default"])
-    }
-
-    func testRenameCollectionPrefillsTheActiveName() throws {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        h.dialogs.nextPromptAnswer = "Main"
-        state.renameCollection()
-        XCTAssertEqual(h.dialogs.prompts[0], FakeDialogs.PromptCall(title: "Rename Collection", initial: "Default"))
-        XCTAssertEqual(state.activeCollection, "Main")
-        XCTAssertEqual(try h.storeOnDisk().activeCollection, "Main")
-        XCTAssertEqual(h.settings.lastApplyDate, h.now)
-    }
-
-    func testDeleteCollectionConfirmTextAndLastCollectionError() {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        state.deleteCollection()
-        XCTAssertEqual(h.dialogs.confirms[0], FakeDialogs.ConfirmCall(
-            message: "Delete Collection “Default”?",
-            informative: "Its connector list is removed; backups keep prior states.",
-            primary: "Delete", cancel: "Cancel", destructive: true))
-        XCTAssertEqual(state.lastError, "Can’t delete the last collection.")
-        XCTAssertEqual(state.collectionNames, ["Default"])
-    }
-
-    func testDeleteCollectionSwitchesToTheAlphabeticallyFirstRemaining() throws {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        h.dialogs.nextPromptAnswer = "Zeta"
-        state.newCollection()
-        h.dialogs.nextPromptAnswer = "Work"
-        state.newCollection()
-        XCTAssertEqual(state.activeCollection, "Work")
-        h.dialogs.nextConfirm = false
-        state.deleteCollection()
-        XCTAssertEqual(state.collectionNames, ["Default", "Work", "Zeta"])   // cancelled
-        h.dialogs.nextConfirm = true
-        state.deleteCollection()
-        XCTAssertEqual(state.collectionNames, ["Default", "Zeta"])
-        XCTAssertEqual(state.activeCollection, "Default")
-        XCTAssertEqual(try h.storeOnDisk().activeCollection, "Default")
     }
 }

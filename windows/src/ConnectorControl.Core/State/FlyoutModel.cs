@@ -14,7 +14,9 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public const string EmptyText = "No connectors configured yet — add one below.";
     public const string RetryTitle = "Apply Failed — Retry";
     public const string RestartTitle = "Restart Required";
-    public const string NewCollectionTitle = "New Collection…";
+    public const string AddDisabledTooltip = "Additions go in a local collection.";
+    public const string ReviewAndApplyButton = "Review & Apply…";
+    public const string ChooseFolderButton = "Choose Folder…";
     /// <summary>Segoe Fluent Icons: Warning (exclamationmark.arrow.circlepath's nearest) and Refresh (arrow.clockwise).</summary>
     public const string RetryGlyph = "\ue7ba";
     public const string RestartGlyph = "\ue72c";
@@ -25,11 +27,15 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public static string SettingsNotSavedCaution(string detail) => $"Settings could not be saved ({detail}); changes apply until the app quits.";
 
+    public static string LocateButton(string fileName) => $"Locate {fileName}…";
+
     /// <summary>Property names Rebuild actually depends on — everything else AppState raises is noise for this view.</summary>
     private static readonly string[] RelevantProperties =
     [
         nameof(AppState.Store), nameof(AppState.ToolStatuses), nameof(AppState.LastError),
         nameof(AppState.StoreNotPrivate), nameof(AppState.ApplyRetryNeeded), nameof(AppState.NeedsClaudeRestart),
+        nameof(AppState.CollectionsFile), nameof(AppState.CollectionsCache), nameof(AppState.PendingUpdates),
+        nameof(AppState.PublishError),
     ];
 
     private readonly AppState state;
@@ -55,21 +61,39 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public IReadOnlyList<CollectionMenuItem> CollectionItems => collectionItems;
 
-    public static string RenameCollectionTitle(string active) => $"Rename “{active}”…";
-
-    public static string DeleteCollectionTitle(string active) => $"Delete “{active}”…";
-
-    public string RenameCollectionMenuItem => RenameCollectionTitle(state.ActiveCollection);
-
-    public string DeleteCollectionMenuItem => DeleteCollectionTitle(state.ActiveCollection);
-
-    public bool CanDeleteCollection => state.Store.Collections.Count >= 2;
+    /// <summary>Nothing can be added to a synced collection: its content is the source file's.</summary>
+    public bool CanAddConnector => !state.ActiveCollectionIsSynced;
 
     public string? ErrorMessage => state.LastError
         ?? (state.StoreNotPrivate ? StoreNotPrivateCaution : null)
         ?? (settings.LastSaveError is { } e ? SettingsNotSavedCaution(e) : null);
 
     public bool HasError => ErrorMessage is not null;
+
+    public CollectionBanner? CollectionBanner => state.CollectionBanner;
+
+    public string? CollectionBannerText => state.CollectionBanner switch
+    {
+        State.CollectionBanner.UpdateAvailable update => AppState.CollectionUpdateBanner(update.Collection, update.Summary),
+        State.CollectionBanner.Locate locate => AppState.CollectionLocateBanner(locate.Collection),
+        // The folder is the binding's, not the banner's: publishing is what sets the error, so
+        // the collection that failed always has one.
+        State.CollectionBanner.PublishFailed failed => AppState.CollectionPublishFailedBanner(
+            failed.Collection,
+            state.CollectionsCache.Published.TryGetValue(failed.Collection, out var binding) ? binding.Folder : "",
+            failed.Message),
+        _ => null,
+    };
+
+    public string? CollectionBannerButton => state.CollectionBanner switch
+    {
+        State.CollectionBanner.UpdateAvailable => ReviewAndApplyButton,
+        State.CollectionBanner.Locate locate => LocateButton(locate.FileName),
+        State.CollectionBanner.PublishFailed => ChooseFolderButton,
+        _ => null,
+    };
+
+    public bool HasCollectionBanner => CollectionBannerText is not null;
 
     public ObservableCollection<ConnectorRow> Rows { get; }
 
@@ -123,12 +147,6 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     }
 
     public void SwitchCollection(string name) => state.SwitchCollection(name);
-
-    public void NewCollection() => state.NewCollection();
-
-    public void RenameCollection() => state.RenameCollection();
-
-    public void DeleteCollection() => state.DeleteCollection();
 
     public void Quit() => state.QuitApp();
 
@@ -192,7 +210,9 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
             }
         }
         var active = state.ActiveCollection;
-        collectionItems = state.CollectionNames.Select(n => new CollectionMenuItem(n, n == active)).ToList();
+        collectionItems = state.CollectionNames
+            .Select(n => new CollectionMenuItem(n, n == active, state.IsSynced(n), state.PendingUpdates.ContainsKey(n)))
+            .ToList();
         RaiseAll();
     }
 

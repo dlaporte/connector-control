@@ -83,11 +83,6 @@ struct PopoverView: View {
                     }
                 }
             }
-            Divider()
-            Button(PopoverModel.newCollectionTitle) { model.newCollection() }
-            Button(model.renameCollectionTitle) { model.renameCollection() }
-            Button(model.deleteCollectionTitle) { model.deleteCollection() }
-                .disabled(!model.canDeleteCollection)
         } label: {
             Text(model.collectionChipText)
                 .font(.caption2.weight(.semibold))

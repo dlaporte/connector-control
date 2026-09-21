@@ -73,10 +73,15 @@ public class StringCatalogTests
     /// </summary>
     private static readonly Dictionary<string, string[]> ArgsByKey = new(StringComparer.Ordinal)
     {
+        ["AppState.collectionLocateBanner"] = ["X"],
+        ["AppState.collectionPublishFailedBanner"] = ["X", "Y", "Z"],
+        ["AppState.collectionUpdateBanner"] = ["X", "Y"],
+        ["AppState.collectionUpdateNotificationBody"] = ["X", "Y"],
         ["AppState.deleteCollectionMessage"] = ["X"],
         ["AppState.duplicateNameError"] = ["X"],
         ["AppState.enabledSubtitle"] = ["3", "7"],
         ["AppState.malformedConfigMessage"] = ["X"],
+        ["AppState.needsValueCaution"] = ["X"],
         ["ClaudeProcess.notAClaudePackageError"] = ["X"],
         ["ClaudePublisher.subjectNoOrganizationError"] = ["X", "Y"],
         ["ClaudeSignature.notFoundMessage"] = ["X"],
@@ -95,8 +100,7 @@ public class StringCatalogTests
         ["MasterStore.duplicateCollectionNameError"] = ["X"],
         ["MasterStore.unknownCollectionError"] = ["X"],
         ["PopoverModel.collectionChipText"] = ["X"],
-        ["PopoverModel.deleteCollectionTitle"] = ["X"],
-        ["PopoverModel.renameCollectionTitle"] = ["X"],
+        ["PopoverModel.locateButton"] = ["X"],
         // The parameter here is a RemoteField, not free text, so the fixed argument is the
         // label one of them renders as rather than the usual "X".
         ["RemotePattern.cmdUnsafeReason"] = ["Server URL"],
@@ -123,6 +127,10 @@ public class StringCatalogTests
         actual["AppState.chooseClaude"] = ClaudePublisher.ChooseClaude;
         actual["AppState.claudeConfigChangedBody"] = AppState.ClaudeConfigChangedBody;
         actual["AppState.claudeConfigRegeneratedBody"] = AppState.ClaudeConfigRegeneratedBody;
+        actual["AppState.collectionLocateBanner"] = AppState.CollectionLocateBanner("X");
+        actual["AppState.collectionPublishFailedBanner"] = AppState.CollectionPublishFailedBanner("X", "Y", "Z");
+        actual["AppState.collectionUpdateBanner"] = AppState.CollectionUpdateBanner("X", "Y");
+        actual["AppState.collectionUpdateNotificationBody"] = AppState.CollectionUpdateNotificationBody("X", "Y");
         actual["AppState.connectorListChangedBody.noRestart"] =
             AppState.ConnectorListChangedBody(new ServerDelta([], [], []), restartRequired: false);
         actual["AppState.connectorListChangedBody.restart"] =
@@ -132,8 +140,11 @@ public class StringCatalogTests
         actual["AppState.deleteCollectionMessage"] = AppState.DeleteCollectionMessage("X");
         actual["AppState.duplicateNameError"] = AppState.DuplicateNameError("X");
         actual["AppState.enabledSubtitle"] = AppState.EnabledSubtitle(3, 7);
+        actual["AppState.lastLocalCollectionError"] = AppState.LastLocalCollectionError;
+        actual["AppState.locateCaution"] = AppState.LocateCaution;
         actual["AppState.malformedConfigMessage"] = AppState.MalformedConfigMessage("X");
         actual["AppState.nameEmptyError"] = AppState.NameEmptyError;
+        actual["AppState.needsValueCaution"] = AppState.NeedsValueCaution("X");
         actual["AppState.newCollectionTitle"] = AppState.NewCollectionTitle;
         actual["AppState.noConnectorsSubtitle"] = AppState.NoConnectorsSubtitle;
         actual["AppState.quitButton"] = AppState.QuitButton;
@@ -253,15 +264,16 @@ public class StringCatalogTests
 
         actual["Notifications.restartToastButton"] = Notifications.RestartToastButton;
         actual["Notifications.title"] = Notifications.Title;
+        actual["PopoverModel.addDisabledTooltip"] = FlyoutModel.AddDisabledTooltip;
         actual["PopoverModel.addTooltip"] = FlyoutModel.AddTooltip;
+        actual["PopoverModel.chooseFolderButton"] = FlyoutModel.ChooseFolderButton;
         actual["PopoverModel.collectionChipText"] = FlyoutModel.CollectionChipTextFor("X");
-        actual["PopoverModel.deleteCollectionTitle"] = FlyoutModel.DeleteCollectionTitle("X");
         actual["PopoverModel.emptyText"] = FlyoutModel.EmptyText;
-        actual["PopoverModel.newCollectionTitle"] = FlyoutModel.NewCollectionTitle;
+        actual["PopoverModel.locateButton"] = FlyoutModel.LocateButton("X");
         actual["PopoverModel.quitTooltip"] = FlyoutModel.QuitTooltip;
-        actual["PopoverModel.renameCollectionTitle"] = FlyoutModel.RenameCollectionTitle("X");
         actual["PopoverModel.restartTitle"] = FlyoutModel.RestartTitle;
         actual["PopoverModel.retryTitle"] = FlyoutModel.RetryTitle;
+        actual["PopoverModel.reviewAndApplyButton"] = FlyoutModel.ReviewAndApplyButton;
         actual["PopoverModel.settingsTooltip"] = FlyoutModel.SettingsTooltip;
         actual["PopoverModel.title"] = FlyoutModel.Title;
 

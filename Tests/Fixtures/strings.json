@@ -3,6 +3,23 @@
   "AppState.chooseClaude": "Choose the real Claude Desktop under Settings ▸ Claude.",
   "AppState.claudeConfigChangedBody": "Claude's config changed outside Connector Control.",
   "AppState.claudeConfigRegeneratedBody": "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up.",
+  "AppState.collectionLocateBanner": {
+    "mac": {
+      "format": "{0}'s file isn’t on this Mac yet."
+    },
+    "win": {
+      "format": "{0}'s file isn’t on this PC yet."
+    }
+  },
+  "AppState.collectionPublishFailedBanner": {
+    "format": "Couldn’t publish {0} to {1}: {2}"
+  },
+  "AppState.collectionUpdateBanner": {
+    "format": "{0} changed at its source: {1}."
+  },
+  "AppState.collectionUpdateNotificationBody": {
+    "format": "{0} changed at its source: {1}. Review it in Connector Control."
+  },
   "AppState.connectorListChangedBody.noRestart": "The connector list changed outside Connector Control — Claude's config was regenerated. Claude will use it the next time it starts.",
   "AppState.connectorListChangedBody.restart": "The connector list changed outside Connector Control — Claude's config was regenerated. Restart Claude to pick it up.",
   "AppState.defaultClaudeAppPath": {
@@ -19,10 +36,15 @@
   "AppState.enabledSubtitle": {
     "format": "{0} of {1} enabled"
   },
+  "AppState.lastLocalCollectionError": "The last local collection can’t be deleted.",
+  "AppState.locateCaution": "Locate the collection file to resolve paths.",
   "AppState.malformedConfigMessage": {
     "format": "Claude's config file is not valid JSON ({0}). Nothing was written. Use Backups ▸ Restore… to recover it."
   },
   "AppState.nameEmptyError": "Name must not be empty.",
+  "AppState.needsValueCaution": {
+    "format": "needs your value: {0}"
+  },
   "AppState.newCollectionTitle": "New Collection",
   "AppState.noConnectorsSubtitle": "No connectors configured",
   "AppState.quitButton": "Quit",
@@ -160,21 +182,20 @@
   },
   "Notifications.restartToastButton": "Restart Claude",
   "Notifications.title": "Connector Control",
+  "PopoverModel.addDisabledTooltip": "Additions go in a local collection.",
   "PopoverModel.addTooltip": "Add Connector",
+  "PopoverModel.chooseFolderButton": "Choose Folder…",
   "PopoverModel.collectionChipText": {
     "format": "{0} ▾"
   },
-  "PopoverModel.deleteCollectionTitle": {
-    "format": "Delete “{0}”…"
-  },
   "PopoverModel.emptyText": "No connectors configured yet — add one below.",
-  "PopoverModel.newCollectionTitle": "New Collection…",
-  "PopoverModel.quitTooltip": "Quit Connector Control",
-  "PopoverModel.renameCollectionTitle": {
-    "format": "Rename “{0}”…"
+  "PopoverModel.locateButton": {
+    "format": "Locate {0}…"
   },
+  "PopoverModel.quitTooltip": "Quit Connector Control",
   "PopoverModel.restartTitle": "Restart Required",
   "PopoverModel.retryTitle": "Apply Failed — Retry",
+  "PopoverModel.reviewAndApplyButton": "Review & Apply…",
   "PopoverModel.settingsTooltip": "Settings",
   "PopoverModel.title": "Connector Control",
   "RemoteAuthKind.automatic.title": "Automatic (OAuth / none)",

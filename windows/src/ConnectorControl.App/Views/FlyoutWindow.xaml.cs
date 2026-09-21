@@ -182,7 +182,7 @@ public partial class FlyoutWindow : Window
 
     private void OnCollectionChip(object sender, RoutedEventArgs e) => OpenCollectionMenu();
 
-    /// <summary>The collection chip menu: collections (check on the active), separator, New / Rename / Delete.</summary>
+    /// <summary>The collection chip menu: the collections to switch between, a check on the active one.</summary>
     internal ContextMenu OpenCollectionMenu()
     {
         var menu = new ContextMenu { PlacementTarget = CollectionChip, Placement = PlacementMode.Bottom, StaysOpen = false };
@@ -197,24 +197,11 @@ public partial class FlyoutWindow : Window
             entry.Click += (_, _) => model.SwitchCollection(name);
             menu.Items.Add(entry);
         }
-        menu.Items.Add(new Separator());
-        menu.Items.Add(MenuItemFor(FlyoutModel.NewCollectionTitle, model.NewCollection));
-        menu.Items.Add(MenuItemFor(model.RenameCollectionMenuItem, model.RenameCollection));
-        var delete = MenuItemFor(model.DeleteCollectionMenuItem, model.DeleteCollection);
-        delete.IsEnabled = model.CanDeleteCollection;
-        menu.Items.Add(delete);
         // The reference, not an Opened/Closed counter: ContextMenu.Closed can be deferred by
         // the menu's fade animation, and HasOpenPopup must never be wrong in the meantime.
         openMenu = menu;
         menu.Closed += (_, _) => Dispatcher.BeginInvoke(new Action(HideIfInactive), DispatcherPriority.Background);
         menu.IsOpen = true;
         return menu;
-    }
-
-    private static MenuItem MenuItemFor(string title, Action action)
-    {
-        var item = new MenuItem { Header = new TextBlock { Text = title } };
-        item.Click += (_, _) => action();
-        return item;
     }
 }

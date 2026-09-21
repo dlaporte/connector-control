@@ -67,10 +67,15 @@ final class StringCatalogTests: XCTestCase {
     /// parameters, and the joined-keys rendering for a factory that takes a
     /// list of keys — matching the convention the C# test also follows.
     private static let argsByKey: [String: [String]] = [
+        "AppState.collectionLocateBanner": ["X"],
+        "AppState.collectionPublishFailedBanner": ["X", "Y", "Z"],
+        "AppState.collectionUpdateBanner": ["X", "Y"],
+        "AppState.collectionUpdateNotificationBody": ["X", "Y"],
         "AppState.deleteCollectionMessage": ["X"],
         "AppState.duplicateNameError": ["X"],
         "AppState.enabledSubtitle": ["3", "7"],
         "AppState.malformedConfigMessage": ["X"],
+        "AppState.needsValueCaution": ["X"],
         "ClaudeSignature.notFoundMessage": ["X"],
         "ClaudeSignature.refusalMessage": ["X", "Y"],
         "ClaudeSignature.uninspectableMessage": ["X"],
@@ -87,8 +92,7 @@ final class StringCatalogTests: XCTestCase {
         "MasterStore.duplicateCollectionNameError": ["X"],
         "MasterStore.unknownCollectionError": ["X"],
         "PopoverModel.collectionChipText": ["X"],
-        "PopoverModel.deleteCollectionTitle": ["X"],
-        "PopoverModel.renameCollectionTitle": ["X"],
+        "PopoverModel.locateButton": ["X"],
         "RestoreModel.confirmMessage": ["X"],
         "SettingsModel.keepCountLabel": ["3"],
         "SettingsModel.loginItemFailureNote": ["X"],
@@ -105,6 +109,10 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.chooseClaude"] = AppState.chooseClaude
         actual["AppState.claudeConfigChangedBody"] = AppState.claudeConfigChangedBody
         actual["AppState.claudeConfigRegeneratedBody"] = AppState.claudeConfigRegeneratedBody
+        actual["AppState.collectionLocateBanner"] = AppState.collectionLocateBanner("X")
+        actual["AppState.collectionPublishFailedBanner"] = AppState.collectionPublishFailedBanner("X", "Y", "Z")
+        actual["AppState.collectionUpdateBanner"] = AppState.collectionUpdateBanner("X", "Y")
+        actual["AppState.collectionUpdateNotificationBody"] = AppState.collectionUpdateNotificationBody("X", "Y")
         actual["AppState.connectorListChangedBody.noRestart"] =
             AppState.connectorListChangedBody(ServerDelta(), restartRequired: false)
         actual["AppState.connectorListChangedBody.restart"] =
@@ -115,8 +123,11 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.deleteCollectionMessage"] = AppState.deleteCollectionMessage("X")
         actual["AppState.duplicateNameError"] = AppState.duplicateNameError("X")
         actual["AppState.enabledSubtitle"] = AppState.enabledSubtitle(enabled: 3, total: 7)
+        actual["AppState.lastLocalCollectionError"] = AppState.lastLocalCollectionError
+        actual["AppState.locateCaution"] = AppState.locateCaution
         actual["AppState.malformedConfigMessage"] = AppState.malformedConfigMessage(detail: "X")
         actual["AppState.nameEmptyError"] = AppState.nameEmptyError
+        actual["AppState.needsValueCaution"] = AppState.needsValueCaution("X")
         actual["AppState.newCollectionTitle"] = AppState.newCollectionTitle
         actual["AppState.noConnectorsSubtitle"] = AppState.noConnectorsSubtitle
         actual["AppState.quitButton"] = AppState.quitButton
@@ -221,15 +232,16 @@ final class StringCatalogTests: XCTestCase {
 
         actual["Notifications.restartToastButton"] = Notifications.restartToastButton
         actual["Notifications.title"] = Notifications.title
+        actual["PopoverModel.addDisabledTooltip"] = PopoverModel.addDisabledTooltip
         actual["PopoverModel.addTooltip"] = PopoverModel.addTooltip
+        actual["PopoverModel.chooseFolderButton"] = PopoverModel.chooseFolderButton
         actual["PopoverModel.collectionChipText"] = PopoverModel.collectionChipText("X")
-        actual["PopoverModel.deleteCollectionTitle"] = PopoverModel.deleteCollectionTitle("X")
         actual["PopoverModel.emptyText"] = PopoverModel.emptyText
-        actual["PopoverModel.newCollectionTitle"] = PopoverModel.newCollectionTitle
+        actual["PopoverModel.locateButton"] = PopoverModel.locateButton("X")
         actual["PopoverModel.quitTooltip"] = PopoverModel.quitTooltip
-        actual["PopoverModel.renameCollectionTitle"] = PopoverModel.renameCollectionTitle("X")
         actual["PopoverModel.restartTitle"] = PopoverModel.restartTitle
         actual["PopoverModel.retryTitle"] = PopoverModel.retryTitle
+        actual["PopoverModel.reviewAndApplyButton"] = PopoverModel.reviewAndApplyButton
         actual["PopoverModel.settingsTooltip"] = PopoverModel.settingsTooltip
         actual["PopoverModel.title"] = PopoverModel.title
 

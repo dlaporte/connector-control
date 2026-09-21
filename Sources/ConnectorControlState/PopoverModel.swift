@@ -13,7 +13,9 @@ public final class PopoverModel: ObservableObject {
     public static let emptyText = "No connectors configured yet — add one below."
     public static let retryTitle = "Apply Failed — Retry"
     public static let restartTitle = "Restart Required"
-    public static let newCollectionTitle = "New Collection…"
+    public static let addDisabledTooltip = "Additions go in a local collection."
+    public static let reviewAndApplyButton = "Review & Apply…"
+    public static let chooseFolderButton = "Choose Folder…"
     /// SF Symbols: the retry footer, the restart footer, and the row caution glyph.
     public static let retryGlyph = "exclamationmark.arrow.circlepath"
     public static let restartGlyph = "arrow.clockwise"
@@ -21,9 +23,7 @@ public final class PopoverModel: ObservableObject {
 
     public static func collectionChipText(_ active: String) -> String { "\(active) ▾" }
 
-    public static func renameCollectionTitle(_ active: String) -> String { "Rename “\(active)”…" }
-
-    public static func deleteCollectionTitle(_ active: String) -> String { "Delete “\(active)”…" }
+    public static func locateButton(_ fileName: String) -> String { "Locate \(fileName)…" }
 
     private let state: AppState
     private var subscription: AnyCancellable?
@@ -41,18 +41,45 @@ public final class PopoverModel: ObservableObject {
 
     public var collectionItems: [CollectionMenuItem] {
         let active = state.activeCollection
-        return state.collectionNames.map { CollectionMenuItem(name: $0, isActive: $0 == active) }
+        return state.collectionNames.map {
+            CollectionMenuItem(name: $0, isActive: $0 == active, isSynced: state.isSynced($0),
+                               hasPendingUpdate: state.pendingUpdates[$0] != nil)
+        }
     }
 
-    public var renameCollectionTitle: String { PopoverModel.renameCollectionTitle(state.activeCollection) }
-
-    public var deleteCollectionTitle: String { PopoverModel.deleteCollectionTitle(state.activeCollection) }
-
-    public var canDeleteCollection: Bool { state.collectionNames.count >= 2 }
+    /// Nothing can be added to a synced collection: its content is the source file's.
+    public var canAddConnector: Bool { !state.activeCollectionIsSynced }
 
     // MARK: banner
 
     public var errorMessage: String? { state.lastError }
+
+    public var collectionBanner: CollectionBanner? { state.collectionBanner }
+
+    public var collectionBannerText: String? {
+        switch state.collectionBanner {
+        case .updateAvailable(let collection, let summary):
+            return AppState.collectionUpdateBanner(collection, summary)
+        case .locate(let collection, _):
+            return AppState.collectionLocateBanner(collection)
+        case .publishFailed(let collection, let message):
+            // The folder is the binding's, not the banner's: publishing is what sets the error,
+            // so the collection that failed always has one.
+            return AppState.collectionPublishFailedBanner(
+                collection, state.collectionsCache.published[collection]?.folder ?? "", message)
+        case nil:
+            return nil
+        }
+    }
+
+    public var collectionBannerButton: String? {
+        switch state.collectionBanner {
+        case .updateAvailable: return PopoverModel.reviewAndApplyButton
+        case .locate(_, let fileName): return PopoverModel.locateButton(fileName)
+        case .publishFailed: return PopoverModel.chooseFolderButton
+        case nil: return nil
+        }
+    }
 
     // MARK: rows
 
@@ -107,12 +134,6 @@ public final class PopoverModel: ObservableObject {
     public func setEnabled(_ name: String, _ on: Bool) { state.setEnabled(name, on) }
 
     public func switchCollection(_ name: String) { state.switchCollection(to: name) }
-
-    public func newCollection() { state.newCollection() }
-
-    public func renameCollection() { state.renameCollection() }
-
-    public func deleteCollection() { state.deleteCollection() }
 
     public func quit() { state.quitApp() }
 

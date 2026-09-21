@@ -28,10 +28,18 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>Coined here, not taken from the Mac catalog: on macOS a relaunch cannot fail silently.</summary>
     public const string RelaunchFailedMessage = "Claude didn’t come back after the restart. Start Claude yourself, then try again.";
     public const string NameEmptyError = "Name must not be empty.";
+    public const string LastLocalCollectionError = "The last local collection can\u2019t be deleted.";
+    public const string LocateCaution = "Locate the collection file to resolve paths.";
     public static string DuplicateNameError(string name) => $"A connector named “{name}” already exists.";
     public static string DeleteCollectionMessage(string collection) => $"Delete Collection “{collection}”?";
     public static string MalformedConfigMessage(string detail) =>
         $"Claude's config file is not valid JSON ({detail}). Nothing was written. Use Backups ▸ Restore… to recover it.";
+    public static string NeedsValueCaution(string names) => $"needs your value: {names}";
+    public static string CollectionUpdateBanner(string collection, string summary) => $"{collection} changed at its source: {summary}.";
+    /// <summary>"this PC" is the platform-forced half of this sentence; the Mac mirror says "this Mac".</summary>
+    public static string CollectionLocateBanner(string collection) => $"{collection}'s file isn\u2019t on this PC yet.";
+    public static string CollectionPublishFailedBanner(string collection, string folder, string reason) => $"Couldn\u2019t publish {collection} to {folder}: {reason}";
+    public static string CollectionUpdateNotificationBody(string collection, string summary) => $"{collection} changed at its source: {summary}. Review it in Connector Control.";
     /// <summary>Claude's launch time is re-read 3 s after the restart completes.</summary>
     public static readonly TimeSpan RestartRecheckDelay = TimeSpan.FromSeconds(3);
     /// <summary>
@@ -42,6 +50,8 @@ public sealed class AppState : ObservableObject, IDisposable
     public static readonly TimeSpan RestartRelaunchCheck = TimeSpan.FromSeconds(20);
 
     private static readonly IReadOnlyDictionary<string, JsonValue> EmptyServers = new Dictionary<string, JsonValue>(StringComparer.Ordinal);
+    private static readonly IReadOnlyDictionary<string, CollectionDiff> EmptyPending = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal);
+    private static readonly IReadOnlyDictionary<string, string> EmptySourceErrors = new Dictionary<string, string>(StringComparer.Ordinal);
 
     private readonly ISettings settings;
     private readonly IClaudeProcess claude;
@@ -61,6 +71,11 @@ public sealed class AppState : ObservableObject, IDisposable
     private IReadOnlyDictionary<string, JsonValue> appliedServers = EmptyServers;
     private ConfigService service;
     private bool hasLoadedOnce;
+    private CollectionsFile collectionsFile = new([]);
+    private CollectionsLocalCache collectionsCache = new([], []);
+    private IReadOnlyDictionary<string, CollectionDiff> pendingUpdates = EmptyPending;
+    private IReadOnlyDictionary<string, string> sourceErrors = EmptySourceErrors;
+    private CollectionPublishError? publishError;
     private FileWatcher? watcher;
     private FileWatcher? storeWatcher;
     private bool disposed;
@@ -117,6 +132,25 @@ public sealed class AppState : ObservableObject, IDisposable
     public IReadOnlyDictionary<string, JsonValue> AppliedServers { get => appliedServers; private set => Set(ref appliedServers, value); }
 
     public ConfigService Service { get => service; private set => Set(ref service, value); }
+
+    /// <summary>The sidecar beside the master list, reconciled with the store on every load.</summary>
+    public CollectionsFile CollectionsFile { get => collectionsFile; private set => Set(ref collectionsFile, value); }
+
+    /// <summary>This machine's bindings, reconciled with the sidecar on every load.</summary>
+    public CollectionsLocalCache CollectionsCache { get => collectionsCache; private set => Set(ref collectionsCache, value); }
+
+    /// <summary>
+    /// Synced collections whose source differs from what the store holds. Settable inside the
+    /// assembly so the banner rules can be exercised without a source file behind them; the
+    /// source watcher is what fills it in the app.
+    /// </summary>
+    public IReadOnlyDictionary<string, CollectionDiff> PendingUpdates { get => pendingUpdates; internal set => Set(ref pendingUpdates, value); }
+
+    /// <summary>Collection → why its source could not be read, after repeated failures or a manual refresh.</summary>
+    public IReadOnlyDictionary<string, string> SourceErrors { get => sourceErrors; internal set => Set(ref sourceErrors, value); }
+
+    /// <summary>The last publish that failed, with the reason. Cleared by a write that succeeds.</summary>
+    public CollectionPublishError? PublishError { get => publishError; internal set => Set(ref publishError, value); }
 
     public bool IsDirty => !DictionaryEquality.Equal(Store.EnabledServers, AppliedServers);
 
@@ -383,6 +417,7 @@ public sealed class AppState : ObservableObject, IDisposable
                 baseline: hasLoadedOnce ? AppliedServers : null,
                 storeAuthoritative: trigger != ReloadTrigger.Routine);
             Store = result.Store;
+            LoadCollections();
             var claudeConfigChangedExternally = false;
             if (result.ClaudeServers is { } servers)
             {
@@ -503,11 +538,20 @@ public sealed class AppState : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// The master list first, then the sidecar beside it, then this machine's cache — the order a
+    /// crash has to survive: a half-done write leaves the collection loading as an ordinary local
+    /// one until the next save, and loses nothing the app cannot rebuild. One catch for the
+    /// three: the first failure stops the chain, since a sidecar written against a master list
+    /// that never landed would describe collections that do not exist.
+    /// </summary>
     private void PersistStore()
     {
         try
         {
             StoreNotPrivate = !Service.SaveStore(Store).Protected;
+            Service.SaveCollections(CollectionsFile);
+            CollectionsCache.Save(Service.Paths.CollectionsCachePath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -689,45 +733,278 @@ public sealed class AppState : ObservableObject, IDisposable
         RaiseAll();
     }
 
-    public void NewCollection()
+    /// <summary>
+    /// Copies the active collection under a new name and makes it active, as the chip menu's
+    /// New Collection has always done. null on success, else the message to show.
+    /// </summary>
+    public string? CreateCollection(string name)
     {
-        if (dialogs.PromptForName(NewCollectionTitle, "") is not { } name)
+        if (Store.AddCollection(name, copyingCurrent: true) is { } error)
         {
-            return;
+            return error;
         }
-        FinishCollectionChange(Store.AddCollection(name, copyingCurrent: true));
-    }
-
-    public void RenameCollection()
-    {
-        if (dialogs.PromptForName(RenameCollectionTitle, Store.ActiveCollection) is not { } name)
-        {
-            return;
-        }
-        FinishCollectionChange(Store.RenameActiveCollection(name));
-    }
-
-    public void DeleteCollection()
-    {
-        if (!dialogs.Confirm(DeleteCollectionMessage(Store.ActiveCollection), DeleteCollectionInformative, DeleteButton, destructive: true))
-        {
-            return;
-        }
-        FinishCollectionChange(Store.DeleteActiveCollection());
-    }
-
-    private void FinishCollectionChange(string? error)
-    {
-        if (error is null)
-        {
-            PersistStore();
-            PerformApply();
-        }
-        else
-        {
-            LastError = error;
-        }
+        PersistStore();
+        PerformApply();
         RaiseAll();
+        return null;
+    }
+
+    /// <summary>
+    /// Renames a collection wherever its name is a key: the master list, the sidecar entry, this
+    /// machine's bindings, and the derived state the banner reads. null on success.
+    /// </summary>
+    public string? RenameCollection(string name, string newName)
+    {
+        if (Store.RenameCollection(name, newName) is { } error)
+        {
+            return error;
+        }
+        var trimmed = newName.TrimSpaces();
+        if (trimmed != name)
+        {
+            CollectionsFile = new CollectionsFile(Moved(CollectionsFile.Collections, name, trimmed));
+            CollectionsCache = new CollectionsLocalCache(
+                Moved(CollectionsCache.Synced, name, trimmed), Moved(CollectionsCache.Published, name, trimmed));
+            PendingUpdates = Moved(PendingUpdates, name, trimmed);
+            SourceErrors = Moved(SourceErrors, name, trimmed);
+            if (PublishError is { } failure && failure.Collection == name)
+            {
+                PublishError = failure with { Collection = trimmed };
+            }
+        }
+        PersistStore();
+        PerformApply();
+        RaiseAll();
+        return null;
+    }
+
+    /// <summary>
+    /// Deletes a collection and everything keyed by its name. A synced collection's source file
+    /// is never touched — only this machine's binding to it goes. null on success.
+    /// </summary>
+    public string? DeleteCollection(string name)
+    {
+        // There must always be somewhere to add a connector, and only a local collection takes
+        // one — so the last local collection stays even when synced ones remain beside it. The
+        // store still owns "no collection by that name": a name it does not have is not the last
+        // anything, and its own message is the one to show.
+        if (Store.Collections.ContainsKey(name) && KindOf(name) == CollectionKind.Local && LocalCollectionNames.Count <= 1)
+        {
+            return LastLocalCollectionError;
+        }
+        if (Store.DeleteCollection(name) is { } error)
+        {
+            return error;
+        }
+        CollectionsFile = new CollectionsFile(Without(CollectionsFile.Collections, name));
+        CollectionsCache = new CollectionsLocalCache(
+            Without(CollectionsCache.Synced, name), Without(CollectionsCache.Published, name));
+        PendingUpdates = Without(PendingUpdates, name);
+        SourceErrors = Without(SourceErrors, name);
+        if (PublishError is { } failure && failure.Collection == name)
+        {
+            PublishError = null;
+        }
+        PersistStore();
+        PerformApply();
+        RaiseAll();
+        return null;
+    }
+
+    private static Dictionary<string, TValue> Moved<TValue>(IReadOnlyDictionary<string, TValue> source, string name, string newName)
+    {
+        var copy = new Dictionary<string, TValue>(source, StringComparer.Ordinal);
+        if (copy.Remove(name, out var value))
+        {
+            copy[newName] = value;
+        }
+        return copy;
+    }
+
+    private static Dictionary<string, TValue> Without<TValue>(IReadOnlyDictionary<string, TValue> source, string name)
+    {
+        var copy = new Dictionary<string, TValue>(source, StringComparer.Ordinal);
+        copy.Remove(name);
+        return copy;
+    }
+
+    // MARK: collection kinds and bindings
+
+    public CollectionKind KindOf(string collection) => CollectionsFile.KindOf(collection);
+
+    public bool IsSynced(string collection) => KindOf(collection) == CollectionKind.Synced;
+
+    public bool IsPublished(string collection) =>
+        CollectionsFile.Collections.TryGetValue(collection, out var entry) && entry.Publish is not null;
+
+    public CollectionsLocalCache.SyncedBinding? SourceBinding(string collection) =>
+        CollectionsCache.Synced.TryGetValue(collection, out var binding) ? binding : null;
+
+    public bool ActiveCollectionIsSynced => IsSynced(ActiveCollection);
+
+    public IReadOnlyList<string> LocalCollectionNames =>
+        CollectionNames.Where(n => KindOf(n) == CollectionKind.Local).ToList();
+
+    /// <summary>What the last Apply asked the user to fill in for one connector, by marker name.</summary>
+    public IReadOnlyDictionary<string, CollectionsFile.Need> Needs(string connector, string collection) =>
+        CollectionsFile.Collections.TryGetValue(collection, out var entry)
+            && entry.Needs.TryGetValue(connector, out var needs)
+            ? needs
+            : EmptyNeeds;
+
+    private static readonly IReadOnlyDictionary<string, CollectionsFile.Need> EmptyNeeds =
+        new Dictionary<string, CollectionsFile.Need>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The collections-level caution for one row, distinct from the tool caution the launcher
+    /// probe produces. The markers in the stored config are the source of truth, not the
+    /// sidecar's needs: a detached collection keeps its unfilled markers after the needs are
+    /// gone, and the row must still say so.
+    ///
+    /// The "authored on &lt;platform&gt;" caution needs the source document's launcher platform,
+    /// which only arrives once a bound source is rendered; it joins this list there.
+    /// </summary>
+    public string? ConnectorCaution(string connector, string collection)
+    {
+        if (!Store.Collections.TryGetValue(collection, out var held) || !held.Mcps.TryGetValue(connector, out var entry))
+        {
+            return null;
+        }
+        // Ordered by first appearance and de-duplicated across leaves, so the sentence is stable
+        // between two reads of the same config.
+        var unfilled = Placeholder.MarkersIn(entry.Config).SelectMany(m => m.Names).Distinct(StringComparer.Ordinal).ToList();
+        if (unfilled.Count > 0)
+        {
+            return NeedsValueCaution(string.Join(", ", unfilled));
+        }
+        if (Placeholder.UsesDirectoryToken(entry.Config) && IsSynced(collection) && SourceBinding(collection)?.Path is null)
+        {
+            return LocateCaution;
+        }
+        return null;
+    }
+
+    // MARK: collection banner
+
+    /// <summary>
+    /// The one banner the collection slot shows. A failed publish outranks everything: it is the
+    /// only one where something the user asked for did not happen. Then the active collection's
+    /// news before any other collection's, since that is the list in front of them.
+    /// </summary>
+    public CollectionBanner? CollectionBanner
+    {
+        get
+        {
+            if (PublishError is { } failure)
+            {
+                return new CollectionBanner.PublishFailed(failure.Collection, failure.Message);
+            }
+            if (PendingUpdates.TryGetValue(ActiveCollection, out var activeDiff))
+            {
+                return new CollectionBanner.UpdateAvailable(ActiveCollection, activeDiff.Summary());
+            }
+            if (PendingUpdates.Keys.Order(StringComparer.Ordinal).FirstOrDefault() is { } pending)
+            {
+                return new CollectionBanner.UpdateAvailable(pending, PendingUpdates[pending].Summary());
+            }
+            if (UnlocatedFileName(ActiveCollection) is { } activeFile)
+            {
+                return new CollectionBanner.Locate(ActiveCollection, activeFile);
+            }
+            foreach (var name in CollectionsFile.Collections.Keys.Order(StringComparer.Ordinal))
+            {
+                if (UnlocatedFileName(name) is { } fileName)
+                {
+                    return new CollectionBanner.Locate(name, fileName);
+                }
+            }
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The document a synced collection is waiting to be pointed at, or null when there is
+    /// nothing to ask for: the collection is local, already bound, or the sidecar never recorded
+    /// a file name to name in the request.
+    /// </summary>
+    private string? UnlocatedFileName(string collection) =>
+        CollectionsFile.Collections.TryGetValue(collection, out var entry)
+            && entry.Kind == CollectionKind.Synced
+            && SourceBinding(collection)?.Path is null
+            ? entry.FileName
+            : null;
+
+    // MARK: collections load
+
+    /// <summary>
+    /// The sidecar and the cache follow the store on every load: the master list decides which
+    /// collections exist, the sidecar annotates them, and the cache binds what this machine has
+    /// found. Runs after the store is assigned, so both reconcile against the list just loaded.
+    /// </summary>
+    private void LoadCollections()
+    {
+        var loaded = Service.LoadCollections();
+        // An unreadable sidecar loads as empty (see CollectionsFile.Load). Reconciling the cache
+        // against that would drop every binding on this machine over a file a sync tool is
+        // halfway through writing, so a sidecar that exists yet loads as empty is left alone and
+        // whatever is already in memory stands. A genuinely empty sidecar reads the same way and
+        // costs only a prune deferred to the next load.
+        if (loaded.Collections.Count == 0 && File.Exists(Service.Paths.CollectionsFilePath))
+        {
+            return;
+        }
+        CollectionsFile = loaded.Reconciled(Store);
+        CollectionsCache = CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath).Reconciled(CollectionsFile);
+        BindSourcesBesideTheStore();
+    }
+
+    /// <summary>
+    /// The last load rule: a synced collection nothing has bound on this machine tries the path
+    /// the sidecar recorded relative to the store dir. A collection that travels inside the
+    /// store's own folder is found there without ever asking; anything else keeps the Locate
+    /// banner. A binding found this way is persisted at once, so the next launch starts bound.
+    /// </summary>
+    private void BindSourcesBesideTheStore()
+    {
+        var synced = new Dictionary<string, CollectionsLocalCache.SyncedBinding>(CollectionsCache.Synced, StringComparer.Ordinal);
+        var bound = false;
+        foreach (var (name, entry) in CollectionsFile.Collections)
+        {
+            if (entry.Kind != CollectionKind.Synced || entry.RelativeToStore is not { } relative)
+            {
+                continue;
+            }
+            synced.TryGetValue(name, out var existing);
+            if (existing?.Path is not null)
+            {
+                continue;
+            }
+            var path = Path.GetFullPath(Path.Combine(Service.Paths.StoreDir, relative));
+            byte[] data;
+            try
+            {
+                data = File.ReadAllBytes(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                continue;
+            }
+            synced[name] = new CollectionsLocalCache.SyncedBinding(path, ContentHash.Sha256(data), existing?.Excluded);
+            bound = true;
+        }
+        if (!bound)
+        {
+            return;
+        }
+        CollectionsCache = new CollectionsLocalCache(synced, CollectionsCache.Published);
+        try
+        {
+            CollectionsCache.Save(Service.Paths.CollectionsCachePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LastError = Friendly(ex);
+        }
     }
 
     // MARK: notifications

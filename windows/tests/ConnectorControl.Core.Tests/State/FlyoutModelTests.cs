@@ -63,25 +63,88 @@ public class FlyoutModelTests
     }
 
     [Fact]
-    public void CollectionMenuItemsAndTitles()
+    public void TheChipMenuHasNoHousekeepingItemsAndAddIsAllowedInALocalCollection()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal([new CollectionMenuItem("Default", true)], flyout.CollectionItems);
-        Assert.Equal("New Collection…", FlyoutModel.NewCollectionTitle);
-        Assert.Equal("Rename “Default”…", flyout.RenameCollectionMenuItem);
-        Assert.Equal("Delete “Default”…", flyout.DeleteCollectionMenuItem);
-        Assert.False(flyout.CanDeleteCollection);
+        Assert.True(flyout.CanAddConnector);
 
-        h.Dialogs.NextPromptAnswer = "Work";
-        flyout.NewCollection();
-        Assert.Equal([new CollectionMenuItem("Default", false), new CollectionMenuItem("Work", true)], flyout.CollectionItems);
+        Assert.Null(state.CreateCollection("Work"));
+        // Switching only — New, Rename and Delete live in the window.
+        Assert.Equal(
+            [new CollectionMenuItem("Default", false), new CollectionMenuItem("Work", true)],
+            flyout.CollectionItems);
         Assert.Equal("Work ▾", flyout.CollectionChipText);
-        Assert.True(flyout.CanDeleteCollection);
         flyout.SwitchCollection("Default");
         Assert.Equal("Default ▾", flyout.CollectionChipText);
     }
+
+    [Fact]
+    public void ASyncedCollectionIsMarkedInTheMenuAndClosedToAdditions()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        new CollectionsFile([Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json"))])
+            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        state.Reload();
+        using var flyout = new FlyoutModel(state, h.Settings);
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
+        {
+            ["Team"] = new CollectionDiff(["jira"], [], []),
+        };
+        Assert.Equal(
+            [new CollectionMenuItem("Default", false), new CollectionMenuItem("Team", true, IsSynced: true, HasPendingUpdate: true)],
+            flyout.CollectionItems);
+        Assert.False(flyout.CanAddConnector);
+        Assert.Equal("Additions go in a local collection.", FlyoutModel.AddDisabledTooltip);
+        flyout.SwitchCollection("Default");
+        Assert.True(flyout.CanAddConnector);
+    }
+
+    [Fact]
+    public void TheCollectionBannerCarriesItsTextAndButton()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        new CollectionsFile([
+            Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json")),
+            Sidecar("Default", new CollectionsFile.Entry(
+                CollectionKind.Local, publish: new CollectionsFile.PublishRecord("default", "origin", PublishIntent.None))),
+        ]).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        new CollectionsLocalCache([], [new KeyValuePair<string, CollectionsLocalCache.PublishBinding>(
+            "Default", new CollectionsLocalCache.PublishBinding("/Acme/mcp", null))])
+            .Save(state.Service.Paths.CollectionsCachePath);
+        state.Reload();
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
+        Assert.True(flyout.HasCollectionBanner);
+        Assert.Equal("Team's file isn’t on this PC yet.", flyout.CollectionBannerText);
+        Assert.Equal("Locate team.json…", flyout.CollectionBannerButton);
+
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
+        {
+            ["Team"] = new CollectionDiff(["jira"], ["confluence"], []),
+        };
+        Assert.Equal("Team changed at its source: adds jira; removes confluence.", flyout.CollectionBannerText);
+        Assert.Equal("Review & Apply…", flyout.CollectionBannerButton);
+
+        state.PublishError = new CollectionPublishError("Default", "the folder is read-only");
+        Assert.Equal("Couldn’t publish Default to /Acme/mcp: the folder is read-only", flyout.CollectionBannerText);
+        Assert.Equal("Choose Folder…", flyout.CollectionBannerButton);
+
+        state.PublishError = null;
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal);
+        flyout.SwitchCollection("Default");
+        // Another collection's unlocated file still gets the slot.
+        Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
+    }
+
+    private static KeyValuePair<string, CollectionsFile.Entry> Sidecar(string name, CollectionsFile.Entry entry) => new(name, entry);
 
     [Fact]
     public void FooterPrefersRetryOverRestart()

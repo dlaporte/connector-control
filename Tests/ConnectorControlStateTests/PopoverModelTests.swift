@@ -70,24 +70,75 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(repaints, before)
     }
 
-    func testCollectionMenuItemsAndTitles() {
+    func testTheChipMenuHasNoHousekeepingItemsAndAddIsAllowedInALocalCollection() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertEqual(popover.collectionItems, [CollectionMenuItem(name: "Default", isActive: true)])
-        XCTAssertEqual(PopoverModel.newCollectionTitle, "New Collection…")
-        XCTAssertEqual(popover.renameCollectionTitle, "Rename “Default”…")
-        XCTAssertEqual(popover.deleteCollectionTitle, "Delete “Default”…")
-        XCTAssertFalse(popover.canDeleteCollection)
+        XCTAssertTrue(popover.canAddConnector)
 
-        h.dialogs.nextPromptAnswer = "Work"
-        popover.newCollection()
-        XCTAssertEqual(popover.collectionItems, [CollectionMenuItem(name: "Default", isActive: false), CollectionMenuItem(name: "Work", isActive: true)])
+        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertEqual(popover.collectionItems.map(\.name), ["Default", "Work"], "switching only — New, Rename and Delete live in the window")
+        XCTAssertEqual(popover.collectionItems.map(\.isActive), [false, true])
+        XCTAssertEqual(popover.collectionItems.map(\.isSynced), [false, false])
+        XCTAssertEqual(popover.collectionItems.map(\.hasPendingUpdate), [false, false])
         XCTAssertEqual(popover.collectionChipText, "Work ▾")
-        XCTAssertTrue(popover.canDeleteCollection)
         popover.switchCollection("Default")
         XCTAssertEqual(popover.collectionChipText, "Default ▾")
+    }
+
+    func testASyncedCollectionIsMarkedInTheMenuAndClosedToAdditions() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        try CollectionsFile(collections: ["Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json")])
+            .save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        state.reload()
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+        state.pendingUpdates = ["Team": CollectionDiff(added: ["jira"], removed: [], changed: [])]
+        XCTAssertEqual(popover.collectionItems.map(\.isSynced), [false, true])
+        XCTAssertEqual(popover.collectionItems.map(\.hasPendingUpdate), [false, true])
+        XCTAssertFalse(popover.canAddConnector)
+        XCTAssertEqual(PopoverModel.addDisabledTooltip, "Additions go in a local collection.")
+        popover.switchCollection("Default")
+        XCTAssertTrue(popover.canAddConnector)
+    }
+
+    func testTheCollectionBannerCarriesItsTextAndButton() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        try CollectionsFile(collections: [
+            "Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json"),
+            "Default": CollectionsFile.Entry(
+                kind: .local, publish: CollectionsFile.PublishRecord(slug: "default", origin: "origin", intent: .none)),
+        ]).save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        try CollectionsLocalCache(synced: [:], published: ["Default": .init(folder: "/Acme/mcp", lastWrittenHash: nil)])
+            .save(to: state.service.paths.collectionsCacheURL, staging: nil)
+        state.reload()
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+
+        XCTAssertEqual(popover.collectionBanner, .locate(collection: "Team", fileName: "team.json"))
+        XCTAssertEqual(popover.collectionBannerText, "Team's file isn’t on this Mac yet.")
+        XCTAssertEqual(popover.collectionBannerButton, "Locate team.json…")
+
+        let diff = CollectionDiff(added: ["jira"], removed: ["confluence"], changed: [])
+        state.pendingUpdates = ["Team": diff]
+        XCTAssertEqual(popover.collectionBannerText, "Team changed at its source: adds jira; removes confluence.")
+        XCTAssertEqual(popover.collectionBannerButton, "Review & Apply…")
+
+        state.publishError = (collection: "Default", message: "the folder is read-only")
+        XCTAssertEqual(popover.collectionBannerText, "Couldn’t publish Default to /Acme/mcp: the folder is read-only")
+        XCTAssertEqual(popover.collectionBannerButton, "Choose Folder…")
+
+        state.publishError = nil
+        state.pendingUpdates = [:]
+        popover.switchCollection("Default")
+        XCTAssertEqual(popover.collectionBanner, .locate(collection: "Team", fileName: "team.json"),
+                       "another collection's unlocated file still gets the slot")
     }
 
     func testFooterPrefersRetryOverRestart() throws {

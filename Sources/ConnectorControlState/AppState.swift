@@ -35,6 +35,8 @@ public final class AppState: ObservableObject {
     public static let deleteCollectionInformative = "Its connector list is removed; backups keep prior states."
     public static let deleteButton = "Delete"
     public static let nameEmptyError = "Name must not be empty."
+    public static let lastLocalCollectionError = "The last local collection can’t be deleted."
+    public static let locateCaution = "Locate the collection file to resolve paths."
     public static let defaultClaudeAppPath = "/Applications/Claude.app"
     nonisolated public static let chooseClaude = "Choose the real Claude Desktop under Settings ▸ Claude."
     /// Claude's launch date is re-read 3 s after the restart completes.
@@ -47,6 +49,17 @@ public final class AppState: ObservableObject {
     public static func malformedConfigMessage(detail: String) -> String { "Claude's config file is not valid JSON (\(detail)). Nothing was written. Use Backups ▸ Restore… to recover it." }
 
     public static func enabledSubtitle(enabled: Int, total: Int) -> String { "\(enabled) of \(total) enabled" }
+
+    public static func needsValueCaution(_ names: String) -> String { "needs your value: \(names)" }
+
+    public static func collectionUpdateBanner(_ collection: String, _ summary: String) -> String { "\(collection) changed at its source: \(summary)." }
+
+    /// "this Mac" is the platform-forced half of this sentence; the Windows mirror says "this PC".
+    public static func collectionLocateBanner(_ collection: String) -> String { "\(collection)'s file isn’t on this Mac yet." }
+
+    public static func collectionPublishFailedBanner(_ collection: String, _ folder: String, _ reason: String) -> String { "Couldn’t publish \(collection) to \(folder): \(reason)" }
+
+    public static func collectionUpdateNotificationBody(_ collection: String, _ summary: String) -> String { "\(collection) changed at its source: \(summary). Review it in Connector Control." }
 
     /// A synced connector-list change was adopted and written into Claude's config: say what it runs now.
     public static func connectorListChangedBody(_ delta: ServerDelta, restartRequired: Bool) -> String {
@@ -70,6 +83,18 @@ public final class AppState: ObservableObject {
     /// Which of the four launchers Claude Desktop can start: probed on demand
     /// and cached for the run. A tool absent here has not been probed yet.
     @Published public private(set) var toolStatuses: [Tool: ToolStatus] = [:]
+    /// The sidecar beside the master list, reconciled with the store on every load.
+    @Published public private(set) var collectionsFile = CollectionsFile(collections: [:])
+    /// This machine's bindings, reconciled with the sidecar on every load.
+    @Published public private(set) var collectionsCache = CollectionsLocalCache(synced: [:], published: [:])
+    /// Synced collections whose source differs from what the store holds. Settable inside the
+    /// module so the banner rules can be exercised without a source file behind them; the
+    /// source watcher is what fills it in the app.
+    @Published public internal(set) var pendingUpdates: [String: CollectionDiff] = [:]
+    /// Collection → why its source could not be read, after repeated failures or a manual refresh.
+    @Published public internal(set) var sourceErrors: [String: String] = [:]
+    /// The last publish that failed, with the reason. Cleared by a write that succeeds.
+    @Published public internal(set) var publishError: (collection: String, message: String)?
 
     /// The prompts AppState itself raises (quit, restart, collections); the editor owns its own.
     public let dialogs: Dialogs
@@ -154,13 +179,17 @@ public final class AppState: ObservableObject {
             // not fill the user's repo/cloud folder with rotating backups. The
             // staging folder stays there too: temp files must never be born in
             // the synced folder — AtomicFile.write takes it as its `staging:`
-            // parameter, threaded through ConfigService/BackupManager.
+            // parameter, threaded through ConfigService/BackupManager. The
+            // bindings cache is machine-local for a different reason: the paths
+            // in it are true here and nowhere else, so a synced copy of it would
+            // point every other machine at files it does not have.
             let machineLocal = AppPaths.live(environment: [:], appSupport: paths.appSupport)
             resolved = AppPaths(
                 claudeConfigURL: resolved.claudeConfigURL,
                 storeDirURL: URL(fileURLWithPath: custom),
                 backupsDirURL: machineLocal.backupsDirURL,
-                stagingDirURL: machineLocal.stagingDirURL)
+                stagingDirURL: machineLocal.stagingDirURL,
+                collectionsCacheURL: machineLocal.collectionsCacheURL)
         }
         return ConfigService(paths: resolved, keepCount: settings.backupKeepCount)
     }
@@ -321,6 +350,7 @@ public final class AppState: ObservableObject {
                 baseline: hasLoadedOnce ? appliedServers : nil,
                 storeAuthoritative: trigger != .routine)
             store = result.store
+            loadCollections()
             var claudeConfigChangedExternally = false
             if let servers = result.claudeServers {
                 claudeConfigChangedExternally = wasLoaded && servers != previousApplied
@@ -405,8 +435,19 @@ public final class AppState: ObservableObject {
         }
     }
 
+    /// The master list first, then the sidecar beside it, then this machine's cache — the order
+    /// a crash has to survive: a half-done write leaves the collection loading as an ordinary
+    /// local one until the next save, and loses nothing the app cannot rebuild. One `catch` for
+    /// the three: the first failure stops the chain, since a sidecar written against a master
+    /// list that never landed would describe collections that do not exist.
     private func persistStore() {
-        do { try service.saveStore(store) } catch { lastError = AppState.friendly(error) }
+        do {
+            try service.saveStore(store)
+            try service.saveCollections(collectionsFile)
+            try collectionsCache.save(to: service.paths.collectionsCacheURL, staging: service.paths.stagingDirURL)
+        } catch {
+            lastError = AppState.friendly(error)
+        }
     }
 
     /// Toggles take effect immediately; the Restart Required button is the only follow-up step.
@@ -497,29 +538,180 @@ public final class AppState: ObservableObject {
         performApply()
     }
 
-    public func newCollection() {
-        guard let name = dialogs.promptForName(title: AppState.newCollectionTitle, initial: "") else { return }
-        finishCollectionChange(store.addCollection(named: name, copyingCurrent: true))
+    /// Copies the active collection under a new name and makes it active, as the chip menu's
+    /// New Collection has always done. nil on success, else the message to show.
+    public func createCollection(named name: String) -> String? {
+        if let error = store.addCollection(named: name, copyingCurrent: true) { return error }
+        persistStore()
+        performApply()
+        return nil
     }
 
-    public func renameCollection() {
-        guard let name = dialogs.promptForName(title: AppState.renameCollectionTitle, initial: store.activeCollection) else { return }
-        finishCollectionChange(store.renameActiveCollection(to: name))
+    /// Renames a collection wherever its name is a key: the master list, the sidecar entry, this
+    /// machine's bindings, and the derived state the banner reads. nil on success.
+    public func renameCollection(_ name: String, to newName: String) -> String? {
+        if let error = store.renameCollection(name, to: newName) { return error }
+        let trimmed = newName.trimmingCharacters(in: .whitespaces)
+        if trimmed != name {
+            move(&collectionsFile.collections, from: name, to: trimmed)
+            move(&collectionsCache.synced, from: name, to: trimmed)
+            move(&collectionsCache.published, from: name, to: trimmed)
+            move(&pendingUpdates, from: name, to: trimmed)
+            move(&sourceErrors, from: name, to: trimmed)
+            if let failure = publishError, failure.collection == name {
+                publishError = (collection: trimmed, message: failure.message)
+            }
+        }
+        persistStore()
+        performApply()
+        return nil
     }
 
-    public func deleteCollection() {
-        guard dialogs.confirm(message: AppState.deleteCollectionMessage(store.activeCollection),
-                              informative: AppState.deleteCollectionInformative,
-                              primary: AppState.deleteButton, destructive: true) else { return }
-        finishCollectionChange(store.deleteActiveCollection())
+    /// Deletes a collection and everything keyed by its name. A synced collection's source file
+    /// is never touched — only this machine's binding to it goes. nil on success.
+    public func deleteCollection(named name: String) -> String? {
+        // There must always be somewhere to add a connector, and only a local collection takes
+        // one — so the last local collection stays even when synced ones remain beside it. The
+        // store still owns "no collection by that name": a name it does not have is not the
+        // last anything, and its own message is the one to show.
+        if store.collections[name] != nil, kind(of: name) == .local, localCollectionNames.count <= 1 {
+            return AppState.lastLocalCollectionError
+        }
+        if let error = store.deleteCollection(named: name) { return error }
+        collectionsFile.collections.removeValue(forKey: name)
+        collectionsCache.synced.removeValue(forKey: name)
+        collectionsCache.published.removeValue(forKey: name)
+        pendingUpdates.removeValue(forKey: name)
+        sourceErrors.removeValue(forKey: name)
+        if publishError?.collection == name { publishError = nil }
+        persistStore()
+        performApply()
+        return nil
     }
 
-    private func finishCollectionChange(_ error: String?) {
-        if let error {
-            lastError = error
-        } else {
-            persistStore()
-            performApply()
+    private func move<Value>(_ dictionary: inout [String: Value], from name: String, to newName: String) {
+        if let value = dictionary.removeValue(forKey: name) { dictionary[newName] = value }
+    }
+
+    // MARK: - Collection kinds and bindings
+
+    public func kind(of collection: String) -> CollectionKind { collectionsFile.kind(of: collection) }
+
+    public func isSynced(_ collection: String) -> Bool { kind(of: collection) == .synced }
+
+    public func isPublished(_ collection: String) -> Bool { collectionsFile.collections[collection]?.publish != nil }
+
+    public func sourceBinding(of collection: String) -> CollectionsLocalCache.SyncedBinding? {
+        collectionsCache.synced[collection]
+    }
+
+    public var activeCollectionIsSynced: Bool { isSynced(activeCollection) }
+
+    public var localCollectionNames: [String] { collectionNames.filter { kind(of: $0) == .local } }
+
+    /// What the last Apply asked the user to fill in for one connector, by marker name.
+    public func needs(of connector: String, in collection: String) -> [String: CollectionsFile.Need] {
+        collectionsFile.collections[collection]?.needs[connector] ?? [:]
+    }
+
+    /// The collections-level caution for one row, distinct from the tool caution the launcher
+    /// probe produces. The markers in the stored config are the source of truth, not the
+    /// sidecar's `needs`: a detached collection keeps its unfilled markers after the needs are
+    /// gone, and the row must still say so.
+    ///
+    /// The "authored on <platform>" caution needs the source document's launcher platform,
+    /// which only arrives once a bound source is rendered; it joins this list there.
+    public func connectorCaution(_ connector: String, in collection: String) -> String? {
+        guard let config = store.collections[collection]?.mcps[connector]?.config else { return nil }
+        let unfilled = Placeholder.markers(in: config).flatMap(\.names)
+        if !unfilled.isEmpty {
+            // Ordered by first appearance and de-duplicated across leaves, so the sentence is
+            // stable between two reads of the same config.
+            var seen: Set<String> = []
+            return AppState.needsValueCaution(unfilled.filter { seen.insert($0).inserted }.joined(separator: ", "))
+        }
+        if Placeholder.usesDirectoryToken(config), isSynced(collection), sourceBinding(of: collection)?.path == nil {
+            return AppState.locateCaution
+        }
+        return nil
+    }
+
+    // MARK: - Collection banner
+
+    /// The one banner the collection slot shows. A failed publish outranks everything: it is the
+    /// only one where something the user asked for did not happen. Then the active collection's
+    /// news before any other collection's, since that is the list in front of them.
+    public var collectionBanner: CollectionBanner? {
+        if let failure = publishError {
+            return .publishFailed(collection: failure.collection, message: failure.message)
+        }
+        if let diff = pendingUpdates[activeCollection] {
+            return .updateAvailable(collection: activeCollection, summary: diff.summary())
+        }
+        if let name = pendingUpdates.keys.min(), let diff = pendingUpdates[name] {
+            return .updateAvailable(collection: name, summary: diff.summary())
+        }
+        if let fileName = unlocatedFileName(of: activeCollection) {
+            return .locate(collection: activeCollection, fileName: fileName)
+        }
+        for name in collectionsFile.collections.keys.sorted() {
+            if let fileName = unlocatedFileName(of: name) { return .locate(collection: name, fileName: fileName) }
+        }
+        return nil
+    }
+
+    /// The document a synced collection is waiting to be pointed at, or nil when there is
+    /// nothing to ask for: the collection is local, already bound, or the sidecar never recorded
+    /// a file name to name in the request.
+    private func unlocatedFileName(of collection: String) -> String? {
+        guard let entry = collectionsFile.collections[collection], entry.kind == .synced,
+              sourceBinding(of: collection)?.path == nil, let fileName = entry.fileName else { return nil }
+        return fileName
+    }
+
+    // MARK: - Collections load
+
+    /// The sidecar and the cache follow the store on every load: the master list decides which
+    /// collections exist, the sidecar annotates them, and the cache binds what this machine has
+    /// found. Runs after the store is assigned, so both reconcile against the list just loaded.
+    private func loadCollections() {
+        let loaded = service.loadCollections()
+        // An unreadable sidecar loads as empty (see CollectionsFile.load). Reconciling the cache
+        // against that would drop every binding on this machine over a file a sync tool is
+        // halfway through writing, so a sidecar that exists yet loads as empty is left alone and
+        // whatever is already in memory stands. A genuinely empty sidecar reads the same way and
+        // costs only a prune deferred to the next load.
+        if loaded.collections.isEmpty, FileManager.default.fileExists(atPath: service.paths.collectionsFileURL.path) {
+            return
+        }
+        collectionsFile = loaded.reconciled(with: store)
+        collectionsCache = CollectionsLocalCache.load(from: service.paths.collectionsCacheURL)
+            .reconciled(with: collectionsFile)
+        bindSourcesBesideTheStore()
+    }
+
+    /// The last load rule: a synced collection nothing has bound on this machine tries the path
+    /// the sidecar recorded relative to the store dir. A collection that travels inside the
+    /// store's own folder is found there without ever asking; anything else keeps the Locate
+    /// banner. A binding found this way is persisted at once, so the next launch starts bound.
+    private func bindSourcesBesideTheStore() {
+        var cache = collectionsCache
+        var bound = false
+        for (name, entry) in collectionsFile.collections where entry.kind == .synced {
+            guard cache.synced[name]?.path == nil, let relative = entry.relativeToStore else { continue }
+            let url = URL(fileURLWithPath: relative, relativeTo: service.paths.storeDirURL).standardizedFileURL
+            guard let data = try? Data(contentsOf: url) else { continue }
+            cache.synced[name] = CollectionsLocalCache.SyncedBinding(
+                path: url.path, lastHash: ContentHash.sha256(data),
+                excluded: cache.synced[name]?.excluded ?? [:])
+            bound = true
+        }
+        guard bound else { return }
+        collectionsCache = cache
+        do {
+            try cache.save(to: service.paths.collectionsCacheURL, staging: service.paths.stagingDirURL)
+        } catch {
+            lastError = AppState.friendly(error)
         }
     }
 
