@@ -93,9 +93,84 @@ final class CollectionDocumentTests: XCTestCase {
         XCTAssertEqual(doc.connectors["ledger"]?.needs, ["server_path": nil])
     }
 
+    func testARemoteConnectorKeepsItsAdditionalFieldsThroughExportAndRender() throws {
+        let encoded = RemotePattern.encode(RemoteConfig(url: "https://mcp.example.com/", auth: .automatic, package: "mcp-remote"))
+        guard case .object(var object) = encoded else { return XCTFail("encode did not produce an object") }
+        object["type"] = .string("stdio")
+        let config: JSONValue = .object(object)
+        let doc = CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z",
+                                            connectors: ["svc": config], intent: .none)
+        XCTAssertEqual(doc.connectors["svc"]?.additional, ["type": .string("stdio")])
+        let rendered = try XCTUnwrap(doc.render().connectors["svc"])
+        XCTAssertEqual(rendered.config.value(at: JSONPointer(["type"])), .string("stdio"))
+        XCTAssertEqual(rendered.config.value(at: JSONPointer(["command"])), .string("npx"))
+    }
+
+    func testRenderMarksTheHeaderValueAndClientSecret() throws {
+        let doc = CollectionDocument(
+            name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z",
+            connectors: [
+                "svc-header": .init(launcher: .remote(.init(url: "https://mcp.example.com/", auth: .header(name: "X-Api-Key"),
+                                                            package: "mcp-remote", extraArgs: [])),
+                                    env: [:], needs: ["header_value": "vendor dashboard \u{25b8} API keys"], additional: [:]),
+                "svc-oauth": .init(launcher: .remote(.init(url: "https://mcp.example.com/", auth: .oauthClient(clientId: "id-1", scopes: "read write"),
+                                                           package: "mcp-remote", extraArgs: [])),
+                                   env: [:], needs: ["client_secret": "vendor dashboard \u{25b8} OAuth apps"], additional: [:]),
+            ])
+        let rendered = doc.render()
+        let header = try XCTUnwrap(rendered.connectors["svc-header"])
+        XCTAssertEqual(header.config.value(at: JSONPointer(["env", "AUTH_HEADER"])), .string("${CC_NEEDS:header_value}"))
+        XCTAssertEqual(header.config.value(at: JSONPointer(["args", "4"])), .string("X-Api-Key:${AUTH_HEADER}"))
+        XCTAssertEqual(header.needs["header_value"],
+                       RenderedNeed(hint: "vendor dashboard \u{25b8} API keys", pointer: JSONPointer(["env", "AUTH_HEADER"])))
+
+        let oauth = try XCTUnwrap(rendered.connectors["svc-oauth"])
+        let blob = try XCTUnwrap(oauth.config.value(at: JSONPointer(["args", "4"])))
+        guard case .string(let blobText) = blob else { return XCTFail("blob is not a string") }
+        XCTAssertTrue(blobText.contains("${CC_NEEDS:client_secret}"))
+        XCTAssertTrue(blobText.contains("\"id-1\""))
+        XCTAssertEqual(oauth.needs["client_secret"],
+                       RenderedNeed(hint: "vendor dashboard \u{25b8} OAuth apps", pointer: JSONPointer(["args", "4"])))
+    }
+
+    func testExportKeepsTheAuthKindAndNonSecretFieldsForEveryKind() throws {
+        let automatic = RemotePattern.encode(RemoteConfig(url: "https://mcp.example.com/", auth: .automatic, package: "mcp-remote"))
+        let bearer = RemotePattern.encode(RemoteConfig(url: "https://mcp.example.com/", auth: .bearer(token: "secret-bearer"), package: "mcp-remote"))
+        let header = RemotePattern.encode(RemoteConfig(url: "https://mcp.example.com/", auth: .header(name: "X-Api-Key", value: "secret-header"), package: "mcp-remote"))
+        let oauth = RemotePattern.encode(RemoteConfig(url: "https://mcp.example.com/",
+                                                       auth: .oauthClient(clientID: "id-1", clientSecret: "secret-oauth", scopes: "read write"),
+                                                       package: "mcp-remote"))
+        let doc = CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z",
+                                            connectors: ["automatic": automatic, "bearer": bearer, "header": header, "oauth": oauth], intent: .none)
+        guard case .remote(let a) = try XCTUnwrap(doc.connectors["automatic"]).launcher else { return XCTFail("automatic is not remote") }
+        XCTAssertEqual(a.auth, .automatic)
+        guard case .remote(let b) = try XCTUnwrap(doc.connectors["bearer"]).launcher else { return XCTFail("bearer is not remote") }
+        XCTAssertEqual(b.auth, .bearer)
+        guard case .remote(let h) = try XCTUnwrap(doc.connectors["header"]).launcher else { return XCTFail("header is not remote") }
+        XCTAssertEqual(h.auth, .header(name: "X-Api-Key"))
+        guard case .remote(let o) = try XCTUnwrap(doc.connectors["oauth"]).launcher else { return XCTFail("oauth is not remote") }
+        XCTAssertEqual(o.auth, .oauthClient(clientId: "id-1", scopes: "read write"))
+        let serialized = doc.encode().serializedString
+        for secret in ["secret-bearer", "secret-header", "secret-oauth"] {
+            XCTAssertFalse(serialized.contains(secret))
+        }
+    }
+
     func testCredentialWarningsNameThePosition() {
         let config: JSONValue = .object(["command": .string("npx"), "args": .array([.string("-y"), .string("tax-mcp"), .string("--key"), .string("sk-live-9f3a")])])
-        XCTAssertEqual(CollectionDocument.credentialWarnings(config), ["args[3] looks like a credential"])
+        XCTAssertEqual(CollectionDocument.credentialWarnings(config, sharedEnv: []), ["args[3] looks like a credential"])
+    }
+
+    func testCredentialWarningsCoverHeaderPairsAndSharedValues() {
+        let config: JSONValue = .object([
+            "command": .string("npx"),
+            "args": .array([.string("--header"), .string("X-Key: sk-live-1")]),
+            "env": .object(["API_TOKEN": .string("ghp_shared123"), "OTHER": .string("sk-live-should-be-ignored")]),
+        ])
+        // "X-Key: sk-live-1" has a space, so the whole string is never flagged; the part after
+        // ": " is. OTHER isn't in sharedEnv, so its credential-shaped value is never scanned.
+        XCTAssertEqual(CollectionDocument.credentialWarnings(config, sharedEnv: ["API_TOKEN"]),
+                       ["args[1] looks like a credential", "env.API_TOKEN looks like a credential"])
     }
 }
 

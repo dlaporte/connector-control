@@ -120,6 +120,8 @@ public struct CollectionDocument: Equatable, Sendable {
     }
 
     public enum Auth: Equatable, Sendable {
+        /// C# has no case value of this name to write — a record type's name isn't an
+        /// expression there — so it exposes the same case through a static `Auto` instead.
         case automatic
         case bearer
         case header(name: String)
@@ -209,8 +211,9 @@ public struct CollectionDocument: Equatable, Sendable {
                 case .oauthClient(let id, let scopes):
                     auth = .oauthClient(clientID: id, clientSecret: Placeholder.marker(Self.clientSecretNeed), scopes: scopes)
                 }
-                config = RemotePattern.encode(RemoteConfig(url: r.url, auth: auth, extraArgs: r.extraArgs,
-                                                           passthroughEnv: env, package: r.package))
+                let encoded = RemotePattern.encode(RemoteConfig(url: r.url, auth: auth, extraArgs: r.extraArgs,
+                                                                 passthroughEnv: env, package: r.package))
+                config = Self.merging(additional: connector.additional, into: encoded)
             case .local(let l):
                 config = FormMapper.serialize(FormModel(command: l.command, args: l.args, env: env, additional: connector.additional))
                 authoredOn = l.platform
@@ -229,6 +232,15 @@ public struct CollectionDocument: Equatable, Sendable {
         // The Windows build excludes connectors the cmd /c launcher cannot carry safely; a Mac
         // never writes that launcher, so nothing is excluded here.
         return RenderedCollection(connectors: out, excluded: [:])
+    }
+
+    /// A remote connector's `additional` fields (whatever the form the config came from cannot
+    /// represent) merged into the freshly encoded launcher config; the encoded keys — always
+    /// `command`/`args`, sometimes `env` — win on a collision, since they are what makes the
+    /// connector run.
+    private static func merging(additional: [String: JSONValue], into config: JSONValue) -> JSONValue {
+        guard !additional.isEmpty, case .object(let encoded) = config else { return config }
+        return .object(additional.merging(encoded) { _, encodedValue in encodedValue })
     }
 
     // MARK: Export
@@ -257,9 +269,12 @@ public struct CollectionDocument: Equatable, Sendable {
                     needs.updateValue(hints[clientSecretNeed], forKey: clientSecretNeed)
                 }
                 let env = remote.passthroughEnv.reduce(into: [String: EnvValue]()) { $0[$1.key] = envValue($1.key, $1.value) }
+                // Whatever the form has no widget for — a key `RemotePattern.decode` doesn't
+                // read — travels too, the same way a local connector's does.
+                let additional = FormMapper.analyze(config).model.additional
                 out[connectorName] = Connector(launcher: .remote(Remote(url: remote.url, auth: auth, package: remote.package,
                                                                         extraArgs: remote.extraArgs)),
-                                               env: env, needs: needs, additional: [:])
+                                               env: env, needs: needs, additional: additional)
             } else {
                 let model = FormMapper.analyze(config).model
                 var args = model.args
@@ -282,13 +297,31 @@ public struct CollectionDocument: Equatable, Sendable {
         return CollectionDocument(name: name, author: author, origin: origin, exported: exported, connectors: out)
     }
 
-    /// "args[2] looks like a credential" lines for the publish preview; never an edit.
-    public static func credentialWarnings(_ config: JSONValue) -> [String] {
-        guard case .object(let object) = config, case .array(let args)? = object["args"] else { return [] }
-        return args.enumerated().compactMap { index, value in
-            guard case .string(let s) = value, CredentialHeuristics.looksLikeCredential(s) else { return nil }
-            return "args[\(index)] looks like a credential"
+    /// "args[N] looks like a credential" / "env.NAME looks like a credential" lines for the
+    /// publish preview; never an edit. Each arg is tested whole and, for a literal "key: value"
+    /// pair such as a `--header` flag's argument, on the text after the colon too, since the
+    /// heuristic's own space check would otherwise hide a credential sitting right after one.
+    /// Env is only tested for names in `sharedEnv` — the ones the author ticked to travel as a
+    /// value rather than a hint — since a hint-only value never leaves this machine.
+    public static func credentialWarnings(_ config: JSONValue, sharedEnv: Set<String>) -> [String] {
+        guard case .object(let object) = config else { return [] }
+        var warnings: [String] = []
+        if case .array(let args)? = object["args"] {
+            for (index, value) in args.enumerated() {
+                guard case .string(let s) = value else { continue }
+                let afterColon = s.range(of: ": ").map { String(s[$0.upperBound...]) }
+                if CredentialHeuristics.looksLikeCredential(s) || (afterColon.map(CredentialHeuristics.looksLikeCredential) ?? false) {
+                    warnings.append("args[\(index)] looks like a credential")
+                }
+            }
         }
+        if case .object(let env)? = object["env"] {
+            for name in sharedEnv.sorted() {
+                guard case .string(let value)? = env[name], CredentialHeuristics.looksLikeCredential(value) else { continue }
+                warnings.append("env.\(name) looks like a credential")
+            }
+        }
+        return warnings
     }
 
     // MARK: Decoding helpers

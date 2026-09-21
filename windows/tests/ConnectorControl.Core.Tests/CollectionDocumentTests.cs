@@ -171,11 +171,94 @@ public class CollectionDocumentTests
     }
 
     [Fact]
+    public void ARemoteConnectorKeepsItsAdditionalFieldsThroughExportAndRender()
+    {
+        var encoded = RemotePattern.Encode(new RemoteConfig("https://mcp.example.com/", RemoteAuth.Auto, RemoteLaunchStyle.Npx, package: "mcp-remote"));
+        var props = new Dictionary<string, JsonValue>(encoded.ObjectProperties, StringComparer.Ordinal) { ["type"] = JsonValue.String("stdio") };
+        var config = JsonValue.Object(props);
+        var doc = CollectionDocument.Export("x", null, null, "2026-09-21T15:00:00Z",
+            new Dictionary<string, JsonValue> { ["svc"] = config }, PublishIntent.None);
+        Assert.Equal(new Dictionary<string, JsonValue> { ["type"] = JsonValue.String("stdio") }, doc.Connectors["svc"].Additional);
+        var rendered = doc.Render().Connectors["svc"];
+        Assert.Equal(JsonValue.String("stdio"), rendered.Config.ValueAt(new JsonPointer(["type"])));
+        // Windows always renders through cmd /c, so the launcher command is "cmd", not "npx".
+        Assert.Equal(JsonValue.String("cmd"), rendered.Config.ValueAt(new JsonPointer(["command"])));
+    }
+
+    [Fact]
+    public void RenderMarksTheHeaderValueAndClientSecret()
+    {
+        var doc = new CollectionDocument("x", null, null, "2026-09-21T15:00:00Z", new Dictionary<string, CollectionDocument.Connector>
+        {
+            ["svc-header"] = new(
+                new CollectionDocument.Launcher.Remote("https://mcp.example.com/", new CollectionDocument.Auth.Header("X-Api-Key"), "mcp-remote", []),
+                new Dictionary<string, CollectionDocument.EnvValue>(),
+                new Dictionary<string, string?> { ["header_value"] = "vendor dashboard ▸ API keys" },
+                new Dictionary<string, JsonValue>()),
+            ["svc-oauth"] = new(
+                new CollectionDocument.Launcher.Remote("https://mcp.example.com/", new CollectionDocument.Auth.OAuthClient("id-1", "read write"), "mcp-remote", []),
+                new Dictionary<string, CollectionDocument.EnvValue>(),
+                new Dictionary<string, string?> { ["client_secret"] = "vendor dashboard ▸ OAuth apps" },
+                new Dictionary<string, JsonValue>()),
+        });
+        var rendered = doc.Render();
+        var header = rendered.Connectors["svc-header"];
+        Assert.Equal(JsonValue.String("${CC_NEEDS:header_value}"), header.Config.ValueAt(new JsonPointer(["env", "AUTH_HEADER"])));
+        // The cmd /c launcher prepends two args ("/c", "npx") ahead of the Mac's, shifting every index by two.
+        Assert.Equal(JsonValue.String("X-Api-Key:${AUTH_HEADER}"), header.Config.ValueAt(new JsonPointer(["args", "6"])));
+        Assert.Equal(new RenderedNeed("vendor dashboard ▸ API keys", new JsonPointer(["env", "AUTH_HEADER"])), header.Needs["header_value"]);
+
+        var oauth = rendered.Connectors["svc-oauth"];
+        var blob = oauth.Config.ValueAt(new JsonPointer(["args", "6"]));
+        Assert.Contains("${CC_NEEDS:client_secret}", blob!.StringValue, StringComparison.Ordinal);
+        Assert.Contains("\"id-1\"", blob.StringValue, StringComparison.Ordinal);
+        Assert.Equal(new RenderedNeed("vendor dashboard ▸ OAuth apps", new JsonPointer(["args", "6"])), oauth.Needs["client_secret"]);
+    }
+
+    [Fact]
+    public void ExportKeepsTheAuthKindAndNonSecretFieldsForEveryKind()
+    {
+        var automatic = RemotePattern.Encode(new RemoteConfig("https://mcp.example.com/", RemoteAuth.Auto, RemoteLaunchStyle.Npx, package: "mcp-remote"));
+        var bearer = RemotePattern.Encode(new RemoteConfig("https://mcp.example.com/", new RemoteAuth.Bearer("secret-bearer"), RemoteLaunchStyle.Npx, package: "mcp-remote"));
+        var header = RemotePattern.Encode(new RemoteConfig("https://mcp.example.com/", new RemoteAuth.Header("X-Api-Key", "secret-header"), RemoteLaunchStyle.Npx, package: "mcp-remote"));
+        var oauth = RemotePattern.Encode(new RemoteConfig("https://mcp.example.com/", new RemoteAuth.OAuthClient("id-1", "secret-oauth", "read write"), RemoteLaunchStyle.Npx, package: "mcp-remote"));
+        var doc = CollectionDocument.Export("x", null, null, "2026-09-21T15:00:00Z",
+            new Dictionary<string, JsonValue> { ["automatic"] = automatic, ["bearer"] = bearer, ["header"] = header, ["oauth"] = oauth }, PublishIntent.None);
+        var a = Assert.IsType<CollectionDocument.Launcher.Remote>(doc.Connectors["automatic"].Launcher);
+        Assert.Equal(CollectionDocument.Auth.Auto, a.Auth);
+        var b = Assert.IsType<CollectionDocument.Launcher.Remote>(doc.Connectors["bearer"].Launcher);
+        Assert.Equal(new CollectionDocument.Auth.Bearer(), b.Auth);
+        var h = Assert.IsType<CollectionDocument.Launcher.Remote>(doc.Connectors["header"].Launcher);
+        Assert.Equal(new CollectionDocument.Auth.Header("X-Api-Key"), h.Auth);
+        var o = Assert.IsType<CollectionDocument.Launcher.Remote>(doc.Connectors["oauth"].Launcher);
+        Assert.Equal(new CollectionDocument.Auth.OAuthClient("id-1", "read write"), o.Auth);
+        var serialized = doc.Encode().EditorText();
+        foreach (var secret in new[] { "secret-bearer", "secret-header", "secret-oauth" })
+        {
+            Assert.DoesNotContain(secret, serialized, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void CredentialWarningsNameThePosition()
     {
         var config = JsonValue.Object(
             ("command", JsonValue.String("npx")),
             ("args", JsonValue.Array([JsonValue.String("-y"), JsonValue.String("tax-mcp"), JsonValue.String("--key"), JsonValue.String("sk-live-9f3a")])));
-        Assert.Equal(["args[3] looks like a credential"], CollectionDocument.CredentialWarnings(config));
+        Assert.Equal(["args[3] looks like a credential"], CollectionDocument.CredentialWarnings(config, new HashSet<string>(StringComparer.Ordinal)));
+    }
+
+    [Fact]
+    public void CredentialWarningsCoverHeaderPairsAndSharedValues()
+    {
+        var config = JsonValue.Object(
+            ("command", JsonValue.String("npx")),
+            ("args", JsonValue.Array([JsonValue.String("--header"), JsonValue.String("X-Key: sk-live-1")])),
+            ("env", JsonValue.Object(("API_TOKEN", JsonValue.String("ghp_shared123")), ("OTHER", JsonValue.String("sk-live-should-be-ignored")))));
+        // "X-Key: sk-live-1" has a space, so the whole string is never flagged; the part after
+        // ": " is. OTHER isn't in sharedEnv, so its credential-shaped value is never scanned.
+        Assert.Equal(
+            ["args[1] looks like a credential", "env.API_TOKEN looks like a credential"],
+            CollectionDocument.CredentialWarnings(config, new HashSet<string>(StringComparer.Ordinal) { "API_TOKEN" }));
     }
 }

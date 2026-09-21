@@ -34,8 +34,11 @@ public sealed class CollectionDocumentException(string message) : Exception(mess
     public static CollectionDocumentException Malformed(string detail) => new("collection document: " + detail);
 }
 
-/// <summary>What the author ticked in the Publish sheet: which env values travel as values rather than as stripped hints, which arguments become markers, and the hint text for each.</summary>
-public sealed class PublishIntent
+/// <summary>
+/// What the author ticked in the Publish sheet: which env values travel as values rather than as
+/// stripped hints, which arguments become markers, and the hint text for each.
+/// </summary>
+public sealed class PublishIntent : IEquatable<PublishIntent>
 {
     public sealed record PathMark(string Name, string? Hint);
 
@@ -54,6 +57,62 @@ public sealed class PublishIntent
     }
 
     public static PublishIntent None { get; } = new([], [], []);
+
+    /// <summary>
+    /// Structural over all three dictionaries, so two intents that say the same thing are the
+    /// same intent however they were built. Swift gets this from its value types; here every
+    /// level is a reference whose own Equals compares references, so each one is spelled out.
+    /// </summary>
+    public bool Equals(PublishIntent? other) =>
+        other is not null
+        && DictionaryEquality.Equal(ShareValues, other.ShareValues, static (x, y) => x.SetEquals(y))
+        && DictionaryEquality.Equal(PathMarks, other.PathMarks, static (x, y) => MarksEqual(x, y))
+        && DictionaryEquality.Equal(Hints, other.Hints, static (x, y) => DictionaryEquality.Equal(x, y));
+
+    public override bool Equals(object? obj) => Equals(obj as PublishIntent);
+
+    public override int GetHashCode() => HashCode.Combine(
+        DictionaryEquality.Hash(ShareValues, SetHash),
+        DictionaryEquality.Hash(PathMarks, MarksHash),
+        DictionaryEquality.Hash(Hints, static h => DictionaryEquality.Hash(h)));
+
+    private static int SetHash(IReadOnlySet<string> names)
+    {
+        var hash = new HashCode();
+        foreach (var name in names.Order(StringComparer.Ordinal))
+        {
+            hash.Add(name, StringComparer.Ordinal);
+        }
+        return hash.ToHashCode();
+    }
+
+    /// <summary>Marks are keyed by pointer, not by string, so the string-keyed helper cannot serve.</summary>
+    private static bool MarksEqual(IReadOnlyDictionary<JsonPointer, PathMark> a, IReadOnlyDictionary<JsonPointer, PathMark> b)
+    {
+        if (a.Count != b.Count)
+        {
+            return false;
+        }
+        foreach (var (pointer, mark) in a)
+        {
+            if (!b.TryGetValue(pointer, out var other) || !mark.Equals(other))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static int MarksHash(IReadOnlyDictionary<JsonPointer, PathMark> marks)
+    {
+        var hash = new HashCode();
+        foreach (var (pointer, mark) in marks.OrderBy(p => p.Key.ToString(), StringComparer.Ordinal))
+        {
+            hash.Add(pointer);
+            hash.Add(mark);
+        }
+        return hash.ToHashCode();
+    }
 }
 
 public sealed record RenderedNeed(string? Hint, JsonPointer Pointer);
@@ -523,7 +582,7 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                         excluded[name] = RemotePattern.CmdUnsafeReason(field);
                         continue;
                     }
-                    config = RemotePattern.Encode(remoteConfig);
+                    config = MergeAdditional(connector.Additional, RemotePattern.Encode(remoteConfig));
                     break;
                 }
                 case Launcher.Local l:
@@ -553,6 +612,26 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
             rendered[name] = new RenderedConnector(config, needs, authoredOn);
         }
         return new RenderedCollection(rendered, excluded);
+    }
+
+    /// <summary>
+    /// A remote connector's <c>Additional</c> fields (whatever the form the config came from
+    /// cannot represent) merged into the freshly encoded launcher config; the encoded keys —
+    /// always <c>command</c>/<c>args</c>, sometimes <c>env</c> — win on a collision, since they
+    /// are what makes the connector run.
+    /// </summary>
+    private static JsonValue MergeAdditional(IReadOnlyDictionary<string, JsonValue> additional, JsonValue config)
+    {
+        if (additional.Count == 0 || config.Kind != JsonKind.Object)
+        {
+            return config;
+        }
+        var merged = new Dictionary<string, JsonValue>(additional, StringComparer.Ordinal);
+        foreach (var (key, value) in config.ObjectProperties)
+        {
+            merged[key] = value;
+        }
+        return JsonValue.Object(merged);
     }
 
     // MARK: Export
@@ -590,9 +669,12 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                         break;
                 }
                 var env = remote.PassthroughEnv.ToDictionary(p => p.Key, p => EnvFor(p.Key, p.Value), StringComparer.Ordinal);
+                // Whatever the form has no widget for — a key RemotePattern.Decode doesn't read —
+                // travels too, the same way a local connector's does.
+                var additional = FormMapper.Analyze(config).Model.Additional;
                 result[connectorName] = new Connector(
                     new Launcher.Remote(remote.Url, auth, remote.Package, remote.ExtraArgs.ToList()),
-                    env, needs, new Dictionary<string, JsonValue>(StringComparer.Ordinal));
+                    env, needs, additional);
             }
             else
             {
@@ -629,20 +711,47 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         return new CollectionDocument(name, author, origin, exported, result);
     }
 
-    /// <summary>"args[2] looks like a credential" lines for the publish preview; never an edit.</summary>
-    public static IReadOnlyList<string> CredentialWarnings(JsonValue config)
+    /// <summary>
+    /// "args[N] looks like a credential" / "env.NAME looks like a credential" lines for the
+    /// publish preview; never an edit. Each arg is tested whole and, for a literal "key: value"
+    /// pair such as a <c>--header</c> flag's argument, on the text after the colon too, since the
+    /// heuristic's own space check would otherwise hide a credential sitting right after one. Env
+    /// is only tested for names in <paramref name="sharedEnv"/> — the ones the author ticked to
+    /// travel as a value rather than a hint — since a hint-only value never leaves this machine.
+    /// </summary>
+    public static IReadOnlyList<string> CredentialWarnings(JsonValue config, IReadOnlySet<string> sharedEnv)
     {
-        if (config.Kind != JsonKind.Object || config["args"] is not { Kind: JsonKind.Array } args)
+        if (config.Kind != JsonKind.Object)
         {
             return [];
         }
         var warnings = new List<string>();
-        for (var i = 0; i < args.ArrayItems.Length; i++)
+        if (config["args"] is { Kind: JsonKind.Array } args)
         {
-            var item = args.ArrayItems[i];
-            if (item.Kind == JsonKind.String && CredentialHeuristics.LooksLikeCredential(item.StringValue))
+            for (var i = 0; i < args.ArrayItems.Length; i++)
             {
-                warnings.Add($"args[{i}] looks like a credential");
+                var item = args.ArrayItems[i];
+                if (item.Kind != JsonKind.String)
+                {
+                    continue;
+                }
+                var s = item.StringValue;
+                var colon = s.IndexOf(": ", StringComparison.Ordinal);
+                var afterColon = colon >= 0 ? s[(colon + 2)..] : null;
+                if (CredentialHeuristics.LooksLikeCredential(s) || (afterColon is not null && CredentialHeuristics.LooksLikeCredential(afterColon)))
+                {
+                    warnings.Add($"args[{i}] looks like a credential");
+                }
+            }
+        }
+        if (config["env"] is { Kind: JsonKind.Object } env)
+        {
+            foreach (var name in sharedEnv.OrderBy(n => n, StringComparer.Ordinal))
+            {
+                if (env[name] is { Kind: JsonKind.String } value && CredentialHeuristics.LooksLikeCredential(value.StringValue))
+                {
+                    warnings.Add($"env.{name} looks like a credential");
+                }
             }
         }
         return warnings;
