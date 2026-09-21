@@ -59,4 +59,56 @@ final class CollectionDiffTests: XCTestCase {
         let diff = CollectionDiff.pending(rendered: r, current: ["dbt": MCPEntry(enabled: false, config: dbtFilled)])
         XCTAssertTrue(diff.isEmpty)
     }
+
+    // Two marker names can render into the same leaf, e.g. "${CC_NEEDS:a}-${CC_NEEDS:b}"; apply
+    // must not let dictionary iteration order (unspecified on both platforms) decide which
+    // filled value survives.
+    func testTwoMarkersInOneLeafCarryTheSortedFirstFilledValue() {
+        let previous: [String: [String: CollectionsFile.Need]] = [
+            "multi": ["a": .init(hint: nil, pointer: JSONPointer(["args", "0"])),
+                     "b": .init(hint: nil, pointer: JSONPointer(["args", "1"]))],
+        ]
+        let current = ["multi": MCPEntry(enabled: true, config: .object(["command": .string("c"),
+                                                                         "args": .array([.string("alpha"), .string("beta")])]))]
+        let newConfig: JSONValue = .object(["command": .string("c"), "args": .array([.string("${CC_NEEDS:a}-${CC_NEEDS:b}")])])
+        let needs: [String: RenderedNeed] = [
+            "a": RenderedNeed(hint: nil, pointer: JSONPointer(["args", "0"])),
+            "b": RenderedNeed(hint: nil, pointer: JSONPointer(["args", "0"])),
+        ]
+        for _ in 0..<10 {
+            let result = CollectionApply.apply(rendered: rendered(["multi": (newConfig, needs)]), current: current, previousNeeds: previous)
+            XCTAssertEqual(result.entries["multi"]?.config.value(at: JSONPointer(["args", "0"])), .string("alpha"))
+        }
+    }
+
+    func testAMissingOrNonStringCurrentLeafIsAChange() {
+        let renderedConfig: JSONValue = .object(["command": .string("c"), "env": .object(["X": .string("${CC_NEEDS:X}")])])
+        let needs: [String: RenderedNeed] = ["X": RenderedNeed(hint: nil, pointer: JSONPointer(["env", "X"]))]
+
+        let noEnv = CollectionDiff.pending(rendered: rendered(["srv": (renderedConfig, needs)]),
+                                           current: ["srv": MCPEntry(config: .object(["command": .string("c")]))])
+        XCTAssertEqual(noEnv.changed, ["srv"])
+
+        let numericEnv = CollectionDiff.pending(rendered: rendered(["srv": (renderedConfig, needs)]),
+                                                current: ["srv": MCPEntry(config: .object(["command": .string("c"), "env": .object(["X": .int(5)])]))])
+        XCTAssertEqual(numericEnv.changed, ["srv"])
+    }
+
+    func testAStalePreviousPointerLeavesTheMarker() {
+        let previous: [String: [String: CollectionsFile.Need]] = ["ledger": ["server_path": .init(hint: nil, pointer: JSONPointer(["args", "3"]))]]
+        let current = ["ledger": MCPEntry(enabled: true, config: .object(["command": .string("node"), "args": .array([.string("/Users/d/ledger/index.js")])]))]
+        let newConfig: JSONValue = .object(["command": .string("node"), "args": .array([.string("${CC_NEEDS:server_path}")])])
+        let result = CollectionApply.apply(rendered: rendered(["ledger": (newConfig, ["server_path": RenderedNeed(hint: nil, pointer: JSONPointer(["args", "0"]))])]),
+                                           current: current, previousNeeds: previous)
+        XCTAssertEqual(result.entries["ledger"]?.config.value(at: JSONPointer(["args", "0"])), .string("${CC_NEEDS:server_path}"))
+    }
+
+    func testAStillMarkeredValueIsNotCarried() {
+        let previous: [String: [String: CollectionsFile.Need]] = ["ledger": ["server_path": .init(hint: nil, pointer: JSONPointer(["args", "0"]))]]
+        let current = ["ledger": MCPEntry(enabled: true, config: .object(["command": .string("node"), "args": .array([.string("${CC_NEEDS:server_path}")])]))]
+        let newConfig: JSONValue = .object(["command": .string("node"), "args": .array([.string("${CC_NEEDS:server_path}")])])
+        let result = CollectionApply.apply(rendered: rendered(["ledger": (newConfig, ["server_path": RenderedNeed(hint: nil, pointer: JSONPointer(["args", "0"]))])]),
+                                           current: current, previousNeeds: previous)
+        XCTAssertEqual(result.entries["ledger"]?.config.value(at: JSONPointer(["args", "0"])), .string("${CC_NEEDS:server_path}"))
+    }
 }

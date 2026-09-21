@@ -104,4 +104,105 @@ public class CollectionDiffTests
         var diff = CollectionDiff.Pending(r, new Dictionary<string, McpEntry> { ["dbt"] = new(false, DbtFilled) });
         Assert.True(diff.IsEmpty);
     }
+
+    // Two marker names can render into the same leaf, e.g. "${CC_NEEDS:a}-${CC_NEEDS:b}"; apply
+    // must not let dictionary iteration order (unspecified on both platforms) decide which
+    // filled value survives.
+    [Fact]
+    public void TwoMarkersInOneLeafCarryTheSortedFirstFilledValue()
+    {
+        var previous = new Dictionary<string, IReadOnlyDictionary<string, CollectionsFile.Need>>
+        {
+            ["multi"] = new Dictionary<string, CollectionsFile.Need>
+            {
+                ["a"] = new(null, new JsonPointer(["args", "0"])),
+                ["b"] = new(null, new JsonPointer(["args", "1"])),
+            },
+        };
+        var current = new Dictionary<string, McpEntry>
+        {
+            ["multi"] = new(true, JsonValue.Object(
+                ("command", JsonValue.String("c")),
+                ("args", JsonValue.Array([JsonValue.String("alpha"), JsonValue.String("beta")])))),
+        };
+        var newConfig = JsonValue.Object(
+            ("command", JsonValue.String("c")),
+            ("args", JsonValue.Array([JsonValue.String("${CC_NEEDS:a}-${CC_NEEDS:b}")])));
+        var needs = new Dictionary<string, RenderedNeed>
+        {
+            ["a"] = new(null, new JsonPointer(["args", "0"])),
+            ["b"] = new(null, new JsonPointer(["args", "0"])),
+        };
+        for (var i = 0; i < 10; i++)
+        {
+            var result = CollectionApply.Apply(Rendered([("multi", newConfig, needs)]), current, previous);
+            Assert.Equal(JsonValue.String("alpha"), result.Entries["multi"].Config.ValueAt(new JsonPointer(["args", "0"])));
+        }
+    }
+
+    [Fact]
+    public void AMissingOrNonStringCurrentLeafIsAChange()
+    {
+        var renderedConfig = JsonValue.Object(
+            ("command", JsonValue.String("c")),
+            ("env", JsonValue.Object(("X", JsonValue.String("${CC_NEEDS:X}")))));
+        var needs = new Dictionary<string, RenderedNeed> { ["X"] = new(null, new JsonPointer(["env", "X"])) };
+
+        var noEnv = CollectionDiff.Pending(
+            Rendered([("srv", renderedConfig, needs)]),
+            new Dictionary<string, McpEntry> { ["srv"] = new(JsonValue.Object(("command", JsonValue.String("c")))) });
+        Assert.Equal(["srv"], noEnv.Changed);
+
+        var numericEnv = CollectionDiff.Pending(
+            Rendered([("srv", renderedConfig, needs)]),
+            new Dictionary<string, McpEntry>
+            {
+                ["srv"] = new(JsonValue.Object(("command", JsonValue.String("c")), ("env", JsonValue.Object(("X", JsonValue.Int(5)))))),
+            });
+        Assert.Equal(["srv"], numericEnv.Changed);
+    }
+
+    [Fact]
+    public void AStalePreviousPointerLeavesTheMarker()
+    {
+        var previous = new Dictionary<string, IReadOnlyDictionary<string, CollectionsFile.Need>>
+        {
+            ["ledger"] = new Dictionary<string, CollectionsFile.Need> { ["server_path"] = new(null, new JsonPointer(["args", "3"])) },
+        };
+        var current = new Dictionary<string, McpEntry>
+        {
+            ["ledger"] = new(true, JsonValue.Object(
+                ("command", JsonValue.String("node")),
+                ("args", JsonValue.Array([JsonValue.String("/Users/d/ledger/index.js")])))),
+        };
+        var newConfig = JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String("${CC_NEEDS:server_path}")])));
+        var result = CollectionApply.Apply(
+            Rendered([("ledger", newConfig, new Dictionary<string, RenderedNeed> { ["server_path"] = new(null, new JsonPointer(["args", "0"])) })]),
+            current, previous);
+        Assert.Equal(JsonValue.String("${CC_NEEDS:server_path}"), result.Entries["ledger"].Config.ValueAt(new JsonPointer(["args", "0"])));
+    }
+
+    [Fact]
+    public void AStillMarkeredValueIsNotCarried()
+    {
+        var previous = new Dictionary<string, IReadOnlyDictionary<string, CollectionsFile.Need>>
+        {
+            ["ledger"] = new Dictionary<string, CollectionsFile.Need> { ["server_path"] = new(null, new JsonPointer(["args", "0"])) },
+        };
+        var current = new Dictionary<string, McpEntry>
+        {
+            ["ledger"] = new(true, JsonValue.Object(
+                ("command", JsonValue.String("node")),
+                ("args", JsonValue.Array([JsonValue.String("${CC_NEEDS:server_path}")])))),
+        };
+        var newConfig = JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String("${CC_NEEDS:server_path}")])));
+        var result = CollectionApply.Apply(
+            Rendered([("ledger", newConfig, new Dictionary<string, RenderedNeed> { ["server_path"] = new(null, new JsonPointer(["args", "0"])) })]),
+            current, previous);
+        Assert.Equal(JsonValue.String("${CC_NEEDS:server_path}"), result.Entries["ledger"].Config.ValueAt(new JsonPointer(["args", "0"])));
+    }
 }

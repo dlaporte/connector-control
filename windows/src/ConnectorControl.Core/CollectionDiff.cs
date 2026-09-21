@@ -113,11 +113,22 @@ public static class CollectionApply
             var config = connector.Config;
             var existingEntry = current.GetValueOrDefault(name);
             var connectorNeeds = new Dictionary<string, CollectionsFile.Need>(StringComparer.Ordinal);
-            foreach (var (needName, need) in connector.Needs)
+            // Sorted (ordinal) so the outcome never depends on dictionary iteration order, which
+            // is unspecified on both platforms. Two marker names can render into the same leaf
+            // (e.g. "${CC_NEEDS:a}-${CC_NEEDS:b}"); a leaf with two markers carries the
+            // alphabetically first filled value; Publish assigns unique names, so this is a
+            // tie-break, not a feature.
+            foreach (var needName in connector.Needs.Keys.Order(StringComparer.Ordinal))
             {
+                var need = connector.Needs[needName];
                 connectorNeeds[needName] = new CollectionsFile.Need(need.Hint, need.Pointer);
                 // A value the user filled in under this name stays filled, wherever the marker
-                // moved to: the previous needs record where it was.
+                // moved to: the previous needs record where it was. Skip a leaf an earlier
+                // (sorted-first) need already carried a value into, so it isn't clobbered.
+                if (config.ValueAt(need.Pointer) is not { Kind: JsonKind.String } currentLeaf || !Placeholder.ContainsMarker(currentLeaf.StringValue))
+                {
+                    continue;
+                }
                 var previousPointer = previousNeeds.GetValueOrDefault(name)?.GetValueOrDefault(needName)?.Pointer;
                 if (previousPointer is not null
                     && existingEntry?.Config.ValueAt(previousPointer) is { Kind: JsonKind.String } filled

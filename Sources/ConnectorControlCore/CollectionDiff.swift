@@ -75,10 +75,18 @@ public enum CollectionApply {
         for (name, connector) in rendered.connectors {
             var config = connector.config
             var connectorNeeds: [String: CollectionsFile.Need] = [:]
-            for (needName, need) in connector.needs {
+            // Sorted (ordinal) so the outcome never depends on dictionary iteration order, which
+            // is unspecified on both platforms. Two marker names can render into the same leaf
+            // (e.g. "${CC_NEEDS:a}-${CC_NEEDS:b}"); a leaf with two markers carries the
+            // alphabetically first filled value; Publish assigns unique names, so this is a
+            // tie-break, not a feature.
+            for needName in connector.needs.keys.sorted() {
+                let need = connector.needs[needName]!
                 connectorNeeds[needName] = CollectionsFile.Need(hint: need.hint, pointer: need.pointer)
                 // A value the user filled in under this name stays filled, wherever the marker
-                // moved to: the previous needs record where it was.
+                // moved to: the previous needs record where it was. Skip a leaf an earlier
+                // (sorted-first) need already carried a value into, so it isn't clobbered.
+                guard case .string(let currentLeaf)? = config.value(at: need.pointer), Placeholder.containsMarker(currentLeaf) else { continue }
                 if let previousPointer = previousNeeds[name]?[needName]?.pointer,
                    case .string(let filled)? = current[name]?.config.value(at: previousPointer),
                    !Placeholder.containsMarker(filled) {
