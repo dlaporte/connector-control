@@ -272,6 +272,7 @@ universal Mac build, Developer ID signing with hardened runtime, Apple
 notarization of both the app and the DMG, stapling, and the Sparkle
 appcast; and the Windows installers for x64 and Arm64, code-signed with
 Azure Artifact Signing and checked by a silent install on a Windows runner.
+
 **Preview builds** (both apps): push a `preview-<n>` tag, or run Actions ▸ Preview ▸
 Run workflow with a number (a dry run by default). A preview builds `<next>-preview.<n>`,
 where `<next>` is the top `## vX.Y.Z` heading of CHANGELOG.md, signs and notarizes the
@@ -282,7 +283,7 @@ follows previews only. A `preview-dry-<n>` tag builds everything and publishes n
 The Mac job runs in the `signing` environment, whose deployment branch policy must allow
 `preview-*` tags and any branch previews are cut from.
 
-All three Windows workflows share one build definition,
+The release, preview and Windows CI workflows all call one Windows build definition,
 [`windows-build.yml`](.github/workflows/windows-build.yml), and every
 workflow's own YAML and shell/PowerShell scripts are linted by
 [`infra-ci.yml`](.github/workflows/infra-ci.yml).
