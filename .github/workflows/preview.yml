@@ -22,9 +22,10 @@
 #
 # A prerelease is never releases/latest, so the Mac app's Sparkle appcast at
 # releases/latest/download/appcast.xml is untouched — no appcast is built here at all. A Mac
-# preview keeps the stable feed: its build number derives from <next>, so it is never offered an
-# older stable version, and it updates to v<next> when that ships. A Windows preview install
-# (prerelease version) follows prereleases only (VelopackUpdater).
+# preview keeps the stable feed: build-app.sh gives <next>-preview.<n> the build number just
+# below <next>'s, so it is never offered an older stable version and is offered v<next> when
+# that ships (between previews, Mac testers download again). A Windows preview install
+# (prerelease version) follows prereleases and the final release (VelopackUpdater).
 #
 # The mac job reads the Apple certificate and notarization account from the "signing" GitHub
 # Environment, whose deployment branch policy must therefore allow the ref a preview is cut
@@ -192,9 +193,9 @@ jobs:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/build.keychain-db"
-          # BUILD_NUMBER deliberately not set: build-app.sh derives it from the numeric part of
-          # the version, so a preview of <next> carries <next>'s build number and Sparkle never
-          # offers it an older stable release.
+          # BUILD_NUMBER deliberately not set: build-app.sh derives it from the version, and for
+          # a -preview.<n> version picks the number just below <next>'s, so Sparkle never offers
+          # this build an older stable release and does offer <next> once it ships.
           VERSION="$VERSION" \
             UNIVERSAL=1 SIGNING_IDENTITY="$APPLE_SIGNING_IDENTITY" \
             ./scripts/build-app.sh
