@@ -11,6 +11,8 @@ public class CredentialHeuristicsTests
         Assert.True(CredentialHeuristics.LooksLikeCredential("xoxb-1-2"));
         Assert.True(CredentialHeuristics.LooksLikeCredential("Bearer abc"));
         Assert.True(CredentialHeuristics.LooksLikeCredential("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6"));
+        Assert.True(CredentialHeuristics.LooksLikeCredential("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"));   // 32 characters is the boundary
+        Assert.False(CredentialHeuristics.LooksLikeCredential("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d"));   // 31 is below it
     }
 
     [Fact]

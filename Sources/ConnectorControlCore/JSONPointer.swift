@@ -62,6 +62,7 @@ public extension JSONValue {
     /// Every string leaf with its pointer, depth first, object keys in sorted order, so two
     /// platforms walking the same value produce the same list.
     var stringLeaves: [(pointer: JSONPointer, value: String)] {
+        // Named `leaves` on the C# side, where `out` is a reserved word; the walk is otherwise identical.
         var out: [(pointer: JSONPointer, value: String)] = []
         func walk(_ value: JSONValue, _ pointer: JSONPointer) {
             switch value {
