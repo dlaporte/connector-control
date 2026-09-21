@@ -84,6 +84,23 @@ public static class RemotePattern
         };
     }
 
+    /// <summary>Everything after the field's name in <see cref="CmdUnsafeReason"/> and in the editor's validation error.</summary>
+    public const string CmdUnsafeSuffix = " must not contain & | < > ^ \" or spaces: on Windows the cmd /c launcher hands it to cmd.exe, which treats those as commands.";
+
+    /// <summary>Why a remote connector cannot ride the cmd /c launcher; the editor and the collection renderer say the same thing.</summary>
+    public static string CmdUnsafeReason(RemoteField field) => FieldLabel(field) + CmdUnsafeSuffix;
+
+    /// <summary>The field's caption in the Remote form, as every message about it names it.</summary>
+    public static string FieldLabel(RemoteField field) => field switch
+    {
+        RemoteField.Url => "Server URL",
+        RemoteField.HeaderName => "Header name",
+        RemoteField.ClientId => "Client ID",
+        RemoteField.ClientSecret => "Client Secret",
+        RemoteField.Scopes => "Scopes",
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
+    };
+
     /// <summary>
     /// Strips the launcher — <c>npx</c> or <c>cmd /c npx</c> — and returns the style
     /// plus the remaining args (before "-y" handling). Null when the config is not an

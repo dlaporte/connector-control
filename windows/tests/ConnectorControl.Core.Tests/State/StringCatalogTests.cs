@@ -97,6 +97,9 @@ public class StringCatalogTests
         ["PopoverModel.collectionChipText"] = ["X"],
         ["PopoverModel.deleteCollectionTitle"] = ["X"],
         ["PopoverModel.renameCollectionTitle"] = ["X"],
+        // The parameter here is a RemoteField, not free text, so the fixed argument is the
+        // label one of them renders as rather than the usual "X".
+        ["RemotePattern.cmdUnsafeReason"] = ["Server URL"],
         ["RestoreModel.confirmMessage"] = ["X"],
         ["SettingsModel.keepCountLabel"] = ["3"],
         ["SettingsModel.loginItemFailureNote"] = ["X"],
@@ -268,6 +271,12 @@ public class StringCatalogTests
         actual["RemoteAuthKind.bearer.title"] = RemoteAuthKind.Bearer.Title();
         actual["RemoteAuthKind.header.title"] = RemoteAuthKind.Header.Title();
         actual["RemoteAuthKind.oauthClient.title"] = RemoteAuthKind.OAuthClient.Title();
+
+        // MARK: RemotePattern
+        // Windows-only: the Mac never writes the cmd /c launcher, so it never excludes a
+        // connector for this reason.
+
+        actual["RemotePattern.cmdUnsafeReason"] = RemotePattern.CmdUnsafeReason(RemoteField.Url);
 
         // MARK: RestoreModel
 

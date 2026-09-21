@@ -181,6 +181,11 @@
   "RemoteAuthKind.bearer.title": "Bearer token",
   "RemoteAuthKind.header.title": "Custom header",
   "RemoteAuthKind.oauthClient.title": "OAuth client ID/secret",
+  "RemotePattern.cmdUnsafeReason": {
+    "win": {
+      "format": "{0} must not contain & | < > ^ \" or spaces: on Windows the cmd /c launcher hands it to cmd.exe, which treats those as commands."
+    }
+  },
   "RestoreModel.cancelTitle": "Cancel",
   "RestoreModel.caption": "The current file is backed up first, then replaced by the selected backup.",
   "RestoreModel.confirmMessage": {

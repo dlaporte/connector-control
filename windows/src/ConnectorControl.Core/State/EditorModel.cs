@@ -20,8 +20,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// </summary>
     public const string OAuthSecretCaption = "Passed to mcp-remote on its command line, which other programs running on this PC can read.";
     public const string InvalidUrlError = "Server URL must be a valid http(s) URL.";
-    /// <summary>Under the cmd /c launcher cmd.exe re-parses every argument.</summary>
-    public const string CmdUnsafeSuffix = " must not contain & | < > ^ \" or spaces: on Windows the cmd /c launcher hands it to cmd.exe, which treats those as commands.";
+    /// <summary>Under the cmd /c launcher cmd.exe re-parses every argument. The collection renderer says the same thing, so the wording lives beside the check.</summary>
+    public const string CmdUnsafeSuffix = RemotePattern.CmdUnsafeSuffix;
     public static string CmdUnsafeError(string field) => field + CmdUnsafeSuffix;
     public const string CmdPercentCaution = "This URL has more than one %, which cmd.exe can expand as a variable. If the connector fails to start, check its JSON view.";
     public const string BearerTokenError = "Enter a bearer token.";
@@ -669,15 +669,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         RemotePattern.CmdUnsafeField(CurrentRemoteConfig()) is { } field ? Label(field) : null;
 
     /// <summary>The field's caption in the Remote form, as the validation message names it.</summary>
-    private static string Label(RemoteField field) => field switch
-    {
-        RemoteField.Url => "Server URL",
-        RemoteField.HeaderName => "Header name",
-        RemoteField.ClientId => "Client ID",
-        RemoteField.ClientSecret => "Client Secret",
-        RemoteField.Scopes => "Scopes",
-        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
-    };
+    private static string Label(RemoteField field) => RemotePattern.FieldLabel(field);
 
     private JsonValue CurrentFormConfig()
     {
