@@ -85,6 +85,7 @@ public sealed class AppState : ObservableObject, IDisposable
     private IReadOnlyDictionary<string, CollectionDiff> pendingUpdates = EmptyPending;
     private IReadOnlyDictionary<string, string> sourceErrors = EmptySourceErrors;
     private CollectionPublishError? publishError;
+    private CollectionsWindowRequest? collectionsWindowRequest;
     private FileWatcher? watcher;
     private FileWatcher? storeWatcher;
     /// <summary>One watcher per bound synced collection, by collection name.</summary>
@@ -213,6 +214,17 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>The last publish that failed, with the reason. Cleared by a write that succeeds.</summary>
     public CollectionPublishError? PublishError { get => publishError; internal set => Set(ref publishError, value); }
+
+    /// <summary>
+    /// What the flyout asked the Collections window to do as it opened. It travels through the
+    /// shared state because the two surfaces are separate windows with no reference to each
+    /// other; <see cref="TakeCollectionsWindowRequest"/> is how the window consumes it.
+    /// </summary>
+    public CollectionsWindowRequest? CollectionsWindowRequest
+    {
+        get => collectionsWindowRequest;
+        set => Set(ref collectionsWindowRequest, value);
+    }
 
     public bool IsDirty => !DictionaryEquality.Equal(ExpandedServers, AppliedServers);
 
@@ -991,6 +1003,17 @@ public sealed class AppState : ObservableObject, IDisposable
         PersistStore();
         PerformApply();
         RaiseAll();
+    }
+
+    /// <summary>
+    /// The pending window request, cleared. The Collections window calls this as it appears, so
+    /// a request acted on once cannot be acted on again the next time that window opens.
+    /// </summary>
+    public CollectionsWindowRequest? TakeCollectionsWindowRequest()
+    {
+        var request = collectionsWindowRequest;
+        CollectionsWindowRequest = null;
+        return request;
     }
 
     /// <summary>

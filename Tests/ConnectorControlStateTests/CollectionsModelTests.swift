@@ -403,4 +403,20 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(state.activeCollection, "Spare Parts")
         XCTAssertEqual(model.items.first { $0.isActive }?.name, "Spare Parts")
     }
+
+    // MARK: - Export
+
+    func testTheSuggestedExportFileNameSlugsTheSelectedCollection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Acme Data Team!"))
+        state.switchCollection(to: "Default")
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+
+        XCTAssertEqual(model.suggestedExportFileName, "default.json")
+        model.selected = "Acme Data Team!"
+        XCTAssertEqual(model.suggestedExportFileName, "acme-data-team.json",
+                       "the same name the published document would take")
+    }
 }

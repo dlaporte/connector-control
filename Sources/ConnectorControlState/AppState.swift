@@ -107,6 +107,10 @@ public final class AppState: ObservableObject {
     @Published public internal(set) var sourceErrors: [String: String] = [:]
     /// The last publish that failed, with the reason. Cleared by a write that succeeds.
     @Published public internal(set) var publishError: (collection: String, message: String)?
+    /// What the popover asked the Collections window to do as it opened. It travels through the
+    /// shared state because the two surfaces are separate windows with no reference to each
+    /// other; `takeCollectionsWindowRequest` is how the window consumes it.
+    @Published public var collectionsWindowRequest: CollectionsWindowRequest?
 
     /// The prompts AppState itself raises (quit, restart, collections); the editor owns its own.
     public let dialogs: Dialogs
@@ -701,6 +705,13 @@ public final class AppState: ObservableObject {
         guard store.switchCollection(to: name) == nil else { return }
         persistStore()
         performApply()
+    }
+
+    /// The pending window request, cleared. The Collections window calls this as it appears, so
+    /// a request acted on once cannot be acted on again the next time that window opens.
+    public func takeCollectionsWindowRequest() -> CollectionsWindowRequest? {
+        defer { collectionsWindowRequest = nil }
+        return collectionsWindowRequest
     }
 
     /// Copies the active collection under a new name and makes it active, as the chip menu's

@@ -300,6 +300,12 @@ public final class CollectionsModel: ObservableObject {
     /// The names the export sheet writes, in the order the rows show them.
     public func exportIntentForChecked() -> [String] { checkedNames }
 
+    /// What the save panel opens with. The same name a published document would take, so an
+    /// export and a publish of one collection cannot be told apart by their file names.
+    public var suggestedExportFileName: String {
+        Slug.make(selectedCollection) + "." + CollectionDocument.fileExtension
+    }
+
     // MARK: - Collection actions
 
     public func create() {

@@ -108,7 +108,9 @@ final class StringCatalogTests: XCTestCase {
         "MasterStore.duplicateCollectionNameError": ["X"],
         "MasterStore.unknownCollectionError": ["X"],
         "PopoverModel.collectionChipText": ["X"],
+        "PopoverModel.exportTitle": ["X"],
         "PopoverModel.locateButton": ["X"],
+        "PopoverModel.sourceTooltipFormat": ["X"],
         "PublishModel.folderLine": ["X"],
         "PublishModel.title": ["X"],
         "PublishModel.warningLine": ["X", "Y"],
@@ -320,12 +322,16 @@ final class StringCatalogTests: XCTestCase {
         actual["PopoverModel.chooseFolderButton"] = PopoverModel.chooseFolderButton
         actual["PopoverModel.collectionChipText"] = PopoverModel.collectionChipText("X")
         actual["PopoverModel.emptyText"] = PopoverModel.emptyText
+        actual["PopoverModel.exportTitle"] = PopoverModel.exportTitle("X")
+        actual["PopoverModel.importTitle"] = PopoverModel.importTitle
         actual["PopoverModel.locateButton"] = PopoverModel.locateButton("X")
+        actual["PopoverModel.manageTitle"] = PopoverModel.manageTitle
         actual["PopoverModel.quitTooltip"] = PopoverModel.quitTooltip
         actual["PopoverModel.restartTitle"] = PopoverModel.restartTitle
         actual["PopoverModel.retryTitle"] = PopoverModel.retryTitle
         actual["PopoverModel.reviewAndApplyButton"] = PopoverModel.reviewAndApplyButton
         actual["PopoverModel.settingsTooltip"] = PopoverModel.settingsTooltip
+        actual["PopoverModel.sourceTooltipFormat"] = PopoverModel.sourceTooltipFormat("X")
         actual["PopoverModel.title"] = PopoverModel.title
 
         // MARK: PublishModel

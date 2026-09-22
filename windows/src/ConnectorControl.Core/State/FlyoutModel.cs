@@ -17,6 +17,8 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public const string AddDisabledTooltip = "Additions go in a local collection.";
     public const string ReviewAndApplyButton = "Review & Apply…";
     public const string ChooseFolderButton = "Choose Folder…";
+    public const string ImportTitle = "Import…";
+    public const string ManageTitle = "Manage Collections…";
     /// <summary>Segoe Fluent Icons: Warning (exclamationmark.arrow.circlepath's nearest) and Refresh (arrow.clockwise).</summary>
     public const string RetryGlyph = "\ue7ba";
     public const string RestartGlyph = "\ue72c";
@@ -28,6 +30,12 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public static string SettingsNotSavedCaution(string detail) => $"Settings could not be saved ({detail}); changes apply until the app quits.";
 
     public static string LocateButton(string fileName) => $"Locate {fileName}…";
+
+    /// <summary>The Mac names this <c>exportTitle</c>, where a static and an instance member of that name coexist; C# forbids that, so the instance property below calls this.</summary>
+    public static string ExportTitleFor(string active) => $"Export “{active}”…";
+
+    /// <summary>The chain glyph's tooltip. The Mac carries the same <c>Format</c> suffix, for the reason <see cref="ExportTitleFor"/> is spelled that way.</summary>
+    public static string SourceTooltipFormat(string source) => $"Synced from {source}";
 
     /// <summary>Property names Rebuild actually depends on — everything else AppState raises is noise for this view.</summary>
     private static readonly string[] RelevantProperties =
@@ -59,10 +67,48 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public string CollectionChipText => CollectionChipTextFor(state.ActiveCollection);
 
+    /// <summary>The menu's Export item, which names the collection it would write.</summary>
+    public string ExportTitle => ExportTitleFor(state.ActiveCollection);
+
+    /// <summary>The chain beside the chip, and the lock on every row below it.</summary>
+    public bool ActiveCollectionIsSynced => state.ActiveCollectionIsSynced;
+
+    /// <summary>
+    /// The amber dot beside the chip: the collection in front of the user has news at its
+    /// source. Another collection's pending update is the menu's dot, not the chip's.
+    /// </summary>
+    public bool ActiveHasPendingUpdate => state.PendingUpdates.ContainsKey(state.ActiveCollection);
+
+    /// <summary>
+    /// The chain's tooltip: where the active collection's document sits on this machine, or the
+    /// name the sidecar recorded while the file has still to be found. Null for a local
+    /// collection, which has no source, and for a synced one the sidecar never named.
+    /// </summary>
+    public string? SourceTooltip
+    {
+        get
+        {
+            var active = state.ActiveCollection;
+            if (!state.IsSynced(active))
+            {
+                return null;
+            }
+            var source = state.SourceBinding(active)?.Path
+                ?? (state.CollectionsFile.Collections.TryGetValue(active, out var entry) ? entry.FileName : null);
+            return source is null ? null : SourceTooltipFormat(source);
+        }
+    }
+
     public IReadOnlyList<CollectionMenuItem> CollectionItems => collectionItems;
 
     /// <summary>Nothing can be added to a synced collection: its content is the source file's.</summary>
     public bool CanAddConnector => !state.ActiveCollectionIsSynced;
+
+    /// <summary>
+    /// The Add button's tooltip, which says why it is disabled when it is. Picked here rather
+    /// than in the view, because XAML binds one tooltip and cannot choose between two constants.
+    /// </summary>
+    public string AddTooltipText => CanAddConnector ? AddTooltip : AddDisabledTooltip;
 
     public string? ErrorMessage => state.LastError
         ?? (state.StoreNotPrivate ? StoreNotPrivateCaution : null)
@@ -148,6 +194,72 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public void SwitchCollection(string name) => state.SwitchCollection(name);
 
+    /// <summary>
+    /// The banner's button, for the one banner that needs nothing from the user first. False
+    /// says the view has still to run its file dialog and call <see cref="LocateSource"/> or
+    /// <see cref="ChoosePublishFolder"/> with what it gets, which only a view can do.
+    /// </summary>
+    public bool CollectionBannerAction()
+    {
+        if (state.CollectionBanner is not State.CollectionBanner.UpdateAvailable)
+        {
+            return false;
+        }
+        RequestReview();
+        return true;
+    }
+
+    /// <summary>
+    /// The Locate banner's file, for the collection that banner names. Null on success, else the
+    /// message; also null when the banner has moved on since the dialog opened, because there is
+    /// then no collection asking to be pointed anywhere.
+    /// </summary>
+    public string? LocateSource(string path) =>
+        state.CollectionBanner is State.CollectionBanner.Locate locate
+            ? state.LocateSource(locate.Collection, path)
+            : null;
+
+    /// <summary>
+    /// The failed-publish banner's folder, for the collection that banner names. Publishing
+    /// again into a new folder is what re-points it, so the recorded intent travels unchanged —
+    /// the dialog is where what the document says gets edited. Null as <see cref="LocateSource"/>
+    /// returns null.
+    /// </summary>
+    public string? ChoosePublishFolder(string folder)
+    {
+        if (state.CollectionBanner is not State.CollectionBanner.PublishFailed failed)
+        {
+            return null;
+        }
+        var intent = state.CollectionsFile.Collections.TryGetValue(failed.Collection, out var entry)
+            && entry.Publish is { } record ? record.Intent : PublishIntent.None;
+        return state.StartPublishing(failed.Collection, folder, intent);
+    }
+
+    /// <summary>
+    /// The menu's Import…: the dialog belongs to the Collections window, so opening it is all
+    /// the flyout does and this is what it finds waiting.
+    /// </summary>
+    public void RequestImport() => state.CollectionsWindowRequest = new CollectionsWindowRequest.ImportFile();
+
+    /// <summary>
+    /// The menu's Export "&lt;active&gt;"…, which the Collections window shows for the collection
+    /// that is active now rather than whichever one it last had selected.
+    /// </summary>
+    public void RequestExport() => state.CollectionsWindowRequest = new CollectionsWindowRequest.ExportActive();
+
+    /// <summary>
+    /// The banner's Review &amp; Apply…, for the collection the banner names — which is not always
+    /// the active one, so the name travels with the request.
+    /// </summary>
+    public void RequestReview()
+    {
+        if (state.CollectionBanner is State.CollectionBanner.UpdateAvailable update)
+        {
+            state.CollectionsWindowRequest = new CollectionsWindowRequest.Review(update.Collection);
+        }
+    }
+
     public void Quit() => state.QuitApp();
 
     /// <summary>The single footer button: retry the apply, or restart Claude.</summary>
@@ -178,6 +290,9 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     private void Rebuild()
     {
         var names = state.SortedNames;
+        // Locked together or not at all: the rows are the active collection's, so one being the
+        // author's makes all of them so.
+        var locked = state.ActiveCollectionIsSynced;
         for (int i = Rows.Count - 1; i >= 0; i--)
         {
             if (!state.Store.Mcps.ContainsKey(Rows[i].Name))
@@ -194,17 +309,17 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
             var warning = WarningFor(entry);
             if (i < Rows.Count && Rows[i].Name == name)
             {
-                Rows[i].Sync(enabled, warning);
+                Rows[i].Sync(enabled, warning, locked);
             }
             else if (rowsByName.TryGetValue(name, out var existing))
             {
                 Rows.Remove(existing);
-                existing.Sync(enabled, warning);
+                existing.Sync(enabled, warning, locked);
                 Rows.Insert(i, existing);
             }
             else
             {
-                var row = new ConnectorRow(state, name, enabled, warning);
+                var row = new ConnectorRow(state, name, enabled, warning, locked);
                 rowsByName[name] = row;
                 Rows.Insert(i, row);
             }

@@ -286,14 +286,22 @@
     "format": "{0} ▾"
   },
   "PopoverModel.emptyText": "No connectors configured yet — add one below.",
+  "PopoverModel.exportTitle": {
+    "format": "Export “{0}”…"
+  },
+  "PopoverModel.importTitle": "Import…",
   "PopoverModel.locateButton": {
     "format": "Locate {0}…"
   },
+  "PopoverModel.manageTitle": "Manage Collections…",
   "PopoverModel.quitTooltip": "Quit Connector Control",
   "PopoverModel.restartTitle": "Restart Required",
   "PopoverModel.retryTitle": "Apply Failed — Retry",
   "PopoverModel.reviewAndApplyButton": "Review & Apply…",
   "PopoverModel.settingsTooltip": "Settings",
+  "PopoverModel.sourceTooltipFormat": {
+    "format": "Synced from {0}"
+  },
   "PopoverModel.title": "Connector Control",
   "PublishModel.envSectionTitle": "Environment values · stripped unless shared",
   "PublishModel.exportButton": "Export…",

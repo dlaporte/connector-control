@@ -8,11 +8,15 @@ public struct ConnectorRow: Identifiable, Equatable, Sendable {
     /// launcher is not where Claude Desktop looks. Advisory only — the row
     /// still toggles.
     public let toolWarning: String?
+    /// Leads the row with a lock: this connector belongs to the author of a synced collection's
+    /// document. The switch and the pencil stay live; everything else is read-only.
+    public let isLocked: Bool
 
-    public init(name: String, enabled: Bool, toolWarning: String?) {
+    public init(name: String, enabled: Bool, toolWarning: String?, isLocked: Bool = false) {
         self.name = name
         self.enabled = enabled
         self.toolWarning = toolWarning
+        self.isLocked = isLocked
     }
 
     public var id: String { name }

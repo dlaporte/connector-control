@@ -293,4 +293,155 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(PopoverModel.restartGlyph, "arrow.clockwise")
         XCTAssertEqual(PopoverModel.toolWarningGlyph, "exclamationmark.triangle.fill")
     }
+
+    // MARK: - Collection menu titles, chip marks and locks
+
+    func testTheMenuTitlesNameTheActiveCollection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+        XCTAssertEqual(PopoverModel.importTitle, "Import…")
+        XCTAssertEqual(PopoverModel.manageTitle, "Manage Collections…")
+        XCTAssertEqual(popover.exportTitle, "Export “Default”…")
+        XCTAssertEqual(popover.addTooltipText, PopoverModel.addTooltip)
+
+        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertEqual(popover.exportTitle, "Export “Work”…")
+    }
+
+    func testTheChipMarksAndLocksFollowTheActiveCollection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let document = h.dir.file("acme/data-team.json")
+        try FileManager.default.createDirectory(at: document.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try CollectionDocumentSamples.dataTeam.serialized().write(to: document)
+        XCTAssertNil(state.subscribe(documentAt: document.path, as: nil))
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+
+        // A local collection: no chain, no tooltip, no locks, and additions are allowed.
+        XCTAssertFalse(popover.activeCollectionIsSynced)
+        XCTAssertNil(popover.sourceTooltip)
+        XCTAssertFalse(popover.activeHasPendingUpdate)
+        XCTAssertTrue(popover.rows.allSatisfy { !$0.isLocked })
+
+        state.switchCollection(to: "Data team")
+        XCTAssertTrue(popover.activeCollectionIsSynced)
+        XCTAssertEqual(popover.sourceTooltip, "Synced from \(document.path)")
+        XCTAssertEqual(popover.addTooltipText, PopoverModel.addDisabledTooltip)
+        XCTAssertEqual(popover.rows.map(\.name), ["dbt", "github", "ledger", "notion"])
+        XCTAssertTrue(popover.rows.allSatisfy(\.isLocked), "every row of a synced collection is the author's")
+
+        // The dot is the active collection's news only.
+        state.pendingUpdates = ["Default": CollectionDiff(added: ["jira"], removed: [], changed: [])]
+        XCTAssertFalse(popover.activeHasPendingUpdate)
+        state.pendingUpdates = ["Data team": CollectionDiff(added: ["jira"], removed: [], changed: [])]
+        XCTAssertTrue(popover.activeHasPendingUpdate)
+    }
+
+    func testTheSourceTooltipNamesTheSidecarFileWhileTheDocumentIsUnfound() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        try CollectionsFile(collections: ["Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json")])
+            .save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        state.reload()
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+        XCTAssertEqual(popover.sourceTooltip, "Synced from team.json")
+    }
+
+    // MARK: - Banner actions
+
+    func testTheLocateBannerBindsTheCollectionItNames() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        try CollectionsFile(collections: ["Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json")])
+            .save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        state.reload()
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+        XCTAssertEqual(popover.collectionBanner, .locate(collection: "Team", fileName: "team.json"))
+
+        // A file that is not there is not bound, and the message is the one AppState gives.
+        XCTAssertNotNil(popover.locateSource(h.dir.file("nope.json").path))
+        XCTAssertNil(state.sourceBinding(of: "Team"))
+
+        let document = h.dir.file("team.json")
+        try CollectionDocumentSamples.dataTeam.serialized().write(to: document)
+        XCTAssertNil(popover.locateSource(document.path))
+        XCTAssertEqual(state.sourceBinding(of: "Team")?.path, document.path)
+
+        // The file is found, so the banner has moved on and a second locate has nothing to act on.
+        XCTAssertNotEqual(popover.collectionBanner, .locate(collection: "Team", fileName: "team.json"))
+        let elsewhere = h.dir.file("moved.json")
+        try CollectionDocumentSamples.dataTeam.serialized().write(to: elsewhere)
+        XCTAssertNil(popover.locateSource(elsewhere.path))
+        XCTAssertEqual(state.sourceBinding(of: "Team")?.path, document.path, "no banner, no change")
+    }
+
+    func testTheFailedPublishBannerRepointsTheCollectionItNames() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        try CollectionsFile(collections: [
+            "Default": CollectionsFile.Entry(
+                kind: .local, publish: CollectionsFile.PublishRecord(slug: "default", origin: "origin", intent: .none)),
+        ]).save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        let first = h.dir.file("first")
+        try FileManager.default.createDirectory(at: first, withIntermediateDirectories: true)
+        try CollectionsLocalCache(synced: [:], published: ["Default": .init(folder: first.path, lastWrittenHash: nil)])
+            .save(to: state.service.paths.collectionsCacheURL, staging: nil)
+        state.reload()
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+
+        state.publishError = (collection: "Default", message: "the folder is read-only")
+        XCTAssertEqual(popover.collectionBannerButton, PopoverModel.chooseFolderButton)
+
+        let second = h.dir.file("second")
+        try FileManager.default.createDirectory(at: second, withIntermediateDirectories: true)
+        XCTAssertNil(popover.choosePublishFolder(second.path))
+        XCTAssertEqual(state.collectionsCache.published["Default"]?.folder, second.path)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second.appendingPathComponent("default.json").path),
+                      "the document lands in the folder just chosen")
+        XCTAssertNil(state.publishError)
+
+        // With the failure gone there is no banner to act on, so the folder stays put.
+        let third = h.dir.file("third")
+        try FileManager.default.createDirectory(at: third, withIntermediateDirectories: true)
+        XCTAssertNil(popover.choosePublishFolder(third.path))
+        XCTAssertEqual(state.collectionsCache.published["Default"]?.folder, second.path)
+    }
+
+    func testTheCollectionsWindowRequestsRoundTripThroughAppState() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        try CollectionsFile(collections: ["Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json")])
+            .save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        state.reload()
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+        XCTAssertNil(state.takeCollectionsWindowRequest())
+
+        popover.requestImport()
+        XCTAssertEqual(state.collectionsWindowRequest, .importFile)
+        XCTAssertEqual(state.takeCollectionsWindowRequest(), .importFile)
+        XCTAssertNil(state.collectionsWindowRequest, "the window takes the request once")
+        XCTAssertNil(state.takeCollectionsWindowRequest())
+
+        popover.requestExport()
+        XCTAssertEqual(state.takeCollectionsWindowRequest(), .exportActive)
+
+        // The review request comes from the banner, and the locate banner is not one.
+        XCTAssertFalse(popover.collectionBannerAction())
+        XCTAssertNil(state.collectionsWindowRequest)
+
+        state.pendingUpdates = ["Team": CollectionDiff(added: ["jira"], removed: [], changed: [])]
+        XCTAssertTrue(popover.collectionBannerAction())
+        XCTAssertEqual(state.takeCollectionsWindowRequest(), .review(collection: "Team"))
+    }
 }

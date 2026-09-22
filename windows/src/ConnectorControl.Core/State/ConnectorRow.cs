@@ -6,13 +6,15 @@ public sealed class ConnectorRow : ObservableObject
     private readonly AppState state;
     private bool enabled;
     private string? toolWarning;
+    private bool isLocked;
 
-    public ConnectorRow(AppState state, string name, bool enabled, string? toolWarning)
+    public ConnectorRow(AppState state, string name, bool enabled, string? toolWarning, bool isLocked = false)
     {
         this.state = state;
         Name = name;
         this.enabled = enabled;
         this.toolWarning = toolWarning;
+        this.isLocked = isLocked;
     }
 
     public string Name { get; }
@@ -27,6 +29,12 @@ public sealed class ConnectorRow : ObservableObject
     public string? ToolWarning => toolWarning;
 
     public bool HasToolWarning => toolWarning is not null;
+
+    /// <summary>
+    /// Leads the row with a lock: this connector belongs to the author of a synced collection's
+    /// document. The switch and the pencil stay live; everything else is read-only.
+    /// </summary>
+    public bool IsLocked => isLocked;
 
     /// <summary>The switch: setting it persists and applies immediately.</summary>
     public bool Enabled
@@ -45,7 +53,7 @@ public sealed class ConnectorRow : ObservableObject
     }
 
     /// <summary>Refresh from the store and the tool cache without calling back into AppState.</summary>
-    internal void Sync(bool value, string? warning)
+    internal void Sync(bool value, string? warning, bool locked)
     {
         if (enabled != value)
         {
@@ -57,6 +65,11 @@ public sealed class ConnectorRow : ObservableObject
             toolWarning = warning;
             Raise(nameof(ToolWarning));
             Raise(nameof(HasToolWarning));
+        }
+        if (isLocked != locked)
+        {
+            isLocked = locked;
+            Raise(nameof(IsLocked));
         }
     }
 }

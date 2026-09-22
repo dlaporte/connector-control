@@ -317,4 +317,169 @@ public class FlyoutModelTests
         state.LastError = "apply failed";   // LastError outranks both
         Assert.Equal("apply failed", flyout.ErrorMessage);
     }
+    // MARK: collection menu titles, chip marks and locks
+
+    [Fact]
+    public void TheMenuTitlesNameTheActiveCollection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.Equal("Import…", FlyoutModel.ImportTitle);
+        Assert.Equal("Manage Collections…", FlyoutModel.ManageTitle);
+        Assert.Equal("Export “Default”…", flyout.ExportTitle);
+        Assert.Equal(FlyoutModel.AddTooltip, flyout.AddTooltipText);
+
+        Assert.Null(state.CreateCollection("Work"));
+        Assert.Equal("Export “Work”…", flyout.ExportTitle);
+    }
+
+    [Fact]
+    public void TheChipMarksAndLocksFollowTheActiveCollection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var document = h.Dir.File(Path.Combine("acme", "data-team.json"));
+        Directory.CreateDirectory(Path.GetDirectoryName(document)!);
+        File.WriteAllBytes(document, CollectionDocumentSamples.DataTeam.Serialize());
+        Assert.Null(state.Subscribe(document, null));
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        // A local collection: no chain, no tooltip, no locks, and additions are allowed.
+        Assert.False(flyout.ActiveCollectionIsSynced);
+        Assert.Null(flyout.SourceTooltip);
+        Assert.False(flyout.ActiveHasPendingUpdate);
+        Assert.All(flyout.Rows, r => Assert.False(r.IsLocked));
+
+        state.SwitchCollection("Data team");
+        Assert.True(flyout.ActiveCollectionIsSynced);
+        Assert.Equal($"Synced from {document}", flyout.SourceTooltip);
+        Assert.Equal(FlyoutModel.AddDisabledTooltip, flyout.AddTooltipText);
+        Assert.Equal(["dbt", "github", "ledger", "notion"], flyout.Rows.Select(r => r.Name).ToArray());
+        // Every row of a synced collection is the author's.
+        Assert.All(flyout.Rows, r => Assert.True(r.IsLocked));
+
+        // The dot is the active collection's news only.
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
+        {
+            ["Default"] = new CollectionDiff(["jira"], [], []),
+        };
+        Assert.False(flyout.ActiveHasPendingUpdate);
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
+        {
+            ["Data team"] = new CollectionDiff(["jira"], [], []),
+        };
+        Assert.True(flyout.ActiveHasPendingUpdate);
+    }
+
+    [Fact]
+    public void TheSourceTooltipNamesTheSidecarFileWhileTheDocumentIsUnfound()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        new CollectionsFile([Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json"))])
+            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        state.Reload();
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.Equal("Synced from team.json", flyout.SourceTooltip);
+    }
+
+    // MARK: banner actions
+
+    [Fact]
+    public void TheLocateBannerBindsTheCollectionItNames()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        new CollectionsFile([Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json"))])
+            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        state.Reload();
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
+
+        // A file that is not there is not bound, and the message is the one AppState gives.
+        Assert.NotNull(flyout.LocateSource(h.Dir.File("nope.json")));
+        Assert.Null(state.SourceBinding("Team"));
+
+        var document = h.Dir.File("team.json");
+        File.WriteAllBytes(document, CollectionDocumentSamples.DataTeam.Serialize());
+        Assert.Null(flyout.LocateSource(document));
+        Assert.Equal(document, state.SourceBinding("Team")?.Path);
+
+        // The file is found, so the banner has moved on and a second locate has nothing to act on.
+        Assert.NotEqual(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
+        var elsewhere = h.Dir.File("moved.json");
+        File.WriteAllBytes(elsewhere, CollectionDocumentSamples.DataTeam.Serialize());
+        Assert.Null(flyout.LocateSource(elsewhere));
+        Assert.Equal(document, state.SourceBinding("Team")?.Path);   // no banner, no change
+    }
+
+    [Fact]
+    public void TheFailedPublishBannerRepointsTheCollectionItNames()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        new CollectionsFile([Sidecar("Default", new CollectionsFile.Entry(
+            CollectionKind.Local, publish: new CollectionsFile.PublishRecord("default", "origin", PublishIntent.None)))])
+            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        var first = h.Dir.File("first");
+        Directory.CreateDirectory(first);
+        new CollectionsLocalCache([], [new KeyValuePair<string, CollectionsLocalCache.PublishBinding>(
+            "Default", new CollectionsLocalCache.PublishBinding(first, null))])
+            .Save(state.Service.Paths.CollectionsCachePath);
+        state.Reload();
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        state.PublishError = new CollectionPublishError("Default", "the folder is read-only");
+        Assert.Equal(FlyoutModel.ChooseFolderButton, flyout.CollectionBannerButton);
+
+        var second = h.Dir.File("second");
+        Directory.CreateDirectory(second);
+        Assert.Null(flyout.ChoosePublishFolder(second));
+        Assert.Equal(second, state.CollectionsCache.Published["Default"].Folder);
+        // The document lands in the folder just chosen.
+        Assert.True(File.Exists(Path.Combine(second, "default.json")));
+        Assert.Null(state.PublishError);
+
+        // With the failure gone there is no banner to act on, so the folder stays put.
+        var third = h.Dir.File("third");
+        Directory.CreateDirectory(third);
+        Assert.Null(flyout.ChoosePublishFolder(third));
+        Assert.Equal(second, state.CollectionsCache.Published["Default"].Folder);
+    }
+
+    [Fact]
+    public void TheCollectionsWindowRequestsRoundTripThroughAppState()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        new CollectionsFile([Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json"))])
+            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        state.Reload();
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.Null(state.TakeCollectionsWindowRequest());
+
+        flyout.RequestImport();
+        Assert.Equal(new CollectionsWindowRequest.ImportFile(), state.CollectionsWindowRequest);
+        Assert.Equal(new CollectionsWindowRequest.ImportFile(), state.TakeCollectionsWindowRequest());
+        Assert.Null(state.CollectionsWindowRequest);   // the window takes the request once
+        Assert.Null(state.TakeCollectionsWindowRequest());
+
+        flyout.RequestExport();
+        Assert.Equal(new CollectionsWindowRequest.ExportActive(), state.TakeCollectionsWindowRequest());
+
+        // The review request comes from the banner, and the locate banner is not one.
+        Assert.False(flyout.CollectionBannerAction());
+        Assert.Null(state.CollectionsWindowRequest);
+
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
+        {
+            ["Team"] = new CollectionDiff(["jira"], [], []),
+        };
+        Assert.True(flyout.CollectionBannerAction());
+        Assert.Equal(new CollectionsWindowRequest.Review("Team"), state.TakeCollectionsWindowRequest());
+    }
 }

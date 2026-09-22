@@ -349,6 +349,12 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>The names the export sheet writes, in the order the rows show them.</summary>
     public IReadOnlyList<string> ExportIntentForChecked() => CheckedNames;
 
+    /// <summary>
+    /// What the save dialog opens with. The same name a published document would take, so an
+    /// export and a publish of one collection cannot be told apart by their file names.
+    /// </summary>
+    public string SuggestedExportFileName => Slug.Make(SelectedCollection) + "." + CollectionDocument.FileExtension;
+
     // MARK: collection actions
 
     public void Create()
