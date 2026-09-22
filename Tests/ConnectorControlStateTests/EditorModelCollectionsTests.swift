@@ -479,6 +479,15 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertNil(editor.publishedHint(envRow: region.id))
         XCTAssertEqual(editor.publishedHint(arg: 0), "your clone, then dist/index.js")
         XCTAssertNil(editor.publishedHint(arg: 7))
+
+        // A published collection's editor adds and removes arguments freely, and the record
+        // keys the hint by where the marker sat, so the answer follows the row rather than the
+        // position it happens to hold now.
+        editor.args.insert(ArgRow(value: "--quiet"), at: 0)
+        XCTAssertNil(editor.publishedHint(arg: 0), "a row added since the window opened")
+        XCTAssertEqual(editor.publishedHint(arg: 1), "your clone, then dist/index.js")
+        editor.args.remove(at: 0)
+        XCTAssertEqual(editor.publishedHint(arg: 0), "your clone, then dist/index.js")
         // A different question from the synced sidecar's needs, which say nothing here.
         XCTAssertNil(editor.placeholderHint(envRow: token.id))
 

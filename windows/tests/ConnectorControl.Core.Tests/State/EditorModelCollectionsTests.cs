@@ -515,6 +515,10 @@ public class EditorModelCollectionsTests
         Assert.True(notion.ClientSecretIsPlaceholder);
     }
 
+    /// <summary>
+    /// C#-only: <c>jsonError</c> is @Published on the Mac, so the tip re-reads without anything
+    /// raising for it.
+    /// </summary>
     [Fact]
     public void TheJsonTipFollowsTheJsonError()
     {
@@ -614,6 +618,15 @@ public class EditorModelCollectionsTests
         Assert.Null(editor.PublishedHint(EnvRow(editor, "REGION")));
         Assert.Equal("your clone, then dist/index.js", editor.PublishedHintForArg(0));
         Assert.Null(editor.PublishedHintForArg(7));
+
+        // A published collection's editor adds and removes arguments freely, and the record
+        // keys the hint by where the marker sat, so the answer follows the row rather than the
+        // position it happens to hold now.
+        editor.Args.Insert(0, new ArgRow("--quiet"));
+        Assert.Null(editor.PublishedHintForArg(0));   // a row added since the window opened
+        Assert.Equal("your clone, then dist/index.js", editor.PublishedHintForArg(1));
+        editor.Args.RemoveAt(0);
+        Assert.Equal("your clone, then dist/index.js", editor.PublishedHintForArg(0));
         // A different question from the synced sidecar's needs, which say nothing here.
         Assert.Null(editor.PlaceholderHint(token));
 
@@ -634,8 +647,8 @@ public class EditorModelCollectionsTests
     }
 
     /// <summary>
-    /// The Mac has no mirror of these two: SwiftUI switches on the HeaderState enum itself, and
-    /// its whole model object republishes on any AppState change.
+    /// C#-only: SwiftUI switches on the HeaderState enum itself, so the Mac needs no bools to
+    /// tell the four states apart.
     /// </summary>
     [Fact]
     public void EachHeaderStateSaysWhichOneItIs()
@@ -653,6 +666,10 @@ public class EditorModelCollectionsTests
         Assert.False(synced.IsImported);
     }
 
+    /// <summary>
+    /// C#-only: the Mac's model republishes as a whole on any AppState change, so there is no
+    /// per-property raise to assert.
+    /// </summary>
     [Fact]
     public void TheCollectionsOwnAnswersFollowAppStateWithoutReseatingTheView()
     {

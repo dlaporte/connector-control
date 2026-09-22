@@ -110,6 +110,12 @@ public final class EditorModel: ObservableObject {
     /// a field still rendered as the unmasked placeholder control would be a secret in the clear
     /// in a form that no longer locks anything.
     private var snapshotWasReadOnly = false
+    /// Where each argument sat in the config the window opened on, by row identity. The publish
+    /// record keys a path mark by its pointer, so a hint belongs to a position in the document
+    /// that was published, not to whatever position the row holds now — and a published
+    /// collection's editor is fully editable, so rows move. Fixed at open and never retaken,
+    /// unlike the asked-for snapshot: the document it describes does not change under the window.
+    private var openArgIndexByRow: [UUID: Int] = [:]
     /// The other local collections that held a byte-identical copy of this connector when the
     /// window opened. Fixed there rather than re-derived: the checkbox names them, and the save
     /// that follows must write to the collections the user was shown, not to whatever matches
@@ -191,12 +197,14 @@ public final class EditorModel: ObservableObject {
         recoveredJSON = PasteRecovery.recover(jsonText)
         load(config)
         takeAskedSnapshot(readOnly: isReadOnly)
+        openArgIndexByRow = Dictionary(uniqueKeysWithValues: args.enumerated().map { ($0.element.id, $0.offset) })
         // On open, a cached status shows its note at once; an unknown one is
         // probed now. Later changes go through evaluateRequiredTool. The relay
         // makes the view re-read toolNote.
         subscription = state.$toolStatuses.dropFirst().sink { [weak self] _ in self?.objectWillChange.send() }
         // The sidecar is what says whether this collection is still synced, and Stop Syncing is
-        // the one thing that unlocks a form under an open window.
+        // the one thing that unlocks a form under an open window. The retake comes before the
+        // republish, so the record is already the new one by the time the view re-reads it.
         collectionSubscription = state.$collectionsFile.dropFirst().sink { [weak self] file in
             self?.retakeSnapshotIfUnlocked(with: file)
             self?.objectWillChange.send()
@@ -380,7 +388,9 @@ public final class EditorModel: ObservableObject {
     /// Stop Syncing under an open window: the form stops locking anything, so the snapshot taken
     /// against a locked form has nothing left to protect and a field the user has since filled
     /// must go back to being an ordinary masked secret. Taken from the values as they stand, so
-    /// a field still holding a marker keeps asking.
+    /// a field still holding a marker keeps asking. The values are read as they stand now, not
+    /// from the config the window opened on. The view gates its control choice on `isReadOnly`
+    /// too, so this only decides which fields stay live inside a form that still locks the rest.
     ///
     /// The sidecar comes from the publisher rather than from AppState: `@Published` announces a
     /// change before the property holds it, so reading `isReadOnly` here would still be the
@@ -423,10 +433,15 @@ public final class EditorModel: ObservableObject {
     }
 
     /// An argument's hint, which the record keys by where the marker sits rather than by name.
+    /// Resolved through the row's identity, as `asksFor(arg:)` is: a published collection's
+    /// editor adds and removes arguments freely, and a hint read by today's position would sit
+    /// beside whichever row happened to slide into it. nil for a row added since the window
+    /// opened, which the published document has never described.
     public func publishedHint(arg index: Int) -> String? {
-        guard state.collectionsCache.published[collectionName] != nil, args.indices.contains(index) else { return nil }
+        guard state.collectionsCache.published[collectionName] != nil, args.indices.contains(index),
+              let published = openArgIndexByRow[args[index].id] else { return nil }
         let marks = state.collectionsFile.collections[collectionName]?.publish?.intent.pathMarks[target.name] ?? [:]
-        return marks[JSONPointer(["args", String(index)])]?.hint
+        return marks[JSONPointer(["args", String(published)])]?.hint
     }
 
     /// Whether this connector has any author's hint to show at all, so the view can leave the

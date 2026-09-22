@@ -1954,12 +1954,13 @@ public sealed class AppState : ObservableObject, IDisposable
     /// publish intent. The origin is the one publishing fixed, so an export of a published
     /// collection is the same document the folder holds.
     /// </summary>
-    /// <summary>
-    /// <paramref name="only"/> names the connectors to carry, for the Export dialog's ticked
-    /// subset; null is the whole collection, which is what publishing always writes. Rendered
-    /// from the subset rather than filtered afterwards, so nothing in the document describes a
-    /// connector that is not in it.
-    /// </summary>
+    /// <param name="only">
+    /// The connectors to carry, for the Export dialog's ticked subset; null is the whole
+    /// collection, which is what publishing always writes. Rendered from the subset rather than
+    /// filtered afterwards, so nothing in the document describes a connector that is not in it.
+    /// The origin travels unchanged, so a subset is indistinguishable by origin from the whole
+    /// collection — deliberate: the origin says who published it, not how much of it.
+    /// </param>
     public CollectionDocument ExportDocument(string collection, PublishIntent intent,
                                              IReadOnlyList<string>? only = null)
     {

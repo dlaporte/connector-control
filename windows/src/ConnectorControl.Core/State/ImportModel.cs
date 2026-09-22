@@ -93,17 +93,23 @@ public sealed class ImportModel : ObservableObject
     /// is what the badge says and what <see cref="Choice"/> answers; an excluded connector cannot
     /// be included at all, since this platform has no way to run it. A class, not a record: the
     /// sheet edits <see cref="Include"/> and <see cref="Choice"/> in place through two-way
-    /// bindings, where the Mac mutates a struct through its index.
+    /// bindings, where the Mac mutates a struct through its index. Those two raise
+    /// PropertyChanged so the model can re-raise the count and the button that follow them; the
+    /// Mac needs none of that, because its rows sit in a @Published array and the array itself
+    /// is what announces the edit.
     /// </summary>
     public sealed class Row(string name, bool include, bool present, ImportChoice choice,
                             string? excludedReason, IReadOnlyList<string> needs, string? needsCaution,
-                            string badge)
+                            string badge) : ObservableObject
     {
+        private bool include = include;
+        private ImportChoice choice = choice;
+
         public string Id { get; } = name;
         public string Name { get; } = name;
-        public bool Include { get; set; } = include;
+        public bool Include { get => include; set => Set(ref include, value); }
         public bool Present { get; } = present;
-        public ImportChoice Choice { get; set; } = choice;
+        public ImportChoice Choice { get => choice; set => Set(ref choice, value); }
         public string? ExcludedReason { get; } = excludedReason;
         public IReadOnlyList<string> Needs { get; } = needs;
 
@@ -193,7 +199,34 @@ public sealed class ImportModel : ObservableObject
 
     public string SyncName { get => syncName; set => Set(ref syncName, value); }
 
-    public IReadOnlyList<Row> Rows { get => rows; private set => Set(ref rows, value); }
+    /// <summary>
+    /// Setting this listens to the new rows and lets the old ones go, so a tick or a choice
+    /// reaches <see cref="ImportCount"/> and <see cref="CanImport"/> without the sheet asking.
+    /// The rows live and die with this model, so a replacement is the only release needed.
+    /// </summary>
+    public IReadOnlyList<Row> Rows
+    {
+        get => rows;
+        private set
+        {
+            foreach (var row in rows)
+            {
+                row.PropertyChanged -= OnRowChanged;
+            }
+            Set(ref rows, value);
+            foreach (var row in value)
+            {
+                row.PropertyChanged += OnRowChanged;
+            }
+        }
+    }
+
+    /// <summary>Everything the footer says is counted off the rows, and nothing above them is.</summary>
+    private void OnRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        Raise(nameof(ImportCount));
+        Raise(nameof(CanImport));
+    }
 
     /// <summary>
     /// "“Data team” by Acme Data Platform · 4 connectors" — what the file says about itself. The
@@ -206,10 +239,8 @@ public sealed class ImportModel : ObservableObject
 
     /// <summary>
     /// What the Import button counts: the rows that are ticked in add mode, and everything this
-    /// platform can carry in sync mode, where the whole document comes across or none of it.
-    /// </summary>
-    /// <summary>
-    /// A ticked row set to Skip lands nothing, so the button must not promise it:
+    /// platform can carry in sync mode, where the whole document comes across or none of it. A
+    /// ticked row set to Skip lands nothing, so the button must not promise it:
     /// <see cref="Perform"/> sends Skip for exactly these, and a count that disagreed would say
     /// "Import 3" over two connectors arriving.
     /// </summary>

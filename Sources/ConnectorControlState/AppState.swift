@@ -1342,7 +1342,8 @@ public final class AppState: ObservableObject {
     /// `only` names the connectors to carry, for the Export sheet's ticked subset; nil is the
     /// whole collection, which is what publishing always writes. Rendered from the subset rather
     /// than filtered afterwards, so nothing in the document describes a connector that is not in
-    /// it.
+    /// it. The origin travels unchanged, so a subset is indistinguishable by origin from the
+    /// whole collection — deliberate: the origin says who published it, not how much of it.
     public func exportDocument(for collection: String, intent: PublishIntent,
                                only: [String]? = nil) -> CollectionDocument {
         var connectors = (store.collections[collection]?.mcps ?? [:]).mapValues(\.config)

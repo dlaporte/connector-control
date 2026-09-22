@@ -290,6 +290,10 @@ public class ImportModelTests
         Assert.Equal(4, model.ImportCount);
     }
 
+    /// <summary>
+    /// C#-only: SwiftUI binds the optional <c>loadError</c> itself, so the Mac has no bool to
+    /// assert — the same one-sided pattern <c>HasCollectionBanner</c> already follows.
+    /// </summary>
     [Fact]
     public void ADocumentThatCannotBeReadSaysSoAsABool()
     {
@@ -312,5 +316,47 @@ public class ImportModelTests
         Assert.Equal("Include github", ImportModel.IncludeLabel("github"));
         Assert.Equal("Collection name", ImportModel.SyncNameLabel);
         Assert.Equal("What to do with github", ImportModel.CollisionPickerLabel("github"));
+    }
+    /// <summary>
+    /// C#-only: the Mac's rows are structs in a @Published array, so editing one republishes the
+    /// array and nothing model-side needs to raise.
+    /// </summary>
+    [Fact]
+    public void TickingOrSkippingARowRaisesTheCountWithoutAViewCall()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
+        Write(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Upsert("github", new McpEntry(AppStateHarness.Remote("https://x/")), null));
+
+        var model = new ImportModel(state, path);
+        var raised = new List<string>();
+        model.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");
+        Assert.Equal(3, model.ImportCount);
+
+        // A choice the sheet makes on a row has to reach the footer, which reads the model.
+        model.Rows[1].Include = true;
+        Assert.Contains(nameof(ImportModel.ImportCount), raised);
+        Assert.Contains(nameof(ImportModel.CanImport), raised);
+        Assert.Equal(4, model.ImportCount);
+
+        raised.Clear();
+        model.Rows[1].Choice = ImportChoice.Skip;
+        Assert.Contains(nameof(ImportModel.ImportCount), raised);
+        Assert.Equal(3, model.ImportCount);
+
+        // Setting a row to what it already holds says nothing.
+        raised.Clear();
+        model.Rows[1].Choice = ImportChoice.Skip;
+        Assert.Empty(raised);
+
+        // Rebuilding the rows lets the old ones go: the replaced row no longer reaches the model.
+        var stale = model.Rows[1];
+        Assert.Null(state.CreateCollection("Other"));
+        model.TargetCollection = "Other";
+        raised.Clear();
+        stale.Include = !stale.Include;
+        Assert.Empty(raised);
     }
 }

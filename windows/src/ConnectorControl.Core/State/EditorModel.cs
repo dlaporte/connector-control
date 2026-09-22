@@ -156,6 +156,14 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// in a form that no longer locks anything.
     /// </summary>
     private bool snapshotWasReadOnly;
+    /// <summary>
+    /// Where each argument sat in the config the window opened on, by row. The publish record
+    /// keys a path mark by its pointer, so a hint belongs to a position in the document that was
+    /// published, not to whatever position the row holds now — and a published collection's
+    /// editor is fully editable, so rows move. Fixed at open and never retaken, unlike the
+    /// asked-for snapshot: the document it describes does not change under the window.
+    /// </summary>
+    private readonly Dictionary<ArgRow, int> openArgIndexByRow = [];
     private string? validationError;
     private Tool? requiredTool;
     private bool suppressToolEvaluation;
@@ -186,6 +194,10 @@ public sealed class EditorModel : ObservableObject, IDisposable
         askedEnvRows = [];
         askedArgs = [];
         TakeAskedSnapshot();
+        for (var i = 0; i < Args.Count; i++)
+        {
+            openArgIndexByRow[Args[i]] = i;
+        }
         state.PropertyChanged += OnStateChanged;
         Args.CollectionChanged += OnArgsChanged;
         requiredTool = ComputeRequiredTool();
@@ -677,16 +689,23 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// </summary>
     public string? PublishedHint(EnvRow row) => PublishedEnvHints.GetValueOrDefault(row.Name);
 
-    /// <summary>An argument's hint, which the record keys by where the marker sits rather than by name.</summary>
+    /// <summary>
+    /// An argument's hint, which the record keys by where the marker sits rather than by name.
+    /// Resolved through the row's identity, as <see cref="AsksForArg"/> is: a published
+    /// collection's editor adds and removes arguments freely, and a hint read by today's
+    /// position would sit beside whichever row happened to slide into it. Null for a row added
+    /// since the window opened, which the published document has never described.
+    /// </summary>
     public string? PublishedHintForArg(int index)
     {
-        if (!state.CollectionsCache.Published.ContainsKey(CollectionName) || index < 0 || index >= Args.Count)
+        if (!state.CollectionsCache.Published.ContainsKey(CollectionName) || index < 0 || index >= Args.Count
+            || !openArgIndexByRow.TryGetValue(Args[index], out var published))
         {
             return null;
         }
         var marks = state.CollectionsFile.Collections.GetValueOrDefault(CollectionName)?.Publish?.Intent
             .PathMarks.GetValueOrDefault(Target.Name);
-        var pointer = new JsonPointer(["args", index.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
+        var pointer = new JsonPointer(["args", published.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
         return marks?.GetValueOrDefault(pointer)?.Hint;
     }
 
@@ -782,6 +801,11 @@ public sealed class EditorModel : ObservableObject, IDisposable
         if (Affects(e, nameof(AppState.CollectionsFile)) || Affects(e, nameof(AppState.CollectionsCache))
             || Affects(e, nameof(AppState.Store)))
         {
+            // The retake comes first, so the record is already the new one by the time anything
+            // hears that the form unlocked. A binding that transfers inline off IsReadOnly would
+            // otherwise read the record this is about to replace; WPF's DataBind priority hides
+            // that today, which is not a thing to depend on.
+            var retook = RetakeSnapshotIfUnlocked();
             Raise(nameof(IsReadOnly));
             Raise(nameof(Header));
             Raise(nameof(HeaderNote));
@@ -792,7 +816,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
             Raise(nameof(ShowPropagate));
             Raise(nameof(PropagateMessage));
             Raise(nameof(HasPublishedHints));
-            if (RetakeSnapshotIfUnlocked())
+            if (retook)
             {
                 Raise(nameof(AsksForBearerToken));
                 Raise(nameof(AsksForHeaderValue));
@@ -816,7 +840,10 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// Stop Syncing under an open window: the form stops locking anything, so the snapshot taken
     /// against a locked form has nothing left to protect and a field the user has since filled
     /// must go back to being an ordinary masked secret. Taken from the values as they stand, so
-    /// a field still holding a marker keeps asking. True when it retook.
+    /// a field still holding a marker keeps asking. The values are read as they stand now, not
+    /// from the config the window opened on. The view gates its control choice on
+    /// <see cref="IsReadOnly"/> too, so this only decides which fields stay live inside a form
+    /// that still locks the rest. True when it retook.
     /// </summary>
     private bool RetakeSnapshotIfUnlocked()
     {

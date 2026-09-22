@@ -71,7 +71,11 @@ public final class ImportModel: ObservableObject {
 
     public enum Mode: Equatable, Sendable { case addToCollection, keepInSync }
 
-    /// One connector of the document against the collection it would land in. `present` is what
+    /// One connector of the document against the collection it would land in. A tick or a choice
+    /// here republishes the whole `rows` array, which is what makes `importCount` and the button
+    /// re-read; the Windows mirror has to raise PropertyChanged from the row for the same effect.
+    ///
+    /// `present` is what
     /// the badge says and what `choice` answers; an excluded connector cannot be included at all,
     /// since this platform has no way to run it. A struct the sheet edits through its index, as
     /// the publish rows are; the Windows mirror is a class, because WPF's two-way bindings need
