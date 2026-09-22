@@ -16,8 +16,7 @@
       <StackPanel Orientation="Horizontal">
         <ComboBox x:Name="ChoiceBox" ItemsSource="{x:Static state:ImportModel.CollisionChoices}"
                   SelectedItem="{Binding Choice, Mode=TwoWay}" MinWidth="110" VerticalAlignment="Center"
-                  AutomationProperties.Name="{Binding Name, Converter={StaticResource RowLabel}, ConverterParameter=choice}"
-                  SelectionChanged="OnRowChose">
+                  AutomationProperties.Name="{Binding Name, Converter={StaticResource RowLabel}, ConverterParameter=choice}">
           <ComboBox.ItemTemplate>
             <DataTemplate>
               <TextBlock Text="{Binding Converter={StaticResource ChoiceTitle}}" />
@@ -118,7 +117,7 @@
                            a local style on a CheckBox would replace the theme's own. -->
                       <CheckBox x:Name="IncludeTick" IsChecked="{Binding Include, Mode=TwoWay}" VerticalAlignment="Center"
                                 IsEnabled="{Binding ExcludedReason, Converter={StaticResource CanInclude}}"
-                                AutomationProperties.Name="{Binding Name, Converter={StaticResource RowLabel}}" Click="OnRowTicked" />
+                                AutomationProperties.Name="{Binding Name, Converter={StaticResource RowLabel}}" />
                       <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" Margin="8,0,0,0" />
                       <!-- Caution glyph: its own Auto column, so the badge column keeps the rest. -->
                       <TextBlock x:Name="NeedsGlyph" Grid.Column="2"
@@ -143,9 +142,8 @@
                            resolves, or — for every other row, and for a collision that is not
                            coming across — the row's own badge. Unticking a collision and choosing
                            Skip in the picker mean the same thing, so a row that is not coming
-                           across says so instead of offering the choice. The tick is a plain
-                           property that notifies nobody, so both states read the tick's own
-                           IsChecked rather than the row's Include. -->
+                           across says so instead of offering the choice. Both states read the
+                           row's own Include, which notifies. -->
                       <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
                         <!-- The badge is a row's whole point and the skipped reason is the longest
                              of them, so the one line that shows it carries the full sentence. -->
@@ -158,7 +156,7 @@
                                 <MultiDataTrigger>
                                   <MultiDataTrigger.Conditions>
                                     <Condition Binding="{Binding Present}" Value="True" />
-                                    <Condition Binding="{Binding IsChecked, ElementName=IncludeTick}" Value="True" />
+                                    <Condition Binding="{Binding Include}" Value="True" />
                                   </MultiDataTrigger.Conditions>
                                   <Setter Property="Visibility" Value="Collapsed" />
                                 </MultiDataTrigger>
@@ -176,7 +174,7 @@
                                 <MultiDataTrigger>
                                   <MultiDataTrigger.Conditions>
                                     <Condition Binding="{Binding Present}" Value="True" />
-                                    <Condition Binding="{Binding IsChecked, ElementName=IncludeTick}" Value="True" />
+                                    <Condition Binding="{Binding Include}" Value="True" />
                                   </MultiDataTrigger.Conditions>
                                   <Setter Property="Content" Value="{Binding}" />
                                   <Setter Property="ContentTemplate" Value="{StaticResource ChoiceTemplate}" />

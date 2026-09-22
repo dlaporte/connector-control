@@ -34,9 +34,9 @@ public class ImportDialogTests
     }
 
     /// <summary>
-    /// A click, in the two halves WPF splits it into: the state the tick lands in, and the Click
-    /// the sheet listens to. Setting IsChecked on its own leaves the count beside Import stale,
-    /// which is the one thing about this sheet a test must not hide.
+    /// A click, in the two halves WPF splits it into: the state the tick lands in, and the Click a
+    /// real one also raises. The sheet listens to neither — the tick writes through to the row,
+    /// which notifies — so the raise is here to keep the test a click rather than an assignment.
     /// </summary>
     private static void ClickTick(ToggleButton tick, bool on)
     {

@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
-using System.Windows.Controls;
 using System.Windows.Data;
 using ConnectorControl.Core.State;
 
@@ -45,11 +44,10 @@ public partial class ImportDialog : DialogWindow
     }
 
     /// <summary>
-    /// The two formatted strings and the one derived flag nothing notifies: the count beside Import
-    /// and the mode's own sentence are built from a value rather than being properties, and a row's
-    /// tick is a plain property that notifies nobody. Everything that is a property of the model is
-    /// bound instead. The Mac's SwiftUI re-reads the whole sheet for free; here the sheet re-reads
-    /// what changed with it.
+    /// The two strings a binding cannot carry: the count beside Import and the mode's own sentence
+    /// are built from a value rather than being properties of their own. Everything else is bound.
+    /// Reached only through the model's own notification — a row raises its edit, the model
+    /// re-raises the count and CanImport that follow it, and this runs once for the pair.
     /// </summary>
     private void Refresh()
     {
@@ -59,14 +57,6 @@ public partial class ImportDialog : DialogWindow
         ImportButton.Content = ImportModel.ImportButton(Model.ImportCount);
         ImportButton.GetBindingExpression(IsEnabledProperty)?.UpdateTarget();
     }
-
-    private void OnRowTicked(object sender, RoutedEventArgs e) => Refresh();
-
-    /// <summary>
-    /// Skip in the picker and an unticked row mean the same thing to the count, so a choice moves
-    /// it exactly as a tick does; the row it was made on notifies nobody either way.
-    /// </summary>
-    private void OnRowChose(object sender, SelectionChangedEventArgs e) => Refresh();
 
     private void OnImport(object sender, RoutedEventArgs e)
     {
