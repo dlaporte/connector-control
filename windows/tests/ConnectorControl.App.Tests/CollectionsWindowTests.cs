@@ -163,6 +163,13 @@ public class CollectionsWindowTests
             Assert.Equal("Default", window.SelectedNameText.Text);
             Assert.Equal(" · " + window.Model.DetailLine, window.DetailText.Text);
             Assert.Equal(Visibility.Collapsed, window.BannerStrip.Visibility);
+
+            // Make Active reaches the window as a command carrying the collection it was raised
+            // over. The context menu holds no handler of its own: an element hooked inside a
+            // lazily built subtree takes one of the window's connection ids and shifts the rest.
+            Assert.True(CollectionsWindow.MakeActiveCommand.CanExecute(team, window));
+            CollectionsWindow.MakeActiveCommand.Execute(team, window);
+            Assert.Equal("Data team", state.ActiveCollection);
         });
     }
 

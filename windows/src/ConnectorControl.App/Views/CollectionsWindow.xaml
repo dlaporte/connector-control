@@ -136,26 +136,34 @@
       <Grid.ColumnDefinitions>
         <!-- Resizable, as the Mac's split view is: a long collection name is otherwise elided
              here for good. -->
-        <ColumnDefinition x:Name="SidebarColumn" Width="200" MinWidth="140" />
+        <ColumnDefinition Width="200" MinWidth="140" />
         <ColumnDefinition Width="Auto" />
         <ColumnDefinition Width="*" MinWidth="380" />
       </Grid.ColumnDefinitions>
 
       <!-- Selecting a collection only shows it. Making it the active one is a double-click, which
            is what this window has to offer: every labelled route to it is a flyout menu item. -->
+      <!-- The double-click is handled here and resolved to the container it landed on, so the
+           empty space under the items answers for nothing. -->
       <ListBox x:Name="Sidebar" ItemsSource="{Binding Items}"
-               SelectedValuePath="Name" SelectedValue="{Binding Selected}">
-        <!-- Both on the container rather than inside the template: a context menu raised from the
-             keyboard is looked for on the focused ListBoxItem, not on what it holds, and a
-             double-click on the list itself would answer for the empty space under the items. -->
+               SelectedValuePath="Name" SelectedValue="{Binding Selected}"
+               PreviewMouseDoubleClick="OnActivate">
+        <!-- The context menu is on the container rather than inside the template: one raised
+             from the keyboard is looked for on the focused ListBoxItem, not on what it holds.
+             Nothing in here may carry x:Name or an event handler — the markup compiler numbers
+             such an element, WPF builds this subtree at another time, and the window's own
+             connection ids then land on the wrong elements. Hence a command and the item as its
+             parameter, with the target named explicitly so the window's binding is found from a
+             menu that lives outside its visual tree. -->
         <ListBox.ItemContainerStyle>
           <Style TargetType="ListBoxItem">
-            <EventSetter Event="MouseDoubleClick" Handler="OnActivate" />
             <Setter Property="ContextMenu">
               <Setter.Value>
                 <ContextMenu>
-                  <MenuItem x:Name="MakeActiveItem" Header="{x:Static state:CollectionsModel.MakeActiveAction}"
-                            Click="OnMakeActive" />
+                  <MenuItem Header="{x:Static state:CollectionsModel.MakeActiveAction}"
+                            Command="{x:Static views:CollectionsWindow.MakeActiveCommand}"
+                            CommandParameter="{Binding}"
+                            CommandTarget="{Binding PlacementTarget, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                 </ContextMenu>
               </Setter.Value>
             </Setter>

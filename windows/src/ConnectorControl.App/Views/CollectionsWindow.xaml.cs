@@ -46,6 +46,9 @@ public partial class CollectionsWindow : Window
             }
         };
         state.PropertyChanged += onStateChanged;
+        // In code, not in XAML: every hookup the markup compiler numbers has to sit in this
+        // window's own tree, and this one has no element to sit on.
+        CommandBindings.Add(new CommandBinding(MakeActiveCommand, OnMakeActive));
         Loaded += (_, _) => ScheduleConsume();
         Closed += (_, _) =>
         {
@@ -55,6 +58,14 @@ public partial class CollectionsWindow : Window
         };
         Refresh();
     }
+
+    /// <summary>
+    /// The sidebar context menu's Make Active, as a command rather than a Click handler: a
+    /// handler or an x:Name on an element inside a <c>Setter.Value</c> takes one of this
+    /// window's connection ids, and WPF builds that subtree late enough that every id after it
+    /// arrives at the wrong element. The menu passes the collection it was raised over.
+    /// </summary>
+    public static RoutedCommand MakeActiveCommand { get; } = new(nameof(MakeActiveCommand), typeof(CollectionsWindow));
 
     public CollectionsModel Model { get; }
 
@@ -138,10 +149,15 @@ public partial class CollectionsWindow : Window
 
     // MARK: panes
 
-    /// <summary>Double-clicking a collection makes it the active one; the click before it selected it.</summary>
+    /// <summary>
+    /// Double-clicking a collection makes it the active one; the click before it selected it.
+    /// Resolved to the container the click landed on, so the empty space under the last item
+    /// does nothing rather than activating whatever happens to be selected.
+    /// </summary>
     private void OnActivate(object sender, MouseButtonEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: CollectionsModel.Item item })
+        if (e.OriginalSource is DependencyObject source
+            && ItemsControl.ContainerFromElement(Sidebar, source) is ListBoxItem { DataContext: CollectionsModel.Item item })
         {
             Act(() => Model.SwitchTo(item.Name));
         }
@@ -151,9 +167,9 @@ public partial class CollectionsWindow : Window
     /// The same action, labelled: the context menu is what a keyboard and a screen reader reach,
     /// and it acts on the collection it was raised over — which a right-click does not select.
     /// </summary>
-    private void OnMakeActive(object sender, RoutedEventArgs e)
+    private void OnMakeActive(object sender, ExecutedRoutedEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: CollectionsModel.Item item })
+        if (e.Parameter is CollectionsModel.Item item)
         {
             Act(() => Model.SwitchTo(item.Name));
         }
