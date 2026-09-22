@@ -19,88 +19,71 @@ bullet once the section is about to ship.
 
 ### Windows
 
-- The check that refuses a Server URL, header name or OAuth client field containing
-  `& | < > ^ "` or a space now covers connectors arriving from a shared collection, not
-  only ones typed into the editor. Such a connector is listed in the Import sheet as
-  skipped, with the field at fault, and is left out of the import and of every later
-  update from that collection: Claude Desktop hands the `cmd /c npx` launcher's
-  arguments to cmd.exe unescaped. A Mac writes bare `npx`, so the same document imports
-  whole there.
+- Connectors arriving from a shared collection go through the same check as ones typed
+  into the editor: a Server URL, header name, client ID or client secret containing
+  `& | < > ^ "` or a space, or scopes containing any of those characters other than a
+  space, is refused, because Claude Desktop hands the `cmd /c npx` launcher's arguments
+  to cmd.exe unescaped. The Import sheet lists such a connector as skipped and names the
+  field, and it stays out of the import and of later updates. A Mac writes bare `npx`,
+  so the same document imports whole there.
 
 ### Both platforms
 
 - Profiles are now collections. Every profile you had is a collection with the same name
-  and the same connectors, and the master list file is unchanged.
-- Collections can be shared. Export writes a collection as a document wherever you
-  choose, and whoever receives that file imports it either as copies into a collection
-  of their own or as a collection of its own that stays in sync with the file. The
-  Import sheet lists every connector first — new, already present, or skipped and why —
-  and nothing happens until you say so.
-- Where an imported connector's name is already taken you choose what happens to it:
-  replace it, which keeps the secrets and paths you had filled in; keep both, which
-  lands the new one beside the old as `<name> 2`; or leave it alone. Imported connectors
-  arrive switched off, and each one records the collection it came from, its author and
-  the day it arrived.
-- A synced collection follows its document. Its connectors are read-only — their names,
-  commands, arguments, URLs and auth belong to the author — while what is yours stays
-  yours: the values the document asks this machine for, the paths you point at, and
-  which connectors you have turned on. When the author changes the file the collection
-  says so, and Review & Apply shows the before and after of every connector it would
-  add, remove or change; nothing lands until you apply it, and your filled values follow
-  their placeholder wherever the author moved it. Refresh re-reads on demand, Locate…
-  finds the file again on a new machine, and Stop Syncing keeps everything the
-  collection holds and makes it yours. A file that is half-written, or that has not
-  synced down yet, is retried quietly before anything is reported.
-- A placeholder is a value a shared document asks each machine for instead of carrying
-  it. A connector waiting on one says "needs your value" or "needs your path" until it
-  is filled, with the author's hint beside the field, and `${COLLECTION_DIR}` in a
-  synced collection resolves to the folder that collection's document sits in — so one
-  shared list can point at each machine's own copy of a server.
-- Publish… points a local collection at a folder in a repository or a synced drive and
-  rewrites the document there whenever what the collection runs changes, so a team
-  follows your list without anyone sending a file. The sheet lists every environment
-  value and every argument that looks like a path on this machine: tick the ones that
-  should travel as values, and the rest travel as a placeholder under a name and hint of
-  your choosing. The document itself is underneath, so you see every byte before it
-  leaves, with anything that looks like a credential called out; nothing is ever edited
-  on your behalf. Turning a connector on or off never republishes.
+  and connectors, and the master list file is unchanged.
+- Export… writes a collection as a document, and Import… brings one in either as copies
+  into a collection of your own or as a synced collection that follows the file. The
+  Import sheet says what will happen to each connector before anything does.
+- An imported name that is already taken can replace the old connector, keeping the
+  secrets and paths you filled in, land beside it as `<name> 2`, or be left out. Copies
+  arrive switched off, and the editor names the collection each came from and the day it
+  arrived.
+- A synced collection is read-only apart from your secrets, your paths and which
+  connectors are on: its rows show a lock, the editor opens locked and says what you can
+  change, and Add Connector is disabled. Make Local Copy… takes the connectors you pick,
+  or the whole collection, into one of your own.
+- A change at a synced collection's source arrives for review: Review & Apply shows the
+  before and after of every connector, nothing lands until you apply it, and your filled
+  values survive. Refresh re-reads at once, Locate… finds the file on a new machine, and
+  Stop Syncing makes the collection yours.
+- A placeholder is a value a document asks each machine for; a connector waiting on one
+  says "needs your value" or "needs your path", with the author's hint.
+  `${COLLECTION_DIR}` is the document's folder: where a synced collection found it, or
+  the publish folder on the publishing machine. In a collection that is not published
+  yet, a caution says it has no folder.
+- Publish… writes a local collection's document to a folder in a repository or synced
+  drive and rewrites it whenever what the collection runs changes; turning a connector
+  on or off never republishes. Deleting a published collection, or Stop Publishing in
+  the Collections window, asks whether to remove the document too; Keep is the default.
+- The Publish sheet lists every environment value, which travels as a hint unless you
+  tick share value, and every argument that looks like a path on this machine, which
+  travels as written unless you tick it to become a placeholder. The token, header value
+  or client secret in a remote connector's Authentication fields always travels as a
+  placeholder, and a preview shows every byte before it leaves, flagging any argument or
+  shared value that looks like a credential.
 - A publish that fails says so on the collection banner, with Choose Folder… and Stop
-  Publishing beside it, and pressing Publish again retries the write there and then.
-  Stop Publishing, and deleting a published collection, ask whether to remove the
-  document from the shared folder as well; keeping it is the default answer.
-- A Collections window lists every collection beside its connectors and marks which one
-  is active, which are synced, which one this machine publishes, and whether a synced
-  collection's file has been found. New, Rename, Delete, Import, Subscribe, Export,
-  Publish, Refresh, Make Local Copy, Stop Syncing and Stop Publishing all live in its
-  toolbar, which follows the selection. A connector's switch can be flipped in any
-  collection from there; only the active collection reaches Claude, so a toggle
-  elsewhere is saved and nothing is restarted.
+  Publishing, and pressing Publish again retries the write at once. A path marked for
+  others to supply follows its argument when you add, remove or reorder arguments; if it
+  cannot be followed, publishing stops and the banner asks you to mark it again, so a
+  marked path never goes out as written.
+- The Collections window lists every collection beside its connectors, marking the
+  active one and the synced ones, with a detail line saying where the selected one
+  publishes to or syncs from. Import…, Subscribe…, Export…, Publish…, Refresh, Make
+  Local Copy… and New… sit in its toolbar, and Rename…, Delete…, Stop Publishing and
+  Stop Syncing under the rows. A switch flipped in a collection that is not active is
+  saved without restarting anything.
 - The collection chip carries a chain when the collection you are in comes from a shared
-  document, and an amber dot when that document has changes waiting for you. Its menu
-  switches collections, marks the synced ones the same way, and offers Import…, Export
-  and Manage Collections…. A collection with news says so above the connector list, with
-  the one button that answers it.
-- Connectors in a synced collection show a lock in the list and open locked in the
-  editor, where only the values the document asks this machine for can be typed into and
-  "What can I change?" spells out the rule. Add Connector is disabled there, saying
-  additions go in a local collection, and Make Local Copy… takes the connectors you
-  pick, or a whole collection, into a collection of your own, where they are yours to
-  change.
-- The editor says where a connector came from in one line above the fields: synced from
-  a collection, published to a folder, or imported from another collection on a date. An
-  ordinary connector in an ordinary collection says nothing and takes no room.
+  document, and an amber dot when that document has changes waiting. Its menu switches
+  collections, marks the synced ones the same way, and offers Import…, Export… and
+  Manage Collections…. A collection with news says so above the connector list, with the
+  button that answers it.
 - Saving a connector that another local collection holds an identical copy of offers, in
   one checkbox, to apply the same change there too.
-- A local server authored on the other platform is marked on its row, since a command
-  written for a Mac rarely runs on a PC unchanged; remote connectors cross either way.
-- A change that cannot be written to the collection list now says plainly that it is not
-  on disk rather than looking saved, a list another machine changed is never quietly
-  reverted, and a change made while a sync tool is writing that file no longer replaces
-  it with an empty one.
-- A folder the app watches — the master list's, or the one a synced collection's
-  document sits in — that is deleted and recreated, or replaced wholesale by a sync
-  client, is picked up again instead of leaving the app watching a folder that is no
-  longer there.
+- In a synced collection, a local server authored on the other platform is marked on its
+  row; remote connectors cross either way.
+- A folder the app watches — Claude's config folder, the master list's, or a synced
+  collection's — that is deleted and recreated, or replaced wholesale by a sync client,
+  is picked up again.
 
 ### Release pipeline
 
