@@ -40,6 +40,7 @@ public final class AppState: ObservableObject {
     public static let ownCollectionError = "This is your own published collection."
     public static let newerDocumentError = "This collection was made by a newer Connector Control."
     public static let publishIntoStoreError = "Choose a folder other than the master list folder or its backups."
+    public static let targetMustBeLocalError = "Copies go into a local collection."
     public static let collectionsNotSavedNote = "Collections could not be saved: the collections file is unreadable. Your change is not on disk and will be lost when the file is read again."
     /// The platform named here is the platform-forced half: the caution names the OTHER one, so
     /// a Mac flags a Windows-authored connector and the Windows mirror says "authored on macOS".
@@ -813,20 +814,8 @@ public final class AppState: ObservableObject {
     /// switching would empty Claude's config the moment anyone subscribed.
     public func subscribe(documentAt path: String, as requestedName: String?) -> String? {
         let url = URL(fileURLWithPath: path).standardizedFileURL
-        let data: Data
-        do {
-            data = try Data(contentsOf: url)
-        } catch {
-            return AppState.sourceUnreadableError(url.lastPathComponent, AppState.sourceDetail(error))
-        }
-        let document: CollectionDocument
-        do {
-            document = try CollectionDocument.decode(data)
-        } catch CollectionDocumentError.newerFormat {
-            return AppState.newerDocumentError
-        } catch {
-            return AppState.sourceUnreadableError(url.lastPathComponent, AppState.sourceDetail(error))
-        }
+        let (decoded, bytes, failure) = AppState.readDocument(at: url)
+        guard let document = decoded, let data = bytes else { return failure }
         // Subscribing to what this machine publishes would make the app its own author: every
         // local edit would come straight back as a pending update to itself.
         if let origin = document.origin,
@@ -860,19 +849,8 @@ public final class AppState: ObservableObject {
         // ignored, as switching to a collection that does not exist is.
         guard isSynced(collection) else { return nil }
         let url = URL(fileURLWithPath: path).standardizedFileURL
-        let data: Data
-        do {
-            data = try Data(contentsOf: url)
-        } catch {
-            return AppState.sourceUnreadableError(url.lastPathComponent, AppState.sourceDetail(error))
-        }
-        do {
-            _ = try CollectionDocument.decode(data)
-        } catch CollectionDocumentError.newerFormat {
-            return AppState.newerDocumentError
-        } catch {
-            return AppState.sourceUnreadableError(url.lastPathComponent, AppState.sourceDetail(error))
-        }
+        let (decoded, bytes, failure) = AppState.readDocument(at: url)
+        guard decoded != nil, let data = bytes else { return failure }
         collectionsCache.synced[collection] = CollectionsLocalCache.SyncedBinding(
             path: url.path, lastHash: ContentHash.sha256(data),
             excluded: collectionsCache.synced[collection]?.excluded ?? [:])
@@ -1063,6 +1041,26 @@ public final class AppState: ObservableObject {
         notifiedSourceHashes.removeValue(forKey: collection)
     }
 
+    /// The document at `url`, or the message to show for it — the one read-and-decode every
+    /// caller that opens a collection document shares. The tuple's document is nil exactly when
+    /// the failure is not; the bytes come back too, since the callers that keep a binding hash
+    /// exactly what they read.
+    static func readDocument(at url: URL) -> (document: CollectionDocument?, data: Data?, failure: String?) {
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            return (nil, nil, sourceUnreadableError(url.lastPathComponent, sourceDetail(error)))
+        }
+        do {
+            return (try CollectionDocument.decode(data), data, nil)
+        } catch CollectionDocumentError.newerFormat {
+            return (nil, nil, newerDocumentError)
+        } catch {
+            return (nil, nil, sourceUnreadableError(url.lastPathComponent, sourceDetail(error)))
+        }
+    }
+
     /// Where `url` sits inside the store's own folder, or nil when it is somewhere else. A
     /// document that travels with the master list is found again on every machine from this.
     private func relativeToStore(_ url: URL) -> String? {
@@ -1077,6 +1075,139 @@ public final class AppState: ObservableObject {
     private static func sourceDetail(_ error: Error) -> String {
         if case CollectionDocumentError.malformed(let detail) = error { return detail }
         return error.localizedDescription
+    }
+
+    // MARK: - Import as copies
+
+    /// The calendar date a copy records as the day it arrived.
+    var today: String { IsoTimestamp.localDate(from: host.now()) }
+
+    /// Imports a document's connectors into a local collection as copies: each one rendered for
+    /// this platform, `${COLLECTION_DIR}` expanded once against the folder the document sits in,
+    /// disabled, and stamped with where it came from. There is no link to the file afterwards —
+    /// that is what Keep as its own collection is for.
+    ///
+    /// `choices` answers, per connector, what to do where the target already holds that name:
+    /// Replace keeps the values the user filled in, Keep both lands a suffixed copy beside it,
+    /// Skip leaves it alone. A name the target does not hold is simply added. nil on success.
+    public func importCopies(documentAt path: String, into collection: String,
+                             choices: [String: ImportChoice], date: String) -> String? {
+        // A name that is not a collection is silently ignored, as switching to one is.
+        guard store.collections[collection] != nil else { return nil }
+        // Copies belong where the user owns what they hold. A synced collection answers to its
+        // document, so anything added beside it would show up as a pending removal at once.
+        guard kind(of: collection) == .local else { return AppState.targetMustBeLocalError }
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        let (decoded, _, failure) = AppState.readDocument(at: url)
+        guard let document = decoded else { return failure }
+        let directory = url.deletingLastPathComponent().path
+        let rendered = document.render()
+        var entry = collectionsFile.collections[collection] ?? .local
+        var landed = false
+        // Sorted so two connectors that want the same suffixed name always get the same one.
+        for name in rendered.connectors.keys.sorted() {
+            guard let connector = rendered.connectors[name] else { continue }
+            let present = store.collections[collection]?.mcps[name] != nil
+            // A collision with nothing said about it is left alone: an import must never
+            // overwrite something the user did not point at. `add` on a collision means the
+            // same thing — there is no way to add under a name that is taken.
+            let choice = choices[name] ?? (present ? .skip : .add)
+            if choice == .skip || (present && choice == .add) { continue }
+            // Expanded here, once: a copy has no document to resolve the token against later.
+            let incoming = RenderedConnector(
+                config: Placeholder.expandDirectoryToken(in: connector.config, directory: directory),
+                needs: connector.needs, authoredOn: connector.authoredOn)
+            let replacing = present && choice == .replace
+            let target = replacing ? name : freeConnectorName(name, in: collection)
+            // Replace carries the filled values across by marker name, the way an update to a
+            // synced collection does: the incoming markers say where each value belongs, and
+            // the same pointers in what is already there say what the user typed. Everything
+            // else has nothing to carry, so the same call lands it disabled and as it stands.
+            let current = replacing ? (store.collections[collection]?.mcps[name]).map { [target: $0] } ?? [:] : [:]
+            let result = CollectionApply.apply(
+                rendered: RenderedCollection(connectors: [target: incoming], excluded: [:]),
+                current: current,
+                previousNeeds: [target: incoming.needs.mapValues { CollectionsFile.Need(hint: $0.hint, pointer: $0.pointer) }])
+            store.collections[collection]?.mcps[target] = result.entries[target]
+            // The needs the render produced are not kept: a copy is not waiting on an author,
+            // and the markers left in its config are what the row's caution reads.
+            entry.provenance[target] = CollectionsFile.Provenance(from: document.name, author: document.author, date: date)
+            landed = true
+        }
+        guard landed else { return nil }
+        collectionsFile.collections[collection] = entry
+        persistStore()
+        // Everything imported arrives off, so only a Replace over a connector that was already
+        // on can change what Claude runs — and the dirty check spares the write when it doesn't.
+        if collection == activeCollection, isDirty { performApply() }
+        return nil
+    }
+
+    /// Copies connectors from one collection into a local one exactly as they stand: markers
+    /// stay unfilled, every copy arrives disabled, and each one records where it came from. A
+    /// name the target already holds lands beside it as "<name> 2". nil on success.
+    public func makeLocalCopy(of connectors: [String], from source: String, into target: String) -> String? {
+        guard store.collections[source] != nil, store.collections[target] != nil else { return nil }
+        guard kind(of: target) == .local else { return AppState.targetMustBeLocalError }
+        let date = today
+        var entry = collectionsFile.collections[target] ?? .local
+        var landed = false
+        for name in connectors.sorted() {
+            guard let held = store.collections[source]?.mcps[name] else { continue }
+            let copied = freeConnectorName(name, in: target)
+            store.collections[target]?.mcps[copied] = MCPEntry(
+                enabled: false, config: copiedConfig(held.config, from: source), lastEditView: held.lastEditView)
+            entry.provenance[copied] = CollectionsFile.Provenance(from: source, author: nil, date: date)
+            landed = true
+        }
+        guard landed else { return nil }
+        collectionsFile.collections[target] = entry
+        persistStore()
+        // Every copy is off, so nothing here can change what Claude runs.
+        return nil
+    }
+
+    /// The whole collection again as a new local one, every connector copied as it stands and
+    /// recording where it came from. It does not become the active collection: everything in it
+    /// is off, so switching would empty Claude's config. nil on success, else the message.
+    public func makeLocalCopyOfCollection(_ source: String, named newName: String) -> String? {
+        guard let held = store.collections[source] else { return nil }
+        let active = store.activeCollection
+        if let error = store.addCollection(named: newName, copyingCurrent: false) { return error }
+        store.activeCollection = active
+        let name = newName.trimmingCharacters(in: .whitespaces)
+        let date = today
+        var entries: [String: MCPEntry] = [:]
+        var provenance: [String: CollectionsFile.Provenance] = [:]
+        for (connector, entry) in held.mcps {
+            entries[connector] = MCPEntry(enabled: false, config: copiedConfig(entry.config, from: source),
+                                          lastEditView: entry.lastEditView)
+            provenance[connector] = CollectionsFile.Provenance(from: source, author: nil, date: date)
+        }
+        store.collections[name] = Collection(mcps: entries)
+        collectionsFile.collections[name] = CollectionsFile.Entry(kind: .local, provenance: provenance)
+        persistStore()
+        return nil
+    }
+
+    /// One connector's config as a local collection has to hold it: what it says, with
+    /// `${COLLECTION_DIR}` resolved against the folder the source's document sits in. A local
+    /// collection has no document, so the token would resolve to nothing afterwards — exactly
+    /// what Stop Syncing bakes in for the same reason. `${CC_NEEDS:…}` markers stay as they are:
+    /// a copy asks the user for the same values the original did.
+    private func copiedConfig(_ config: JSONValue, from source: String) -> JSONValue {
+        guard Placeholder.usesDirectoryToken(config), let path = sourceBinding(of: source)?.path else { return config }
+        return Placeholder.expandDirectoryToken(
+            in: config, directory: URL(fileURLWithPath: path).deletingLastPathComponent().path)
+    }
+
+    /// `name`, or "name 2", "name 3", … — the first one no connector in `collection` is called.
+    /// Keep both lands beside what is already there rather than over it.
+    private func freeConnectorName(_ name: String, in collection: String) -> String {
+        guard store.collections[collection]?.mcps[name] != nil else { return name }
+        var suffix = 2
+        while store.collections[collection]?.mcps["\(name) \(suffix)"] != nil { suffix += 1 }
+        return "\(name) \(suffix)"
     }
 
     // MARK: - Publishing and export

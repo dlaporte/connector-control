@@ -99,6 +99,10 @@ public class StringCatalogTests
         ["EditorModel.removeMessage"] = ["X"],
         ["EditorModel.removedOutsideMessage"] = ["X"],
         ["FlyoutModel.settingsNotSavedCaution"] = ["X"],
+        ["ImportModel.addModeTitle"] = ["X"],
+        ["ImportModel.importButton"] = ["3"],
+        ["ImportModel.skippedBadge"] = ["X"],
+        ["ImportModel.sourceLine"] = ["X", "Y", "3"],
         ["MasterStore.duplicateCollectionNameError"] = ["X"],
         ["MasterStore.unknownCollectionError"] = ["X"],
         ["PopoverModel.collectionChipText"] = ["X"],
@@ -169,6 +173,7 @@ public class StringCatalogTests
         actual["AppState.restartMessage"] = AppState.RestartMessage;
         actual["AppState.sourceUnreadableError"] = AppState.SourceUnreadableError("X", "Y");
         actual["AppState.storeChangedBody"] = AppState.StoreChangedBody;
+        actual["AppState.targetMustBeLocalError"] = AppState.TargetMustBeLocalError;
 
         // MARK: ClaudeConfigIO
         // Both messages are inline literals inside a throw, not exposed as callable
@@ -258,6 +263,25 @@ public class StringCatalogTests
         actual["FirstRunTip.body"] = FirstRunTip.Body;
         actual["FlyoutModel.settingsNotSavedCaution"] = FlyoutModel.SettingsNotSavedCaution("X");
         actual["FlyoutModel.storeNotPrivateCaution"] = FlyoutModel.StoreNotPrivateCaution;
+
+        // MARK: ImportModel
+
+        actual["ImportModel.addModeDetail"] = ImportModel.AddModeDetail;
+        actual["ImportModel.addModeTitle"] = ImportModel.AddModeTitle("X");
+        actual["ImportModel.cancelButton"] = ImportModel.CancelButton;
+        actual["ImportModel.importButton"] = ImportModel.ImportButton(3);
+        actual["ImportModel.keepBothTitle"] = ImportModel.KeepBothTitle;
+        actual["ImportModel.newBadge"] = ImportModel.NewBadge;
+        actual["ImportModel.presentBadge"] = ImportModel.PresentBadge;
+        actual["ImportModel.replaceKeepsValues"] = ImportModel.ReplaceKeepsValues;
+        actual["ImportModel.replaceTitle"] = ImportModel.ReplaceTitle;
+        actual["ImportModel.skipTitle"] = ImportModel.SkipTitle;
+        actual["ImportModel.skippedBadge"] = ImportModel.SkippedBadge("X");
+        actual["ImportModel.sourceLine"] = ImportModel.SourceLine("X", "Y", 3);
+        actual["ImportModel.syncModeDetail"] = ImportModel.SyncModeDetail;
+        actual["ImportModel.syncModeTitle"] = ImportModel.SyncModeTitle;
+        actual["ImportModel.title"] = ImportModel.Title;
+        actual["ImportModel.unknownAuthor"] = ImportModel.UnknownAuthor;
 
         // MARK: MasterStore
         // Every message below is returned by a real mutation, not a bare constant —

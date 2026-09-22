@@ -33,6 +33,7 @@ public sealed class AppState : ObservableObject, IDisposable
     public const string OwnCollectionError = "This is your own published collection.";
     public const string NewerDocumentError = "This collection was made by a newer Connector Control.";
     public const string PublishIntoStoreError = "Choose a folder other than the master list folder or its backups.";
+    public const string TargetMustBeLocalError = "Copies go into a local collection.";
     public const string CollectionsNotSavedNote = "Collections could not be saved: the collections file is unreadable. Your change is not on disk and will be lost when the file is read again.";
     /// <summary>The platform named here is the platform-forced half: the caution names the OTHER one, so a PC flags a Mac-authored connector and the Mac mirror says "authored on Windows".</summary>
     public const string AuthoredElsewhereCaution = "authored on macOS";
@@ -1476,8 +1477,13 @@ public sealed class AppState : ObservableObject, IDisposable
         notifiedSourceHashes.Remove(collection);
     }
 
-    /// <summary>The document at <paramref name="path"/>, or the message to show for it. The tuple's document is null exactly when the failure is not.</summary>
-    private static (CollectionDocument? Document, byte[]? Data, string? Failure) ReadDocument(string path)
+    /// <summary>
+    /// The document at <paramref name="path"/>, or the message to show for it — the one
+    /// read-and-decode every caller that opens a collection document shares. The tuple's document
+    /// is null exactly when the failure is not; the bytes come back too, since the callers that
+    /// keep a binding hash exactly what they read.
+    /// </summary>
+    internal static (CollectionDocument? Document, byte[]? Data, string? Failure) ReadDocument(string path)
     {
         byte[] data;
         try
@@ -1515,6 +1521,222 @@ public sealed class AppState : ObservableObject, IDisposable
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, CollectionsFile.Need>> EmptyNeedsByConnector =
         new Dictionary<string, IReadOnlyDictionary<string, CollectionsFile.Need>>(StringComparer.Ordinal);
+
+    // MARK: import as copies
+
+    /// <summary>The calendar date a copy records as the day it arrived.</summary>
+    internal string Today => IsoTimestamp.LocalDate(host.Now());
+
+    /// <summary>
+    /// Imports a document's connectors into a local collection as copies: each one rendered for
+    /// this platform, <c>${COLLECTION_DIR}</c> expanded once against the folder the document sits
+    /// in, disabled, and stamped with where it came from. There is no link to the file afterwards
+    /// — that is what Keep as its own collection is for.
+    /// <para>
+    /// <paramref name="choices"/> answers, per connector, what to do where the target already
+    /// holds that name: Replace keeps the values the user filled in, Keep both lands a suffixed
+    /// copy beside it, Skip leaves it alone. A name the target does not hold is simply added.
+    /// null on success.
+    /// </para>
+    /// </summary>
+    public string? ImportCopies(string path, string collection, IReadOnlyDictionary<string, ImportChoice> choices, string date)
+    {
+        // A name that is not a collection is silently ignored, as switching to one is.
+        if (!Store.Collections.TryGetValue(collection, out var target))
+        {
+            return null;
+        }
+        // Copies belong where the user owns what they hold. A synced collection answers to its
+        // document, so anything added beside it would show up as a pending removal at once.
+        if (KindOf(collection) != CollectionKind.Local)
+        {
+            return TargetMustBeLocalError;
+        }
+        var full = Path.GetFullPath(path);
+        var (document, _, failure) = ReadDocument(full);
+        if (document is null)
+        {
+            return failure;
+        }
+        var directory = Path.GetDirectoryName(full) ?? full;
+        var rendered = document.Render();
+        var entry = CollectionsFile.Collections.GetValueOrDefault(collection) ?? CollectionsFile.Entry.Local;
+        var provenance = new Dictionary<string, CollectionsFile.Provenance>(entry.Provenance, StringComparer.Ordinal);
+        var landed = false;
+        // Sorted so two connectors that want the same suffixed name always get the same one.
+        foreach (var name in rendered.Connectors.Keys.Order(StringComparer.Ordinal).ToList())
+        {
+            var connector = rendered.Connectors[name];
+            var present = target.Mcps.ContainsKey(name);
+            // A collision with nothing said about it is left alone: an import must never
+            // overwrite something the user did not point at. Add on a collision means the same
+            // thing — there is no way to add under a name that is taken.
+            var choice = choices.TryGetValue(name, out var chosen)
+                ? chosen
+                : present ? ImportChoice.Skip : ImportChoice.Add;
+            if (choice == ImportChoice.Skip || (present && choice == ImportChoice.Add))
+            {
+                continue;
+            }
+            // Expanded here, once: a copy has no document to resolve the token against later.
+            var incoming = new RenderedConnector(
+                Placeholder.ExpandDirectoryToken(connector.Config, directory), connector.Needs, connector.AuthoredOn);
+            var replacing = present && choice == ImportChoice.Replace;
+            var landing = replacing ? name : FreeConnectorName(name, collection);
+            // Replace carries the filled values across by marker name, the way an update to a
+            // synced collection does: the incoming markers say where each value belongs, and the
+            // same pointers in what is already there say what the user typed. Everything else has
+            // nothing to carry, so the same call lands it disabled and as it stands.
+            var current = new Dictionary<string, McpEntry>(StringComparer.Ordinal);
+            if (replacing)
+            {
+                current[landing] = target.Mcps[name];
+            }
+            var result = CollectionApply.Apply(
+                new RenderedCollection(
+                    new Dictionary<string, RenderedConnector>(StringComparer.Ordinal) { [landing] = incoming },
+                    new Dictionary<string, string>(StringComparer.Ordinal)),
+                current,
+                new Dictionary<string, IReadOnlyDictionary<string, CollectionsFile.Need>>(StringComparer.Ordinal)
+                {
+                    [landing] = incoming.Needs.ToDictionary(
+                        pair => pair.Key,
+                        pair => new CollectionsFile.Need(pair.Value.Hint, pair.Value.Pointer),
+                        StringComparer.Ordinal),
+                });
+            target.Mcps[landing] = result.Entries[landing];
+            // The needs the render produced are not kept: a copy is not waiting on an author, and
+            // the markers left in its config are what the row's caution reads.
+            provenance[landing] = new CollectionsFile.Provenance(document.Name, document.Author, date);
+            landed = true;
+        }
+        if (!landed)
+        {
+            return null;
+        }
+        SetSidecarEntry(collection, new CollectionsFile.Entry(
+            entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs, entry.Publish, provenance));
+        PersistStore();
+        // Everything imported arrives off, so only a Replace over a connector that was already on
+        // can change what Claude runs — and the dirty check spares the write when it doesn't.
+        if (collection == ActiveCollection && IsDirty)
+        {
+            PerformApply();
+        }
+        RaiseAll();
+        return null;
+    }
+
+    /// <summary>
+    /// Copies connectors from one collection into a local one exactly as they stand: markers stay
+    /// unfilled, every copy arrives disabled, and each one records where it came from. A name the
+    /// target already holds lands beside it as "&lt;name&gt; 2". null on success.
+    /// </summary>
+    public string? MakeLocalCopy(IReadOnlyList<string> connectors, string source, string target)
+    {
+        if (!Store.Collections.TryGetValue(source, out var from) || !Store.Collections.TryGetValue(target, out var into))
+        {
+            return null;
+        }
+        if (KindOf(target) != CollectionKind.Local)
+        {
+            return TargetMustBeLocalError;
+        }
+        var date = Today;
+        var entry = CollectionsFile.Collections.GetValueOrDefault(target) ?? CollectionsFile.Entry.Local;
+        var provenance = new Dictionary<string, CollectionsFile.Provenance>(entry.Provenance, StringComparer.Ordinal);
+        var landed = false;
+        foreach (var name in connectors.Order(StringComparer.Ordinal).ToList())
+        {
+            if (!from.Mcps.TryGetValue(name, out var held))
+            {
+                continue;
+            }
+            var copied = FreeConnectorName(name, target);
+            into.Mcps[copied] = held with { Enabled = false, Config = CopiedConfig(held.Config, source) };
+            provenance[copied] = new CollectionsFile.Provenance(source, null, date);
+            landed = true;
+        }
+        if (!landed)
+        {
+            return null;
+        }
+        SetSidecarEntry(target, new CollectionsFile.Entry(
+            entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs, entry.Publish, provenance));
+        PersistStore();
+        // Every copy is off, so nothing here can change what Claude runs.
+        RaiseAll();
+        return null;
+    }
+
+    /// <summary>
+    /// The whole collection again as a new local one, every connector copied as it stands and
+    /// recording where it came from. It does not become the active collection: everything in it
+    /// is off, so switching would empty Claude's config. null on success, else the message.
+    /// </summary>
+    public string? MakeLocalCopyOfCollection(string source, string newName)
+    {
+        if (!Store.Collections.TryGetValue(source, out var held))
+        {
+            return null;
+        }
+        var active = Store.ActiveCollection;
+        if (Store.AddCollection(newName, copyingCurrent: false) is { } error)
+        {
+            return error;
+        }
+        Store.ActiveCollection = active;
+        var name = newName.TrimSpaces();
+        var date = Today;
+        var entries = new Dictionary<string, McpEntry>(StringComparer.Ordinal);
+        var provenance = new Dictionary<string, CollectionsFile.Provenance>(StringComparer.Ordinal);
+        foreach (var (connector, entry) in held.Mcps)
+        {
+            entries[connector] = entry with { Enabled = false, Config = CopiedConfig(entry.Config, source) };
+            provenance[connector] = new CollectionsFile.Provenance(source, null, date);
+        }
+        Store.Collections[name] = new Collection(entries);
+        SetSidecarEntry(name, new CollectionsFile.Entry(CollectionKind.Local, provenance: provenance));
+        PersistStore();
+        RaiseAll();
+        return null;
+    }
+
+    /// <summary>
+    /// One connector's config as a local collection has to hold it: what it says, with
+    /// <c>${COLLECTION_DIR}</c> resolved against the folder the source's document sits in. A local
+    /// collection has no document, so the token would resolve to nothing afterwards — exactly what
+    /// Stop Syncing bakes in for the same reason. <c>${CC_NEEDS:…}</c> markers stay as they are: a
+    /// copy asks the user for the same values the original did.
+    /// </summary>
+    private JsonValue CopiedConfig(JsonValue config, string source)
+    {
+        if (!Placeholder.UsesDirectoryToken(config) || SourceBinding(source)?.Path is not { } bound)
+        {
+            return config;
+        }
+        return Placeholder.ExpandDirectoryToken(config, Path.GetDirectoryName(Path.GetFullPath(bound)) ?? bound);
+    }
+
+    /// <summary>
+    /// <paramref name="name"/>, or "name 2", "name 3", … — the first one no connector in
+    /// <paramref name="collection"/> is called. Keep both lands beside what is already there
+    /// rather than over it.
+    /// </summary>
+    private string FreeConnectorName(string name, string collection)
+    {
+        var mcps = Store.Collections.TryGetValue(collection, out var held) ? held.Mcps : null;
+        if (mcps is null || !mcps.ContainsKey(name))
+        {
+            return name;
+        }
+        var suffix = 2;
+        while (mcps.ContainsKey(name + " " + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+        {
+            suffix++;
+        }
+        return name + " " + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
 
     // MARK: publishing and export
 

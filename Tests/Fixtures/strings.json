@@ -72,6 +72,7 @@
     "format": "{0} couldn’t be read: {1}"
   },
   "AppState.storeChangedBody": "The connector list changed outside Connector Control — review it before your next change is applied.",
+  "AppState.targetMustBeLocalError": "Copies go into a local collection.",
   "ClaudeConfigIO.mcpServersNotObjectError": "mcpServers is not a JSON object",
   "ClaudeConfigIO.topLevelNotObjectError": "top level is not a JSON object",
   "ClaudeProcess.notAClaudePackageError": {
@@ -186,6 +187,30 @@
   "FlyoutModel.storeNotPrivateCaution": {
     "win": "The master list could not be made private: its folder refused the permission change, so connector secrets in it are readable by anyone who can read that folder."
   },
+  "ImportModel.addModeDetail": "Copies. No link to the file afterwards.",
+  "ImportModel.addModeTitle": {
+    "format": "Add to a collection: {0}"
+  },
+  "ImportModel.cancelButton": "Cancel",
+  "ImportModel.importButton": {
+    "format": "Import {0}"
+  },
+  "ImportModel.keepBothTitle": "Keep both",
+  "ImportModel.newBadge": "new · arrives off",
+  "ImportModel.presentBadge": "already present · skipped",
+  "ImportModel.replaceKeepsValues": "keeps your filled values",
+  "ImportModel.replaceTitle": "Replace",
+  "ImportModel.skipTitle": "Skip",
+  "ImportModel.skippedBadge": {
+    "format": "skipped: {0}"
+  },
+  "ImportModel.sourceLine": {
+    "format": "“{0}” by {1} · {2} connectors"
+  },
+  "ImportModel.syncModeDetail": "Read-only except your secrets and switches. Changes at the source arrive for review.",
+  "ImportModel.syncModeTitle": "Keep as its own collection, in sync with this file",
+  "ImportModel.title": "Import connectors",
+  "ImportModel.unknownAuthor": "unknown author",
   "MasterStore.deleteLastCollectionError": "Can’t delete the last collection.",
   "MasterStore.duplicateCollectionNameError": {
     "format": "A collection named “{0}” already exists."

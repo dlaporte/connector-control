@@ -1015,4 +1015,139 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.subscribe(documentAt: file.path, as: "Copy"), AppState.ownCollectionError)
         XCTAssertEqual(state.collectionNames, ["Default"])
     }
+
+    // MARK: - Import as copies
+
+    /// The design's sample plus a connector whose path is written against the document's own
+    /// folder, so one import exercises markers, shared values and the directory token at once.
+    private var importableDocument: CollectionDocument {
+        var doc = CollectionDocumentSamples.dataTeam
+        doc.connectors["ledger"] = .init(
+            launcher: .local(.init(command: "node", args: ["${COLLECTION_DIR}/dist/index.js"], platform: .current)))
+        return doc
+    }
+
+    func testImportCopiesArriveDisabledWithProvenanceAndExpandedToken() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("shared/data-team.json")
+        try writeDocument(importableDocument, at: url)
+
+        XCTAssertNil(state.importCopies(documentAt: url.path, into: "Default", choices: [:], date: "2026-09-21"))
+        let mcps = try XCTUnwrap(state.store.collections["Default"]).mcps
+        XCTAssertEqual(mcps.keys.sorted(), ["aws-mcp", "dbt", "github", "ledger", "notion", "scoutbook", "service-now"])
+        for name in ["dbt", "github", "ledger", "notion"] {
+            XCTAssertEqual(mcps[name]?.enabled, false, "an imported copy arrives off")
+        }
+        XCTAssertEqual(mcps["ledger"]?.config.value(at: JSONPointer(["args", "0"])),
+                       .string(url.standardizedFileURL.deletingLastPathComponent().path + "/dist/index.js"),
+                       "the directory token is expanded once, against the folder the document sits in")
+        XCTAssertEqual(mcps["dbt"]?.config.value(at: JSONPointer(["env", "DBT_TOKEN"])), .string("${CC_NEEDS:DBT_TOKEN}"))
+        XCTAssertEqual(mcps["dbt"]?.config.value(at: JSONPointer(["env", "DBT_REGION"])), .string("us"))
+        XCTAssertEqual(state.kind(of: "Default"), .local, "copies leave no link to the file")
+        XCTAssertTrue(state.collectionsCache.synced.isEmpty)
+        XCTAssertTrue(state.pendingUpdates.isEmpty)
+        XCTAssertEqual(state.collectionsFile.collections["Default"]?.provenance["dbt"],
+                       CollectionsFile.Provenance(from: "Data team", author: "Acme Data Platform", date: "2026-09-21"))
+        XCTAssertEqual(state.connectorCaution("dbt", in: "Default"), AppState.needsValueCaution("DBT_TOKEN"))
+        XCTAssertEqual(try h.claudeServers().keys.sorted(), ["aws-mcp", "scoutbook", "service-now"],
+                       "nothing that arrives off reaches Claude")
+        XCTAssertEqual(state.importCopies(documentAt: url.path, into: "Nowhere", choices: [:], date: "2026-09-21"), nil,
+                       "a collection that does not exist is a no-op, as switching to one is")
+    }
+
+    func testReplaceKeepsAFilledValueAndKeepBothSuffixes() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("shared/data-team.json")
+        try writeDocument(importableDocument, at: url)
+        XCTAssertNil(state.importCopies(documentAt: url.path, into: "Default", choices: [:], date: "2026-09-21"))
+
+        // The user fills the token and turns dbt on.
+        var dbt = try XCTUnwrap(state.store.collections["Default"]?.mcps["dbt"])
+        dbt.config = try XCTUnwrap(dbt.config.replacing(at: JSONPointer(["env", "DBT_TOKEN"]), with: .string("tok")))
+        dbt.enabled = true
+        XCTAssertNil(state.upsert(name: "dbt", entry: dbt, renamedFrom: "dbt"))
+
+        // The author ships a new dbt, and the same document is imported again.
+        var doc = importableDocument
+        doc.connectors["dbt"]?.launcher = .local(.init(command: "npx", args: ["-y", "@dbt/mcp@2"], platform: .current))
+        try writeDocument(doc, at: url)
+        XCTAssertNil(state.importCopies(documentAt: url.path, into: "Default",
+                                        choices: ["dbt": .replace, "github": .keepBoth, "notion": .skip, "ledger": .skip],
+                                        date: "2026-09-22"))
+        let mcps = try XCTUnwrap(state.store.collections["Default"]).mcps
+        XCTAssertEqual(mcps["dbt"]?.config.value(at: JSONPointer(["args", "1"])), .string("@dbt/mcp@2"))
+        XCTAssertEqual(mcps["dbt"]?.config.value(at: JSONPointer(["env", "DBT_TOKEN"])), .string("tok"),
+                       "Replace keeps what the user filled in")
+        XCTAssertEqual(mcps["dbt"]?.enabled, true, "replacing a connector that was on leaves it on")
+        XCTAssertNotNil(mcps["github 2"], "Keep both lands beside what is already there")
+        XCTAssertEqual(mcps["github 2"]?.enabled, false)
+        XCTAssertEqual(mcps.keys.filter { $0.hasPrefix("notion") }.sorted(), ["notion"], "Skip leaves it alone")
+        XCTAssertEqual(state.collectionsFile.collections["Default"]?.provenance["dbt"]?.date, "2026-09-22")
+        XCTAssertEqual(state.collectionsFile.collections["Default"]?.provenance["github 2"]?.from, "Data team")
+        XCTAssertEqual(try h.claudeServers()["dbt"]?.value(at: JSONPointer(["args", "1"])), .string("@dbt/mcp@2"),
+                       "a replaced connector that was on reaches Claude")
+
+        // A third import with Keep both again numbers on from the highest suffix taken.
+        XCTAssertNil(state.importCopies(documentAt: url.path, into: "Default",
+                                        choices: ["github": .keepBoth, "dbt": .skip, "notion": .skip, "ledger": .skip],
+                                        date: "2026-09-23"))
+        XCTAssertNotNil(state.store.collections["Default"]?.mcps["github 3"])
+    }
+
+    func testMakeLocalCopyIntoALocalCollection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("shared/data-team.json")
+        try writeDocument(importableDocument, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        XCTAssertNil(state.createCollection(named: "Personal"))
+
+        XCTAssertNil(state.makeLocalCopy(of: ["dbt", "ledger"], from: "Data team", into: "Personal"))
+        let mcps = try XCTUnwrap(state.store.collections["Personal"]).mcps
+        XCTAssertEqual(mcps["dbt"]?.enabled, false)
+        XCTAssertEqual(mcps["dbt"]?.config.value(at: JSONPointer(["env", "DBT_TOKEN"])), .string("${CC_NEEDS:DBT_TOKEN}"),
+                       "a copy is what it was: an unfilled marker stays unfilled")
+        XCTAssertEqual(mcps["ledger"]?.config.value(at: JSONPointer(["args", "0"])),
+                       .string(url.standardizedFileURL.deletingLastPathComponent().path + "/dist/index.js"),
+                       "a local collection has no document to resolve the directory token against later")
+        XCTAssertEqual(state.collectionsFile.collections["Personal"]?.provenance["dbt"],
+                       CollectionsFile.Provenance(from: "Data team", author: nil, date: IsoTimestamp.localDate(from: h.now)))
+        XCTAssertEqual(state.kind(of: "Data team"), .synced, "the source is untouched")
+        XCTAssertEqual(state.store.collections["Data team"]?.mcps.count, 4)
+
+        XCTAssertNil(state.makeLocalCopy(of: ["dbt"], from: "Data team", into: "Personal"))
+        XCTAssertNotNil(state.store.collections["Personal"]?.mcps["dbt 2"])
+
+        XCTAssertEqual(state.makeLocalCopy(of: ["dbt"], from: "Personal", into: "Data team"),
+                       AppState.targetMustBeLocalError)
+        XCTAssertNil(state.store.collections["Data team"]?.mcps["dbt 2"])
+    }
+
+    func testMakeLocalCopyOfAWholeSyncedCollection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("shared/data-team.json")
+        try writeDocument(importableDocument, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+
+        XCTAssertNil(state.makeLocalCopyOfCollection("Data team", named: "Data team copy"))
+        XCTAssertEqual(state.kind(of: "Data team copy"), .local)
+        XCTAssertEqual(state.activeCollection, "Default", "the copy is all off, so switching to it would empty Claude's config")
+        let copied = try XCTUnwrap(state.store.collections["Data team copy"]).mcps
+        XCTAssertEqual(copied.keys.sorted(), ["dbt", "github", "ledger", "notion"])
+        XCTAssertTrue(copied.values.allSatisfy { !$0.enabled })
+        XCTAssertEqual(copied["ledger"]?.config.value(at: JSONPointer(["args", "0"])),
+                       .string(url.standardizedFileURL.deletingLastPathComponent().path + "/dist/index.js"))
+        for name in copied.keys {
+            XCTAssertEqual(state.collectionsFile.collections["Data team copy"]?.provenance[name]?.from, "Data team")
+        }
+        XCTAssertNil(state.collectionsCache.synced["Data team copy"], "a copy follows nothing")
+        XCTAssertEqual(state.kind(of: "Data team"), .synced)
+
+        XCTAssertNotNil(state.makeLocalCopyOfCollection("Data team", named: "Data team copy"), "a name already taken is refused")
+        XCTAssertNil(state.makeLocalCopyOfCollection("Nowhere", named: "Ghost"))
+        XCTAssertFalse(state.collectionNames.contains("Ghost"))
+    }
 }

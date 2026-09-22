@@ -1166,4 +1166,168 @@ public class AppStateCollectionsTests
         Assert.Equal(AppState.OwnCollectionError, state.Subscribe(file, "Copy"));
         Assert.Equal(["Default"], state.CollectionNames);
     }
+
+    // MARK: import as copies
+
+    /// <summary>The design's sample plus a connector whose path is written against the document's
+    /// own folder, so one import exercises markers, shared values and the directory token at once.</summary>
+    private static CollectionDocument ImportableDocument()
+    {
+        var sample = CollectionDocumentSamples.DataTeam;
+        var connectors = new Dictionary<string, CollectionDocument.Connector>(sample.Connectors, StringComparer.Ordinal)
+        {
+            ["ledger"] = new(new CollectionDocument.Launcher.Local("node", ["${COLLECTION_DIR}/dist/index.js"], CollectionPlatforms.Current)),
+        };
+        return new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors);
+    }
+
+    private static IReadOnlyDictionary<string, ImportChoice> Choices(params (string Name, ImportChoice Choice)[] choices) =>
+        choices.ToDictionary(c => c.Name, c => c.Choice, StringComparer.Ordinal);
+
+    [Fact]
+    public void ImportCopiesArriveDisabledWithProvenanceAndExpandedToken()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
+        WriteDocument(ImportableDocument(), path);
+
+        Assert.Null(state.ImportCopies(path, "Default", Choices(), "2026-09-21"));
+        var mcps = state.Store.Collections["Default"].Mcps;
+        Assert.Equal(["aws-mcp", "dbt", "github", "ledger", "notion", "scoutbook", "service-now"],
+            AppStateHarness.Keys(mcps.Keys));
+        // An imported copy arrives off.
+        foreach (var name in new[] { "dbt", "github", "ledger", "notion" })
+        {
+            Assert.False(mcps[name].Enabled);
+        }
+        // The directory token is expanded once, against the folder the document sits in.
+        Assert.Equal(JsonValue.String(Path.GetDirectoryName(path) + "/dist/index.js"),
+            mcps["ledger"].Config.ValueAt(JsonPointer.Parse("/args/0")!));
+        Assert.Equal(JsonValue.String("${CC_NEEDS:DBT_TOKEN}"), mcps["dbt"].Config.ValueAt(JsonPointer.Parse("/env/DBT_TOKEN")!));
+        Assert.Equal(JsonValue.String("us"), mcps["dbt"].Config.ValueAt(JsonPointer.Parse("/env/DBT_REGION")!));
+        // Copies leave no link to the file.
+        Assert.Equal(CollectionKind.Local, state.KindOf("Default"));
+        Assert.Empty(state.CollectionsCache.Synced);
+        Assert.Empty(state.PendingUpdates);
+        Assert.Equal(new CollectionsFile.Provenance("Data team", "Acme Data Platform", "2026-09-21"),
+            state.CollectionsFile.Collections["Default"].Provenance["dbt"]);
+        Assert.Equal(AppState.NeedsValueCaution("DBT_TOKEN"), state.ConnectorCaution("dbt", "Default"));
+        // Nothing that arrives off reaches Claude.
+        Assert.Equal(["aws-mcp", "scoutbook", "service-now"], AppStateHarness.Keys(h.ClaudeServers().Keys));
+        // A collection that does not exist is a no-op, as switching to one is.
+        Assert.Null(state.ImportCopies(path, "Nowhere", Choices(), "2026-09-21"));
+    }
+
+    [Fact]
+    public void ReplaceKeepsAFilledValueAndKeepBothSuffixes()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
+        WriteDocument(ImportableDocument(), path);
+        Assert.Null(state.ImportCopies(path, "Default", Choices(), "2026-09-21"));
+
+        // The user fills the token and turns dbt on.
+        var dbt = state.Store.Collections["Default"].Mcps["dbt"];
+        Assert.Null(state.Upsert("dbt", dbt with
+        {
+            Enabled = true,
+            Config = dbt.Config.Replacing(JsonPointer.Parse("/env/DBT_TOKEN")!, JsonValue.String("tok"))!,
+        }, "dbt"));
+
+        // The author ships a new dbt, and the same document is imported again.
+        var next = ImportableDocument();
+        var connectors = new Dictionary<string, CollectionDocument.Connector>(next.Connectors, StringComparer.Ordinal);
+        var authored = connectors["dbt"];
+        connectors["dbt"] = new CollectionDocument.Connector(
+            new CollectionDocument.Launcher.Local("npx", ["-y", "@dbt/mcp@2"], CollectionPlatforms.Current),
+            authored.Env, authored.Needs, authored.Additional);
+        WriteDocument(new CollectionDocument(next.Name, next.Author, next.Origin, next.Exported, connectors), path);
+
+        Assert.Null(state.ImportCopies(path, "Default", Choices(
+            ("dbt", ImportChoice.Replace), ("github", ImportChoice.KeepBoth),
+            ("notion", ImportChoice.Skip), ("ledger", ImportChoice.Skip)), "2026-09-22"));
+        var mcps = state.Store.Collections["Default"].Mcps;
+        Assert.Equal(JsonValue.String("@dbt/mcp@2"), mcps["dbt"].Config.ValueAt(JsonPointer.Parse("/args/1")!));
+        // Replace keeps what the user filled in, and a connector that was on stays on.
+        Assert.Equal(JsonValue.String("tok"), mcps["dbt"].Config.ValueAt(JsonPointer.Parse("/env/DBT_TOKEN")!));
+        Assert.True(mcps["dbt"].Enabled);
+        // Keep both lands beside what is already there; Skip leaves it alone.
+        Assert.True(mcps.ContainsKey("github 2"));
+        Assert.False(mcps["github 2"].Enabled);
+        Assert.Equal(["notion"], AppStateHarness.Keys(mcps.Keys.Where(k => k.StartsWith("notion", StringComparison.Ordinal))));
+        Assert.Equal("2026-09-22", state.CollectionsFile.Collections["Default"].Provenance["dbt"].Date);
+        Assert.Equal("Data team", state.CollectionsFile.Collections["Default"].Provenance["github 2"].From);
+        // A replaced connector that was on reaches Claude.
+        Assert.Equal(JsonValue.String("@dbt/mcp@2"), h.ClaudeServers()["dbt"].ValueAt(JsonPointer.Parse("/args/1")!));
+
+        // A third import with Keep both again numbers on from the highest suffix taken.
+        Assert.Null(state.ImportCopies(path, "Default", Choices(
+            ("github", ImportChoice.KeepBoth), ("dbt", ImportChoice.Skip),
+            ("notion", ImportChoice.Skip), ("ledger", ImportChoice.Skip)), "2026-09-23"));
+        Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("github 3"));
+    }
+
+    [Fact]
+    public void MakeLocalCopyIntoALocalCollection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
+        WriteDocument(ImportableDocument(), path);
+        Assert.Null(state.Subscribe(path, null));
+        Assert.Null(state.CreateCollection("Personal"));
+
+        Assert.Null(state.MakeLocalCopy(["dbt", "ledger"], "Data team", "Personal"));
+        var mcps = state.Store.Collections["Personal"].Mcps;
+        Assert.False(mcps["dbt"].Enabled);
+        // A copy is what it was: an unfilled marker stays unfilled.
+        Assert.Equal(JsonValue.String("${CC_NEEDS:DBT_TOKEN}"), mcps["dbt"].Config.ValueAt(JsonPointer.Parse("/env/DBT_TOKEN")!));
+        // A local collection has no document to resolve the directory token against later.
+        Assert.Equal(JsonValue.String(Path.GetDirectoryName(path) + "/dist/index.js"),
+            mcps["ledger"].Config.ValueAt(JsonPointer.Parse("/args/0")!));
+        Assert.Equal(new CollectionsFile.Provenance("Data team", null, IsoTimestamp.LocalDate(h.Now)),
+            state.CollectionsFile.Collections["Personal"].Provenance["dbt"]);
+        // The source is untouched.
+        Assert.Equal(CollectionKind.Synced, state.KindOf("Data team"));
+        Assert.Equal(4, state.Store.Collections["Data team"].Mcps.Count);
+
+        Assert.Null(state.MakeLocalCopy(["dbt"], "Data team", "Personal"));
+        Assert.True(state.Store.Collections["Personal"].Mcps.ContainsKey("dbt 2"));
+
+        Assert.Equal(AppState.TargetMustBeLocalError, state.MakeLocalCopy(["dbt"], "Personal", "Data team"));
+        Assert.False(state.Store.Collections["Data team"].Mcps.ContainsKey("dbt 2"));
+    }
+
+    [Fact]
+    public void MakeLocalCopyOfAWholeSyncedCollection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
+        WriteDocument(ImportableDocument(), path);
+        Assert.Null(state.Subscribe(path, null));
+
+        Assert.Null(state.MakeLocalCopyOfCollection("Data team", "Data team copy"));
+        Assert.Equal(CollectionKind.Local, state.KindOf("Data team copy"));
+        // The copy is all off, so switching to it would empty Claude's config.
+        Assert.Equal("Default", state.ActiveCollection);
+        var copied = state.Store.Collections["Data team copy"].Mcps;
+        Assert.Equal(["dbt", "github", "ledger", "notion"], AppStateHarness.Keys(copied.Keys));
+        Assert.All(copied.Values, entry => Assert.False(entry.Enabled));
+        Assert.Equal(JsonValue.String(Path.GetDirectoryName(path) + "/dist/index.js"),
+            copied["ledger"].Config.ValueAt(JsonPointer.Parse("/args/0")!));
+        foreach (var name in copied.Keys)
+        {
+            Assert.Equal("Data team", state.CollectionsFile.Collections["Data team copy"].Provenance[name].From);
+        }
+        // A copy follows nothing.
+        Assert.False(state.CollectionsCache.Synced.ContainsKey("Data team copy"));
+        Assert.Equal(CollectionKind.Synced, state.KindOf("Data team"));
+
+        Assert.NotNull(state.MakeLocalCopyOfCollection("Data team", "Data team copy"));
+        Assert.Null(state.MakeLocalCopyOfCollection("Nowhere", "Ghost"));
+        Assert.DoesNotContain("Ghost", state.CollectionNames);
+    }
 }

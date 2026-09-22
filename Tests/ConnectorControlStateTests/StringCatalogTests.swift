@@ -91,6 +91,10 @@ final class StringCatalogTests: XCTestCase {
         "EditorModel.duplicateEnvError": ["X"],
         "EditorModel.removeMessage": ["X"],
         "EditorModel.removedOutsideMessage": ["X"],
+        "ImportModel.addModeTitle": ["X"],
+        "ImportModel.importButton": ["3"],
+        "ImportModel.skippedBadge": ["X"],
+        "ImportModel.sourceLine": ["X", "Y", "3"],
         "MasterStore.duplicateCollectionNameError": ["X"],
         "MasterStore.unknownCollectionError": ["X"],
         "PopoverModel.collectionChipText": ["X"],
@@ -151,6 +155,7 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.restartMessage"] = AppState.restartMessage
         actual["AppState.sourceUnreadableError"] = AppState.sourceUnreadableError("X", "Y")
         actual["AppState.storeChangedBody"] = AppState.storeChangedBody
+        actual["AppState.targetMustBeLocalError"] = AppState.targetMustBeLocalError
 
         // MARK: ClaudeConfigIO
         // Both messages are inline literals inside guard/throw statements, not
@@ -226,6 +231,25 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.stayInJSONButton"] = EditorModel.stayInJSONButton
         actual["EditorModel.switchAnywayButton"] = EditorModel.switchAnywayButton
         actual["EditorModel.urlHint"] = EditorModel.urlHint
+
+        // MARK: ImportModel
+
+        actual["ImportModel.addModeDetail"] = ImportModel.addModeDetail
+        actual["ImportModel.addModeTitle"] = ImportModel.addModeTitle("X")
+        actual["ImportModel.cancelButton"] = ImportModel.cancelButton
+        actual["ImportModel.importButton"] = ImportModel.importButton(3)
+        actual["ImportModel.keepBothTitle"] = ImportModel.keepBothTitle
+        actual["ImportModel.newBadge"] = ImportModel.newBadge
+        actual["ImportModel.presentBadge"] = ImportModel.presentBadge
+        actual["ImportModel.replaceKeepsValues"] = ImportModel.replaceKeepsValues
+        actual["ImportModel.replaceTitle"] = ImportModel.replaceTitle
+        actual["ImportModel.skipTitle"] = ImportModel.skipTitle
+        actual["ImportModel.skippedBadge"] = ImportModel.skippedBadge("X")
+        actual["ImportModel.sourceLine"] = ImportModel.sourceLine("X", "Y", 3)
+        actual["ImportModel.syncModeDetail"] = ImportModel.syncModeDetail
+        actual["ImportModel.syncModeTitle"] = ImportModel.syncModeTitle
+        actual["ImportModel.title"] = ImportModel.title
+        actual["ImportModel.unknownAuthor"] = ImportModel.unknownAuthor
 
         // MARK: MasterStore
         // Every message below is returned by a real mutation, not a bare
