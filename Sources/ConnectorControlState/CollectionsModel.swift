@@ -146,6 +146,13 @@ public final class CollectionsModel: ObservableObject {
         relay(state.$pendingUpdates)
         relay(state.$sourceErrors)
         relay(state.$publishError)
+        // A remembered name the store no longer holds is forgotten as soon as it stops resolving,
+        // not only when a view happens to write its selection back. The new store comes from the
+        // publisher rather than from `state`: `@Published` announces a change before the property
+        // holds it.
+        state.$store.dropFirst()
+            .sink { [weak self] store in self?.forgetUnresolvedSelection(in: store) }
+            .store(in: &subscriptions)
     }
 
     private func relay<P: Publisher>(_ publisher: P) where P.Failure == Never {
@@ -167,7 +174,10 @@ public final class CollectionsModel: ObservableObject {
     public var selected: String? {
         get { selectedCollection }
         set {
-            guard effectiveCollection(for: newValue) != selectedCollection else { return }
+            guard effectiveCollection(for: newValue) != selectedCollection else {
+                forgetUnresolvedSelection(in: state.store)
+                return
+            }
             objectWillChange.send()
             selection = newValue
             checkedNames_ = []
@@ -176,6 +186,14 @@ public final class CollectionsModel: ObservableObject {
     }
 
     private var selectedCollection: String { effectiveCollection(for: selection) }
+
+    /// Lets go of a remembered name that no longer names a collection. Nothing on screen changes —
+    /// the window was already showing the fallback — so nothing is republished. Without it, a
+    /// collection renamed away and later renamed back would pull the window to it unprompted,
+    /// because the name would start resolving again.
+    private func forgetUnresolvedSelection(in store: MasterStore) {
+        if let remembered = selection, store.collections[remembered] == nil { selection = nil }
+    }
 
     /// What a chosen name resolves to: itself while it is a collection, the active one otherwise.
     private func effectiveCollection(for chosen: String?) -> String {
@@ -198,6 +216,9 @@ public final class CollectionsModel: ObservableObject {
 
     // MARK: - Panes
 
+    /// Rebuilt on every read, which is fine here: SwiftUI's List diffs its rows by id and keeps an
+    /// unchanged row's view, focus included. The Windows mirror keeps both lists and replaces one
+    /// only when its content changes, because WPF regenerates every container on a new list.
     public var items: [Item] {
         let active = state.activeCollection
         return state.collectionNames.map { name in

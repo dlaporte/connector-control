@@ -114,11 +114,21 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// a tick must not survive into another one that happens to hold a connector of that name.
     /// </summary>
     private string? checkedCollection;
+    /// <summary>
+    /// The two panes, kept rather than rebuilt on every read. WPF regenerates every container when
+    /// ItemsSource is handed a new list, which drops keyboard focus from the row that had it — so
+    /// a list is replaced, and announced, only when what it holds has actually changed. The Mac
+    /// needs none of this: SwiftUI's List diffs its rows by id and keeps an unchanged row's view.
+    /// </summary>
+    private IReadOnlyList<Item> items = [];
+    private IReadOnlyList<Row> rows = [];
 
     public CollectionsModel(AppState state, IDialogs dialogs)
     {
         this.state = state;
         this.dialogs = dialogs;
+        items = ComputeItems();
+        rows = ComputeRows();
         state.PropertyChanged += OnStateChanged;
     }
 
@@ -146,16 +156,53 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             if (EffectiveCollection(value) == SelectedCollection)
             {
+                ForgetUnresolvedSelection();
                 return;
             }
             selection = value;
             checkedNames.Clear();
             checkedCollection = null;
-            RaiseAll();
+            RefreshRows();
+            RaiseSelectionDependents();
         }
     }
 
     private string SelectedCollection => EffectiveCollection(selection);
+
+    /// <summary>
+    /// Lets go of a remembered name that no longer names a collection. Nothing on screen changes —
+    /// the window was already showing the fallback — so nothing is raised. Without it, a collection
+    /// renamed away and later renamed back would pull the window to it unprompted, because the
+    /// name would start resolving again. Called from the no-op branch of <see cref="Selected"/>
+    /// and on every store change, so a view that never writes its selection back is covered too.
+    /// </summary>
+    private void ForgetUnresolvedSelection()
+    {
+        if (selection is { } remembered && !state.Store.Collections.ContainsKey(remembered))
+        {
+            selection = null;
+        }
+    }
+
+    /// <summary>
+    /// Everything that follows the collection on show, and nothing that does not — in particular
+    /// not <see cref="Items"/>, whose content the selection never touches.
+    /// </summary>
+    private void RaiseSelectionDependents()
+    {
+        Raise(nameof(Selected));
+        Raise(nameof(DetailLine));
+        Raise(nameof(BannerText));
+        Raise(nameof(BannerButton));
+        Raise(nameof(HasBanner));
+        Raise(nameof(CanExport));
+        Raise(nameof(CanPublish));
+        Raise(nameof(CanRefresh));
+        Raise(nameof(CanMakeLocalCopy));
+        Raise(nameof(CanStopSyncing));
+        Raise(nameof(CanStopPublishing));
+        Raise(nameof(CanDelete));
+    }
 
     /// <summary>What a chosen name resolves to: itself while it is a collection, the active one otherwise.</summary>
     private string EffectiveCollection(string? chosen) =>
@@ -176,41 +223,67 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             checkedCollection = name;
         }
         selection = name;
-        RaiseAll();
+        RefreshRows();
+        RaiseSelectionDependents();
     }
 
     // MARK: panes
 
-    public IReadOnlyList<Item> Items
+    public IReadOnlyList<Item> Items => items;
+
+    public IReadOnlyList<Row> Rows => rows;
+
+    private List<Item> ComputeItems()
     {
-        get
+        var active = state.ActiveCollection;
+        return state.CollectionNames
+            .Select(name => new Item(name, state.KindOf(name), name == active, state.IsPublished(name),
+                state.PendingUpdates.ContainsKey(name), state.IsLocated(name), state.SourceLocation(name)))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Both panes, each replaced and announced only when its content differs. The records are
+    /// value-equal, so a rebuild that says the same thing leaves the list — and the focus on it —
+    /// where it was.
+    /// </summary>
+    private void RefreshPanes()
+    {
+        var fresh = ComputeItems();
+        if (!fresh.SequenceEqual(items))
         {
-            var active = state.ActiveCollection;
-            return state.CollectionNames
-                .Select(name => new Item(name, state.KindOf(name), name == active, state.IsPublished(name),
-                    state.PendingUpdates.ContainsKey(name), state.IsLocated(name), state.SourceLocation(name)))
-                .ToList();
+            items = fresh;
+            Raise(nameof(Items));
+        }
+        RefreshRows();
+    }
+
+    private void RefreshRows()
+    {
+        var fresh = ComputeRows();
+        if (!fresh.SequenceEqual(rows))
+        {
+            rows = fresh;
+            Raise(nameof(Rows));
+            Raise(nameof(CheckedNames));
         }
     }
 
-    public IReadOnlyList<Row> Rows
+    private List<Row> ComputeRows()
     {
-        get
-        {
-            var collection = SelectedCollection;
-            var locked = state.IsSynced(collection);
-            var checks = ActiveChecks;
-            var mcps = state.Store.Collections.TryGetValue(collection, out var held)
-                ? held.Mcps
-                : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
-            // Ordinal, which is how the flyout sorts the same connectors of the same collection:
-            // two surfaces over one list must agree on its order.
-            return mcps.Keys
-                .Order(StringComparer.Ordinal)
-                .Select(name => new Row(name, mcps[name].Enabled, state.ConnectorCaution(name, collection),
-                    locked, checks.Contains(name), TypeTextOf(mcps[name].Config)))
-                .ToList();
-        }
+        var collection = SelectedCollection;
+        var locked = state.IsSynced(collection);
+        var checks = ActiveChecks;
+        var mcps = state.Store.Collections.TryGetValue(collection, out var held)
+            ? held.Mcps
+            : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
+        // Ordinal, which is how the flyout sorts the same connectors of the same collection: two
+        // surfaces over one list must agree on its order.
+        return mcps.Keys
+            .Order(StringComparer.Ordinal)
+            .Select(name => new Row(name, mcps[name].Enabled, state.ConnectorCaution(name, collection),
+                locked, checks.Contains(name), TypeTextOf(mcps[name].Config)))
+            .ToList();
     }
 
     /// <summary>
@@ -399,7 +472,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             checkedNames.Remove(name);
         }
-        RaiseAll();
+        RefreshRows();
+        Raise(nameof(CanExport));
     }
 
     /// <summary>The row switch, in the collection the window is showing rather than the active one.</summary>
@@ -565,7 +639,9 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     {
         if (RelevantProperties.Any(name => Affects(e, name)))
         {
-            RaiseAll();
+            ForgetUnresolvedSelection();
+            RefreshPanes();
+            RaiseSelectionDependents();
         }
     }
 

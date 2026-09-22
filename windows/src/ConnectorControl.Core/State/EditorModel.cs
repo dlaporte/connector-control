@@ -975,7 +975,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// Env rows are keyed by name, which is unique within a connector. Arguments are keyed by
     /// position, which is exact in a synced form — its JSON is read-only, so the round trip is
     /// always unchanged — and approximate only in an editable published form after a JSON edit
-    /// that reorders arguments, which is the one case this cannot follow.
+    /// that inserts, removes or reorders arguments, which is the one case this cannot follow.
     /// </summary>
     private sealed record Carried(
         HashSet<string> AskedEnvNames, HashSet<int> AskedArgPositions, Dictionary<int, int> OpenArgIndexByPosition);

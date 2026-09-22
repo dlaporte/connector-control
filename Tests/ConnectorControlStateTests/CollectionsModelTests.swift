@@ -595,4 +595,24 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertGreaterThan(repaints, 0)
         XCTAssertEqual(model.selected, "Default")
     }
+    func testASelectionRenamedAwayDoesNotPullTheWindowBackWhenItReturns() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Spare"))
+        state.switchCollection(to: "Default")
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Spare"
+        XCTAssertEqual(model.selected, "Spare")
+
+        // Renamed away elsewhere: the window falls back to the active collection.
+        XCTAssertNil(state.renameCollection("Spare", to: "Spare Parts"))
+        XCTAssertEqual(model.selected, "Default")
+        // A view writing its selection back is harmless, and changes nothing either.
+        model.selected = "Default"
+
+        // Renamed back: the name resolves again, and the window stays where the user left it.
+        XCTAssertNil(state.renameCollection("Spare Parts", to: "Spare"))
+        XCTAssertEqual(model.selected, "Default", "a returning name must not pull the window to it")
+    }
 }

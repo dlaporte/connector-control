@@ -82,12 +82,15 @@ public class CollectionsModelTests
         Assert.False(state.IsLocated("Team"));
         Assert.True(state.IsLocated("Default"));
 
-        // Dispose cuts the republish: the items still read through, nothing repaints.
+        // Dispose cuts the republish: nothing repaints. The kept list stops following the state
+        // with it — the window that read it is gone. This is where the mirrors part: the Mac's
+        // items are computed on every read and still read through, because SwiftUI's List needs
+        // no kept list to hold its focus.
         model.Dispose();
         var before = repaints;
         state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal);
-        Assert.Equal([false, false, false], model.Items.Select(i => i.HasPendingUpdate));
         Assert.Equal(before, repaints);
+        Assert.Equal([false, false, true], model.Items.Select(i => i.HasPendingUpdate));
     }
 
     // MARK: rows
@@ -618,5 +621,67 @@ public class CollectionsModelTests
         model.Selected = "Default";
         Assert.NotEmpty(raised);
         Assert.Equal("Default", model.Selected);
+    }
+    [Fact]
+    public void ASelectionRenamedAwayDoesNotPullTheWindowBackWhenItReturns()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Spare"));
+        state.SwitchCollection("Default");
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Spare";
+        Assert.Equal("Spare", model.Selected);
+
+        // Renamed away elsewhere: the window falls back to the active collection.
+        Assert.Null(state.RenameCollection("Spare", "Spare Parts"));
+        Assert.Equal("Default", model.Selected);
+        // A view writing its selection back is harmless, and changes nothing either.
+        model.Selected = "Default";
+
+        // Renamed back: the name resolves again, and the window stays where the user left it.
+        Assert.Null(state.RenameCollection("Spare Parts", "Spare"));
+        Assert.Equal("Default", model.Selected);
+    }
+
+    /// <summary>
+    /// C#-only: WPF regenerates every container when ItemsSource is handed a new list, dropping
+    /// keyboard focus. SwiftUI's List diffs by id, so the Mac has no instance to keep.
+    /// </summary>
+    [Fact]
+    public void TheSidebarKeepsItsListAcrossASelectionAndReplacesItOnlyWhenAnItemChanges()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.Upsert("extra", new McpEntry(AppStateHarness.Remote("https://extra.example/mcp")), null, "Work"));
+        state.SwitchCollection("Default");
+        using var model = new CollectionsModel(state, h.Dialogs);
+        var items = model.Items;
+        var rows = model.Rows;
+        var raised = new List<string?>();
+        model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        // Choosing another collection changes the right pane and nothing in the sidebar.
+        model.Selected = "Work";
+        Assert.DoesNotContain(nameof(CollectionsModel.Items), raised);
+        Assert.DoesNotContain(string.Empty, raised);   // no blanket raise either
+        Assert.Same(items, model.Items);
+        Assert.Contains(nameof(CollectionsModel.Rows), raised);
+        Assert.NotSame(rows, model.Rows);
+        Assert.Contains(nameof(CollectionsModel.DetailLine), raised);
+
+        // A store change the sidebar's items do not reflect leaves the list where it is.
+        raised.Clear();
+        state.SetEnabled("extra", false, "Work");
+        Assert.DoesNotContain(nameof(CollectionsModel.Items), raised);
+        Assert.Same(items, model.Items);
+
+        // One that alters an item — which collection is active — replaces it.
+        raised.Clear();
+        state.SwitchCollection("Work");
+        Assert.Contains(nameof(CollectionsModel.Items), raised);
+        Assert.NotSame(items, model.Items);
+        Assert.True(model.Items.Single(i => i.Name == "Work").IsActive);
     }
 }
