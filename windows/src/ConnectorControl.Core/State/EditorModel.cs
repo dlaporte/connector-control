@@ -323,11 +323,56 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public bool IsHeader => authKind == RemoteAuthKind.Header;
     public bool IsOAuth => authKind == RemoteAuthKind.OAuthClient;
 
-    public string BearerToken { get => bearerToken; set => Set(ref bearerToken, value); }
+    /// <summary>
+    /// The three secret fields raise what is read off their text as well as the text itself: a
+    /// synced connector unlocks exactly the fields whose value is still a placeholder, and the
+    /// hint under one is the author's. Typing over the marker locks the field again, so the two
+    /// have to move together. The Mac needs none of this — there these are <c>@Published</c>, and
+    /// a change to one republishes the whole object.
+    /// </summary>
+    public string BearerToken
+    {
+        get => bearerToken;
+        set
+        {
+            if (Set(ref bearerToken, value))
+            {
+                Raise(nameof(BearerTokenIsPlaceholder));
+                Raise(nameof(BearerTokenHint));
+            }
+        }
+    }
+
     public string HeaderName { get => headerName; set => Set(ref headerName, value); }
-    public string HeaderValue { get => headerValue; set => Set(ref headerValue, value); }
+
+    public string HeaderValue
+    {
+        get => headerValue;
+        set
+        {
+            if (Set(ref headerValue, value))
+            {
+                Raise(nameof(HeaderValueIsPlaceholder));
+                Raise(nameof(HeaderValueHint));
+            }
+        }
+    }
+
     public string OAuthClientId { get => oauthClientId; set => Set(ref oauthClientId, value); }
-    public string OAuthClientSecret { get => oauthClientSecret; set => Set(ref oauthClientSecret, value); }
+
+    public string OAuthClientSecret
+    {
+        get => oauthClientSecret;
+        set
+        {
+            if (Set(ref oauthClientSecret, value))
+            {
+                Raise(nameof(ClientSecretIsPlaceholder));
+                Raise(nameof(ClientSecretHint));
+            }
+        }
+    }
+
     public string OAuthScopes { get => oauthScopes; set => Set(ref oauthScopes, value); }
 
     public string Command
@@ -378,6 +423,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
                 Raise(nameof(HasJsonError));
                 Raise(nameof(JsonStatusText));
                 Raise(nameof(CanSave));
+                // The paste tip offers what a JSON view with an error in it cannot do.
+                Raise(nameof(ShowJsonTip));
             }
         }
     }

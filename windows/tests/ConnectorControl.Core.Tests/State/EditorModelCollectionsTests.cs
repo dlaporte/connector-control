@@ -473,4 +473,67 @@ public class EditorModelCollectionsTests
         Assert.Null(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx).Collection);
         Assert.Equal("Team", EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx, "Team").Collection);
     }
+    /// <summary>
+    /// The Mac has no mirror of this: there the secret fields and the JSON error are
+    /// <c>@Published</c>, so a change to one republishes the whole object. Here they are plain
+    /// properties, and what a synced editor unlocks is read off their text, so the text and the
+    /// two things derived from it have to be announced together. Without these raises the editor
+    /// window has to work the answers out for itself.
+    /// </summary>
+    [Fact]
+    public void FillingASecretFieldRaisesWhatIsReadOffIt()
+    {
+        using var rig = new EditorRig();
+        SubscribeToDataTeam(rig);
+        using var notion = rig.Editor("notion", "Data team");
+        var raised = new List<string>();
+        notion.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");
+
+        Assert.True(notion.BearerTokenIsPlaceholder);
+        notion.BearerToken = "secret_abc";
+        Assert.Contains(nameof(EditorModel.BearerTokenIsPlaceholder), raised);
+        Assert.Contains(nameof(EditorModel.BearerTokenHint), raised);
+        Assert.False(notion.BearerTokenIsPlaceholder);
+        Assert.Null(notion.BearerTokenHint);
+
+        // Typing the same text again says nothing.
+        raised.Clear();
+        notion.BearerToken = "secret_abc";
+        Assert.Empty(raised);
+
+        // The other two secrets answer the same way.
+        raised.Clear();
+        notion.HeaderValue = Placeholder.Marker("header_value");
+        Assert.Contains(nameof(EditorModel.HeaderValueIsPlaceholder), raised);
+        Assert.Contains(nameof(EditorModel.HeaderValueHint), raised);
+        Assert.True(notion.HeaderValueIsPlaceholder);
+
+        raised.Clear();
+        notion.OAuthClientSecret = Placeholder.Marker("client_secret");
+        Assert.Contains(nameof(EditorModel.ClientSecretIsPlaceholder), raised);
+        Assert.Contains(nameof(EditorModel.ClientSecretHint), raised);
+        Assert.True(notion.ClientSecretIsPlaceholder);
+    }
+
+    [Fact]
+    public void TheJsonTipFollowsTheJsonError()
+    {
+        using var rig = new EditorRig();
+        using var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        Assert.True(editor.ShowJsonTip);
+        var raised = new List<string>();
+        editor.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");
+
+        editor.View = EditView.Json;
+        editor.JsonText = "{not json";
+        Assert.NotNull(editor.JsonError);
+        Assert.False(editor.ShowJsonTip);
+        Assert.Contains(nameof(EditorModel.ShowJsonTip), raised);
+
+        raised.Clear();
+        editor.JsonText = "{}";
+        Assert.Null(editor.JsonError);
+        Assert.True(editor.ShowJsonTip);
+        Assert.Contains(nameof(EditorModel.ShowJsonTip), raised);
+    }
 }
