@@ -127,4 +127,57 @@ final class PublishModelTests: XCTestCase {
                                                                           intent: model.intent).serialized())
         XCTAssertFalse(state.isPublished(state.activeCollection), "exporting binds nothing")
     }
+
+    func testPublishAgainRetriesAFailedWrite() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let folder = try publishFolder(h)
+        let model = PublishModel(state: state, collection: state.activeCollection)
+        model.folder = folder.path
+        XCTAssertNil(model.publish())
+        let file = folder.appendingPathComponent(model.fileName)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+
+        // A file where the folder belongs fails the write on both platforms; the next store
+        // change is what raises the banner.
+        try FileManager.default.removeItem(at: folder)
+        try TempDir.touch(folder, "not a folder")
+        XCTAssertNil(state.upsert(name: "d", entry: MCPEntry(config: connector), renamedFrom: nil))
+        XCTAssertEqual(state.publishError?.collection, state.activeCollection)
+
+        try FileManager.default.removeItem(at: folder)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        // Nothing about the document or the ticks has changed since the failure, so only an
+        // unconditional write puts it back — which is what pressing Publish again has to do,
+        // rather than waiting for whatever the user changes next.
+        let retry = PublishModel(state: state, collection: state.activeCollection)
+        XCTAssertEqual(retry.folder, folder.path)
+        XCTAssertNil(retry.publish())
+        XCTAssertNil(state.publishError, "pressing Publish again is a retry")
+        XCTAssertNotNil(try CollectionDocument.decode(try Data(contentsOf: file)).connectors["d"],
+                        "the change the failed write held back lands with it")
+    }
+
+    func testAnIllegalPathNameIsSanitizedNotDropped() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let model = PublishModel(state: state, collection: state.activeCollection)
+        model.pathRows[0].marked = true
+
+        model.pathRows[0].name = "my path!"
+        XCTAssertEqual(model.intent.pathMarks["c"]?[JSONPointer(["args", "0"])]?.name, "my_path_")
+        XCTAssertTrue(model.preview.contains("${CC_NEEDS:my_path_}"))
+        XCTAssertFalse(model.preview.contains("/Users/d/x.js"),
+                       "a name nobody can fill must not publish the path the mark was hiding")
+
+        model.pathRows[0].name = "2nd path"
+        XCTAssertEqual(model.intent.pathMarks["c"]?[JSONPointer(["args", "0"])]?.name, "p_2nd_path",
+                       "a marker name cannot start with a digit")
+
+        // Nothing to make a name out of is the one case left: the row stays unmarked rather
+        // than writing a marker with no name in it.
+        model.pathRows[0].name = "   "
+        XCTAssertNil(model.intent.pathMarks["c"])
+        XCTAssertTrue(model.preview.contains("/Users/d/x.js"))
+    }
 }

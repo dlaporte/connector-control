@@ -984,6 +984,29 @@ public class AppStateCollectionsTests
     }
 
     [Fact]
+    public void ASyncedCollectionCannotBePublished()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Subscribe(path, null));
+        var folder = PublishFolder(h);
+
+        // A synced collection has an author elsewhere, and nothing in the window offers Publish
+        // for one — the toolbar swaps it for Refresh and Make Local Copy. The refusal is the same
+        // silence LocateSource gives a collection that is not synced.
+        Assert.Null(state.StartPublishing("Data team", folder, PublishIntent.None));
+        Assert.False(state.IsPublished("Data team"));
+        Assert.Null(state.CollectionsFile.Collections["Data team"].Publish);
+        Assert.False(state.CollectionsCache.Published.ContainsKey("Data team"));
+        Assert.Empty(Directory.GetFileSystemEntries(folder));   // nothing was written for it
+        // And it is still a synced collection.
+        Assert.Equal(CollectionKind.Synced, state.KindOf("Data team"));
+        Assert.Null(state.PublishError);
+    }
+
+    [Fact]
     public void PublishGuards()
     {
         using var h = new AppStateHarness();

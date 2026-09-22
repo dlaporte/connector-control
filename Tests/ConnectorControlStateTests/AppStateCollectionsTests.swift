@@ -853,6 +853,27 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.publishError)
     }
 
+    func testASyncedCollectionCannotBePublished() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("data-team.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let folder = try publishFolder(h)
+
+        // A synced collection has an author elsewhere, and nothing in the window offers Publish
+        // for one — the toolbar swaps it for Refresh and Make Local Copy. The refusal is the
+        // same silence locateSource gives a collection that is not synced.
+        XCTAssertNil(state.startPublishing("Data team", to: folder.path, intent: .none))
+        XCTAssertFalse(state.isPublished("Data team"))
+        XCTAssertNil(state.collectionsFile.collections["Data team"]?.publish)
+        XCTAssertNil(state.collectionsCache.published["Data team"])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: folder.path), [],
+                       "nothing was written for it")
+        XCTAssertEqual(state.kind(of: "Data team"), .synced, "and it is still a synced collection")
+        XCTAssertNil(state.publishError)
+    }
+
     func testPublishGuards() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

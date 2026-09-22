@@ -1321,10 +1321,23 @@ public final class AppState: ObservableObject {
         }
     }
 
+    /// Publish now, whatever the recorded hash says: the sheet's Publish button pressed again
+    /// after a write failed, where nothing about the document has changed and the only thing that
+    /// did is that the folder is reachable again. nil on success, else the message.
+    public func republish(_ collection: String) -> String? {
+        guard collectionsCache.published[collection] != nil else { return nil }
+        publishIfChanged(forcing: collection)
+        return publishError?.collection == collection ? publishError?.message : nil
+    }
+
     /// Every collection this machine publishes, written when what it says has changed. Only the
     /// bindings in this machine's cache: the sidecar travels with the master list, so another
     /// machine's publish folder is recorded there but is that machine's to write.
-    func publishIfChanged() {
+    ///
+    /// `forcing` names the one collection whose write happens whether or not the document
+    /// changed — a retry, where the recorded hash says the bytes are in a folder they never
+    /// reached.
+    func publishIfChanged(forcing forced: String? = nil) {
         guard !collectionsCache.published.isEmpty else { return }
         var cacheChanged = false
         for collection in collectionsCache.published.keys.sorted() {
@@ -1333,7 +1346,7 @@ public final class AppState: ObservableObject {
             do {
                 let document = exportDocument(for: collection, intent: record.intent)
                 let hash = try AppState.publishHash(of: document)
-                guard hash != binding.lastWrittenHash else { continue }
+                guard hash != binding.lastWrittenHash || collection == forced else { continue }
                 let target = URL(fileURLWithPath: binding.folder)
                     .appendingPathComponent(record.slug + "." + CollectionDocument.fileExtension)
                 try AtomicFile.write(document.serialized(), to: target, staging: service.paths.stagingDirURL)

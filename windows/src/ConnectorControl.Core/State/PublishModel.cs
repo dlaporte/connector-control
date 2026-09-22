@@ -127,8 +127,9 @@ public sealed class PublishModel : ObservableObject
 
     /// <summary>
     /// What the rows say, in the form the exporter reads. A marked row whose name is not a legal
-    /// placeholder name is left as the path it is: a marker nobody can fill is worse than a path
-    /// the recipient can see and change.
+    /// placeholder name is sanitized rather than dropped: the author ticked that row to keep a
+    /// path on this machine out of the document, and silently publishing it because of how they
+    /// spelled the name would be the one failure here nobody would notice.
     /// </summary>
     public PublishIntent Intent
     {
@@ -162,8 +163,11 @@ public sealed class PublishModel : ObservableObject
             var pathMarks = new Dictionary<string, Dictionary<JsonPointer, PublishIntent.PathMark>>(StringComparer.Ordinal);
             foreach (var row in PathRows)
             {
-                var name = row.Name.TrimSpaces();
-                if (!row.Marked || !Placeholder.IsValidName(name))
+                var name = PlaceholderName(row.Name);
+                // Nothing to make a name out of is the one case left, and a marker with no name
+                // in it is text nobody can fill: the row stays unmarked, which is visible in the
+                // preview right under it.
+                if (!row.Marked || name.Length == 0)
                 {
                     continue;
                 }
@@ -222,12 +226,16 @@ public sealed class PublishModel : ObservableObject
         {
             return null;
         }
-        if (state.IsPublished(Collection)
-            && string.Equals(state.CollectionsCache.Published.GetValueOrDefault(Collection)?.Folder, chosen, StringComparison.Ordinal))
+        if (!state.IsPublished(Collection)
+            || !string.Equals(state.CollectionsCache.Published.GetValueOrDefault(Collection)?.Folder, chosen, StringComparison.Ordinal))
         {
-            return state.UpdatePublishIntent(Collection, Intent);
+            return state.StartPublishing(Collection, chosen, Intent);
         }
-        return state.StartPublishing(Collection, chosen, Intent);
+        // The same folder, already publishing: the ticks go on record, and then the document is
+        // written whether or not it changed. Pressing Publish again is how a write that failed is
+        // retried, and by then nothing about the document is different — only the folder is.
+        state.UpdatePublishIntent(Collection, Intent);
+        return state.Republish(Collection);
     }
 
     /// <summary>The same document, written once, binding nothing. null on success.</summary>
@@ -275,4 +283,28 @@ public sealed class PublishModel : ObservableObject
     /// <summary>"path", then "path_2", "path_3" — numbered inside each connector, since a recipient fills one connector's placeholders at a time.</summary>
     private static string DefaultPathName(int index) =>
         index <= 1 ? "path" : "path_" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// A legal placeholder name out of whatever the author typed: anything outside
+    /// <c>[A-Za-z0-9_]</c> becomes "_", and a leading digit takes a "p_" prefix, since a marker
+    /// name may not start with one. Empty for a name that is only whitespace — there is nothing
+    /// there to make a name out of.
+    /// </summary>
+    internal static string PlaceholderName(string typed)
+    {
+        var trimmed = typed.TrimSpaces();
+        if (trimmed.Length == 0)
+        {
+            return string.Empty;
+        }
+        // Per rune, as the Mac mirror walks Unicode scalars: one character the name cannot carry
+        // becomes one underscore on both platforms.
+        var name = new System.Text.StringBuilder(trimmed.Length);
+        foreach (var rune in trimmed.EnumerateRunes())
+        {
+            var text = rune.ToString();
+            name.Append(Placeholder.IsValidName(text) ? text : "_");
+        }
+        return char.IsAsciiDigit(name[0]) ? "p_" + name : name.ToString();
+    }
 }

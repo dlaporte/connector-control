@@ -151,4 +151,61 @@ public class PublishModelTests
         Assert.Equal(state.ExportDocument(state.ActiveCollection, model.Intent).Serialize(), File.ReadAllBytes(path));
         Assert.False(state.IsPublished(state.ActiveCollection));   // exporting binds nothing
     }
+
+    [Fact]
+    public void PublishAgainRetriesAFailedWrite()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var folder = PublishFolder(h);
+        var model = new PublishModel(state, state.ActiveCollection) { Folder = folder };
+        Assert.Null(model.Publish());
+        var file = Path.Combine(folder, model.FileName);
+        Assert.True(File.Exists(file));
+
+        // A file where the folder belongs fails the write on both platforms; the next store
+        // change is what raises the banner.
+        Directory.Delete(folder, recursive: true);
+        File.WriteAllText(folder, "not a folder");
+        Assert.Null(state.Upsert("d", new McpEntry(true, Connector()), null));
+        Assert.Equal(state.ActiveCollection, state.PublishError?.Collection);
+
+        File.Delete(folder);
+        Directory.CreateDirectory(folder);
+        // Nothing about the document or the ticks has changed since the failure, so only an
+        // unconditional write puts it back — which is what pressing Publish again has to do,
+        // rather than waiting for whatever the user changes next.
+        var retry = new PublishModel(state, state.ActiveCollection);
+        Assert.Equal(folder, retry.Folder);
+        Assert.Null(retry.Publish());
+        Assert.Null(state.PublishError);   // pressing Publish again is a retry
+        // The change the failed write held back lands with it.
+        Assert.Contains("d", CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors.Keys);
+    }
+
+    [Fact]
+    public void AnIllegalPathNameIsSanitizedNotDropped()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var model = new PublishModel(state, state.ActiveCollection);
+        var pointer = JsonPointer.Parse("/args/0")!;
+        model.PathRows[0].Marked = true;
+
+        model.PathRows[0].Name = "my path!";
+        Assert.Equal("my_path_", model.Intent.PathMarks["c"][pointer].Name);
+        Assert.Contains("${CC_NEEDS:my_path_}", model.Preview, StringComparison.Ordinal);
+        // A name nobody can fill must not publish the path the mark was hiding.
+        Assert.DoesNotContain("/Users/d/x.js", model.Preview, StringComparison.Ordinal);
+
+        // A marker name cannot start with a digit.
+        model.PathRows[0].Name = "2nd path";
+        Assert.Equal("p_2nd_path", model.Intent.PathMarks["c"][pointer].Name);
+
+        // Nothing to make a name out of is the one case left: the row stays unmarked rather than
+        // writing a marker with no name in it.
+        model.PathRows[0].Name = "   ";
+        Assert.False(model.Intent.PathMarks.ContainsKey("c"));
+        Assert.Contains("/Users/d/x.js", model.Preview, StringComparison.Ordinal);
+    }
 }

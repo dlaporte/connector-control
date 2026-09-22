@@ -1894,8 +1894,29 @@ public sealed class AppState : ObservableObject, IDisposable
     /// Every collection this machine publishes, written when what it says has changed. Only the
     /// bindings in this machine's cache: the sidecar travels with the master list, so another
     /// machine's publish folder is recorded there but is that machine's to write.
+    /// <para>
+    /// <paramref name="forced"/> names the one collection whose write happens whether or not the
+    /// document changed — a retry, where the recorded hash says the bytes are in a folder they
+    /// never reached.
+    /// </para>
     /// </summary>
-    internal void PublishIfChanged()
+    /// <summary>
+    /// Publish now, whatever the recorded hash says: the sheet's Publish button pressed again
+    /// after a write failed, where nothing about the document has changed and the only thing that
+    /// did is that the folder is reachable again. null on success, else the message.
+    /// </summary>
+    public string? Republish(string collection)
+    {
+        if (!CollectionsCache.Published.ContainsKey(collection))
+        {
+            return null;
+        }
+        PublishIfChanged(collection);
+        RaiseAll();
+        return PublishError?.Collection == collection ? PublishError.Message : null;
+    }
+
+    internal void PublishIfChanged(string? forced = null)
     {
         if (CollectionsCache.Published.Count == 0)
         {
@@ -1913,7 +1934,7 @@ public sealed class AppState : ObservableObject, IDisposable
             {
                 var document = ExportDocument(collection, record.Intent);
                 var hash = PublishHash(document);
-                if (hash == binding.LastWrittenHash)
+                if (hash == binding.LastWrittenHash && collection != forced)
                 {
                     continue;
                 }

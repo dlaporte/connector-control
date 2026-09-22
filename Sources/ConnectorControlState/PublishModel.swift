@@ -123,8 +123,9 @@ public final class PublishModel: ObservableObject {
     public var canPublish: Bool { !(folder ?? "").isEmpty }
 
     /// What the rows say, in the form the exporter reads. A marked row whose name is not a legal
-    /// placeholder name is left as the path it is: a marker nobody can fill is worse than a path
-    /// the recipient can see and change.
+    /// placeholder name is sanitized rather than dropped: the author ticked that row to keep a
+    /// path on this machine out of the document, and silently publishing it because of how they
+    /// spelled the name would be the one failure here nobody would notice.
     public var intent: PublishIntent {
         var shareValues: [String: Set<String>] = [:]
         var hints: [String: [String: String]] = [:]
@@ -135,8 +136,11 @@ public final class PublishModel: ObservableObject {
         }
         var pathMarks: [String: [JSONPointer: PublishIntent.PathMark]] = [:]
         for row in pathRows where row.marked {
-            let name = row.name.trimmingCharacters(in: .whitespaces)
-            guard Placeholder.isValidName(name) else { continue }
+            let name = PublishModel.placeholderName(row.name)
+            // Nothing to make a name out of is the one case left, and a marker with no name in
+            // it is text nobody can fill: the row stays unmarked, which is visible in the
+            // preview right under it.
+            guard !name.isEmpty else { continue }
             let hint = row.hint.trimmingCharacters(in: .whitespaces)
             pathMarks[row.connector, default: [:]][row.pointer] =
                 PublishIntent.PathMark(name: name, hint: hint.isEmpty ? nil : hint)
@@ -165,10 +169,14 @@ public final class PublishModel: ObservableObject {
     /// Folder… moves a collection. nil on success.
     public func publish() -> String? {
         guard let chosen = folder?.trimmingCharacters(in: .whitespaces), !chosen.isEmpty else { return nil }
-        if state.isPublished(collection), state.collectionsCache.published[collection]?.folder == chosen {
-            return state.updatePublishIntent(collection, intent: intent)
+        guard state.isPublished(collection), state.collectionsCache.published[collection]?.folder == chosen else {
+            return state.startPublishing(collection, to: chosen, intent: intent)
         }
-        return state.startPublishing(collection, to: chosen, intent: intent)
+        // The same folder, already publishing: the ticks go on record, and then the document is
+        // written whether or not it changed. Pressing Publish again is how a write that failed is
+        // retried, and by then nothing about the document is different — only the folder is.
+        _ = state.updatePublishIntent(collection, intent: intent)
+        return state.republish(collection)
     }
 
     /// The same document, written once, binding nothing. nil on success.
@@ -209,5 +217,24 @@ public final class PublishModel: ObservableObject {
     /// one connector's placeholders at a time.
     private static func defaultPathName(_ index: Int) -> String {
         index <= 1 ? "path" : "path_\(index)"
+    }
+
+    /// A legal placeholder name out of whatever the author typed: anything outside
+    /// `[A-Za-z0-9_]` becomes "_", and a leading digit takes a "p_" prefix, since a marker name
+    /// may not start with one. Empty for a name that is only whitespace — there is nothing there
+    /// to make a name out of.
+    static func placeholderName(_ typed: String) -> String {
+        let trimmed = typed.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return "" }
+        var name = ""
+        // Per Unicode scalar, as the Windows mirror walks runes: one character the name cannot
+        // carry becomes one underscore on both platforms.
+        for scalar in trimmed.unicodeScalars {
+            name.unicodeScalars.append(Placeholder.isValidName(String(scalar)) ? scalar : "_")
+        }
+        if let first = name.unicodeScalars.first, first.value >= 0x30, first.value <= 0x39 {
+            name = "p_" + name
+        }
+        return name
     }
 }
