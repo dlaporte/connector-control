@@ -308,18 +308,22 @@ machines that follow it, including the one that publishes it.
   can no longer tell which argument it is, the app stops publishing that
   collection rather than send the path as written. The banner gives the
   reason, "A path marked in “<connector>” has moved. Open Publish… to mark
-  it again.", the document already in the folder is left exactly as it was,
-  and subscribers receive none of that collection's other changes until the
-  entry is answered.
+  it again." Publishing stops the same way, each with a banner of its own,
+  when the document would carry a path this machine keeps back, or this
+  machine's publish folder, in some other connector. However it stops, the
+  document already in the folder is left exactly as it was, and subscribers
+  receive none of that collection's other changes until the entry is
+  answered.
 - Reopen **Publish…** and the sheet lists every mark it could not place,
   and every path this machine keeps back that turns up elsewhere in the
   document, each with its connector and the field it sits in. Publish and
-  Export stay unavailable until every entry is answered: tick the path
-  where it now sits, or **Forget Mark**, or **Release** it to let it travel
-  as written once you have read the preview. This machine's publish folder
-  is the one entry you cannot release. It takes **Use ${COLLECTION_DIR}**,
-  which rewrites that connector to the token, because a document that would
-  carry the folder is never written.
+  Export stay unavailable until every entry is answered, and each kind of
+  entry takes its own answer. A lost mark: tick the path where it now sits,
+  or **Forget Mark**. A kept-back path: tick it where it sits, or
+  **Release** it to let it travel as written once you have read the
+  preview. This machine's publish folder: **Use ${COLLECTION_DIR}** alone,
+  which rewrites that connector to the token. A folder is never released,
+  because a document that would carry it is never written.
 - A differently spelled version of a marked path is a different path to the
   app — another case, `~` in place of your home folder, a trailing slash.
   It is not recognised as the one you marked, so it travels as written;
@@ -327,7 +331,10 @@ machines that follow it, including the one that publishes it.
 - Restoring a backup of Claude's configuration puts it back into the
   collection it was taken from and makes that collection active. A backup
   whose collection is gone is refused: "This backup was taken from
-  “<name>”, which no longer exists. Nothing was restored."
+  “<name>”, which no longer exists. Nothing was restored." Only this
+  version records the collection, so a backup from an earlier one — which
+  is every backup you already have, and the first-run original — goes into
+  the active collection instead.
 - An export of part of a published collection still carries that
   collection's identity, so your own app refuses to subscribe to it, as it
   refuses the published document itself.
@@ -512,6 +519,12 @@ changes live (the file is watched). Notes:
   Import sheet lists it as skipped with the field at fault, and every later
   update from that document leaves it out. The same document imports whole
   on a Mac, which writes bare `npx`.
+- The same goes for the folder `${COLLECTION_DIR}` stands for. On Windows a
+  connector launched through `cmd /c` that uses the token shows a caution
+  when that folder holds `& | < > ^ "` or a space: "The folder
+  ${COLLECTION_DIR} stands for must not contain…". Folder names with spaces
+  are ordinary on Windows, so a collection meant for PCs is best published
+  into a folder without one.
 - An app older than collections, sharing the same master list, has no idea a
   collection is synced and edits it as an ordinary one. This app then reads
   those edits as a pending update from the source, and applying reverts
