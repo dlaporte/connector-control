@@ -82,6 +82,7 @@ public class StringCatalogTests
         ["AppState.enabledSubtitle"] = ["3", "7"],
         ["AppState.malformedConfigMessage"] = ["X"],
         ["AppState.needsValueCaution"] = ["X"],
+        ["AppState.publishSlugTakenError"] = ["X"],
         ["AppState.sourceUnreadableError"] = ["X", "Y"],
         ["ClaudeProcess.notAClaudePackageError"] = ["X"],
         ["ClaudePublisher.subjectNoOrganizationError"] = ["X", "Y"],
@@ -102,6 +103,9 @@ public class StringCatalogTests
         ["MasterStore.unknownCollectionError"] = ["X"],
         ["PopoverModel.collectionChipText"] = ["X"],
         ["PopoverModel.locateButton"] = ["X"],
+        ["PublishModel.folderLine"] = ["X"],
+        ["PublishModel.title"] = ["X"],
+        ["PublishModel.warningLine"] = ["X", "Y"],
         // The parameter here is a RemoteField, not free text, so the fixed argument is the
         // label one of them renders as rather than the usual "X".
         ["RemotePattern.cmdUnsafeReason"] = ["Server URL"],
@@ -153,6 +157,8 @@ public class StringCatalogTests
         actual["AppState.newerDocumentError"] = AppState.NewerDocumentError;
         actual["AppState.noConnectorsSubtitle"] = AppState.NoConnectorsSubtitle;
         actual["AppState.ownCollectionError"] = AppState.OwnCollectionError;
+        actual["AppState.publishIntoStoreError"] = AppState.PublishIntoStoreError;
+        actual["AppState.publishSlugTakenError"] = AppState.PublishSlugTakenError("X");
         actual["AppState.quitButton"] = AppState.QuitButton;
         actual["AppState.quitMessage"] = AppState.QuitMessage;
         actual["AppState.regenerationFailedBody"] = AppState.RegenerationFailedBody;
@@ -283,6 +289,20 @@ public class StringCatalogTests
         actual["PopoverModel.reviewAndApplyButton"] = FlyoutModel.ReviewAndApplyButton;
         actual["PopoverModel.settingsTooltip"] = FlyoutModel.SettingsTooltip;
         actual["PopoverModel.title"] = FlyoutModel.Title;
+
+        // MARK: PublishModel
+
+        actual["PublishModel.envSectionTitle"] = PublishModel.EnvSectionTitle;
+        actual["PublishModel.exportButton"] = PublishModel.ExportButton;
+        actual["PublishModel.folderLine"] = PublishModel.FolderLine("X");
+        actual["PublishModel.hintPlaceholder"] = PublishModel.HintPlaceholder;
+        actual["PublishModel.pathNamePlaceholder"] = PublishModel.PathNamePlaceholder;
+        actual["PublishModel.pathsSectionTitle"] = PublishModel.PathsSectionTitle;
+        actual["PublishModel.previewTitle"] = PublishModel.PreviewTitle;
+        actual["PublishModel.publishButton"] = PublishModel.PublishButton;
+        actual["PublishModel.shareValueLabel"] = PublishModel.ShareValueLabel;
+        actual["PublishModel.title"] = PublishModel.Title("X");
+        actual["PublishModel.warningLine"] = PublishModel.WarningLine("X", "Y");
 
         // MARK: RemoteAuthKind
 

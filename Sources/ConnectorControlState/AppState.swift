@@ -39,7 +39,8 @@ public final class AppState: ObservableObject {
     public static let locateCaution = "Locate the collection file to resolve paths."
     public static let ownCollectionError = "This is your own published collection."
     public static let newerDocumentError = "This collection was made by a newer Connector Control."
-    public static let collectionsNotSavedNote = "Collections could not be saved: the collections file is unreadable. Your change stays in memory until it can be read."
+    public static let publishIntoStoreError = "Choose a folder other than the master list folder or its backups."
+    public static let collectionsNotSavedNote = "Collections could not be saved: the collections file is unreadable. Your change is not on disk and will be lost when the file is read again."
     /// The platform named here is the platform-forced half: the caution names the OTHER one, so
     /// a Mac flags a Windows-authored connector and the Windows mirror says "authored on macOS".
     public static let authoredElsewhereCaution = "authored on Windows"
@@ -68,6 +69,8 @@ public final class AppState: ObservableObject {
     public static func collectionUpdateNotificationBody(_ collection: String, _ summary: String) -> String { "\(collection) changed at its source: \(summary). Review it in Connector Control." }
 
     public static func sourceUnreadableError(_ fileName: String, _ detail: String) -> String { "\(fileName) couldn’t be read: \(detail)" }
+
+    public static func publishSlugTakenError(_ fileName: String) -> String { "\(fileName) already exists there and belongs to a different collection." }
 
     /// A synced connector-list change was adopted and written into Claude's config: say what it runs now.
     public static func connectorListChangedBody(_ delta: ServerDelta, restartRequired: Bool) -> String {
@@ -520,6 +523,9 @@ public final class AppState: ObservableObject {
         } catch {
             lastError = AppState.friendly(error)
         }
+        // What this machine publishes follows the store it has just loaded: a change made on the
+        // author's other machine arrives as a store change and reaches the team from here.
+        publishIfChanged()
         refreshRestartState()
         AppState.reArm(watcher)
         AppState.reArm(storeWatcher)
@@ -582,6 +588,9 @@ public final class AppState: ObservableObject {
         // Every binding change reaches disk through here: subscribe, locate, stop syncing,
         // rename and delete all end in a save, so this is where the watchers follow them.
         armSourceWatchers()
+        // Publishing is derived from the store on every store change, never from a save event:
+        // the store has just changed, so what the team reads may have to change with it.
+        publishIfChanged()
     }
 
     /// The sidecar only when it would differ: every connector change persists the store, and
@@ -1068,6 +1077,166 @@ public final class AppState: ObservableObject {
     private static func sourceDetail(_ error: Error) -> String {
         if case CollectionDocumentError.malformed(let detail) = error { return detail }
         return error.localizedDescription
+    }
+
+    // MARK: - Publishing and export
+
+    /// Starts publishing a local collection into `folder`, or re-points one that already
+    /// publishes (the failed-write banner's Choose Folder…). The slug and the origin are fixed
+    /// the first time and never re-derived, so renaming the collection cannot orphan the document
+    /// the team already subscribed to. The document is written before this returns.
+    /// nil on success, else the message to show.
+    public func startPublishing(_ collection: String, to folder: String, intent: PublishIntent) -> String? {
+        // A synced collection has an author elsewhere, and a name that is not a collection has
+        // nothing to publish. Nothing offers either, so both get the silence `locateSource` gives
+        // a collection that is not synced.
+        guard store.collections[collection] != nil, !isSynced(collection) else { return nil }
+        // A record the next save cannot write would leave a document in a shared folder that
+        // nothing here remembers publishing. It waits for a sidecar that can be read.
+        guard collectionsLoaded else { return AppState.collectionsNotSavedNote }
+        let url = URL(fileURLWithPath: folder).standardizedFileURL
+        // The master list's own folder is synced to every machine the user owns, and the backups
+        // folder is rotated; a document in either would be swept up by machinery that is not
+        // about publishing at all.
+        guard !AppState.isInside(url, service.paths.storeDirURL),
+              !AppState.isInside(url, service.paths.backupsDirURL) else {
+            return AppState.publishIntoStoreError
+        }
+        let record = collectionsFile.collections[collection]?.publish
+        let slug = record?.slug ?? Slug.make(collection)
+        let origin = record?.origin ?? UUID().uuidString.lowercased()
+        let fileName = slug + "." + CollectionDocument.fileExtension
+        let target = url.appendingPathComponent(fileName)
+        // Somebody else's document under the name this one would take: publishing over it would
+        // replace what their subscribers follow. A file that cannot be decoded counts too — it
+        // has no origin to vouch for it.
+        if FileManager.default.fileExists(atPath: target.path),
+           (try? CollectionDocument.decode(try Data(contentsOf: target)))?.origin != origin {
+            return AppState.publishSlugTakenError(fileName)
+        }
+        var entry = collectionsFile.collections[collection] ?? .local
+        entry.publish = CollectionsFile.PublishRecord(slug: slug, origin: origin, intent: intent)
+        collectionsFile.collections[collection] = entry
+        let previous = collectionsCache.published[collection]
+        collectionsCache.published[collection] = CollectionsLocalCache.PublishBinding(
+            folder: url.path,
+            // A new folder has nothing in it this app wrote, so the next write is unconditional.
+            lastWrittenHash: previous?.folder == url.path ? previous?.lastWrittenHash : nil)
+        // persistStore ends in publishIfChanged, which is what writes the document.
+        persistStore()
+        return publishError?.collection == collection ? publishError?.message : nil
+    }
+
+    /// What the author ticked in the sheet, for a collection that already publishes. The document
+    /// is rewritten if the change makes it say something different. nil on success.
+    public func updatePublishIntent(_ collection: String, intent: PublishIntent) -> String? {
+        guard var entry = collectionsFile.collections[collection], let record = entry.publish,
+              record.intent != intent else { return nil }
+        entry.publish = CollectionsFile.PublishRecord(slug: record.slug, origin: record.origin, intent: intent)
+        collectionsFile.collections[collection] = entry
+        persistStore()
+        return publishError?.collection == collection ? publishError?.message : nil
+    }
+
+    /// Stop Publishing: the record and this machine's binding go, and the document in the folder
+    /// stays unless the user asked for it too. The collection itself is untouched.
+    public func stopPublishing(_ collection: String, deleteFile: Bool) {
+        guard var entry = collectionsFile.collections[collection], let record = entry.publish else { return }
+        let folder = collectionsCache.published[collection]?.folder
+        entry.publish = nil
+        // An entry with nothing left to say is no entry at all, which is how the sidecar writes
+        // it and how the next load reads it back.
+        if entry == .local {
+            collectionsFile.collections.removeValue(forKey: collection)
+        } else {
+            collectionsFile.collections[collection] = entry
+        }
+        collectionsCache.published.removeValue(forKey: collection)
+        if publishError?.collection == collection { publishError = nil }
+        persistStore()
+        // After the save, so a failure here reaches the banner rather than being overwritten by it.
+        guard deleteFile, let folder else { return }
+        let target = URL(fileURLWithPath: folder).appendingPathComponent(record.slug + "." + CollectionDocument.fileExtension)
+        guard FileManager.default.fileExists(atPath: target.path) else { return }
+        do {
+            try FileManager.default.removeItem(at: target)
+        } catch {
+            lastError = AppState.friendly(error)
+        }
+    }
+
+    /// The document this collection travels as: every connector it holds, rendered through the
+    /// publish intent. The origin is the one publishing fixed, so an export of a published
+    /// collection is the same document the folder holds.
+    public func exportDocument(for collection: String, intent: PublishIntent) -> CollectionDocument {
+        CollectionDocument.export(
+            name: collection,
+            // No author setting exists yet; the field travels as absent rather than guessed at.
+            author: nil,
+            origin: collectionsFile.collections[collection]?.publish?.origin,
+            exported: IsoTimestamp.string(from: host.now()),
+            connectors: (store.collections[collection]?.mcps ?? [:]).mapValues(\.config),
+            intent: intent)
+    }
+
+    /// Export: the same document written once, wherever the user chose. nil on success.
+    public func writeExport(for collection: String, intent: PublishIntent, to path: String) -> String? {
+        do {
+            try AtomicFile.write(exportDocument(for: collection, intent: intent).serialized(),
+                                 to: URL(fileURLWithPath: path), staging: service.paths.stagingDirURL)
+            return nil
+        } catch {
+            return AppState.friendly(error)
+        }
+    }
+
+    /// Every collection this machine publishes, written when what it says has changed. Only the
+    /// bindings in this machine's cache: the sidecar travels with the master list, so another
+    /// machine's publish folder is recorded there but is that machine's to write.
+    func publishIfChanged() {
+        guard !collectionsCache.published.isEmpty else { return }
+        var cacheChanged = false
+        for collection in collectionsCache.published.keys.sorted() {
+            guard let binding = collectionsCache.published[collection],
+                  let record = collectionsFile.collections[collection]?.publish else { continue }
+            do {
+                let document = exportDocument(for: collection, intent: record.intent)
+                let hash = try AppState.publishHash(of: document)
+                guard hash != binding.lastWrittenHash else { continue }
+                let target = URL(fileURLWithPath: binding.folder)
+                    .appendingPathComponent(record.slug + "." + CollectionDocument.fileExtension)
+                try AtomicFile.write(document.serialized(), to: target, staging: service.paths.stagingDirURL)
+                collectionsCache.published[collection]?.lastWrittenHash = hash
+                cacheChanged = true
+                if publishError?.collection == collection { publishError = nil }
+            } catch {
+                // The recorded hash is left as it was, so the next change tries this write again.
+                publishError = (collection: collection, message: AppState.friendly(error))
+            }
+        }
+        // The cache save the write earned, through the same gate as every other one.
+        guard cacheChanged, collectionsLoaded else { return }
+        do {
+            try collectionsCache.save(to: service.paths.collectionsCacheURL, staging: service.paths.stagingDirURL)
+        } catch {
+            lastError = AppState.friendly(error)
+        }
+    }
+
+    /// What a document says, with the export stamp left out. The moment it was written is not
+    /// part of its content, and hashing it would rewrite the shared folder on every store change
+    /// — including the toggles that must never publish.
+    private static func publishHash(of document: CollectionDocument) throws -> String {
+        var identity = document
+        identity.exported = ""
+        return ContentHash.sha256(try identity.serialized())
+    }
+
+    /// `url` is `folder` itself or somewhere under it.
+    private static func isInside(_ url: URL, _ folder: URL) -> Bool {
+        let base = folder.standardizedFileURL.path
+        let path = url.standardizedFileURL.path
+        return path == base || path.hasPrefix(base + "/")
     }
 
     // MARK: - Collection banner

@@ -24,7 +24,7 @@
   "AppState.collectionUpdateNotificationBody": {
     "format": "{0} changed at its source: {1}. Review it in Connector Control."
   },
-  "AppState.collectionsNotSavedNote": "Collections could not be saved: the collections file is unreadable. Your change stays in memory until it can be read.",
+  "AppState.collectionsNotSavedNote": "Collections could not be saved: the collections file is unreadable. Your change is not on disk and will be lost when the file is read again.",
   "AppState.connectorListChangedBody.noRestart": "The connector list changed outside Connector Control — Claude's config was regenerated. Claude will use it the next time it starts.",
   "AppState.connectorListChangedBody.restart": "The connector list changed outside Connector Control — Claude's config was regenerated. Restart Claude to pick it up.",
   "AppState.defaultClaudeAppPath": {
@@ -54,6 +54,10 @@
   "AppState.newerDocumentError": "This collection was made by a newer Connector Control.",
   "AppState.noConnectorsSubtitle": "No connectors configured",
   "AppState.ownCollectionError": "This is your own published collection.",
+  "AppState.publishIntoStoreError": "Choose a folder other than the master list folder or its backups.",
+  "AppState.publishSlugTakenError": {
+    "format": "{0} already exists there and belongs to a different collection."
+  },
   "AppState.quitButton": "Quit",
   "AppState.quitMessage": "Quit Connector Control?",
   "AppState.regenerationFailedBody": "The connector configuration changed, but Claude's config could not be updated — open Connector Control to retry.",
@@ -208,6 +212,28 @@
   "PopoverModel.reviewAndApplyButton": "Review & Apply…",
   "PopoverModel.settingsTooltip": "Settings",
   "PopoverModel.title": "Connector Control",
+  "PublishModel.envSectionTitle": "Environment values · stripped unless shared",
+  "PublishModel.exportButton": "Export…",
+  "PublishModel.folderLine": {
+    "mac": {
+      "format": "writes {0} from this Mac on every change"
+    },
+    "win": {
+      "format": "writes {0} from this PC on every change"
+    }
+  },
+  "PublishModel.hintPlaceholder": "hint for recipients",
+  "PublishModel.pathNamePlaceholder": "placeholder name",
+  "PublishModel.pathsSectionTitle": "Machine-specific paths · found in arguments",
+  "PublishModel.previewTitle": "Document preview",
+  "PublishModel.publishButton": "Publish",
+  "PublishModel.shareValueLabel": "share value",
+  "PublishModel.title": {
+    "format": "Publish “{0}”"
+  },
+  "PublishModel.warningLine": {
+    "format": "{0}: {1}"
+  },
   "RemoteAuthKind.automatic.title": "Automatic (OAuth / none)",
   "RemoteAuthKind.bearer.title": "Bearer token",
   "RemoteAuthKind.header.title": "Custom header",

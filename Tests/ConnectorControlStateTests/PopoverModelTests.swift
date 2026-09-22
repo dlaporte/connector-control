@@ -115,7 +115,11 @@ final class PopoverModelTests: XCTestCase {
             "Default": CollectionsFile.Entry(
                 kind: .local, publish: CollectionsFile.PublishRecord(slug: "default", origin: "origin", intent: .none)),
         ]).save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
-        try CollectionsLocalCache(synced: [:], published: ["Default": .init(folder: "/Acme/mcp", lastWrittenHash: nil)])
+        // A folder that exists and can be written: a binding pointing at one that cannot would
+        // raise a real publish failure on the reload below, ahead of the banner under test.
+        let folder = h.dir.file("pub")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try CollectionsLocalCache(synced: [:], published: ["Default": .init(folder: folder.path, lastWrittenHash: nil)])
             .save(to: state.service.paths.collectionsCacheURL, staging: nil)
         state.reload()
         let popover = PopoverModel(state: state)
@@ -131,7 +135,8 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(popover.collectionBannerButton, "Review & Apply…")
 
         state.publishError = (collection: "Default", message: "the folder is read-only")
-        XCTAssertEqual(popover.collectionBannerText, "Couldn’t publish Default to /Acme/mcp: the folder is read-only")
+        XCTAssertEqual(popover.collectionBannerText,
+                       "Couldn’t publish Default to \(folder.path): the folder is read-only")
         XCTAssertEqual(popover.collectionBannerButton, "Choose Folder…")
 
         state.publishError = nil

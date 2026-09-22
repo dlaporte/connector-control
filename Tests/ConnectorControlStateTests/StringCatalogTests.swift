@@ -76,6 +76,7 @@ final class StringCatalogTests: XCTestCase {
         "AppState.enabledSubtitle": ["3", "7"],
         "AppState.malformedConfigMessage": ["X"],
         "AppState.needsValueCaution": ["X"],
+        "AppState.publishSlugTakenError": ["X"],
         "AppState.sourceUnreadableError": ["X", "Y"],
         "ClaudeSignature.notFoundMessage": ["X"],
         "ClaudeSignature.refusalMessage": ["X", "Y"],
@@ -94,6 +95,9 @@ final class StringCatalogTests: XCTestCase {
         "MasterStore.unknownCollectionError": ["X"],
         "PopoverModel.collectionChipText": ["X"],
         "PopoverModel.locateButton": ["X"],
+        "PublishModel.folderLine": ["X"],
+        "PublishModel.title": ["X"],
+        "PublishModel.warningLine": ["X", "Y"],
         "RestoreModel.confirmMessage": ["X"],
         "ReviewModel.title": ["X"],
         "SettingsModel.keepCountLabel": ["3"],
@@ -136,6 +140,8 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.newerDocumentError"] = AppState.newerDocumentError
         actual["AppState.noConnectorsSubtitle"] = AppState.noConnectorsSubtitle
         actual["AppState.ownCollectionError"] = AppState.ownCollectionError
+        actual["AppState.publishIntoStoreError"] = AppState.publishIntoStoreError
+        actual["AppState.publishSlugTakenError"] = AppState.publishSlugTakenError("X")
         actual["AppState.quitButton"] = AppState.quitButton
         actual["AppState.quitMessage"] = AppState.quitMessage
         actual["AppState.regenerationFailedBody"] = AppState.regenerationFailedBody
@@ -251,6 +257,20 @@ final class StringCatalogTests: XCTestCase {
         actual["PopoverModel.reviewAndApplyButton"] = PopoverModel.reviewAndApplyButton
         actual["PopoverModel.settingsTooltip"] = PopoverModel.settingsTooltip
         actual["PopoverModel.title"] = PopoverModel.title
+
+        // MARK: PublishModel
+
+        actual["PublishModel.envSectionTitle"] = PublishModel.envSectionTitle
+        actual["PublishModel.exportButton"] = PublishModel.exportButton
+        actual["PublishModel.folderLine"] = PublishModel.folderLine("X")
+        actual["PublishModel.hintPlaceholder"] = PublishModel.hintPlaceholder
+        actual["PublishModel.pathNamePlaceholder"] = PublishModel.pathNamePlaceholder
+        actual["PublishModel.pathsSectionTitle"] = PublishModel.pathsSectionTitle
+        actual["PublishModel.previewTitle"] = PublishModel.previewTitle
+        actual["PublishModel.publishButton"] = PublishModel.publishButton
+        actual["PublishModel.shareValueLabel"] = PublishModel.shareValueLabel
+        actual["PublishModel.title"] = PublishModel.title("X")
+        actual["PublishModel.warningLine"] = PublishModel.warningLine("X", "Y")
 
         // MARK: RemoteAuthKind
 

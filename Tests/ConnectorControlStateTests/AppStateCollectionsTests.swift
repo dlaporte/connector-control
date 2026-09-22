@@ -802,4 +802,217 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.kind(of: "Team"), .synced)
         XCTAssertEqual(state.sourceBinding(of: "Team")?.path, "/shared/team.json")
     }
+
+    // MARK: - Publishing and export
+
+    /// A folder to publish into, created so the guards read a real directory rather than a path.
+    private func publishFolder(_ h: AppStateHarness, _ name: String = "pub") throws -> URL {
+        let url = h.dir.file(name)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    /// A local connector with two environment values and an absolute path argument — what the
+    /// Publish sheet's rows are built from, and what the intent strips or shares.
+    private var ledgerConfig: JSONValue {
+        .object([
+            "command": .string("node"),
+            "args": .array([.string("/Users/d/ledger/dist/index.js")]),
+            "env": .object(["A": .string("sk-live-secret"), "B": .string("us")]),
+        ])
+    }
+
+    private func newConnector(_ name: String) -> MCPEntry {
+        MCPEntry(config: .object(["command": .string(name)]))
+    }
+
+    func testStartPublishingWritesTheDocumentAndRepublishesOnlyWhenTheContentChanges() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        let file = folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json")
+        let first = try Data(contentsOf: file)
+        XCTAssertTrue(state.isPublished(state.activeCollection))
+        XCTAssertEqual(state.collectionsCache.published[state.activeCollection]?.folder, folder.path)
+
+        // The clock moves between the two saves. What decides a rewrite is what the document
+        // says, never when it was written, or every toggle would publish.
+        h.now = h.now.addingTimeInterval(60)
+        state.setEnabled("aws-mcp", false)
+        XCTAssertEqual(try Data(contentsOf: file), first, "toggles never change the document")
+
+        XCTAssertNil(state.upsert(name: "new", entry: newConnector("x"), renamedFrom: nil))
+        let second = try Data(contentsOf: file)
+        XCTAssertNotEqual(second, first)
+        let document = try CollectionDocument.decode(second)
+        XCTAssertNotNil(document.origin)
+        XCTAssertEqual(document.name, state.activeCollection)
+        XCTAssertEqual(document.exported, IsoTimestamp.string(from: h.now))
+        XCTAssertNil(document.connectors["new"]?.env.keys.first, "a disabled connector still travels")
+        XCTAssertNil(state.publishError)
+    }
+
+    func testPublishGuards() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertEqual(state.startPublishing(state.activeCollection, to: h.storeDir.path, intent: .none),
+                       AppState.publishIntoStoreError)
+        XCTAssertEqual(state.startPublishing(state.activeCollection, to: h.backupsDir.appendingPathComponent("2026").path,
+                                             intent: .none),
+                       AppState.publishIntoStoreError, "a folder inside the backups folder is the backups folder")
+
+        let folder = try publishFolder(h)
+        let fileName = Slug.make(state.activeCollection) + ".json"
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: folder.appendingPathComponent(fileName))
+        XCTAssertEqual(state.startPublishing(state.activeCollection, to: folder.path, intent: .none),
+                       AppState.publishSlugTakenError(fileName))
+        XCTAssertFalse(state.isPublished(state.activeCollection), "a refused publish records nothing")
+    }
+
+    func testPublishingAgainIntoTheFolderItAlreadyOwnsIsAllowed() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        // The document sitting there carries this collection's own origin, which is the whole
+        // point of the guard: only somebody else's file is in the way.
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+    }
+
+    func testPublishingIsRefusedWhileTheCollectionFileCannotBeRead() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishFolder(h)
+        try TempDir.touch(h.storeDir.appendingPathComponent(CollectionsFile.fileName), "{half")
+        state.reload()
+        XCTAssertEqual(state.startPublishing(state.activeCollection, to: folder.path, intent: .none),
+                       AppState.collectionsNotSavedNote, "a publish record that cannot be saved must not be created")
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json").path))
+        XCTAssertFalse(state.isPublished(state.activeCollection))
+    }
+
+    func testAPublishFailureRaisesTheBannerAndClearsOnSuccess() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        let file = folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+
+        // A file where the folder belongs fails the write on both platforms and needs no
+        // permission games. Deleting the folder would not: the writer creates it again.
+        try FileManager.default.removeItem(at: folder)
+        try TempDir.touch(folder, "not a folder")
+        XCTAssertNil(state.upsert(name: "new", entry: newConnector("x"), renamedFrom: nil))
+        XCTAssertEqual(state.publishError?.collection, state.activeCollection)
+        guard case .publishFailed(let collection, _)? = state.collectionBanner else {
+            return XCTFail("a failed publish outranks every other banner")
+        }
+        XCTAssertEqual(collection, state.activeCollection)
+
+        try FileManager.default.removeItem(at: folder)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        XCTAssertNil(state.upsert(name: "another", entry: newConnector("y"), renamedFrom: nil))
+        XCTAssertNil(state.publishError, "a write that succeeds clears the mark")
+        let document = try CollectionDocument.decode(try Data(contentsOf: file))
+        XCTAssertNotNil(document.connectors["new"], "the change the failed write held back still lands")
+        XCTAssertNotNil(document.connectors["another"])
+    }
+
+    func testExportStripsSecretsAndPublishedDocumentsStripThemToo() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: ledgerConfig), renamedFrom: nil))
+        let intent = PublishIntent(shareValues: ["ledger": ["B"]], pathMarks: [:],
+                                   hints: ["ledger": ["A": "your ledger token"]])
+
+        let exported = h.dir.file("out/ledger.json")
+        XCTAssertNil(state.writeExport(for: state.activeCollection, intent: intent, to: exported.path))
+        let exportedBytes = try Data(contentsOf: exported)
+        let document = try CollectionDocument.decode(exportedBytes)
+        XCTAssertEqual(document.connectors["ledger"]?.env["A"], .hint("your ledger token"),
+                       "an unshared value travels as its hint")
+        XCTAssertEqual(document.connectors["ledger"]?.env["B"], .value("us"))
+        XCTAssertFalse(try XCTUnwrap(String(data: exportedBytes, encoding: .utf8)).contains("sk-live-secret"))
+        XCTAssertNil(document.origin, "nothing published, nothing to identify it by")
+
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: intent))
+        let published = try Data(contentsOf: folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json"))
+        XCTAssertFalse(try XCTUnwrap(String(data: published, encoding: .utf8)).contains("sk-live-secret"))
+        XCTAssertEqual(try CollectionDocument.decode(published).connectors["ledger"]?.env["B"], .value("us"))
+    }
+
+    func testChangingWhatIsSharedRewritesTheDocument() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: ledgerConfig), renamedFrom: nil))
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        let file = folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json")
+        XCTAssertEqual(try CollectionDocument.decode(try Data(contentsOf: file)).connectors["ledger"]?.env["B"], .hint(nil))
+
+        XCTAssertNil(state.updatePublishIntent(state.activeCollection,
+                                               intent: PublishIntent(shareValues: ["ledger": ["B"]], pathMarks: [:], hints: [:])))
+        XCTAssertEqual(try CollectionDocument.decode(try Data(contentsOf: file)).connectors["ledger"]?.env["B"], .value("us"))
+        XCTAssertEqual(state.collectionsFile.collections[state.activeCollection]?.publish?.intent.shareValues,
+                       ["ledger": ["B"]], "what was ticked is remembered for the next write")
+    }
+
+    func testStopPublishingDropsTheRecordAndCanDeleteTheFile() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishFolder(h)
+        let fileName = Slug.make(state.activeCollection) + ".json"
+        let file = folder.appendingPathComponent(fileName)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+
+        state.stopPublishing(state.activeCollection, deleteFile: false)
+        XCTAssertFalse(state.isPublished(state.activeCollection))
+        XCTAssertTrue(state.collectionsCache.published.isEmpty)
+        let left = try Data(contentsOf: file)
+        XCTAssertNil(state.upsert(name: "new", entry: newConnector("x"), renamedFrom: nil))
+        XCTAssertEqual(try Data(contentsOf: file), left, "nothing is published once it has stopped")
+
+        // The collection no longer holds the origin that vouched for the document left behind,
+        // so publishing here again is refused exactly as somebody else's file would be. That is
+        // why Stop Publishing offers to delete it.
+        XCTAssertEqual(state.startPublishing(state.activeCollection, to: folder.path, intent: .none),
+                       AppState.publishSlugTakenError(fileName))
+
+        let second = try publishFolder(h, "pub2")
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: second.path, intent: .none))
+        state.stopPublishing(state.activeCollection, deleteFile: true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: second.appendingPathComponent(fileName).path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path),
+                      "only the folder it was publishing to is touched")
+    }
+
+    func testAChangeThatArrivesFromAnotherMachineIsPublishedOnTheNextLoad() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        let file = folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json")
+
+        // The author's other machine added a connector to the shared master list.
+        var store = try h.storeOnDisk()
+        store.collections[store.activeCollection]?.mcps["elsewhere"] = newConnector("z")
+        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        state.reload(trigger: .externalStoreAdoption)
+        XCTAssertNotNil(try CollectionDocument.decode(try Data(contentsOf: file)).connectors["elsewhere"],
+                        "the publishing machine carries another machine's change to the team")
+    }
+
+    func testSubscribingToWhatThisMachinePublishesIsRefused() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        let file = folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json")
+        XCTAssertEqual(state.subscribe(documentAt: file.path, as: "Copy"), AppState.ownCollectionError)
+        XCTAssertEqual(state.collectionNames, ["Default"])
+    }
 }

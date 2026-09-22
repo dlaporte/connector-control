@@ -115,8 +115,12 @@ public class FlyoutModelTests
             Sidecar("Default", new CollectionsFile.Entry(
                 CollectionKind.Local, publish: new CollectionsFile.PublishRecord("default", "origin", PublishIntent.None))),
         ]).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        // A folder that exists and can be written: a binding pointing at one that cannot would
+        // raise a real publish failure on the reload below, ahead of the banner under test.
+        var folder = h.Dir.File("pub");
+        Directory.CreateDirectory(folder);
         new CollectionsLocalCache([], [new KeyValuePair<string, CollectionsLocalCache.PublishBinding>(
-            "Default", new CollectionsLocalCache.PublishBinding("/Acme/mcp", null))])
+            "Default", new CollectionsLocalCache.PublishBinding(folder, null))])
             .Save(state.Service.Paths.CollectionsCachePath);
         state.Reload();
         using var flyout = new FlyoutModel(state, h.Settings);
@@ -134,7 +138,7 @@ public class FlyoutModelTests
         Assert.Equal("Review & Apply…", flyout.CollectionBannerButton);
 
         state.PublishError = new CollectionPublishError("Default", "the folder is read-only");
-        Assert.Equal("Couldn’t publish Default to /Acme/mcp: the folder is read-only", flyout.CollectionBannerText);
+        Assert.Equal($"Couldn’t publish Default to {folder}: the folder is read-only", flyout.CollectionBannerText);
         Assert.Equal("Choose Folder…", flyout.CollectionBannerButton);
 
         state.PublishError = null;

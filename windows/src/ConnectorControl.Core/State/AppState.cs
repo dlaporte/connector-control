@@ -32,7 +32,8 @@ public sealed class AppState : ObservableObject, IDisposable
     public const string LocateCaution = "Locate the collection file to resolve paths.";
     public const string OwnCollectionError = "This is your own published collection.";
     public const string NewerDocumentError = "This collection was made by a newer Connector Control.";
-    public const string CollectionsNotSavedNote = "Collections could not be saved: the collections file is unreadable. Your change stays in memory until it can be read.";
+    public const string PublishIntoStoreError = "Choose a folder other than the master list folder or its backups.";
+    public const string CollectionsNotSavedNote = "Collections could not be saved: the collections file is unreadable. Your change is not on disk and will be lost when the file is read again.";
     /// <summary>The platform named here is the platform-forced half: the caution names the OTHER one, so a PC flags a Mac-authored connector and the Mac mirror says "authored on Windows".</summary>
     public const string AuthoredElsewhereCaution = "authored on macOS";
     public static string DuplicateNameError(string name) => $"A connector named “{name}” already exists.";
@@ -46,6 +47,7 @@ public sealed class AppState : ObservableObject, IDisposable
     public static string CollectionPublishFailedBanner(string collection, string folder, string reason) => $"Couldn\u2019t publish {collection} to {folder}: {reason}";
     public static string CollectionUpdateNotificationBody(string collection, string summary) => $"{collection} changed at its source: {summary}. Review it in Connector Control.";
     public static string SourceUnreadableError(string fileName, string detail) => $"{fileName} couldn\u2019t be read: {detail}";
+    public static string PublishSlugTakenError(string fileName) => $"{fileName} already exists there and belongs to a different collection.";
     /// <summary>Claude's launch time is re-read 3 s after the restart completes.</summary>
     public static readonly TimeSpan RestartRecheckDelay = TimeSpan.FromSeconds(3);
     /// <summary>
@@ -642,6 +644,9 @@ public sealed class AppState : ObservableObject, IDisposable
                 // escape this handler and turn a friendly banner into an unhandled exception.
             }
         }
+        // What this machine publishes follows the store it has just loaded: a change made on the
+        // author's other machine arrives as a store change and reaches the team from here.
+        PublishIfChanged();
         // Only when arming previously failed — the parent directory did not exist, or
         // FileWatcher.HandleError disarmed itself because the directory was deleted.
         // Never a blanket re-arm: a flyout open reloads, and tearing two
@@ -733,14 +738,11 @@ public sealed class AppState : ObservableObject, IDisposable
         // Every binding change reaches disk through here: subscribe, locate, stop syncing,
         // rename and delete all end in a save, so this is where the watchers follow them.
         ArmSourceWatchers();
+        // Publishing is derived from the store on every store change, never from a save event:
+        // the store has just changed, so what the team reads may have to change with it.
+        PublishIfChanged();
     }
 
-    /// <summary>
-    /// The sidecar only when it would differ: every connector change persists the store, and most
-    /// of them say nothing new about collections. Rewriting the same bytes would rotate a backup
-    /// and churn a file that travels through someone's sync tool for nothing. Returns whether the
-    /// bytes on disk are owner-only — true when there was nothing to write.
-    /// </summary>
     /// <summary>The sidecar's bytes as they are on disk, or null when it is not there to read.</summary>
     private string? ReadSidecarHash()
     {
@@ -754,6 +756,12 @@ public sealed class AppState : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// The sidecar only when it would differ: every connector change persists the store, and most
+    /// of them say nothing new about collections. Rewriting the same bytes would rotate a backup
+    /// and churn a file that travels through someone's sync tool for nothing. Returns whether the
+    /// bytes on disk are owner-only — true when there was nothing to write.
+    /// </summary>
     private bool SaveCollectionsIfChanged()
     {
         var hash = ContentHash.Sha256(CollectionsFile.Encode().Serialize());
@@ -1068,6 +1076,13 @@ public sealed class AppState : ObservableObject, IDisposable
         CollectionsCache = new CollectionsLocalCache(
             binding is null ? Without(CollectionsCache.Synced, collection) : With(CollectionsCache.Synced, collection, binding),
             CollectionsCache.Published);
+
+    private void SetPublishBinding(string collection, CollectionsLocalCache.PublishBinding? binding) =>
+        CollectionsCache = new CollectionsLocalCache(
+            CollectionsCache.Synced,
+            binding is null
+                ? Without(CollectionsCache.Published, collection)
+                : With(CollectionsCache.Published, collection, binding));
 
     private static Dictionary<string, TValue> With<TValue>(IReadOnlyDictionary<string, TValue> source, string name, TValue value)
     {
@@ -1500,6 +1515,246 @@ public sealed class AppState : ObservableObject, IDisposable
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, CollectionsFile.Need>> EmptyNeedsByConnector =
         new Dictionary<string, IReadOnlyDictionary<string, CollectionsFile.Need>>(StringComparer.Ordinal);
+
+    // MARK: publishing and export
+
+    /// <summary>
+    /// Starts publishing a local collection into <paramref name="folder"/>, or re-points one that
+    /// already publishes (the failed-write banner's Choose Folder…). The slug and the origin are
+    /// fixed the first time and never re-derived, so renaming the collection cannot orphan the
+    /// document the team already subscribed to. The document is written before this returns.
+    /// null on success, else the message to show.
+    /// </summary>
+    public string? StartPublishing(string collection, string folder, PublishIntent intent)
+    {
+        // A synced collection has an author elsewhere, and a name that is not a collection has
+        // nothing to publish. Nothing offers either, so both get the silence LocateSource gives a
+        // collection that is not synced.
+        if (!Store.Collections.ContainsKey(collection) || IsSynced(collection))
+        {
+            return null;
+        }
+        // A record the next save cannot write would leave a document in a shared folder that
+        // nothing here remembers publishing. It waits for a sidecar that can be read.
+        if (!collectionsLoaded)
+        {
+            return CollectionsNotSavedNote;
+        }
+        var full = Path.GetFullPath(folder);
+        // The master list's own folder is synced to every machine the user owns, and the backups
+        // folder is rotated; a document in either would be swept up by machinery that is not
+        // about publishing at all.
+        if (IsInside(full, Service.Paths.StoreDir) || IsInside(full, Service.Paths.BackupsDir))
+        {
+            return PublishIntoStoreError;
+        }
+        var entry = CollectionsFile.Collections.GetValueOrDefault(collection) ?? CollectionsFile.Entry.Local;
+        var slug = entry.Publish?.Slug ?? Slug.Make(collection);
+        var origin = entry.Publish?.Origin ?? Guid.NewGuid().ToString("D").ToLowerInvariant();
+        var fileName = slug + "." + CollectionDocument.FileExtension;
+        var target = Path.Combine(full, fileName);
+        // Somebody else's document under the name this one would take: publishing over it would
+        // replace what their subscribers follow. A file that cannot be decoded counts too — it
+        // has no origin to vouch for it.
+        if (File.Exists(target) && ReadOrigin(target) != origin)
+        {
+            return PublishSlugTakenError(fileName);
+        }
+        SetSidecarEntry(collection, new CollectionsFile.Entry(
+            entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs,
+            new CollectionsFile.PublishRecord(slug, origin, intent), entry.Provenance));
+        var previous = CollectionsCache.Published.GetValueOrDefault(collection);
+        SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(
+            full,
+            // A new folder has nothing in it this app wrote, so the next write is unconditional.
+            string.Equals(previous?.Folder, full, StringComparison.Ordinal) ? previous?.LastWrittenHash : null));
+        // PersistStore ends in PublishIfChanged, which is what writes the document.
+        PersistStore();
+        RaiseAll();
+        return PublishError?.Collection == collection ? PublishError.Message : null;
+    }
+
+    /// <summary>
+    /// What the author ticked in the sheet, for a collection that already publishes. The document
+    /// is rewritten if the change makes it say something different. null on success.
+    /// </summary>
+    public string? UpdatePublishIntent(string collection, PublishIntent intent)
+    {
+        if (CollectionsFile.Collections.GetValueOrDefault(collection) is not { Publish: { } record } entry
+            || record.Intent.Equals(intent))
+        {
+            return null;
+        }
+        SetSidecarEntry(collection, new CollectionsFile.Entry(
+            entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs,
+            new CollectionsFile.PublishRecord(record.Slug, record.Origin, intent), entry.Provenance));
+        PersistStore();
+        RaiseAll();
+        return PublishError?.Collection == collection ? PublishError.Message : null;
+    }
+
+    /// <summary>
+    /// Stop Publishing: the record and this machine's binding go, and the document in the folder
+    /// stays unless the user asked for it too. The collection itself is untouched.
+    /// </summary>
+    public void StopPublishing(string collection, bool deleteFile)
+    {
+        if (CollectionsFile.Collections.GetValueOrDefault(collection) is not { Publish: { } record } entry)
+        {
+            return;
+        }
+        var folder = CollectionsCache.Published.GetValueOrDefault(collection)?.Folder;
+        var stripped = new CollectionsFile.Entry(entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin,
+                                                 entry.Needs, null, entry.Provenance);
+        // An entry with nothing left to say is no entry at all, which is how the sidecar writes it
+        // and how the next load reads it back.
+        SetSidecarEntry(collection, stripped.Equals(CollectionsFile.Entry.Local) ? null : stripped);
+        SetPublishBinding(collection, null);
+        if (PublishError?.Collection == collection)
+        {
+            PublishError = null;
+        }
+        PersistStore();
+        // After the save, so a failure here reaches the banner rather than being overwritten by it.
+        if (deleteFile && folder is not null)
+        {
+            var target = Path.Combine(folder, record.Slug + "." + CollectionDocument.FileExtension);
+            try
+            {
+                if (File.Exists(target))
+                {
+                    File.Delete(target);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                LastError = Friendly(ex);
+            }
+        }
+        RaiseAll();
+    }
+
+    /// <summary>
+    /// The document this collection travels as: every connector it holds, rendered through the
+    /// publish intent. The origin is the one publishing fixed, so an export of a published
+    /// collection is the same document the folder holds.
+    /// </summary>
+    public CollectionDocument ExportDocument(string collection, PublishIntent intent)
+    {
+        var connectors = Store.Collections.TryGetValue(collection, out var held)
+            ? held.Mcps.ToDictionary(pair => pair.Key, pair => pair.Value.Config, StringComparer.Ordinal)
+            : new Dictionary<string, JsonValue>(StringComparer.Ordinal);
+        return CollectionDocument.Export(
+            collection,
+            // No author setting exists yet; the field travels as absent rather than guessed at.
+            author: null,
+            CollectionsFile.Collections.GetValueOrDefault(collection)?.Publish?.Origin,
+            IsoTimestamp.String(host.Now()),
+            connectors,
+            intent);
+    }
+
+    /// <summary>Export: the same document written once, wherever the user chose. null on success.</summary>
+    public string? WriteExport(string collection, PublishIntent intent, string path)
+    {
+        try
+        {
+            AtomicFile.Write(ExportDocument(collection, intent).Serialize(), path);
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return Friendly(ex);
+        }
+    }
+
+    /// <summary>
+    /// Every collection this machine publishes, written when what it says has changed. Only the
+    /// bindings in this machine's cache: the sidecar travels with the master list, so another
+    /// machine's publish folder is recorded there but is that machine's to write.
+    /// </summary>
+    internal void PublishIfChanged()
+    {
+        if (CollectionsCache.Published.Count == 0)
+        {
+            return;
+        }
+        var cacheChanged = false;
+        foreach (var collection in CollectionsCache.Published.Keys.Order(StringComparer.Ordinal).ToList())
+        {
+            if (CollectionsCache.Published.GetValueOrDefault(collection) is not { } binding
+                || CollectionsFile.Collections.GetValueOrDefault(collection)?.Publish is not { } record)
+            {
+                continue;
+            }
+            try
+            {
+                var document = ExportDocument(collection, record.Intent);
+                var hash = PublishHash(document);
+                if (hash == binding.LastWrittenHash)
+                {
+                    continue;
+                }
+                var target = Path.Combine(binding.Folder, record.Slug + "." + CollectionDocument.FileExtension);
+                AtomicFile.Write(document.Serialize(), target);
+                SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(binding.Folder, hash));
+                cacheChanged = true;
+                if (PublishError?.Collection == collection)
+                {
+                    PublishError = null;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                // The recorded hash is left as it was, so the next change tries this write again.
+                PublishError = new CollectionPublishError(collection, Friendly(ex));
+            }
+        }
+        // The cache save the write earned, through the same gate as every other one.
+        if (!cacheChanged || !collectionsLoaded)
+        {
+            return;
+        }
+        try
+        {
+            CollectionsCache.Save(Service.Paths.CollectionsCachePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LastError = Friendly(ex);
+        }
+    }
+
+    /// <summary>
+    /// What a document says, with the export stamp left out. The moment it was written is not part
+    /// of its content, and hashing it would rewrite the shared folder on every store change —
+    /// including the toggles that must never publish.
+    /// </summary>
+    private static string PublishHash(CollectionDocument document) =>
+        ContentHash.Sha256(new CollectionDocument(
+            document.Name, document.Author, document.Origin, string.Empty, document.Connectors).Serialize());
+
+    /// <summary>The origin of the document at <paramref name="path"/>, or null when there is nothing readable there to vouch for it.</summary>
+    private static string? ReadOrigin(string path)
+    {
+        try
+        {
+            return CollectionDocument.Decode(File.ReadAllBytes(path)).Origin;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                                   or NotSupportedException or CollectionDocumentException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary><paramref name="path"/> is <paramref name="folder"/> itself or somewhere under it.</summary>
+    private static bool IsInside(string path, string folder)
+    {
+        var relative = Path.GetRelativePath(folder, path);
+        return relative == "."
+            || (!Path.IsPathRooted(relative) && !relative.StartsWith("..", StringComparison.Ordinal) && relative != path);
+    }
 
     // MARK: collection banner
 

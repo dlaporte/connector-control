@@ -924,4 +924,246 @@ public class AppStateCollectionsTests
         Assert.Equal(CollectionKind.Synced, state.KindOf("Team"));
         Assert.Equal("/shared/team.json", state.SourceBinding("Team")?.Path);
     }
+
+    // MARK: publishing and export
+
+    /// <summary>A folder to publish into, created so the guards read a real directory rather than a path.</summary>
+    private static string PublishFolder(AppStateHarness h, string name = "pub")
+    {
+        var path = h.Dir.File(name);
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    /// <summary>A local connector with two environment values and an absolute path argument — what
+    /// the Publish sheet's rows are built from, and what the intent strips or shares.</summary>
+    private static JsonValue LedgerConfig() => JsonValue.Object(new Dictionary<string, JsonValue>(StringComparer.Ordinal)
+    {
+        ["command"] = JsonValue.String("node"),
+        ["args"] = JsonValue.Array([JsonValue.String("/Users/d/ledger/dist/index.js")]),
+        ["env"] = JsonValue.Object(new Dictionary<string, JsonValue>(StringComparer.Ordinal)
+        {
+            ["A"] = JsonValue.String("sk-live-secret"),
+            ["B"] = JsonValue.String("us"),
+        }),
+    });
+
+    private static McpEntry NewConnector(string name) =>
+        new(true, JsonValue.Object(new Dictionary<string, JsonValue>(StringComparer.Ordinal)
+        {
+            ["command"] = JsonValue.String(name),
+        }));
+
+    [Fact]
+    public void StartPublishingWritesTheDocumentAndRepublishesOnlyWhenTheContentChanges()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var file = Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
+        var first = File.ReadAllBytes(file);
+        Assert.True(state.IsPublished(state.ActiveCollection));
+        Assert.Equal(folder, state.CollectionsCache.Published[state.ActiveCollection].Folder);
+
+        // The clock moves between the two saves. What decides a rewrite is what the document says,
+        // never when it was written, or every toggle would publish.
+        h.Now = h.Now.AddSeconds(60);
+        state.SetEnabled("aws-mcp", false);
+        Assert.Equal(first, File.ReadAllBytes(file));   // toggles never change the document
+
+        Assert.Null(state.Upsert("new", NewConnector("x"), null));
+        var second = File.ReadAllBytes(file);
+        Assert.NotEqual(first, second);
+        var document = CollectionDocument.Decode(second);
+        Assert.NotNull(document.Origin);
+        Assert.Equal(state.ActiveCollection, document.Name);
+        Assert.Equal(IsoTimestamp.String(h.Now), document.Exported);
+        Assert.Contains("new", document.Connectors.Keys);   // a disabled connector still travels
+        Assert.Null(state.PublishError);
+    }
+
+    [Fact]
+    public void PublishGuards()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Equal(AppState.PublishIntoStoreError,
+            state.StartPublishing(state.ActiveCollection, h.StoreDir, PublishIntent.None));
+        // A folder inside the backups folder is the backups folder.
+        Assert.Equal(AppState.PublishIntoStoreError,
+            state.StartPublishing(state.ActiveCollection, Path.Combine(h.BackupsDir, "2026"), PublishIntent.None));
+
+        var folder = PublishFolder(h);
+        var fileName = Slug.Make(state.ActiveCollection) + ".json";
+        WriteDocument(CollectionDocumentSamples.DataTeam, Path.Combine(folder, fileName));
+        Assert.Equal(AppState.PublishSlugTakenError(fileName),
+            state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        Assert.False(state.IsPublished(state.ActiveCollection));   // a refused publish records nothing
+    }
+
+    [Fact]
+    public void PublishingAgainIntoTheFolderItAlreadyOwnsIsAllowed()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        // The document sitting there carries this collection's own origin, which is the whole
+        // point of the guard: only somebody else's file is in the way.
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+    }
+
+    [Fact]
+    public void PublishingIsRefusedWhileTheCollectionFileCannotBeRead()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        TempDir.Touch(Path.Combine(h.StoreDir, CollectionsFile.FileName), "{half");
+        state.Reload();
+        // A publish record that cannot be saved must not be created.
+        Assert.Equal(AppState.CollectionsNotSavedNote,
+            state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        Assert.False(File.Exists(Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json")));
+        Assert.False(state.IsPublished(state.ActiveCollection));
+    }
+
+    [Fact]
+    public void APublishFailureRaisesTheBannerAndClearsOnSuccess()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var file = Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
+        Assert.True(File.Exists(file));
+
+        // A file where the folder belongs fails the write on both platforms and needs no
+        // permission games. Deleting the folder would not: the writer creates it again.
+        Directory.Delete(folder, recursive: true);
+        TempDir.Touch(folder, "not a folder");
+        Assert.Null(state.Upsert("new", NewConnector("x"), null));
+        Assert.Equal(state.ActiveCollection, state.PublishError?.Collection);
+        var banner = Assert.IsType<CollectionBanner.PublishFailed>(state.CollectionBanner);
+        Assert.Equal(state.ActiveCollection, banner.Collection);
+
+        File.Delete(folder);
+        Directory.CreateDirectory(folder);
+        Assert.Null(state.Upsert("another", NewConnector("y"), null));
+        Assert.Null(state.PublishError);   // a write that succeeds clears the mark
+        var document = CollectionDocument.Decode(File.ReadAllBytes(file));
+        // The change the failed write held back still lands.
+        Assert.Contains("new", document.Connectors.Keys);
+        Assert.Contains("another", document.Connectors.Keys);
+    }
+
+    [Fact]
+    public void ExportStripsSecretsAndPublishedDocumentsStripThemToo()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.Upsert("ledger", new McpEntry(true, LedgerConfig()), null));
+        var intent = new PublishIntent(
+            [new("ledger", new HashSet<string>(StringComparer.Ordinal) { "B" })],
+            [],
+            [new("ledger", new Dictionary<string, string>(StringComparer.Ordinal) { ["A"] = "your ledger token" })]);
+
+        var exported = h.Dir.File("out/ledger.json");
+        Assert.Null(state.WriteExport(state.ActiveCollection, intent, exported));
+        var exportedBytes = File.ReadAllBytes(exported);
+        var document = CollectionDocument.Decode(exportedBytes);
+        // An unshared value travels as its hint.
+        Assert.Equal(new CollectionDocument.EnvValue.Hint("your ledger token"), document.Connectors["ledger"].Env["A"]);
+        Assert.Equal(new CollectionDocument.EnvValue.Value("us"), document.Connectors["ledger"].Env["B"]);
+        Assert.DoesNotContain("sk-live-secret", Encoding.UTF8.GetString(exportedBytes), StringComparison.Ordinal);
+        Assert.Null(document.Origin);   // nothing published, nothing to identify it by
+
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, intent));
+        var published = File.ReadAllBytes(Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json"));
+        Assert.DoesNotContain("sk-live-secret", Encoding.UTF8.GetString(published), StringComparison.Ordinal);
+        Assert.Equal(new CollectionDocument.EnvValue.Value("us"),
+            CollectionDocument.Decode(published).Connectors["ledger"].Env["B"]);
+    }
+
+    [Fact]
+    public void ChangingWhatIsSharedRewritesTheDocument()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.Upsert("ledger", new McpEntry(true, LedgerConfig()), null));
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var file = Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
+        Assert.Equal(new CollectionDocument.EnvValue.Hint(null),
+            CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors["ledger"].Env["B"]);
+
+        var shared = new PublishIntent([new("ledger", new HashSet<string>(StringComparer.Ordinal) { "B" })], [], []);
+        Assert.Null(state.UpdatePublishIntent(state.ActiveCollection, shared));
+        Assert.Equal(new CollectionDocument.EnvValue.Value("us"),
+            CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors["ledger"].Env["B"]);
+        // What was ticked is remembered for the next write.
+        Assert.Equal(shared, state.CollectionsFile.Collections[state.ActiveCollection].Publish?.Intent);
+    }
+
+    [Fact]
+    public void StopPublishingDropsTheRecordAndCanDeleteTheFile()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        var fileName = Slug.Make(state.ActiveCollection) + ".json";
+        var file = Path.Combine(folder, fileName);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+
+        state.StopPublishing(state.ActiveCollection, deleteFile: false);
+        Assert.False(state.IsPublished(state.ActiveCollection));
+        Assert.Empty(state.CollectionsCache.Published);
+        var left = File.ReadAllBytes(file);
+        Assert.Null(state.Upsert("new", NewConnector("x"), null));
+        Assert.Equal(left, File.ReadAllBytes(file));   // nothing is published once it has stopped
+
+        // The collection no longer holds the origin that vouched for the document left behind, so
+        // publishing here again is refused exactly as somebody else's file would be. That is why
+        // Stop Publishing offers to delete it.
+        Assert.Equal(AppState.PublishSlugTakenError(fileName),
+            state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+
+        var second = PublishFolder(h, "pub2");
+        Assert.Null(state.StartPublishing(state.ActiveCollection, second, PublishIntent.None));
+        state.StopPublishing(state.ActiveCollection, deleteFile: true);
+        Assert.False(File.Exists(Path.Combine(second, fileName)));
+        Assert.True(File.Exists(file), "only the folder it was publishing to is touched");
+    }
+
+    [Fact]
+    public void AChangeThatArrivesFromAnotherMachineIsPublishedOnTheNextLoad()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var file = Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
+
+        // The author's other machine added a connector to the shared master list.
+        var store = h.StoreOnDisk();
+        store.Collections[store.ActiveCollection].Mcps["elsewhere"] = NewConnector("z");
+        MasterStoreIO.Save(store, h.MasterStorePath);
+        state.Reload(ReloadTrigger.ExternalStoreAdoption);
+        // The publishing machine carries another machine's change to the team.
+        Assert.Contains("elsewhere", CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors.Keys);
+    }
+
+    [Fact]
+    public void SubscribingToWhatThisMachinePublishesIsRefused()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var file = Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
+        Assert.Equal(AppState.OwnCollectionError, state.Subscribe(file, "Copy"));
+        Assert.Equal(["Default"], state.CollectionNames);
+    }
 }
