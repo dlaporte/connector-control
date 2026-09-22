@@ -4,11 +4,15 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.Core.State;
 using H.NotifyIcon.Core;
 using H.NotifyIcon.Interop;
+using Microsoft.Win32;
 using DrawingPoint = System.Drawing.Point;
+// Named rather than imported: System.Windows.Shapes.Path would collide with System.IO.Path.
+using Ellipse = System.Windows.Shapes.Ellipse;
 
 namespace ConnectorControl.App.Views;
 
@@ -27,6 +31,7 @@ public partial class FlyoutWindow : Window
 
     private readonly FlyoutModel model;
     private readonly WindowRegistry windows;
+    private readonly PropertyChangedEventHandler onModelChanged;
     private ContextMenu? openMenu;
 
     public FlyoutWindow(FlyoutModel model, WindowRegistry windows)
@@ -35,9 +40,28 @@ public partial class FlyoutWindow : Window
         this.model = model;
         this.windows = windows;
         DataContext = model;
+        onModelChanged = (_, _) => Refresh();
+        model.PropertyChanged += onModelChanged;
+        Closed += (_, _) => model.PropertyChanged -= onModelChanged;
         Deactivated += (_, _) => HandleDeactivated();
         PreviewKeyDown += OnPreviewKeyDown;
+        Refresh();
     }
+
+    /// <summary>
+    /// The two pickers this window puts in front of itself, and the one dialog a refusal ends
+    /// in. One overridable bundle, because a test drives this window on the very dispatcher it
+    /// lives on: a real modal would block the test that opened it, and a real picker would wait
+    /// for a person.
+    /// </summary>
+    internal sealed record Presenters(
+        Func<string?> ChooseDocument,
+        Func<string?> ChooseFolder,
+        Action<string> Inform);
+
+    internal static Presenters Live { get; } = new(PickDocument, PickFolder, Tell);
+
+    internal Presenters Surfaces { get; set; } = Live;
 
     public DateTime LastHiddenUtc { get; private set; } = DateTime.MinValue;
 
@@ -182,8 +206,20 @@ public partial class FlyoutWindow : Window
 
     private void OnCollectionChip(object sender, RoutedEventArgs e) => OpenCollectionMenu();
 
-    /// <summary>The collection chip menu: the collections to switch between, a check on the active one.</summary>
-    internal ContextMenu OpenCollectionMenu()
+    /// <summary>
+    /// The one caption set from a value rather than bound: the chip's name. The model publishes
+    /// its chip text with the disclosure mark already inside it, and the chain and the dot belong
+    /// between the two, so the name is read off the menu item that carries the check instead.
+    /// </summary>
+    private void Refresh() =>
+        CollectionChipName.Text = model.CollectionItems.FirstOrDefault(i => i.IsActive)?.Name ?? string.Empty;
+
+    /// <summary>
+    /// The collection chip menu: the collections to switch between with a check on the active
+    /// one, then the two document commands, then the window that owns everything else — creating,
+    /// renaming and deleting included. Built without being shown, so a test can read it.
+    /// </summary>
+    internal ContextMenu BuildCollectionMenu()
     {
         var menu = new ContextMenu { PlacementTarget = CollectionChip, Placement = PlacementMode.Bottom, StaysOpen = false };
         foreach (var item in model.CollectionItems)
@@ -193,10 +229,26 @@ public partial class FlyoutWindow : Window
             // column only when it is checkable, so the active collection's mark would not be drawn.
             // Clicking toggles the mark before Click runs, which is harmless — the menu closes and
             // the next open rebuilds every item from CollectionItems.
-            var entry = new MenuItem { Header = new TextBlock { Text = name }, IsCheckable = true, IsChecked = item.IsActive };
+            var entry = new MenuItem { Header = MenuHeader(item), IsCheckable = true, IsChecked = item.IsActive };
             entry.Click += (_, _) => model.SwitchCollection(name);
             menu.Items.Add(entry);
         }
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Command(FlyoutModel.ImportTitle, model.RequestImport));
+        // A synced collection is the author's document already; passing a second copy of it on
+        // is theirs to do, not this machine's.
+        if (!model.ActiveCollectionIsSynced)
+        {
+            menu.Items.Add(Command(model.ExportTitle, model.RequestExport));
+        }
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Command(FlyoutModel.ManageTitle));
+        return menu;
+    }
+
+    internal ContextMenu OpenCollectionMenu()
+    {
+        var menu = BuildCollectionMenu();
         // The reference, not an Opened/Closed counter: ContextMenu.Closed can be deferred by
         // the menu's fade animation, and HasOpenPopup must never be wrong in the meantime.
         openMenu = menu;
@@ -204,4 +256,118 @@ public partial class FlyoutWindow : Window
         menu.IsOpen = true;
         return menu;
     }
+
+    /// <summary>
+    /// One menu item that ends in the Collections window. What it wants open in front of that
+    /// window is asked for first, because the window reads the request as it appears.
+    /// </summary>
+    private MenuItem Command(string header, Action? request = null)
+    {
+        var item = new MenuItem { Header = header };
+        item.Click += (_, _) =>
+        {
+            request?.Invoke();
+            OpenCollections();
+        };
+        return item;
+    }
+
+    /// <summary>
+    /// One collection's row in the menu: its name, then the same two marks the chip carries for
+    /// the collection it is showing — a chain for a synced one, an amber dot for one with news.
+    /// </summary>
+    private StackPanel MenuHeader(CollectionMenuItem item)
+    {
+        var header = new StackPanel { Orientation = Orientation.Horizontal };
+        header.Children.Add(new TextBlock { Text = item.Name, VerticalAlignment = VerticalAlignment.Center });
+        if (item.IsSynced)
+        {
+            header.Children.Add(new TextBlock
+            {
+                Text = (string)FindResource("ChainGlyph"),
+                FontFamily = (FontFamily)FindResource("IconFont"),
+                Margin = new Thickness(6, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+        }
+        if (item.HasPendingUpdate)
+        {
+            header.Children.Add(new Ellipse { Style = (Style)FindResource("PendingDot"), Margin = new Thickness(6, 0, 0, 0) });
+        }
+        return header;
+    }
+
+    /// <summary>
+    /// The collection banner's first button. True says the news needs nothing from the file
+    /// system and the Collections window is the whole answer; false says this window owes a
+    /// picker, and which one is what the banner is — the model then refuses anything that is not
+    /// what it asked for.
+    /// </summary>
+    private void OnCollectionBanner(object sender, RoutedEventArgs e)
+    {
+        if (model.CollectionBannerAction())
+        {
+            OpenCollections();
+            return;
+        }
+        switch (model.CollectionBanner)
+        {
+            case CollectionBanner.Locate:
+                HideFlyout();
+                if (Surfaces.ChooseDocument() is { } path)
+                {
+                    Report(model.LocateSource(path));
+                }
+                break;
+            case CollectionBanner.PublishFailed:
+                HideFlyout();
+                if (Surfaces.ChooseFolder() is { } folder)
+                {
+                    Report(model.ChoosePublishFolder(folder));
+                }
+                break;
+        }
+    }
+
+    /// <summary>Stop Publishing, the one banner answer that asks nothing of the user first.</summary>
+    private void OnCollectionBannerSecondary(object sender, RoutedEventArgs e) => model.CollectionBannerSecondaryAction();
+
+    /// <summary>
+    /// The Collections window, which takes no arguments: whatever the flyout wants in front of it
+    /// travels as a request, which the window reads on load and on every change.
+    /// </summary>
+    private void OpenCollections()
+    {
+        HideFlyout();
+        windows.OpenCollections();
+    }
+
+    private void Report(string? failure)
+    {
+        if (failure is not null)
+        {
+            Surfaces.Inform(failure);
+        }
+    }
+
+    /// <summary>The Collections window's picker, for the document a collection asks to be pointed at.</summary>
+    private static string? PickDocument()
+    {
+        var picker = new OpenFileDialog { Title = "Choose", Filter = "Collection (*.json)|*.json", Multiselect = false };
+        return picker.ShowDialog() == true ? picker.FileName : null;
+    }
+
+    /// <summary>Settings ▸ Storage's picker, for the folder a failed publish asks to be pointed at.</summary>
+    private static string? PickFolder()
+    {
+        var picker = new OpenFolderDialog { Title = "Choose", Multiselect = false };
+        return picker.ShowDialog() == true ? picker.FolderName : null;
+    }
+
+    /// <summary>
+    /// A refusal, said the way every dialog the flyout raises is said: ownerless. Owning one to
+    /// this window would own it to a window that hides itself the moment the dialog takes the
+    /// focus, which is what <see cref="WpfDialogs.ResolveOwner"/> is written to avoid.
+    /// </summary>
+    private static void Tell(string message) => new WpfDialogs(() => null).Inform(message, null);
 }

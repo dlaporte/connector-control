@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.App.Services;
@@ -15,6 +16,105 @@ namespace ConnectorControl.App.Tests;
 public class FlyoutWindowTests
 {
     private static void Layout(Window window) => WindowTestSupport.Layout(window, new Size(380, 800));
+
+    /// <summary>
+    /// The pickers the flyout would have put in front of itself and the refusal it would have
+    /// shown. Every test drives the window on the one dispatcher it lives on, where a real modal
+    /// would block the test that opened it and a real picker would wait for a person.
+    /// </summary>
+    private sealed class Recorder
+    {
+        /// <summary>What the file picker answers; null is the user cancelling it.</summary>
+        public string? Document { get; set; }
+
+        public string? Folder { get; set; }
+
+        public List<string> Informed { get; } = [];
+
+        public FlyoutWindow.Presenters Presenters => new(() => Document, () => Folder, Informed.Add);
+    }
+
+    /// <summary>
+    /// One flyout with its pickers recorded instead of shown, hidden however the body ends, and
+    /// never both visible and active while it lives. Closing it only hides it — OnClosing cancels
+    /// while the app is alive — so the helper does both. <paramref name="rows"/> buys the real
+    /// layout pass an ItemsControl needs before it generates any container.
+    /// </summary>
+    private static void Showing(AppStateHarness h, AppState state,
+        Action<FlyoutWindow, FlyoutModel, Recorder> body, bool rows = false)
+    {
+        var services = h.Services();
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        using var model = new FlyoutModel(state, h.Settings);
+        var registry = new WindowRegistry(state, services, updates, h.Dialogs);
+        var window = new FlyoutWindow(model, registry) { TrayAnchor = () => null };
+        var recorder = new Recorder();
+        window.Surfaces = recorder.Presenters;
+        try
+        {
+            // Bindings settle first, while nothing of ours is on screen, because that is the step
+            // that pumps. Between Show and Hide there is no pump at all: UpdateLayout runs the
+            // real layout pass — the one that generates the rows — synchronously.
+            Layout(window);
+            if (rows)
+            {
+                window.Show();
+                window.UpdateLayout();
+                window.HideFlyout();
+                Layout(window);
+            }
+            body(window, model, recorder);
+        }
+        finally
+        {
+            window.HideFlyout();
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// Subscribes the harness's state to the sample document on disk, so "Data team" is a real
+    /// synced collection beside the harness's local one, and leaves Default active.
+    /// </summary>
+    private static void SubscribeToDataTeam(AppStateHarness h, AppState state)
+    {
+        File.WriteAllBytes(DataTeamPath(h), CollectionDocumentSamples.DataTeam.Serialize());
+        Assert.Null(state.Subscribe(DataTeamPath(h), null));
+        state.SwitchCollection("Default");
+    }
+
+    private static string DataTeamPath(AppStateHarness h)
+    {
+        var path = h.Dir.File(Path.Combine("shared", "data-team.json"));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        return path;
+    }
+
+    /// <summary>The sample with one connector gone: a change at the source, which is all a banner needs.</summary>
+    private static CollectionDocument Without(string removed)
+    {
+        var sample = CollectionDocumentSamples.DataTeam;
+        var connectors = new Dictionary<string, CollectionDocument.Connector>(sample.Connectors, StringComparer.Ordinal);
+        connectors.Remove(removed);
+        return new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors);
+    }
+
+    private static void Click(ButtonBase button) =>
+        button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+
+    /// <summary>A collection item's name: the first TextBlock of its header, ahead of its marks.</summary>
+    private static string MenuName(MenuItem item) =>
+        ((StackPanel)item.Header).Children.OfType<TextBlock>().First().Text;
+
+    /// <summary>How many marks — chain, dot — trail that name.</summary>
+    private static int MenuMarks(MenuItem item) => ((StackPanel)item.Header).Children.Count - 1;
+
+    /// <summary>The menu's commands: everything after the one item per collection.</summary>
+    private static string[] MenuCommands(ContextMenu menu, FlyoutModel model) =>
+        menu.Items.OfType<MenuItem>().Skip(model.CollectionItems.Count).Select(i => (string)i.Header).ToArray();
+
+    private static TextBlock RowLock(FlyoutWindow window, ConnectorRow row) =>
+        RowElements.Find<TextBlock>(window.RowList, row, "RowLockGlyph");
 
     [Fact]
     public void FlyoutShowsHeaderRowsAndNoFooterWhenNothingIsPending()
@@ -33,7 +133,8 @@ public class FlyoutWindowTests
             Assert.Equal(Visibility.Collapsed, window.ErrorBanner.Visibility);
             Assert.Equal(Visibility.Collapsed, window.EmptyLabel.Visibility);
             Assert.Equal("3 of 3 enabled", window.SubtitleText.Text);
-            Assert.Equal("Default ▾", window.CollectionChip.Content);
+            Assert.Equal("Default", window.CollectionChipName.Text);
+            Assert.Equal(Visibility.Collapsed, window.CollectionBannerStrip.Visibility);
             Assert.False(window.ShowInTaskbar);
             Assert.True(window.Topmost);
             Assert.Equal(WindowStyle.None, window.WindowStyle);
@@ -111,18 +212,153 @@ public class FlyoutWindowTests
             var menu = window.OpenCollectionMenu();
 
             var collections = menu.Items.OfType<MenuItem>().Take(model.CollectionItems.Count).ToList();
-            Assert.Equal(["Default", "Work"], collections.Select(i => ((TextBlock)i.Header).Text).ToArray());
+            Assert.Equal(["Default", "Work"], collections.Select(MenuName).ToArray());
             foreach (var (item, expected) in collections.Zip(model.CollectionItems))
             {
                 Assert.True(item.IsCheckable);
                 Assert.Equal(expected.IsActive, item.IsChecked);
             }
-            Assert.Equal(["Work"], collections.Where(i => i.IsChecked).Select(i => ((TextBlock)i.Header).Text).ToArray());
+            Assert.Equal(["Work"], collections.Where(i => i.IsChecked).Select(MenuName).ToArray());
 
             menu.IsOpen = false;   // leave nothing behind in the shared WPF host
             window.HideFlyout();
             window.Close();
         });
+    }
+
+    [Fact]
+    public void TheChipShowsTheChainOnlyForASyncedCollection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        SubscribeToDataTeam(h, state);
+        WpfApp.Invoke(() => Showing(h, state, (window, model, _) =>
+        {
+            Assert.Equal("Default", window.CollectionChipName.Text);
+            Assert.Equal(Visibility.Collapsed, window.CollectionChipChain.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.CollectionChipDot.Visibility);
+
+            state.SwitchCollection("Data team");
+            Layout(window);
+            Assert.Equal("Data team", window.CollectionChipName.Text);
+            Assert.Equal(Visibility.Visible, window.CollectionChipChain.Visibility);
+            // The chain says where the document is, which is the one thing the chip cannot show.
+            // The bound path is the one the state recorded, not the one this test wrote: a temp
+            // directory can reach the same file under more than one spelling.
+            var source = state.SourceBinding("Data team")?.Path;
+            Assert.NotNull(source);
+            Assert.Equal(FlyoutModel.SourceTooltipFormat(source), window.CollectionChipChain.ToolTip);
+            Assert.Equal(Visibility.Collapsed, window.CollectionChipDot.Visibility);   // nothing waiting yet
+
+            state.SwitchCollection("Default");
+            Layout(window);
+            Assert.Equal(Visibility.Collapsed, window.CollectionChipChain.Visibility);
+        }));
+    }
+
+    [Fact]
+    public void TheMenuHasImportExportAndManageButNoHousekeeping()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        SubscribeToDataTeam(h, state);
+        WpfApp.Invoke(() => Showing(h, state, (window, model, _) =>
+        {
+            var menu = window.BuildCollectionMenu();
+            Assert.Equal(["Import…", "Export “Default”…", "Manage Collections…"], MenuCommands(menu, model));
+            Assert.Equal(2, menu.Items.OfType<Separator>().Count());
+            var collections = menu.Items.OfType<MenuItem>().Take(model.CollectionItems.Count).ToList();
+            Assert.Equal(["Data team", "Default"], collections.Select(MenuName).ToArray());
+            Assert.Equal(1, MenuMarks(collections[0]));   // the chain
+            Assert.Equal(0, MenuMarks(collections[1]));
+
+            // A synced collection is the author's document already; this machine does not offer
+            // to pass a second copy of it on.
+            state.SwitchCollection("Data team");
+            Layout(window);
+            Assert.Equal(["Import…", "Manage Collections…"], MenuCommands(window.BuildCollectionMenu(), model));
+        }));
+    }
+
+    [Fact]
+    public void ARowInASyncedCollectionShowsTheLockAndAddIsDisabled()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        SubscribeToDataTeam(h, state);
+        WpfApp.Invoke(() => Showing(h, state, (window, model, _) =>
+        {
+            Assert.True(window.AddButton.IsEnabled);
+            Assert.Equal(FlyoutModel.AddTooltip, window.AddButton.ToolTip);
+            Assert.Equal(Visibility.Collapsed, RowLock(window, model.Rows[0]).Visibility);
+        }, rows: true));
+
+        state.SwitchCollection("Data team");
+        WpfApp.Invoke(() => Showing(h, state, (window, model, _) =>
+        {
+            Assert.False(window.AddButton.IsEnabled);
+            Assert.Equal(FlyoutModel.AddDisabledTooltip, window.AddButton.ToolTip);
+            var glyph = RowLock(window, model.Rows[0]);
+            Assert.Equal(Visibility.Visible, glyph.Visibility);
+            Assert.Equal(CollectionsModel.LockedGlyphTooltip, glyph.ToolTip);
+        }, rows: true));
+    }
+
+    [Fact]
+    public void TheCollectionBannerShowsAPendingUpdate()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        SubscribeToDataTeam(h, state);
+        state.SwitchCollection("Data team");
+        // The document changes under the collection, read back through Refresh — the same read
+        // the watcher would drive, without waiting for one.
+        File.WriteAllBytes(DataTeamPath(h), Without("github").Serialize());
+        state.RefreshSource("Data team");
+        Assert.True(state.PendingUpdates.ContainsKey("Data team"));
+
+        WpfApp.Invoke(() => Showing(h, state, (window, model, _) =>
+        {
+            Assert.Equal(Visibility.Visible, window.CollectionBannerStrip.Visibility);
+            Assert.Equal(model.CollectionBannerText, window.CollectionBannerMessage.Text);
+            Assert.Contains("removes github", window.CollectionBannerMessage.Text);
+            Assert.Equal(FlyoutModel.ReviewAndApplyButton, window.CollectionBannerButton.Content);
+            // One answer, so no second button; the chip repeats the news beside the name.
+            Assert.Equal(Visibility.Collapsed, window.CollectionBannerSecondary.Visibility);
+            Assert.Equal(Visibility.Visible, window.CollectionChipDot.Visibility);
+        }));
+    }
+
+    [Fact]
+    public void TheFailedPublishBannerOffersStopPublishingAsWellAsAnotherFolder()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = h.Dir.File("pub");
+        Directory.CreateDirectory(folder);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        // A file where the folder belongs fails the write on both platforms and needs no
+        // permission games; the next store change is what raises the banner.
+        Directory.Delete(folder, recursive: true);
+        File.WriteAllText(folder, "not a folder");
+        Assert.Null(state.Upsert("blocked", new McpEntry(AppStateHarness.Remote("https://example.test/")), null));
+        Assert.NotNull(state.PublishError);
+
+        WpfApp.Invoke(() => Showing(h, state, (window, _, _) =>
+        {
+            Assert.Equal(Visibility.Visible, window.CollectionBannerStrip.Visibility);
+            Assert.Equal(FlyoutModel.ChooseFolderButton, window.CollectionBannerButton.Content);
+            Assert.Equal(Visibility.Visible, window.CollectionBannerSecondary.Visibility);
+            Assert.Equal(CollectionsModel.StopPublishingAction, window.CollectionBannerSecondary.Content);
+
+            // Giving up on the folder is the one banner answer that asks nothing of the user
+            // first, and it takes the banner with it.
+            Click(window.CollectionBannerSecondary);
+            Layout(window);
+            Assert.Null(state.PublishError);
+            Assert.False(state.IsPublished(state.ActiveCollection));
+            Assert.Equal(Visibility.Collapsed, window.CollectionBannerStrip.Visibility);
+        }));
     }
 
     [Fact]

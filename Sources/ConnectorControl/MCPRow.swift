@@ -4,6 +4,10 @@ import ConnectorControlState
 /// Layout only — the row's facts arrive in a ConnectorRow and its two actions
 /// go back through the closures.
 struct MCPRow: View {
+    /// The lock leading a synced collection's row, dimmed so it reads as a mark rather than as
+    /// a control — the switch and the pencil beside it are still live.
+    private static let lockOpacity = 0.55
+
     let row: ConnectorRow
     var onToggle: (Bool) -> Void
     var onEdit: () -> Void
@@ -14,6 +18,16 @@ struct MCPRow: View {
                 .toggleStyle(.switch)
                 .controlSize(.small)
                 .labelsHidden()
+            if row.isLocked {
+                // A glyph on its own reads as nothing, and this one is only ever on screen
+                // while the collection is synced, so its sentence is what it says out loud.
+                Image(systemName: "lock.fill")
+                    .imageScale(.small)
+                    .foregroundStyle(.secondary)
+                    .opacity(MCPRow.lockOpacity)
+                    .help(CollectionsModel.lockedGlyphTooltip)
+                    .accessibilityLabel(CollectionsModel.lockedGlyphTooltip)
+            }
             Text(row.name).fontWeight(.medium)
                 .lineLimit(1)
                 .layoutPriority(1)
