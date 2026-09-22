@@ -35,6 +35,7 @@ public partial class PublishDialog : DialogWindow
             ? model.SheetTitle
             // Exporting borrows the menu item's own wording, which names the collection it writes.
             : FlyoutModel.ExportTitleFor(model.Collection);
+        TitleText.Text = Title;
         FolderRow.Visibility = mode == PublishDialogMode.Publish ? Visibility.Visible : Visibility.Collapsed;
         PublishButton.Visibility = mode == PublishDialogMode.Publish ? Visibility.Visible : Visibility.Collapsed;
         ExportButton.Visibility = mode == PublishDialogMode.Export ? Visibility.Visible : Visibility.Collapsed;
@@ -53,10 +54,17 @@ public partial class PublishDialog : DialogWindow
 
     public PublishDialogMode Mode { get; }
 
+    /// <summary>
+    /// Whether the sheet published or exported before it closed. A plain property, like every other
+    /// dialog here: Window.DialogResult's setter throws on a window presented with Show(), which is
+    /// how the tests present this one.
+    /// </summary>
+    public bool Accepted { get; private set; }
+
     public static bool Show(Window? owner, PublishModel model, PublishDialogMode mode)
     {
         var dialog = new PublishDialog(model, mode);
-        return Present(dialog, owner, () => dialog.DialogResult == true);
+        return Present(dialog, owner, () => dialog.Accepted);
     }
 
     /// <summary>
@@ -114,8 +122,8 @@ public partial class PublishDialog : DialogWindow
         ShowFailure(failure);
         if (failure is null)
         {
-            // Set only for a sheet shown with ShowDialog, which is the only way it is presented.
-            DialogResult = true;
+            Accepted = true;
+            Close();
         }
     }
 

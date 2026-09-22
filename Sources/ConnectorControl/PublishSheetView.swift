@@ -48,11 +48,22 @@ struct PublishSheetView: View {
 
             preview
 
-            ForEach(model.warnings, id: \.self) { warning in
-                Text(warning)
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
+            // One line per credential-looking value, and a connector that passes keys as
+            // arguments can produce many: the list scrolls rather than pushing the footer
+            // buttons off a sheet whose height is its content's.
+            if !model.warnings.isEmpty {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(model.warnings, id: \.self) { warning in
+                            Text(warning)
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+                .frame(maxHeight: 72)
             }
 
             if let failure {
@@ -66,7 +77,10 @@ struct PublishSheetView: View {
             footer
         }
         .padding(16)
-        .frame(width: 580)
+        // Wide enough for a path row's value beside its fields, and growable from there, so a
+        // long path can be read in full rather than truncated for good. Same width as the
+        // Windows dialog.
+        .frame(minWidth: 620, idealWidth: 620, maxWidth: .infinity)
     }
 
     /// Publishing names the collection it binds; exporting borrows the menu item's own wording,
@@ -198,6 +212,8 @@ struct PublishSheetView: View {
             Text(model.footerLine)
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
             Spacer()
             Button(ImportModel.cancelButton) { onDone() }
             if mode == .publish {

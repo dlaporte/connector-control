@@ -35,18 +35,6 @@ public class PublishDialogTests
     }
 
     /// <summary>
-    /// A named element inside one row's template instance. The rows are an ItemsControl's, so the
-    /// container is the ContentPresenter the item template was applied to.
-    /// </summary>
-    private static T Named<T>(ItemsControl list, object row, string name)
-        where T : FrameworkElement
-    {
-        var presenter = (ContentPresenter)list.ItemContainerGenerator.ContainerFromItem(row)!;
-        presenter.ApplyTemplate();
-        return (T)presenter.ContentTemplate.FindName(name, presenter);
-    }
-
-    /// <summary>
     /// A click, in the two halves WPF splits it into: the state the tick lands in, and the Click
     /// the sheet listens to. Setting IsChecked on its own leaves the preview below stale, which is
     /// the one thing about this sheet a test must not hide.
@@ -78,8 +66,8 @@ public class PublishDialogTests
             var model = new PublishModel(state, state.ActiveCollection);
             var window = Shown(model);
             var row = model.EnvRows.Single(r => r.Name == "A");
-            var tick = Named<CheckBox>(window.EnvList, row, "ShareTick");
-            var hint = Named<TextBox>(window.EnvList, row, "HintBox");
+            var tick = RowElements.Find<CheckBox>(window.EnvList, row, "ShareTick");
+            var hint = RowElements.Find<TextBox>(window.EnvList, row, "HintBox");
 
             Assert.Equal(PublishModel.ShareValueLabel, tick.Content);
             Assert.False(tick.IsChecked);
@@ -112,10 +100,10 @@ public class PublishDialogTests
             var model = new PublishModel(state, state.ActiveCollection);
             var window = Shown(model);
             var row = Assert.Single(model.PathRows);
-            var tick = Named<CheckBox>(window.PathList, row, "MarkTick");
-            var fields = Named<StackPanel>(window.PathList, row, "MarkedFields");
-            var nameBox = Named<TextBox>(window.PathList, row, "PathNameBox");
-            var hintBox = Named<TextBox>(window.PathList, row, "PathHintBox");
+            var tick = RowElements.Find<CheckBox>(window.PathList, row, "MarkTick");
+            var fields = RowElements.Find<StackPanel>(window.PathList, row, "MarkedFields");
+            var nameBox = RowElements.Find<TextBox>(window.PathList, row, "PathNameBox");
+            var hintBox = RowElements.Find<TextBox>(window.PathList, row, "PathHintBox");
 
             Assert.False(tick.IsChecked);
             Assert.Equal(Visibility.Collapsed, fields.Visibility);
@@ -157,7 +145,7 @@ public class PublishDialogTests
             Assert.True(window.PreviewBox.IsReadOnly);
             Assert.Empty(window.WarningList.Items);
 
-            ClickTick(Named<CheckBox>(window.EnvList, row, "ShareTick"), true);
+            ClickTick(RowElements.Find<CheckBox>(window.EnvList, row, "ShareTick"), true);
             Layout(window);
 
             // The preview shows every byte that leaves, and says which of them look like secrets.
@@ -165,7 +153,7 @@ public class PublishDialogTests
             Assert.Equal(PublishModel.WarningLine("c", "env.A looks like a credential"),
                 Assert.Single(window.WarningList.Items));
 
-            ClickTick(Named<CheckBox>(window.EnvList, row, "ShareTick"), false);
+            ClickTick(RowElements.Find<CheckBox>(window.EnvList, row, "ShareTick"), false);
             Layout(window);
 
             Assert.DoesNotContain("sk-live-secret", window.PreviewBox.Text, StringComparison.Ordinal);
@@ -188,6 +176,7 @@ public class PublishDialogTests
             Layout(window);
 
             Assert.Equal(model.SheetTitle, window.Title);
+            Assert.Equal(model.SheetTitle, window.TitleText.Text);
             Assert.Equal(Visibility.Visible, window.FolderRow.Visibility);
             Assert.Equal(Visibility.Visible, window.PublishButton.Visibility);
             Assert.Equal(Visibility.Collapsed, window.ExportButton.Visibility);
@@ -205,11 +194,12 @@ public class PublishDialogTests
             var export = new PublishDialog(new PublishModel(state, state.ActiveCollection), PublishDialogMode.Export);
             Layout(export);
             Assert.Equal(FlyoutModel.ExportTitleFor(state.ActiveCollection), export.Title);
+            Assert.Equal(export.Title, export.TitleText.Text);
             Assert.Equal(Visibility.Collapsed, export.FolderRow.Visibility);
             Assert.Equal(Visibility.Collapsed, export.PublishButton.Visibility);
             Assert.Equal(Visibility.Visible, export.ExportButton.Visibility);
             Assert.Equal(PublishModel.ExportButton, export.ExportButton.Content);
-            Assert.True(export.ExportButton.IsEnabled);
+            Assert.False(export.Accepted);
         });
     }
 }
