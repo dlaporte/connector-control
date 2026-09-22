@@ -147,8 +147,15 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// What the connector was asking this machine for when the window opened; see
     /// <see cref="AsksFor"/> for why it is fixed rather than re-read.
     /// </summary>
-    private readonly HashSet<EnvRow> askedEnvRows;
-    private readonly HashSet<ArgRow> askedArgs;
+    private HashSet<EnvRow> askedEnvRows;
+    private HashSet<ArgRow> askedArgs;
+    /// <summary>
+    /// Whether the form was read-only when the snapshot above was taken. One transition retakes
+    /// it: a collection that stops syncing turns every field into an ordinary editable one, and
+    /// a field still rendered as the unmasked placeholder control would be a secret in the clear
+    /// in a form that no longer locks anything.
+    /// </summary>
+    private bool snapshotWasReadOnly;
     private string? validationError;
     private Tool? requiredTool;
     private bool suppressToolEvaluation;
@@ -176,11 +183,9 @@ public sealed class EditorModel : ObservableObject, IDisposable
         Load(config);
         // On open, a cached status shows its note at once; an
         // unknown one is probed now. Later changes go through EvaluateRequiredTool.
-        askedEnvRows = EnvRows.Where(r => Placeholder.ContainsMarker(r.Value)).ToHashSet();
-        askedArgs = Args.Where(r => Placeholder.ContainsMarker(r.Value)).ToHashSet();
-        AsksForBearerToken = Placeholder.ContainsMarker(bearerToken);
-        AsksForHeaderValue = Placeholder.ContainsMarker(headerValue);
-        AsksForClientSecret = Placeholder.ContainsMarker(oauthClientSecret);
+        askedEnvRows = [];
+        askedArgs = [];
+        TakeAskedSnapshot();
         state.PropertyChanged += OnStateChanged;
         Args.CollectionChanged += OnArgsChanged;
         requiredTool = ComputeRequiredTool();
@@ -787,7 +792,40 @@ public sealed class EditorModel : ObservableObject, IDisposable
             Raise(nameof(ShowPropagate));
             Raise(nameof(PropagateMessage));
             Raise(nameof(HasPublishedHints));
+            if (RetakeSnapshotIfUnlocked())
+            {
+                Raise(nameof(AsksForBearerToken));
+                Raise(nameof(AsksForHeaderValue));
+                Raise(nameof(AsksForClientSecret));
+            }
         }
+    }
+
+    /// <summary>What every field is asking for right now, recorded as the answer the locks will use.</summary>
+    private void TakeAskedSnapshot()
+    {
+        askedEnvRows = EnvRows.Where(r => Placeholder.ContainsMarker(r.Value)).ToHashSet();
+        askedArgs = Args.Where(r => Placeholder.ContainsMarker(r.Value)).ToHashSet();
+        AsksForBearerToken = Placeholder.ContainsMarker(bearerToken);
+        AsksForHeaderValue = Placeholder.ContainsMarker(headerValue);
+        AsksForClientSecret = Placeholder.ContainsMarker(oauthClientSecret);
+        snapshotWasReadOnly = IsReadOnly;
+    }
+
+    /// <summary>
+    /// Stop Syncing under an open window: the form stops locking anything, so the snapshot taken
+    /// against a locked form has nothing left to protect and a field the user has since filled
+    /// must go back to being an ordinary masked secret. Taken from the values as they stand, so
+    /// a field still holding a marker keeps asking. True when it retook.
+    /// </summary>
+    private bool RetakeSnapshotIfUnlocked()
+    {
+        if (!snapshotWasReadOnly || IsReadOnly)
+        {
+            return false;
+        }
+        TakeAskedSnapshot();
+        return true;
     }
 
     /// <summary>Stops listening to AppState; the window calls this from Closed.</summary>

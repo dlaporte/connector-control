@@ -675,4 +675,34 @@ public class EditorModelCollectionsTests
         Assert.Contains(nameof(EditorModel.ShowJsonTip), raised);
         Assert.Contains(nameof(EditorModel.HasPublishedHints), raised);
     }
+    [Fact]
+    public void StopSyncingRetakesTheSnapshotSoAFilledSecretIsMaskedAgain()
+    {
+        using var rig = new EditorRig();
+        SubscribeToDataTeam(rig);
+        using var notion = rig.Editor("notion", "Data team");
+        Assert.True(notion.IsReadOnly);
+        Assert.True(notion.AsksForBearerToken);
+        var raised = new List<string>();
+        notion.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");
+
+        // Filled while the form still locks everything else: the field stays the live one, so
+        // the user can keep typing into it.
+        notion.BearerToken = "secret_abc";
+        Assert.True(notion.AsksForBearerToken);
+
+        // Stop Syncing turns the whole form into an ordinary editable one. What the user filled
+        // is now an ordinary secret and must stop being rendered in the clear.
+        rig.State.StopSyncing("Data team");
+        Assert.False(notion.IsReadOnly);
+        Assert.False(notion.AsksForBearerToken);
+        Assert.Contains(nameof(EditorModel.AsksForBearerToken), raised);
+
+        // A field still holding its marker is still owed, locked form or not.
+        using var dbt = rig.Editor("dbt", "Data team");
+        var token = EnvRow(dbt, "DBT_TOKEN");
+        Assert.False(dbt.IsReadOnly);   // the collection is local now
+        Assert.True(dbt.AsksFor(token));
+        Assert.True(dbt.IsPlaceholder(token));
+    }
 }

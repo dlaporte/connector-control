@@ -83,6 +83,7 @@ public final class EditorModel: ObservableObject {
     private let state: AppState
     private let dialogs: Dialogs
     private var subscription: AnyCancellable?
+    private var collectionSubscription: AnyCancellable?
     private var suppressToolEvaluation = false
     /// True only for a brand-new connector still showing the remote
     /// template's placeholder command/args. Set at open; consumed by the
@@ -104,6 +105,11 @@ public final class EditorModel: ObservableObject {
     private var askedBearerToken = false
     private var askedHeaderValue = false
     private var askedClientSecret = false
+    /// Whether the form was read-only when the snapshot above was taken. One transition retakes
+    /// it: a collection that stops syncing turns every field into an ordinary editable one, and
+    /// a field still rendered as the unmasked placeholder control would be a secret in the clear
+    /// in a form that no longer locks anything.
+    private var snapshotWasReadOnly = false
     /// The other local collections that held a byte-identical copy of this connector when the
     /// window opened. Fixed there rather than re-derived: the checkbox names them, and the save
     /// that follows must write to the collections the user was shown, not to whatever matches
@@ -184,15 +190,17 @@ public final class EditorModel: ObservableObject {
         jsonText = config.editorText()
         recoveredJSON = PasteRecovery.recover(jsonText)
         load(config)
-        askedEnvRows = Set(envRows.filter { Placeholder.containsMarker($0.value) }.map(\.id))
-        askedArgs = Set(args.filter { Placeholder.containsMarker($0.value) }.map(\.id))
-        askedBearerToken = Placeholder.containsMarker(bearerToken)
-        askedHeaderValue = Placeholder.containsMarker(headerValue)
-        askedClientSecret = Placeholder.containsMarker(oauthClientSecret)
+        takeAskedSnapshot(readOnly: isReadOnly)
         // On open, a cached status shows its note at once; an unknown one is
         // probed now. Later changes go through evaluateRequiredTool. The relay
         // makes the view re-read toolNote.
         subscription = state.$toolStatuses.dropFirst().sink { [weak self] _ in self?.objectWillChange.send() }
+        // The sidecar is what says whether this collection is still synced, and Stop Syncing is
+        // the one thing that unlocks a form under an open window.
+        collectionSubscription = state.$collectionsFile.dropFirst().sink { [weak self] file in
+            self?.retakeSnapshotIfUnlocked(with: file)
+            self?.objectWillChange.send()
+        }
         requiredTool = computeRequiredTool()
         if let initial = requiredTool, state.toolStatuses[initial] == nil {
             state.refreshTools([initial])
@@ -358,6 +366,29 @@ public final class EditorModel: ObservableObject {
     public var headerValueIsPlaceholder: Bool { Placeholder.containsMarker(headerValue) }
 
     public var clientSecretIsPlaceholder: Bool { Placeholder.containsMarker(oauthClientSecret) }
+
+    /// What every field is asking for right now, recorded as the answer the locks will use.
+    private func takeAskedSnapshot(readOnly: Bool) {
+        askedEnvRows = Set(envRows.filter { Placeholder.containsMarker($0.value) }.map(\.id))
+        askedArgs = Set(args.filter { Placeholder.containsMarker($0.value) }.map(\.id))
+        askedBearerToken = Placeholder.containsMarker(bearerToken)
+        askedHeaderValue = Placeholder.containsMarker(headerValue)
+        askedClientSecret = Placeholder.containsMarker(oauthClientSecret)
+        snapshotWasReadOnly = readOnly
+    }
+
+    /// Stop Syncing under an open window: the form stops locking anything, so the snapshot taken
+    /// against a locked form has nothing left to protect and a field the user has since filled
+    /// must go back to being an ordinary masked secret. Taken from the values as they stand, so
+    /// a field still holding a marker keeps asking.
+    ///
+    /// The sidecar comes from the publisher rather than from AppState: `@Published` announces a
+    /// change before the property holds it, so reading `isReadOnly` here would still be the
+    /// answer this is trying to leave behind.
+    private func retakeSnapshotIfUnlocked(with file: CollectionsFile) {
+        guard snapshotWasReadOnly, file.kind(of: collectionName) != .synced else { return }
+        takeAskedSnapshot(readOnly: false)
+    }
 
     /// Whether this row was asking for a value when the window opened, which is what unlocks it
     /// in a read-only form. Stays true after the value is filled in, unlike `isPlaceholder`.
@@ -822,5 +853,7 @@ public final class EditorModel: ObservableObject {
     public func dispose() {
         subscription?.cancel()
         subscription = nil
+        collectionSubscription?.cancel()
+        collectionSubscription = nil
     }
 }

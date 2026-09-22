@@ -498,4 +498,30 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertNil(elsewhere.publishedHint(envRow: try envRow(elsewhere, "TOKEN").id))
         XCTAssertNil(elsewhere.publishedHint(arg: 0))
     }
+    func testStopSyncingRetakesTheSnapshotSoAFilledSecretIsMaskedAgain() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        try subscribeToDataTeam(rig)
+        let notion = rig.editor("notion", in: "Data team")
+        XCTAssertTrue(notion.isReadOnly)
+        XCTAssertTrue(notion.asksForBearerToken)
+
+        // Filled while the form still locks everything else: the field stays the live one, so
+        // the user can keep typing into it.
+        notion.bearerToken = "secret_abc"
+        XCTAssertTrue(notion.asksForBearerToken)
+
+        // Stop Syncing turns the whole form into an ordinary editable one. What the user filled
+        // is now an ordinary secret and must stop being rendered in the clear.
+        rig.state.stopSyncing("Data team")
+        XCTAssertFalse(notion.isReadOnly)
+        XCTAssertFalse(notion.asksForBearerToken, "nothing is owed, so nothing is unmasked")
+
+        // A field still holding its marker is still owed, locked form or not.
+        let dbt = rig.editor("dbt", in: "Data team")
+        let token = try envRow(dbt, "DBT_TOKEN")
+        XCTAssertFalse(dbt.isReadOnly, "the collection is local now")
+        XCTAssertTrue(dbt.asksFor(envRow: token.id))
+        XCTAssertTrue(dbt.isPlaceholder(envRow: token.id))
+    }
 }
