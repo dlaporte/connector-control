@@ -229,6 +229,35 @@ public sealed class CollectionsLocalCacheTests : IDisposable
                      CollectionsLocalCache.KeptRecord.Remembering(legacy, new(null, null, ["/Users/d/old"], null)));
     }
 
+    /// <summary>
+    /// A collection that never published moves no record, so a rename onto a name a departed
+    /// collection left a record under leaves that record as it found it, belonging to none: the
+    /// same reading a collection made with the name gets.
+    /// </summary>
+    [Fact]
+    public void RenamedWithNothingMovingLeavesTheDisplacedRecordAsItIs()
+    {
+        var displaced = new CollectionsLocalCache.KeptRecord(["/a"], null, ["/Users/d/old"], ["/Users/d/older"]);
+        Assert.Equal(displaced, CollectionsLocalCache.KeptRecord.Renamed(null, displaced));
+    }
+
+    /// <summary>
+    /// A live collection's name is refused, so a record displaced by a rename is a departed
+    /// collection's: its paths are inherited, as a re-used name inherits them, and its folders, own
+    /// and departed alike, are departed to the collection now bearing the name, whose own folders
+    /// and origin the merged record keeps.
+    /// </summary>
+    [Fact]
+    public void RenamedFilesTheDisplacedRecordsFoldersAsDeparted()
+    {
+        var moving = new CollectionsLocalCache.KeptRecord(["/c"], ["/d"], ["/Users/d/squad"], ["/Users/d/gone"], "0c9b7d1e");
+        var displaced = new CollectionsLocalCache.KeptRecord(["/a"], ["/b"], ["/Users/d/old"], ["/Users/d/older"]);
+        Assert.Equal(
+            new CollectionsLocalCache.KeptRecord(["/a", "/c"], ["/b", "/d"], ["/Users/d/squad"],
+                                                 ["/Users/d/gone", "/Users/d/old", "/Users/d/older"], "0c9b7d1e"),
+            CollectionsLocalCache.KeptRecord.Renamed(moving, displaced));
+    }
+
     [Fact]
     public void AnUnknownVersionDecodesAsMalformed()
     {

@@ -2014,6 +2014,70 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.publishError, "and a later save is an ordinary one")
     }
 
+    /// A rename lands on a name only a departed collection can have left a record under, the store
+    /// refusing a live one's. That record is this machine's memory of the folder the departed
+    /// collection published into, and the renamed collection's own record merges with it rather
+    /// than writing over it: the folder is departed to the collection now bearing the name, and
+    /// stays kept back from every document this machine publishes.
+    func testARenameOntoADepartedCollectionsNameKeepsTheFolderItLeft() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let home = state.activeCollection
+        // Squad published and stopped, so its record is its own; Team published and was deleted,
+        // so its record is a departed collection's.
+        XCTAssertNil(state.createCollection(named: "Squad"))
+        let squadFolder = try publishFolder(h, "pubSquad")
+        XCTAssertNil(state.startPublishing("Squad", to: squadFolder.path, intent: .none, reviewedValues: []))
+        let squadOrigin = try XCTUnwrap(state.collectionsFile.collections["Squad"]?.publish?.origin)
+        state.stopPublishing("Squad", deleteFile: false)
+        state.switchCollection(to: home)
+        let folder = try publishThenDeleteTeam(h, state)
+        let homeFolder = try publishFolder(h, "pubHome")
+        XCTAssertNil(state.startPublishing(home, to: homeFolder.path, intent: .none, reviewedValues: []))
+        XCTAssertTrue(state.keptBack(for: home).values.contains(folder.path), "kept back before the rename")
+
+        XCTAssertNil(state.renameCollection("Squad", to: "Team"))
+        let record = try XCTUnwrap(state.collectionsCache.kept["Team"])
+        XCTAssertEqual(record.publishedFolders, [squadFolder.path], "the renamed collection's own folder")
+        XCTAssertEqual(record.origin, squadOrigin, "under the origin it published under")
+        XCTAssertEqual(record.departedFolders, [folder.path], "and the old Team's folder, departed to it")
+        XCTAssertNil(state.collectionsCache.kept["Squad"])
+        XCTAssertTrue(state.keptBack(for: home).values.contains(folder.path), "and kept back after it")
+        // The old folder comes back in a connector of the collection this machine publishes.
+        // Before this round the rename wrote one record over the other, and the folder travelled.
+        XCTAssertNil(state.upsert(name: "tool", entry: MCPEntry(config: .object([
+            "command": .string(folder.path + "/bin/tool"),
+        ])), renamedFrom: nil, in: home))
+        XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+        XCTAssertFalse(try jsonFile(homeFolder.appendingPathComponent(Slug.make(home) + ".json"), contains: folder.path))
+    }
+
+    /// The merged record is the renamed collection's own: it published under the origin the
+    /// record carries, so publishing again takes its folders back as its own, while the departed
+    /// collection's folder stays what it was to it — a path kept back, releasable, never the
+    /// token's.
+    func testACollectionRenamedOntoADepartedNameStillOwnsItsFoldersWhenItPublishesAgain() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let home = state.activeCollection
+        XCTAssertNil(state.createCollection(named: "Squad"))
+        let squadFolder = try publishFolder(h, "pubSquad")
+        XCTAssertNil(state.startPublishing("Squad", to: squadFolder.path, intent: .none, reviewedValues: []))
+        state.stopPublishing("Squad", deleteFile: false)
+        state.switchCollection(to: home)
+        let folder = try publishThenDeleteTeam(h, state)
+        XCTAssertNil(state.renameCollection("Squad", to: "Team"))
+
+        XCTAssertNil(state.startPublishing("Team", to: try publishFolder(h, "pubTeam2").path, intent: .none, reviewedValues: []))
+        XCTAssertTrue(state.collectionsCache.published["Team"]?.publishedFolders.contains(squadFolder.path) ?? false,
+                      "the binding takes its own old folder back")
+        let kept = state.keptBack(for: "Team")
+        XCTAssertTrue(kept.folders.contains(squadFolder.path), "its own, which the token stands for")
+        XCTAssertTrue(kept.values.contains(folder.path), "the departed collection's, a path kept back")
+        XCTAssertFalse(kept.folders.contains(folder.path))
+        XCTAssertEqual(state.collectionsCache.kept["Team"]?.departedFolders, [folder.path], "and it stays behind for the next Stop")
+    }
+
     /// A collection the author publishes from their other machine marks its paths in the sidecar,
     /// which syncs with the master list. Those marks are this machine's to keep back too, so a copy
     /// of that connector reaching a collection published here is refused, with no binding involved.

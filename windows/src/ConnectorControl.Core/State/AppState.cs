@@ -1205,12 +1205,22 @@ public sealed class AppState : ObservableObject, IDisposable
         if (trimmed != name)
         {
             CollectionsFile = new CollectionsFile(Moved(CollectionsFile.Collections, name, trimmed));
+            // The store refuses a name a live collection bears, so a record already under the new
+            // name is a departed collection's: this machine's memory of the folder it published
+            // into, which the rename must not write over. The two merge, that folder departed to
+            // the collection now bearing the name.
+            var displaced = CollectionsCache.Kept.GetValueOrDefault(trimmed);
+            var kept = Moved(Without(CollectionsCache.Kept, trimmed), name, trimmed);
+            if (displaced is not null)
+            {
+                kept[trimmed] = CollectionsLocalCache.KeptRecord.Renamed(kept.GetValueOrDefault(trimmed), displaced);
+            }
             // Claude's file and its backups name the collection they were applied from, and the
             // rename carries both. A backup record that fails to follow restores as refused, the
             // name it holds being gone, never into the wrong collection.
             CollectionsCache = new CollectionsLocalCache(
                 Moved(CollectionsCache.Synced, name, trimmed), Moved(CollectionsCache.Published, name, trimmed),
-                Moved(CollectionsCache.Kept, name, trimmed),
+                kept,
                 CollectionsCache.LastAppliedCollection == name ? trimmed : CollectionsCache.LastAppliedCollection,
                 CollectionsCache.LastAppliedNames);
             try

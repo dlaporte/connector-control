@@ -94,6 +94,25 @@ public struct CollectionsLocalCache: Equatable, Sendable {
                 departedFolders: (earlier?.departedFolders ?? []).union(own ? [] : earlierFolders),
                 origin: binding.origin ?? earlier?.origin)
         }
+
+        /// What a rename files under a name a departed collection left a record under. A rename
+        /// can land on a record only where the collection that left it has gone — a live
+        /// collection's name is refused — so the record already there is a departed collection's,
+        /// or one written before origins were kept, read the same way, and the collection taking
+        /// the name is a different one. Its folders are departed to it, as they would be to a
+        /// collection made with the name, and its paths are inherited, as a re-used name inherits
+        /// them; the moving record's own folders and origin stay its own, so the collection goes
+        /// on being the one that published under them. A collection that never published moves no
+        /// record, and leaves the one under the name as it found it, belonging to none.
+        public static func renamed(_ moving: KeptRecord?, over displaced: KeptRecord) -> KeptRecord {
+            guard let moving else { return displaced }
+            return KeptRecord(
+                markedValues: moving.markedValues.union(displaced.markedValues),
+                releasedValues: moving.releasedValues.union(displaced.releasedValues),
+                publishedFolders: moving.publishedFolders,
+                departedFolders: moving.departedFolders.union(displaced.publishedFolders).union(displaced.departedFolders),
+                origin: moving.origin)
+        }
     }
 
     public struct SyncedBinding: Equatable, Sendable {

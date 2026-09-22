@@ -2178,6 +2178,80 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// A rename lands on a name only a departed collection can have left a record under, the store
+    /// refusing a live one's. That record is this machine's memory of the folder the departed
+    /// collection published into, and the renamed collection's own record merges with it rather
+    /// than writing over it: the folder is departed to the collection now bearing the name, and
+    /// stays kept back from every document this machine publishes.
+    /// </summary>
+    [Fact]
+    public void ARenameOntoADepartedCollectionsNameKeepsTheFolderItLeft()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var home = state.ActiveCollection;
+        // Squad published and stopped, so its record is its own; Team published and was deleted, so
+        // its record is a departed collection's.
+        Assert.Null(state.CreateCollection("Squad"));
+        var squadFolder = PublishFolder(h, "pubSquad");
+        Assert.Null(state.StartPublishing("Squad", squadFolder, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
+        var squadOrigin = state.CollectionsFile.Collections["Squad"].Publish?.Origin;
+        Assert.NotNull(squadOrigin);
+        state.StopPublishing("Squad", deleteFile: false);
+        state.SwitchCollection(home);
+        var folder = PublishThenDeleteTeam(h, state);
+        var homeFolder = PublishFolder(h, "pubHome");
+        Assert.Null(state.StartPublishing(home, homeFolder, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
+        Assert.Contains(folder, state.KeptBack(home).Values);   // kept back before the rename
+
+        Assert.Null(state.RenameCollection("Squad", "Team"));
+        var record = state.CollectionsCache.Kept["Team"];
+        Assert.Equal([squadFolder], record.PublishedFolders);   // the renamed collection's own folder
+        Assert.Equal(squadOrigin, record.Origin);               // under the origin it published under
+        Assert.Equal([folder], record.DepartedFolders);         // and the old Team's folder, departed to it
+        Assert.False(state.CollectionsCache.Kept.ContainsKey("Squad"));
+        Assert.Contains(folder, state.KeptBack(home).Values);   // and kept back after it
+        // The old folder comes back in a connector of the collection this machine publishes. Before
+        // this round the rename wrote one record over the other, and the folder travelled.
+        Assert.Null(state.Upsert("tool", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String(folder + "/bin/tool")))), null, home));
+        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+        Assert.False(JsonText.FileContains(Path.Combine(homeFolder, Slug.Make(home) + ".json"), folder));
+    }
+
+    /// <summary>
+    /// The merged record is the renamed collection's own: it published under the origin the record
+    /// carries, so publishing again takes its folders back as its own, while the departed
+    /// collection's folder stays what it was to it — a path kept back, releasable, never the
+    /// token's.
+    /// </summary>
+    [Fact]
+    public void ACollectionRenamedOntoADepartedNameStillOwnsItsFoldersWhenItPublishesAgain()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var home = state.ActiveCollection;
+        Assert.Null(state.CreateCollection("Squad"));
+        var squadFolder = PublishFolder(h, "pubSquad");
+        Assert.Null(state.StartPublishing("Squad", squadFolder, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
+        state.StopPublishing("Squad", deleteFile: false);
+        state.SwitchCollection(home);
+        var folder = PublishThenDeleteTeam(h, state);
+        Assert.Null(state.RenameCollection("Squad", "Team"));
+
+        Assert.Null(state.StartPublishing("Team", PublishFolder(h, "pubTeam2"), PublishIntent.None,
+            new HashSet<string>(StringComparer.Ordinal)));
+        // The binding takes its own old folder back, which the token stands for; the departed
+        // collection's is a path kept back, and stays behind for the next Stop.
+        Assert.Contains(squadFolder, state.CollectionsCache.Published["Team"].PublishedFolders);
+        var kept = state.KeptBack("Team");
+        Assert.Contains(squadFolder, kept.Folders);
+        Assert.Contains(folder, kept.Values);
+        Assert.DoesNotContain(folder, kept.Folders);
+        Assert.Equal([folder], state.CollectionsCache.Kept["Team"].DepartedFolders);
+    }
+
+    /// <summary>
     /// A collection the author publishes from their other machine marks its paths in the sidecar,
     /// which syncs with the master list. Those marks are this machine's to keep back too, so a copy of
     /// that connector reaching a collection published here is refused, with no binding involved.

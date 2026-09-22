@@ -847,7 +847,15 @@ public final class AppState: ObservableObject {
             move(&collectionsFile.collections, from: name, to: trimmed)
             move(&collectionsCache.synced, from: name, to: trimmed)
             move(&collectionsCache.published, from: name, to: trimmed)
+            // The store refuses a name a live collection bears, so a record already under the new
+            // name is a departed collection's: this machine's memory of the folder it published
+            // into, which the rename must not write over. The two merge, that folder departed to
+            // the collection now bearing the name.
+            let displaced = collectionsCache.kept.removeValue(forKey: trimmed)
             move(&collectionsCache.kept, from: name, to: trimmed)
+            if let displaced {
+                collectionsCache.kept[trimmed] = CollectionsLocalCache.KeptRecord.renamed(collectionsCache.kept[trimmed], over: displaced)
+            }
             move(&pendingUpdates, from: name, to: trimmed)
             move(&sourceErrors, from: name, to: trimmed)
             move(&pendingRendered, from: name, to: trimmed)

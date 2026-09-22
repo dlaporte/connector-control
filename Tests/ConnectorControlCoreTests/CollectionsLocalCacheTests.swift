@@ -175,6 +175,30 @@ final class CollectionsLocalCacheTests: XCTestCase {
                        .init(publishedFolders: ["/Users/d/old", "/Users/d/new"]))
     }
 
+    /// A collection that never published moves no record, so a rename onto a name a departed
+    /// collection left a record under leaves that record as it found it, belonging to none: the
+    /// same reading a collection made with the name gets.
+    func testRenamedWithNothingMovingLeavesTheDisplacedRecordAsItIs() {
+        let displaced = CollectionsLocalCache.KeptRecord(markedValues: ["/a"], publishedFolders: ["/Users/d/old"],
+                                                         departedFolders: ["/Users/d/older"])
+        XCTAssertEqual(CollectionsLocalCache.KeptRecord.renamed(nil, over: displaced), displaced)
+    }
+
+    /// A live collection's name is refused, so a record displaced by a rename is a departed
+    /// collection's: its paths are inherited, as a re-used name inherits them, and its folders,
+    /// own and departed alike, are departed to the collection now bearing the name, whose own
+    /// folders and origin the merged record keeps.
+    func testRenamedFilesTheDisplacedRecordsFoldersAsDeparted() {
+        let moving = CollectionsLocalCache.KeptRecord(markedValues: ["/c"], releasedValues: ["/d"],
+                                                      publishedFolders: ["/Users/d/squad"], departedFolders: ["/Users/d/gone"],
+                                                      origin: "0c9b7d1e")
+        let displaced = CollectionsLocalCache.KeptRecord(markedValues: ["/a"], releasedValues: ["/b"],
+                                                         publishedFolders: ["/Users/d/old"], departedFolders: ["/Users/d/older"])
+        XCTAssertEqual(CollectionsLocalCache.KeptRecord.renamed(moving, over: displaced),
+                       .init(markedValues: ["/a", "/c"], releasedValues: ["/b", "/d"], publishedFolders: ["/Users/d/squad"],
+                             departedFolders: ["/Users/d/gone", "/Users/d/old", "/Users/d/older"], origin: "0c9b7d1e"))
+    }
+
     func testAnUnknownVersionDecodesAsMalformed() {
         XCTAssertThrowsError(try CollectionsLocalCache.decode(.object(["version": .int(9), "synced": .object([:]), "published": .object([:])])))
     }

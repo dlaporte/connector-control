@@ -129,6 +129,27 @@ public sealed record CollectionsLocalCache
                 binding.Origin ?? earlier?.Origin);
         }
 
+        /// <summary>
+        /// What a rename files under a name a departed collection left a record under. A rename
+        /// can land on a record only where the collection that left it has gone — a live
+        /// collection's name is refused — so the record already there is a departed collection's,
+        /// or one written before origins were kept, read the same way, and the collection taking
+        /// the name is a different one. Its folders are departed to it, as they would be to a
+        /// collection made with the name, and its paths are inherited, as a re-used name inherits
+        /// them; the moving record's own folders and origin stay its own, so the collection goes
+        /// on being the one that published under them. A collection that never published moves no
+        /// record, and leaves the one under the name as it found it, belonging to none.
+        /// </summary>
+        public static KeptRecord Renamed(KeptRecord? moving, KeptRecord displaced) =>
+            moving is null
+                ? displaced
+                : new(
+                    moving.MarkedValues.Concat(displaced.MarkedValues),
+                    moving.ReleasedValues.Concat(displaced.ReleasedValues),
+                    moving.PublishedFolders,
+                    moving.DepartedFolders.Concat(displaced.PublishedFolders).Concat(displaced.DepartedFolders),
+                    moving.Origin);
+
         public bool Equals(KeptRecord? other) =>
             other is not null && MarkedValues.SetEquals(other.MarkedValues)
             && ReleasedValues.SetEquals(other.ReleasedValues) && PublishedFolders.SetEquals(other.PublishedFolders)
