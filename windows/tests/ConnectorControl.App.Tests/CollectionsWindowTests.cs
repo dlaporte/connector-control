@@ -470,6 +470,65 @@ public class CollectionsWindowTests
         }, select: "Team");
     }
 
+    /// <summary>
+    /// A publish the app stopped for review, as the flyout's banner hands it over: the window,
+    /// already open on another collection, moves to the one the request names and opens the
+    /// Publish dialog over the whole of it — never a picker.
+    /// </summary>
+    [Fact]
+    public void APublishRequestSelectsItsCollectionAndOpensThePublishDialog()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Spare"));
+        state.SwitchCollection("Default");
+        state.PublishError = new CollectionPublishError("Spare", "A marked path has moved.", PublishErrorKind.BlockedForReview);
+        Showing(h, state, (window, recorder) =>
+        {
+            Assert.Equal("Default", window.Model.Selected);
+            using var flyout = new FlyoutModel(state, h.Settings);
+            Assert.True(flyout.CollectionBannerAction());
+            Pump(window);
+
+            Assert.Equal(new CollectionsWindowRequest.Publish("Spare"), window.LastRequest);
+            Assert.Null(state.CollectionsWindowRequest);   // taken, so nothing acts on it twice
+            Assert.Equal("Spare", window.Model.Selected);
+            var (model, mode) = Assert.Single(recorder.Publishes);
+            Assert.Equal(PublishDialogMode.Publish, mode);
+            Assert.Equal("Spare", model.Collection);
+            Assert.Null(model.Connectors);
+            Assert.Equal(0, recorder.DocumentAsks);
+            Assert.Equal(0, recorder.FolderAsks);
+        });
+    }
+
+    /// <summary>
+    /// The window's own strip over a publish blocked for review: its button opens the Publish
+    /// dialog for the collection on show, and asks for no folder — another folder would re-bind
+    /// the collection, write nothing there and abandon the document the old one still holds.
+    /// </summary>
+    [Fact]
+    public void ABlockedPublishIsAnsweredInThePublishDialogNotByAFolder()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        state.PublishError = new CollectionPublishError("Default", "A marked path has moved.", PublishErrorKind.BlockedForReview);
+        Showing(h, state, (window, recorder) =>
+        {
+            Assert.Equal(Visibility.Visible, window.BannerStrip.Visibility);
+            Assert.Equal(window.Model.BannerText, window.BannerText.Text);
+            Assert.Equal(window.Model.BannerButton, window.BannerButton.Content);
+
+            window.BannerButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, window.BannerButton));
+
+            var (model, mode) = Assert.Single(recorder.Publishes);
+            Assert.Equal(PublishDialogMode.Publish, mode);
+            Assert.Equal("Default", model.Collection);
+            Assert.Equal(0, recorder.FolderAsks);
+            Assert.Equal(0, recorder.DocumentAsks);
+        });
+    }
+
     [Fact]
     public void AWindowRequestRaisedWhileOpenIsConsumed()
     {

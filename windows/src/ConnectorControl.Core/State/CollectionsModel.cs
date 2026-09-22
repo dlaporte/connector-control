@@ -379,10 +379,11 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public bool HasBanner => Banner is not null;
 
     /// <summary>
-    /// The strip's button. True says the news needs nothing from the file system, so the view has
-    /// only to put the Review dialog in front of the selected collection. False says the view
-    /// owes a dialog and must hand what it gets to <see cref="LocateSource"/> or
-    /// <see cref="ChoosePublishFolder"/>.
+    /// The strip's button. True says the news is an update, so the view has only to put the Review
+    /// dialog in front of the selected collection. False says the view decides by the banner's
+    /// kind: a file or folder dialog, handed to <see cref="LocateSource"/> or
+    /// <see cref="ChoosePublishFolder"/>, or — for a publish blocked for review — the Publish
+    /// dialog, since another folder is no answer to that.
     /// </summary>
     public bool BannerAction() => Banner is CollectionBanner.UpdateAvailable;
 
@@ -396,10 +397,15 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// The Choose Folder button's folder, for the collection the window is showing. Null as
-    /// <see cref="LocateSource"/> returns null.
+    /// <see cref="LocateSource"/> returns null. Under a publish blocked for review the folder is
+    /// refused inside <c>AppState.ChangePublishFolder</c>, which answers with the reason.
     /// </summary>
-    public string? ChoosePublishFolder(string folder) =>
-        Banner is CollectionBanner.PublishFailed failed ? state.ChangePublishFolder(failed.Collection, folder) : null;
+    public string? ChoosePublishFolder(string folder) => Banner switch
+    {
+        CollectionBanner.PublishFailed failed => state.ChangePublishFolder(failed.Collection, folder),
+        CollectionBanner.PublishBlocked blocked => state.ChangePublishFolder(blocked.Collection, folder),
+        _ => null,
+    };
 
     // MARK: toolbar
 
@@ -564,7 +570,11 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         // failed: the folder that refused it would refuse the delete too, so the question would be
         // one whose Remove cannot be honoured. The banner's own Stop Publishing says the same by
         // passing false outright.
-        var deleteFile = state.PublishError?.Collection != collection
+        // Only a failed write puts the folder out of reach. A publish blocked for review never
+        // touched it, so its document can still be removed and the question still stands.
+        var failedWrite = state.PublishError is { } error
+            && error.Collection == collection && error.Kind == PublishErrorKind.WriteFailed;
+        var deleteFile = !failedWrite
             && PublishedFileName(collection) is { } fileName
             && AskAboutPublishedFile(fileName);
         state.StopPublishing(collection, deleteFile);

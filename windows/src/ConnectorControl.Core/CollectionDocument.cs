@@ -184,6 +184,30 @@ public sealed class PublishIntent : IEquatable<PublishIntent>
         return new PathMarkPlacement(placed, unresolved);
     }
 
+    /// <summary>
+    /// The text of every argument a mark in this intent is placed on, across
+    /// <paramref name="connectors"/>: what the exporter replaces with placeholders, and so what the
+    /// document must never carry as written. A remote connector's arguments are the launcher's, and
+    /// carry no mark.
+    /// </summary>
+    public IReadOnlySet<string> PlacedArguments(IReadOnlyDictionary<string, JsonValue> connectors)
+    {
+        var placedTexts = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (name, marks) in PathMarks)
+        {
+            if (!connectors.TryGetValue(name, out var config) || RemotePattern.Decode(config) is not null)
+            {
+                continue;
+            }
+            var args = FormMapper.Analyze(config).Model.Args;
+            foreach (var index in PlacePathMarks(marks, args).Placed.Keys)
+            {
+                placedTexts.Add(args[index]);
+            }
+        }
+        return placedTexts;
+    }
+
     /// <summary>The argument index a <c>/args/&lt;n&gt;</c> pointer names, when there is an argument there.</summary>
     private static int? ArgumentIndex(JsonPointer pointer, int count) =>
         pointer.Segments.Length == 2 && pointer.Segments[0] == "args"
@@ -785,10 +809,13 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
 
     /// <summary>
     /// Throws <see cref="PathMarkMovedException"/> for the first connector, by name, whose path
-    /// marks cannot all be placed (<see cref="PublishIntent.PlacePathMarks"/>), and for a remote
-    /// connector that still carries a mark with a value: a remote connector's arguments are built
-    /// by each importer, so a mark there was made while it was a local one, and the path it stood
-    /// for may now be travelling in its extra arguments.
+    /// marks cannot all be placed (<see cref="PublishIntent.PlacePathMarks"/>); for a local
+    /// connector that also holds a placed mark's text somewhere unmarked that travels — another
+    /// argument, the command or a shared environment value — since a duplicate of a marked path is
+    /// that path; and for
+    /// a remote connector that still carries a mark with a value: a remote connector's arguments
+    /// are built by each importer, so a mark there was made while it was a local one, and the path
+    /// it stood for may now be travelling in its extra arguments.
     /// </summary>
     public static CollectionDocument Export(string name, string? author, string? origin, string exported,
                                             IEnumerable<KeyValuePair<string, JsonValue>> connectors, PublishIntent intent)
@@ -846,6 +873,14 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                 {
                     throw new PathMarkMovedException(connectorName);
                 }
+                var marked = placement.Placed.Keys.Select(i => model.Args[i]).ToHashSet(StringComparer.Ordinal);
+                var unmarked = Enumerable.Range(0, model.Args.Count).Where(i => !placement.Placed.ContainsKey(i))
+                    .Select(i => model.Args[i]).Append(model.Command)
+                    .Concat(model.Env.Where(p => shared.Contains(p.Key)).Select(p => p.Value));
+                if (unmarked.Any(marked.Contains))
+                {
+                    throw new PathMarkMovedException(connectorName);
+                }
                 foreach (var (i, mark) in placement.Placed.OrderBy(p => p.Key))
                 {
                     args[i] = Placeholder.Marker(mark.Name);
@@ -868,6 +903,53 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         }
         return new CollectionDocument(name, author, origin, exported, result);
     }
+
+    /// <summary>
+    /// The first connector, in ordinal order, any of whose strings holds one of
+    /// <paramref name="values"/> as written, or null. A string holding a value counts wherever it
+    /// sits in it — a path inside a longer path, or inside a flag — and so does the value as JSON
+    /// would escape it, which is how it reads inside a JSON blob carried as a single argument.
+    /// Empty values are ignored: every string holds one.
+    /// </summary>
+    public string? ConnectorCarrying(IEnumerable<string> values)
+    {
+        var forms = values.Where(v => v.Length > 0).SelectMany(WrittenForms).ToList();
+        if (forms.Count == 0)
+        {
+            return null;
+        }
+        foreach (var (name, connector) in Connectors.OrderBy(p => p.Key, StringComparer.Ordinal))
+        {
+            var encoded = connector.Encode();
+            var strings = encoded.StringLeaves().Select(leaf => leaf.Value).Concat(KeysIn(encoded));
+            if (strings.Any(s => forms.Any(form => s.Contains(form, StringComparison.Ordinal))))
+            {
+                return name;
+            }
+        }
+        return null;
+    }
+
+    /// <summary><paramref name="value"/> as written, and as a JSON string would spell it: backslashes and quotes escaped, with and without the slash escaped too.</summary>
+    internal static IReadOnlyList<string> WrittenForms(string value)
+    {
+        var escaped = value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
+        return new HashSet<string>(StringComparer.Ordinal)
+        {
+            value,
+            value.Replace("/", "\\/", StringComparison.Ordinal),
+            escaped,
+            escaped.Replace("/", "\\/", StringComparison.Ordinal),
+        }.ToList();
+    }
+
+    /// <summary>Every object key in <paramref name="json"/>, at any depth: a value could as well be a key of an <c>additional</c> field as a string inside one.</summary>
+    private static IEnumerable<string> KeysIn(JsonValue json) => json.Kind switch
+    {
+        JsonKind.Object => json.ObjectProperties.SelectMany(p => KeysIn(p.Value).Prepend(p.Key)),
+        JsonKind.Array => json.ArrayItems.SelectMany(KeysIn),
+        _ => [],
+    };
 
     /// <summary>
     /// "args[N] looks like a credential" / "env.NAME looks like a credential" lines for the

@@ -237,6 +237,93 @@ public class CollectionDocumentTests
     }
 
     [Fact]
+    public void ExportRefusesAnUnmarkedCopyOfAMarkedPath()
+    {
+        var intent = new PublishIntent(
+            [new("ledger", new HashSet<string>(["LEDGER"], StringComparer.Ordinal))],
+            [new("ledger", Marks((0, Mark("/Users/d/ledger.js"))))],
+            []);
+        var copies = new Dictionary<string, JsonValue>
+        {
+            ["another argument"] = Local("/Users/d/ledger.js", "/Users/d/ledger.js"),
+            ["the command"] = JsonValue.Object(
+                ("command", JsonValue.String("/Users/d/ledger.js")),
+                ("args", JsonValue.Array([JsonValue.String("/Users/d/ledger.js")]))),
+            ["an environment value"] = JsonValue.Object(
+                ("command", JsonValue.String("node")),
+                ("args", JsonValue.Array([JsonValue.String("/Users/d/ledger.js")])),
+                ("env", JsonValue.Object(("LEDGER", JsonValue.String("/Users/d/ledger.js"))))),
+        };
+        foreach (var (place, config) in copies)
+        {
+            var refused = Assert.Throws<PathMarkMovedException>(() => CollectionDocument.Export("x", null, null, "2026-09-21T15:00:00Z",
+                new Dictionary<string, JsonValue> { ["ledger"] = config }, intent));
+            Assert.True(refused.Connector == "ledger", place);
+        }
+        // An environment value nobody ticked to share stays here as a hint, so it copies nothing.
+        var stripped = JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String("/Users/d/ledger.js")])),
+            ("env", JsonValue.Object(("OTHER", JsonValue.String("/Users/d/ledger.js")))));
+        CollectionDocument.Export("x", null, null, "2026-09-21T15:00:00Z",
+            new Dictionary<string, JsonValue> { ["ledger"] = stripped }, intent);
+    }
+
+    [Fact]
+    public void ConnectorCarryingFindsAValueAsWrittenOrAsJsonSpellsIt()
+    {
+        CollectionDocument.Connector LocalConnector(string arg) =>
+            new(new CollectionDocument.Launcher.Local("node", [arg], CollectionPlatforms.Current));
+        var document = new CollectionDocument("x", null, null, "2026-09-21T15:00:00Z", new Dictionary<string, CollectionDocument.Connector>
+        {
+            ["inside"] = LocalConnector("--config=/Users/d/a/b.json"),
+            ["escaped"] = LocalConnector("""{"dir":"\/Users\/d\/c"}"""),
+            ["clean"] = LocalConnector("x.js"),
+        });
+        Assert.Equal("inside", document.ConnectorCarrying(["/Users/d/a"]));   // held inside a longer string
+        Assert.Equal("escaped", document.ConnectorCarrying(["/Users/d/c"]));  // held as a JSON blob spells it
+        Assert.Null(document.ConnectorCarrying(["/Users/d/elsewhere"]));
+        Assert.Null(document.ConnectorCarrying([""]));   // an empty value would match every string
+        Assert.Null(document.ConnectorCarrying([]));
+    }
+
+    /// <summary>
+    /// A character past U+FFFF sorts before U+FF5E by UTF-16 code unit, which is how this side
+    /// orders, and after it by Unicode scalar, which is Swift's <c>&lt;</c>: the refusal names the
+    /// same one on both.
+    /// </summary>
+    [Fact]
+    public void ARefusalNamesTheFirstConnectorInOrdinalOrder()
+    {
+        var lost = new PublishIntent(
+            [],
+            [new("～", Marks((0, Mark("/gone/one.js")))), new("\U0001F600", Marks((0, Mark("/gone/two.js"))))],
+            []);
+        var refused = Assert.Throws<PathMarkMovedException>(() => CollectionDocument.Export("x", null, null, "2026-09-21T15:00:00Z",
+            new Dictionary<string, JsonValue> { ["～"] = Local("x.js"), ["\U0001F600"] = Local("x.js") }, lost));
+        Assert.Equal("\U0001F600", refused.Connector);
+    }
+
+    [Fact]
+    public void PlacedArgumentsAreTheTextsTheMarksReplace()
+    {
+        var intent = new PublishIntent(
+            [],
+            [
+                new("ledger", Marks((0, Mark("/Users/d/ledger.js")))),
+                new("remote", Marks((0, Mark("/Users/d/r.js")))),
+                new("gone", Marks((0, Mark("/Users/d/g.js")))),
+            ],
+            []);
+        var connectors = new Dictionary<string, JsonValue>(StringComparer.Ordinal)
+        {
+            ["ledger"] = Local("--quiet", "/Users/d/ledger.js"),
+            ["remote"] = RemotePattern.Encode(new RemoteConfig("https://mcp.example.com/", RemoteAuth.Auto, RemoteLaunchStyle.Npx, package: "mcp-remote")),
+        };
+        Assert.Equal(["/Users/d/ledger.js"], intent.PlacedArguments(connectors));
+    }
+
+    [Fact]
     public void ExportRefusesAMarkLeftOnARemoteConnector()
     {
         var remote = RemotePattern.Encode(new RemoteConfig("https://mcp.example.com/", RemoteAuth.Auto, RemoteLaunchStyle.Npx,

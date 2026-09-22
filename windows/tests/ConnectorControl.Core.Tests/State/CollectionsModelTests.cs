@@ -706,4 +706,33 @@ public class CollectionsModelTests
         Assert.NotSame(items, model.Items);
         Assert.True(model.Items.Single(i => i.Name == "Work").IsActive);
     }
+    [Fact]
+    public void TheWindowsStripOpensPublishForABlockedPublishAndStillAsksAboutTheFile()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        var folder = h.Dir.File("share");
+        Directory.CreateDirectory(folder);
+        Assert.Null(state.CreateCollection("Shared"));
+        Assert.Null(state.StartPublishing("Shared", folder, PublishIntent.None));
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Shared";
+
+        var moved = AppState.PathMarkMovedError("ledger");
+        state.PublishError = new CollectionPublishError("Shared", moved, PublishErrorKind.BlockedForReview);
+        Assert.Equal(moved, model.BannerText);
+        Assert.Equal(CollectionsModel.PublishButton, model.BannerButton);
+        // False: true would put the Review dialog up. The view shows Publish for this kind.
+        Assert.False(model.BannerAction());
+        // A folder is no answer to this.
+        // Refused, and the refusal says why.
+        Assert.Equal(moved, model.ChoosePublishFolder(h.Dir.File("elsewhere")));
+        Assert.Equal(folder, state.CollectionsCache.Published["Shared"].Folder);
+
+        // Unlike a failed write, a blocked publish never touched the folder, so Stop Publishing can
+        // still offer to remove the document there.
+        h.Dialogs.ConfirmAnswers.Enqueue(false);
+        model.StopPublishing();
+        Assert.Equal([CollectionsModel.DeletePublishedFileQuestion("shared.json")], h.Dialogs.Confirms.Select(c => c.Message));
+    }
 }

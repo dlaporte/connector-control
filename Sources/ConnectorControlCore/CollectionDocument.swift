@@ -88,7 +88,7 @@ public struct PublishIntent: Equatable, Sendable {
         // Pointer order on both platforms, so which of two competing marks wins is the same
         // everywhere. Marks still on their own argument go first: a mark that stayed put keeps
         // it, whatever another mark's value would follow onto.
-        for (pointer, mark) in marks.sorted(by: { $0.key.description < $1.key.description }) {
+        for (pointer, mark) in marks.sorted(by: { $0.key.description.ordinallyPrecedes($1.key.description) }) {
             let index = argumentIndex(pointer, count: args.count)
             guard let value = mark.value else {
                 if let index {
@@ -113,11 +113,33 @@ public struct PublishIntent: Equatable, Sendable {
         return PathMarkPlacement(placed: placed, unresolved: unresolved)
     }
 
+    /// The text of every argument a mark in this intent is placed on, across `connectors`: what
+    /// the exporter replaces with placeholders, and so what the document must never carry as
+    /// written. A remote connector's arguments are the launcher's, and carry no mark.
+    public func placedArguments(in connectors: [String: JSONValue]) -> Set<String> {
+        var out: Set<String> = []
+        for (name, marks) in pathMarks {
+            guard let config = connectors[name], RemotePattern.decode(config) == nil else { continue }
+            let args = FormMapper.analyze(config).model.args
+            for index in PublishIntent.placePathMarks(marks, in: args).placed.keys { out.insert(args[index]) }
+        }
+        return out
+    }
+
     /// The argument index a `/args/<n>` pointer names, when there is an argument there.
     private static func argumentIndex(_ pointer: JSONPointer, count: Int) -> Int? {
         guard pointer.segments.count == 2, pointer.segments[0] == "args",
               let index = Int(pointer.segments[1]), index >= 0, index < count else { return nil }
         return index
+    }
+}
+
+extension String {
+    /// UTF-16 code-unit order, which is what C#'s `StringComparer.Ordinal` sorts by. Swift's own
+    /// `<` orders by Unicode scalar, which puts a character beyond U+FFFF after one such as U+FF5E
+    /// where C# puts it before, so anything both platforms must list alike sorts by this.
+    public func ordinallyPrecedes(_ other: String) -> Bool {
+        utf16.lexicographicallyPrecedes(other.utf16)
     }
 }
 
@@ -348,15 +370,18 @@ public struct CollectionDocument: Equatable, Sendable {
     // MARK: Export
 
     /// Throws `PublishIntentError.pathMarkMoved` for the first connector, by name, whose path
-    /// marks cannot all be placed (`PublishIntent.placePathMarks`), and for a remote connector
-    /// that still carries a mark with a value: a remote connector's arguments are built by each
-    /// importer, so a mark there was made while it was a local one, and the path it stood for
-    /// may now be travelling in its extra arguments.
+    /// marks cannot all be placed (`PublishIntent.placePathMarks`); for a local connector that
+    /// also holds a placed mark's text somewhere unmarked that travels — another argument, the
+    /// command or a shared environment value — since a duplicate of a marked path is that path;
+    /// and for a remote
+    /// connector that still carries a mark with a value: a remote connector's arguments are
+    /// built by each importer, so a mark there was made while it was a local one, and the path
+    /// it stood for may now be travelling in its extra arguments.
     public static func export(name: String, author: String?, origin: String?, exported: String,
                               connectors: [String: JSONValue], intent: PublishIntent) throws -> CollectionDocument {
         var out: [String: Connector] = [:]
-        // By name, so the connector a refusal names is the same on both platforms.
-        for connectorName in connectors.keys.sorted() {
+        // By name, in ordinal order, so the connector a refusal names is the same on both platforms.
+        for connectorName in connectors.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
             guard let config = connectors[connectorName] else { continue }
             let marks = intent.pathMarks[connectorName] ?? [:]
             let shared = intent.shareValues[connectorName] ?? []
@@ -393,6 +418,12 @@ public struct CollectionDocument: Equatable, Sendable {
                 var args = model.args
                 let placement = PublishIntent.placePathMarks(marks, in: model.args)
                 guard placement.unresolved.isEmpty else { throw PublishIntentError.pathMarkMoved(connector: connectorName) }
+                let marked = Set(placement.placed.keys.map { model.args[$0] })
+                let unmarked = model.args.indices.filter { placement.placed[$0] == nil }.map { model.args[$0] }
+                    + [model.command] + model.env.filter { shared.contains($0.key) }.map(\.value)
+                guard !unmarked.contains(where: marked.contains) else {
+                    throw PublishIntentError.pathMarkMoved(connector: connectorName)
+                }
                 for i in placement.placed.keys.sorted() {
                     guard let mark = placement.placed[i] else { continue }
                     args[i] = Placeholder.marker(mark.name)
@@ -409,6 +440,40 @@ public struct CollectionDocument: Equatable, Sendable {
             }
         }
         return CollectionDocument(name: name, author: author, origin: origin, exported: exported, connectors: out)
+    }
+
+    /// The first connector, in ordinal order, any of whose strings holds one of `values` as
+    /// written, or nil. A string holding a value counts wherever it sits in it — a path inside a
+    /// longer path, or inside a flag — and so does the value as JSON would escape it, which is how
+    /// it reads inside a JSON blob carried as a single argument. Empty values are ignored: every
+    /// string holds one.
+    public func connectorCarrying(_ values: Set<String>) -> String? {
+        let forms = values.filter { !$0.isEmpty }.flatMap(CollectionDocument.writtenForms)
+        guard !forms.isEmpty else { return nil }
+        for name in connectors.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+            guard let encoded = connectors[name]?.encode() else { continue }
+            let strings = encoded.stringLeaves.map(\.value) + CollectionDocument.keys(in: encoded)
+            if strings.contains(where: { string in forms.contains { string.contains($0) } }) { return name }
+        }
+        return nil
+    }
+
+    /// `value` as written, and as a JSON string would spell it: backslashes and quotes escaped,
+    /// with and without the slash escaped too.
+    static func writtenForms(_ value: String) -> [String] {
+        let escaped = value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        return Array(Set([value, value.replacingOccurrences(of: "/", with: "\\/"),
+                          escaped, escaped.replacingOccurrences(of: "/", with: "\\/")]))
+    }
+
+    /// Every object key in `json`, at any depth: a value could as well be a key of an
+    /// `additional` field as a string inside one.
+    private static func keys(in json: JSONValue) -> [String] {
+        switch json {
+        case .object(let object): return Array(object.keys) + object.values.flatMap(keys(in:))
+        case .array(let items): return items.flatMap(keys(in:))
+        default: return []
+        }
     }
 
     /// "args[N] looks like a credential" / "env.NAME looks like a credential" lines for the

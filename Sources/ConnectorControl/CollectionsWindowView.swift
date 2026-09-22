@@ -384,6 +384,10 @@ struct CollectionsWindowView: View {
         case .review(let collection):
             model.selected = collection
             show(.review(ReviewModel(state: state, collection: collection)))
+        case .publish(let collection):
+            // A publish the app stopped for review: the sheet is where the author answers it.
+            model.selected = collection
+            show(.publish(PublishModel(state: state, collection: collection)))
         case nil:
             break
         }
@@ -404,6 +408,12 @@ struct CollectionsWindowView: View {
             if let path = chooseDocument() { shownError = model.locateSource(path) }
         case .publishFailed:
             if let folder = chooseFolder() { shownError = model.choosePublishFolder(folder) }
+        case .publishBlocked:
+            // Stopped for review, not for a folder: choosing another folder would only move the
+            // failure there, so the answer is the Publish sheet.
+            if let collection = model.selected {
+                show(.publish(PublishModel(state: state, collection: collection)))
+            }
         case .updateAvailable, nil:
             break
         }

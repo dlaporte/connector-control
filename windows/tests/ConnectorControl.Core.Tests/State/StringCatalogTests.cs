@@ -155,6 +155,7 @@ public class StringCatalogTests
         actual["AppState.chooseClaude"] = ClaudePublisher.ChooseClaude;
         actual["AppState.claudeConfigChangedBody"] = AppState.ClaudeConfigChangedBody;
         actual["AppState.claudeConfigRegeneratedBody"] = AppState.ClaudeConfigRegeneratedBody;
+        actual["AppState.collectionDirCmdUnsafeCaution"] = AppState.CollectionDirCmdUnsafeCaution;
         actual["AppState.collectionLocateBanner"] = AppState.CollectionLocateBanner("X");
         actual["AppState.collectionPublishFailedBanner"] = AppState.CollectionPublishFailedBanner("X", "Y", "Z");
         actual["AppState.collectionUpdateBanner"] = AppState.CollectionUpdateBanner("X", "Y");

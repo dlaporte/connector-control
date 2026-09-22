@@ -629,21 +629,6 @@ final class EditorModelCollectionsTests: XCTestCase {
         return local.args
     }
 
-    /// Whether any string value in the JSON document at `file` contains `text`. Decoded rather
-    /// than searched as bytes: the serializer writes "/" as "\/", so a path searched for in the
-    /// raw text is never found, whatever the document carries.
-    private func carries(_ file: URL, _ text: String) throws -> Bool {
-        func strings(_ value: JSONValue) -> [String] {
-            switch value {
-            case .string(let s): return [s]
-            case .array(let items): return items.flatMap(strings)
-            case .object(let object): return object.values.flatMap(strings)
-            default: return []
-            }
-        }
-        return strings(try JSONValue.parse(Data(contentsOf: file))).contains { $0.contains(text) }
-    }
-
     func testSavingMovesAPathMarkWithItsRow() throws {
         let rig = EditorRig()
         defer { rig.dispose() }
@@ -667,7 +652,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertEqual(marks(rig), mark(at: 1, value: serverPath), "reordered")
         XCTAssertEqual(try publishedArgs(file), ["--quiet", "${CC_NEEDS:server_path}"])
         XCTAssertNil(rig.state.publishError)
-        XCTAssertFalse(try carries(file, serverPath))
+        XCTAssertFalse(try jsonFile(file, contains: serverPath))
     }
 
     func testEditingTheMarkedPathInPlaceKeepsItMarked() throws {
@@ -681,7 +666,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertEqual(marks(rig), mark(at: 0, value: corrected), "still the marked row; the record learns its new text")
         XCTAssertEqual(try publishedArgs(file), ["${CC_NEEDS:server_path}"])
         XCTAssertNil(rig.state.publishError)
-        XCTAssertFalse(try carries(file, corrected))
+        XCTAssertFalse(try jsonFile(file, contains: corrected))
     }
 
     func testDeletingTheMarkedRowDropsItsMark() throws {
@@ -694,6 +679,44 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertNil(marks(rig), "nothing is left for it to mark")
         XCTAssertNil(rig.state.publishError)
         XCTAssertEqual(try publishedArgs(file), ["--quiet"])
+    }
+
+    func testDeletingTheMarkedRowAndTypingThePathBackKeepsItMarked() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let file = try publishTeam(rig, args: [serverPath, "--quiet"])
+        let editor = rig.editor("svc", in: "Team")
+        editor.args.remove(at: 0)
+        editor.args.append(ArgRow(value: serverPath))
+        XCTAssertTrue(editor.save())
+        XCTAssertNil(rig.state.publishError)
+        XCTAssertEqual(try publishedArgs(file), ["--quiet", "${CC_NEEDS:server_path}"],
+                       "the same path typed back is still the marked path")
+        XCTAssertFalse(try jsonFile(file, contains: serverPath))
+        XCTAssertEqual(marks(rig), mark(at: 0, value: serverPath), "left for publishing to place by value")
+    }
+
+    func testACopyOfTheMarkedPathWaitsUntilTheSheetTicksBoth() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let file = try publishTeam(rig, args: [serverPath, "--quiet"])
+        let before = try Data(contentsOf: file)
+        let editor = rig.editor("svc", in: "Team")
+        editor.args.append(ArgRow(value: serverPath))
+        XCTAssertTrue(editor.save())
+        XCTAssertEqual(rig.state.publishError?.message, AppState.pathMarkMovedError("svc"))
+        XCTAssertEqual(try Data(contentsOf: file), before, "the copy is not sent as written")
+
+        // Publish… ticks every row holding the marked path, under the mark's name and hint.
+        let sheet = PublishModel(state: rig.state, collection: "Team")
+        let copies = sheet.pathRows.filter { $0.connector == "svc" && $0.value == serverPath }
+        XCTAssertEqual(copies.map(\.marked), [true, true])
+        XCTAssertEqual(copies.map(\.name), ["server_path", "server_path"])
+        XCTAssertEqual(copies.map(\.hint), ["your clone", "your clone"])
+        XCTAssertNil(sheet.publish())
+        XCTAssertNil(rig.state.publishError)
+        XCTAssertEqual(try publishedArgs(file), ["${CC_NEEDS:server_path}", "--quiet", "${CC_NEEDS:server_path}"])
+        XCTAssertFalse(try jsonFile(file, contains: serverPath))
     }
 
     func testARenameCarriesTheMarksToTheNewName() throws {

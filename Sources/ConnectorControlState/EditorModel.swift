@@ -922,6 +922,15 @@ public final class EditorModel: ObservableObject {
               FormMapper.analyze(config).model.args == args.map(\.value) else { return nil }
         let placement = PublishIntent.placePathMarks(marks, in: openedArgs)
         guard placement.unresolved.isEmpty else { return nil }
+        // A deleted row takes its mark with it only when its text is gone from the save too. The
+        // same path typed back in a new row, or moved into the command or an environment value,
+        // is still the path the author marked: the record is left for publishing to place by
+        // value, or to refuse.
+        let model = FormMapper.analyze(config).model
+        let saved = Set(model.args + [model.command] + Array(model.env.values))
+        for (opened, _) in placement.placed where !args.contains(where: { openArgIndexByRow[$0.id] == opened }) {
+            if saved.contains(openedArgs[opened]) { return nil }
+        }
         var followed: [JSONPointer: PublishIntent.PathMark] = [:]
         for (position, row) in args.enumerated() {
             guard let opened = openArgIndexByRow[row.id], let mark = placement.placed[opened] else { continue }

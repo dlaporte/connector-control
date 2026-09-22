@@ -24,4 +24,10 @@ public abstract record CollectionsWindowRequest
 
     /// <summary>Review &amp; Apply…: the window selects this collection and shows the Review dialog.</summary>
     public sealed record Review(string Collection) : CollectionsWindowRequest;
+
+    /// <summary>
+    /// A publish blocked for review: the window selects this collection and shows the Publish
+    /// dialog, which is where a moved mark is placed again.
+    /// </summary>
+    public sealed record Publish(string Collection) : CollectionsWindowRequest;
 }

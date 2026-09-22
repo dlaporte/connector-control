@@ -164,8 +164,14 @@ public partial class CollectionsWindow : Window
         }
     }
 
-    /// <summary>Publishing binds the whole collection, so this one takes no subset.</summary>
-    private void OnPublish(object sender, RoutedEventArgs e)
+    private void OnPublish(object sender, RoutedEventArgs e) => PublishSelected();
+
+    /// <summary>
+    /// The Publish dialog over the collection on show. Publishing binds the whole collection, so
+    /// this one takes no subset. Shared by the toolbar, the action link and a blocked publish's
+    /// banner, so all three open the same dialog the same way.
+    /// </summary>
+    private void PublishSelected()
     {
         if (Model.Selected is { } collection)
         {
@@ -282,8 +288,10 @@ public partial class CollectionsWindow : Window
 
     /// <summary>
     /// The strip's one button. True says the news needs nothing from the file system and the
-    /// Review dialog is the whole answer; false says this window owes a picker, and which one is
-    /// what the banner is — the model then refuses anything that is not what it asked for.
+    /// Review dialog is the whole answer; false says this window owes something else, and what is
+    /// what the banner is: a file for a source to locate, a folder for a write that failed — the
+    /// model refuses anything that is not what it asked for — or, for a publish stopped for
+    /// review, the Publish dialog.
     /// </summary>
     private void OnBannerAction(object sender, RoutedEventArgs e)
     {
@@ -308,6 +316,12 @@ public partial class CollectionsWindow : Window
                 {
                     Report(Model.ChoosePublishFolder(folder));
                 }
+                break;
+            case CollectionBanner.PublishBlocked:
+                // Stopped for review, not for a folder: another folder would re-bind the collection,
+                // write nothing there and leave the old folder's document behind. The Publish
+                // dialog is where the author answers it.
+                PublishSelected();
                 break;
         }
     }
@@ -353,6 +367,12 @@ public partial class CollectionsWindow : Window
                 break;
             case CollectionsWindowRequest.Review review:
                 Review(review.Collection);
+                break;
+            case CollectionsWindowRequest.Publish publish:
+                // A publish the app stopped for review, for the collection it names — which need
+                // not be the one this window is showing. The dialog is where the author answers it.
+                Model.Selected = publish.Collection;
+                PresentPublish(new PublishModel(state, publish.Collection), PublishDialogMode.Publish);
                 break;
         }
     }

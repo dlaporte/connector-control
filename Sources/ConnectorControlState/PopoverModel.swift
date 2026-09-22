@@ -187,16 +187,26 @@ public final class PopoverModel: ObservableObject {
 
     public func switchCollection(_ name: String) { state.switchCollection(to: name) }
 
-    /// The banner's button, for the one banner that needs nothing from the user first. The Bool
-    /// is about order as much as outcome: on true the request is already waiting, so the view
-    /// opens the Collections window and does nothing else; on false nothing has happened yet and
-    /// the view runs its file picker, then calls `locateSource` or `choosePublishFolder` with
-    /// what it gets. Opening the window before the call would let it take a nil request.
+    /// The banner's button, for the two banners that need nothing from the user first: an update
+    /// to review, and a publish blocked for review, each answered by a sheet in the Collections
+    /// window. The Bool is about order as much as outcome: on true the request is already waiting,
+    /// so the view opens the Collections window and does nothing else; on false nothing has
+    /// happened yet and the view runs its file picker, then calls `locateSource` or
+    /// `choosePublishFolder` with what it gets. Opening the window before the call would let it
+    /// take a nil request.
     @discardableResult
     public func collectionBannerAction() -> Bool {
-        guard case .updateAvailable = state.collectionBanner else { return false }
-        requestReview()
-        return true
+        switch state.collectionBanner {
+        case .updateAvailable:
+            requestReview()
+            return true
+        case .publishBlocked(let collection, _):
+            // Another folder is no answer to this, so the banner never offers the folder picker.
+            state.collectionsWindowRequest = .publish(collection: collection)
+            return true
+        case .locate, .publishFailed, nil:
+            return false
+        }
     }
 
     /// The failed-publish banner's second button, where giving up on the folder is as reasonable
@@ -224,9 +234,16 @@ public final class PopoverModel: ObservableObject {
     /// The failed-publish banner's folder, for the collection that banner names. Publishing
     /// again into a new folder is what re-points it, so the recorded intent travels unchanged —
     /// the sheet is where what the document says gets edited. nil as `locateSource` returns nil.
+    /// Under a publish blocked for review the folder is refused inside `changePublishFolder`, which
+    /// answers with the reason, so a folder panel reached by any route explains itself rather than
+    /// doing nothing without a word.
     public func choosePublishFolder(_ path: String) -> String? {
-        guard case .publishFailed(let collection, _) = state.collectionBanner else { return nil }
-        return state.changePublishFolder(collection, to: path)
+        switch state.collectionBanner {
+        case .publishFailed(let collection, _), .publishBlocked(let collection, _):
+            return state.changePublishFolder(collection, to: path)
+        case .updateAvailable, .locate, nil:
+            return nil
+        }
     }
 
     /// The menu's Import…: the picker and the sheet belong to the Collections window, so opening

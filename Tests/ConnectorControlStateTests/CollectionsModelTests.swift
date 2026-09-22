@@ -317,7 +317,7 @@ final class CollectionsModelTests: XCTestCase {
         defer { model.dispose() }
         model.selected = "Shared"
         // The folder that refused the write would refuse the delete, so Remove is not offered.
-        state.publishError = (collection: "Shared", message: "the folder is read-only")
+        state.publishError = CollectionPublishError(collection: "Shared", message: "the folder is read-only")
         model.stopPublishing()
         XCTAssertTrue(h.dialogs.confirms.isEmpty, "nothing to ask when Remove could not be honoured")
         XCTAssertFalse(state.isPublished("Shared"))
@@ -328,7 +328,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNil(state.createCollection(named: "Consulting"))
         XCTAssertNil(state.startPublishing("Consulting", to: folder.path, intent: .none))
         model.selected = "Consulting"
-        state.publishError = (collection: "Shared", message: "the folder is read-only")
+        state.publishError = CollectionPublishError(collection: "Shared", message: "the folder is read-only")
         h.dialogs.confirmAnswers = [false]
         model.stopPublishing()
         XCTAssertEqual(h.dialogs.confirms.map(\.message),
@@ -483,7 +483,7 @@ final class CollectionsModelTests: XCTestCase {
         var repaints = 0
         let sink = model.objectWillChange.sink { _ in repaints += 1 }
         defer { sink.cancel() }
-        state.publishError = (collection: "Default", message: "the folder is read-only")
+        state.publishError = CollectionPublishError(collection: "Default", message: "the folder is read-only")
         XCTAssertGreaterThan(repaints, 0, "a failed publish repaints the window")
         XCTAssertNil(model.bannerText)
         model.selected = "Default"
@@ -518,7 +518,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(state.collectionsCache.published["Default"]?.folder, first.path)
 
         // A failed publish belongs to Default, and only Default's window may answer it.
-        state.publishError = (collection: "Default", message: "the folder is read-only")
+        state.publishError = CollectionPublishError(collection: "Default", message: "the folder is read-only")
         XCTAssertNil(model.choosePublishFolder(second.path), "Team is showing, not Default")
         XCTAssertEqual(state.collectionsCache.published["Default"]?.folder, first.path)
 
@@ -635,5 +635,32 @@ final class CollectionsModelTests: XCTestCase {
         // Renamed back: the name resolves again, and the window stays where the user left it.
         XCTAssertNil(state.renameCollection("Spare Parts", to: "Spare"))
         XCTAssertEqual(model.selected, "Default", "a returning name must not pull the window to it")
+    }
+    func testTheWindowsStripOpensPublishForABlockedPublishAndStillAsksAboutTheFile() throws {
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        let folder = h.dir.file("share")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        XCTAssertNil(state.createCollection(named: "Shared"))
+        XCTAssertNil(state.startPublishing("Shared", to: folder.path, intent: .none))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Shared"
+
+        let moved = AppState.pathMarkMovedError("ledger")
+        state.publishError = CollectionPublishError(collection: "Shared", message: moved, kind: .blockedForReview)
+        XCTAssertEqual(model.bannerText, moved)
+        XCTAssertEqual(model.bannerButton, CollectionsModel.publishButton)
+        // False: true would put the Review sheet up. The view shows Publish for this kind.
+        XCTAssertFalse(model.bannerAction())
+        XCTAssertEqual(model.choosePublishFolder(h.dir.file("elsewhere").path), moved,
+                       "a folder is no answer to this, and the refusal says why")
+        XCTAssertEqual(state.collectionsCache.published["Shared"]?.folder, folder.path)
+
+        // Unlike a failed write, a blocked publish never touched the folder, so Stop Publishing can
+        // still offer to remove the document there.
+        h.dialogs.confirmAnswers = [false]
+        model.stopPublishing()
+        XCTAssertEqual(h.dialogs.confirms.map(\.message), [CollectionsModel.deletePublishedFileQuestion("shared.json")])
     }
 }

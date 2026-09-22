@@ -1417,6 +1417,17 @@ public sealed class EditorModel : ObservableObject, IDisposable
         {
             return null;
         }
+        // A deleted row takes its mark with it only when its text is gone from the save too. The
+        // same path typed back in a new row, or moved into the command or an environment value, is
+        // still the path the author marked: the record is left for publishing to place by value, or
+        // to refuse.
+        var model = FormMapper.Analyze(config).Model;
+        var saved = model.Args.Append(model.Command).Concat(model.Env.Values).ToHashSet(StringComparer.Ordinal);
+        var surviving = Args.Where(openArgIndexByRow.ContainsKey).Select(row => openArgIndexByRow[row]).ToHashSet();
+        if (placement.Placed.Keys.Any(opened => !surviving.Contains(opened) && saved.Contains(openedArgs[opened])))
+        {
+            return null;
+        }
         var followed = new Dictionary<JsonPointer, PublishIntent.PathMark>();
         for (var position = 0; position < Args.Count; position++)
         {

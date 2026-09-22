@@ -311,9 +311,11 @@ public final class CollectionsModel: ObservableObject {
 
     public var bannerButton: String? { banner.map(CollectionBannerPresentation.button) }
 
-    /// The strip's button. True says the news needs nothing from the file system, so the view has
-    /// only to put the Review sheet in front of the selected collection. False says the view owes
-    /// a picker and must hand what it gets to `locateSource` or `choosePublishFolder`.
+    /// The strip's button. True says the news is an update, so the view has only to put the
+    /// Review sheet in front of the selected collection. False says the view decides by the
+    /// banner's kind: a picker for the file or folder, handed to `locateSource` or
+    /// `choosePublishFolder`, or — for a publish blocked for review — the Publish sheet, since
+    /// another folder is no answer to that.
     ///
     /// Deliberately not `@discardableResult`, unlike the popover's, which sets the window request
     /// on its way past: everything this one does is in the answer, so a call that drops it did
@@ -332,10 +334,15 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// The Choose Folder button's folder, for the collection the window is showing. nil as
-    /// `locateSource` returns nil.
+    /// `locateSource` returns nil. Under a publish blocked for review the folder is refused inside
+    /// `changePublishFolder`, which answers with the reason.
     public func choosePublishFolder(_ path: String) -> String? {
-        guard case .publishFailed(let collection, _) = banner else { return nil }
-        return state.changePublishFolder(collection, to: path)
+        switch banner {
+        case .publishFailed(let collection, _), .publishBlocked(let collection, _):
+            return state.changePublishFolder(collection, to: path)
+        case .updateAvailable, .locate, nil:
+            return nil
+        }
     }
 
     // MARK: - Toolbar
@@ -445,7 +452,10 @@ public final class CollectionsModel: ObservableObject {
         // failed: the folder that refused it would refuse the delete too, so the question would
         // be one whose Remove cannot be honoured. The banner's own Stop Publishing says the same
         // by passing false outright.
-        let deleteFile = state.publishError?.collection == collection
+        // Only a failed write puts the folder out of reach. A publish blocked for review never
+        // touched it, so its document can still be removed and the question still stands.
+        let failedWrite = state.publishError.map { $0.collection == collection && $0.kind == .writeFailed } ?? false
+        let deleteFile = failedWrite
             ? false
             : publishedFileName(of: collection).map(askAboutPublishedFile) ?? false
         state.stopPublishing(collection, deleteFile: deleteFile)

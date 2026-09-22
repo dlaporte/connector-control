@@ -97,7 +97,7 @@ public class PublishModelTests
         using var h = new AppStateHarness();
         using var state = Started(h);
         var model = new PublishModel(state, state.ActiveCollection);
-        Assert.DoesNotContain("sk-live-secret", model.Preview, StringComparison.Ordinal);   // the default is stripped
+        Assert.False(JsonText.Contains(model.Preview, "sk-live-secret"));   // the default is stripped
         // A value that never leaves this machine is nothing to warn about.
         Assert.Empty(model.Warnings);
 
@@ -161,7 +161,8 @@ public class PublishModelTests
         Assert.Equal("srv", row.Name);
 
         // A marked argument that does not look like a path keeps its row, so publishing from the
-        // dialog cannot quietly unmark it.
+        // dialog cannot quietly unmark it. Recorded as the author's reviewed answer, which is what
+        // lets the path it replaces leave this machine's list of marked paths.
         var flag = new PublishIntent(
             [],
             [new("c", new Dictionary<JsonPointer, PublishIntent.PathMark>
@@ -169,7 +170,7 @@ public class PublishModelTests
                 [new JsonPointer(["args", "0"])] = new("flag", null, "--quiet"),
             })],
             []);
-        Assert.Null(state.UpdatePublishIntent(state.ActiveCollection, flag));
+        Assert.Null(state.UpdatePublishIntent(state.ActiveCollection, flag, new HashSet<string>(["--quiet"], StringComparer.Ordinal)));
         var marked = new PublishModel(state, state.ActiveCollection);
         Assert.Equal(["--quiet"], marked.PathRows.Where(r => r.Connector == "c" && r.Marked).Select(r => r.Value));
         Assert.Equal(flag, marked.Intent);
@@ -301,6 +302,41 @@ public class PublishModelTests
         // The author's explicit choice: the path travels as written.
         Assert.Equal(["/Users/d/y.js", "--quiet"], DocumentArgs("c", File.ReadAllBytes(file)));
         Assert.Null(RecordedMarks(state, "c"));
+        // Forgetting then publishing is how a path leaves this machine's list.
+        Assert.Empty(state.CollectionsCache.Published[state.ActiveCollection].MarkedValues);
+    }
+
+    [Fact]
+    public void ARowHoldingAPathThisMachineKeepsBackStartsTicked()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var first = new PublishModel(state, state.ActiveCollection) { Folder = PublishFolder(h) };
+        first.PathRows[0].Marked = true;
+        first.PathRows[0].Name = "srv";
+        Assert.Null(first.Publish());
+        var file = Path.Combine(PublishFolder(h), first.FileName);
+
+        // The other machine dropped the mark; its sidecar is here, its master list is not.
+        var entry = state.CollectionsFile.Collections[state.ActiveCollection];
+        var record = entry.Publish!;
+        new CollectionsFile(state.CollectionsFile.Collections.Select(p => p.Key == state.ActiveCollection
+            ? new KeyValuePair<string, CollectionsFile.Entry>(p.Key, new CollectionsFile.Entry(
+                entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs,
+                new CollectionsFile.PublishRecord(record.Slug, record.Origin,
+                    record.Intent.ReplacingPathMarks("c", new Dictionary<JsonPointer, PublishIntent.PathMark>())),
+                entry.Provenance))
+            : p)).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        state.Reload();
+        Assert.Equal(AppState.PathMarkMovedError("c"), state.PublishError?.Message);
+
+        var sheet = new PublishModel(state, state.ActiveCollection);
+        // The record no longer marks it, but this machine has sent it as a placeholder.
+        Assert.True(sheet.PathRows.First(r => r.Connector == "c").Marked);
+        Assert.Empty(sheet.UnresolvedMarks);
+        Assert.Null(sheet.Publish());
+        Assert.Null(state.PublishError);
+        Assert.Equal(["${CC_NEEDS:path}", "--quiet"], DocumentArgs("c", File.ReadAllBytes(file)));
     }
 
     [Fact]
@@ -422,7 +458,7 @@ public class PublishModelTests
         Assert.Equal("my_path_", model.Intent.PathMarks["c"][pointer].Name);
         Assert.Contains("${CC_NEEDS:my_path_}", model.Preview, StringComparison.Ordinal);
         // A name nobody can fill must not publish the path the mark was hiding.
-        Assert.DoesNotContain("/Users/d/x.js", model.Preview, StringComparison.Ordinal);
+        Assert.False(JsonText.Contains(model.Preview, "/Users/d/x.js"));
 
         // A leading digit is legal in a marker name; only the space is replaced.
         model.PathRows[0].Name = "2nd path";
@@ -490,7 +526,7 @@ public class PublishModelTests
         Assert.Equal(["A", "B"], model.EnvRows.Select(r => r.Name));
         Assert.Equal(["sk-live-secret", "us"], model.EnvRows.Select(r => r.Value));
         // Stripped until it is ticked.
-        Assert.DoesNotContain("sk-live-secret", model.Preview, StringComparison.Ordinal);
+        Assert.False(JsonText.Contains(model.Preview, "sk-live-secret"));
         model.EnvRows[0].Share = true;
         Assert.Contains("sk-live-secret", model.Preview, StringComparison.Ordinal);
         // The tick does not change what is there.

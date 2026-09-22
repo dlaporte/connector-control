@@ -208,21 +208,28 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public void SwitchCollection(string name) => state.SwitchCollection(name);
 
     /// <summary>
-    /// The banner's button, for the one banner that needs nothing from the user first. The bool
-    /// is about order as much as outcome: on true the request is already waiting, so the view
-    /// opens the Collections window and does nothing else; on false nothing has happened yet and
-    /// the view runs its file dialog, then calls <see cref="LocateSource"/> or
+    /// The banner's button, for the two banners that need nothing from the user first: an update
+    /// to review, and a publish blocked for review, each answered by a dialog in the Collections
+    /// window. The bool is about order as much as outcome: on true the request is already waiting,
+    /// so the view opens the Collections window and does nothing else; on false nothing has
+    /// happened yet and the view runs its file dialog, then calls <see cref="LocateSource"/> or
     /// <see cref="ChoosePublishFolder"/> with what it gets. Opening the window before the call
     /// would let it take a null request.
     /// </summary>
     public bool CollectionBannerAction()
     {
-        if (state.CollectionBanner is not State.CollectionBanner.UpdateAvailable)
+        switch (state.CollectionBanner)
         {
-            return false;
+            case State.CollectionBanner.UpdateAvailable:
+                RequestReview();
+                return true;
+            case State.CollectionBanner.PublishBlocked blocked:
+                // Another folder is no answer to this, so the banner never offers the folder dialog.
+                state.CollectionsWindowRequest = new CollectionsWindowRequest.Publish(blocked.Collection);
+                return true;
+            default:
+                return false;
         }
-        RequestReview();
-        return true;
     }
 
     /// <summary>
@@ -259,12 +266,16 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     /// The failed-publish banner's folder, for the collection that banner names. Publishing
     /// again into a new folder is what re-points it, so the recorded intent travels unchanged —
     /// the dialog is where what the document says gets edited. Null as <see cref="LocateSource"/>
-    /// returns null.
+    /// returns null. Under a publish blocked for review the folder is refused inside
+    /// <c>AppState.ChangePublishFolder</c>, which answers with the reason, so a folder dialog
+    /// reached by any route explains itself rather than doing nothing without a word.
     /// </summary>
-    public string? ChoosePublishFolder(string folder) =>
-        state.CollectionBanner is State.CollectionBanner.PublishFailed failed
-            ? state.ChangePublishFolder(failed.Collection, folder)
-            : null;
+    public string? ChoosePublishFolder(string folder) => state.CollectionBanner switch
+    {
+        State.CollectionBanner.PublishFailed failed => state.ChangePublishFolder(failed.Collection, folder),
+        State.CollectionBanner.PublishBlocked blocked => state.ChangePublishFolder(blocked.Collection, folder),
+        _ => null,
+    };
 
     /// <summary>
     /// The menu's Import…: the dialog belongs to the Collections window, so opening it is all

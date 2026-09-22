@@ -77,7 +77,7 @@ final class PublishModelTests: XCTestCase {
         let (h, state) = try started()
         defer { h.dispose() }
         let model = PublishModel(state: state, collection: state.activeCollection)
-        XCTAssertFalse(model.preview.contains("sk-live-secret"), "the default is stripped")
+        XCTAssertFalse(jsonText(model.preview, contains: "sk-live-secret"), "the default is stripped")
         XCTAssertTrue(model.warnings.isEmpty, "a value that never leaves this machine is nothing to warn about")
 
         model.envRows[0].hint = "the ledger dashboard ▸ API tokens"
@@ -137,11 +137,12 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(row.name, "srv")
 
         // A marked argument that does not look like a path keeps its row, so publishing from the
-        // sheet cannot quietly unmark it.
+        // sheet cannot quietly unmark it. Recorded as the author's reviewed answer, which is what
+        // lets the path it replaces leave this machine's list of marked paths.
         let flag = PublishIntent(shareValues: [:], pathMarks: ["c": [
             JSONPointer(["args", "0"]): .init(name: "flag", hint: nil, value: "--quiet"),
         ]], hints: [:])
-        XCTAssertNil(state.updatePublishIntent(state.activeCollection, intent: flag))
+        XCTAssertNil(state.updatePublishIntent(state.activeCollection, intent: flag, reviewedValues: ["--quiet"]))
         let marked = PublishModel(state: state, collection: state.activeCollection)
         XCTAssertEqual(marked.pathRows.filter { $0.connector == "c" && $0.marked }.map(\.value), ["--quiet"])
         XCTAssertEqual(marked.intent, flag)
@@ -259,6 +260,36 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(try documentArgs("c", in: Data(contentsOf: file)), ["/Users/d/y.js", "--quiet"],
                        "the author's explicit choice: the path travels as written")
         XCTAssertNil(state.collectionsFile.collections[state.activeCollection]?.publish?.intent.pathMarks["c"])
+        XCTAssertEqual(state.collectionsCache.published[state.activeCollection]?.markedValues, [],
+                       "forgetting then publishing is how a path leaves this machine's list")
+    }
+
+    func testARowHoldingAPathThisMachineKeepsBackStartsTicked() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let first = PublishModel(state: state, collection: state.activeCollection)
+        first.folder = try publishFolder(h).path
+        first.pathRows[0].marked = true
+        first.pathRows[0].name = "srv"
+        XCTAssertNil(first.publish())
+        let file = try publishFolder(h).appendingPathComponent(first.fileName)
+
+        // The other machine dropped the mark; its sidecar is here, its master list is not.
+        var sidecar = state.collectionsFile
+        var record = try XCTUnwrap(sidecar.collections[state.activeCollection]?.publish)
+        record.intent = record.intent.replacingPathMarks(of: "c", with: [:])
+        sidecar.collections[state.activeCollection]?.publish = record
+        try sidecar.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        state.reload()
+        XCTAssertEqual(state.publishError?.message, AppState.pathMarkMovedError("c"))
+
+        let sheet = PublishModel(state: state, collection: state.activeCollection)
+        let row = try XCTUnwrap(sheet.pathRows.first { $0.connector == "c" })
+        XCTAssertTrue(row.marked, "the record no longer marks it, but this machine has sent it as a placeholder")
+        XCTAssertEqual(sheet.unresolvedMarks, [])
+        XCTAssertNil(sheet.publish())
+        XCTAssertNil(state.publishError)
+        XCTAssertEqual(try documentArgs("c", in: Data(contentsOf: file)), ["${CC_NEEDS:path}", "--quiet"])
     }
 
     func testAMarkWhoseConnectorIsGoneWaitsToBeForgotten() throws {
@@ -341,7 +372,7 @@ final class PublishModelTests: XCTestCase {
         model.pathRows[0].name = "my path!"
         XCTAssertEqual(model.intent.pathMarks["c"]?[JSONPointer(["args", "0"])]?.name, "my_path_")
         XCTAssertTrue(model.preview.contains("${CC_NEEDS:my_path_}"))
-        XCTAssertFalse(model.preview.contains("/Users/d/x.js"),
+        XCTAssertFalse(jsonText(model.preview, contains: "/Users/d/x.js"),
                        "a name nobody can fill must not publish the path the mark was hiding")
 
         model.pathRows[0].name = "2nd path"
@@ -383,7 +414,7 @@ final class PublishModelTests: XCTestCase {
         // In full and unelided: the tick beside it is a decision about exactly these bytes.
         XCTAssertEqual(model.envRows.map(\.name), ["A", "B"])
         XCTAssertEqual(model.envRows.map(\.value), ["sk-live-secret", "us"])
-        XCTAssertFalse(model.preview.contains("sk-live-secret"), "stripped until it is ticked")
+        XCTAssertFalse(jsonText(model.preview, contains: "sk-live-secret"), "stripped until it is ticked")
         model.envRows[0].share = true
         XCTAssertTrue(model.preview.contains("sk-live-secret"))
         XCTAssertEqual(model.envRows[0].value, "sk-live-secret", "the tick does not change what is there")

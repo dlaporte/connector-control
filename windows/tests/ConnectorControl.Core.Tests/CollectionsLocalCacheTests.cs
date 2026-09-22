@@ -54,6 +54,29 @@ public sealed class CollectionsLocalCacheTests : IDisposable
         Assert.Equal(Sample, Sample.Reconciled(file));
     }
 
+    /// <summary>
+    /// The list of marked paths round-trips sorted, is left out while empty, and a cache written
+    /// before it was kept loads with an empty one.
+    /// </summary>
+    [Fact]
+    public void MarkedValuesRoundTripAndAreEmptyInAnOlderCache()
+    {
+        var marked = new CollectionsLocalCache([], new Dictionary<string, CollectionsLocalCache.PublishBinding>
+        {
+            ["Consulting"] = new("/Users/d/Acme/mcp", "sha256:01", ["/Users/d/ledger.js", "/Users/d/b.js"]),
+        });
+        Assert.Equal(marked, CollectionsLocalCache.Decode(marked.Encode()));
+        Assert.Equal(
+            JsonValue.Array([JsonValue.String("/Users/d/b.js"), JsonValue.String("/Users/d/ledger.js")]),
+            marked.Encode().ValueAt(new JsonPointer(["published", "Consulting", "markedValues"])));
+        Assert.Null(Sample.Encode().ValueAt(new JsonPointer(["published", "Consulting", "markedValues"])));
+
+        var older = JsonValue.Parse("""
+            {"version": 1, "synced": {}, "published": {"Consulting": {"folder": "/Users/d/Acme/mcp"}}}
+            """);
+        Assert.Empty(CollectionsLocalCache.Decode(older).Published["Consulting"].MarkedValues);
+    }
+
     [Fact]
     public void AnUnknownVersionDecodesAsMalformed()
     {

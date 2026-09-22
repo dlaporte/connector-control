@@ -827,14 +827,6 @@ public class EditorModelCollectionsTests
         }
     }
 
-    /// <summary>
-    /// Whether any string value in the JSON document at <paramref name="file"/> contains
-    /// <paramref name="text"/>. Decoded rather than searched as text: the serializer writes "/"
-    /// as "\/", so a path searched for in the raw text is never found, whatever the document carries.
-    /// </summary>
-    private static bool Carries(string file, string text) =>
-        JsonValue.Parse(File.ReadAllBytes(file)).StringLeaves().Any(leaf => leaf.Value.Contains(text, StringComparison.Ordinal));
-
     private static IReadOnlyList<string> PublishedArgs(string file, string connector = "svc") =>
         Assert.IsType<CollectionDocument.Launcher.Local>(
             CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors[connector].Launcher).Args;
@@ -869,7 +861,7 @@ public class EditorModelCollectionsTests
         AssertMarks(MarkAt(1, ServerPath), Marks(rig));   // reordered
         Assert.Equal(["--quiet", "${CC_NEEDS:server_path}"], PublishedArgs(file));
         Assert.Null(rig.State.PublishError);
-        Assert.False(Carries(file, ServerPath));
+        Assert.False(JsonText.FileContains(file, ServerPath));
     }
 
     [Fact]
@@ -885,7 +877,7 @@ public class EditorModelCollectionsTests
         AssertMarks(MarkAt(0, corrected), Marks(rig));
         Assert.Equal(["${CC_NEEDS:server_path}"], PublishedArgs(file));
         Assert.Null(rig.State.PublishError);
-        Assert.False(Carries(file, corrected));
+        Assert.False(JsonText.FileContains(file, corrected));
     }
 
     [Fact]
@@ -899,6 +891,52 @@ public class EditorModelCollectionsTests
         Assert.Null(Marks(rig));   // nothing is left for it to mark
         Assert.Null(rig.State.PublishError);
         Assert.Equal(["--quiet"], PublishedArgs(file));
+    }
+
+    [Fact]
+    public void DeletingTheMarkedRowAndTypingThePathBackKeepsItMarked()
+    {
+        using var rig = new EditorRig();
+        var file = PublishTeam(rig, ServerPath, "--quiet");
+        using (var editor = rig.Editor("svc", "Team"))
+        {
+            editor.Args.RemoveAt(0);
+            editor.Args.Add(new ArgRow(ServerPath));
+            Assert.True(editor.Save());
+        }
+        Assert.Null(rig.State.PublishError);
+        // The same path typed back is still the marked path.
+        Assert.Equal(["--quiet", "${CC_NEEDS:server_path}"], PublishedArgs(file));
+        Assert.False(JsonText.FileContains(file, ServerPath));
+        // Left for publishing to place by value.
+        AssertMarks(MarkAt(0, ServerPath), Marks(rig));
+    }
+
+    [Fact]
+    public void ACopyOfTheMarkedPathWaitsUntilTheSheetTicksBoth()
+    {
+        using var rig = new EditorRig();
+        var file = PublishTeam(rig, ServerPath, "--quiet");
+        var before = File.ReadAllBytes(file);
+        using (var editor = rig.Editor("svc", "Team"))
+        {
+            editor.Args.Add(new ArgRow(ServerPath));
+            Assert.True(editor.Save());
+        }
+        Assert.Equal(AppState.PathMarkMovedError("svc"), rig.State.PublishError?.Message);
+        // The copy is not sent as written.
+        Assert.Equal(before, File.ReadAllBytes(file));
+
+        // Publish… ticks every row holding the marked path, under the mark's name and hint.
+        var dialog = new PublishModel(rig.State, "Team");
+        var copies = dialog.PathRows.Where(r => r.Connector == "svc" && r.Value == ServerPath).ToList();
+        Assert.Equal([true, true], copies.Select(r => r.Marked));
+        Assert.Equal(["server_path", "server_path"], copies.Select(r => r.Name));
+        Assert.Equal(["your clone", "your clone"], copies.Select(r => r.Hint));
+        Assert.Null(dialog.Publish());
+        Assert.Null(rig.State.PublishError);
+        Assert.Equal(["${CC_NEEDS:server_path}", "--quiet", "${CC_NEEDS:server_path}"], PublishedArgs(file));
+        Assert.False(JsonText.FileContains(file, ServerPath));
     }
 
     [Fact]

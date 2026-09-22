@@ -32,6 +32,8 @@ public sealed class AppState : ObservableObject, IDisposable
     public const string LocateCaution = "Locate the collection file to resolve paths.";
     /// <summary>"this PC" is the platform-forced half of this sentence; the Mac mirror says "this Mac".</summary>
     public const string UnpublishedDirectoryCaution = "${COLLECTION_DIR} has no folder until this collection is published from this PC.";
+    /// <summary>Windows only: the Mac never starts a connector through cmd.exe, so it has nothing to say here.</summary>
+    public const string CollectionDirCmdUnsafeCaution = "The folder ${COLLECTION_DIR} stands for" + RemotePattern.CmdUnsafeSuffix;
     public const string OwnCollectionError = "This is your own published collection.";
     public const string NewerDocumentError = "This collection was made by a newer Connector Control.";
     public const string PublishIntoStoreError = "Choose a folder other than the master list folder or its backups.";
@@ -1323,6 +1325,17 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return UnpublishedDirectoryCaution;
         }
+        // cmd.exe re-parses the arguments of a connector it starts, so a folder the token expands
+        // to with a space or one of its metacharacters in it splits the argument, or runs part of
+        // it as a command of its own.
+        if (CollectionDirectory(collection) is { } directory && RemotePattern.CmdUnsafeCharacter(directory) is not null
+            && CommandLine.TryRead(entry.Config, out var command, out var args)
+            && (command.Equals("cmd", StringComparison.OrdinalIgnoreCase) || command.Equals("cmd.exe", StringComparison.OrdinalIgnoreCase))
+            && args.Count > 0 && args[0].Equals("/c", StringComparison.OrdinalIgnoreCase)
+            && args.Any(arg => arg.Contains(Placeholder.DirectoryToken, StringComparison.Ordinal)))
+        {
+            return CollectionDirCmdUnsafeCaution;
+        }
         return null;
     }
 
@@ -1919,7 +1932,14 @@ public sealed class AppState : ObservableObject, IDisposable
     /// document the team already subscribed to. The document is written before this returns.
     /// null on success, else the message to show.
     /// </summary>
-    public string? StartPublishing(string collection, string folder, PublishIntent intent)
+    /// <param name="reviewedValues">
+    /// What the author's Publish in the dialog says must never travel as written: it replaces this
+    /// machine's list of marked paths (<see cref="CollectionsLocalCache.PublishBinding.MarkedValues"/>).
+    /// Null — the banner's Choose Folder…, which nobody reviewed — keeps the list the collection
+    /// already had.
+    /// </param>
+    public string? StartPublishing(string collection, string folder, PublishIntent intent,
+                                   IReadOnlySet<string>? reviewedValues = null)
     {
         // A synced collection has an author elsewhere, and a name that is not a collection has
         // nothing to publish. Nothing offers either, so both get the silence LocateSource gives a
@@ -1961,7 +1981,8 @@ public sealed class AppState : ObservableObject, IDisposable
         SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(
             full,
             // A new folder has nothing in it this app wrote, so the next write is unconditional.
-            string.Equals(previous?.Folder, full, StringComparison.Ordinal) ? previous?.LastWrittenHash : null));
+            string.Equals(previous?.Folder, full, StringComparison.Ordinal) ? previous?.LastWrittenHash : null,
+            reviewedValues ?? previous?.MarkedValues));
         // PersistStore ends in PublishIfChanged, which is what writes the document.
         PersistStore();
         // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
@@ -1980,23 +2001,50 @@ public sealed class AppState : ObservableObject, IDisposable
     /// Folder… does from the flyout and from the Collections window alike. The recorded intent
     /// travels unchanged: the dialog is where what the document says gets edited, not this.
     /// null on success, else the message.
+    ///
+    /// Refused, with nothing changed, while the collection's publish is blocked for review. The
+    /// intent carried here is the one that blocked, so the new folder would be bound, receive
+    /// nothing, and leave the old folder's document behind. The Publish dialog is the way out,
+    /// and it goes through <see cref="StartPublishing"/> with the intent the author has just
+    /// corrected.
     /// </summary>
-    public string? ChangePublishFolder(string collection, string folder) =>
-        StartPublishing(collection, folder,
+    public string? ChangePublishFolder(string collection, string folder)
+    {
+        if (PublishError is { } blocked && blocked.Collection == collection
+            && blocked.Kind == PublishErrorKind.BlockedForReview)
+        {
+            return blocked.Message;
+        }
+        return StartPublishing(collection, folder,
             CollectionsFile.Collections.TryGetValue(collection, out var entry) && entry.Publish is { } record
                 ? record.Intent
                 : PublishIntent.None);
+    }
 
     /// <summary>
     /// What the author ticked in the sheet, for a collection that already publishes. The document
     /// is rewritten if the change makes it say something different. null on success.
     /// </summary>
-    public string? UpdatePublishIntent(string collection, PublishIntent intent)
+    /// <param name="reviewedValues">
+    /// From the dialog's Publish: replaces this machine's list of marked paths as
+    /// <see cref="StartPublishing"/> describes. It is the one way a path leaves that list.
+    /// </param>
+    public string? UpdatePublishIntent(string collection, PublishIntent intent, IReadOnlySet<string>? reviewedValues = null)
     {
-        if (CollectionsFile.Collections.GetValueOrDefault(collection) is not { Publish: { } record } entry
-            || record.Intent.Equals(intent))
+        if (CollectionsFile.Collections.GetValueOrDefault(collection) is not { Publish: { } record } entry)
         {
             return null;
+        }
+        // The list is this machine's: another machine's publish record has no binding here.
+        var binding = CollectionsCache.Published.GetValueOrDefault(collection);
+        var listChanged = reviewedValues is not null && binding is not null && !binding.MarkedValues.SetEquals(reviewedValues);
+        if (record.Intent.Equals(intent) && !listChanged)
+        {
+            return null;
+        }
+        if (listChanged)
+        {
+            SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(binding!.Folder, binding.LastWrittenHash, reviewedValues));
         }
         SetSidecarEntry(collection, new CollectionsFile.Entry(
             entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs,
@@ -2104,12 +2152,22 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>Export: the same document written once, wherever the user chose. null on success.</summary>
+    /// <param name="denying">
+    /// Paths that must not appear in it as written — the dialog passes the ones it marks, so a copy
+    /// of a marked path elsewhere in a connector refuses the export as it would refuse a publish.
+    /// The export binds nothing, so it leaves this machine's list of marked paths as it was.
+    /// </param>
     public string? WriteExport(string collection, PublishIntent intent, string path,
-                               IReadOnlyList<string>? only = null)
+                               IReadOnlyList<string>? only = null, IReadOnlySet<string>? denying = null)
     {
         try
         {
-            AtomicFile.Write(ExportDocument(collection, intent, only).Serialize(), path);
+            var document = ExportDocument(collection, intent, only);
+            if (denying is not null && document.ConnectorCarrying(denying) is { } carrier)
+            {
+                throw new PathMarkMovedException(carrier);
+            }
+            AtomicFile.Write(document.Serialize(), path);
             return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException
@@ -2161,6 +2219,14 @@ public sealed class AppState : ObservableObject, IDisposable
             try
             {
                 var document = ExportDocument(collection, record.Intent);
+                // A path this machine has published as a placeholder, now in the document as
+                // written: whatever the marks say — the other machine dropped them in a sidecar that
+                // landed before its master list, a connector came back without them — this machine
+                // does not send it. Only the author's Publish in the dialog clears it.
+                if (document.ConnectorCarrying(binding.MarkedValues) is { } carrier)
+                {
+                    throw new PathMarkMovedException(carrier);
+                }
                 var hash = PublishHash(document);
                 if (hash == binding.LastWrittenHash && collection != forced)
                 {
@@ -2168,7 +2234,13 @@ public sealed class AppState : ObservableObject, IDisposable
                 }
                 var target = Path.Combine(binding.Folder, record.Slug + "." + CollectionDocument.FileExtension);
                 AtomicFile.Write(document.Serialize(), target);
-                SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(binding.Folder, hash));
+                // Only ever added to here: a publish nobody reviewed may learn a path it now keeps
+                // back, never forget one.
+                var held = Store.Collections.TryGetValue(collection, out var heldCollection)
+                    ? heldCollection.Mcps.ToDictionary(p => p.Key, p => p.Value.Config, StringComparer.Ordinal)
+                    : new Dictionary<string, JsonValue>(StringComparer.Ordinal);
+                SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(
+                    binding.Folder, hash, binding.MarkedValues.Concat(record.Intent.PlacedArguments(held))));
                 cacheChanged = true;
                 if (PublishError?.Collection == collection)
                 {
@@ -2182,7 +2254,7 @@ public sealed class AppState : ObservableObject, IDisposable
                 // A mark that has moved lands here too, before anything is written: the document
                 // already in the folder stays as it was, placeholder and all, until the author
                 // marks the path again.
-                PublishError = new CollectionPublishError(collection, Friendly(ex));
+                PublishError = new CollectionPublishError(collection, Friendly(ex), PublishErrorKindOf(ex));
             }
         }
         // The cache save the write earned, through the same gate as every other one.
@@ -2244,7 +2316,9 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             if (PublishError is { } failure)
             {
-                return new CollectionBanner.PublishFailed(failure.Collection, failure.Message);
+                return failure.Kind == PublishErrorKind.BlockedForReview
+                    ? new CollectionBanner.PublishBlocked(failure.Collection, failure.Message)
+                    : new CollectionBanner.PublishFailed(failure.Collection, failure.Message);
             }
             if (PendingUpdates.TryGetValue(ActiveCollection, out var activeDiff))
             {
@@ -2395,6 +2469,15 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>friendly(): the malformed-config case gets the guided message; everything else its own text.</summary>
+    /// <summary>
+    /// Which way a caught publish error did not land. A mark that has moved stops the write for the
+    /// author to review, so another folder is no answer to it; anything else is a write that
+    /// failed. A new reason to block a publish for review belongs here, so the banner can tell it
+    /// from a failed write.
+    /// </summary>
+    internal static PublishErrorKind PublishErrorKindOf(Exception error) =>
+        error is PathMarkMovedException ? PublishErrorKind.BlockedForReview : PublishErrorKind.WriteFailed;
+
     public static string Friendly(Exception error) => error switch
     {
         ClaudeConfigException malformed => MalformedConfigMessage(malformed.Detail),

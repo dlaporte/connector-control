@@ -109,8 +109,10 @@ public final class AppState: ObservableObject {
     @Published public internal(set) var pendingUpdates: [String: CollectionDiff] = [:]
     /// Collection → why its source could not be read, after repeated failures or a manual refresh.
     @Published public internal(set) var sourceErrors: [String: String] = [:]
-    /// The last publish that failed, with the reason. Cleared by a write that succeeds.
-    @Published public internal(set) var publishError: (collection: String, message: String)?
+    /// The last publish that did not land, with the reason and its kind. Cleared by a write that
+    /// succeeds. The kind is what separates a failed write, answered by another folder, from a
+    /// publish blocked for the author's review, answered by the Publish sheet.
+    @Published public internal(set) var publishError: CollectionPublishError?
     /// What the popover asked the Collections window to do as it opened. It travels through the
     /// shared state because the two surfaces are separate windows with no reference to each
     /// other; `takeCollectionsWindowRequest` is how the window consumes it. A newer request
@@ -791,7 +793,7 @@ public final class AppState: ObservableObject {
             move(&sourceFailures, from: name, to: trimmed)
             move(&notifiedSourceHashes, from: name, to: trimmed)
             if let failure = publishError, failure.collection == name {
-                publishError = (collection: trimmed, message: failure.message)
+                publishError = CollectionPublishError(collection: trimmed, message: failure.message, kind: failure.kind)
             }
         }
         persistStore()
@@ -1312,7 +1314,13 @@ public final class AppState: ObservableObject {
     /// the first time and never re-derived, so renaming the collection cannot orphan the document
     /// the team already subscribed to. The document is written before this returns.
     /// nil on success, else the message to show.
-    public func startPublishing(_ collection: String, to folder: String, intent: PublishIntent) -> String? {
+    ///
+    /// `reviewedValues` is what the author's Publish in the sheet says must never travel as
+    /// written: it replaces this machine's list of marked paths (`PublishBinding.markedValues`).
+    /// nil — the banner's Choose Folder…, which nobody reviewed — keeps the list the collection
+    /// already had.
+    public func startPublishing(_ collection: String, to folder: String, intent: PublishIntent,
+                                reviewedValues: Set<String>? = nil) -> String? {
         // A synced collection has an author elsewhere, and a name that is not a collection has
         // nothing to publish. Nothing offers either, so both get the silence `locateSource` gives
         // a collection that is not synced.
@@ -1347,7 +1355,8 @@ public final class AppState: ObservableObject {
         collectionsCache.published[collection] = CollectionsLocalCache.PublishBinding(
             folder: url.path,
             // A new folder has nothing in it this app wrote, so the next write is unconditional.
-            lastWrittenHash: previous?.folder == url.path ? previous?.lastWrittenHash : nil)
+            lastWrittenHash: previous?.folder == url.path ? previous?.lastWrittenHash : nil,
+            markedValues: reviewedValues ?? previous?.markedValues ?? [])
         // persistStore ends in publishIfChanged, which is what writes the document.
         persistStore()
         // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
@@ -1361,16 +1370,32 @@ public final class AppState: ObservableObject {
     /// Folder… does from the popover and from the Collections window alike. The recorded intent
     /// travels unchanged: the sheet is where what the document says gets edited, not this.
     /// nil on success, else the message.
+    ///
+    /// Refused, with nothing changed, while the collection's publish is blocked for review. The
+    /// intent carried here is the one that blocked, so the new folder would be bound, receive
+    /// nothing, and leave the old folder's document behind. The Publish sheet is the way out, and
+    /// it goes through `startPublishing` with the intent the author has just corrected.
     public func changePublishFolder(_ collection: String, to folder: String) -> String? {
-        startPublishing(collection, to: folder,
-                        intent: collectionsFile.collections[collection]?.publish?.intent ?? .none)
+        if let blocked = publishError, blocked.collection == collection, blocked.kind == .blockedForReview {
+            return blocked.message
+        }
+        return startPublishing(collection, to: folder,
+                               intent: collectionsFile.collections[collection]?.publish?.intent ?? .none)
     }
 
     /// What the author ticked in the sheet, for a collection that already publishes. The document
     /// is rewritten if the change makes it say something different. nil on success.
-    public func updatePublishIntent(_ collection: String, intent: PublishIntent) -> String? {
-        guard var entry = collectionsFile.collections[collection], let record = entry.publish,
-              record.intent != intent else { return nil }
+    ///
+    /// `reviewedValues`, from the sheet's Publish, replaces this machine's list of marked paths as
+    /// `startPublishing` describes; it is the one way a path leaves that list.
+    public func updatePublishIntent(_ collection: String, intent: PublishIntent,
+                                    reviewedValues: Set<String>? = nil) -> String? {
+        guard var entry = collectionsFile.collections[collection], let record = entry.publish else { return nil }
+        // The list is this machine's: another machine's publish record has no binding here.
+        let listChanged = reviewedValues != nil && collectionsCache.published[collection] != nil
+            && collectionsCache.published[collection]?.markedValues != reviewedValues
+        guard record.intent != intent || listChanged else { return nil }
+        if let reviewedValues, listChanged { collectionsCache.published[collection]?.markedValues = reviewedValues }
         entry.publish = CollectionsFile.PublishRecord(slug: record.slug, origin: record.origin, intent: intent)
         collectionsFile.collections[collection] = entry
         persistStore()
@@ -1425,7 +1450,7 @@ public final class AppState: ObservableObject {
     public func exportDocument(for collection: String, intent: PublishIntent,
                                only: [String]? = nil) throws -> CollectionDocument {
         let held = (store.collections[collection]?.mcps ?? [:]).mapValues(\.config)
-        if let orphan = intent.pathMarks.keys.sorted().first(where: { name in
+        if let orphan = intent.pathMarks.keys.sorted(by: { $0.ordinallyPrecedes($1) }).first(where: { name in
             held[name] == nil && (intent.pathMarks[name]?.values.contains { $0.value != nil } ?? false)
         }) {
             throw PublishIntentError.pathMarkMoved(connector: orphan)
@@ -1446,10 +1471,19 @@ public final class AppState: ObservableObject {
     }
 
     /// Export: the same document written once, wherever the user chose. nil on success.
+    ///
+    /// `denying` holds paths that must not appear in it as written — the sheet passes the ones
+    /// it marks, so a copy of a marked path elsewhere in a connector refuses the export as it
+    /// would refuse a publish. The export binds nothing, so it leaves this machine's list of
+    /// marked paths as it was.
     public func writeExport(for collection: String, intent: PublishIntent, to path: String,
-                            only: [String]? = nil) -> String? {
+                            only: [String]? = nil, denying: Set<String> = []) -> String? {
         do {
-            try AtomicFile.write(try exportDocument(for: collection, intent: intent, only: only).serialized(),
+            let document = try exportDocument(for: collection, intent: intent, only: only)
+            if let carrier = document.connectorCarrying(denying) {
+                throw PublishIntentError.pathMarkMoved(connector: carrier)
+            }
+            try AtomicFile.write(try document.serialized(),
                                  to: URL(fileURLWithPath: path), staging: service.paths.stagingDirURL)
             return nil
         } catch {
@@ -1464,6 +1498,15 @@ public final class AppState: ObservableObject {
         guard collectionsCache.published[collection] != nil else { return nil }
         publishIfChanged(forcing: collection)
         return publishError?.collection == collection ? publishError?.message : nil
+    }
+
+    /// Which way a caught publish error did not land. A mark that has moved stops the write for
+    /// the author to review, so another folder is no answer to it; anything else is a write that
+    /// failed. A new reason to block a publish for review belongs here, so the banner can tell it
+    /// from a failed write.
+    static func publishErrorKind(of error: Error) -> PublishErrorKind {
+        if case PublishIntentError.pathMarkMoved = error { return .blockedForReview }
+        return .writeFailed
     }
 
     /// Every collection this machine publishes, written when what it says has changed. Only the
@@ -1481,12 +1524,23 @@ public final class AppState: ObservableObject {
                   let record = collectionsFile.collections[collection]?.publish else { continue }
             do {
                 let document = try exportDocument(for: collection, intent: record.intent)
+                // A path this machine has published as a placeholder, now in the document as
+                // written: whatever the marks say — the other machine dropped them in a sidecar
+                // that landed before its master list, a connector came back without them — this
+                // machine does not send it. Only the author's Publish in the sheet clears it.
+                if let carrier = document.connectorCarrying(binding.markedValues) {
+                    throw PublishIntentError.pathMarkMoved(connector: carrier)
+                }
                 let hash = try AppState.publishHash(of: document)
                 guard hash != binding.lastWrittenHash || collection == forced else { continue }
                 let target = URL(fileURLWithPath: binding.folder)
                     .appendingPathComponent(record.slug + "." + CollectionDocument.fileExtension)
                 try AtomicFile.write(document.serialized(), to: target, staging: service.paths.stagingDirURL)
                 collectionsCache.published[collection]?.lastWrittenHash = hash
+                // Only ever added to here: a publish nobody reviewed may learn a path it now
+                // keeps back, never forget one.
+                let placed = record.intent.placedArguments(in: (store.collections[collection]?.mcps ?? [:]).mapValues(\.config))
+                collectionsCache.published[collection]?.markedValues.formUnion(placed)
                 cacheChanged = true
                 if publishError?.collection == collection { publishError = nil }
             } catch {
@@ -1494,7 +1548,8 @@ public final class AppState: ObservableObject {
                 // A mark that has moved lands here too, before anything is written: the document
                 // already in the folder stays as it was, placeholder and all, until the author
                 // marks the path again.
-                publishError = (collection: collection, message: AppState.friendly(error))
+                publishError = CollectionPublishError(collection: collection, message: AppState.friendly(error),
+                                                      kind: AppState.publishErrorKind(of: error))
             }
         }
         // The cache save the write earned, through the same gate as every other one.
@@ -1529,7 +1584,10 @@ public final class AppState: ObservableObject {
     /// news before any other collection's, since that is the list in front of them.
     public var collectionBanner: CollectionBanner? {
         if let failure = publishError {
-            return .publishFailed(collection: failure.collection, message: failure.message)
+            switch failure.kind {
+            case .writeFailed: return .publishFailed(collection: failure.collection, message: failure.message)
+            case .blockedForReview: return .publishBlocked(collection: failure.collection, message: failure.message)
+            }
         }
         if let diff = pendingUpdates[activeCollection] {
             return .updateAvailable(collection: activeCollection, summary: diff.summary())

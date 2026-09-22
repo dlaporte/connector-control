@@ -96,8 +96,48 @@ public sealed record CollectionsLocalCache
         }
     }
 
-    public sealed record PublishBinding(string Folder, string? LastWrittenHash)
+    public sealed record PublishBinding
     {
+        public string Folder { get; }
+
+        public string? LastWrittenHash { get; }
+
+        /// <summary>
+        /// Every path this machine has written into the document as a placeholder, which must never
+        /// appear in it as written. Kept here, where nothing syncs it, so the publisher fails closed
+        /// whatever the sidecar or the editor says: a publish that happens on its own only adds to
+        /// it, and only the author, pressing Publish in the sheet after reading the preview,
+        /// replaces it.
+        /// </summary>
+        public IReadOnlySet<string> MarkedValues { get; }
+
+        public PublishBinding(string folder, string? lastWrittenHash, IEnumerable<string>? markedValues = null)
+        {
+            Folder = folder;
+            LastWrittenHash = lastWrittenHash;
+            MarkedValues = markedValues is null
+                ? new HashSet<string>(StringComparer.Ordinal)
+                : new HashSet<string>(markedValues, StringComparer.Ordinal);
+        }
+
+        public bool Equals(PublishBinding? other) =>
+            other is not null
+            && string.Equals(Folder, other.Folder, StringComparison.Ordinal)
+            && string.Equals(LastWrittenHash, other.LastWrittenHash, StringComparison.Ordinal)
+            && MarkedValues.SetEquals(other.MarkedValues);
+
+        public override int GetHashCode()
+        {
+            var hash = new HashCode();
+            hash.Add(Folder, StringComparer.Ordinal);
+            hash.Add(LastWrittenHash ?? string.Empty, StringComparer.Ordinal);
+            foreach (var value in MarkedValues.Order(StringComparer.Ordinal))
+            {
+                hash.Add(value, StringComparer.Ordinal);
+            }
+            return hash.ToHashCode();
+        }
+
         internal JsonValue Encode()
         {
             var props = new Dictionary<string, JsonValue>(StringComparer.Ordinal)
@@ -107,6 +147,11 @@ public sealed record CollectionsLocalCache
             if (LastWrittenHash is not null)
             {
                 props["lastWrittenHash"] = JsonValue.String(LastWrittenHash);
+            }
+            // Sorted, so the file does not churn between saves that change nothing.
+            if (MarkedValues.Count > 0)
+            {
+                props["markedValues"] = JsonValue.Array(MarkedValues.Order(StringComparer.Ordinal).Select(JsonValue.String));
             }
             return JsonValue.Object(props);
         }
@@ -119,7 +164,10 @@ public sealed record CollectionsLocalCache
             }
             return new PublishBinding(
                 CollectionsFile.RequiredString(json["folder"], $"{what} folder"),
-                CollectionsFile.OptionalString(json["lastWrittenHash"], $"{what} lastWrittenHash"));
+                CollectionsFile.OptionalString(json["lastWrittenHash"], $"{what} lastWrittenHash"),
+                // Absent in a cache written before the list was kept: nothing marked yet, which the
+                // next write fills in.
+                CollectionsFile.StringSet(json["markedValues"], $"{what} markedValues"));
         }
     }
 

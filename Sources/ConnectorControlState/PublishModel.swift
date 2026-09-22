@@ -121,6 +121,11 @@ public final class PublishModel: ObservableObject {
         var env: [EnvRow] = []
         var paths: [PathRow] = []
         var lost: Set<String> = []
+        // What this machine has already published as placeholders for the collection. A row
+        // holding one of them starts ticked even when the record no longer marks it — the other
+        // machine may have dropped the mark while this one still sends the path — so the author
+        // unticks it on purpose, in view of the preview, or it stays a placeholder.
+        let denied = state.collectionsCache.published[collection]?.markedValues ?? []
         let held = PublishModel.held(in: state, collection, only: connectors)
         for name in held.keys.sorted() {
             guard let config = held[name]?.config else { continue }
@@ -134,22 +139,30 @@ public final class PublishModel: ObservableObject {
             var found = 0
             let arguments = PublishModel.arguments(of: config)
             // The ticks sit where the exporter would place them, not where the record says they
-            // were made: an argument that moved since keeps its tick, and a mark that has lost
-            // its argument ticks nothing, which is the sheet asking for it to be marked again. A
-            // marked argument keeps its row even once it stops looking like a path (the file
-            // it named is gone), or publishing from the sheet would quietly unmark it.
-            let placement = PublishIntent.placePathMarks(intent.pathMarks[name] ?? [:], in: arguments)
-            let placed = placement.placed
-            if !placement.unresolved.isEmpty { lost.insert(name) }
-            for (index, argument) in arguments.enumerated()
-            where PublishModel.looksLikeAPath(argument) || placed[index] != nil {
+            // were made: an argument that moved since keeps its tick. Every other argument holding
+            // a marked path's text is ticked with that mark's name and hint too, since a copy of
+            // a marked path is that path. A marked argument keeps its row even once it stops
+            // looking like a path (the file it named is gone), or publishing from the sheet would
+            // quietly unmark it.
+            let marks = intent.pathMarks[name] ?? [:]
+            let placement = PublishIntent.placePathMarks(marks, in: arguments)
+            let byValue = PublishModel.marksByValue(marks)
+            // A mark whose text no argument holds any more has nothing to tick: the connector
+            // waits for the author to tick the path where it now sits, and the rows that could be
+            // that path carry the lost mark's name and hint so the tick keeps them.
+            let lostHere = placement.unresolved.sorted { $0.key.description.ordinallyPrecedes($1.key.description) }
+                .map(\.value).filter { mark in mark.value.map { !arguments.contains($0) } ?? false }
+            if !lostHere.isEmpty { lost.insert(name) }
+            for (index, argument) in arguments.enumerated() {
+                let mark = placement.placed[index] ?? byValue[argument]
+                let ticked = mark != nil || denied.contains(argument)
+                guard PublishModel.looksLikeAPath(argument) || ticked else { continue }
                 found += 1
-                let pointer = JSONPointer(["args", String(index)])
-                let mark = placed[index]
-                paths.append(PathRow(connector: name, pointer: pointer, value: argument,
-                                     marked: mark != nil,
-                                     name: mark?.name ?? PublishModel.defaultPathName(found),
-                                     hint: mark?.hint ?? ""))
+                let carried = mark ?? (ticked ? nil : lostHere.first)
+                paths.append(PathRow(connector: name, pointer: JSONPointer(["args", String(index)]), value: argument,
+                                     marked: ticked,
+                                     name: carried?.name ?? PublishModel.defaultPathName(found),
+                                     hint: carried?.hint ?? ""))
             }
         }
         // A mark for a connector the collection no longer holds was made on one renamed or
@@ -215,7 +228,7 @@ public final class PublishModel: ObservableObject {
                 row.connector == connector && row.marked && !tickedAtOpen.contains(row.id)
                     && !PublishModel.placeholderName(row.name).isEmpty
             }
-        }.sorted()
+        }.sorted { $0.ordinallyPrecedes($1) }
     }
 
     /// Drops a lost mark by the author's explicit choice: the path then travels as the preview
@@ -260,10 +273,21 @@ public final class PublishModel: ObservableObject {
     /// would not be written.
     public var preview: String {
         do {
-            return try state.exportDocument(for: collection, intent: intent, only: connectors).encode().editorText()
+            let document = try state.exportDocument(for: collection, intent: intent, only: connectors)
+            if let carrier = document.connectorCarrying(reviewedValues) {
+                throw PublishIntentError.pathMarkMoved(connector: carrier)
+            }
+            return document.encode().editorText()
         } catch {
             return AppState.friendly(error)
         }
+    }
+
+    /// The text of every path the rows mark: what Publish or Export must not send as written
+    /// anywhere else in the document, and what the sheet's Publish records as this machine's
+    /// list of marked paths — the author's reviewed answer, replacing whatever was kept before.
+    private var reviewedValues: Set<String> {
+        Set(intent.pathMarks.values.flatMap { $0.values.compactMap(\.value) })
     }
 
     /// The connectors a sheet over `collection` speaks for, which is every one of them unless an
@@ -296,12 +320,12 @@ public final class PublishModel: ObservableObject {
         if let lost = unresolvedMarks.first { return PublishModel.unresolvedMarkNote(lost) }
         guard let chosen = folder?.trimmingCharacters(in: .whitespaces), !chosen.isEmpty else { return nil }
         guard state.isPublished(collection), state.collectionsCache.published[collection]?.folder == chosen else {
-            return state.startPublishing(collection, to: chosen, intent: intent)
+            return state.startPublishing(collection, to: chosen, intent: intent, reviewedValues: reviewedValues)
         }
         // The same folder, already publishing: the ticks go on record, and then the document is
         // written whether or not it changed. Pressing Publish again is how a write that failed is
         // retried, and by then nothing about the document is different — only the folder is.
-        _ = state.updatePublishIntent(collection, intent: intent)
+        _ = state.updatePublishIntent(collection, intent: intent, reviewedValues: reviewedValues)
         return state.republish(collection)
     }
 
@@ -309,7 +333,7 @@ public final class PublishModel: ObservableObject {
     /// while a mark is unresolved, as `publish()` is.
     public func export(to path: String) -> String? {
         if let lost = unresolvedMarks.first { return PublishModel.unresolvedMarkNote(lost) }
-        return state.writeExport(for: collection, intent: intent, to: path, only: connectors)
+        return state.writeExport(for: collection, intent: intent, to: path, only: connectors, denying: reviewedValues)
     }
 
     // MARK: - Rows
@@ -343,6 +367,16 @@ public final class PublishModel: ObservableObject {
 
     /// "path", then "path_2", "path_3" — numbered inside each connector, since a recipient fills
     /// one connector's placeholders at a time.
+    /// A connector's recorded marks by the text each was made on; where two share a text, the
+    /// first in pointer order speaks for both.
+    private static func marksByValue(_ marks: [JSONPointer: PublishIntent.PathMark]) -> [String: PublishIntent.PathMark] {
+        var out: [String: PublishIntent.PathMark] = [:]
+        for (_, mark) in marks.sorted(by: { $0.key.description.ordinallyPrecedes($1.key.description) }) {
+            if let value = mark.value, out[value] == nil { out[value] = mark }
+        }
+        return out
+    }
+
     private static func defaultPathName(_ index: Int) -> String {
         index <= 1 ? "path" : "path_\(index)"
     }

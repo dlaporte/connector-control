@@ -10,4 +10,7 @@ public enum CollectionsWindowRequest: Equatable, Sendable {
     case exportActive
     /// Review & Apply…: the window selects this collection and shows the Review sheet.
     case review(collection: String)
+    /// A publish blocked for review: the window selects this collection and shows the Publish
+    /// sheet, which is where a moved mark is placed again.
+    case publish(collection: String)
 }

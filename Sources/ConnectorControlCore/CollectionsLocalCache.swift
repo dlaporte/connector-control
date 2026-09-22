@@ -34,9 +34,16 @@ public struct CollectionsLocalCache: Equatable, Sendable {
     public struct PublishBinding: Equatable, Sendable {
         public var folder: String
         public var lastWrittenHash: String?
-        public init(folder: String, lastWrittenHash: String?) {
+        /// Every path this machine has written into the document as a placeholder, which must
+        /// never appear in it as written. Kept here, where nothing syncs it, so the publisher
+        /// fails closed whatever the sidecar or the editor says: a publish that happens on its
+        /// own only adds to it, and only the author, pressing Publish in the sheet after reading
+        /// the preview, replaces it.
+        public var markedValues: Set<String>
+        public init(folder: String, lastWrittenHash: String?, markedValues: Set<String> = []) {
             self.folder = folder
             self.lastWrittenHash = lastWrittenHash
+            self.markedValues = markedValues
         }
     }
 
@@ -120,6 +127,10 @@ extension CollectionsLocalCache.PublishBinding {
     func encode() -> JSONValue {
         var object: [String: JSONValue] = ["folder": .string(folder)]
         if let lastWrittenHash { object["lastWrittenHash"] = .string(lastWrittenHash) }
+        // Sorted, so the file does not churn between saves that change nothing.
+        if !markedValues.isEmpty {
+            object["markedValues"] = .array(markedValues.sorted { $0.ordinallyPrecedes($1) }.map(JSONValue.string))
+        }
         return .object(object)
     }
 
@@ -127,6 +138,9 @@ extension CollectionsLocalCache.PublishBinding {
         guard case .object(let object) = json else { throw CollectionsFileError.malformed("\(what) is not a JSON object") }
         return CollectionsLocalCache.PublishBinding(
             folder: try CollectionsFile.requiredString(object["folder"], "\(what) folder"),
-            lastWrittenHash: try CollectionsFile.optionalString(object["lastWrittenHash"], "\(what) lastWrittenHash"))
+            lastWrittenHash: try CollectionsFile.optionalString(object["lastWrittenHash"], "\(what) lastWrittenHash"),
+            // Absent in a cache written before the list was kept: nothing marked yet, which the
+            // next write fills in.
+            markedValues: try CollectionsFile.stringSet(object["markedValues"], "\(what) markedValues"))
     }
 }

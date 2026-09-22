@@ -629,4 +629,122 @@ public class FlyoutModelTests
         // Nothing to find, which is what located already means.
         Assert.True(state.IsLocated("Team"));
     }
+    // MARK: a publish blocked for review
+
+    [Fact]
+    public void ABlockedPublishOpensThePublishDialogInsteadOfAFolder()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        new CollectionsFile([Sidecar("Default", new CollectionsFile.Entry(
+            CollectionKind.Local, publish: new CollectionsFile.PublishRecord("default", "origin", PublishIntent.None)))])
+            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        var folder = h.Dir.File("pub");
+        Directory.CreateDirectory(folder);
+        new CollectionsLocalCache([], [new KeyValuePair<string, CollectionsLocalCache.PublishBinding>(
+            "Default", new CollectionsLocalCache.PublishBinding(folder, null))])
+            .Save(state.Service.Paths.CollectionsCachePath);
+        state.Reload();
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        // A failed write keeps today's banner exactly: another folder is an answer to it.
+        state.PublishError = new CollectionPublishError("Default", "the folder is read-only");
+        // The default every existing caller meant.
+        Assert.Equal(PublishErrorKind.WriteFailed, state.PublishError.Kind);
+        Assert.Equal(new CollectionBanner.PublishFailed("Default", "the folder is read-only"), flyout.CollectionBanner);
+        Assert.Equal(FlyoutModel.ChooseFolderButton, flyout.CollectionBannerButton);
+
+        // Blocked for review: the message is the whole banner, the button opens the Publish dialog,
+        // and nothing offers a folder or a second button.
+        var moved = AppState.PathMarkMovedError("ledger");
+        state.PublishError = new CollectionPublishError("Default", moved, PublishErrorKind.BlockedForReview);
+        Assert.Equal(new CollectionBanner.PublishBlocked("Default", moved), flyout.CollectionBanner);
+        Assert.Equal(moved, flyout.CollectionBannerText);
+        Assert.Equal(CollectionsModel.PublishButton, flyout.CollectionBannerButton);
+        Assert.Null(flyout.CollectionBannerSecondaryButton);
+
+        // The button asks the Collections window for the Publish dialog, and true tells the view to
+        // open that window and do nothing else.
+        Assert.True(flyout.CollectionBannerAction());
+        Assert.Equal(new CollectionsWindowRequest.Publish("Default"), state.TakeCollectionsWindowRequest());
+
+        // A folder chosen anyway, or Stop Publishing reached some other way, is refused here: the
+        // banner is not asking for either, and re-binding would abandon the old folder's document.
+        var elsewhere = h.Dir.File("elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        // Refused, and it says why.
+        Assert.Equal(moved, flyout.ChoosePublishFolder(elsewhere));
+        Assert.Equal(folder, state.CollectionsCache.Published["Default"].Folder);
+        flyout.CollectionBannerSecondaryAction();
+        Assert.True(state.IsPublished("Default"));
+    }
+
+    [Fact]
+    public void AMovedMarkIsClassifiedAsBlockedAndEverythingElseAsAFailedWrite()
+    {
+        Assert.Equal(PublishErrorKind.BlockedForReview, AppState.PublishErrorKindOf(new PathMarkMovedException("ledger")));
+        Assert.Equal(PublishErrorKind.WriteFailed, AppState.PublishErrorKindOf(new IOException("disk full")));
+    }
+
+    [Fact]
+    public void RenamingACollectionKeepsItsBlockedPublishBlocked()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        state.PublishError = new CollectionPublishError("Team", "moved", PublishErrorKind.BlockedForReview);
+        Assert.Null(state.RenameCollection("Team", "Crew"));
+        Assert.Equal(new CollectionPublishError("Crew", "moved", PublishErrorKind.BlockedForReview), state.PublishError);
+    }
+    /// <summary>
+    /// Adapted from the coll-21 review's probe P6. A real moved mark, not a hand-set error: the
+    /// folder change that follows must be refused, because the intent it would carry is the one
+    /// that blocked, so the new folder would be bound, receive nothing, and leave the old folder's
+    /// document behind.
+    /// </summary>
+    [Fact]
+    public void AFolderChangeIsRefusedWhileAMovedMarkBlocksThePublish()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var collection = state.ActiveCollection;
+        const string marked = "/Users/d/ledger/dist/index.js";
+        Assert.Null(state.Upsert("ledger", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String(marked)])))), null));
+        var a = h.Dir.File("pubA");
+        Directory.CreateDirectory(a);
+        var b = h.Dir.File("pubB");
+        Directory.CreateDirectory(b);
+        Assert.Null(state.StartPublishing(collection, a, new PublishIntent(
+            [],
+            [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark>
+            {
+                [new JsonPointer(["args", "0"])] = new("server_path", null, marked),
+            })],
+            [])));
+        var fileName = Slug.Make(collection) + "." + CollectionDocument.FileExtension;
+        var document = Path.Combine(a, fileName);
+        var published = File.ReadAllBytes(document);
+
+        // The marked path moves: publishing stops before writing, for the author to review.
+        Assert.Null(state.Upsert("ledger", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String("/Users/d/v2.js")])))), "ledger"));
+        var blocked = Assert.IsType<CollectionPublishError>(state.PublishError);
+        Assert.Equal(PublishErrorKind.BlockedForReview, blocked.Kind);
+
+        // Straight at AppState, as the probe did, and through the flyout, as a view would.
+        Assert.Equal(blocked.Message, state.ChangePublishFolder(collection, b));
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.Equal(blocked.Message, flyout.ChoosePublishFolder(b));
+
+        // Nothing moved: the binding is where it was, nothing landed in the new folder, and the old
+        // folder still holds the document it had.
+        Assert.Equal(a, state.CollectionsCache.Published[collection].Folder);
+        Assert.False(File.Exists(Path.Combine(b, fileName)));
+        Assert.Equal(published, File.ReadAllBytes(document));
+        // Refusing changes nothing, the error included.
+        Assert.Equal(blocked, state.PublishError);
+    }
 }

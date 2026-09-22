@@ -24,6 +24,7 @@ internal static class CollectionBannerPresentation
         CollectionBanner.UpdateAvailable update => update.Collection,
         CollectionBanner.Locate locate => locate.Collection,
         CollectionBanner.PublishFailed failed => failed.Collection,
+        CollectionBanner.PublishBlocked blocked => blocked.Collection,
         // Unreachable: the record hierarchy's constructor is private, so these are all of them.
         // Throwing rather than answering blandly, because a strip that claims to have news and
         // then shows nothing is harder to notice than a crash.
@@ -40,6 +41,8 @@ internal static class CollectionBannerPresentation
             failed.Collection,
             state.CollectionsCache.Published.TryGetValue(failed.Collection, out var binding) ? binding.Folder : "",
             failed.Message),
+        // Already a whole sentence that says what to do, and names the button beside it.
+        CollectionBanner.PublishBlocked blocked => blocked.Message,
         _ => throw new ArgumentOutOfRangeException(nameof(banner)),
     };
 
@@ -48,6 +51,9 @@ internal static class CollectionBannerPresentation
         CollectionBanner.UpdateAvailable => FlyoutModel.ReviewAndApplyButton,
         CollectionBanner.Locate locate => FlyoutModel.LocateButton(locate.FileName),
         CollectionBanner.PublishFailed => FlyoutModel.ChooseFolderButton,
+        // The command's own name, as the window's toolbar and link spell it: the ellipsis already
+        // says a dialog follows, and a second wording for one command would be one too many.
+        CollectionBanner.PublishBlocked => CollectionsModel.PublishButton,
         _ => throw new ArgumentOutOfRangeException(nameof(banner)),
     };
 

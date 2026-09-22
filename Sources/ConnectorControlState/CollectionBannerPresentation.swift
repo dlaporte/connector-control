@@ -17,6 +17,7 @@ enum CollectionBannerPresentation {
         case .updateAvailable(let collection, _): return collection
         case .locate(let collection, _): return collection
         case .publishFailed(let collection, _): return collection
+        case .publishBlocked(let collection, _): return collection
         }
     }
 
@@ -31,6 +32,9 @@ enum CollectionBannerPresentation {
             // so the collection that failed always has one.
             return AppState.collectionPublishFailedBanner(
                 collection, state.collectionsCache.published[collection]?.folder ?? "", message)
+        case .publishBlocked(_, let message):
+            // Already a whole sentence that says what to do, and names the button beside it.
+            return message
         }
     }
 
@@ -39,6 +43,9 @@ enum CollectionBannerPresentation {
         case .updateAvailable: return PopoverModel.reviewAndApplyButton
         case .locate(_, let fileName): return PopoverModel.locateButton(fileName)
         case .publishFailed: return PopoverModel.chooseFolderButton
+        // The command's own name, as the window's toolbar and link spell it: the ellipsis already
+        // says a sheet follows, and a second wording for one command would be one too many.
+        case .publishBlocked: return CollectionsModel.publishButton
         }
     }
 

@@ -7,6 +7,9 @@
   "AppState.chooseClaude": "Choose the real Claude Desktop under Settings ▸ Claude.",
   "AppState.claudeConfigChangedBody": "Claude's config changed outside Connector Control.",
   "AppState.claudeConfigRegeneratedBody": "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up.",
+  "AppState.collectionDirCmdUnsafeCaution": {
+    "win": "The folder ${COLLECTION_DIR} stands for must not contain & | < > ^ \" or spaces: on Windows the cmd /c launcher hands it to cmd.exe, which treats those as commands."
+  },
   "AppState.collectionLocateBanner": {
     "mac": {
       "format": "{0}'s file isn’t on this Mac yet."

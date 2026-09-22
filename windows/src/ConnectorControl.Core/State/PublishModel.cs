@@ -118,6 +118,12 @@ public sealed class PublishModel : ObservableObject
         folder = state.CollectionsCache.Published.GetValueOrDefault(collection)?.Folder;
         var env = new List<EnvRow>();
         var paths = new List<PathRow>();
+        // What this machine has already published as placeholders for the collection. A row
+        // holding one of them starts ticked even when the record no longer marks it — the other
+        // machine may have dropped the mark while this one still sends the path — so the author
+        // unticks it on purpose, in view of the preview, or it stays a placeholder.
+        IReadOnlySet<string> denied = state.CollectionsCache.Published.GetValueOrDefault(collection)?.MarkedValues
+            ?? new HashSet<string>(StringComparer.Ordinal);
         var seeded = Held(state, collection, connectors);
         foreach (var name in seeded.Keys.Order(StringComparer.Ordinal))
         {
@@ -137,29 +143,39 @@ public sealed class PublishModel : ObservableObject
             var arguments = Arguments(config);
             var found = 0;
             // The ticks sit where the exporter would place them, not where the record says they
-            // were made: an argument that moved since keeps its tick, and a mark that has lost its
-            // argument ticks nothing, which is the dialog asking for it to be marked again. A
-            // marked argument keeps its row even once it stops looking like a path (the file it
-            // named is gone), or publishing from the dialog would quietly unmark it.
-            var placement = PublishIntent.PlacePathMarks(
-                intent.PathMarks.TryGetValue(name, out var marks) ? marks : new Dictionary<JsonPointer, PublishIntent.PathMark>(),
-                arguments);
-            var placed = placement.Placed;
-            if (placement.Unresolved.Count > 0)
+            // were made: an argument that moved since keeps its tick. Every other argument holding a
+            // marked path's text is ticked with that mark's name and hint too, since a copy of a
+            // marked path is that path. A marked argument keeps its row even once it stops looking
+            // like a path (the file it named is gone), or publishing from the dialog would quietly
+            // unmark it.
+            IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> marks =
+                intent.PathMarks.TryGetValue(name, out var recorded) ? recorded : new Dictionary<JsonPointer, PublishIntent.PathMark>();
+            var placement = PublishIntent.PlacePathMarks(marks, arguments);
+            var byValue = MarksByValue(marks);
+            // A mark whose text no argument holds any more has nothing to tick: the connector waits
+            // for the author to tick the path where it now sits, and the rows that could be that
+            // path carry the lost mark's name and hint so the tick keeps them.
+            var lostHere = placement.Unresolved.OrderBy(p => p.Key.ToString(), StringComparer.Ordinal)
+                .Select(p => p.Value)
+                .Where(mark => mark.Value is not null && !arguments.Contains(mark.Value, StringComparer.Ordinal))
+                .ToList();
+            if (lostHere.Count > 0)
             {
                 lostMarks.Add(name);
             }
             for (var index = 0; index < arguments.Count; index++)
             {
-                var mark = placed.GetValueOrDefault(index);
-                if (!LooksLikeAPath(arguments[index]) && mark is null)
+                var mark = placement.Placed.GetValueOrDefault(index) ?? byValue.GetValueOrDefault(arguments[index]);
+                var ticked = mark is not null || denied.Contains(arguments[index]);
+                if (!LooksLikeAPath(arguments[index]) && !ticked)
                 {
                     continue;
                 }
                 found++;
+                var carried = mark ?? (ticked ? null : lostHere.FirstOrDefault());
                 var pointer = new JsonPointer(["args", index.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
-                paths.Add(new PathRow(name, pointer, arguments[index], mark is not null,
-                                      mark?.Name ?? DefaultPathName(found), mark?.Hint ?? string.Empty));
+                paths.Add(new PathRow(name, pointer, arguments[index], ticked,
+                                      carried?.Name ?? DefaultPathName(found), carried?.Hint ?? string.Empty));
             }
         }
         // A mark for a connector the collection no longer holds was made on one renamed or removed
@@ -431,7 +447,12 @@ public sealed class PublishModel : ObservableObject
         {
             try
             {
-                return state.ExportDocument(Collection, Intent, Connectors).Encode().EditorText();
+                var document = state.ExportDocument(Collection, Intent, Connectors);
+                if (document.ConnectorCarrying(ReviewedValues) is { } carrier)
+                {
+                    throw new PathMarkMovedException(carrier);
+                }
+                return document.Encode().EditorText();
             }
             catch (PathMarkMovedException moved)
             {
@@ -439,6 +460,16 @@ public sealed class PublishModel : ObservableObject
             }
         }
     }
+
+    /// <summary>
+    /// The text of every path the rows mark: what Publish or Export must not send as written
+    /// anywhere else in the document, and what the dialog's Publish records as this machine's list
+    /// of marked paths — the author's reviewed answer, replacing whatever was kept before.
+    /// </summary>
+    private IReadOnlySet<string> ReviewedValues =>
+        Intent.PathMarks.Values.SelectMany(marks => marks.Values)
+            .Select(mark => mark.Value).OfType<string>()
+            .ToHashSet(StringComparer.Ordinal);
 
     /// <summary>
     /// What the exporter cannot know is a secret: a value that looks like a credential and is
@@ -483,12 +514,12 @@ public sealed class PublishModel : ObservableObject
         if (!state.IsPublished(Collection)
             || !string.Equals(state.CollectionsCache.Published.GetValueOrDefault(Collection)?.Folder, chosen, StringComparison.Ordinal))
         {
-            return state.StartPublishing(Collection, chosen, Intent);
+            return state.StartPublishing(Collection, chosen, Intent, ReviewedValues);
         }
         // The same folder, already publishing: the ticks go on record, and then the document is
         // written whether or not it changed. Pressing Publish again is how a write that failed is
         // retried, and by then nothing about the document is different — only the folder is.
-        state.UpdatePublishIntent(Collection, Intent);
+        state.UpdatePublishIntent(Collection, Intent, ReviewedValues);
         return state.Republish(Collection);
     }
 
@@ -498,7 +529,7 @@ public sealed class PublishModel : ObservableObject
     /// </summary>
     public string? Export(string path) => UnresolvedMarks.Count > 0
         ? UnresolvedMarkNote(UnresolvedMarks[0])
-        : state.WriteExport(Collection, Intent, path, Connectors);
+        : state.WriteExport(Collection, Intent, path, Connectors, ReviewedValues);
 
     // MARK: rows
 
@@ -538,6 +569,20 @@ public sealed class PublishModel : ObservableObject
     }
 
     /// <summary>"path", then "path_2", "path_3" — numbered inside each connector, since a recipient fills one connector's placeholders at a time.</summary>
+    /// <summary>A connector's recorded marks by the text each was made on; where two share a text, the first in pointer order speaks for both.</summary>
+    private static Dictionary<string, PublishIntent.PathMark> MarksByValue(IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> marks)
+    {
+        var byValue = new Dictionary<string, PublishIntent.PathMark>(StringComparer.Ordinal);
+        foreach (var (_, mark) in marks.OrderBy(p => p.Key.ToString(), StringComparer.Ordinal))
+        {
+            if (mark.Value is { } value)
+            {
+                byValue.TryAdd(value, mark);
+            }
+        }
+        return byValue;
+    }
+
     private static string DefaultPathName(int index) =>
         index <= 1 ? "path" : "path_" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
 

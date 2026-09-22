@@ -152,6 +152,70 @@ final class CollectionDocumentTests: XCTestCase {
         }
     }
 
+    func testExportRefusesAnUnmarkedCopyOfAMarkedPath() throws {
+        let intent = PublishIntent(shareValues: ["ledger": ["LEDGER"]], pathMarks: ["ledger": [arg(0): mark("/Users/d/ledger.js")]], hints: [:])
+        let copies: [String: JSONValue] = [
+            "another argument": .object(["command": .string("node"),
+                                         "args": .array([.string("/Users/d/ledger.js"), .string("/Users/d/ledger.js")])]),
+            "the command": .object(["command": .string("/Users/d/ledger.js"), "args": .array([.string("/Users/d/ledger.js")])]),
+            "an environment value": .object(["command": .string("node"), "args": .array([.string("/Users/d/ledger.js")]),
+                                             "env": .object(["LEDGER": .string("/Users/d/ledger.js")])]),
+        ]
+        for (place, config) in copies {
+            XCTAssertThrowsError(try CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z",
+                                                               connectors: ["ledger": config], intent: intent), place) {
+                XCTAssertEqual($0 as? PublishIntentError, .pathMarkMoved(connector: "ledger"), place)
+            }
+        }
+        // An environment value nobody ticked to share stays here as a hint, so it copies nothing.
+        let stripped: JSONValue = .object(["command": .string("node"), "args": .array([.string("/Users/d/ledger.js")]),
+                                           "env": .object(["OTHER": .string("/Users/d/ledger.js")])])
+        XCTAssertNoThrow(try CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z",
+                                                       connectors: ["ledger": stripped], intent: intent))
+    }
+
+    func testConnectorCarryingFindsAValueAsWrittenOrAsJSONSpellsIt() throws {
+        let document = CollectionDocument(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z", connectors: [
+            "inside": .init(launcher: .local(.init(command: "node", args: ["--config=/Users/d/a/b.json"], platform: .current))),
+            "escaped": .init(launcher: .local(.init(command: "node", args: [#"{"dir":"\/Users\/d\/c"}"#], platform: .current))),
+            "clean": .init(launcher: .local(.init(command: "node", args: ["x.js"], platform: .current))),
+        ])
+        XCTAssertEqual(document.connectorCarrying(["/Users/d/a"]), "inside", "held inside a longer string")
+        XCTAssertEqual(document.connectorCarrying(["/Users/d/c"]), "escaped", "held as a JSON blob spells it")
+        XCTAssertNil(document.connectorCarrying(["/Users/d/elsewhere"]))
+        XCTAssertNil(document.connectorCarrying([""]), "an empty value would match every string")
+        XCTAssertNil(document.connectorCarrying([]))
+    }
+
+    /// A character past U+FFFF sorts before U+FF5E by UTF-16 code unit, which is how C# orders, and
+    /// after it by Unicode scalar, which is Swift's `<`: the refusal names the same one on both.
+    func testARefusalNamesTheFirstConnectorInOrdinalOrder() {
+        let lost = PublishIntent(shareValues: [:], pathMarks: [
+            "\u{FF5E}": [arg(0): mark("/gone/one.js")],
+            "\u{1F600}": [arg(0): mark("/gone/two.js")],
+        ], hints: [:])
+        let config: JSONValue = .object(["command": .string("node"), "args": .array([.string("x.js")])])
+        XCTAssertThrowsError(try CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z",
+                                                           connectors: ["\u{FF5E}": config, "\u{1F600}": config], intent: lost)) {
+            XCTAssertEqual($0 as? PublishIntentError, .pathMarkMoved(connector: "\u{1F600}"))
+        }
+        XCTAssertTrue("\u{1F600}".ordinallyPrecedes("\u{FF5E}"))
+        XCTAssertFalse("\u{1F600}" < "\u{FF5E}", "Swift's own order is the other way round")
+    }
+
+    func testPlacedArgumentsAreTheTextsTheMarksReplace() {
+        let intent = PublishIntent(shareValues: [:], pathMarks: [
+            "ledger": [arg(0): mark("/Users/d/ledger.js")],
+            "remote": [arg(0): mark("/Users/d/r.js")],
+            "gone": [arg(0): mark("/Users/d/g.js")],
+        ], hints: [:])
+        let connectors: [String: JSONValue] = [
+            "ledger": .object(["command": .string("node"), "args": .array([.string("--quiet"), .string("/Users/d/ledger.js")])]),
+            "remote": RemotePattern.encode(RemoteConfig(url: "https://mcp.example.com/", auth: .automatic, package: "mcp-remote")),
+        ]
+        XCTAssertEqual(intent.placedArguments(in: connectors), ["/Users/d/ledger.js"])
+    }
+
     func testExportRefusesAMarkLeftOnARemoteConnector() {
         let remote = RemotePattern.encode(RemoteConfig(url: "https://mcp.example.com/", auth: .automatic,
                                                        extraArgs: ["/Users/d/ledger.js"], passthroughEnv: [:], package: "mcp-remote"))

@@ -192,7 +192,9 @@ struct PopoverView: View {
             if let path = chooseDocument() { tell(model.locateSource(path)) }
         case .publishFailed:
             if let folder = chooseFolder() { tell(model.choosePublishFolder(folder)) }
-        case .updateAvailable, nil:
+        // A blocked publish never reaches here: its action queues the Publish sheet and reports
+        // true, which opens the window above.
+        case .updateAvailable, .publishBlocked, nil:
             break
         }
     }

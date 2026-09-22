@@ -134,7 +134,7 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(popover.collectionBannerText, "Team changed at its source: adds jira; removes confluence.")
         XCTAssertEqual(popover.collectionBannerButton, "Review & Apply…")
 
-        state.publishError = (collection: "Default", message: "the folder is read-only")
+        state.publishError = CollectionPublishError(collection: "Default", message: "the folder is read-only")
         XCTAssertEqual(popover.collectionBannerText,
                        "Couldn’t publish Default to \(folder.path): the folder is read-only")
         XCTAssertEqual(popover.collectionBannerButton, "Choose Folder…")
@@ -399,7 +399,7 @@ final class PopoverModelTests: XCTestCase {
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
 
-        state.publishError = (collection: "Default", message: "the folder is read-only")
+        state.publishError = CollectionPublishError(collection: "Default", message: "the folder is read-only")
         XCTAssertEqual(popover.collectionBannerButton, PopoverModel.chooseFolderButton)
 
         let second = h.dir.file("second")
@@ -441,7 +441,7 @@ final class PopoverModelTests: XCTestCase {
         popover.collectionBannerSecondaryAction()
         XCTAssertNotNil(state.collectionsFile.collections["Default"]?.publish, "nothing was stopped")
 
-        state.publishError = (collection: "Default", message: "the folder is read-only")
+        state.publishError = CollectionPublishError(collection: "Default", message: "the folder is read-only")
         XCTAssertEqual(popover.collectionBannerSecondaryButton, CollectionsModel.stopPublishingAction)
         popover.collectionBannerSecondaryAction()
         XCTAssertNil(state.collectionsFile.collections["Default"]?.publish, "the record is gone")
@@ -574,5 +574,110 @@ final class PopoverModelTests: XCTestCase {
         let team = try XCTUnwrap(popover.collectionItems.first { $0.name == "Team" })
         XCTAssertNil(PopoverModel.menuTooltip(for: team))
         XCTAssertTrue(state.isLocated("Team"), "nothing to find, which is what located already means")
+    }
+    // MARK: - A publish blocked for review
+
+    func testABlockedPublishOpensThePublishSheetInsteadOfAFolder() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        try CollectionsFile(collections: [
+            "Default": CollectionsFile.Entry(
+                kind: .local, publish: CollectionsFile.PublishRecord(slug: "default", origin: "origin", intent: .none)),
+        ]).save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        let folder = h.dir.file("pub")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try CollectionsLocalCache(synced: [:], published: ["Default": .init(folder: folder.path, lastWrittenHash: nil)])
+            .save(to: state.service.paths.collectionsCacheURL, staging: nil)
+        state.reload()
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+
+        // A failed write keeps today's banner exactly: another folder is an answer to it.
+        state.publishError = CollectionPublishError(collection: "Default", message: "the folder is read-only")
+        XCTAssertEqual(state.publishError?.kind, .writeFailed, "the default every existing caller meant")
+        XCTAssertEqual(popover.collectionBanner, .publishFailed(collection: "Default", message: "the folder is read-only"))
+        XCTAssertEqual(popover.collectionBannerButton, PopoverModel.chooseFolderButton)
+
+        // Blocked for review: the message is the whole banner, the button opens the Publish sheet,
+        // and nothing offers a folder or a second button.
+        let moved = AppState.pathMarkMovedError("ledger")
+        state.publishError = CollectionPublishError(collection: "Default", message: moved, kind: .blockedForReview)
+        XCTAssertEqual(popover.collectionBanner, .publishBlocked(collection: "Default", message: moved))
+        XCTAssertEqual(popover.collectionBannerText, moved)
+        XCTAssertEqual(popover.collectionBannerButton, CollectionsModel.publishButton)
+        XCTAssertNil(popover.collectionBannerSecondaryButton)
+
+        // The button asks the Collections window for the Publish sheet, and true tells the view to
+        // open that window and do nothing else.
+        XCTAssertTrue(popover.collectionBannerAction())
+        XCTAssertEqual(state.takeCollectionsWindowRequest(), .publish(collection: "Default"))
+
+        // A folder chosen anyway, or Stop Publishing reached some other way, is refused here: the
+        // banner is not asking for either, and re-binding would abandon the old folder's document.
+        let elsewhere = h.dir.file("elsewhere")
+        try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+        XCTAssertEqual(popover.choosePublishFolder(elsewhere.path), moved, "refused, and it says why")
+        XCTAssertEqual(state.collectionsCache.published["Default"]?.folder, folder.path)
+        popover.collectionBannerSecondaryAction()
+        XCTAssertTrue(state.isPublished("Default"))
+    }
+
+    func testAMovedMarkIsClassifiedAsBlockedAndEverythingElseAsAFailedWrite() {
+        XCTAssertEqual(AppState.publishErrorKind(of: PublishIntentError.pathMarkMoved(connector: "ledger")),
+                       .blockedForReview)
+        XCTAssertEqual(AppState.publishErrorKind(of: CocoaError(.fileWriteNoPermission)), .writeFailed)
+    }
+
+    func testRenamingACollectionKeepsItsBlockedPublishBlocked() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        state.publishError = CollectionPublishError(collection: "Team", message: "moved", kind: .blockedForReview)
+        XCTAssertNil(state.renameCollection("Team", to: "Crew"))
+        XCTAssertEqual(state.publishError, CollectionPublishError(collection: "Crew", message: "moved", kind: .blockedForReview))
+    }
+    /// Adapted from the coll-21 review's probe P6. A real moved mark, not a hand-set error: the
+    /// folder change that follows must be refused, because the intent it would carry is the one
+    /// that blocked, so the new folder would be bound, receive nothing, and leave the old folder's
+    /// document behind.
+    func testAFolderChangeIsRefusedWhileAMovedMarkBlocksThePublish() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let collection = state.activeCollection
+        let marked = "/Users/d/ledger/dist/index.js"
+        XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string(marked)]),
+        ])), renamedFrom: nil))
+        let a = h.dir.file("pubA")
+        try FileManager.default.createDirectory(at: a, withIntermediateDirectories: true)
+        let b = h.dir.file("pubB")
+        try FileManager.default.createDirectory(at: b, withIntermediateDirectories: true)
+        XCTAssertNil(state.startPublishing(collection, to: a.path, intent: PublishIntent(
+            shareValues: [:],
+            pathMarks: ["ledger": [JSONPointer(["args", "0"]): .init(name: "server_path", hint: nil, value: marked)]],
+            hints: [:])))
+        let document = a.appendingPathComponent(Slug.make(collection) + "." + CollectionDocument.fileExtension)
+        let published = try Data(contentsOf: document)
+
+        // The marked path moves: publishing stops before writing, for the author to review.
+        XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string("/Users/d/v2.js")]),
+        ])), renamedFrom: "ledger"))
+        let blocked = try XCTUnwrap(state.publishError)
+        XCTAssertEqual(blocked.kind, .blockedForReview)
+
+        // Straight at AppState, as the probe did, and through the popover, as a view would.
+        XCTAssertEqual(state.changePublishFolder(collection, to: b.path), blocked.message)
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+        XCTAssertEqual(popover.choosePublishFolder(b.path), blocked.message)
+
+        // Nothing moved: the binding is where it was, nothing landed in the new folder, and the old
+        // folder still holds the document it had.
+        XCTAssertEqual(state.collectionsCache.published[collection]?.folder, a.path)
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: b.appendingPathComponent(Slug.make(collection) + "." + CollectionDocument.fileExtension).path))
+        XCTAssertEqual(try Data(contentsOf: document), published)
+        XCTAssertEqual(state.publishError, blocked, "refusing changes nothing, the error included")
     }
 }
