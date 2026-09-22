@@ -35,9 +35,16 @@ public sealed class FileWatcher : IDisposable
     /// only handle on which folder that was.</summary>
     private DateTime? armedAt;
     private int armCount;
-    /// <summary>Environment.TickCount64 at the last rebuild, which is monotonic and so is not
-    /// disturbed by the clock moving. Zero means none yet, and the first error rebuilds.</summary>
+    /// <summary>Environment.TickCount64 at the last rebuild that actually happened, which is
+    /// monotonic and so is not disturbed by the clock moving. Zero means none yet, and the first
+    /// error rebuilds. An attempt that rebuilt nothing does not move it.</summary>
     private long lastRebuildAt;
+    /// <summary>An error warranted a rebuild that the cooldown held back. The watcher it kept may
+    /// be on a dead handle — a folder deleted and recreated under the same name keeps its creation
+    /// time on NTFS, so nothing else would ever notice — so the debt stands until it is paid:
+    /// IsArmed says no, and the next Start() swaps and re-checks exactly as for a replacement.
+    /// That bounds these rebuilds by the reload rate without a timer.</summary>
+    private bool rebuildOwed;
 
     public FileWatcher(string path, Action<Action> marshal, Action onChange, TimeSpan? debounce = null, IPathProbe? probe = null, TimeSpan? rebuildCooldown = null)
     {
@@ -57,8 +64,9 @@ public sealed class FileWatcher : IDisposable
     /// was armed on, so a folder replaced wholesale — renamed away with another put in its place,
     /// or deleted and recreated — leaves it watching something that is no longer at the path,
     /// where it goes silent for good; calling that armed would make the caller's re-arm on the
-    /// next reload a no-op forever. A parent that is simply missing stays armed until the error
-    /// for it is handled, which is a different case with its own callback.
+    /// next reload a no-op forever. The same goes for a watcher owed a rebuild the cooldown held
+    /// back. A parent that is simply missing stays armed until the error for it is handled, which
+    /// is a different case with its own callback.
     /// </summary>
     public bool IsArmed
     {
@@ -67,7 +75,7 @@ public sealed class FileWatcher : IDisposable
             DateTime? armed;
             lock (gate)
             {
-                if (watcher is null)
+                if (watcher is null || rebuildOwed)
                 {
                     return false;
                 }
@@ -90,8 +98,9 @@ public sealed class FileWatcher : IDisposable
     }
 
     /// <summary>Arms the watcher; a no-op while armed on the folder the path resolves to, and a
-    /// swap onto the new folder, plus a re-check against it, when that folder has been replaced;
-    /// safe to call again after the parent directory appears.</summary>
+    /// swap onto the new folder, plus a re-check against it, when that folder has been replaced or
+    /// a rebuild is owed; safe to call again after the parent directory appears. A swap that
+    /// cannot build its new watcher keeps the one it has.</summary>
     public void Start()
     {
         FileSystemWatcher? dead = null;
@@ -102,11 +111,11 @@ public sealed class FileWatcher : IDisposable
             {
                 ObjectDisposedException.ThrowIf(disposed, this);
                 var cold = watcher is null;
-                if (!cold && !DirectoryWasReplaced(armedAt))
+                if (!cold && !rebuildOwed && !DirectoryWasReplaced(armedAt))
                 {
                     return;
                 }
-                if (!Directory.Exists(directory))
+                if (!probe.DirectoryExists(directory))
                 {
                     return;   // caller retries on its next reload
                 }
@@ -118,8 +127,21 @@ public sealed class FileWatcher : IDisposable
                 {
                     lastModified = ModificationTime();
                 }
+                FileSystemWatcher fresh;
+                try
+                {
+                    // Built before the live watcher is given up. The folder can go between the
+                    // check above and here, and a swap that failed after retiring the live
+                    // watcher would leave nothing armed, so the next Start() would come in cold and
+                    // re-baseline away whatever change is pending.
+                    fresh = Build();
+                }
+                catch (Exception ex) when (CannotBuild(ex))
+                {
+                    return;   // as if the directory were missing: the caller retries on its next reload
+                }
                 dead = Detach();
-                Arm();
+                Install(fresh);
                 if (cold)
                 {
                     generation++;
@@ -152,6 +174,7 @@ public sealed class FileWatcher : IDisposable
             fsw = watcher;
             watcher = null;
             armedAt = null;
+            rebuildOwed = false;
             generation++;
             t = timer;
             timer = null;
@@ -183,9 +206,11 @@ public sealed class FileWatcher : IDisposable
     /// the directory that is there and the file re-checked against it. That is what covers a
     /// folder deleted and recreated before this ran, the case a Directory.Exists check alone
     /// reads as a lost buffer. A lost buffer itself does not warrant one, because the handle
-    /// is still on the right folder, and neither does a second rebuild inside the cooldown:
-    /// both re-check the file and keep the watcher, so a folder that keeps erroring costs
-    /// re-checks rather than a teardown apiece. Only a directory that is really gone disarms
+    /// is still on the right folder; it re-checks the file and keeps the watcher. A second
+    /// rebuild inside the cooldown is not done but owed — the watcher it kept may be the dead
+    /// one — so it re-checks too, and the next Start() pays the debt; a folder that keeps
+    /// erroring therefore costs re-checks and one rebuild per reload rather than a teardown
+    /// apiece. Only a directory that is really gone disarms
     /// and reports, leaving the caller's next Start() (each reload re-arms it) to build a
     /// fresh one. The
     /// deletion is delivered directly rather than through Schedule(): Stop() disposes
@@ -198,9 +223,9 @@ public sealed class FileWatcher : IDisposable
     /// </summary>
     internal void HandleError(bool rebuild = true)
     {
-        if (Directory.Exists(directory))
+        if (probe.DirectoryExists(directory))
         {
-            if (!rebuild || !RebuildIsDue())
+            if (!rebuild)
             {
                 // Re-check the file and keep the watcher: Schedule() does nothing of its own
                 // when nothing is armed, so a late error after a Stop() reports nothing.
@@ -210,6 +235,7 @@ public sealed class FileWatcher : IDisposable
             switch (Rebuild())
             {
                 case Rebuilt.Yes:
+                case Rebuilt.Owed:
                     Schedule();
                     return;
                 case Rebuilt.NothingArmed:
@@ -238,6 +264,9 @@ public sealed class FileWatcher : IDisposable
     {
         /// <summary>A fresh FileSystemWatcher is live on the path.</summary>
         Yes,
+        /// <summary>The cooldown held the rebuild back. It is recorded as owed, for the next
+        /// Start() to pay, rather than dropped.</summary>
+        Owed,
         /// <summary>Nothing was armed, so this is a late error from a watcher already stopped:
         /// there is nothing to recover and nothing to report.</summary>
         NothingArmed,
@@ -246,29 +275,12 @@ public sealed class FileWatcher : IDisposable
         Failed,
     }
 
-    /// <summary>Whether enough time has passed since the last rebuild to spend another one, and
-    /// records this one when it has. A storm of errors then degrades to plain re-checks instead
-    /// of a teardown apiece.</summary>
-    private bool RebuildIsDue()
-    {
-        lock (gate)
-        {
-            var now = Environment.TickCount64;
-            if (lastRebuildAt != 0 && now - lastRebuildAt < (long)rebuildCooldown.TotalMilliseconds)
-            {
-                return false;
-            }
-            lastRebuildAt = now;
-            return true;
-        }
-    }
-
     /// <summary>
-    /// Builds a FileSystemWatcher on the parent directory and makes it the live one, recording
-    /// which folder that was. The caller holds the gate and has already detached any previous
-    /// watcher.
+    /// Builds and enables a FileSystemWatcher on the parent directory without making it the live
+    /// one, so a caller whose build fails still has the watcher it had. Throws what building one
+    /// throws when the directory has gone; <see cref="CannotBuild"/> recognises it.
     /// </summary>
-    private void Arm()
+    private FileSystemWatcher Build()
     {
         var fsw = new FileSystemWatcher(directory)
         {
@@ -291,10 +303,22 @@ public sealed class FileWatcher : IDisposable
             fsw.Dispose();   // enabling can throw, and a half-built watcher still holds a handle
             throw;
         }
+        return fsw;
+    }
+
+    /// <summary>Makes a freshly built watcher the live one and records which folder it is on;
+    /// whatever was owed is paid by it. The caller holds the gate and has already detached the
+    /// previous watcher.</summary>
+    private void Install(FileSystemWatcher fsw)
+    {
         armedAt = CreationTime(directory);
         armCount++;
+        rebuildOwed = false;
         watcher = fsw;
     }
+
+    /// <summary>What building a FileSystemWatcher throws when its directory has just gone.</summary>
+    private static bool CannotBuild(Exception ex) => FileSystemErrors.IsTransient(ex) || ex is ArgumentException;
 
     /// <summary>Takes the live FileSystemWatcher out for the caller to Retire outside the gate:
     /// disposing one can block on its own callbacks, and those callbacks take the gate. Caller
@@ -326,7 +350,8 @@ public sealed class FileWatcher : IDisposable
     }
 
     /// <summary>
-    /// Swaps the live FileSystemWatcher for a fresh one on the same path. Never throws: it runs
+    /// Swaps the live FileSystemWatcher for a fresh one on the same path, at most once per
+    /// cooldown; one held back by the cooldown is owed rather than dropped. Never throws: it runs
     /// on the FileSystemWatcher's own callback thread.
     /// </summary>
     private Rebuilt Rebuild()
@@ -340,14 +365,24 @@ public sealed class FileWatcher : IDisposable
                 {
                     return Rebuilt.NothingArmed;
                 }
+                var now = Environment.TickCount64;
+                if (lastRebuildAt != 0 && now - lastRebuildAt < (long)rebuildCooldown.TotalMilliseconds)
+                {
+                    rebuildOwed = true;
+                    return Rebuilt.Owed;
+                }
+                var fresh = Build();   // before the live watcher is given up, as in Start()
                 dead = Detach();
-                Arm();
+                Install(fresh);
+                // Stamped only now that a rebuild has happened: an attempt that found nothing
+                // armed, or could not build, must not spend the slot the next real error needs.
+                lastRebuildAt = now;
                 return Rebuilt.Yes;
             }
         }
-        catch (Exception ex) when (FileSystemErrors.IsTransient(ex) || ex is ArgumentException)
+        catch (Exception ex) when (CannotBuild(ex))
         {
-            return Rebuilt.Failed;   // the directory went away between the check and the arm
+            return Rebuilt.Failed;   // the directory went away between the check and the build
         }
         finally
         {
@@ -383,7 +418,7 @@ public sealed class FileWatcher : IDisposable
     /// </summary>
     private bool DirectoryWasReplaced(DateTime? armed)
     {
-        if (!Directory.Exists(directory))
+        if (!probe.DirectoryExists(directory))
         {
             return false;
         }

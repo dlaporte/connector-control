@@ -402,9 +402,9 @@ public class FileWatcherTests : IDisposable
 
     /// <summary>
     /// Errors arrive in storms, and each rebuild costs a directory handle and a window in which
-    /// events are missed, so they are bounded to one per cooldown. The cooldown is injected
-    /// rather than waited out, which is what makes the count exact instead of a race with the
-    /// clock.
+    /// events are missed, so they are bounded to one per cooldown; the rest are owed, and the
+    /// next Start() pays them with a single swap. The cooldown is injected rather than waited
+    /// out, which is what makes the counts exact instead of a race with the clock.
     /// </summary>
     [Fact]
     public void AStormOfErrorsCostsOneRebuild()
@@ -418,10 +418,92 @@ public class FileWatcherTests : IDisposable
         {
             watcher.HandleError();
         }
-        Assert.True(watcher.IsArmed);
         Assert.Equal(armed + 1, watcher.ArmCount);
+        Assert.False(watcher.IsArmed, "the errors the cooldown held back are owed a rebuild");
         TempDir.Touch(path, "two");
-        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "and the watcher it kept still reports changes");
+        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "the watcher it kept still reports changes meanwhile");
+        watcher.Start();
+        Assert.Equal(armed + 2, watcher.ArmCount);   // the whole storm's debt, paid once
+        Assert.True(watcher.IsArmed);
+    }
+
+    /// <summary>
+    /// A rebuild the cooldown holds back is owed, not dropped. If the error it answered came from
+    /// a dead handle — a folder deleted and recreated under the same name, which keeps its
+    /// creation time on NTFS, so the identity check cannot see it — dropping it would leave the
+    /// watcher reporting itself armed while deaf for good. Two replacements of the same folder
+    /// inside a second is enough, which a git rebase in a synced collection can do.
+    /// </summary>
+    [Fact]
+    public void AnErrorTheCooldownHoldsBackIsOwedAndPaidByTheNextStart()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, rebuildCooldown: TimeSpan.FromMinutes(5));
+        watcher.Start();
+        var armed = watcher.ArmCount;
+        watcher.HandleError();   // rebuilds
+        watcher.HandleError();   // inside the cooldown
+        Assert.False(watcher.IsArmed, "a watcher owed a rebuild may be on a dead handle");
+        watcher.Start();         // AppState re-arms on every reload: this is where the debt is paid
+        Assert.True(watcher.IsArmed);
+        Assert.Equal(armed + 2, watcher.ArmCount);
+    }
+
+    /// <summary>
+    /// Only a rebuild that happened spends the cooldown. An attempt that found nothing armed —
+    /// a late error after Stop() — rebuilt nothing, and the next real error must still get its
+    /// rebuild rather than find the slot taken.
+    /// </summary>
+    [Fact]
+    public void AnAttemptThatRebuiltNothingDoesNotSpendTheCooldown()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, rebuildCooldown: TimeSpan.FromMinutes(5));
+        watcher.Start();
+        watcher.Stop();
+        watcher.HandleError();   // nothing armed: nothing rebuilt
+        watcher.Start();
+        var armed = watcher.ArmCount;
+        watcher.HandleError();
+        Assert.Equal(armed + 1, watcher.ArmCount);
+        Assert.True(watcher.IsArmed);
+    }
+
+    /// <summary>
+    /// A swap builds its new FileSystemWatcher before giving up the live one. The folder can go
+    /// between the check that it is there and the build; the path probe stands in for that
+    /// window by still reporting the folder after it has been moved away, so the build fails
+    /// exactly there. A swap that had retired the live watcher first would leave nothing armed,
+    /// and the next Start() would come in cold and re-baseline away whatever change was pending.
+    /// Moving the folder back is the proof: it is the folder the kept watcher is on, so the
+    /// watcher reports itself armed on it again without another Start(), which a watcher that
+    /// had thrown its live one away cannot do. A rename rather than a delete, because a rename
+    /// raises no error of its own to race these assertions.
+    /// </summary>
+    [Fact]
+    public void AReArmThatCannotBuildItsWatcherKeepsTheLiveOne()
+    {
+        var folder = dir.File("collection");
+        Directory.CreateDirectory(folder);
+        var file = System.IO.Path.Combine(folder, "watched.json");
+        File.WriteAllText(file, "one");
+        var probe = new FakePathProbe().AddFile(file, File.GetLastWriteTimeUtc(file));
+        var counter = new Counter();
+        using var watcher = new FileWatcher(file, a => a(), counter.Hit, probe: probe);
+        watcher.Start();
+        Assert.True(watcher.IsArmed);
+        var armed = watcher.ArmCount;
+        Thread.Sleep(Settle);
+
+        var away = dir.File("collection-away");
+        Directory.Move(folder, away);
+        watcher.Start();   // the build fails: it must neither throw nor give up the watcher it has
+        Assert.Equal(armed, watcher.ArmCount);
+
+        Directory.Move(away, folder);
+        Assert.True(watcher.IsArmed, "the failed swap must not have retired the live watcher");
     }
 
     [Fact]
