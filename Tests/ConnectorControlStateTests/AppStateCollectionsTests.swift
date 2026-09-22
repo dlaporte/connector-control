@@ -1037,6 +1037,171 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.collectionNames, ["Default"])
     }
 
+    // MARK: - A marked path never leaves as written
+
+    private let markedPath = "/Users/d/ledger/dist/index.js"
+
+    /// The active collection publishing `ledger` with its path argument marked, the way the
+    /// Publish sheet records it: the pointer and the path it was made on.
+    private func publishMarkedLedger(_ h: AppStateHarness, _ state: AppState,
+                                     args: [String]) throws -> (folder: URL, file: URL) {
+        let index = try XCTUnwrap(args.firstIndex(of: markedPath))
+        XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array(args.map(JSONValue.string)),
+        ])), renamedFrom: nil))
+        let intent = PublishIntent(shareValues: [:], pathMarks: ["ledger": [JSONPointer(["args", String(index)]):
+            .init(name: "server_path", hint: "your ledger clone", value: markedPath)]], hints: [:])
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: intent))
+        return (folder, folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json"))
+    }
+
+    /// A change to the connector that did not come through its editor — the JSON view of another
+    /// window, the author's other machine, an older app — so nothing re-keyed the marks.
+    private func rewriteLedger(_ state: AppState, args: [String]) {
+        XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array(args.map(JSONValue.string)),
+        ])), renamedFrom: "ledger"))
+    }
+
+    private func ledgerArgs(in file: URL) throws -> [String] {
+        let document = try CollectionDocument.decode(try Data(contentsOf: file))
+        guard case .local(let local)? = document.connectors["ledger"]?.launcher else { throw AppStateHarness.HarnessError() }
+        return local.args
+    }
+
+    func testAMarkMovedOutsideTheEditorFollowsItsPathByValue() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let (_, file) = try publishMarkedLedger(h, state, args: [markedPath, "--quiet"])
+        XCTAssertEqual(try ledgerArgs(in: file), ["${CC_NEEDS:server_path}", "--quiet"])
+
+        rewriteLedger(state, args: ["--quiet", markedPath])
+        XCTAssertNil(state.publishError)
+        XCTAssertEqual(try ledgerArgs(in: file), ["--quiet", "${CC_NEEDS:server_path}"],
+                       "the placeholder stays on the path, and the flag that took its place travels as written")
+        XCTAssertFalse(try XCTUnwrap(String(data: Data(contentsOf: file), encoding: .utf8)).contains(markedPath))
+    }
+
+    func testAMarkThatLostItsPathFailsClosedUntilItIsMarkedAgain() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let (_, file) = try publishMarkedLedger(h, state, args: [markedPath])
+        let before = try Data(contentsOf: file)
+
+        // Edited outside the editor, so the record still names the old path: nothing now says
+        // which argument the author meant, and the new path must not go out as written.
+        let edited = "/Users/d/ledger-v2/dist/index.js"
+        rewriteLedger(state, args: ["--quiet", edited])
+        XCTAssertEqual(state.publishError?.collection, state.activeCollection)
+        XCTAssertEqual(state.publishError?.message, AppState.pathMarkMovedError("ledger"))
+        guard case .publishFailed(_, let message)? = state.collectionBanner else {
+            return XCTFail("the failed-publish banner shows")
+        }
+        XCTAssertEqual(message, AppState.pathMarkMovedError("ledger"))
+        XCTAssertEqual(try Data(contentsOf: file), before, "no file is written: the old document, placeholder and all, stays")
+        let exported = h.dir.file("out/copy.json")
+        let record = try XCTUnwrap(state.collectionsFile.collections[state.activeCollection]?.publish)
+        XCTAssertEqual(state.writeExport(for: state.activeCollection, intent: record.intent, to: exported.path),
+                       AppState.pathMarkMovedError("ledger"), "an export refuses the same way")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: exported.path))
+
+        // Re-ticking in the Publish sheet records the path where it is now, and clears it.
+        let sheet = PublishModel(state: state, collection: state.activeCollection)
+        let row = try XCTUnwrap(sheet.pathRows.firstIndex { $0.connector == "ledger" && $0.value == edited })
+        XCTAssertFalse(sheet.pathRows[row].marked, "a mark that lost its argument ticks nothing")
+        sheet.pathRows[row].marked = true
+        sheet.pathRows[row].name = "server_path"
+        XCTAssertNil(sheet.publish())
+        XCTAssertNil(state.publishError)
+        XCTAssertEqual(try ledgerArgs(in: file), ["--quiet", "${CC_NEEDS:server_path}"])
+        XCTAssertFalse(try XCTUnwrap(String(data: Data(contentsOf: file), encoding: .utf8)).contains(edited))
+        XCTAssertEqual(state.collectionsFile.collections[state.activeCollection]?.publish?.intent.pathMarks["ledger"],
+                       [JSONPointer(["args", "1"]): .init(name: "server_path", hint: nil, value: edited)])
+    }
+
+    func testARenamedConnectorKeepsItsMarksAndARemovedOneLeavesNone() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let (_, file) = try publishMarkedLedger(h, state, args: [markedPath])
+        let entry = try XCTUnwrap(state.store.collections[state.activeCollection]?.mcps["ledger"])
+        XCTAssertNil(state.upsert(name: "books", entry: entry, renamedFrom: "ledger"))
+        XCTAssertNil(state.publishError)
+        let intent = try XCTUnwrap(state.collectionsFile.collections[state.activeCollection]?.publish?.intent)
+        XCTAssertNil(intent.pathMarks["ledger"])
+        XCTAssertEqual(intent.pathMarks["books"]?.values.first?.value, markedPath)
+        let document = try CollectionDocument.decode(try Data(contentsOf: file))
+        XCTAssertEqual(document.connectors["books"]?.needs.keys.sorted(), ["server_path"])
+
+        state.remove(name: "books")
+        XCTAssertNil(state.collectionsFile.collections[state.activeCollection]?.publish?.intent.pathMarks["books"],
+                     "a connector added later under the same name was never ticked")
+        XCTAssertNil(state.publishError)
+    }
+
+    func testAMarkWhoseConnectorWasRenamedElsewhereFailsClosed() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let (_, file) = try publishMarkedLedger(h, state, args: [markedPath])
+        let before = try Data(contentsOf: file)
+
+        // An older app renamed it on another machine: the master list arrives, the record does
+        // not follow, and the path would otherwise travel under the new name as written.
+        var store = try h.storeOnDisk()
+        let entry = try XCTUnwrap(store.collections[store.activeCollection]?.mcps.removeValue(forKey: "ledger"))
+        store.collections[store.activeCollection]?.mcps["books"] = entry
+        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        state.reload(trigger: .externalStoreAdoption)
+        XCTAssertEqual(state.publishError?.message, AppState.pathMarkMovedError("ledger"))
+        XCTAssertEqual(try Data(contentsOf: file), before)
+    }
+
+    // MARK: - The directory token on the publishing machine
+
+    func testThePublishFolderStandsForTheDirectoryTokenOnlyWhileThisMachinePublishes() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let token = "\(Placeholder.directoryToken)/tools/srv.js"
+        XCTAssertNil(state.upsert(name: "x", entry: MCPEntry(enabled: true, config: .object([
+            "command": .string("node"), "args": .array([.string(token)]),
+        ])), renamedFrom: nil))
+        state.apply()
+        XCTAssertEqual(state.connectorCaution("x", in: state.activeCollection), AppState.unpublishedDirectoryCaution)
+        XCTAssertEqual(args(of: try XCTUnwrap(h.claudeServers()["x"])), [token], "no folder is guessed at")
+
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        let published = try XCTUnwrap(state.collectionsCache.published[state.activeCollection]?.folder)
+        XCTAssertEqual(args(of: try XCTUnwrap(h.claudeServers()["x"])), [published + "/tools/srv.js"],
+                       "Claude runs the tool shipped beside the document, from the moment publishing starts")
+        XCTAssertNil(state.connectorCaution("x", in: state.activeCollection))
+        XCTAssertEqual(args(of: try XCTUnwrap(state.store.collections[state.activeCollection]?.mcps["x"]?.config)), [token],
+                       "the store keeps the token")
+        let bytes = try XCTUnwrap(String(data: try Data(contentsOf: folder.appendingPathComponent(
+            Slug.make(state.activeCollection) + ".json")), encoding: .utf8))
+        XCTAssertTrue(bytes.contains(Placeholder.directoryToken), "each subscriber resolves it against their own copy")
+        XCTAssertFalse(bytes.contains(published), "the author's folder never travels")
+        state.reload()
+        XCTAssertEqual(args(of: try XCTUnwrap(h.claudeServers()["x"])), [published + "/tools/srv.js"],
+                       "what was written is what a reload renders, so nothing is regenerated")
+
+        state.stopPublishing(state.activeCollection, deleteFile: false)
+        XCTAssertEqual(state.connectorCaution("x", in: state.activeCollection), AppState.unpublishedDirectoryCaution)
+        XCTAssertEqual(args(of: try XCTUnwrap(h.claudeServers()["x"])), [token])
+    }
+
+    func testACollectionPublishedFromAnotherMachineHasNoFolderHere() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.upsert(name: "x", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string("\(Placeholder.directoryToken)/srv.js")]),
+        ])), renamedFrom: nil))
+        try seed(h, state, file: CollectionsFile(collections: [state.activeCollection: published(slug: "default")]))
+        XCTAssertTrue(state.isPublished(state.activeCollection))
+        XCTAssertNil(state.collectionDirectory(of: state.activeCollection))
+        XCTAssertEqual(state.connectorCaution("x", in: state.activeCollection), AppState.unpublishedDirectoryCaution)
+    }
+
     // MARK: - Import as copies
 
     /// The design's sample plus a connector whose path is written against the document's own

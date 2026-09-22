@@ -346,9 +346,18 @@ public sealed record CollectionsFile
                 var byPointer = new Dictionary<string, JsonValue>(StringComparer.Ordinal);
                 foreach (var (pointer, mark) in marks)
                 {
-                    byPointer[pointer.ToString()] = JsonValue.Object(
-                        ("name", JsonValue.String(mark.Name)),
-                        ("hint", mark.Hint is null ? JsonValue.Null : JsonValue.String(mark.Hint)));
+                    var fields = new Dictionary<string, JsonValue>(StringComparer.Ordinal)
+                    {
+                        ["name"] = JsonValue.String(mark.Name),
+                        ["hint"] = mark.Hint is null ? JsonValue.Null : JsonValue.String(mark.Hint),
+                    };
+                    // The path itself, which this file may hold: it travels only among the
+                    // author's own machines, beside a master list that already holds the same value.
+                    if (mark.Value is not null)
+                    {
+                        fields["value"] = JsonValue.String(mark.Value);
+                    }
+                    byPointer[pointer.ToString()] = JsonValue.Object(fields);
                 }
                 paths[connector] = JsonValue.Object(byPointer);
             }
@@ -385,9 +394,13 @@ public sealed record CollectionsFile
                     {
                         throw CollectionsFileException.Malformed($"{markWhat} is not a JSON object");
                     }
+                    // A mark with no value is tolerated rather than refused: no release ever wrote
+                    // one, but a build from before values were kept may have, and it still loads as
+                    // the pointer-only mark it was.
                     marks[Pointer(rawPointer, markWhat)] = new PublishIntent.PathMark(
                         RequiredString(mark["name"], $"{markWhat} name"),
-                        OptionalString(mark["hint"], $"{markWhat} hint"));
+                        OptionalString(mark["hint"], $"{markWhat} hint"),
+                        OptionalString(mark["value"], $"{markWhat} value"));
                 }
                 pathMarks[connector] = marks;
             }

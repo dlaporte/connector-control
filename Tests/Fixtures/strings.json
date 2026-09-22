@@ -54,6 +54,9 @@
   "AppState.newerDocumentError": "This collection was made by a newer Connector Control.",
   "AppState.noConnectorsSubtitle": "No connectors configured",
   "AppState.ownCollectionError": "This is your own published collection.",
+  "AppState.pathMarkMovedError": {
+    "format": "A path marked in “{0}” has moved. Open Publish… to mark it again."
+  },
   "AppState.publishIntoStoreError": "Choose a folder other than the master list folder or its backups.",
   "AppState.publishSlugTakenError": {
     "format": "{0} already exists there and belongs to a different collection."
@@ -73,6 +76,10 @@
   },
   "AppState.storeChangedBody": "The connector list changed outside Connector Control — review it before your next change is applied.",
   "AppState.targetMustBeLocalError": "Copies go into a local collection.",
+  "AppState.unpublishedDirectoryCaution": {
+    "mac": "${COLLECTION_DIR} has no folder until this collection is published from this Mac.",
+    "win": "${COLLECTION_DIR} has no folder until this collection is published from this PC."
+  },
   "ClaudeConfigIO.mcpServersNotObjectError": "mcpServers is not a JSON object",
   "ClaudeConfigIO.topLevelNotObjectError": "top level is not a JSON object",
   "ClaudeProcess.notAClaudePackageError": {

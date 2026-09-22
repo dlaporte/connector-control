@@ -39,7 +39,8 @@ public sealed class CollectionsFileTests : IDisposable
                 {
                     ["ledger"] = new Dictionary<JsonPointer, PublishIntent.PathMark>
                     {
-                        [new JsonPointer(["args", "1"])] = new("server_path", "your ledger clone, then dist/index.js"),
+                        [new JsonPointer(["args", "1"])] = new("server_path", "your ledger clone, then dist/index.js",
+                            "/Users/you/ledger/dist/index.js"),
                     },
                 },
                 new Dictionary<string, IReadOnlyDictionary<string, string>>
@@ -104,6 +105,23 @@ public sealed class CollectionsFileTests : IDisposable
     {
         Assert.Throws<CollectionsFileException>(() => CollectionsFile.Decode(
             JsonValue.Object(("version", JsonValue.Int(9)), ("collections", JsonValue.Object()))));
+    }
+
+    /// <summary>
+    /// No release wrote a path mark without the value it was made on, but a build from before
+    /// values were kept may have: such a mark loads as the pointer-only mark it was.
+    /// </summary>
+    [Fact]
+    public void APathMarkWithNoValueStillLoads()
+    {
+        var json = JsonValue.Parse("""
+            {"version": 1, "collections": {"Consulting": {"kind": "local", "publish": {
+              "slug": "consulting", "origin": "o", "shareValues": {}, "hints": {},
+              "paths": {"ledger": {"/args/1": {"name": "server_path", "hint": null}}}}}}}
+            """);
+        var marks = CollectionsFile.Decode(json).Collections["Consulting"].Publish!.Intent.PathMarks["ledger"];
+        Assert.Equal(new PublishIntent.PathMark("server_path", null, null), Assert.Single(marks).Value);
+        Assert.Equal(new JsonPointer(["args", "1"]), Assert.Single(marks).Key);
     }
 
     /// <summary>A local collection with nothing to say is absent from the file, not written as an empty entry: the sidecar only ever records what the master list cannot.</summary>

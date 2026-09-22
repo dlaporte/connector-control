@@ -243,10 +243,14 @@ extension CollectionsFile.PublishRecord {
         for (connector, marks) in intent.pathMarks {
             var byPointer: [String: JSONValue] = [:]
             for (pointer, mark) in marks {
-                byPointer[pointer.description] = .object([
+                var fields: [String: JSONValue] = [
                     "name": .string(mark.name),
                     "hint": mark.hint.map(JSONValue.string) ?? .null,
-                ])
+                ]
+                // The path itself, which this file may hold: it travels only among the author's
+                // own machines, beside a master list that already holds the same value.
+                if let value = mark.value { fields["value"] = .string(value) }
+                byPointer[pointer.description] = .object(fields)
             }
             paths[connector] = .object(byPointer)
         }
@@ -272,9 +276,13 @@ extension CollectionsFile.PublishRecord {
             for (rawPointer, mark) in try CollectionsFile.objectValue(value, "\(what) paths \"\(connector)\"") {
                 let markWhat = "\(what) path \"\(connector)\".\"\(rawPointer)\""
                 guard case .object(let fields) = mark else { throw CollectionsFileError.malformed("\(markWhat) is not a JSON object") }
+                // A mark with no value is tolerated rather than refused: no release ever wrote
+                // one, but a build from before values were kept may have, and it still loads as
+                // the pointer-only mark it was.
                 marks[try CollectionsFile.pointer(rawPointer, markWhat)] = PublishIntent.PathMark(
                     name: try CollectionsFile.requiredString(fields["name"], "\(markWhat) name"),
-                    hint: try CollectionsFile.optionalString(fields["hint"], "\(markWhat) hint"))
+                    hint: try CollectionsFile.optionalString(fields["hint"], "\(markWhat) hint"),
+                    value: try CollectionsFile.optionalString(fields["value"], "\(markWhat) value"))
             }
             pathMarks[connector] = marks
         }

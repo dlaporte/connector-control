@@ -62,9 +62,10 @@ final class CollectionDocumentTests: XCTestCase {
         let ledger: JSONValue = .object(["command": .string("node"), "args": .array([.string("/Users/d/ledger/dist/index.js")]), "type": .string("stdio")])
         let intent = PublishIntent(
             shareValues: ["dbt": ["DBT_REGION"]],
-            pathMarks: ["ledger": [JSONPointer(["args", "0"]): .init(name: "server_path", hint: "your ledger clone")]],
+            pathMarks: ["ledger": [JSONPointer(["args", "0"]): .init(name: "server_path", hint: "your ledger clone",
+                                                                     value: "/Users/d/ledger/dist/index.js")]],
             hints: ["dbt": ["DBT_TOKEN": "cloud.getdbt.com"], "notion": ["token": "notion.so"]])
-        let doc = CollectionDocument.export(name: "Consulting", author: nil, origin: "o-1", exported: "2026-09-21T15:00:00Z",
+        let doc = try CollectionDocument.export(name: "Consulting", author: nil, origin: "o-1", exported: "2026-09-21T15:00:00Z",
                                             connectors: ["notion": notion, "dbt": dbt, "ledger": ledger], intent: intent)
         guard case .remote(let r) = try XCTUnwrap(doc.connectors["notion"]).launcher else { return XCTFail("notion is not remote") }
         XCTAssertEqual(r.auth, .bearer)
@@ -80,8 +81,85 @@ final class CollectionDocumentTests: XCTestCase {
 
     func testExportKeepsAnUnfilledMarkerAsANeed() throws {
         let copy: JSONValue = .object(["command": .string("node"), "args": .array([.string("${CC_NEEDS:server_path}")])])
-        let doc = CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z", connectors: ["ledger": copy], intent: .none)
+        let doc = try CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z", connectors: ["ledger": copy], intent: .none)
         XCTAssertEqual(doc.connectors["ledger"]?.needs, ["server_path": nil])
+    }
+
+    // MARK: - Path marks follow their argument
+
+    private func mark(_ value: String?, name: String = "path") -> PublishIntent.PathMark {
+        PublishIntent.PathMark(name: name, hint: nil, value: value)
+    }
+
+    private func arg(_ index: Int) -> JSONPointer { JSONPointer(["args", String(index)]) }
+
+    func testAMarkStaysOnItsArgumentOrFollowsItsValue() {
+        let marks = [arg(1): mark("/Users/d/srv.js")]
+        XCTAssertEqual(PublishIntent.placePathMarks(marks, in: ["-y", "/Users/d/srv.js"]).placed,
+                       [1: mark("/Users/d/srv.js")], "where it was marked")
+        XCTAssertEqual(PublishIntent.placePathMarks(marks, in: ["--quiet", "-y", "/Users/d/srv.js"]).placed,
+                       [2: mark("/Users/d/srv.js")], "an argument inserted above: the mark follows the path")
+        XCTAssertEqual(PublishIntent.placePathMarks(marks, in: ["/Users/d/srv.js"]).placed,
+                       [0: mark("/Users/d/srv.js")], "one removed above")
+        let reordered = PublishIntent.placePathMarks(marks, in: ["/Users/d/srv.js", "-y"])
+        XCTAssertEqual(reordered.placed, [0: mark("/Users/d/srv.js")], "reordered")
+        XCTAssertEqual(reordered.unresolved, [:])
+        // Still where it was marked, so a second copy elsewhere does not make it ambiguous.
+        XCTAssertEqual(PublishIntent.placePathMarks(marks, in: ["/Users/d/srv.js", "/Users/d/srv.js"]).placed,
+                       [1: mark("/Users/d/srv.js")])
+    }
+
+    func testAMarkThatFindsNoArgumentIsUnresolved() {
+        let marks = [arg(1): mark("/Users/d/srv.js")]
+        let edited = PublishIntent.placePathMarks(marks, in: ["-y", "/Users/d/other.js"])
+        XCTAssertEqual(edited.placed, [:])
+        XCTAssertEqual(edited.unresolved, marks, "its value edited away")
+        let twice = PublishIntent.placePathMarks(marks, in: ["/Users/d/srv.js", "-y", "/Users/d/srv.js"])
+        XCTAssertEqual(twice.placed, [:])
+        XCTAssertEqual(twice.unresolved, marks, "moved, and held by two arguments: which one it was is anybody's guess")
+    }
+
+    func testTwoMarksCannotShareOneArgument() {
+        // Both were made on the same path; with one copy edited away, the one left can carry only one.
+        let marks = [arg(0): mark("/p", name: "a"), arg(1): mark("/p", name: "b")]
+        let placement = PublishIntent.placePathMarks(marks, in: ["/p", "/q"])
+        XCTAssertEqual(placement.placed, [0: mark("/p", name: "a")])
+        XCTAssertEqual(placement.unresolved, [arg(1): mark("/p", name: "b")])
+    }
+
+    func testAMarkWithNoValueIsPlacedByItsPointerAlone() {
+        let marks = [arg(1): mark(nil)]
+        XCTAssertEqual(PublishIntent.placePathMarks(marks, in: ["-y", "/anything"]).placed, [1: mark(nil)])
+        let past = PublishIntent.placePathMarks(marks, in: ["-y"])
+        XCTAssertEqual(past.placed, [:])
+        XCTAssertEqual(past.unresolved, [:], "a pointer past the arguments marks nothing, as it always did")
+    }
+
+    func testExportPlacesAMovedMarkOnItsPathAndRefusesOneItCannotPlace() throws {
+        let intent = PublishIntent(shareValues: [:], pathMarks: ["ledger": [arg(0): mark("/Users/d/ledger.js")]], hints: [:])
+        let inserted: JSONValue = .object(["command": .string("node"),
+                                           "args": .array([.string("--quiet"), .string("/Users/d/ledger.js")])])
+        let doc = try CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z",
+                                                connectors: ["ledger": inserted], intent: intent)
+        guard case .local(let l) = try XCTUnwrap(doc.connectors["ledger"]).launcher else { return XCTFail("ledger is not local") }
+        XCTAssertEqual(l.args, ["--quiet", "${CC_NEEDS:path}"], "the flag that slid into its place travels as written, the path does not")
+
+        let edited: JSONValue = .object(["command": .string("node"),
+                                         "args": .array([.string("--quiet"), .string("/Users/d/ledger-v2.js")])])
+        XCTAssertThrowsError(try CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z",
+                                                           connectors: ["ledger": edited, "other": inserted], intent: intent)) {
+            XCTAssertEqual($0 as? PublishIntentError, .pathMarkMoved(connector: "ledger"))
+        }
+    }
+
+    func testExportRefusesAMarkLeftOnARemoteConnector() {
+        let remote = RemotePattern.encode(RemoteConfig(url: "https://mcp.example.com/", auth: .automatic,
+                                                       extraArgs: ["/Users/d/ledger.js"], passthroughEnv: [:], package: "mcp-remote"))
+        let intent = PublishIntent(shareValues: [:], pathMarks: ["ledger": [arg(0): mark("/Users/d/ledger.js")]], hints: [:])
+        XCTAssertThrowsError(try CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z",
+                                                           connectors: ["ledger": remote], intent: intent)) {
+            XCTAssertEqual($0 as? PublishIntentError, .pathMarkMoved(connector: "ledger"))
+        }
     }
 
     func testARemoteConnectorKeepsItsAdditionalFieldsThroughExportAndRender() throws {
@@ -89,7 +167,7 @@ final class CollectionDocumentTests: XCTestCase {
         guard case .object(var object) = encoded else { return XCTFail("encode did not produce an object") }
         object["type"] = .string("stdio")
         let config: JSONValue = .object(object)
-        let doc = CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z",
+        let doc = try CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z",
                                             connectors: ["svc": config], intent: .none)
         XCTAssertEqual(doc.connectors["svc"]?.additional, ["type": .string("stdio")])
         let rendered = try XCTUnwrap(doc.render().connectors["svc"])
@@ -131,7 +209,7 @@ final class CollectionDocumentTests: XCTestCase {
         let oauth = RemotePattern.encode(RemoteConfig(url: "https://mcp.example.com/",
                                                        auth: .oauthClient(clientID: "id-1", clientSecret: "secret-oauth", scopes: "read write"),
                                                        package: "mcp-remote"))
-        let doc = CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z",
+        let doc = try CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z",
                                             connectors: ["automatic": automatic, "bearer": bearer, "header": header, "oauth": oauth], intent: .none)
         guard case .remote(let a) = try XCTUnwrap(doc.connectors["automatic"]).launcher else { return XCTFail("automatic is not remote") }
         XCTAssertEqual(a.auth, .automatic)

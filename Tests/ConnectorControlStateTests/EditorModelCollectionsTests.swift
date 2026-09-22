@@ -466,7 +466,8 @@ final class EditorModelCollectionsTests: XCTestCase {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let intent = PublishIntent(
             shareValues: ["svc": ["REGION"]],
-            pathMarks: ["svc": [JSONPointer(["args", "0"]): .init(name: "server_path", hint: "your clone, then dist/index.js")]],
+            pathMarks: ["svc": [JSONPointer(["args", "0"]): .init(name: "server_path", hint: "your clone, then dist/index.js",
+                                                                  value: "/Users/d/server.js")]],
             hints: ["svc": ["TOKEN": "acme.example ▸ API tokens"]])
         XCTAssertNil(state.startPublishing("Team", to: folder.path, intent: intent))
 
@@ -581,7 +582,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let intent = PublishIntent(
             shareValues: [:],
-            pathMarks: ["svc": [JSONPointer(["args", "0"]): .init(name: "server_path", hint: "your clone")]],
+            pathMarks: ["svc": [JSONPointer(["args", "0"]): .init(name: "server_path", hint: "your clone", value: "/Users/d/server.js")]],
             hints: [:])
         XCTAssertNil(state.startPublishing("Team", to: folder.path, intent: intent))
 
@@ -590,5 +591,160 @@ final class EditorModelCollectionsTests: XCTestCase {
         editor.requestView(.json)
         editor.requestView(.form)
         XCTAssertEqual(editor.publishedHint(arg: 0), "your clone", "the hint survives an unchanged round trip")
+    }
+
+    // MARK: - Saving a published connector moves its path marks with their rows
+
+    private let serverPath = "/Users/d/server.js"
+
+    /// "Team" publishing `svc`, whose arguments are `args` with the server path marked the way
+    /// the Publish sheet records it. Returns the document's path.
+    @discardableResult
+    private func publishTeam(_ rig: EditorRig, args: [String]) throws -> URL {
+        let state = rig.state
+        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.upsert(name: "svc", entry: MCPEntry(config: rig.local("node", args)), renamedFrom: nil, in: "Team"))
+        let index = try XCTUnwrap(args.firstIndex(of: serverPath))
+        let folder = rig.h.dir.file("share")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        XCTAssertNil(state.startPublishing("Team", to: folder.path, intent: PublishIntent(
+            shareValues: [:], pathMarks: ["svc": mark(at: index, value: serverPath)], hints: [:])))
+        return folder.appendingPathComponent("team.json")
+    }
+
+    private func mark(at index: Int, value: String) -> [JSONPointer: PublishIntent.PathMark] {
+        [JSONPointer(["args", String(index)]): .init(name: "server_path", hint: "your clone", value: value)]
+    }
+
+    private func marks(_ rig: EditorRig, _ connector: String = "svc", in collection: String = "Team")
+        -> [JSONPointer: PublishIntent.PathMark]? {
+        rig.state.collectionsFile.collections[collection]?.publish?.intent.pathMarks[connector]
+    }
+
+    private func publishedArgs(_ file: URL, _ connector: String = "svc") throws -> [String] {
+        let document = try CollectionDocument.decode(try Data(contentsOf: file))
+        guard case .local(let local)? = document.connectors[connector]?.launcher else {
+            throw AppStateHarness.HarnessError()
+        }
+        return local.args
+    }
+
+    private func carries(_ file: URL, _ text: String) throws -> Bool {
+        try XCTUnwrap(String(data: try Data(contentsOf: file), encoding: .utf8)).contains(text)
+    }
+
+    func testSavingMovesAPathMarkWithItsRow() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let file = try publishTeam(rig, args: [serverPath, "--quiet"])
+
+        var editor = rig.editor("svc", in: "Team")
+        editor.args.insert(ArgRow(value: "--inspect"), at: 0)
+        XCTAssertTrue(editor.save())
+        XCTAssertEqual(marks(rig), mark(at: 1, value: serverPath), "an argument inserted above")
+        XCTAssertEqual(try publishedArgs(file), ["--inspect", "${CC_NEEDS:server_path}", "--quiet"],
+                       "the neighbour that slid into the old position travels as written, the path does not")
+
+        editor = rig.editor("svc", in: "Team")
+        editor.args.remove(at: 0)
+        XCTAssertTrue(editor.save())
+        XCTAssertEqual(marks(rig), mark(at: 0, value: serverPath), "one removed above")
+
+        editor = rig.editor("svc", in: "Team")
+        editor.args.swapAt(0, 1)
+        XCTAssertTrue(editor.save())
+        XCTAssertEqual(marks(rig), mark(at: 1, value: serverPath), "reordered")
+        XCTAssertEqual(try publishedArgs(file), ["--quiet", "${CC_NEEDS:server_path}"])
+        XCTAssertNil(rig.state.publishError)
+        XCTAssertFalse(try carries(file, serverPath))
+    }
+
+    func testEditingTheMarkedPathInPlaceKeepsItMarked() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let file = try publishTeam(rig, args: [serverPath])
+        let editor = rig.editor("svc", in: "Team")
+        let corrected = "/Users/d/v2/server.js"
+        editor.args[0].value = corrected
+        XCTAssertTrue(editor.save())
+        XCTAssertEqual(marks(rig), mark(at: 0, value: corrected), "still the marked row; the record learns its new text")
+        XCTAssertEqual(try publishedArgs(file), ["${CC_NEEDS:server_path}"])
+        XCTAssertNil(rig.state.publishError)
+        XCTAssertFalse(try carries(file, corrected))
+    }
+
+    func testDeletingTheMarkedRowDropsItsMark() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let file = try publishTeam(rig, args: ["--quiet", serverPath])
+        let editor = rig.editor("svc", in: "Team")
+        editor.args.remove(at: 1)
+        XCTAssertTrue(editor.save())
+        XCTAssertNil(marks(rig), "nothing is left for it to mark")
+        XCTAssertNil(rig.state.publishError)
+        XCTAssertEqual(try publishedArgs(file), ["--quiet"])
+    }
+
+    func testARenameCarriesTheMarksToTheNewName() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let file = try publishTeam(rig, args: [serverPath])
+        let editor = rig.editor("svc", in: "Team")
+        editor.name = "server"
+        editor.args.insert(ArgRow(value: "--quiet"), at: 0)
+        XCTAssertTrue(editor.save())
+        XCTAssertNil(marks(rig))
+        XCTAssertEqual(marks(rig, "server"), mark(at: 1, value: serverPath))
+        XCTAssertEqual(try publishedArgs(file, "server"), ["--quiet", "${CC_NEEDS:server_path}"])
+        XCTAssertNil(rig.state.publishError)
+    }
+
+    func testAJSONEditLeavesTheMarksToBePlacedByTheirValue() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let file = try publishTeam(rig, args: [serverPath, "--quiet"])
+
+        // Reordered in the JSON view: the rows come back matched by position, which is a guess,
+        // so the record is left as it is and publishing finds the path by what it says.
+        let editor = rig.editor("svc", in: "Team")
+        editor.requestView(.json)
+        editor.jsonText = rig.local("node", ["--quiet", serverPath]).editorText()
+        editor.requestView(.form)
+        XCTAssertEqual(editor.view, .form)
+        XCTAssertTrue(editor.save())
+        XCTAssertEqual(marks(rig), mark(at: 0, value: serverPath), "not re-keyed on a guess")
+        XCTAssertEqual(try publishedArgs(file), ["--quiet", "${CC_NEEDS:server_path}"])
+
+        // Changed in the JSON view and saved from there: nothing says which argument is the
+        // marked one now, so no document is written until the author marks it again.
+        let before = try Data(contentsOf: file)
+        let again = rig.editor("svc", in: "Team")
+        again.requestView(.json)
+        again.jsonText = rig.local("node", ["--quiet", "/Users/d/v2/server.js"]).editorText()
+        XCTAssertTrue(again.save())
+        XCTAssertEqual(rig.state.publishError?.message, AppState.pathMarkMovedError("svc"))
+        XCTAssertEqual(try Data(contentsOf: file), before)
+    }
+
+    func testPropagateMovesATwinsMarksToo() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let state = rig.state
+        try publishTeam(rig, args: [serverPath])
+        XCTAssertNil(state.createCollection(named: "Mirror"))   // a copy of Team, and now active
+        let folder = rig.h.dir.file("share2")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        XCTAssertNil(state.startPublishing("Mirror", to: folder.path, intent: PublishIntent(
+            shareValues: [:], pathMarks: ["svc": mark(at: 0, value: serverPath)], hints: [:])))
+
+        let editor = rig.editor("svc", in: "Team")
+        XCTAssertEqual(editor.propagateTargets, ["Mirror"])
+        editor.propagate = true
+        editor.args.insert(ArgRow(value: "--quiet"), at: 0)
+        XCTAssertTrue(editor.save())
+        XCTAssertEqual(marks(rig), mark(at: 1, value: serverPath))
+        XCTAssertEqual(marks(rig, in: "Mirror"), mark(at: 1, value: serverPath),
+                       "the twin held the same arguments, so its marks follow the same rows")
+        XCTAssertNil(state.publishError)
     }
 }

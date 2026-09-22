@@ -12,13 +12,32 @@ public enum CollectionDocumentError: Error, Equatable {
     case malformed(String)
 }
 
+/// Why a document was not produced from a publish intent.
+///
+/// Mirror: `PathMarkMovedException` in windows/src/ConnectorControl.Core/CollectionDocument.cs
+public enum PublishIntentError: Error, Equatable {
+    /// A path the author marked on this connector can no longer be found where it was marked.
+    /// The argument it stood for may be anywhere, so no document is written rather than one that
+    /// might carry that path as written.
+    case pathMarkMoved(connector: String)
+}
+
 /// What the author ticked in the Publish sheet: which env values travel as values rather than
 /// as stripped hints, which arguments become markers, and the hint text for each.
 public struct PublishIntent: Equatable, Sendable {
     public struct PathMark: Equatable, Sendable {
         public var name: String
         public var hint: String?
-        public init(name: String, hint: String?) { self.name = name; self.hint = hint }
+        /// The argument as it read when it was marked, so the mark can follow it when arguments
+        /// move and can tell when it no longer marks anything. nil only in a record written
+        /// before values were kept, which no release did: such a mark is placed where its
+        /// pointer points, as every mark once was.
+        public var value: String?
+        public init(name: String, hint: String?, value: String?) {
+            self.name = name
+            self.hint = hint
+            self.value = value
+        }
     }
     public var shareValues: [String: Set<String>]
     public var pathMarks: [String: [JSONPointer: PathMark]]
@@ -29,6 +48,89 @@ public struct PublishIntent: Equatable, Sendable {
         self.hints = hints
     }
     public static let none = PublishIntent(shareValues: [:], pathMarks: [:], hints: [:])
+
+    /// Everything this intent says about `connector` said about `newName` instead, or dropped
+    /// when `newName` is nil: a renamed connector keeps its ticks, and a removed one leaves none
+    /// behind for a later connector of the same name to inherit.
+    public func movingConnector(_ connector: String, to newName: String?) -> PublishIntent {
+        var moved = self
+        let shared = moved.shareValues.removeValue(forKey: connector)
+        let marks = moved.pathMarks.removeValue(forKey: connector)
+        let connectorHints = moved.hints.removeValue(forKey: connector)
+        guard let newName else { return moved }
+        if let shared { moved.shareValues[newName] = shared }
+        if let marks { moved.pathMarks[newName] = marks }
+        if let connectorHints { moved.hints[newName] = connectorHints }
+        return moved
+    }
+
+    /// The same intent with `connector`'s path marks replaced; an empty set drops its entry.
+    public func replacingPathMarks(of connector: String, with marks: [JSONPointer: PathMark]) -> PublishIntent {
+        var replaced = self
+        replaced.pathMarks[connector] = marks.isEmpty ? nil : marks
+        return replaced
+    }
+
+    /// Where one connector's path marks sit among its arguments now.
+    ///
+    /// A mark stays on the argument at its pointer while that argument still reads as it did
+    /// when it was marked. Failing that, it follows its value to the one argument that holds it.
+    /// A mark that finds neither — its value edited away, held by two arguments, or already
+    /// claimed by another mark — is unresolved: the argument it was made on could be anywhere,
+    /// and nothing may be published over it.
+    ///
+    /// A mark with no recorded value is placed where its pointer points, and one pointing past
+    /// the arguments marks nothing, which is how every mark behaved before values were kept.
+    public static func placePathMarks(_ marks: [JSONPointer: PathMark], in args: [String]) -> PathMarkPlacement {
+        var placed: [Int: PathMark] = [:]
+        var unresolved: [JSONPointer: PathMark] = [:]
+        var following: [(JSONPointer, PathMark)] = []
+        // Pointer order on both platforms, so which of two competing marks wins is the same
+        // everywhere. Marks still on their own argument go first: a mark that stayed put keeps
+        // it, whatever another mark's value would follow onto.
+        for (pointer, mark) in marks.sorted(by: { $0.key.description < $1.key.description }) {
+            let index = argumentIndex(pointer, count: args.count)
+            guard let value = mark.value else {
+                if let index {
+                    if placed[index] == nil { placed[index] = mark } else { unresolved[pointer] = mark }
+                }
+                continue
+            }
+            if let index, args[index] == value, placed[index] == nil {
+                placed[index] = mark
+            } else {
+                following.append((pointer, mark))
+            }
+        }
+        for (pointer, mark) in following {
+            let holders = args.indices.filter { args[$0] == mark.value }
+            if holders.count == 1, placed[holders[0]] == nil {
+                placed[holders[0]] = mark
+            } else {
+                unresolved[pointer] = mark
+            }
+        }
+        return PathMarkPlacement(placed: placed, unresolved: unresolved)
+    }
+
+    /// The argument index a `/args/<n>` pointer names, when there is an argument there.
+    private static func argumentIndex(_ pointer: JSONPointer, count: Int) -> Int? {
+        guard pointer.segments.count == 2, pointer.segments[0] == "args",
+              let index = Int(pointer.segments[1]), index >= 0, index < count else { return nil }
+        return index
+    }
+}
+
+/// One connector's path marks, placed on the arguments it holds now.
+public struct PathMarkPlacement: Equatable, Sendable {
+    /// Argument index → the mark that sits on it.
+    public var placed: [Int: PublishIntent.PathMark]
+    /// The marks that found no argument, by the pointer they were recorded at.
+    public var unresolved: [JSONPointer: PublishIntent.PathMark]
+    public init(placed: [Int: PublishIntent.PathMark], unresolved: [JSONPointer: PublishIntent.PathMark]) {
+        self.placed = placed
+        self.unresolved = unresolved
+    }
 }
 
 public struct RenderedNeed: Equatable, Sendable {
@@ -245,15 +347,26 @@ public struct CollectionDocument: Equatable, Sendable {
 
     // MARK: Export
 
+    /// Throws `PublishIntentError.pathMarkMoved` for the first connector, by name, whose path
+    /// marks cannot all be placed (`PublishIntent.placePathMarks`), and for a remote connector
+    /// that still carries a mark with a value: a remote connector's arguments are built by each
+    /// importer, so a mark there was made while it was a local one, and the path it stood for
+    /// may now be travelling in its extra arguments.
     public static func export(name: String, author: String?, origin: String?, exported: String,
-                              connectors: [String: JSONValue], intent: PublishIntent) -> CollectionDocument {
+                              connectors: [String: JSONValue], intent: PublishIntent) throws -> CollectionDocument {
         var out: [String: Connector] = [:]
-        for (connectorName, config) in connectors {
+        // By name, so the connector a refusal names is the same on both platforms.
+        for connectorName in connectors.keys.sorted() {
+            guard let config = connectors[connectorName] else { continue }
+            let marks = intent.pathMarks[connectorName] ?? [:]
             let shared = intent.shareValues[connectorName] ?? []
             let hints = intent.hints[connectorName] ?? [:]
             func envValue(_ key: String, _ value: String) -> EnvValue { shared.contains(key) ? .value(value) : .hint(hints[key]) }
             var needs: [String: String?] = [:]
             if let remote = RemotePattern.decode(config) {
+                guard !marks.values.contains(where: { $0.value != nil }) else {
+                    throw PublishIntentError.pathMarkMoved(connector: connectorName)
+                }
                 let auth: Auth
                 switch remote.auth {
                 case .automatic:
@@ -278,9 +391,10 @@ public struct CollectionDocument: Equatable, Sendable {
             } else {
                 let model = FormMapper.analyze(config).model
                 var args = model.args
-                for (pointer, mark) in intent.pathMarks[connectorName] ?? [:] {
-                    guard pointer.segments.count == 2, pointer.segments[0] == "args",
-                          let i = Int(pointer.segments[1]), args.indices.contains(i) else { continue }
+                let placement = PublishIntent.placePathMarks(marks, in: model.args)
+                guard placement.unresolved.isEmpty else { throw PublishIntentError.pathMarkMoved(connector: connectorName) }
+                for i in placement.placed.keys.sorted() {
+                    guard let mark = placement.placed[i] else { continue }
                     args[i] = Placeholder.marker(mark.name)
                     needs.updateValue(mark.hint, forKey: mark.name)
                 }

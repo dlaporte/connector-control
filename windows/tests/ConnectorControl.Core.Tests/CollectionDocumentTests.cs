@@ -102,7 +102,7 @@ public class CollectionDocumentTests
             {
                 ["ledger"] = new Dictionary<JsonPointer, PublishIntent.PathMark>
                 {
-                    [new JsonPointer(["args", "0"])] = new("server_path", "your ledger clone"),
+                    [new JsonPointer(["args", "0"])] = new("server_path", "your ledger clone", @"C:\Users\d\ledger\dist\index.js"),
                 },
             },
             new Dictionary<string, IReadOnlyDictionary<string, string>>
@@ -140,6 +140,110 @@ public class CollectionDocumentTests
         var doc = CollectionDocument.Export("x", null, null, "2026-09-21T15:00:00Z",
             new Dictionary<string, JsonValue> { ["ledger"] = copy }, PublishIntent.None);
         Assert.Equal(new Dictionary<string, string?> { ["server_path"] = null }, doc.Connectors["ledger"].Needs);
+    }
+
+    // MARK: path marks follow their argument
+
+    private static PublishIntent.PathMark Mark(string? value, string name = "path") => new(name, null, value);
+
+    private static JsonPointer Arg(int index) =>
+        new(["args", index.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
+
+    private static Dictionary<JsonPointer, PublishIntent.PathMark> Marks(params (int Index, PublishIntent.PathMark Mark)[] marks) =>
+        marks.ToDictionary(m => Arg(m.Index), m => m.Mark);
+
+    private static PublishIntent LedgerIntent(PublishIntent.PathMark mark) => new(
+        [],
+        [new("ledger", Marks((0, mark)))],
+        []);
+
+    private static JsonValue Local(params string[] args) => JsonValue.Object(
+        ("command", JsonValue.String("node")),
+        ("args", JsonValue.Array(args.Select(JsonValue.String))));
+
+    [Fact]
+    public void AMarkStaysOnItsArgumentOrFollowsItsValue()
+    {
+        var marks = Marks((1, Mark("/Users/d/srv.js")));
+        // Where it was marked.
+        Assert.Equal(new Dictionary<int, PublishIntent.PathMark> { [1] = Mark("/Users/d/srv.js") },
+            PublishIntent.PlacePathMarks(marks, ["-y", "/Users/d/srv.js"]).Placed);
+        // An argument inserted above: the mark follows the path.
+        Assert.Equal(new Dictionary<int, PublishIntent.PathMark> { [2] = Mark("/Users/d/srv.js") },
+            PublishIntent.PlacePathMarks(marks, ["--quiet", "-y", "/Users/d/srv.js"]).Placed);
+        // One removed above.
+        Assert.Equal(new Dictionary<int, PublishIntent.PathMark> { [0] = Mark("/Users/d/srv.js") },
+            PublishIntent.PlacePathMarks(marks, ["/Users/d/srv.js"]).Placed);
+        // Reordered.
+        var reordered = PublishIntent.PlacePathMarks(marks, ["/Users/d/srv.js", "-y"]);
+        Assert.Equal(new Dictionary<int, PublishIntent.PathMark> { [0] = Mark("/Users/d/srv.js") }, reordered.Placed);
+        Assert.Empty(reordered.Unresolved);
+        // Still where it was marked, so a second copy elsewhere does not make it ambiguous.
+        Assert.Equal(new Dictionary<int, PublishIntent.PathMark> { [1] = Mark("/Users/d/srv.js") },
+            PublishIntent.PlacePathMarks(marks, ["/Users/d/srv.js", "/Users/d/srv.js"]).Placed);
+    }
+
+    [Fact]
+    public void AMarkThatFindsNoArgumentIsUnresolved()
+    {
+        var marks = Marks((1, Mark("/Users/d/srv.js")));
+        // Its value edited away.
+        var edited = PublishIntent.PlacePathMarks(marks, ["-y", "/Users/d/other.js"]);
+        Assert.Empty(edited.Placed);
+        Assert.Equal(marks, edited.Unresolved);
+        // Moved, and held by two arguments: which one it was is anybody's guess.
+        var twice = PublishIntent.PlacePathMarks(marks, ["/Users/d/srv.js", "-y", "/Users/d/srv.js"]);
+        Assert.Empty(twice.Placed);
+        Assert.Equal(marks, twice.Unresolved);
+    }
+
+    [Fact]
+    public void TwoMarksCannotShareOneArgument()
+    {
+        // Both were made on the same path; with one copy edited away, the one left can carry only one.
+        var marks = Marks((0, Mark("/p", "a")), (1, Mark("/p", "b")));
+        var placement = PublishIntent.PlacePathMarks(marks, ["/p", "/q"]);
+        Assert.Equal(new Dictionary<int, PublishIntent.PathMark> { [0] = Mark("/p", "a") }, placement.Placed);
+        Assert.Equal(Marks((1, Mark("/p", "b"))), placement.Unresolved);
+    }
+
+    [Fact]
+    public void AMarkWithNoValueIsPlacedByItsPointerAlone()
+    {
+        var marks = Marks((1, Mark(null)));
+        Assert.Equal(new Dictionary<int, PublishIntent.PathMark> { [1] = Mark(null) },
+            PublishIntent.PlacePathMarks(marks, ["-y", "/anything"]).Placed);
+        var past = PublishIntent.PlacePathMarks(marks, ["-y"]);
+        Assert.Empty(past.Placed);
+        // A pointer past the arguments marks nothing, as it always did.
+        Assert.Empty(past.Unresolved);
+    }
+
+    [Fact]
+    public void ExportPlacesAMovedMarkOnItsPathAndRefusesOneItCannotPlace()
+    {
+        var intent = LedgerIntent(Mark("/Users/d/ledger.js"));
+        var inserted = Local("--quiet", "/Users/d/ledger.js");
+        var doc = CollectionDocument.Export("x", null, null, "2026-09-21T15:00:00Z",
+            new Dictionary<string, JsonValue> { ["ledger"] = inserted }, intent);
+        var l = Assert.IsType<CollectionDocument.Launcher.Local>(doc.Connectors["ledger"].Launcher);
+        // The flag that slid into its place travels as written, the path does not.
+        Assert.Equal(["--quiet", "${CC_NEEDS:path}"], l.Args);
+
+        var edited = Local("--quiet", "/Users/d/ledger-v2.js");
+        var refused = Assert.Throws<PathMarkMovedException>(() => CollectionDocument.Export("x", null, null, "2026-09-21T15:00:00Z",
+            new Dictionary<string, JsonValue> { ["ledger"] = edited, ["other"] = inserted }, intent));
+        Assert.Equal("ledger", refused.Connector);
+    }
+
+    [Fact]
+    public void ExportRefusesAMarkLeftOnARemoteConnector()
+    {
+        var remote = RemotePattern.Encode(new RemoteConfig("https://mcp.example.com/", RemoteAuth.Auto, RemoteLaunchStyle.Npx,
+            extraArgs: ["/Users/d/ledger.js"], package: "mcp-remote"));
+        var refused = Assert.Throws<PathMarkMovedException>(() => CollectionDocument.Export("x", null, null, "2026-09-21T15:00:00Z",
+            new Dictionary<string, JsonValue> { ["ledger"] = remote }, LedgerIntent(Mark("/Users/d/ledger.js"))));
+        Assert.Equal("ledger", refused.Connector);
     }
 
     [Fact]

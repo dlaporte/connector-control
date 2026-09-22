@@ -118,11 +118,18 @@ public final class PublishModel: ObservableObject {
                                   share: shared.contains(key), hint: hints[key] ?? ""))
             }
             var found = 0
-            for (index, argument) in PublishModel.arguments(of: config).enumerated()
-            where PublishModel.looksLikeAPath(argument) {
+            let arguments = PublishModel.arguments(of: config)
+            // The ticks sit where the exporter would place them, not where the record says they
+            // were made: an argument that moved since keeps its tick, and a mark that has lost
+            // its argument ticks nothing, which is the sheet asking for it to be marked again. A
+            // marked argument keeps its row even once it stops looking like a path (the file
+            // it named is gone), or publishing from the sheet would quietly unmark it.
+            let placed = PublishIntent.placePathMarks(intent.pathMarks[name] ?? [:], in: arguments).placed
+            for (index, argument) in arguments.enumerated()
+            where PublishModel.looksLikeAPath(argument) || placed[index] != nil {
                 found += 1
                 let pointer = JSONPointer(["args", String(index)])
-                let mark = intent.pathMarks[name]?[pointer]
+                let mark = placed[index]
                 paths.append(PathRow(connector: name, pointer: pointer, value: argument,
                                      marked: mark != nil,
                                      name: mark?.name ?? PublishModel.defaultPathName(found),
@@ -189,16 +196,23 @@ public final class PublishModel: ObservableObject {
             // preview right under it.
             guard !name.isEmpty else { continue }
             let hint = row.hint.trimmingCharacters(in: .whitespaces)
+            // The value is what lets the mark find its argument again once arguments move.
             pathMarks[row.connector, default: [:]][row.pointer] =
-                PublishIntent.PathMark(name: name, hint: hint.isEmpty ? nil : hint)
+                PublishIntent.PathMark(name: name, hint: hint.isEmpty ? nil : hint, value: row.value)
         }
         return PublishIntent(shareValues: shareValues, pathMarks: pathMarks, hints: hints)
     }
 
     /// The document itself, as the editor would show it. Every byte that leaves this machine is
-    /// in here.
+    /// in here. When the ticks can no longer be placed — the collection changed under the open
+    /// sheet — there is no document, and the preview says why rather than showing one that
+    /// would not be written.
     public var preview: String {
-        state.exportDocument(for: collection, intent: intent, only: connectors).encode().editorText()
+        do {
+            return try state.exportDocument(for: collection, intent: intent, only: connectors).encode().editorText()
+        } catch {
+            return AppState.friendly(error)
+        }
     }
 
     /// The connectors a sheet over `collection` speaks for, which is every one of them unless an

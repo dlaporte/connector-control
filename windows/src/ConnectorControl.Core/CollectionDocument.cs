@@ -35,12 +35,32 @@ public sealed class CollectionDocumentException(string message) : Exception(mess
 }
 
 /// <summary>
+/// A path the author marked on <see cref="Connector"/> can no longer be found where it was
+/// marked. The argument it stood for may be anywhere, so no document is written rather than one
+/// that might carry that path as written. What the user reads is
+/// <c>AppState.PathMarkMovedError</c>, which <c>AppState.Friendly</c> gives for this.
+///
+/// Mirror: <c>PublishIntentError.pathMarkMoved</c> in Sources/ConnectorControlCore/CollectionDocument.swift
+/// </summary>
+public sealed class PathMarkMovedException(string connector)
+    : Exception($"a path mark on \"{connector}\" no longer finds its argument")
+{
+    public string Connector { get; } = connector;
+}
+
+/// <summary>
 /// What the author ticked in the Publish sheet: which env values travel as values rather than as
 /// stripped hints, which arguments become markers, and the hint text for each.
 /// </summary>
 public sealed class PublishIntent : IEquatable<PublishIntent>
 {
-    public sealed record PathMark(string Name, string? Hint);
+    /// <summary>
+    /// One marked argument. <paramref name="Value"/> is the argument as it read when it was
+    /// marked, so the mark can follow it when arguments move and can tell when it no longer marks
+    /// anything. Null only in a record written before values were kept, which no release did:
+    /// such a mark is placed where its pointer points, as every mark once was.
+    /// </summary>
+    public sealed record PathMark(string Name, string? Hint, string? Value);
 
     public IReadOnlyDictionary<string, IReadOnlySet<string>> ShareValues { get; }
     public IReadOnlyDictionary<string, IReadOnlyDictionary<JsonPointer, PathMark>> PathMarks { get; }
@@ -57,6 +77,121 @@ public sealed class PublishIntent : IEquatable<PublishIntent>
     }
 
     public static PublishIntent None { get; } = new([], [], []);
+
+    /// <summary>
+    /// Everything this intent says about <paramref name="connector"/> said about
+    /// <paramref name="newName"/> instead, or dropped when <paramref name="newName"/> is null: a
+    /// renamed connector keeps its ticks, and a removed one leaves none behind for a later
+    /// connector of the same name to inherit.
+    /// </summary>
+    public PublishIntent MovingConnector(string connector, string? newName)
+    {
+        var shareValues = new Dictionary<string, IReadOnlySet<string>>(ShareValues, StringComparer.Ordinal);
+        var pathMarks = new Dictionary<string, IReadOnlyDictionary<JsonPointer, PathMark>>(PathMarks, StringComparer.Ordinal);
+        var hints = new Dictionary<string, IReadOnlyDictionary<string, string>>(Hints, StringComparer.Ordinal);
+        var hadShared = shareValues.Remove(connector, out var shared);
+        var hadMarks = pathMarks.Remove(connector, out var marks);
+        var hadHints = hints.Remove(connector, out var connectorHints);
+        if (newName is not null)
+        {
+            if (hadShared)
+            {
+                shareValues[newName] = shared!;
+            }
+            if (hadMarks)
+            {
+                pathMarks[newName] = marks!;
+            }
+            if (hadHints)
+            {
+                hints[newName] = connectorHints!;
+            }
+        }
+        return new PublishIntent(shareValues, pathMarks, hints);
+    }
+
+    /// <summary>The same intent with <paramref name="connector"/>'s path marks replaced; an empty set drops its entry.</summary>
+    public PublishIntent ReplacingPathMarks(string connector, IReadOnlyDictionary<JsonPointer, PathMark> marks)
+    {
+        var pathMarks = new Dictionary<string, IReadOnlyDictionary<JsonPointer, PathMark>>(PathMarks, StringComparer.Ordinal);
+        if (marks.Count == 0)
+        {
+            pathMarks.Remove(connector);
+        }
+        else
+        {
+            pathMarks[connector] = marks;
+        }
+        return new PublishIntent(ShareValues, pathMarks, Hints);
+    }
+
+    /// <summary>
+    /// Where one connector's path marks sit among its arguments now.
+    /// <para>
+    /// A mark stays on the argument at its pointer while that argument still reads as it did when
+    /// it was marked. Failing that, it follows its value to the one argument that holds it. A mark
+    /// that finds neither — its value edited away, held by two arguments, or already claimed by
+    /// another mark — is unresolved: the argument it was made on could be anywhere, and nothing
+    /// may be published over it.
+    /// </para>
+    /// <para>
+    /// A mark with no recorded value is placed where its pointer points, and one pointing past the
+    /// arguments marks nothing, which is how every mark behaved before values were kept.
+    /// </para>
+    /// </summary>
+    public static PathMarkPlacement PlacePathMarks(IReadOnlyDictionary<JsonPointer, PathMark> marks, IReadOnlyList<string> args)
+    {
+        var placed = new Dictionary<int, PathMark>();
+        var unresolved = new Dictionary<JsonPointer, PathMark>();
+        var following = new List<(JsonPointer Pointer, PathMark Mark)>();
+        // Pointer order on both platforms, so which of two competing marks wins is the same
+        // everywhere. Marks still on their own argument go first: a mark that stayed put keeps it,
+        // whatever another mark's value would follow onto.
+        foreach (var (pointer, mark) in marks.OrderBy(p => p.Key.ToString(), StringComparer.Ordinal))
+        {
+            var index = ArgumentIndex(pointer, args.Count);
+            if (mark.Value is null)
+            {
+                if (index is { } at)
+                {
+                    if (!placed.TryAdd(at, mark))
+                    {
+                        unresolved[pointer] = mark;
+                    }
+                }
+                continue;
+            }
+            if (index is { } i && string.Equals(args[i], mark.Value, StringComparison.Ordinal) && !placed.ContainsKey(i))
+            {
+                placed[i] = mark;
+            }
+            else
+            {
+                following.Add((pointer, mark));
+            }
+        }
+        foreach (var (pointer, mark) in following)
+        {
+            var holders = Enumerable.Range(0, args.Count)
+                .Where(i => string.Equals(args[i], mark.Value, StringComparison.Ordinal))
+                .ToList();
+            if (holders.Count == 1 && placed.TryAdd(holders[0], mark))
+            {
+                continue;
+            }
+            unresolved[pointer] = mark;
+        }
+        return new PathMarkPlacement(placed, unresolved);
+    }
+
+    /// <summary>The argument index a <c>/args/&lt;n&gt;</c> pointer names, when there is an argument there.</summary>
+    private static int? ArgumentIndex(JsonPointer pointer, int count) =>
+        pointer.Segments.Length == 2 && pointer.Segments[0] == "args"
+        && int.TryParse(pointer.Segments[1], System.Globalization.NumberStyles.AllowLeadingSign,
+                        System.Globalization.CultureInfo.InvariantCulture, out var index)
+        && index >= 0 && index < count
+            ? index
+            : null;
 
     /// <summary>
     /// Structural over all three dictionaries, so two intents that say the same thing are the
@@ -113,6 +248,18 @@ public sealed class PublishIntent : IEquatable<PublishIntent>
         }
         return hash.ToHashCode();
     }
+}
+
+/// <summary>One connector's path marks, placed on the arguments it holds now.</summary>
+public sealed class PathMarkPlacement(
+    IReadOnlyDictionary<int, PublishIntent.PathMark> placed,
+    IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> unresolved)
+{
+    /// <summary>Argument index → the mark that sits on it.</summary>
+    public IReadOnlyDictionary<int, PublishIntent.PathMark> Placed { get; } = placed;
+
+    /// <summary>The marks that found no argument, by the pointer they were recorded at.</summary>
+    public IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> Unresolved { get; } = unresolved;
 }
 
 public sealed record RenderedNeed(string? Hint, JsonPointer Pointer);
@@ -636,12 +783,22 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
 
     // MARK: Export
 
+    /// <summary>
+    /// Throws <see cref="PathMarkMovedException"/> for the first connector, by name, whose path
+    /// marks cannot all be placed (<see cref="PublishIntent.PlacePathMarks"/>), and for a remote
+    /// connector that still carries a mark with a value: a remote connector's arguments are built
+    /// by each importer, so a mark there was made while it was a local one, and the path it stood
+    /// for may now be travelling in its extra arguments.
+    /// </summary>
     public static CollectionDocument Export(string name, string? author, string? origin, string exported,
                                             IEnumerable<KeyValuePair<string, JsonValue>> connectors, PublishIntent intent)
     {
         var result = new Dictionary<string, Connector>(StringComparer.Ordinal);
-        foreach (var (connectorName, config) in connectors)
+        // By name, so the connector a refusal names is the same on both platforms.
+        foreach (var (connectorName, config) in connectors.OrderBy(p => p.Key, StringComparer.Ordinal))
         {
+            IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> marks =
+                intent.PathMarks.TryGetValue(connectorName, out var m) ? m : new Dictionary<JsonPointer, PublishIntent.PathMark>();
             IReadOnlySet<string> shared = intent.ShareValues.TryGetValue(connectorName, out var s) ? s : new HashSet<string>(StringComparer.Ordinal);
             IReadOnlyDictionary<string, string> hints = intent.Hints.TryGetValue(connectorName, out var h) ? h : new Dictionary<string, string>(StringComparer.Ordinal);
             string? HintFor(string key) => hints.TryGetValue(key, out var hint) ? hint : null;
@@ -649,6 +806,10 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
             var needs = new Dictionary<string, string?>(StringComparer.Ordinal);
             if (RemotePattern.Decode(config) is { } remote)
             {
+                if (marks.Values.Any(mark => mark.Value is not null))
+                {
+                    throw new PathMarkMovedException(connectorName);
+                }
                 Auth auth;
                 switch (remote.Auth)
                 {
@@ -680,18 +841,15 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
             {
                 var model = FormMapper.Analyze(config).Model;
                 var args = model.Args.ToList();
-                if (intent.PathMarks.TryGetValue(connectorName, out var marks))
+                var placement = PublishIntent.PlacePathMarks(marks, model.Args);
+                if (placement.Unresolved.Count > 0)
                 {
-                    foreach (var (pointer, mark) in marks)
-                    {
-                        if (pointer.Segments.Length != 2 || pointer.Segments[0] != "args"
-                            || !int.TryParse(pointer.Segments[1], out var i) || i < 0 || i >= args.Count)
-                        {
-                            continue;
-                        }
-                        args[i] = Placeholder.Marker(mark.Name);
-                        needs[mark.Name] = mark.Hint;
-                    }
+                    throw new PathMarkMovedException(connectorName);
+                }
+                foreach (var (i, mark) in placement.Placed.OrderBy(p => p.Key))
+                {
+                    args[i] = Placeholder.Marker(mark.Name);
+                    needs[mark.Name] = mark.Hint;
                 }
                 // A marker the author already typed, or one an imported copy still carries, is a
                 // need too — otherwise re-exporting a collection would drop what it asks for.

@@ -37,6 +37,8 @@ public final class AppState: ObservableObject {
     public static let nameEmptyError = "Name must not be empty."
     public static let lastLocalCollectionError = "The last local collection can’t be deleted."
     public static let locateCaution = "Locate the collection file to resolve paths."
+    /// "this Mac" is the platform-forced half of this sentence; the Windows mirror says "this PC".
+    public static let unpublishedDirectoryCaution = "${COLLECTION_DIR} has no folder until this collection is published from this Mac."
     public static let ownCollectionError = "This is your own published collection."
     public static let newerDocumentError = "This collection was made by a newer Connector Control."
     public static let publishIntoStoreError = "Choose a folder other than the master list folder or its backups."
@@ -72,6 +74,8 @@ public final class AppState: ObservableObject {
     public static func sourceUnreadableError(_ fileName: String, _ detail: String) -> String { "\(fileName) couldn’t be read: \(detail)" }
 
     public static func publishSlugTakenError(_ fileName: String) -> String { "\(fileName) already exists there and belongs to a different collection." }
+
+    public static func pathMarkMovedError(_ connector: String) -> String { "A path marked in “\(connector)” has moved. Open Publish… to mark it again." }
 
     /// A synced connector-list change was adopted and written into Claude's config: say what it runs now.
     public static func connectorListChangedBody(_ delta: ServerDelta, restartRequired: Bool) -> String {
@@ -224,16 +228,29 @@ public final class AppState: ObservableObject {
 
     var isDirty: Bool { expandedServers != appliedServers }
 
-    /// The enabled connectors as Claude must see them. Inside a synced collection this machine
-    /// has located, `${COLLECTION_DIR}` resolves against the folder that document sits in; the
-    /// store itself keeps the token, so the same list still resolves on the next machine. With
-    /// nothing bound the token is written as it stands — guessing a folder would start the
+    /// The enabled connectors as Claude must see them, with `${COLLECTION_DIR}` resolved against
+    /// the active collection's folder on this machine (`collectionDirectory(of:)`). The store
+    /// itself keeps the token, so the same list still resolves on the next machine, and a
+    /// published document carries it as written for each subscriber to resolve against their own
+    /// copy. With no folder the token is written as it stands — guessing one would start the
     /// wrong program — and the row carries the caution that says so.
     var expandedServers: [String: JSONValue] {
         let servers = store.enabledServers
-        guard isSynced(activeCollection), let path = sourceBinding(of: activeCollection)?.path else { return servers }
-        let directory = URL(fileURLWithPath: path).deletingLastPathComponent().path
+        guard let directory = collectionDirectory(of: activeCollection) else { return servers }
         return servers.mapValues { Placeholder.expandDirectoryToken(in: $0, directory: directory) }
+    }
+
+    /// The folder `${COLLECTION_DIR}` stands for in `collection` on this machine, or nil when it
+    /// stands for none here. A synced collection's is the folder its located document sits in. A
+    /// local one's is the folder this machine publishes it into — where the document is written
+    /// and the tools shipped beside it live, the same folder a subscriber's copy resolves against.
+    /// A collection published from another machine, or not at all, has none on this one.
+    func collectionDirectory(of collection: String) -> String? {
+        if isSynced(collection) {
+            return sourceBinding(of: collection)?.path.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }
+        }
+        guard isPublished(collection) else { return nil }
+        return collectionsCache.published[collection]?.folder
     }
 
     public var sortedNames: [String] { store.mcps.keys.sorted() }
@@ -639,8 +656,15 @@ public final class AppState: ObservableObject {
     ///
     /// Only the active collection reaches Claude, so a write to any other one stops at the
     /// store: the caller's apply finds nothing Claude runs has changed and writes nothing.
+    ///
+    /// What the collection's publish record says about the connector follows it: a rename carries
+    /// its ticks to the new name, and `pathMarks` (nil: leave them) replaces its path marks with
+    /// ones re-keyed to where the saved arguments put them. Both land in the same save as the
+    /// connector, so the document written at the end of it never pairs the new arguments with
+    /// the old marks.
     public func upsert(name: String, entry: MCPEntry, renamedFrom oldName: String?,
-                       in collection: String? = nil) -> String? {
+                       in collection: String? = nil,
+                       pathMarks: [JSONPointer: PublishIntent.PathMark]? = nil) -> String? {
         let target = collection ?? activeCollection
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return AppState.nameEmptyError }
@@ -649,14 +673,35 @@ public final class AppState: ObservableObject {
         }
         if let old = oldName, old != trimmed { store.collections[target]?.mcps.removeValue(forKey: old) }
         store.collections[target, default: Collection()].mcps[trimmed] = entry
+        editPublishIntent(of: target) { intent in
+            if let old = oldName, old != trimmed { intent = intent.movingConnector(old, to: trimmed) }
+            if let pathMarks { intent = intent.replacingPathMarks(of: trimmed, with: pathMarks) }
+        }
         persistStore()
         return nil
     }
 
     /// Removes and persists; the caller applies (the editor's remove flow does both in one turn).
+    /// Whatever the publish record said about the connector goes with it: a connector added later
+    /// under the same name was never ticked, and a mark left behind would refuse every publish
+    /// as a path that had moved.
     public func remove(name: String, in collection: String? = nil) {
-        store.collections[collection ?? activeCollection]?.mcps.removeValue(forKey: name)
+        let target = collection ?? activeCollection
+        store.collections[target]?.mcps.removeValue(forKey: name)
+        editPublishIntent(of: target) { $0 = $0.movingConnector(name, to: nil) }
         persistStore()
+    }
+
+    /// Rewrites a published collection's intent in memory, for the save that follows to write.
+    /// A collection that publishes nothing is left alone, and so is the sidecar when the edit
+    /// changes nothing — every assignment announces itself to the windows watching it.
+    private func editPublishIntent(of collection: String, _ edit: (inout PublishIntent) -> Void) {
+        guard var record = collectionsFile.collections[collection]?.publish else { return }
+        var intent = record.intent
+        edit(&intent)
+        guard intent != record.intent else { return }
+        record.intent = intent
+        collectionsFile.collections[collection]?.publish = record
     }
 
     // MARK: - Quit
@@ -827,6 +872,10 @@ public final class AppState: ObservableObject {
     /// The "authored on <platform>" caution reads the launcher platform out of the last render
     /// of the bound document: only a local connector carries one, and only the other platform's
     /// is worth saying anything about.
+    ///
+    /// A connector using `${COLLECTION_DIR}` where this machine has no folder for it says so:
+    /// a synced collection's document has not been located yet, or a local collection is not
+    /// published from here (`collectionDirectory(of:)`).
     public func connectorCaution(_ connector: String, in collection: String) -> String? {
         guard let config = store.collections[collection]?.mcps[connector]?.config else { return nil }
         let unfilled = Placeholder.unfilledNames(in: config)
@@ -839,6 +888,9 @@ public final class AppState: ObservableObject {
         }
         if Placeholder.usesDirectoryToken(config), isSynced(collection), sourceBinding(of: collection)?.path == nil {
             return AppState.locateCaution
+        }
+        if Placeholder.usesDirectoryToken(config), !isSynced(collection), collectionDirectory(of: collection) == nil {
+            return AppState.unpublishedDirectoryCaution
         }
         return nil
     }
@@ -1298,6 +1350,10 @@ public final class AppState: ObservableObject {
             lastWrittenHash: previous?.folder == url.path ? previous?.lastWrittenHash : nil)
         // persistStore ends in publishIfChanged, which is what writes the document.
         persistStore()
+        // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
+        // changes the moment publishing starts. The dirty check spares the write when nothing in
+        // the collection uses the token.
+        if collection == activeCollection, isDirty { performApply() }
         return publishError?.collection == collection ? publishError?.message : nil
     }
 
@@ -1337,6 +1393,9 @@ public final class AppState: ObservableObject {
         collectionsCache.published.removeValue(forKey: collection)
         if publishError?.collection == collection { publishError = nil }
         persistStore()
+        // ${COLLECTION_DIR} has no folder here any more: Claude gets the token as written, and
+        // the row's caution says why.
+        if collection == activeCollection, isDirty { performApply() }
         // After the save, so a failure here reaches the banner rather than being overwritten by it.
         guard deleteFile, let folder else { return }
         let target = URL(fileURLWithPath: folder).appendingPathComponent(record.slug + "." + CollectionDocument.fileExtension)
@@ -1356,14 +1415,27 @@ public final class AppState: ObservableObject {
     /// than filtered afterwards, so nothing in the document describes a connector that is not in
     /// it. The origin travels unchanged, so a subset is indistinguishable by origin from the
     /// whole collection — deliberate: the origin says who published it, not how much of it.
+    ///
+    /// Throws `PublishIntentError.pathMarkMoved` when a path mark cannot be placed on the
+    /// argument it was made on, so a marked path is never written into a document as it stands.
+    /// A mark for a connector the collection no longer holds counts, whatever the subset: it was
+    /// made on one renamed or removed where the record could not follow — an older app, a hand
+    /// edit, a master list that synced ahead of the file beside it — and the path it stood for
+    /// may be travelling under another name.
     public func exportDocument(for collection: String, intent: PublishIntent,
-                               only: [String]? = nil) -> CollectionDocument {
-        var connectors = (store.collections[collection]?.mcps ?? [:]).mapValues(\.config)
+                               only: [String]? = nil) throws -> CollectionDocument {
+        let held = (store.collections[collection]?.mcps ?? [:]).mapValues(\.config)
+        if let orphan = intent.pathMarks.keys.sorted().first(where: { name in
+            held[name] == nil && (intent.pathMarks[name]?.values.contains { $0.value != nil } ?? false)
+        }) {
+            throw PublishIntentError.pathMarkMoved(connector: orphan)
+        }
+        var connectors = held
         if let only {
             let keep = Set(only)
             connectors = connectors.filter { keep.contains($0.key) }
         }
-        return CollectionDocument.export(
+        return try CollectionDocument.export(
             name: collection,
             // No author setting exists yet; the field travels as absent rather than guessed at.
             author: nil,
@@ -1377,7 +1449,7 @@ public final class AppState: ObservableObject {
     public func writeExport(for collection: String, intent: PublishIntent, to path: String,
                             only: [String]? = nil) -> String? {
         do {
-            try AtomicFile.write(exportDocument(for: collection, intent: intent, only: only).serialized(),
+            try AtomicFile.write(try exportDocument(for: collection, intent: intent, only: only).serialized(),
                                  to: URL(fileURLWithPath: path), staging: service.paths.stagingDirURL)
             return nil
         } catch {
@@ -1408,7 +1480,7 @@ public final class AppState: ObservableObject {
             guard let binding = collectionsCache.published[collection],
                   let record = collectionsFile.collections[collection]?.publish else { continue }
             do {
-                let document = exportDocument(for: collection, intent: record.intent)
+                let document = try exportDocument(for: collection, intent: record.intent)
                 let hash = try AppState.publishHash(of: document)
                 guard hash != binding.lastWrittenHash || collection == forced else { continue }
                 let target = URL(fileURLWithPath: binding.folder)
@@ -1419,6 +1491,9 @@ public final class AppState: ObservableObject {
                 if publishError?.collection == collection { publishError = nil }
             } catch {
                 // The recorded hash is left as it was, so the next change tries this write again.
+                // A mark that has moved lands here too, before anything is written: the document
+                // already in the folder stays as it was, placeholder and all, until the author
+                // marks the path again.
                 publishError = (collection: collection, message: AppState.friendly(error))
             }
         }
@@ -1560,6 +1635,9 @@ public final class AppState: ObservableObject {
     public static func friendly(_ error: Error) -> String {
         if case ClaudeConfigError.malformed(let detail) = error {
             return malformedConfigMessage(detail: detail)
+        }
+        if case PublishIntentError.pathMarkMoved(let connector) = error {
+            return pathMarkMovedError(connector)
         }
         return error.localizedDescription
     }

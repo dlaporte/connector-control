@@ -18,7 +18,8 @@ final class CollectionsFileTests: XCTestCase {
         "Consulting": .init(kind: .local, fileName: nil, relativeToStore: nil, origin: nil, needs: [:],
                             publish: .init(slug: "consulting", origin: "0c9b7d1e-5a3f-4f2c-8e6d-2b1a9c8d7e6f",
                                            intent: PublishIntent(shareValues: ["tax": ["LOG_LEVEL"]],
-                                                                 pathMarks: ["ledger": [JSONPointer(["args", "1"]): .init(name: "server_path", hint: "your ledger clone, then dist/index.js")]],
+                                                                 pathMarks: ["ledger": [JSONPointer(["args", "1"]): .init(name: "server_path", hint: "your ledger clone, then dist/index.js",
+                                                                                                                          value: "/Users/you/ledger/dist/index.js")]],
                                                                  hints: ["tax": ["ANTHROPIC_API_KEY": "console.anthropic.com ▸ API keys"]])),
                             provenance: [:]),
     ])
@@ -63,6 +64,18 @@ final class CollectionsFileTests: XCTestCase {
 
     func testAnUnknownVersionDecodesAsMalformed() {
         XCTAssertThrowsError(try CollectionsFile.decode(.object(["version": .int(9), "collections": .object([:])])))
+    }
+
+    /// No release wrote a path mark without the value it was made on, but a build from before
+    /// values were kept may have: such a mark loads as the pointer-only mark it was.
+    func testAPathMarkWithNoValueStillLoads() throws {
+        let json = try JSONValue.parse(Data("""
+            {"version": 1, "collections": {"Consulting": {"kind": "local", "publish": {
+              "slug": "consulting", "origin": "o", "shareValues": {}, "hints": {},
+              "paths": {"ledger": {"/args/1": {"name": "server_path", "hint": null}}}}}}}
+            """.utf8))
+        let marks = try CollectionsFile.decode(json).collections["Consulting"]?.publish?.intent.pathMarks["ledger"]
+        XCTAssertEqual(marks, [JSONPointer(["args", "1"]): .init(name: "server_path", hint: nil, value: nil)])
     }
 
     /// A local collection with nothing to say is absent from the file, not written as an empty

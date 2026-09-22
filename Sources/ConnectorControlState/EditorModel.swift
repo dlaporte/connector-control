@@ -118,6 +118,14 @@ public final class EditorModel: ObservableObject {
     /// change under the window. A republish from the Collections window while this editor is
     /// open breaks that assumption: the hints then describe the document as it was at open.
     private var openArgIndexByRow: [UUID: Int] = [:]
+    /// The arguments the window opened on, which the publish record's path marks are placed
+    /// against. Fixed with `openArgIndexByRow`, for the same reason.
+    private var openedArgs: [String] = []
+    /// Whether every argument row still traces back to the config the window opened on. A JSON
+    /// edit that changed the arguments rebuilds the rows and carries their open positions by
+    /// position alone (`carriedRecords`), which is a guess a path mark must not bet a path on:
+    /// from then on a save leaves the marks for publishing to place by their values.
+    private var argRowsFollowOpen = true
     /// The other local collections that held a byte-identical copy of this connector when the
     /// window opened. Fixed there rather than re-derived: the checkbox names them, and the save
     /// that follows must write to the collections the user was shown, not to whatever matches
@@ -200,6 +208,7 @@ public final class EditorModel: ObservableObject {
         load(config)
         takeAskedSnapshot(readOnly: isReadOnly)
         openArgIndexByRow = Dictionary(uniqueKeysWithValues: args.enumerated().map { ($0.element.id, $0.offset) })
+        openedArgs = args.map(\.value)
         // On open, a cached status shows its note at once; an unknown one is
         // probed now. Later changes go through evaluateRequiredTool. The relay
         // makes the view re-read toolNote.
@@ -439,11 +448,13 @@ public final class EditorModel: ObservableObject {
     /// editor adds and removes arguments freely, and a hint read by today's position would sit
     /// beside whichever row happened to slide into it. nil for a row added since the window
     /// opened, which the published document has never described.
+    /// The mark is placed on the opened arguments the way the exporter places it, so a mark that
+    /// moved before the window opened still shows its hint beside the argument it stands for.
     public func publishedHint(arg index: Int) -> String? {
         guard state.collectionsCache.published[collectionName] != nil, args.indices.contains(index),
               let published = openArgIndexByRow[args[index].id] else { return nil }
         let marks = state.collectionsFile.collections[collectionName]?.publish?.intent.pathMarks[target.name] ?? [:]
-        return marks[JSONPointer(["args", String(published)])]?.hint
+        return PublishIntent.placePathMarks(marks, in: openedArgs).placed[published]?.hint
     }
 
     /// Whether this connector has any author's hint to show at all, so the view can leave the
@@ -577,8 +588,10 @@ public final class EditorModel: ObservableObject {
     /// bridge-discard branch — gated on `view == .form` — from firing mid-load.
     private func adoptForm(_ config: JSONValue) {
         let carried = carriedRecords()
+        let argsBefore = args.map(\.value)
         load(config)
         restore(carried)
+        if args.map(\.value) != argsBefore { argRowsFollowOpen = false }
         // A JSON edit that changed the config consumes the template, exactly
         // like a discard would — so a later Type toggle to Local re-derives
         // nothing and leaves what the user typed alone. An unchanged round
@@ -854,7 +867,8 @@ public final class EditorModel: ObservableObject {
         let entry = MCPEntry(enabled: current?.enabled ?? target.entry.enabled, config: config,
                              lastEditView: readOnly ? target.entry.lastEditView : view)
         if let error = state.upsert(name: saved, entry: entry, renamedFrom: target.isNew ? nil : target.name,
-                                    in: target.collection) {
+                                    in: target.collection,
+                                    pathMarks: followedPathMarks(in: collection, saving: config)) {
             validationError = error
             return false
         }
@@ -879,10 +893,42 @@ public final class EditorModel: ObservableObject {
         for other in propagateTargets {
             guard let twin = state.store.collections[other]?.mcps[target.name],
                   twin.config == target.entry.config else { continue }
+            // The twin held this window's opening config, so its marks follow the same rows.
             _ = state.upsert(name: saved,
                              entry: MCPEntry(enabled: twin.enabled, config: config, lastEditView: view),
-                             renamedFrom: target.name, in: other)
+                             renamedFrom: target.name, in: other,
+                             pathMarks: followedPathMarks(in: other, saving: config))
         }
+    }
+
+    /// The saved connector's path marks in `collection`'s publish record, re-keyed to follow the
+    /// rows they were made on, or nil to leave the record as it is.
+    ///
+    /// Each mark is first placed on the arguments the window opened on, the way the exporter
+    /// places it, so a mark that had already moved before the window opened is followed from
+    /// where it really was. It then goes with its row: to wherever the row sits now, recording
+    /// the row's text as its value — the author may have corrected the path in place — or away
+    /// with the row when the row was deleted.
+    ///
+    /// nil whenever this window cannot vouch for its rows, and publishing then places each mark
+    /// by its value, refusing any it cannot: a new or read-only connector; a remote one, whose
+    /// arguments are the launcher's; a save whose arguments are not the rows' (a JSON edit not
+    /// brought back to the form); rows rebuilt from a JSON edit that changed the arguments; or a
+    /// mark that could not be placed even on the arguments the window opened on.
+    private func followedPathMarks(in collection: String, saving config: JSONValue) -> [JSONPointer: PublishIntent.PathMark]? {
+        guard !target.isNew, !isReadOnly, argRowsFollowOpen,
+              let marks = state.collectionsFile.collections[collection]?.publish?.intent.pathMarks[target.name],
+              !marks.isEmpty, RemotePattern.decode(config) == nil,
+              FormMapper.analyze(config).model.args == args.map(\.value) else { return nil }
+        let placement = PublishIntent.placePathMarks(marks, in: openedArgs)
+        guard placement.unresolved.isEmpty else { return nil }
+        var followed: [JSONPointer: PublishIntent.PathMark] = [:]
+        for (position, row) in args.enumerated() {
+            guard let opened = openArgIndexByRow[row.id], let mark = placement.placed[opened] else { continue }
+            followed[JSONPointer(["args", String(position)])] =
+                PublishIntent.PathMark(name: mark.name, hint: mark.hint, value: row.value)
+        }
+        return followed
     }
 
     /// The Remove button: opens the confirmation sheet.

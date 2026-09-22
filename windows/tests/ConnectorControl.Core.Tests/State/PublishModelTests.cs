@@ -62,7 +62,8 @@ public class PublishModelTests
         model.PathRows[0].Name = "srv";
         model.PathRows[0].Hint = "your ledger clone, then dist/index.js";
         Assert.Equal(["B"], model.Intent.ShareValues["c"].Order(StringComparer.Ordinal));
-        Assert.Equal(new PublishIntent.PathMark("srv", "your ledger clone, then dist/index.js"),
+        // The mark records the path it was made on, so it can find it again once arguments move.
+        Assert.Equal(new PublishIntent.PathMark("srv", "your ledger clone, then dist/index.js", "/Users/d/x.js"),
             model.Intent.PathMarks["c"][JsonPointer.Parse("/args/0")!]);
         // A marked path leaves as its placeholder.
         Assert.Contains("${CC_NEEDS:srv}", model.Preview, StringComparison.Ordinal);
@@ -137,6 +138,41 @@ public class PublishModelTests
         // the team already subscribed to.
         Assert.Null(state.RenameCollection(state.ActiveCollection, "Team"));
         Assert.Equal("default.json", new PublishModel(state, "Team").FileName);
+    }
+
+    [Fact]
+    public void AReopenedSheetTicksAPathWhereItNowStands()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var model = new PublishModel(state, state.ActiveCollection) { Folder = PublishFolder(h) };
+        model.PathRows[0].Marked = true;
+        model.PathRows[0].Name = "srv";
+        Assert.Null(model.Publish());
+
+        // Moved outside the editor, so the record still says where it was.
+        Assert.Null(state.Upsert("c", new McpEntry(true, JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String("--quiet"), JsonValue.String("/Users/d/x.js")])))), "c"));
+        var reopened = new PublishModel(state, state.ActiveCollection);
+        var row = reopened.PathRows.First(r => r.Connector == "c");
+        Assert.Equal(new JsonPointer(["args", "1"]), row.Pointer);
+        Assert.True(row.Marked, "the tick sits where the exporter places the mark");
+        Assert.Equal("srv", row.Name);
+
+        // A marked argument that does not look like a path keeps its row, so publishing from the
+        // dialog cannot quietly unmark it.
+        var flag = new PublishIntent(
+            [],
+            [new("c", new Dictionary<JsonPointer, PublishIntent.PathMark>
+            {
+                [new JsonPointer(["args", "0"])] = new("flag", null, "--quiet"),
+            })],
+            []);
+        Assert.Null(state.UpdatePublishIntent(state.ActiveCollection, flag));
+        var marked = new PublishModel(state, state.ActiveCollection);
+        Assert.Equal(["--quiet"], marked.PathRows.Where(r => r.Connector == "c" && r.Marked).Select(r => r.Value));
+        Assert.Equal(flag, marked.Intent);
     }
 
     [Fact]

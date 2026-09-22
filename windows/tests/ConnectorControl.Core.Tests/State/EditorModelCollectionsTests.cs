@@ -602,7 +602,7 @@ public class EditorModelCollectionsTests
             [new("svc", new HashSet<string>(["REGION"], StringComparer.Ordinal))],
             [new("svc", new Dictionary<JsonPointer, PublishIntent.PathMark>
             {
-                [pointer] = new("server_path", "your clone, then dist/index.js"),
+                [pointer] = new("server_path", "your clone, then dist/index.js", "/Users/d/server.js"),
             })],
             [new("svc", new Dictionary<string, string>(StringComparer.Ordinal)
             {
@@ -772,7 +772,7 @@ public class EditorModelCollectionsTests
             [],
             [new("svc", new Dictionary<JsonPointer, PublishIntent.PathMark>
             {
-                [new JsonPointer(["args", "0"])] = new("server_path", "your clone"),
+                [new JsonPointer(["args", "0"])] = new("server_path", "your clone", "/Users/d/server.js"),
             })],
             []);
         Assert.Null(state.StartPublishing("Team", folder, intent));
@@ -783,5 +783,183 @@ public class EditorModelCollectionsTests
         editor.RequestView(EditView.Form);
         // The hint survives an unchanged round trip.
         Assert.Equal("your clone", editor.PublishedHintForArg(0));
+    }
+
+    // MARK: saving a published connector moves its path marks with their rows
+
+    private const string ServerPath = "/Users/d/server.js";
+
+    private static JsonPointer ArgPointer(int index) =>
+        new(["args", index.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
+
+    private static Dictionary<JsonPointer, PublishIntent.PathMark> MarkAt(int index, string value) =>
+        new() { [ArgPointer(index)] = new("server_path", "your clone", value) };
+
+    /// <summary>
+    /// "Team" publishing <c>svc</c>, whose arguments are <paramref name="args"/> with the server
+    /// path marked the way the Publish dialog records it. Returns the document's path.
+    /// </summary>
+    private static string PublishTeam(EditorRig rig, params string[] args)
+    {
+        var state = rig.State;
+        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.Upsert("svc", new McpEntry(rig.Local("node", args)), null, "Team"));
+        var folder = rig.H.Dir.File("share");
+        Directory.CreateDirectory(folder);
+        Assert.Null(state.StartPublishing("Team", folder, new PublishIntent(
+            [], [new("svc", MarkAt(Array.IndexOf(args, ServerPath), ServerPath))], [])));
+        return Path.Combine(folder, "team.json");
+    }
+
+    private static IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark>? Marks(
+        EditorRig rig, string connector = "svc", string collection = "Team") =>
+        rig.State.CollectionsFile.Collections.GetValueOrDefault(collection)?.Publish?.Intent.PathMarks
+            .GetValueOrDefault(connector);
+
+    private static void AssertMarks(IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> expected,
+                                    IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark>? actual)
+    {
+        Assert.NotNull(actual);
+        Assert.Equal(expected.Count, actual.Count);
+        foreach (var (pointer, mark) in expected)
+        {
+            Assert.Equal(mark, actual.GetValueOrDefault(pointer));
+        }
+    }
+
+    private static IReadOnlyList<string> PublishedArgs(string file, string connector = "svc") =>
+        Assert.IsType<CollectionDocument.Launcher.Local>(
+            CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors[connector].Launcher).Args;
+
+    [Fact]
+    public void SavingMovesAPathMarkWithItsRow()
+    {
+        using var rig = new EditorRig();
+        var file = PublishTeam(rig, ServerPath, "--quiet");
+
+        using (var editor = rig.Editor("svc", "Team"))
+        {
+            editor.Args.Insert(0, new ArgRow("--inspect"));
+            Assert.True(editor.Save());
+        }
+        AssertMarks(MarkAt(1, ServerPath), Marks(rig));   // an argument inserted above
+        // The neighbour that slid into the old position travels as written, the path does not.
+        Assert.Equal(["--inspect", "${CC_NEEDS:server_path}", "--quiet"], PublishedArgs(file));
+
+        using (var editor = rig.Editor("svc", "Team"))
+        {
+            editor.Args.RemoveAt(0);
+            Assert.True(editor.Save());
+        }
+        AssertMarks(MarkAt(0, ServerPath), Marks(rig));   // one removed above
+
+        using (var editor = rig.Editor("svc", "Team"))
+        {
+            editor.Args.Move(0, 1);
+            Assert.True(editor.Save());
+        }
+        AssertMarks(MarkAt(1, ServerPath), Marks(rig));   // reordered
+        Assert.Equal(["--quiet", "${CC_NEEDS:server_path}"], PublishedArgs(file));
+        Assert.Null(rig.State.PublishError);
+        Assert.DoesNotContain(ServerPath, File.ReadAllText(file), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EditingTheMarkedPathInPlaceKeepsItMarked()
+    {
+        using var rig = new EditorRig();
+        var file = PublishTeam(rig, ServerPath);
+        using var editor = rig.Editor("svc", "Team");
+        const string corrected = "/Users/d/v2/server.js";
+        editor.Args[0].Value = corrected;
+        Assert.True(editor.Save());
+        // Still the marked row; the record learns its new text.
+        AssertMarks(MarkAt(0, corrected), Marks(rig));
+        Assert.Equal(["${CC_NEEDS:server_path}"], PublishedArgs(file));
+        Assert.Null(rig.State.PublishError);
+        Assert.DoesNotContain(corrected, File.ReadAllText(file), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DeletingTheMarkedRowDropsItsMark()
+    {
+        using var rig = new EditorRig();
+        var file = PublishTeam(rig, "--quiet", ServerPath);
+        using var editor = rig.Editor("svc", "Team");
+        editor.Args.RemoveAt(1);
+        Assert.True(editor.Save());
+        Assert.Null(Marks(rig));   // nothing is left for it to mark
+        Assert.Null(rig.State.PublishError);
+        Assert.Equal(["--quiet"], PublishedArgs(file));
+    }
+
+    [Fact]
+    public void ARenameCarriesTheMarksToTheNewName()
+    {
+        using var rig = new EditorRig();
+        var file = PublishTeam(rig, ServerPath);
+        using var editor = rig.Editor("svc", "Team");
+        editor.Name = "server";
+        editor.Args.Insert(0, new ArgRow("--quiet"));
+        Assert.True(editor.Save());
+        Assert.Null(Marks(rig));
+        AssertMarks(MarkAt(1, ServerPath), Marks(rig, "server"));
+        Assert.Equal(["--quiet", "${CC_NEEDS:server_path}"], PublishedArgs(file, "server"));
+        Assert.Null(rig.State.PublishError);
+    }
+
+    [Fact]
+    public void AJsonEditLeavesTheMarksToBePlacedByTheirValue()
+    {
+        using var rig = new EditorRig();
+        var file = PublishTeam(rig, ServerPath, "--quiet");
+
+        // Reordered in the JSON view: the rows come back matched by position, which is a guess, so
+        // the record is left as it is and publishing finds the path by what it says.
+        using (var editor = rig.Editor("svc", "Team"))
+        {
+            editor.RequestView(EditView.Json);
+            editor.JsonText = rig.Local("node", ["--quiet", ServerPath]).EditorText();
+            editor.RequestView(EditView.Form);
+            Assert.Equal(EditView.Form, editor.View);
+            Assert.True(editor.Save());
+        }
+        AssertMarks(MarkAt(0, ServerPath), Marks(rig));   // not re-keyed on a guess
+        Assert.Equal(["--quiet", "${CC_NEEDS:server_path}"], PublishedArgs(file));
+
+        // Changed in the JSON view and saved from there: nothing says which argument is the marked
+        // one now, so no document is written until the author marks it again.
+        var before = File.ReadAllBytes(file);
+        using (var again = rig.Editor("svc", "Team"))
+        {
+            again.RequestView(EditView.Json);
+            again.JsonText = rig.Local("node", ["--quiet", "/Users/d/v2/server.js"]).EditorText();
+            Assert.True(again.Save());
+        }
+        Assert.Equal(AppState.PathMarkMovedError("svc"), rig.State.PublishError?.Message);
+        Assert.Equal(before, File.ReadAllBytes(file));
+    }
+
+    [Fact]
+    public void PropagateMovesATwinsMarksToo()
+    {
+        using var rig = new EditorRig();
+        var state = rig.State;
+        PublishTeam(rig, ServerPath);
+        Assert.Null(state.CreateCollection("Mirror"));   // a copy of Team, and now active
+        var folder = rig.H.Dir.File("share2");
+        Directory.CreateDirectory(folder);
+        Assert.Null(state.StartPublishing("Mirror", folder, new PublishIntent(
+            [], [new("svc", MarkAt(0, ServerPath))], [])));
+
+        using var editor = rig.Editor("svc", "Team");
+        Assert.Equal(["Mirror"], editor.PropagateTargets);
+        editor.Propagate = true;
+        editor.Args.Insert(0, new ArgRow("--quiet"));
+        Assert.True(editor.Save());
+        AssertMarks(MarkAt(1, ServerPath), Marks(rig));
+        // The twin held the same arguments, so its marks follow the same rows.
+        AssertMarks(MarkAt(1, ServerPath), Marks(rig, collection: "Mirror"));
+        Assert.Null(state.PublishError);
     }
 }

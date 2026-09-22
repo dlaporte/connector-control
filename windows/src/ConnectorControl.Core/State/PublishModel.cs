@@ -122,15 +122,23 @@ public sealed class PublishModel : ObservableObject
             }
             var arguments = Arguments(config);
             var found = 0;
+            // The ticks sit where the exporter would place them, not where the record says they
+            // were made: an argument that moved since keeps its tick, and a mark that has lost its
+            // argument ticks nothing, which is the dialog asking for it to be marked again. A
+            // marked argument keeps its row even once it stops looking like a path (the file it
+            // named is gone), or publishing from the dialog would quietly unmark it.
+            var placed = PublishIntent.PlacePathMarks(
+                intent.PathMarks.TryGetValue(name, out var marks) ? marks : new Dictionary<JsonPointer, PublishIntent.PathMark>(),
+                arguments).Placed;
             for (var index = 0; index < arguments.Count; index++)
             {
-                if (!LooksLikeAPath(arguments[index]))
+                var mark = placed.GetValueOrDefault(index);
+                if (!LooksLikeAPath(arguments[index]) && mark is null)
                 {
                     continue;
                 }
                 found++;
                 var pointer = new JsonPointer(["args", index.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
-                var mark = intent.PathMarks.TryGetValue(name, out var marks) ? marks.GetValueOrDefault(pointer) : null;
                 paths.Add(new PathRow(name, pointer, arguments[index], mark is not null,
                                       mark?.Name ?? DefaultPathName(found), mark?.Hint ?? string.Empty));
             }
@@ -325,7 +333,8 @@ public sealed class PublishModel : ObservableObject
                     pathMarks[row.Connector] = marks;
                 }
                 var hint = row.Hint.TrimSpaces();
-                marks[row.Pointer] = new PublishIntent.PathMark(name, hint.Length == 0 ? null : hint);
+                // The value is what lets the mark find its argument again once arguments move.
+                marks[row.Pointer] = new PublishIntent.PathMark(name, hint.Length == 0 ? null : hint, row.Value);
             }
             return new PublishIntent(
                 shareValues.Select(p => new KeyValuePair<string, IReadOnlySet<string>>(p.Key, p.Value)),
@@ -334,8 +343,26 @@ public sealed class PublishModel : ObservableObject
         }
     }
 
-    /// <summary>The document itself, as the editor would show it. Every byte that leaves this machine is in here.</summary>
-    public string Preview => state.ExportDocument(Collection, Intent, Connectors).Encode().EditorText();
+    /// <summary>
+    /// The document itself, as the editor would show it. Every byte that leaves this machine is
+    /// in here. When the ticks can no longer be placed — the collection changed under the open
+    /// dialog — there is no document, and the preview says why rather than showing one that would
+    /// not be written.
+    /// </summary>
+    public string Preview
+    {
+        get
+        {
+            try
+            {
+                return state.ExportDocument(Collection, Intent, Connectors).Encode().EditorText();
+            }
+            catch (PathMarkMovedException moved)
+            {
+                return AppState.Friendly(moved);
+            }
+        }
+    }
 
     /// <summary>
     /// What the exporter cannot know is a secret: a value that looks like a credential and is

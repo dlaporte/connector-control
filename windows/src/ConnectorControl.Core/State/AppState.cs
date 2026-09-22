@@ -30,6 +30,8 @@ public sealed class AppState : ObservableObject, IDisposable
     public const string NameEmptyError = "Name must not be empty.";
     public const string LastLocalCollectionError = "The last local collection can\u2019t be deleted.";
     public const string LocateCaution = "Locate the collection file to resolve paths.";
+    /// <summary>"this PC" is the platform-forced half of this sentence; the Mac mirror says "this Mac".</summary>
+    public const string UnpublishedDirectoryCaution = "${COLLECTION_DIR} has no folder until this collection is published from this PC.";
     public const string OwnCollectionError = "This is your own published collection.";
     public const string NewerDocumentError = "This collection was made by a newer Connector Control.";
     public const string PublishIntoStoreError = "Choose a folder other than the master list folder or its backups.";
@@ -49,6 +51,7 @@ public sealed class AppState : ObservableObject, IDisposable
     public static string CollectionUpdateNotificationBody(string collection, string summary) => $"{collection} changed at its source: {summary}. Review it in Connector Control.";
     public static string SourceUnreadableError(string fileName, string detail) => $"{fileName} couldn\u2019t be read: {detail}";
     public static string PublishSlugTakenError(string fileName) => $"{fileName} already exists there and belongs to a different collection.";
+    public static string PathMarkMovedError(string connector) => $"A path marked in “{connector}” has moved. Open Publish… to mark it again.";
     /// <summary>Claude's launch time is re-read 3 s after the restart completes.</summary>
     public static readonly TimeSpan RestartRecheckDelay = TimeSpan.FromSeconds(3);
     /// <summary>
@@ -231,24 +234,43 @@ public sealed class AppState : ObservableObject, IDisposable
     public bool IsDirty => !DictionaryEquality.Equal(ExpandedServers, AppliedServers);
 
     /// <summary>
-    /// The enabled connectors as Claude must see them. Inside a synced collection this machine
-    /// has located, <c>${COLLECTION_DIR}</c> resolves against the folder that document sits in;
-    /// the store itself keeps the token, so the same list still resolves on the next machine.
-    /// With nothing bound the token is written as it stands — guessing a folder would start the
-    /// wrong program — and the row carries the caution that says so.
+    /// The enabled connectors as Claude must see them, with <c>${COLLECTION_DIR}</c> resolved
+    /// against the active collection's folder on this machine (<see cref="CollectionDirectory"/>).
+    /// The store itself keeps the token, so the same list still resolves on the next machine, and
+    /// a published document carries it as written for each subscriber to resolve against their own
+    /// copy. With no folder the token is written as it stands — guessing one would start the wrong
+    /// program — and the row carries the caution that says so.
     /// </summary>
     internal IReadOnlyDictionary<string, JsonValue> ExpandedServers
     {
         get
         {
             var servers = Store.EnabledServers;
-            if (!IsSynced(ActiveCollection) || SourceBinding(ActiveCollection)?.Path is not { } path)
+            if (CollectionDirectory(ActiveCollection) is not { } directory)
             {
                 return servers;
             }
-            var directory = Path.GetDirectoryName(Path.GetFullPath(path)) ?? path;
             return servers.ToDictionary(p => p.Key, p => Placeholder.ExpandDirectoryToken(p.Value, directory), StringComparer.Ordinal);
         }
+    }
+
+    /// <summary>
+    /// The folder <c>${COLLECTION_DIR}</c> stands for in <paramref name="collection"/> on this
+    /// machine, or null when it stands for none here. A synced collection's is the folder its
+    /// located document sits in. A local one's is the folder this machine publishes it into —
+    /// where the document is written and the tools shipped beside it live, the same folder a
+    /// subscriber's copy resolves against. A collection published from another machine, or not at
+    /// all, has none on this one.
+    /// </summary>
+    internal string? CollectionDirectory(string collection)
+    {
+        if (IsSynced(collection))
+        {
+            return SourceBinding(collection)?.Path is { } path
+                ? Path.GetDirectoryName(Path.GetFullPath(path)) ?? path
+                : null;
+        }
+        return IsPublished(collection) ? CollectionsCache.Published.GetValueOrDefault(collection)?.Folder : null;
     }
 
     public IReadOnlyList<string> SortedNames => Store.Mcps.Keys.Order(StringComparer.Ordinal).ToList();
@@ -836,8 +858,15 @@ public sealed class AppState : ObservableObject, IDisposable
     ///
     /// Only the active collection reaches Claude, so a write to any other one stops at the
     /// store: the caller's apply finds nothing Claude runs has changed and writes nothing.
+    ///
+    /// What the collection's publish record says about the connector follows it: a rename carries
+    /// its ticks to the new name, and <paramref name="pathMarks"/> (null: leave them) replaces its
+    /// path marks with ones re-keyed to where the saved arguments put them. Both land in the same
+    /// save as the connector, so the document written at the end of it never pairs the new
+    /// arguments with the old marks.
     /// </summary>
-    public string? Upsert(string name, McpEntry entry, string? renamedFrom, string? collection = null)
+    public string? Upsert(string name, McpEntry entry, string? renamedFrom, string? collection = null,
+                          IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark>? pathMarks = null)
     {
         var target = collection ?? ActiveCollection;
         var trimmed = name.TrimSpaces();
@@ -858,22 +887,58 @@ public sealed class AppState : ObservableObject, IDisposable
             existing?.Remove(old);
         }
         McpsIn(target)[trimmed] = entry;
+        EditPublishIntent(target, intent =>
+        {
+            if (renamedFrom is { } previous && previous != trimmed)
+            {
+                intent = intent.MovingConnector(previous, trimmed);
+            }
+            return pathMarks is null ? intent : intent.ReplacingPathMarks(trimmed, pathMarks);
+        });
         PersistStore();
         RaiseAll();
         return null;
     }
 
-    /// <summary>Removes and persists; the caller applies (both happen in one turn).</summary>
+    /// <summary>
+    /// Removes and persists; the caller applies (both happen in one turn). Whatever the publish
+    /// record said about the connector goes with it: a connector added later under the same name
+    /// was never ticked, and a mark left behind would refuse every publish as a path that had
+    /// moved.
+    /// </summary>
     public void Remove(string name, string? collection = null)
     {
+        var target = collection ?? ActiveCollection;
         // A collection that isn't there has nothing to remove — and must not be brought into
         // being by the attempt, which is what Swift's optional chain gives for free.
-        if (Store.Collections.TryGetValue(collection ?? ActiveCollection, out var held))
+        if (Store.Collections.TryGetValue(target, out var held))
         {
             held.Mcps.Remove(name);
         }
+        EditPublishIntent(target, intent => intent.MovingConnector(name, null));
         PersistStore();
         RaiseAll();
+    }
+
+    /// <summary>
+    /// Rewrites a published collection's intent in memory, for the save that follows to write. A
+    /// collection that publishes nothing is left alone, and so is the sidecar when the edit changes
+    /// nothing — every assignment announces itself to the windows watching it.
+    /// </summary>
+    private void EditPublishIntent(string collection, Func<PublishIntent, PublishIntent> edit)
+    {
+        if (CollectionsFile.Collections.GetValueOrDefault(collection) is not { Publish: { } record } entry)
+        {
+            return;
+        }
+        var intent = edit(record.Intent);
+        if (intent.Equals(record.Intent))
+        {
+            return;
+        }
+        SetSidecarEntry(collection, new CollectionsFile.Entry(
+            entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs,
+            new CollectionsFile.PublishRecord(record.Slug, record.Origin, intent), entry.Provenance));
     }
 
     /// <summary>
@@ -1229,6 +1294,10 @@ public sealed class AppState : ObservableObject, IDisposable
     /// The "authored on &lt;platform&gt;" caution reads the launcher platform out of the last
     /// render of the bound document: only a local connector carries one, and only the other
     /// platform's is worth saying anything about.
+    ///
+    /// A connector using <c>${COLLECTION_DIR}</c> where this machine has no folder for it says so:
+    /// a synced collection's document has not been located yet, or a local collection is not
+    /// published from here (<see cref="CollectionDirectory"/>).
     /// </summary>
     public string? ConnectorCaution(string connector, string collection)
     {
@@ -1249,6 +1318,10 @@ public sealed class AppState : ObservableObject, IDisposable
         if (Placeholder.UsesDirectoryToken(entry.Config) && IsSynced(collection) && SourceBinding(collection)?.Path is null)
         {
             return LocateCaution;
+        }
+        if (Placeholder.UsesDirectoryToken(entry.Config) && !IsSynced(collection) && CollectionDirectory(collection) is null)
+        {
+            return UnpublishedDirectoryCaution;
         }
         return null;
     }
@@ -1891,6 +1964,13 @@ public sealed class AppState : ObservableObject, IDisposable
             string.Equals(previous?.Folder, full, StringComparison.Ordinal) ? previous?.LastWrittenHash : null));
         // PersistStore ends in PublishIfChanged, which is what writes the document.
         PersistStore();
+        // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
+        // changes the moment publishing starts. The dirty check spares the write when nothing in
+        // the collection uses the token.
+        if (collection == ActiveCollection && IsDirty)
+        {
+            PerformApply();
+        }
         RaiseAll();
         return PublishError?.Collection == collection ? PublishError.Message : null;
     }
@@ -1948,6 +2028,12 @@ public sealed class AppState : ObservableObject, IDisposable
             PublishError = null;
         }
         PersistStore();
+        // ${COLLECTION_DIR} has no folder here any more: Claude gets the token as written, and the
+        // row's caution says why.
+        if (collection == ActiveCollection && IsDirty)
+        {
+            PerformApply();
+        }
         // After the save, so a failure here reaches the banner rather than being overwritten by it.
         if (deleteFile && folder is not null)
         {
@@ -1979,12 +2065,28 @@ public sealed class AppState : ObservableObject, IDisposable
     /// The origin travels unchanged, so a subset is indistinguishable by origin from the whole
     /// collection — deliberate: the origin says who published it, not how much of it.
     /// </param>
+    /// <exception cref="PathMarkMovedException">
+    /// A path mark cannot be placed on the argument it was made on, so a marked path is never
+    /// written into a document as it stands. A mark for a connector the collection no longer holds
+    /// counts, whatever the subset: it was made on one renamed or removed where the record could
+    /// not follow — an older app, a hand edit, a master list that synced ahead of the file beside
+    /// it — and the path it stood for may be travelling under another name.
+    /// </exception>
     public CollectionDocument ExportDocument(string collection, PublishIntent intent,
                                              IReadOnlyList<string>? only = null)
     {
         var connectors = Store.Collections.TryGetValue(collection, out var held)
             ? held.Mcps.ToDictionary(pair => pair.Key, pair => pair.Value.Config, StringComparer.Ordinal)
             : new Dictionary<string, JsonValue>(StringComparer.Ordinal);
+        var orphan = intent.PathMarks
+            .Where(pair => !connectors.ContainsKey(pair.Key) && pair.Value.Values.Any(mark => mark.Value is not null))
+            .Select(pair => pair.Key)
+            .Order(StringComparer.Ordinal)
+            .FirstOrDefault();
+        if (orphan is not null)
+        {
+            throw new PathMarkMovedException(orphan);
+        }
         if (only is not null)
         {
             var keep = only.ToHashSet(StringComparer.Ordinal);
@@ -2010,7 +2112,8 @@ public sealed class AppState : ObservableObject, IDisposable
             AtomicFile.Write(ExportDocument(collection, intent, only).Serialize(), path);
             return null;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException
+                                   or PathMarkMovedException)
         {
             return Friendly(ex);
         }
@@ -2072,9 +2175,13 @@ public sealed class AppState : ObservableObject, IDisposable
                     PublishError = null;
                 }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException
+                                       or PathMarkMovedException)
             {
                 // The recorded hash is left as it was, so the next change tries this write again.
+                // A mark that has moved lands here too, before anything is written: the document
+                // already in the folder stays as it was, placeholder and all, until the author
+                // marks the path again.
                 PublishError = new CollectionPublishError(collection, Friendly(ex));
             }
         }
@@ -2288,9 +2395,12 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>friendly(): the malformed-config case gets the guided message; everything else its own text.</summary>
-    public static string Friendly(Exception error) => error is ClaudeConfigException malformed
-        ? MalformedConfigMessage(malformed.Detail)
-        : error.Message;
+    public static string Friendly(Exception error) => error switch
+    {
+        ClaudeConfigException malformed => MalformedConfigMessage(malformed.Detail),
+        PathMarkMovedException moved => PathMarkMovedError(moved.Connector),
+        _ => error.Message,
+    };
 
     public void Dispose()
     {

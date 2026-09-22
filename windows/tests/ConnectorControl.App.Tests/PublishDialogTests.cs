@@ -122,7 +122,7 @@ public class PublishDialogTests
             hintBox.Text = "your ledger clone, then dist/index.js";
             Layout(window);
 
-            Assert.Equal(new PublishIntent.PathMark("server_path", "your ledger clone, then dist/index.js"),
+            Assert.Equal(new PublishIntent.PathMark("server_path", "your ledger clone, then dist/index.js", "/Users/d/x.js"),
                 model.Intent.PathMarks["c"][JsonPointer.Parse("/args/0")!]);
             Assert.Contains("${CC_NEEDS:server_path}", window.PreviewBox.Text, StringComparison.Ordinal);
             Assert.DoesNotContain("/Users/d/x.js", window.PreviewBox.Text, StringComparison.Ordinal);

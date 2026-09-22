@@ -1190,6 +1190,192 @@ public class AppStateCollectionsTests
         Assert.Equal(["Default"], state.CollectionNames);
     }
 
+    // MARK: a marked path never leaves as written
+
+    private const string MarkedPath = "/Users/d/ledger/dist/index.js";
+
+    private static JsonValue NodeWith(params string[] args) => JsonValue.Object(
+        ("command", JsonValue.String("node")),
+        ("args", JsonValue.Array(args.Select(JsonValue.String))));
+
+    private static string[] ArgsOf(JsonValue config) =>
+        config.ValueAt(new JsonPointer(["args"]))!.ArrayItems.Select(a => a.StringValue).ToArray();
+
+    private static JsonPointer ArgPointer(int index) =>
+        new(["args", index.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
+
+    /// <summary>
+    /// The active collection publishing <c>ledger</c> with its path argument marked, the way the
+    /// Publish dialog records it: the pointer and the path it was made on. Returns the document's path.
+    /// </summary>
+    private static string PublishMarkedLedger(AppStateHarness h, AppState state, params string[] args)
+    {
+        var index = Array.IndexOf(args, MarkedPath);
+        Assert.True(index >= 0);
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(args)), null));
+        var intent = new PublishIntent(
+            [],
+            [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark>
+            {
+                [ArgPointer(index)] = new("server_path", "your ledger clone", MarkedPath),
+            })],
+            []);
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, intent));
+        return Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
+    }
+
+    /// <summary>
+    /// A change to the connector that did not come through its editor — the JSON view of another
+    /// window, the author's other machine, an older app — so nothing re-keyed the marks.
+    /// </summary>
+    private static void RewriteLedger(AppState state, params string[] args) =>
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(args)), "ledger"));
+
+    private static IReadOnlyList<string> LedgerArgs(string file) =>
+        Assert.IsType<CollectionDocument.Launcher.Local>(
+            CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors["ledger"].Launcher).Args;
+
+    [Fact]
+    public void AMarkMovedOutsideTheEditorFollowsItsPathByValue()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var file = PublishMarkedLedger(h, state, MarkedPath, "--quiet");
+        Assert.Equal(["${CC_NEEDS:server_path}", "--quiet"], LedgerArgs(file));
+
+        RewriteLedger(state, "--quiet", MarkedPath);
+        Assert.Null(state.PublishError);
+        // The placeholder stays on the path, and the flag that took its place travels as written.
+        Assert.Equal(["--quiet", "${CC_NEEDS:server_path}"], LedgerArgs(file));
+        Assert.DoesNotContain(MarkedPath, File.ReadAllText(file), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AMarkThatLostItsPathFailsClosedUntilItIsMarkedAgain()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var file = PublishMarkedLedger(h, state, MarkedPath);
+        var before = File.ReadAllBytes(file);
+
+        // Edited outside the editor, so the record still names the old path: nothing now says which
+        // argument the author meant, and the new path must not go out as written.
+        const string edited = "/Users/d/ledger-v2/dist/index.js";
+        RewriteLedger(state, "--quiet", edited);
+        Assert.Equal(state.ActiveCollection, state.PublishError?.Collection);
+        Assert.Equal(AppState.PathMarkMovedError("ledger"), state.PublishError?.Message);
+        var banner = Assert.IsType<CollectionBanner.PublishFailed>(state.CollectionBanner);
+        Assert.Equal(AppState.PathMarkMovedError("ledger"), banner.Message);
+        // No file is written: the old document, placeholder and all, stays.
+        Assert.Equal(before, File.ReadAllBytes(file));
+        var exported = h.Dir.File(Path.Combine("out", "copy.json"));
+        var record = state.CollectionsFile.Collections[state.ActiveCollection].Publish!;
+        // An export refuses the same way.
+        Assert.Equal(AppState.PathMarkMovedError("ledger"), state.WriteExport(state.ActiveCollection, record.Intent, exported));
+        Assert.False(File.Exists(exported));
+
+        // Re-ticking in the Publish dialog records the path where it is now, and clears it.
+        var dialog = new PublishModel(state, state.ActiveCollection);
+        var row = dialog.PathRows.Single(r => r.Connector == "ledger" && r.Value == edited);
+        Assert.False(row.Marked);   // a mark that lost its argument ticks nothing
+        row.Marked = true;
+        row.Name = "server_path";
+        Assert.Null(dialog.Publish());
+        Assert.Null(state.PublishError);
+        Assert.Equal(["--quiet", "${CC_NEEDS:server_path}"], LedgerArgs(file));
+        Assert.DoesNotContain(edited, File.ReadAllText(file), StringComparison.Ordinal);
+        var marks = state.CollectionsFile.Collections[state.ActiveCollection].Publish!.Intent.PathMarks["ledger"];
+        Assert.Equal(new PublishIntent.PathMark("server_path", null, edited), marks[ArgPointer(1)]);
+        Assert.Single(marks);
+    }
+
+    [Fact]
+    public void ARenamedConnectorKeepsItsMarksAndARemovedOneLeavesNone()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var file = PublishMarkedLedger(h, state, MarkedPath);
+        var entry = state.Store.Collections[state.ActiveCollection].Mcps["ledger"];
+        Assert.Null(state.Upsert("books", entry, "ledger"));
+        Assert.Null(state.PublishError);
+        var intent = state.CollectionsFile.Collections[state.ActiveCollection].Publish!.Intent;
+        Assert.False(intent.PathMarks.ContainsKey("ledger"));
+        Assert.Equal(MarkedPath, Assert.Single(intent.PathMarks["books"]).Value.Value);
+        Assert.Equal(["server_path"], CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors["books"].Needs.Keys);
+
+        state.Remove("books");
+        // A connector added later under the same name was never ticked.
+        Assert.False(state.CollectionsFile.Collections[state.ActiveCollection].Publish!.Intent.PathMarks.ContainsKey("books"));
+        Assert.Null(state.PublishError);
+    }
+
+    [Fact]
+    public void AMarkWhoseConnectorWasRenamedElsewhereFailsClosed()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var file = PublishMarkedLedger(h, state, MarkedPath);
+        var before = File.ReadAllBytes(file);
+
+        // An older app renamed it on another machine: the master list arrives, the record does not
+        // follow, and the path would otherwise travel under the new name as written.
+        var store = h.StoreOnDisk();
+        var mcps = store.Collections[store.ActiveCollection].Mcps;
+        mcps["books"] = mcps["ledger"];
+        mcps.Remove("ledger");
+        MasterStoreIO.Save(store, h.MasterStorePath);
+        state.Reload(ReloadTrigger.ExternalStoreAdoption);
+        Assert.Equal(AppState.PathMarkMovedError("ledger"), state.PublishError?.Message);
+        Assert.Equal(before, File.ReadAllBytes(file));
+    }
+
+    // MARK: the directory token on the publishing machine
+
+    [Fact]
+    public void ThePublishFolderStandsForTheDirectoryTokenOnlyWhileThisMachinePublishes()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var token = $"{Placeholder.DirectoryToken}/tools/srv.js";
+        Assert.Null(state.Upsert("x", new McpEntry(true, NodeWith(token)), null));
+        state.Apply();
+        Assert.Equal(AppState.UnpublishedDirectoryCaution, state.ConnectorCaution("x", state.ActiveCollection));
+        Assert.Equal([token], ArgsOf(h.ClaudeServers()["x"]));   // no folder is guessed at
+
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var published = state.CollectionsCache.Published[state.ActiveCollection].Folder;
+        // Claude runs the tool shipped beside the document, from the moment publishing starts.
+        Assert.Equal([published + "/tools/srv.js"], ArgsOf(h.ClaudeServers()["x"]));
+        Assert.Null(state.ConnectorCaution("x", state.ActiveCollection));
+        // The store keeps the token.
+        Assert.Equal([token], ArgsOf(state.Store.Collections[state.ActiveCollection].Mcps["x"].Config));
+        var bytes = File.ReadAllText(Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json"));
+        // Each subscriber resolves it against their own copy, and the author's folder never travels.
+        Assert.Contains(Placeholder.DirectoryToken, bytes, StringComparison.Ordinal);
+        Assert.DoesNotContain(published, bytes, StringComparison.Ordinal);
+        state.Reload();
+        // What was written is what a reload renders, so nothing is regenerated.
+        Assert.Equal([published + "/tools/srv.js"], ArgsOf(h.ClaudeServers()["x"]));
+
+        state.StopPublishing(state.ActiveCollection, deleteFile: false);
+        Assert.Equal(AppState.UnpublishedDirectoryCaution, state.ConnectorCaution("x", state.ActiveCollection));
+        Assert.Equal([token], ArgsOf(h.ClaudeServers()["x"]));
+    }
+
+    [Fact]
+    public void ACollectionPublishedFromAnotherMachineHasNoFolderHere()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.Upsert("x", new McpEntry(NodeWith($"{Placeholder.DirectoryToken}/srv.js")), null));
+        Seed(h, state, File_((state.ActiveCollection, Published("default"))));
+        Assert.True(state.IsPublished(state.ActiveCollection));
+        Assert.Null(state.CollectionDirectory(state.ActiveCollection));
+        Assert.Equal(AppState.UnpublishedDirectoryCaution, state.ConnectorCaution("x", state.ActiveCollection));
+    }
+
     // MARK: import as copies
 
     /// <summary>The design's sample plus a connector whose path is written against the document's

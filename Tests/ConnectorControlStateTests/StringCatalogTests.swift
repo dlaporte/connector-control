@@ -76,6 +76,7 @@ final class StringCatalogTests: XCTestCase {
         "AppState.enabledSubtitle": ["3", "7"],
         "AppState.malformedConfigMessage": ["X"],
         "AppState.needsValueCaution": ["X"],
+        "AppState.pathMarkMovedError": ["X"],
         "AppState.publishSlugTakenError": ["X"],
         "AppState.sourceUnreadableError": ["X", "Y"],
         "ClaudeSignature.notFoundMessage": ["X"],
@@ -159,6 +160,7 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.newerDocumentError"] = AppState.newerDocumentError
         actual["AppState.noConnectorsSubtitle"] = AppState.noConnectorsSubtitle
         actual["AppState.ownCollectionError"] = AppState.ownCollectionError
+        actual["AppState.pathMarkMovedError"] = AppState.pathMarkMovedError("X")
         actual["AppState.publishIntoStoreError"] = AppState.publishIntoStoreError
         actual["AppState.publishSlugTakenError"] = AppState.publishSlugTakenError("X")
         actual["AppState.quitButton"] = AppState.quitButton
@@ -171,6 +173,7 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.sourceUnreadableError"] = AppState.sourceUnreadableError("X", "Y")
         actual["AppState.storeChangedBody"] = AppState.storeChangedBody
         actual["AppState.targetMustBeLocalError"] = AppState.targetMustBeLocalError
+        actual["AppState.unpublishedDirectoryCaution"] = AppState.unpublishedDirectoryCaution
 
         // MARK: ClaudeConfigIO
         // Both messages are inline literals inside guard/throw statements, not

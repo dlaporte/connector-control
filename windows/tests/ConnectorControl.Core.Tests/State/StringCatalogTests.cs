@@ -82,6 +82,7 @@ public class StringCatalogTests
         ["AppState.enabledSubtitle"] = ["3", "7"],
         ["AppState.malformedConfigMessage"] = ["X"],
         ["AppState.needsValueCaution"] = ["X"],
+        ["AppState.pathMarkMovedError"] = ["X"],
         ["AppState.publishSlugTakenError"] = ["X"],
         ["AppState.sourceUnreadableError"] = ["X", "Y"],
         ["ClaudeProcess.notAClaudePackageError"] = ["X"],
@@ -176,6 +177,7 @@ public class StringCatalogTests
         actual["AppState.newerDocumentError"] = AppState.NewerDocumentError;
         actual["AppState.noConnectorsSubtitle"] = AppState.NoConnectorsSubtitle;
         actual["AppState.ownCollectionError"] = AppState.OwnCollectionError;
+        actual["AppState.pathMarkMovedError"] = AppState.PathMarkMovedError("X");
         actual["AppState.publishIntoStoreError"] = AppState.PublishIntoStoreError;
         actual["AppState.publishSlugTakenError"] = AppState.PublishSlugTakenError("X");
         actual["AppState.quitButton"] = AppState.QuitButton;
@@ -189,6 +191,7 @@ public class StringCatalogTests
         actual["AppState.sourceUnreadableError"] = AppState.SourceUnreadableError("X", "Y");
         actual["AppState.storeChangedBody"] = AppState.StoreChangedBody;
         actual["AppState.targetMustBeLocalError"] = AppState.TargetMustBeLocalError;
+        actual["AppState.unpublishedDirectoryCaution"] = AppState.UnpublishedDirectoryCaution;
 
         // MARK: ClaudeConfigIO
         // Both messages are inline literals inside a throw, not exposed as callable

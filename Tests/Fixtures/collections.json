@@ -13,7 +13,8 @@
           "ledger" : {
             "\/args\/1" : {
               "hint" : "your ledger clone, then dist\/index.js",
-              "name" : "server_path"
+              "name" : "server_path",
+              "value" : "\/Users\/you\/ledger\/dist\/index.js"
             }
           }
         },

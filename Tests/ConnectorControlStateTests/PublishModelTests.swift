@@ -52,7 +52,8 @@ final class PublishModelTests: XCTestCase {
         model.pathRows[0].hint = "your ledger clone, then dist/index.js"
         XCTAssertEqual(model.intent.shareValues, ["c": ["B"]])
         XCTAssertEqual(model.intent.pathMarks["c"]?[JSONPointer(["args", "0"])],
-                       PublishIntent.PathMark(name: "srv", hint: "your ledger clone, then dist/index.js"))
+                       PublishIntent.PathMark(name: "srv", hint: "your ledger clone, then dist/index.js", value: "/Users/d/x.js"),
+                       "the mark records the path it was made on, so it can find it again once arguments move")
         XCTAssertTrue(model.preview.contains("${CC_NEEDS:srv}"), "a marked path leaves as its placeholder")
     }
 
@@ -114,6 +115,36 @@ final class PublishModelTests: XCTestCase {
         // the team already subscribed to.
         XCTAssertNil(state.renameCollection(state.activeCollection, to: "Team"))
         XCTAssertEqual(PublishModel(state: state, collection: "Team").fileName, "default.json")
+    }
+
+    func testAReopenedSheetTicksAPathWhereItNowStands() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let model = PublishModel(state: state, collection: state.activeCollection)
+        model.folder = try publishFolder(h).path
+        model.pathRows[0].marked = true
+        model.pathRows[0].name = "srv"
+        XCTAssertNil(model.publish())
+
+        // Moved outside the editor, so the record still says where it was.
+        XCTAssertNil(state.upsert(name: "c", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string("--quiet"), .string("/Users/d/x.js")]),
+        ])), renamedFrom: "c"))
+        let reopened = PublishModel(state: state, collection: state.activeCollection)
+        let row = try XCTUnwrap(reopened.pathRows.first { $0.connector == "c" })
+        XCTAssertEqual(row.pointer, JSONPointer(["args", "1"]))
+        XCTAssertTrue(row.marked, "the tick sits where the exporter places the mark")
+        XCTAssertEqual(row.name, "srv")
+
+        // A marked argument that does not look like a path keeps its row, so publishing from the
+        // sheet cannot quietly unmark it.
+        let flag = PublishIntent(shareValues: [:], pathMarks: ["c": [
+            JSONPointer(["args", "0"]): .init(name: "flag", hint: nil, value: "--quiet"),
+        ]], hints: [:])
+        XCTAssertNil(state.updatePublishIntent(state.activeCollection, intent: flag))
+        let marked = PublishModel(state: state, collection: state.activeCollection)
+        XCTAssertEqual(marked.pathRows.filter { $0.connector == "c" && $0.marked }.map(\.value), ["--quiet"])
+        XCTAssertEqual(marked.intent, flag)
     }
 
     func testExportWritesTheSameDocumentOnce() throws {
@@ -244,7 +275,7 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(after.footerLine, PublishModel.footerLine(after.fileName, after.originShort))
         XCTAssertEqual(after.footerLine, "\(after.fileName) · \(after.originShort)")
         // The document an export writes carries that same origin, so both sheets show one thing.
-        XCTAssertEqual(state.exportDocument(for: collection, intent: .none).origin, origin)
+        XCTAssertEqual(try state.exportDocument(for: collection, intent: .none).origin, origin)
     }
     func testAnExportCarriesOnlyTheTickedConnectors() throws {
         let (h, state) = try started()

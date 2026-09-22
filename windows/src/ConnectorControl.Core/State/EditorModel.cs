@@ -166,6 +166,18 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// assumption: the hints then describe the document as it was at open.
     /// </summary>
     private Dictionary<ArgRow, int> openArgIndexByRow = [];
+    /// <summary>
+    /// The arguments the window opened on, which the publish record's path marks are placed
+    /// against. Fixed with <see cref="openArgIndexByRow"/>, for the same reason.
+    /// </summary>
+    private readonly List<string> openedArgs = [];
+    /// <summary>
+    /// Whether every argument row still traces back to the config the window opened on. A JSON
+    /// edit that changed the arguments rebuilds the rows and carries their open positions by
+    /// position alone (<see cref="CarriedRecords"/>), which is a guess a path mark must not bet a
+    /// path on: from then on a save leaves the marks for publishing to place by their values.
+    /// </summary>
+    private bool argRowsFollowOpen = true;
     private string? validationError;
     private Tool? requiredTool;
     private bool suppressToolEvaluation;
@@ -199,6 +211,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         for (var i = 0; i < Args.Count; i++)
         {
             openArgIndexByRow[Args[i]] = i;
+            openedArgs.Add(Args[i].Value);
         }
         state.PropertyChanged += OnStateChanged;
         Args.CollectionChanged += OnArgsChanged;
@@ -705,10 +718,11 @@ public sealed class EditorModel : ObservableObject, IDisposable
         {
             return null;
         }
+        // Placed on the opened arguments the way the exporter places it, so a mark that moved
+        // before the window opened still shows its hint beside the argument it stands for.
         var marks = state.CollectionsFile.Collections.GetValueOrDefault(CollectionName)?.Publish?.Intent
             .PathMarks.GetValueOrDefault(Target.Name);
-        var pointer = new JsonPointer(["args", published.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
-        return marks?.GetValueOrDefault(pointer)?.Hint;
+        return marks is null ? null : PublishIntent.PlacePathMarks(marks, openedArgs).Placed.GetValueOrDefault(published)?.Hint;
     }
 
     /// <summary>
@@ -953,8 +967,13 @@ public sealed class EditorModel : ObservableObject, IDisposable
     private void AdoptForm(JsonValue config)
     {
         var carried = CarriedRecords();
+        var argsBefore = Args.Select(row => row.Value).ToList();
         Load(config);
         Restore(carried);
+        if (!Args.Select(row => row.Value).SequenceEqual(argsBefore, StringComparer.Ordinal))
+        {
+            argRowsFollowOpen = false;
+        }
         // A JSON edit that changed the config consumes the template, exactly
         // like a discard would — so a later Type toggle to Local re-derives
         // nothing and leaves what the user typed alone. An unchanged round
@@ -1323,7 +1342,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
         // store, exactly as every other save does.
         var saved = readOnly ? Target.Name : name;
         var entry = new McpEntry(current?.Enabled ?? Target.Entry.Enabled, config, readOnly ? Target.Entry.LastEditView : view);
-        if (state.Upsert(saved, entry, Target.IsNew ? null : Target.Name, Target.Collection) is { } error)
+        if (state.Upsert(saved, entry, Target.IsNew ? null : Target.Name, Target.Collection,
+                         FollowedPathMarks(CollectionName, config)) is { } error)
         {
             ValidationError = error;
             return false;
@@ -1357,9 +1377,57 @@ public sealed class EditorModel : ObservableObject, IDisposable
                 && held.Mcps.TryGetValue(Target.Name, out var twin)
                 && twin.Config == Target.Entry.Config)
             {
-                state.Upsert(saved, new McpEntry(twin.Enabled, config, view), Target.Name, other);
+                // The twin held this window's opening config, so its marks follow the same rows.
+                state.Upsert(saved, new McpEntry(twin.Enabled, config, view), Target.Name, other,
+                             FollowedPathMarks(other, config));
             }
         }
+    }
+
+    /// <summary>
+    /// The saved connector's path marks in <paramref name="collection"/>'s publish record,
+    /// re-keyed to follow the rows they were made on, or null to leave the record as it is.
+    /// <para>
+    /// Each mark is first placed on the arguments the window opened on, the way the exporter
+    /// places it, so a mark that had already moved before the window opened is followed from where
+    /// it really was. It then goes with its row: to wherever the row sits now, recording the row's
+    /// text as its value — the author may have corrected the path in place — or away with the row
+    /// when the row was deleted.
+    /// </para>
+    /// <para>
+    /// Null whenever this window cannot vouch for its rows, and publishing then places each mark by
+    /// its value, refusing any it cannot: a new or read-only connector; a remote one, whose
+    /// arguments are the launcher's; a save whose arguments are not the rows' (a JSON edit not
+    /// brought back to the form); rows rebuilt from a JSON edit that changed the arguments; or a
+    /// mark that could not be placed even on the arguments the window opened on.
+    /// </para>
+    /// </summary>
+    private IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark>? FollowedPathMarks(string collection, JsonValue config)
+    {
+        if (Target.IsNew || IsReadOnly || !argRowsFollowOpen
+            || state.CollectionsFile.Collections.GetValueOrDefault(collection)?.Publish?.Intent.PathMarks
+                   .GetValueOrDefault(Target.Name) is not { Count: > 0 } marks
+            || RemotePattern.Decode(config) is not null
+            || !FormMapper.Analyze(config).Model.Args.SequenceEqual(Args.Select(row => row.Value), StringComparer.Ordinal))
+        {
+            return null;
+        }
+        var placement = PublishIntent.PlacePathMarks(marks, openedArgs);
+        if (placement.Unresolved.Count > 0)
+        {
+            return null;
+        }
+        var followed = new Dictionary<JsonPointer, PublishIntent.PathMark>();
+        for (var position = 0; position < Args.Count; position++)
+        {
+            if (openArgIndexByRow.TryGetValue(Args[position], out var opened)
+                && placement.Placed.TryGetValue(opened, out var mark))
+            {
+                followed[new JsonPointer(["args", position.ToString(System.Globalization.CultureInfo.InvariantCulture)])] =
+                    mark with { Value = Args[position].Value };
+            }
+        }
+        return followed;
     }
 
     /// <summary>Remove and apply in the same turn: a watcher-driven reload between the two once resurrected the connector.</summary>
