@@ -245,9 +245,10 @@ public class PublishDialogTests
             // would travel as written. The sheet says why, beside the way out.
             Assert.False(string.IsNullOrEmpty(model.Folder));
             Assert.False(window.PublishButton.IsEnabled);
-            var note = RowElements.Find<TextBlock>(window.UnresolvedList, "c", "MarkNoteText");
-            Assert.Equal(PublishModel.UnresolvedMarkNote("c"), note.Text);
-            var forget = RowElements.Find<Button>(window.UnresolvedList, "c", "ForgetMark");
+            var lost = Assert.Single(model.UnresolvedMarks);
+            var note = RowElements.Find<TextBlock>(window.UnresolvedList, lost, "MarkNoteText");
+            Assert.Equal(PublishModel.UnresolvedMarkNote("c", "srv"), note.Text);
+            var forget = RowElements.Find<Button>(window.UnresolvedList, lost, "ForgetMark");
             Assert.Equal(PublishModel.ForgetMarkButton, forget.Content);
 
             Press(forget);
@@ -259,10 +260,11 @@ public class PublishDialogTests
 
             // Forgetting belongs to the sheet it was pressed in: a fresh one on the same record
             // holds Export the same way, until its own Forget Mark.
-            var export = Shown(new PublishModel(state, state.ActiveCollection), PublishDialogMode.Export);
+            var fresh = new PublishModel(state, state.ActiveCollection);
+            var export = Shown(fresh, PublishDialogMode.Export);
             Assert.False(export.ExportButton.IsEnabled);
 
-            Press(RowElements.Find<Button>(export.UnresolvedList, "c", "ForgetMark"));
+            Press(RowElements.Find<Button>(export.UnresolvedList, Assert.Single(fresh.UnresolvedMarks), "ForgetMark"));
             Layout(export);
 
             Assert.Empty(export.UnresolvedList.Items);

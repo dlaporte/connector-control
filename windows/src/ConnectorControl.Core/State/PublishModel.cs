@@ -25,6 +25,8 @@ public sealed class PublishModel : ObservableObject
     public const string MarkPathLabel = "Mark as a path this machine supplies";
     /// <summary>The button beside an unresolved mark's note: drop the mark and let the path travel as the preview shows it.</summary>
     public const string ForgetMarkButton = "Forget Mark";
+    /// <summary>The button beside a kept path's note: let that path travel as written in this collection's document, which the preview above shows.</summary>
+    public const string ReleaseValueButton = "Release";
 
     public static string Title(string collection) => $"Publish “{collection}”";
 
@@ -41,8 +43,27 @@ public sealed class PublishModel : ObservableObject
 
     public static string FooterLine(string fileName, string originShort) => $"{fileName} · {originShort}";
 
-    public static string UnresolvedMarkNote(string connector) =>
-        $"A path marked in “{connector}” has moved. Tick it where it now sits, or forget the mark.";
+    public static string UnresolvedMarkNote(string connector, string name) =>
+        $"A path marked “{name}” in “{connector}” has moved. Tick it where it now sits, or forget the mark.";
+
+    public static string KeptPathNote(string connector, string field) =>
+        $"“{connector}” carries a path this machine keeps back, in {field}. Tick it where it sits, or release it.";
+
+    /// <summary>
+    /// A path mark that lost its argument: its text is held by no argument now. It waits for the
+    /// author to tick the path where it now sits, which answers it, or to forget it.
+    /// </summary>
+    public sealed record UnresolvedMark(string Id, string Connector, string Name, string? Hint)
+    {
+        internal JsonPointer Pointer { get; init; } = new([]);
+    }
+
+    /// <summary>A path this machine keeps back that the document would carry as written, and where.</summary>
+    /// <param name="Field">Its place in the connector's document form, as the preview shows it.</param>
+    public sealed record KeptPath(string Value, string Connector, string Field)
+    {
+        public string Id => Connector + "\0" + Field + "\0" + Value;
+    }
 
     /// <summary>
     /// One environment variable of one connector. Stripped by default: its name and hint travel,
@@ -98,14 +119,22 @@ public sealed class PublishModel : ObservableObject
     private readonly AppState state;
     private string? folder;
     /// <summary>
-    /// Connectors whose recorded path mark found no argument when the dialog opened, and those the
-    /// collection no longer holds that still carry one. Kept rather than dropped: the rows alone
-    /// show such a path unticked, and publishing or exporting what they say would send it as
-    /// written. Each waits for the author to tick the path where it now sits, or to forget it.
+    /// Every path mark the dialog found lost on open, each on its own: its text is held by no
+    /// argument of its connector, or the connector is gone. Kept rather than dropped, because the
+    /// rows alone would show such a path unticked and publishing them would send it as written. In
+    /// connector, then pointer, order.
     /// </summary>
-    private readonly HashSet<string> lostMarks = new(StringComparer.Ordinal);
+    private readonly List<UnresolvedMark> lostMarks = [];
+    /// <summary>The lost marks the author chose to forget.</summary>
+    private readonly HashSet<string> forgotten = new(StringComparer.Ordinal);
+    /// <summary>Row → the lost mark its tick answers.</summary>
+    private readonly Dictionary<string, string> answers = new(StringComparer.Ordinal);
+    /// <summary>The paths the author released in this dialog, to travel as written in this document.</summary>
+    private readonly HashSet<string> released = new(StringComparer.Ordinal);
     /// <summary>The path rows ticked when the dialog opened. Those are marks already on record, so only a tick made since can stand in for a lost one.</summary>
     private readonly HashSet<string> tickedAtOpen = new(StringComparer.Ordinal);
+    /// <summary>Each row's name as the dialog opened it, so a tick that answers a lost mark gives it that mark's name only while the author has not typed one of their own.</summary>
+    private readonly Dictionary<string, string> namesAtOpen = new(StringComparer.Ordinal);
 
     public PublishModel(AppState state, string collection, IReadOnlyList<string>? connectors = null)
     {
@@ -118,12 +147,13 @@ public sealed class PublishModel : ObservableObject
         folder = state.CollectionsCache.Published.GetValueOrDefault(collection)?.Folder;
         var env = new List<EnvRow>();
         var paths = new List<PathRow>();
-        // What this machine has already published as placeholders for the collection. A row
-        // holding one of them starts ticked even when the record no longer marks it — the other
-        // machine may have dropped the mark while this one still sends the path — so the author
-        // unticks it on purpose, in view of the preview, or it stays a placeholder.
-        IReadOnlySet<string> denied = state.CollectionsCache.Published.GetValueOrDefault(collection)?.MarkedValues
-            ?? new HashSet<string>(StringComparer.Ordinal);
+        var lost = new List<UnresolvedMark>();
+        // What this machine keeps back from the collection's document: its lists of marked paths
+        // and the folders it binds. A row holding one of them starts ticked even when the record no
+        // longer marks it — the other machine may have dropped the mark while this one still sends
+        // the path — so the author unticks it on purpose, in view of the preview, or it stays a
+        // placeholder.
+        var denied = state.KeptBack(collection).Values.Select(KeptValue.Nfc).ToHashSet(StringComparer.Ordinal);
         var seeded = Held(state, collection, connectors);
         foreach (var name in seeded.Keys.Order(StringComparer.Ordinal))
         {
@@ -152,46 +182,55 @@ public sealed class PublishModel : ObservableObject
                 intent.PathMarks.TryGetValue(name, out var recorded) ? recorded : new Dictionary<JsonPointer, PublishIntent.PathMark>();
             var placement = PublishIntent.PlacePathMarks(marks, arguments);
             var byValue = MarksByValue(marks);
-            // A mark whose text no argument holds any more has nothing to tick: the connector waits
-            // for the author to tick the path where it now sits, and the rows that could be that
-            // path carry the lost mark's name and hint so the tick keeps them.
-            var lostHere = placement.Unresolved.OrderBy(p => p.Key.ToString(), StringComparer.Ordinal)
-                .Select(p => p.Value)
-                .Where(mark => mark.Value is not null && !arguments.Contains(mark.Value, StringComparer.Ordinal))
-                .ToList();
-            if (lostHere.Count > 0)
-            {
-                lostMarks.Add(name);
-            }
+            // A mark whose text no argument holds any more has nothing to tick: it waits, on its
+            // own, for the author to tick the path where it now sits.
+            var texts = arguments.Select(KeptValue.Nfc).ToHashSet(StringComparer.Ordinal);
+            lost.AddRange(SortedByPointer(placement.Unresolved)
+                .Where(p => p.Value.Value is { } value && !texts.Contains(KeptValue.Nfc(value)))
+                .Select(p => Lost(name, p.Key, p.Value)));
             for (var index = 0; index < arguments.Count; index++)
             {
-                var mark = placement.Placed.GetValueOrDefault(index) ?? byValue.GetValueOrDefault(arguments[index]);
-                var ticked = mark is not null || denied.Contains(arguments[index]);
+                var text = KeptValue.Nfc(arguments[index]);
+                var mark = placement.Placed.GetValueOrDefault(index) ?? byValue.GetValueOrDefault(text);
+                var ticked = mark is not null || denied.Contains(text);
                 if (!LooksLikeAPath(arguments[index]) && !ticked)
                 {
                     continue;
                 }
                 found++;
-                var carried = mark ?? (ticked ? null : lostHere.FirstOrDefault());
                 var pointer = new JsonPointer(["args", index.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
                 paths.Add(new PathRow(name, pointer, arguments[index], ticked,
-                                      carried?.Name ?? DefaultPathName(found), carried?.Hint ?? string.Empty));
+                                      mark?.Name ?? DefaultPathName(found), mark?.Hint ?? string.Empty));
             }
         }
         // A mark for a connector the collection no longer holds was made on one renamed or removed
         // where the record could not follow, and the exporter refuses it whatever the subset. No
-        // row can be ticked for it, so it waits to be forgotten.
+        // row can be ticked for it, so each waits to be forgotten.
         var all = state.Store.Collections.GetValueOrDefault(collection)?.Mcps;
-        foreach (var (name, marks) in intent.PathMarks)
+        foreach (var (name, marks) in intent.PathMarks.OrderBy(p => p.Key, StringComparer.Ordinal))
         {
-            if ((all is null || !all.ContainsKey(name)) && marks.Values.Any(mark => mark.Value is not null))
+            if (all is null || !all.ContainsKey(name))
             {
-                lostMarks.Add(name);
+                lost.AddRange(SortedByPointer(marks).Where(p => p.Value.Value is not null).Select(p => Lost(name, p.Key, p.Value)));
             }
         }
+        lostMarks.AddRange(lost
+            .OrderBy(mark => mark.Connector, StringComparer.Ordinal)
+            .ThenBy(mark => mark.Pointer.ToString(), StringComparer.Ordinal));
         tickedAtOpen.UnionWith(paths.Where(row => row.Marked).Select(row => row.Id));
+        foreach (var row in paths)
+        {
+            namesAtOpen[row.Id] = row.Name;
+        }
         ReplaceRows(env, paths);
     }
+
+    private static UnresolvedMark Lost(string connector, JsonPointer pointer, PublishIntent.PathMark mark) =>
+        new(connector + pointer, connector, mark.Name, mark.Hint) { Pointer = pointer };
+
+    private static IEnumerable<KeyValuePair<JsonPointer, PublishIntent.PathMark>> SortedByPointer(
+        IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> marks) =>
+        marks.OrderBy(p => p.Key.ToString(), StringComparer.Ordinal);
 
     public string Collection { get; }
 
@@ -277,16 +316,51 @@ public sealed class PublishModel : ObservableObject
         Raise(nameof(HasPathRows));
     }
 
-    /// <summary>Everything below the rows is derived from them, and nothing above is.</summary>
+    /// <summary>
+    /// Everything below the rows is derived from them, and nothing above is. A tick made since the
+    /// dialog opened answers the next lost mark of its connector and takes its name and hint.
+    /// </summary>
     private void OnRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (sender is PathRow row && e.PropertyName == nameof(PathRow.Marked))
+        {
+            AnswerLostMark(row);
+        }
         Raise(nameof(Intent));
         Raise(nameof(Preview));
         Raise(nameof(Warnings));
-        // A tick, or the name beside it, is what answers a lost mark.
-        if (sender is PathRow)
+        // A tick, or the name beside it, is what answers a lost mark; a shared value can carry a
+        // kept path into the document.
+        RaiseMarkGates();
+    }
+
+    /// <summary>
+    /// A row newly ticked, not ticked on open, answers the next unanswered lost mark of its
+    /// connector in pointer order, and takes its name and hint while the author has not typed their
+    /// own. A row unticked gives its lost mark back.
+    /// </summary>
+    private void AnswerLostMark(PathRow row)
+    {
+        if (!row.Marked)
         {
-            RaiseMarkGates();
+            answers.Remove(row.Id);
+            return;
+        }
+        if (tickedAtOpen.Contains(row.Id) || answers.ContainsKey(row.Id))
+        {
+            return;
+        }
+        var taken = answers.Values.ToHashSet(StringComparer.Ordinal);
+        if (lostMarks.FirstOrDefault(mark => mark.Connector == row.Connector && !forgotten.Contains(mark.Id)
+                                             && !taken.Contains(mark.Id)) is not { } answered)
+        {
+            return;
+        }
+        answers[row.Id] = answered.Id;
+        if (row.Name == namesAtOpen.GetValueOrDefault(row.Id) && row.Hint.Length == 0)
+        {
+            row.Name = answered.Name;
+            row.Hint = answered.Hint ?? string.Empty;
         }
     }
 
@@ -331,40 +405,97 @@ public sealed class PublishModel : ObservableObject
         }
     }
 
-    /// <summary>Nothing is published while a mark is unresolved: the rows would send its path as written.</summary>
-    public bool CanPublish => !string.IsNullOrEmpty(Folder) && UnresolvedMarks.Count == 0;
+    /// <summary>Nothing is published while a mark is unresolved or a kept path unanswered: the rows would send the path as written.</summary>
+    public bool CanPublish => !string.IsNullOrEmpty(Folder) && UnresolvedMarks.Count == 0 && KeptPaths.Count == 0;
 
-    /// <summary>Nothing is exported while a mark is unresolved, for the same reason.</summary>
-    public bool CanExport => UnresolvedMarks.Count == 0;
+    /// <summary>Nothing is exported while either waits, for the same reason.</summary>
+    public bool CanExport => UnresolvedMarks.Count == 0 && KeptPaths.Count == 0;
 
     /// <summary>
-    /// The connectors whose path mark was lost and is still unanswered, sorted. One leaves the list
-    /// when a path row of it is ticked that was not ticked on open, with a name the placeholder
-    /// can carry — the new tick replaces the lost mark — or when the mark is forgotten. Unticking
-    /// that row puts it back.
+    /// The lost marks still unanswered, one note each, in connector then pointer order. A lost mark
+    /// is answered by its own tick — a path row of its connector ticked since the dialog opened,
+    /// with a name the placeholder can carry, each tick answering the next lost mark in pointer
+    /// order — or by forgetting it. Unticking the row puts it back.
     /// </summary>
-    public IReadOnlyList<string> UnresolvedMarks => lostMarks
-        .Where(connector => !PathRows.Any(row => row.Connector == connector && row.Marked
-                                                 && !tickedAtOpen.Contains(row.Id)
-                                                 && PlaceholderName(row.Name).Length > 0))
-        .Order(StringComparer.Ordinal)
-        .ToList();
+    public IReadOnlyList<UnresolvedMark> UnresolvedMarks
+    {
+        get
+        {
+            var answered = PathRows
+                .Where(row => row.Marked && PlaceholderName(row.Name).Length > 0 && answers.ContainsKey(row.Id))
+                .Select(row => answers[row.Id])
+                .ToHashSet(StringComparer.Ordinal);
+            return lostMarks.Where(mark => !forgotten.Contains(mark.Id) && !answered.Contains(mark.Id)).ToList();
+        }
+    }
 
     /// <summary>
-    /// Drops a lost mark by the author's explicit choice: the path then travels as the preview
+    /// Drops one lost mark by the author's explicit choice: its path then travels as the preview
     /// shows it, as written unless a row of it is ticked.
     /// </summary>
-    public void ForgetUnresolvedMark(string connector)
+    public void ForgetUnresolvedMark(string id)
     {
-        if (lostMarks.Remove(connector))
+        if (!forgotten.Add(id))
         {
-            RaiseMarkGates();
+            return;
         }
+        foreach (var row in answers.Where(p => p.Value == id).Select(p => p.Key).ToList())
+        {
+            answers.Remove(row);
+        }
+        RaiseMarkGates();
+    }
+
+    /// <summary>
+    /// Every path this machine keeps back that the document, as the rows now make it, would carry
+    /// as written, with its connector and field: a copy of a ticked path; a path on one of this
+    /// machine's lists of marked paths, this collection's or another's; a folder it binds. Each is
+    /// answered by ticking it where it sits in an argument row, or by releasing it.
+    /// </summary>
+    public IReadOnlyList<KeptPath> KeptPaths
+    {
+        get
+        {
+            var intent = Intent;
+            var held = Held(state, Collection, Connectors).ToDictionary(p => p.Key, p => p.Value.Config, StringComparer.Ordinal);
+            IEnumerable<KeptValueFinding> found = CollectionDocument.CopiesOfMarkedPaths(held, intent);
+            if (!found.Any())
+            {
+                try
+                {
+                    var document = state.ExportDocument(Collection, intent, Connectors);
+                    var (values, folders) = state.KeptBack(Collection, ReviewedValues, released);
+                    found = document.Findings(values).Concat(document.Findings(folders));
+                }
+                catch (Exception refused) when (refused is PathMarkMovedException or KeptPathCarriedException)
+                {
+                    found = [];
+                }
+            }
+            return found.Select(f => new KeptPath(f.Value, f.Connector, f.Field)).DistinctBy(kept => kept.Id).ToList();
+        }
+    }
+
+    /// <summary>
+    /// Lets one kept path travel as written in this collection's document, by the author's explicit
+    /// choice after reading the preview. Everywhere: every row holding it is unticked, since a path
+    /// both marked and released would be both a placeholder and not.
+    /// </summary>
+    public void ReleaseKeptPath(string value)
+    {
+        var text = KeptValue.Nfc(value);
+        released.Add(value);
+        foreach (var row in PathRows.Where(row => row.Marked && KeptValue.Nfc(row.Value) == text))
+        {
+            row.Marked = false;
+        }
+        RaiseMarkGates();
     }
 
     private void RaiseMarkGates()
     {
         Raise(nameof(UnresolvedMarks));
+        Raise(nameof(KeptPaths));
         Raise(nameof(CanPublish));
         Raise(nameof(CanExport));
     }
@@ -436,10 +567,11 @@ public sealed class PublishModel : ObservableObject
     }
 
     /// <summary>
-    /// The document itself, as the editor would show it. Every byte that leaves this machine is
-    /// in here. When the ticks can no longer be placed — the collection changed under the open
-    /// dialog — there is no document, and the preview says why rather than showing one that would
-    /// not be written.
+    /// The document itself, as the editor would show it. Every byte that leaves this machine is in
+    /// here, kept paths included, so the author reads them before releasing any
+    /// (<see cref="KeptPaths"/>). When the ticks can no longer be placed — the collection changed
+    /// under the open dialog, or a ticked path is also copied unticked — there is no document, and
+    /// the preview says why rather than showing one that would not be written.
     /// </summary>
     public string Preview
     {
@@ -447,11 +579,9 @@ public sealed class PublishModel : ObservableObject
         {
             try
             {
-                var document = state.ExportDocument(Collection, Intent, Connectors);
-                state.RefuseKeptBackPaths(document, Collection, ReviewedValues);
-                return document.Encode().EditorText();
+                return state.ExportDocument(Collection, Intent, Connectors).Encode().EditorText();
             }
-            catch (Exception refused) when (refused is PathMarkMovedException or PublishFolderCarriedException)
+            catch (Exception refused) when (refused is PathMarkMovedException or KeptPathCarriedException)
             {
                 return AppState.Friendly(refused);
             }
@@ -491,17 +621,42 @@ public sealed class PublishModel : ObservableObject
         }
     }
 
+    /// <summary>The first thing still waiting for the author, as the note the dialog shows for it.</summary>
+    private string? FirstUnanswered
+    {
+        get
+        {
+            if (UnresolvedMarks.FirstOrDefault() is { } lost)
+            {
+                return UnresolvedMarkNote(lost.Connector, lost.Name);
+            }
+            return KeptPaths.FirstOrDefault() is { } kept ? KeptPathNote(kept.Connector, kept.Field) : null;
+        }
+    }
+
+    /// <summary>What the author released and has not ticked since: a ticked path is kept back again.</summary>
+    private IReadOnlySet<string> LetGo
+    {
+        get
+        {
+            var letGo = new HashSet<string>(released, StringComparer.Ordinal);
+            letGo.ExceptWith(ReviewedValues);
+            return letGo;
+        }
+    }
+
     /// <summary>
     /// Publish, or re-publish with what the sheet now says. A folder that is not the one on record
     /// starts publishing again there, which is how the failed-write banner's Choose Folder… moves
-    /// a collection. null on success.
+    /// a collection. null on success. Refused with the first note while a mark is unresolved or a
+    /// kept path unanswered, behind the disabled button: what the rows say would send the path as
+    /// written. What the author released goes on record with the ticks.
     /// </summary>
     public string? Publish()
     {
-        // Behind the disabled button: what the rows say would send a lost mark's path as written.
-        if (UnresolvedMarks.Count > 0)
+        if (FirstUnanswered is { } note)
         {
-            return UnresolvedMarkNote(UnresolvedMarks[0]);
+            return note;
         }
         var chosen = Folder?.TrimSpaces() ?? string.Empty;
         if (chosen.Length == 0)
@@ -511,22 +666,20 @@ public sealed class PublishModel : ObservableObject
         if (!state.IsPublished(Collection)
             || !string.Equals(state.CollectionsCache.Published.GetValueOrDefault(Collection)?.Folder, chosen, StringComparison.Ordinal))
         {
-            return state.StartPublishing(Collection, chosen, Intent, ReviewedValues);
+            return state.StartPublishing(Collection, chosen, Intent, ReviewedValues, LetGo);
         }
         // The same folder, already publishing: the ticks go on record, and then the document is
         // written whether or not it changed. Pressing Publish again is how a write that failed is
         // retried, and by then nothing about the document is different — only the folder is.
-        state.UpdatePublishIntent(Collection, Intent, ReviewedValues);
+        state.UpdatePublishIntent(Collection, Intent, ReviewedValues, LetGo);
         return state.Republish(Collection);
     }
 
     /// <summary>
-    /// The same document, written once, binding nothing. null on success. Refused with the note
-    /// while a mark is unresolved, as <see cref="Publish"/> is.
+    /// The same document, written once, binding nothing. null on success. Refused with the first
+    /// note while anything waits, as <see cref="Publish"/> is.
     /// </summary>
-    public string? Export(string path) => UnresolvedMarks.Count > 0
-        ? UnresolvedMarkNote(UnresolvedMarks[0])
-        : state.WriteExport(Collection, Intent, path, Connectors, ReviewedValues);
+    public string? Export(string path) => FirstUnanswered ?? state.WriteExport(Collection, Intent, path, Connectors, ReviewedValues, LetGo);
 
     // MARK: rows
 
@@ -565,21 +718,21 @@ public sealed class PublishModel : ObservableObject
         }
     }
 
-    /// <summary>"path", then "path_2", "path_3" — numbered inside each connector, since a recipient fills one connector's placeholders at a time.</summary>
-    /// <summary>A connector's recorded marks by the text each was made on; where two share a text, the first in pointer order speaks for both.</summary>
+    /// <summary>A connector's recorded marks by the text each was made on, in NFC; where two share a text, the first in pointer order speaks for both.</summary>
     private static Dictionary<string, PublishIntent.PathMark> MarksByValue(IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> marks)
     {
         var byValue = new Dictionary<string, PublishIntent.PathMark>(StringComparer.Ordinal);
-        foreach (var (_, mark) in marks.OrderBy(p => p.Key.ToString(), StringComparer.Ordinal))
+        foreach (var (_, mark) in SortedByPointer(marks))
         {
             if (mark.Value is { } value)
             {
-                byValue.TryAdd(value, mark);
+                byValue.TryAdd(KeptValue.Nfc(value), mark);
             }
         }
         return byValue;
     }
 
+    /// <summary>"path", then "path_2", "path_3" — numbered inside each connector, since a recipient fills one connector's placeholders at a time.</summary>
     private static string DefaultPathName(int index) =>
         index <= 1 ? "path" : "path_" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
 

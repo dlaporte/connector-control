@@ -54,14 +54,14 @@ struct PublishSheetView: View {
             if !model.unresolvedMarks.isEmpty {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 6) {
-                        ForEach(model.unresolvedMarks, id: \.self) { connector in
+                        ForEach(model.unresolvedMarks) { mark in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text(PublishModel.unresolvedMarkNote(connector))
+                                Text(PublishModel.unresolvedMarkNote(mark.connector, mark.name))
                                     .font(.caption)
                                     .foregroundStyle(.orange)
                                     .fixedSize(horizontal: false, vertical: true)
                                 Spacer()
-                                Button(PublishModel.forgetMarkButton) { model.forgetUnresolvedMark(connector) }
+                                Button(PublishModel.forgetMarkButton) { model.forgetUnresolvedMark(mark.id) }
                                     .controlSize(.small)
                             }
                         }

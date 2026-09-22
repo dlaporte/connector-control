@@ -16,20 +16,33 @@ public sealed record CollectionsLocalCache
     public IReadOnlyDictionary<string, SyncedBinding> Synced { get; }
     public IReadOnlyDictionary<string, PublishBinding> Published { get; }
 
+    /// <summary>
+    /// The collection Claude's config was last written from on this machine. Claude's file holds
+    /// that collection's connectors, so it is the only one a launch may ingest them into; null
+    /// until the first apply that records it.
+    /// </summary>
+    public string? LastAppliedCollection { get; init; }
+
     public CollectionsLocalCache(
         IEnumerable<KeyValuePair<string, SyncedBinding>> synced,
-        IEnumerable<KeyValuePair<string, PublishBinding>> published)
+        IEnumerable<KeyValuePair<string, PublishBinding>> published,
+        string? lastAppliedCollection = null)
     {
         Synced = new Dictionary<string, SyncedBinding>(synced, StringComparer.Ordinal);
         Published = new Dictionary<string, PublishBinding>(published, StringComparer.Ordinal);
+        LastAppliedCollection = lastAppliedCollection;
     }
 
     public bool Equals(CollectionsLocalCache? other) =>
         other is not null
         && DictionaryEquality.Equal(Synced, other.Synced)
-        && DictionaryEquality.Equal(Published, other.Published);
+        && DictionaryEquality.Equal(Published, other.Published)
+        && string.Equals(LastAppliedCollection, other.LastAppliedCollection, StringComparison.Ordinal);
 
-    public override int GetHashCode() => HashCode.Combine(DictionaryEquality.Hash(Synced), DictionaryEquality.Hash(Published));
+    public override int GetHashCode() => HashCode.Combine(
+        DictionaryEquality.Hash(Synced),
+        DictionaryEquality.Hash(Published),
+        LastAppliedCollection is null ? 0 : LastAppliedCollection.GetHashCode(StringComparison.Ordinal));
 
     public sealed record SyncedBinding
     {
@@ -111,20 +124,32 @@ public sealed record CollectionsLocalCache
         /// </summary>
         public IReadOnlySet<string> MarkedValues { get; }
 
-        public PublishBinding(string folder, string? lastWrittenHash, IEnumerable<string>? markedValues = null)
+        /// <summary>
+        /// Paths the author let travel as written in this collection's document, pressing Release
+        /// and then Publish in the sheet after reading the preview, although this machine keeps them
+        /// back elsewhere: on another collection's list, or as a folder it binds.
+        /// </summary>
+        public IReadOnlySet<string> ReleasedValues { get; }
+
+        public PublishBinding(string folder, string? lastWrittenHash, IEnumerable<string>? markedValues = null,
+                              IEnumerable<string>? releasedValues = null)
         {
             Folder = folder;
             LastWrittenHash = lastWrittenHash;
             MarkedValues = markedValues is null
                 ? new HashSet<string>(StringComparer.Ordinal)
                 : new HashSet<string>(markedValues, StringComparer.Ordinal);
+            ReleasedValues = releasedValues is null
+                ? new HashSet<string>(StringComparer.Ordinal)
+                : new HashSet<string>(releasedValues, StringComparer.Ordinal);
         }
 
         public bool Equals(PublishBinding? other) =>
             other is not null
             && string.Equals(Folder, other.Folder, StringComparison.Ordinal)
             && string.Equals(LastWrittenHash, other.LastWrittenHash, StringComparison.Ordinal)
-            && MarkedValues.SetEquals(other.MarkedValues);
+            && MarkedValues.SetEquals(other.MarkedValues)
+            && ReleasedValues.SetEquals(other.ReleasedValues);
 
         public override int GetHashCode()
         {
@@ -132,6 +157,11 @@ public sealed record CollectionsLocalCache
             hash.Add(Folder, StringComparer.Ordinal);
             hash.Add(LastWrittenHash ?? string.Empty, StringComparer.Ordinal);
             foreach (var value in MarkedValues.Order(StringComparer.Ordinal))
+            {
+                hash.Add(value, StringComparer.Ordinal);
+            }
+            hash.Add(ReleasedValues.Count);
+            foreach (var value in ReleasedValues.Order(StringComparer.Ordinal))
             {
                 hash.Add(value, StringComparer.Ordinal);
             }
@@ -153,6 +183,10 @@ public sealed record CollectionsLocalCache
             {
                 props["markedValues"] = JsonValue.Array(MarkedValues.Order(StringComparer.Ordinal).Select(JsonValue.String));
             }
+            if (ReleasedValues.Count > 0)
+            {
+                props["releasedValues"] = JsonValue.Array(ReleasedValues.Order(StringComparer.Ordinal).Select(JsonValue.String));
+            }
             return JsonValue.Object(props);
         }
 
@@ -167,16 +201,27 @@ public sealed record CollectionsLocalCache
                 CollectionsFile.OptionalString(json["lastWrittenHash"], $"{what} lastWrittenHash"),
                 // Absent in a cache written before the list was kept: nothing marked yet, which the
                 // next write fills in.
-                CollectionsFile.StringSet(json["markedValues"], $"{what} markedValues"));
+                CollectionsFile.StringSet(json["markedValues"], $"{what} markedValues"),
+                CollectionsFile.StringSet(json["releasedValues"], $"{what} releasedValues"));
         }
     }
 
     // MARK: Encode
 
-    public JsonValue Encode() => JsonValue.Object(
-        ("version", JsonValue.Int(FormatVersion)),
-        ("synced", JsonValue.Object(Synced.Select(p => new KeyValuePair<string, JsonValue>(p.Key, p.Value.Encode())))),
-        ("published", JsonValue.Object(Published.Select(p => new KeyValuePair<string, JsonValue>(p.Key, p.Value.Encode())))));
+    public JsonValue Encode()
+    {
+        var root = new Dictionary<string, JsonValue>(StringComparer.Ordinal)
+        {
+            ["version"] = JsonValue.Int(FormatVersion),
+            ["synced"] = JsonValue.Object(Synced.Select(p => new KeyValuePair<string, JsonValue>(p.Key, p.Value.Encode()))),
+            ["published"] = JsonValue.Object(Published.Select(p => new KeyValuePair<string, JsonValue>(p.Key, p.Value.Encode()))),
+        };
+        if (LastAppliedCollection is not null)
+        {
+            root["lastAppliedCollection"] = JsonValue.String(LastAppliedCollection);
+        }
+        return JsonValue.Object(root);
+    }
 
     // MARK: Decode
 
@@ -204,7 +249,10 @@ public sealed record CollectionsLocalCache
         {
             published[name] = PublishBinding.Decode(value, $"published \"{name}\"");
         }
-        return new CollectionsLocalCache(synced, published);
+        return new CollectionsLocalCache(
+            synced, published,
+            // Absent in a cache written before it was recorded: the next apply records it.
+            CollectionsFile.OptionalString(json["lastAppliedCollection"], "lastAppliedCollection"));
     }
 
     // MARK: Disk
@@ -227,5 +275,6 @@ public sealed record CollectionsLocalCache
     /// <summary>Drops a binding the sidecar no longer vouches for: a source binding for a collection that is not synced any more, and a publish folder for one that is not published any more.</summary>
     public CollectionsLocalCache Reconciled(CollectionsFile file) => new(
         Synced.Where(p => file.KindOf(p.Key) == CollectionKind.Synced),
-        Published.Where(p => file.Collections.TryGetValue(p.Key, out var entry) && entry.Publish is not null));
+        Published.Where(p => file.Collections.TryGetValue(p.Key, out var entry) && entry.Publish is not null),
+        LastAppliedCollection);
 }

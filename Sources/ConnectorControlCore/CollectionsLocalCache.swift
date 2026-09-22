@@ -12,10 +12,16 @@ public struct CollectionsLocalCache: Equatable, Sendable {
 
     public var synced: [String: SyncedBinding]
     public var published: [String: PublishBinding]
+    /// The collection Claude's config was last written from on this machine. Claude's file holds
+    /// that collection's connectors, so it is the only one a launch may ingest them into; nil
+    /// until the first apply that records it.
+    public var lastAppliedCollection: String?
 
-    public init(synced: [String: SyncedBinding], published: [String: PublishBinding]) {
+    public init(synced: [String: SyncedBinding], published: [String: PublishBinding],
+                lastAppliedCollection: String? = nil) {
         self.synced = synced
         self.published = published
+        self.lastAppliedCollection = lastAppliedCollection
     }
 
     public struct SyncedBinding: Equatable, Sendable {
@@ -40,21 +46,29 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         /// own only adds to it, and only the author, pressing Publish in the sheet after reading
         /// the preview, replaces it.
         public var markedValues: Set<String>
-        public init(folder: String, lastWrittenHash: String?, markedValues: Set<String> = []) {
+        /// Paths the author let travel as written in this collection's document, pressing Release
+        /// and then Publish in the sheet after reading the preview, although this machine keeps them
+        /// back elsewhere: on another collection's list, or as a folder it binds.
+        public var releasedValues: Set<String>
+        public init(folder: String, lastWrittenHash: String?, markedValues: Set<String> = [],
+                    releasedValues: Set<String> = []) {
             self.folder = folder
             self.lastWrittenHash = lastWrittenHash
             self.markedValues = markedValues
+            self.releasedValues = releasedValues
         }
     }
 
     // MARK: Encode
 
     public func encode() -> JSONValue {
-        .object([
+        var root: [String: JSONValue] = [
             "version": .int(Self.formatVersion),
             "synced": .object(synced.mapValues { $0.encode() }),
             "published": .object(published.mapValues { $0.encode() }),
-        ])
+        ]
+        if let lastAppliedCollection { root["lastAppliedCollection"] = .string(lastAppliedCollection) }
+        return .object(root)
     }
 
     // MARK: Decode
@@ -73,7 +87,10 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         for (name, value) in try CollectionsFile.objectValue(root["published"], "published") {
             published[name] = try PublishBinding.decode(value, what: "published \"\(name)\"")
         }
-        return CollectionsLocalCache(synced: synced, published: published)
+        return CollectionsLocalCache(
+            synced: synced, published: published,
+            // Absent in a cache written before it was recorded: the next apply records it.
+            lastAppliedCollection: try CollectionsFile.optionalString(root["lastAppliedCollection"], "lastAppliedCollection"))
     }
 
     // MARK: Disk
@@ -96,7 +113,8 @@ public struct CollectionsLocalCache: Equatable, Sendable {
     public func reconciled(with file: CollectionsFile) -> CollectionsLocalCache {
         CollectionsLocalCache(
             synced: synced.filter { file.kind(of: $0.key) == .synced },
-            published: published.filter { file.collections[$0.key]?.publish != nil })
+            published: published.filter { file.collections[$0.key]?.publish != nil },
+            lastAppliedCollection: lastAppliedCollection)
     }
 }
 
@@ -131,6 +149,9 @@ extension CollectionsLocalCache.PublishBinding {
         if !markedValues.isEmpty {
             object["markedValues"] = .array(markedValues.sorted { $0.ordinallyPrecedes($1) }.map(JSONValue.string))
         }
+        if !releasedValues.isEmpty {
+            object["releasedValues"] = .array(releasedValues.sorted { $0.ordinallyPrecedes($1) }.map(JSONValue.string))
+        }
         return .object(object)
     }
 
@@ -141,6 +162,7 @@ extension CollectionsLocalCache.PublishBinding {
             lastWrittenHash: try CollectionsFile.optionalString(object["lastWrittenHash"], "\(what) lastWrittenHash"),
             // Absent in a cache written before the list was kept: nothing marked yet, which the
             // next write fills in.
-            markedValues: try CollectionsFile.stringSet(object["markedValues"], "\(what) markedValues"))
+            markedValues: try CollectionsFile.stringSet(object["markedValues"], "\(what) markedValues"),
+            releasedValues: try CollectionsFile.stringSet(object["releasedValues"], "\(what) releasedValues"))
     }
 }

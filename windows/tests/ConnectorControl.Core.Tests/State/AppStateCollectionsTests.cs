@@ -1273,17 +1273,17 @@ public class AppStateCollectionsTests
         Assert.Equal(before, File.ReadAllBytes(file));
         // Export… goes through the dialog, which holds the lost mark and will not write.
         var exported = h.Dir.File(Path.Combine("out", "copy.json"));
-        Assert.Equal(PublishModel.UnresolvedMarkNote("ledger"), new PublishModel(state, state.ActiveCollection).Export(exported));
+        Assert.Equal(PublishModel.UnresolvedMarkNote("ledger", "server_path"), new PublishModel(state, state.ActiveCollection).Export(exported));
         Assert.False(File.Exists(exported));
 
         // Re-ticking in the Publish dialog records the path where it is now, and clears it.
         var dialog = new PublishModel(state, state.ActiveCollection);
         var row = dialog.PathRows.Single(r => r.Connector == "ledger" && r.Value == edited);
         Assert.False(row.Marked);   // a mark that lost its argument ticks nothing
-        // The row that could be the lost path carries its name and its hint.
+        row.Marked = true;
+        // The tick that answers the lost mark takes its name and its hint.
         Assert.Equal("server_path", row.Name);
         Assert.Equal("your ledger clone", row.Hint);
-        row.Marked = true;
         Assert.Null(dialog.Publish());
         Assert.Null(state.PublishError);
         Assert.Equal(["--quiet", "${CC_NEEDS:server_path}"], LedgerArgs(file));
@@ -1366,7 +1366,8 @@ public class AppStateCollectionsTests
 
         // The other machine deleted the marked row: its sidecar arrives first, without the mark.
         SidecarLandsFirst(h, state, intent => intent.ReplacingPathMarks("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark>()));
-        Assert.Equal(AppState.PathMarkMovedError("ledger"), state.PublishError?.Message);
+        // Nothing moved: the path is kept back where it sits.
+        Assert.Equal(AppState.KeptPathCarriedError("ledger", "local.args[0]"), state.PublishError?.Message);
         // The path is still in the master list here, so nothing is written.
         Assert.Equal(before, File.ReadAllBytes(file));
         Assert.False(JsonText.FileContains(file, MarkedPath));
@@ -1390,7 +1391,7 @@ public class AppStateCollectionsTests
         var file = PublishMarkedLedger(h, state, MarkedPath);
         var before = File.ReadAllBytes(file);
         SidecarLandsFirst(h, state, intent => intent.MovingConnector("ledger", null));
-        Assert.Equal(AppState.PathMarkMovedError("ledger"), state.PublishError?.Message);
+        Assert.Equal(AppState.KeptPathCarriedError("ledger", "local.args[0]"), state.PublishError?.Message);
         Assert.Equal(before, File.ReadAllBytes(file));
         Assert.False(JsonText.FileContains(file, MarkedPath));
     }
@@ -1429,7 +1430,7 @@ public class AppStateCollectionsTests
         using var relaunched = h.Create();
         // Claude's config brought it back.
         Assert.True(relaunched.Store.Collections[relaunched.ActiveCollection].Mcps.ContainsKey("ledger"));
-        Assert.Equal(AppState.PathMarkMovedError("ledger"), relaunched.PublishError?.Message);
+        Assert.Equal(AppState.KeptPathCarriedError("ledger", "local.args[0]"), relaunched.PublishError?.Message);
         Assert.Equal(before, File.ReadAllBytes(file));
     }
 
@@ -1441,8 +1442,8 @@ public class AppStateCollectionsTests
         var file = PublishMarkedLedger(h, state, MarkedPath);
         var before = File.ReadAllBytes(file);
         // Still marked where it was, and now also inside a flag nothing marks.
-        RewriteLedger(state, MarkedPath, $"--config={MarkedPath}.config");
-        Assert.Equal(AppState.PathMarkMovedError("ledger"), state.PublishError?.Message);
+        RewriteLedger(state, MarkedPath, $"--script={MarkedPath}");
+        Assert.Equal(AppState.KeptPathCarriedError("ledger", "local.args[1]"), state.PublishError?.Message);
         Assert.Equal(before, File.ReadAllBytes(file));
     }
 
@@ -1455,9 +1456,15 @@ public class AppStateCollectionsTests
         var dialog = new PublishModel(state, state.ActiveCollection);
         var row = dialog.PathRows.Single(r => r.Value == MarkedPath);
         Assert.True(row.Marked);
-        // The author unticks it, reads the preview, and presses Publish: that is the reviewed answer.
+        // Unticked, the path is listed as kept back and holds Publish, until the author releases it
+        // after reading the preview: that is the reviewed answer.
         row.Marked = false;
         Assert.True(JsonText.Contains(dialog.Preview, MarkedPath));   // the preview shows the path as it will travel
+        Assert.Equal(["ledger local.args[0]"], dialog.KeptPaths.Select(k => $"{k.Connector} {k.Field}"));
+        Assert.False(dialog.CanPublish);
+        Assert.Equal(PublishModel.KeptPathNote("ledger", "local.args[0]"), dialog.Publish());
+        dialog.ReleaseKeptPath(MarkedPath);
+        Assert.True(dialog.CanPublish);
         Assert.Null(dialog.Publish());
         Assert.Null(state.PublishError);
         Assert.Empty(MarkedValues(state)!);
@@ -1469,14 +1476,16 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath, $"--config={MarkedPath}.config")), null));
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath, $"--script={MarkedPath}")), null));
         var dialog = new PublishModel(state, state.ActiveCollection);
         dialog.PathRows.Single(r => r.Value == MarkedPath).Marked = true;
+        Assert.Equal(["ledger local.args[1]"], dialog.KeptPaths.Select(k => $"{k.Connector} {k.Field}"));
+        Assert.False(dialog.CanExport);
         var output = h.Dir.File(Path.Combine("away", "copy.json"));
-        Assert.Equal(AppState.PathMarkMovedError("ledger"), dialog.Export(output));
+        Assert.Equal(PublishModel.KeptPathNote("ledger", "local.args[1]"), dialog.Export(output));
         Assert.False(File.Exists(output));
-        // The preview says why rather than show it.
-        Assert.Equal(AppState.PathMarkMovedError("ledger"), dialog.Preview);
+        // The preview shows where it sits.
+        Assert.True(JsonText.Contains(dialog.Preview, $"--script={MarkedPath}"));
     }
 
     /// <summary>
@@ -1536,7 +1545,7 @@ public class AppStateCollectionsTests
         using var relaunched = h.Create();
         // The old name came back.
         Assert.True(relaunched.Store.Collections[relaunched.ActiveCollection].Mcps.ContainsKey("ledger"));
-        Assert.Equal(AppState.PathMarkMovedError("ledger"), relaunched.PublishError?.Message);
+        Assert.Equal(AppState.KeptPathCarriedError("ledger", "local.args[0]"), relaunched.PublishError?.Message);
         Assert.Equal(PublishErrorKind.BlockedForReview, relaunched.PublishError?.Kind);
         Assert.Equal(before, File.ReadAllBytes(file));
     }
@@ -1548,25 +1557,198 @@ public class AppStateCollectionsTests
         using var state = h.Create();
         var file = PublishMarkedLedger(h, state, MarkedPath);
         var before = File.ReadAllBytes(file);
-        var carriers = new (string Name, JsonValue Config)[]
+        var carriers = new (string Name, string Field, JsonValue Config)[]
         {
-            ("in the command", JsonValue.Object(("command", JsonValue.String(MarkedPath + "/bin/start")), ("args", JsonValue.Array([])))),
-            ("in a remote's arguments", RemotePattern.Encode(new RemoteConfig("https://mcp.example.com/", RemoteAuth.Auto,
+            ("in the command", "local.command",
+             JsonValue.Object(("command", JsonValue.String(MarkedPath + "/bin/start")), ("args", JsonValue.Array([])))),
+            ("in a remote's arguments", "remote.extraArgs[1]", RemotePattern.Encode(new RemoteConfig("https://mcp.example.com/", RemoteAuth.Auto,
                 RemoteLaunchStyle.CmdNpx, extraArgs: ["--config", MarkedPath], package: "mcp-remote"))),
-            ("in an additional field", JsonValue.Object(
+            ("in an additional field", "additional.cwd", JsonValue.Object(
                 ("command", JsonValue.String("node")), ("args", JsonValue.Array([JsonValue.String("x.js")])),
                 ("cwd", JsonValue.String(MarkedPath)))),
         };
-        foreach (var (name, config) in carriers)
+        foreach (var (name, field, config) in carriers)
         {
             Assert.Null(state.Upsert(name, new McpEntry(config), null));
-            Assert.Equal(AppState.PathMarkMovedError(name), state.PublishError?.Message);
+            Assert.Equal(AppState.KeptPathCarriedError(name, field), state.PublishError?.Message);
             Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
             Assert.Equal(before, File.ReadAllBytes(file));
             state.Remove(name);
             // With it gone there is nothing left to keep back.
             Assert.Null(state.PublishError);
         }
+    }
+
+    // MARK: across collections
+
+    /// <summary>
+    /// Team (active, published) runs <c>ledger</c> with a marked path and <c>x</c> with the token;
+    /// Clients, published too, runs <c>crm</c> beside the harness's connectors. Claude's file holds
+    /// Team's.
+    /// </summary>
+    private static (string Team, string TeamFolder, string ClientsDoc) TwoPublishedCollections(AppStateHarness h, AppState s)
+    {
+        var team = s.ActiveCollection;
+        Assert.Null(s.Upsert("ledger", new McpEntry(true, NodeWith(MarkedPath)), null));
+        Assert.Null(s.Upsert("x", new McpEntry(true, NodeWith($"{Placeholder.DirectoryToken}/tools/srv.js")), null));
+        Assert.Null(s.StartPublishing(team, PublishFolder(h, "pubTeam"), new PublishIntent(
+            [],
+            [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark> { [ArgPointer(0)] = new("server_path", null, MarkedPath) })],
+            []), new HashSet<string>([MarkedPath], StringComparer.Ordinal)));
+        Assert.Null(s.CreateCollection("Clients"));
+        s.Remove("ledger", "Clients");
+        s.Remove("x", "Clients");
+        Assert.Null(s.Upsert("crm", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("crm-mcp")))), null, "Clients"));
+        var clients = PublishFolder(h, "pubClients");
+        Assert.Null(s.StartPublishing("Clients", clients, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
+        s.SwitchCollection(team);
+        var teamFolder = s.CollectionsCache.Published[team].Folder;
+        return (team, teamFolder, Path.Combine(clients, Slug.Make("Clients") + ".json"));
+    }
+
+    /// <summary>
+    /// The other machine made Clients active while this one was off. Claude's file still holds
+    /// Team's connectors, and they are not Clients' to take in: nothing is ingested, and the active
+    /// collection is applied over the file.
+    /// </summary>
+    [Fact]
+    public void ARelaunchAfterTheActiveCollectionChangedElsewhereTakesNothingFromClaudesFile()
+    {
+        using var h = new AppStateHarness();
+        string team, teamFolder, clientsDoc;
+        using (var first = h.Create())
+        {
+            (team, teamFolder, clientsDoc) = TwoPublishedCollections(h, first);
+            // Every apply records what Claude's file holds.
+            Assert.Equal(team, first.CollectionsCache.LastAppliedCollection);
+        }
+        var store = h.StoreOnDisk();
+        store.ActiveCollection = "Clients";
+        MasterStoreIO.Save(store, h.MasterStorePath);
+
+        using var relaunched = h.Create();
+        Assert.False(relaunched.Store.Collections["Clients"].Mcps.ContainsKey("ledger"));
+        Assert.False(relaunched.Store.Collections["Clients"].Mcps.ContainsKey("x"));
+        Assert.False(JsonText.FileContains(clientsDoc, MarkedPath));
+        Assert.False(JsonText.FileContains(clientsDoc, teamFolder));
+        // Claude's file was written from the active collection.
+        Assert.False(h.ClaudeServers().ContainsKey("ledger"));
+        Assert.Equal("Clients", relaunched.CollectionsCache.LastAppliedCollection);
+        Assert.Null(relaunched.PublishError);
+    }
+
+    /// <summary>
+    /// A file restored with no record of its collection goes into the active one, as a restore
+    /// always did; the other collection's marked path and folder are still kept out of its document.
+    /// </summary>
+    [Fact]
+    public void ARestoreWithNoRecordedCollectionStillKeepsAnotherCollectionsPathsBack()
+    {
+        using var h = new AppStateHarness();
+        using var s = h.Create();
+        var (_, teamFolder, clientsDoc) = TwoPublishedCollections(h, s);
+        var before = File.ReadAllBytes(clientsDoc);
+        var backup = h.Dir.File("backup.json");
+        File.Copy(h.ClaudeConfigPath, backup);
+        s.SwitchCollection("Clients");
+        s.RestoreClaudeConfig(backup);
+        Assert.Equal("Clients", s.ActiveCollection);
+        Assert.Equal("Clients", s.PublishError?.Collection);
+        Assert.Equal(AppState.KeptPathCarriedError("ledger", "local.args[0]"), s.PublishError?.Message);
+        Assert.Equal(PublishErrorKind.BlockedForReview, s.PublishError?.Kind);
+        Assert.Equal(before, File.ReadAllBytes(clientsDoc));
+        Assert.False(JsonText.FileContains(clientsDoc, MarkedPath));
+        Assert.False(JsonText.FileContains(clientsDoc, teamFolder));
+    }
+
+    /// <summary>
+    /// A backup records the collection Claude's file held, and its restore goes back there, which
+    /// becomes the active collection again: never into whichever collection is active now.
+    /// </summary>
+    [Fact]
+    public void ARestoreGoesBackIntoTheCollectionItsBackupWasTakenFrom()
+    {
+        using var h = new AppStateHarness();
+        using var s = h.Create();
+        var (team, teamFolder, clientsDoc) = TwoPublishedCollections(h, s);
+        s.SwitchCollection("Clients");   // backs up Team's file first, recorded as Team's
+        var backup = s.Service.Backups.Backups("claude_desktop_config")[0];
+        Assert.Equal(team, BackupCollections.CollectionOf(backup, h.BackupsDir));
+        var clientsBefore = File.ReadAllBytes(clientsDoc);
+
+        s.RestoreClaudeConfig(backup);
+        Assert.Equal(team, s.ActiveCollection);
+        // Nothing of Team's went into Clients.
+        Assert.False(s.Store.Collections["Clients"].Mcps.ContainsKey("ledger"));
+        // Team keeps its token.
+        Assert.Equal([$"{Placeholder.DirectoryToken}/tools/srv.js"], ArgsOf(s.Store.Collections[team].Mcps["x"].Config));
+        Assert.Equal(clientsBefore, File.ReadAllBytes(clientsDoc));
+        Assert.False(JsonText.FileContains(clientsDoc, teamFolder));
+        Assert.Null(s.PublishError);
+        Assert.Equal(team, s.CollectionsCache.LastAppliedCollection);
+    }
+
+    [Fact]
+    public void ARestoreOfABackupWhoseCollectionIsGoneIsRefused()
+    {
+        using var h = new AppStateHarness();
+        using var s = h.Create();
+        Assert.Null(s.CreateCollection("Gone"));
+        // A collection of its own content: a backup identical to the newest belongs to whichever
+        // collection last wrote it.
+        Assert.Null(s.Upsert("gone-only", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("g")))), null, "Gone"));
+        s.Apply();
+        s.SwitchCollection("Default");   // backs up what Gone put in Claude's file, recorded as Gone's
+        var backup = s.Service.Backups.Backups("claude_desktop_config")[0];
+        Assert.Equal("Gone", BackupCollections.CollectionOf(backup, h.BackupsDir));
+        Assert.Null(s.DeleteCollection("Gone"));
+        var claudeBefore = File.ReadAllBytes(h.ClaudeConfigPath);
+        var storeBefore = s.Store.Clone();
+        var refused = Assert.Throws<RestoreCollectionGoneException>(() => s.RestoreClaudeConfig(backup));
+        Assert.Equal("Gone", refused.Collection);
+        Assert.Equal(AppState.RestoreCollectionGoneError("Gone"), refused.Message);
+        // Nothing was restored.
+        Assert.Equal(claudeBefore, File.ReadAllBytes(h.ClaudeConfigPath));
+        Assert.Equal(storeBefore, s.Store);
+    }
+
+    /// <summary>
+    /// Renaming a collection carries what names it outside the store: the record of what Claude's
+    /// file holds, and every backup taken from it, which still restores into it under the new name.
+    /// </summary>
+    [Fact]
+    public void ARenameCarriesTheRecordsOfWhereClaudesFileCameFrom()
+    {
+        using var h = new AppStateHarness();
+        using var s = h.Create();
+        Assert.Null(s.CreateCollection("Team"));
+        Assert.Null(s.Upsert("team-only", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("t")))), null, "Team"));
+        s.Apply();
+        s.SwitchCollection("Default");   // backs up what Team put in Claude's file
+        var backup = s.Service.Backups.Backups("claude_desktop_config")[0];
+        Assert.Null(s.RenameCollection("Team", "Team A"));
+        Assert.Equal("Team A", BackupCollections.CollectionOf(backup, h.BackupsDir));
+        Assert.Null(s.RenameCollection("Default", "Main"));
+        Assert.Equal("Main", s.CollectionsCache.LastAppliedCollection);
+        s.RestoreClaudeConfig(backup);
+        Assert.Equal("Team A", s.ActiveCollection);
+        Assert.True(s.Store.Collections["Team A"].Mcps.ContainsKey("team-only"));
+    }
+
+    /// <summary>A copy of the marked path in an <c>additional</c> field is kept back, and the refusal says where it sits rather than that the mark moved.</summary>
+    [Fact]
+    public void ACopyOfAMarkedPathSaysWhereItSits()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var file = PublishMarkedLedger(h, state, MarkedPath);
+        var before = File.ReadAllBytes(file);
+        Assert.Null(state.Upsert("ledger", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String(MarkedPath)])),
+            ("description", JsonValue.String($"runs {MarkedPath}")))), "ledger"));
+        Assert.Equal(AppState.KeptPathCarriedError("ledger", "additional.description"), state.PublishError?.Message);
+        Assert.Equal(before, File.ReadAllBytes(file));
     }
 
     // MARK: the directory token on the publishing machine
@@ -1734,11 +1916,12 @@ public class AppStateCollectionsTests
         Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
         Assert.Equal(withSibling, File.ReadAllBytes(file));
 
+        // The dialog lists the folder where it sits, and holds Export until it is answered.
         var dialog = new PublishModel(state, state.ActiveCollection);
+        Assert.Equal([$"typed local.args[0] {bound}"], dialog.KeptPaths.Select(k => $"{k.Connector} {k.Field} {k.Value}"));
         var output = h.Dir.File(Path.Combine("away", "copy.json"));
-        Assert.Equal(AppState.PublishFolderCarriedError("typed"), dialog.Export(output));
+        Assert.Equal(PublishModel.KeptPathNote("typed", "local.args[0]"), dialog.Export(output));
         Assert.False(File.Exists(output));
-        Assert.Equal(AppState.PublishFolderCarriedError("typed"), dialog.Preview);
     }
 
     // MARK: import as copies

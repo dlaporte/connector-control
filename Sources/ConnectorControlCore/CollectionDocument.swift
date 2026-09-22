@@ -23,6 +23,74 @@ public enum PublishIntentError: Error, Equatable {
     /// This connector carries, as written, the folder this machine publishes the collection into.
     /// It is the author's own folder, and a subscriber's copy stands for it with the token.
     case publishFolderCarried(connector: String)
+    /// This connector carries, as written in `field`, a path this machine keeps back: a copy of a
+    /// path marked in it, or a path on one of this machine's lists of marked paths.
+    case keptPathCarried(connector: String, field: String)
+}
+
+/// A path this machine keeps back, found as written in a document.
+public struct KeptValueFinding: Equatable, Sendable {
+    public var connector: String
+    /// Its place in the connector's document form, e.g. `local.args[1]` or `additional.cwd`.
+    public var field: String
+    public var value: String
+    public init(connector: String, field: String, value: String) {
+        self.connector = connector
+        self.field = field
+        self.value = value
+    }
+}
+
+/// How a path kept back is recognised in a string.
+///
+/// Mirror: `KeptValue` in windows/src/ConnectorControl.Core/CollectionDocument.cs
+public enum KeptValue {
+    /// Whether `text` holds `value` as written. Any value counts as the whole string. An absolute
+    /// or home path also counts where it stands as a path of its own inside a longer string:
+    /// after the start, a space, a quote, `=`, `:` or `,`, and before the end, a separator, a
+    /// space, a quote, `:` or `,` — so "--root=/share/x" holds "/share" and "/share-tools" does not.
+    /// A short relative value such as "." counts only as the whole string, or it would be found in
+    /// every connector. The value also counts as JSON spells it, as it reads inside a JSON blob
+    /// carried as a single argument. Both sides are compared in NFC, so an accented path matches
+    /// in either normalization on both platforms.
+    public static func holds(_ text: String, _ value: String) -> Bool {
+        let text = nfc(text), value = nfc(value)
+        guard !value.isEmpty else { return false }
+        if text == value { return true }
+        guard isAbsolute(value) else { return false }
+        for form in writtenForms(value) {
+            var rest = text[...]
+            while let range = rest.range(of: form, options: .literal) {
+                let before = range.lowerBound == text.startIndex ? nil : text[text.index(before: range.lowerBound)]
+                let after = range.upperBound == text.endIndex ? nil : text[range.upperBound]
+                if before.map(openers.contains) ?? true, after.map(closers.contains) ?? true { return true }
+                rest = text[text.index(after: range.lowerBound)...]
+            }
+        }
+        return false
+    }
+
+    /// `text` in Unicode NFC, the form every kept-value comparison is made in.
+    public static func nfc(_ text: String) -> String { text.precomposedStringWithCanonicalMapping }
+
+    /// An absolute or home path: `/…`, `~…`, a UNC `\\…` path, or a drive letter with `:\` or `:/`.
+    static func isAbsolute(_ value: String) -> Bool {
+        if value.hasPrefix("/") || value.hasPrefix("~") || value.hasPrefix("\\\\") { return true }
+        let scalars = Array(value.unicodeScalars)
+        return scalars.count >= 3 && CharacterSet.letters.contains(scalars[0]) && scalars[1] == ":"
+            && (scalars[2] == "\\" || scalars[2] == "/")
+    }
+
+    private static let openers: Set<Character> = [" ", "\"", "=", ":", ","]
+    private static let closers: Set<Character> = ["/", "\\", " ", "\"", ":", ","]
+
+    /// `value` as written, and as a JSON string would spell it: backslashes and quotes escaped,
+    /// with and without the slash escaped too.
+    static func writtenForms(_ value: String) -> [String] {
+        let escaped = value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        return Array(Set([value, value.replacingOccurrences(of: "/", with: "\\/"),
+                          escaped, escaped.replacingOccurrences(of: "/", with: "\\/")]))
+    }
 }
 
 /// What the author ticked in the Publish sheet: which env values travel as values rather than
@@ -99,14 +167,15 @@ public struct PublishIntent: Equatable, Sendable {
                 }
                 continue
             }
-            if let index, args[index] == value, placed[index] == nil {
+            if let index, KeptValue.nfc(args[index]) == KeptValue.nfc(value), placed[index] == nil {
                 placed[index] = mark
             } else {
                 following.append((pointer, mark))
             }
         }
         for (pointer, mark) in following {
-            let holders = args.indices.filter { args[$0] == mark.value }
+            let value = KeptValue.nfc(mark.value ?? "")
+            let holders = args.indices.filter { KeptValue.nfc(args[$0]) == value }
             if holders.count == 1, placed[holders[0]] == nil {
                 placed[holders[0]] = mark
             } else {
@@ -373,13 +442,13 @@ public struct CollectionDocument: Equatable, Sendable {
     // MARK: Export
 
     /// Throws `PublishIntentError.pathMarkMoved` for the first connector, by name, whose path
-    /// marks cannot all be placed (`PublishIntent.placePathMarks`); for a local connector that
-    /// also holds a placed mark's text somewhere unmarked that travels — another argument, the
-    /// command or a shared environment value — since a duplicate of a marked path is that path;
-    /// and for a remote
-    /// connector that still carries a mark with a value: a remote connector's arguments are
-    /// built by each importer, so a mark there was made while it was a local one, and the path
-    /// it stood for may now be travelling in its extra arguments.
+    /// marks cannot all be placed (`PublishIntent.placePathMarks`), and for a remote connector
+    /// that still carries a mark with a value: a remote connector's arguments are built by each
+    /// importer, so a mark there was made while it was a local one, and the path it stood for may
+    /// now be travelling in its extra arguments. Throws `PublishIntentError.keptPathCarried` for a
+    /// local connector that also holds a placed mark's text somewhere unmarked that travels —
+    /// another argument, the command or a shared environment value — since a duplicate of a marked
+    /// path is that path.
     public static func export(name: String, author: String?, origin: String?, exported: String,
                               connectors: [String: JSONValue], intent: PublishIntent) throws -> CollectionDocument {
         var out: [String: Connector] = [:]
@@ -421,11 +490,8 @@ public struct CollectionDocument: Equatable, Sendable {
                 var args = model.args
                 let placement = PublishIntent.placePathMarks(marks, in: model.args)
                 guard placement.unresolved.isEmpty else { throw PublishIntentError.pathMarkMoved(connector: connectorName) }
-                let marked = Set(placement.placed.keys.map { model.args[$0] })
-                let unmarked = model.args.indices.filter { placement.placed[$0] == nil }.map { model.args[$0] }
-                    + [model.command] + model.env.filter { shared.contains($0.key) }.map(\.value)
-                guard !unmarked.contains(where: marked.contains) else {
-                    throw PublishIntentError.pathMarkMoved(connector: connectorName)
+                if let copy = CollectionDocument.copies(in: model, placed: placement.placed, shared: shared).first {
+                    throw PublishIntentError.keptPathCarried(connector: connectorName, field: copy.field)
                 }
                 for i in placement.placed.keys.sorted() {
                     guard let mark = placement.placed[i] else { continue }
@@ -445,62 +511,78 @@ public struct CollectionDocument: Equatable, Sendable {
         return CollectionDocument(name: name, author: author, origin: origin, exported: exported, connectors: out)
     }
 
-    /// The first connector, in ordinal order, any of whose strings holds one of `values` as
-    /// written, or nil. A string holding a value counts wherever it sits in it — a path inside a
-    /// longer path, or inside a flag — and so does the value as JSON would escape it, which is how
-    /// it reads inside a JSON blob carried as a single argument. Empty values are ignored: every
-    /// string holds one.
-    public func connectorCarrying(_ values: Set<String>) -> String? {
-        let forms = values.filter { !$0.isEmpty }.flatMap(CollectionDocument.writtenForms)
-        guard !forms.isEmpty else { return nil }
+    /// Every copy of a marked path that would travel as written, connector by connector in ordinal
+    /// order: another argument, the command or a shared environment value holding a placed mark's
+    /// text. The exporter refuses the first; the Publish sheet lists them all.
+    public static func copiesOfMarkedPaths(in connectors: [String: JSONValue], intent: PublishIntent) -> [KeptValueFinding] {
+        connectors.keys.sorted(by: { $0.ordinallyPrecedes($1) }).flatMap { name -> [KeptValueFinding] in
+            guard let config = connectors[name], RemotePattern.decode(config) == nil else { return [] }
+            let model = FormMapper.analyze(config).model
+            let placed = PublishIntent.placePathMarks(intent.pathMarks[name] ?? [:], in: model.args).placed
+            return copies(in: model, placed: placed, shared: intent.shareValues[name] ?? []).map {
+                KeptValueFinding(connector: name, field: $0.field, value: $0.text)
+            }
+        }
+    }
+
+    private static func copies(in model: FormModel, placed: [Int: PublishIntent.PathMark],
+                               shared: Set<String>) -> [(field: String, text: String)] {
+        let marked = Set(placed.keys.map { KeptValue.nfc(model.args[$0]) })
+        guard !marked.isEmpty else { return [] }
+        var unmarked: [(field: String, text: String)] = model.args.indices
+            .filter { placed[$0] == nil }.map { ("local.args[\($0)]", model.args[$0]) }
+        unmarked.append(("local.command", model.command))
+        for key in model.env.keys.sorted(by: { $0.ordinallyPrecedes($1) }) where shared.contains(key) {
+            unmarked.append(("env.\(key).value", model.env[key] ?? ""))
+        }
+        return unmarked.filter { marked.contains(KeptValue.nfc($0.text)) }
+    }
+
+    /// Every place, connector by connector in ordinal order and field by field, where one of
+    /// `values` stands as written (`KeptValue.holds`). The field is the place in the connector's
+    /// document form — `local.command`, `local.args[1]`, `env.LOG_DIR.value`, `env.LOG_DIR.hint`,
+    /// `needs.server_path.hint`, `additional.cwd`, `remote.extraArgs[0]` — so the author can find it
+    /// in the preview; an environment variable's, a need's or an additional field's own name counts
+    /// as a place too. Empty values are ignored.
+    public func findings(of values: Set<String>) -> [KeptValueFinding] {
+        let kept = values.filter { !$0.isEmpty }.sorted { $0.ordinallyPrecedes($1) }
+        guard !kept.isEmpty else { return [] }
+        var out: [KeptValueFinding] = []
         for name in connectors.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
             guard let encoded = connectors[name]?.encode() else { continue }
-            let strings = encoded.stringLeaves.map(\.value) + CollectionDocument.keys(in: encoded)
-            if strings.contains(where: { string in forms.contains { string.contains($0) } }) { return name }
+            for place in CollectionDocument.places(in: encoded) {
+                for value in kept where KeptValue.holds(place.text, value) {
+                    out.append(KeptValueFinding(connector: name, field: place.field, value: value))
+                }
+            }
         }
-        return nil
+        return out
     }
 
-    /// The first connector, in ordinal order, any of whose strings holds `folder` as a folder —
-    /// followed by a separator, a closing quote or the end of the string — as written or as JSON
-    /// would escape it, or nil. A folder name that merely begins another name does not count, so
-    /// "/share" is not found in "/share-tools".
-    public func connectorCarrying(folder: String) -> String? {
-        guard !folder.isEmpty else { return nil }
-        let forms = CollectionDocument.writtenForms(folder)
-        for name in connectors.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
-            guard let encoded = connectors[name]?.encode() else { continue }
-            let strings = encoded.stringLeaves.map(\.value) + CollectionDocument.keys(in: encoded)
-            if strings.contains(where: { string in forms.contains { CollectionDocument.holdsFolder(string, $0) } }) { return name }
+    /// Every string in a connector's document form with the field it sits in, keys sorted ordinally
+    /// so both platforms walk alike. Keys count only below `env`, `needs` and `additional`, the
+    /// objects whose names the author chose; the rest are the format's own.
+    static func places(in json: JSONValue) -> [(field: String, text: String)] {
+        var out: [(field: String, text: String)] = []
+        func walk(_ value: JSONValue, _ field: String, namesCount: Bool) {
+            switch value {
+            case .string(let text):
+                out.append((field, text))
+            case .array(let items):
+                for (index, item) in items.enumerated() { walk(item, field + "[\(index)]", namesCount: false) }
+            case .object(let object):
+                for key in object.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+                    guard let child = object[key] else { continue }
+                    let path = field.isEmpty ? key : field + "." + key
+                    if namesCount { out.append((path, key)) }
+                    walk(child, path, namesCount: field.isEmpty && ["env", "needs", "additional"].contains(key))
+                }
+            default:
+                break
+            }
         }
-        return nil
-    }
-
-    private static func holdsFolder(_ string: String, _ folder: String) -> Bool {
-        var rest = Substring(string)
-        while let range = rest.range(of: folder) {
-            if range.upperBound == rest.endIndex || "/\\\"".contains(rest[range.upperBound]) { return true }
-            rest = rest[range.upperBound...]
-        }
-        return false
-    }
-
-    /// `value` as written, and as a JSON string would spell it: backslashes and quotes escaped,
-    /// with and without the slash escaped too.
-    static func writtenForms(_ value: String) -> [String] {
-        let escaped = value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        return Array(Set([value, value.replacingOccurrences(of: "/", with: "\\/"),
-                          escaped, escaped.replacingOccurrences(of: "/", with: "\\/")]))
-    }
-
-    /// Every object key in `json`, at any depth: a value could as well be a key of an
-    /// `additional` field as a string inside one.
-    private static func keys(in json: JSONValue) -> [String] {
-        switch json {
-        case .object(let object): return Array(object.keys) + object.values.flatMap(keys(in:))
-        case .array(let items): return items.flatMap(keys(in:))
-        default: return []
-        }
+        walk(json, "", namesCount: false)
+        return out
     }
 
     /// "args[N] looks like a credential" / "env.NAME looks like a credential" lines for the

@@ -94,7 +94,8 @@ public sealed class RestoreModel : ObservableObject
             CloseRequested?.Invoke();
             return true;
         }
-        catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException or JsonException
+                                   or RestoreCollectionGoneException)
         {
             RestoreError = ex.Message;         // raw message, not Friendly()
             state.LastError = ex.Message;

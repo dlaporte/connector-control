@@ -62,6 +62,101 @@ public sealed class PublishFolderCarriedException(string connector)
 }
 
 /// <summary>
+/// <see cref="Connector"/> carries, as written in <see cref="Field"/>, a path this machine keeps
+/// back: a copy of a path marked in it, or a path on one of this machine's lists of marked paths.
+/// What the user reads is <c>AppState.KeptPathCarriedError</c>.
+///
+/// Mirror: <c>PublishIntentError.keptPathCarried</c> in Sources/ConnectorControlCore/CollectionDocument.swift
+/// </summary>
+public sealed class KeptPathCarriedException(string connector, string field)
+    : Exception($"\"{connector}\" carries a kept-back path in {field}")
+{
+    public string Connector { get; } = connector;
+
+    /// <summary>Its place in the connector's document form, e.g. <c>local.args[1]</c> or <c>additional.cwd</c>.</summary>
+    public string Field { get; } = field;
+}
+
+/// <summary>A path this machine keeps back, found as written in a document.</summary>
+/// <param name="Field">Its place in the connector's document form, e.g. <c>local.args[1]</c> or <c>additional.cwd</c>.</param>
+public sealed record KeptValueFinding(string Connector, string Field, string Value);
+
+/// <summary>
+/// How a path kept back is recognised in a string.
+///
+/// Mirror: <c>KeptValue</c> in Sources/ConnectorControlCore/CollectionDocument.swift
+/// </summary>
+public static class KeptValue
+{
+    /// <summary>
+    /// Whether <paramref name="text"/> holds <paramref name="value"/> as written. Any value counts as
+    /// the whole string. An absolute or home path also counts where it stands as a path of its own
+    /// inside a longer string: after the start, a space, a quote, <c>=</c>, <c>:</c> or <c>,</c>, and
+    /// before the end, a separator, a space, a quote, <c>:</c> or <c>,</c> — so "--root=/share/x"
+    /// holds "/share" and "/share-tools" does not. A short relative value such as "." counts only as
+    /// the whole string, or it would be found in every connector. The value also counts as JSON
+    /// spells it, as it reads inside a JSON blob carried as a single argument. Both sides are
+    /// compared in NFC, so an accented path matches in either normalization on both platforms.
+    /// </summary>
+    public static bool Holds(string text, string value)
+    {
+        text = Nfc(text);
+        value = Nfc(value);
+        if (value.Length == 0)
+        {
+            return false;
+        }
+        if (string.Equals(text, value, StringComparison.Ordinal))
+        {
+            return true;
+        }
+        if (!IsAbsolute(value))
+        {
+            return false;
+        }
+        foreach (var form in WrittenForms(value))
+        {
+            var start = 0;
+            int found;
+            while ((found = text.IndexOf(form, start, StringComparison.Ordinal)) >= 0)
+            {
+                var end = found + form.Length;
+                if ((found == 0 || Openers.Contains(text[found - 1])) && (end == text.Length || Closers.Contains(text[end])))
+                {
+                    return true;
+                }
+                start = found + 1;
+            }
+        }
+        return false;
+    }
+
+    /// <summary><paramref name="text"/> in Unicode NFC, the form every kept-value comparison is made in.</summary>
+    public static string Nfc(string text) => text.Normalize(System.Text.NormalizationForm.FormC);
+
+    /// <summary>An absolute or home path: <c>/…</c>, <c>~…</c>, a UNC <c>\\…</c> path, or a drive letter with <c>:\</c> or <c>:/</c>.</summary>
+    internal static bool IsAbsolute(string value) =>
+        value.StartsWith('/') || value.StartsWith('~') || value.StartsWith(@"\\", StringComparison.Ordinal)
+        || (value.Length >= 3 && char.IsLetter(value[0]) && value[1] == ':' && value[2] is '\\' or '/');
+
+    private static readonly HashSet<char> Openers = [' ', '"', '=', ':', ','];
+    private static readonly HashSet<char> Closers = ['/', '\\', ' ', '"', ':', ','];
+
+    /// <summary><paramref name="value"/> as written, and as a JSON string would spell it: backslashes and quotes escaped, with and without the slash escaped too.</summary>
+    internal static IReadOnlyList<string> WrittenForms(string value)
+    {
+        var escaped = value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
+        return new HashSet<string>(StringComparer.Ordinal)
+        {
+            value,
+            value.Replace("/", "\\/", StringComparison.Ordinal),
+            escaped,
+            escaped.Replace("/", "\\/", StringComparison.Ordinal),
+        }.ToList();
+    }
+}
+
+/// <summary>
 /// What the author ticked in the Publish sheet: which env values travel as values rather than as
 /// stripped hints, which arguments become markers, and the hint text for each.
 /// </summary>
@@ -174,7 +269,8 @@ public sealed class PublishIntent : IEquatable<PublishIntent>
                 }
                 continue;
             }
-            if (index is { } i && string.Equals(args[i], mark.Value, StringComparison.Ordinal) && !placed.ContainsKey(i))
+            if (index is { } i && string.Equals(KeptValue.Nfc(args[i]), KeptValue.Nfc(mark.Value), StringComparison.Ordinal)
+                && !placed.ContainsKey(i))
             {
                 placed[i] = mark;
             }
@@ -185,8 +281,9 @@ public sealed class PublishIntent : IEquatable<PublishIntent>
         }
         foreach (var (pointer, mark) in following)
         {
+            var value = KeptValue.Nfc(mark.Value ?? string.Empty);
             var holders = Enumerable.Range(0, args.Count)
-                .Where(i => string.Equals(args[i], mark.Value, StringComparison.Ordinal))
+                .Where(i => string.Equals(KeptValue.Nfc(args[i]), value, StringComparison.Ordinal))
                 .ToList();
             if (holders.Count == 1 && placed.TryAdd(holders[0], mark))
             {
@@ -822,13 +919,13 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
 
     /// <summary>
     /// Throws <see cref="PathMarkMovedException"/> for the first connector, by name, whose path
-    /// marks cannot all be placed (<see cref="PublishIntent.PlacePathMarks"/>); for a local
-    /// connector that also holds a placed mark's text somewhere unmarked that travels — another
-    /// argument, the command or a shared environment value — since a duplicate of a marked path is
-    /// that path; and for
-    /// a remote connector that still carries a mark with a value: a remote connector's arguments
-    /// are built by each importer, so a mark there was made while it was a local one, and the path
-    /// it stood for may now be travelling in its extra arguments.
+    /// marks cannot all be placed (<see cref="PublishIntent.PlacePathMarks"/>), and for a remote
+    /// connector that still carries a mark with a value: a remote connector's arguments are built by
+    /// each importer, so a mark there was made while it was a local one, and the path it stood for
+    /// may now be travelling in its extra arguments. Throws <see cref="KeptPathCarriedException"/>
+    /// for a local connector that also holds a placed mark's text somewhere unmarked that travels —
+    /// another argument, the command or a shared environment value — since a duplicate of a marked
+    /// path is that path.
     /// </summary>
     public static CollectionDocument Export(string name, string? author, string? origin, string exported,
                                             IEnumerable<KeyValuePair<string, JsonValue>> connectors, PublishIntent intent)
@@ -886,13 +983,9 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                 {
                     throw new PathMarkMovedException(connectorName);
                 }
-                var marked = placement.Placed.Keys.Select(i => model.Args[i]).ToHashSet(StringComparer.Ordinal);
-                var unmarked = Enumerable.Range(0, model.Args.Count).Where(i => !placement.Placed.ContainsKey(i))
-                    .Select(i => model.Args[i]).Append(model.Command)
-                    .Concat(model.Env.Where(p => shared.Contains(p.Key)).Select(p => p.Value));
-                if (unmarked.Any(marked.Contains))
+                if (Copies(model, placement.Placed, shared) is [var copy, ..])
                 {
-                    throw new PathMarkMovedException(connectorName);
+                    throw new KeptPathCarriedException(connectorName, copy.Field);
                 }
                 foreach (var (i, mark) in placement.Placed.OrderBy(p => p.Key))
                 {
@@ -918,92 +1011,112 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     }
 
     /// <summary>
-    /// The first connector, in ordinal order, any of whose strings holds one of
-    /// <paramref name="values"/> as written, or null. A string holding a value counts wherever it
-    /// sits in it — a path inside a longer path, or inside a flag — and so does the value as JSON
-    /// would escape it, which is how it reads inside a JSON blob carried as a single argument.
-    /// Empty values are ignored: every string holds one.
+    /// Every copy of a marked path that would travel as written, connector by connector in ordinal
+    /// order: another argument, the command or a shared environment value holding a placed mark's
+    /// text. The exporter refuses the first; the Publish sheet lists them all.
     /// </summary>
-    public string? ConnectorCarrying(IEnumerable<string> values)
+    public static IReadOnlyList<KeptValueFinding> CopiesOfMarkedPaths(IEnumerable<KeyValuePair<string, JsonValue>> connectors,
+                                                                      PublishIntent intent)
     {
-        var forms = values.Where(v => v.Length > 0).SelectMany(WrittenForms).ToList();
-        if (forms.Count == 0)
+        var out_ = new List<KeptValueFinding>();
+        foreach (var (name, config) in connectors.OrderBy(p => p.Key, StringComparer.Ordinal))
         {
-            return null;
-        }
-        foreach (var (name, connector) in Connectors.OrderBy(p => p.Key, StringComparer.Ordinal))
-        {
-            var encoded = connector.Encode();
-            var strings = encoded.StringLeaves().Select(leaf => leaf.Value).Concat(KeysIn(encoded));
-            if (strings.Any(s => forms.Any(form => s.Contains(form, StringComparison.Ordinal))))
+            if (RemotePattern.Decode(config) is not null)
             {
-                return name;
+                continue;
             }
+            var model = FormMapper.Analyze(config).Model;
+            IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> marks =
+                intent.PathMarks.TryGetValue(name, out var m) ? m : new Dictionary<JsonPointer, PublishIntent.PathMark>();
+            IReadOnlySet<string> shared = intent.ShareValues.TryGetValue(name, out var s) ? s : new HashSet<string>(StringComparer.Ordinal);
+            var placed = PublishIntent.PlacePathMarks(marks, model.Args).Placed;
+            out_.AddRange(Copies(model, placed, shared).Select(copy => new KeptValueFinding(name, copy.Field, copy.Text)));
         }
-        return null;
+        return out_;
+    }
+
+    private static IReadOnlyList<(string Field, string Text)> Copies(FormModel model, IReadOnlyDictionary<int, PublishIntent.PathMark> placed,
+                                                                    IReadOnlySet<string> shared)
+    {
+        var marked = placed.Keys.Select(i => KeptValue.Nfc(model.Args[i])).ToHashSet(StringComparer.Ordinal);
+        if (marked.Count == 0)
+        {
+            return [];
+        }
+        var unmarked = Enumerable.Range(0, model.Args.Count).Where(i => !placed.ContainsKey(i))
+            .Select(i => ($"local.args[{i}]", model.Args[i]))
+            .Append(("local.command", model.Command))
+            .Concat(model.Env.Where(p => shared.Contains(p.Key)).OrderBy(p => p.Key, StringComparer.Ordinal)
+                .Select(p => ($"env.{p.Key}.value", p.Value)));
+        return unmarked.Where(u => marked.Contains(KeptValue.Nfc(u.Item2))).ToList();
     }
 
     /// <summary>
-    /// The first connector, in ordinal order, any of whose strings holds <paramref name="folder"/>
-    /// as a folder — followed by a separator, a closing quote or the end of the string — as written
-    /// or as JSON would escape it, or null. A folder name that merely begins another name does not
-    /// count, so "/share" is not found in "/share-tools".
+    /// Every place, connector by connector in ordinal order and field by field, where one of
+    /// <paramref name="values"/> stands as written (<see cref="KeptValue.Holds"/>). The field is the
+    /// place in the connector's document form — <c>local.command</c>, <c>local.args[1]</c>,
+    /// <c>env.LOG_DIR.value</c>, <c>env.LOG_DIR.hint</c>, <c>needs.server_path.hint</c>,
+    /// <c>additional.cwd</c>, <c>remote.extraArgs[0]</c> — so the author can find it in the preview;
+    /// an environment variable's, a need's or an additional field's own name counts as a place too.
+    /// Empty values are ignored.
     /// </summary>
-    public string? ConnectorCarryingFolder(string folder)
+    public IReadOnlyList<KeptValueFinding> Findings(IEnumerable<string> values)
     {
-        if (folder.Length == 0)
+        var kept = values.Where(v => v.Length > 0).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+        var found = new List<KeptValueFinding>();
+        if (kept.Count == 0)
         {
-            return null;
+            return found;
         }
-        var forms = WrittenForms(folder);
         foreach (var (name, connector) in Connectors.OrderBy(p => p.Key, StringComparer.Ordinal))
         {
-            var encoded = connector.Encode();
-            var strings = encoded.StringLeaves().Select(leaf => leaf.Value).Concat(KeysIn(encoded));
-            if (strings.Any(s => forms.Any(form => HoldsFolder(s, form))))
+            foreach (var (field, text) in Places(connector.Encode()))
             {
-                return name;
+                found.AddRange(kept.Where(value => KeptValue.Holds(text, value)).Select(value => new KeptValueFinding(name, field, value)));
             }
         }
-        return null;
+        return found;
     }
 
-    private static bool HoldsFolder(string text, string folder)
+    /// <summary>
+    /// Every string in a connector's document form with the field it sits in, keys sorted ordinally
+    /// so both platforms walk alike. Keys count only below <c>env</c>, <c>needs</c> and
+    /// <c>additional</c>, the objects whose names the author chose; the rest are the format's own.
+    /// </summary>
+    internal static IReadOnlyList<(string Field, string Text)> Places(JsonValue json)
     {
-        var start = 0;
-        int found;
-        while ((found = text.IndexOf(folder, start, StringComparison.Ordinal)) >= 0)
+        var places = new List<(string Field, string Text)>();
+        void Walk(JsonValue value, string field, bool namesCount)
         {
-            var end = found + folder.Length;
-            if (end == text.Length || text[end] is '/' or '\\' or '"')
+            switch (value.Kind)
             {
-                return true;
+                case JsonKind.String:
+                    places.Add((field, value.StringValue));
+                    break;
+                case JsonKind.Array:
+                    var index = 0;
+                    foreach (var item in value.ArrayItems)
+                    {
+                        Walk(item, $"{field}[{index}]", false);
+                        index++;
+                    }
+                    break;
+                case JsonKind.Object:
+                    foreach (var (key, child) in value.ObjectProperties.OrderBy(p => p.Key, StringComparer.Ordinal))
+                    {
+                        var path = field.Length == 0 ? key : field + "." + key;
+                        if (namesCount)
+                        {
+                            places.Add((path, key));
+                        }
+                        Walk(child, path, field.Length == 0 && key is "env" or "needs" or "additional");
+                    }
+                    break;
             }
-            start = end;
         }
-        return false;
+        Walk(json, string.Empty, false);
+        return places;
     }
-
-    /// <summary><paramref name="value"/> as written, and as a JSON string would spell it: backslashes and quotes escaped, with and without the slash escaped too.</summary>
-    internal static IReadOnlyList<string> WrittenForms(string value)
-    {
-        var escaped = value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
-        return new HashSet<string>(StringComparer.Ordinal)
-        {
-            value,
-            value.Replace("/", "\\/", StringComparison.Ordinal),
-            escaped,
-            escaped.Replace("/", "\\/", StringComparison.Ordinal),
-        }.ToList();
-    }
-
-    /// <summary>Every object key in <paramref name="json"/>, at any depth: a value could as well be a key of an <c>additional</c> field as a string inside one.</summary>
-    private static IEnumerable<string> KeysIn(JsonValue json) => json.Kind switch
-    {
-        JsonKind.Object => json.ObjectProperties.SelectMany(p => KeysIn(p.Value).Prepend(p.Key)),
-        JsonKind.Array => json.ArrayItems.SelectMany(KeysIn),
-        _ => [],
-    };
 
     /// <summary>
     /// "args[N] looks like a credential" / "env.NAME looks like a credential" lines for the

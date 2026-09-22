@@ -76,9 +76,11 @@ final class StringCatalogTests: XCTestCase {
         "AppState.enabledSubtitle": ["3", "7"],
         "AppState.malformedConfigMessage": ["X"],
         "AppState.needsValueCaution": ["X"],
+        "AppState.keptPathCarriedError": ["X", "Y"],
         "AppState.pathMarkMovedError": ["X"],
         "AppState.publishFolderCarriedError": ["X"],
         "AppState.publishSlugTakenError": ["X"],
+        "AppState.restoreCollectionGoneError": ["X"],
         "AppState.sourceUnreadableError": ["X", "Y"],
         "ClaudeSignature.notFoundMessage": ["X"],
         "ClaudeSignature.refusalMessage": ["X", "Y"],
@@ -118,7 +120,8 @@ final class StringCatalogTests: XCTestCase {
         "PublishModel.folderLine": ["X"],
         "PublishModel.footerLine": ["X", "Y"],
         "PublishModel.title": ["X"],
-        "PublishModel.unresolvedMarkNote": ["X"],
+        "PublishModel.keptPathNote": ["X", "Y"],
+        "PublishModel.unresolvedMarkNote": ["X", "Y"],
         "PublishModel.warningLine": ["X", "Y"],
         "RestoreModel.confirmMessage": ["X"],
         "ReviewModel.title": ["X"],
@@ -162,6 +165,7 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.newerDocumentError"] = AppState.newerDocumentError
         actual["AppState.noConnectorsSubtitle"] = AppState.noConnectorsSubtitle
         actual["AppState.ownCollectionError"] = AppState.ownCollectionError
+        actual["AppState.keptPathCarriedError"] = AppState.keptPathCarriedError("X", "Y")
         actual["AppState.pathMarkMovedError"] = AppState.pathMarkMovedError("X")
         actual["AppState.publishFolderCarriedError"] = AppState.publishFolderCarriedError("X")
         actual["AppState.publishIntoStoreError"] = AppState.publishIntoStoreError
@@ -173,6 +177,7 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.restartButton"] = AppState.restartButton
         actual["AppState.restartInformative"] = AppState.restartInformative
         actual["AppState.restartMessage"] = AppState.restartMessage
+        actual["AppState.restoreCollectionGoneError"] = AppState.restoreCollectionGoneError("X")
         actual["AppState.sourceUnreadableError"] = AppState.sourceUnreadableError("X", "Y")
         actual["AppState.storeChangedBody"] = AppState.storeChangedBody
         actual["AppState.targetMustBeLocalError"] = AppState.targetMustBeLocalError
@@ -368,7 +373,9 @@ final class StringCatalogTests: XCTestCase {
         actual["PublishModel.publishButton"] = PublishModel.publishButton
         actual["PublishModel.shareValueLabel"] = PublishModel.shareValueLabel
         actual["PublishModel.title"] = PublishModel.title("X")
-        actual["PublishModel.unresolvedMarkNote"] = PublishModel.unresolvedMarkNote("X")
+        actual["PublishModel.keptPathNote"] = PublishModel.keptPathNote("X", "Y")
+        actual["PublishModel.releaseValueButton"] = PublishModel.releaseValueButton
+        actual["PublishModel.unresolvedMarkNote"] = PublishModel.unresolvedMarkNote("X", "Y")
         actual["PublishModel.warningLine"] = PublishModel.warningLine("X", "Y")
 
         // MARK: RemoteAuthKind

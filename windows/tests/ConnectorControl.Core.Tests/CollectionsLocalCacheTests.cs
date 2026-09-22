@@ -78,6 +78,22 @@ public sealed class CollectionsLocalCacheTests : IDisposable
     }
 
     [Fact]
+    public void ReleasedValuesAndTheLastAppliedCollectionRoundTripAndAreAbsentInAnOlderCache()
+    {
+        var cache = new CollectionsLocalCache([], new Dictionary<string, CollectionsLocalCache.PublishBinding>
+        {
+            ["Consulting"] = new("/Users/d/Acme/mcp", null, ["/a"], ["/b"]),
+        }, "Consulting");
+        Assert.Equal(cache, CollectionsLocalCache.Decode(cache.Encode()));
+        // Which collection Claude's file holds is not a binding to prune.
+        Assert.Equal("Consulting", cache.Reconciled(new CollectionsFile([])).LastAppliedCollection);
+        var older = CollectionsLocalCache.Decode(Sample.Encode());
+        Assert.Null(older.LastAppliedCollection);
+        Assert.Empty(older.Published["Consulting"].ReleasedValues);
+        Assert.NotEqual(cache, cache with { LastAppliedCollection = "Other" });
+    }
+
+    [Fact]
     public void AnUnknownVersionDecodesAsMalformed()
     {
         Assert.Throws<CollectionsFileException>(() => CollectionsLocalCache.Decode(JsonValue.Object(

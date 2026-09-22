@@ -720,7 +720,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         let editor = rig.editor("svc", in: "Team")
         editor.args.append(ArgRow(value: serverPath))
         XCTAssertTrue(editor.save())
-        XCTAssertEqual(rig.state.publishError?.message, AppState.pathMarkMovedError("svc"))
+        XCTAssertEqual(rig.state.publishError?.message, AppState.keptPathCarriedError("svc", "local.args[2]"))
         XCTAssertEqual(try Data(contentsOf: file), before, "the copy is not sent as written")
 
         // Publish… ticks every row holding the marked path, under the mark's name and hint.

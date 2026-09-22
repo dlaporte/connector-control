@@ -44,6 +44,9 @@
   "AppState.enabledSubtitle": {
     "format": "{0} of {1} enabled"
   },
+  "AppState.keptPathCarriedError": {
+    "format": "“{0}” carries a path this machine keeps back, in {1}. Open Publish… to review it."
+  },
   "AppState.lastLocalCollectionError": "The last local collection can’t be deleted.",
   "AppState.locateCaution": "Locate the collection file to resolve paths.",
   "AppState.malformedConfigMessage": {
@@ -77,6 +80,9 @@
   "AppState.restartButton": "Restart",
   "AppState.restartInformative": "Any in-progress Claude conversation will be interrupted.",
   "AppState.restartMessage": "Restart Claude Desktop now?",
+  "AppState.restoreCollectionGoneError": {
+    "format": "This backup was taken from “{0}”, which no longer exists. Nothing was restored."
+  },
   "AppState.sourceUnreadableError": {
     "format": "{0} couldn’t be read: {1}"
   },
@@ -345,17 +351,21 @@
   },
   "PublishModel.forgetMarkButton": "Forget Mark",
   "PublishModel.hintPlaceholder": "hint for recipients",
+  "PublishModel.keptPathNote": {
+    "format": "“{0}” carries a path this machine keeps back, in {1}. Tick it where it sits, or release it."
+  },
   "PublishModel.markPathLabel": "Mark as a path this machine supplies",
   "PublishModel.pathNamePlaceholder": "placeholder name",
   "PublishModel.pathsSectionTitle": "Machine-specific paths · found in arguments",
   "PublishModel.previewTitle": "Document preview",
   "PublishModel.publishButton": "Publish",
+  "PublishModel.releaseValueButton": "Release",
   "PublishModel.shareValueLabel": "share value",
   "PublishModel.title": {
     "format": "Publish “{0}”"
   },
   "PublishModel.unresolvedMarkNote": {
-    "format": "A path marked in “{0}” has moved. Tick it where it now sits, or forget the mark."
+    "format": "A path marked “{1}” in “{0}” has moved. Tick it where it now sits, or forget the mark."
   },
   "PublishModel.warningLine": {
     "format": "{0}: {1}"

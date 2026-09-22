@@ -79,6 +79,10 @@ public final class AppState: ObservableObject {
 
     public static func publishFolderCarriedError(_ connector: String) -> String { "“\(connector)” carries this machine's publish folder as written. Write ${COLLECTION_DIR} in its place, or mark the path in Publish…" }
 
+    public static func keptPathCarriedError(_ connector: String, _ field: String) -> String { "“\(connector)” carries a path this machine keeps back, in \(field). Open Publish… to review it." }
+
+    nonisolated public static func restoreCollectionGoneError(_ collection: String) -> String { "This backup was taken from “\(collection)”, which no longer exists. Nothing was restored." }
+
     /// A synced connector-list change was adopted and written into Claude's config: say what it runs now.
     public static func connectorListChangedBody(_ delta: ServerDelta, restartRequired: Bool) -> String {
         let what = delta.isEmpty ? "was regenerated" : "now " + delta.summary()
@@ -416,13 +420,27 @@ public final class AppState: ObservableObject {
     /// Restores Claude's config from a backup and syncs the reconciliation
     /// baseline to the restored contents BEFORE reloading, so the app's own
     /// restore is not misread as an external change or a re-add.
+    ///
+    /// The snapshot goes back into the collection the backup was taken from, which becomes the
+    /// active one again, since Claude's file held that collection's connectors. A backup whose
+    /// collection is gone is refused. One with no record — older than the record, the first-run
+    /// original, a file from elsewhere — goes into the active collection, and publishing still
+    /// keeps back any path or folder it carries.
     public func restoreClaudeConfig(from backup: URL) throws {
+        var target = store
+        if let recorded = BackupCollections.collection(of: backup, in: service.paths.backupsDirURL) {
+            guard store.collections[recorded] != nil else { throw RestoreError.collectionGone(recorded) }
+            target.activeCollection = recorded
+        }
         // Every apply backed Claude's file up with this machine's publish folder where the store
         // holds ${COLLECTION_DIR}: a connector that renders just as the backup does keeps its
         // token. Only this machine's own binding counts; another machine's record has no folder here.
-        let active = store.activeCollection
-        let publishFolder = isPublished(active) ? collectionsCache.published[active]?.folder : nil
-        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: store, publishFolder: publishFolder)
+        let collection = target.activeCollection
+        let publishFolder = isPublished(collection) ? collectionsCache.published[collection]?.folder : nil
+        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: target, publishFolder: publishFolder,
+                                                      backedUpFrom: collectionsCache.lastAppliedCollection,
+                                                      activating: target.activeCollection != store.activeCollection)
+        recordApplied(collection)
         appliedServers = servers
         hasLoadedOnce = true
         settings.lastApplyDate = host.now()
@@ -486,7 +504,8 @@ public final class AppState: ObservableObject {
 
             let result = try service.loadAndReconcile(
                 baseline: hasLoadedOnce ? appliedServers : nil,
-                storeAuthoritative: trigger != .routine)
+                storeAuthoritative: trigger != .routine,
+                lastAppliedCollection: lastAppliedCollection)
             store = result.store
             loadCollections()
             var claudeConfigChangedExternally = false
@@ -525,6 +544,10 @@ public final class AppState: ObservableObject {
                 // Notify a failure only on the transition into it — retry
                 // reloads (every popover open) must not re-post it.
                 regenerationFailed = applyRetryNeeded && !alreadyFailing
+            } else if result.claudeServers != nil {
+                // Claude's file already holds exactly what the active collection renders, so it
+                // holds that collection — which a first launch, with no apply yet, needs recorded.
+                recordApplied(activeCollection)
             }
 
             // Fire notifications AFTER all state above has been assigned, never
@@ -573,7 +596,8 @@ public final class AppState: ObservableObject {
     private func performApply() {
         do {
             let servers = expandedServers
-            try service.apply(servers: servers)
+            try service.apply(servers: servers, backedUpFrom: collectionsCache.lastAppliedCollection)
+            recordApplied(activeCollection)
             appliedServers = servers
             settings.lastApplyDate = host.now()
             refreshRestartState()
@@ -585,6 +609,24 @@ public final class AppState: ObservableObject {
             lastError = AppState.friendly(error)
             applyRetryNeeded = true
         }
+    }
+
+    /// The collection Claude's file was last written from, for the launch ingest: in memory once the
+    /// collections files are loaded, and read from this machine's cache before then — at launch the
+    /// store loads first.
+    private var lastAppliedCollection: String? {
+        hasLoadedCollectionsOnce
+            ? collectionsCache.lastAppliedCollection
+            : CollectionsLocalCache.load(from: service.paths.collectionsCacheURL).lastAppliedCollection
+    }
+
+    /// Records that Claude's file now holds `collection`, in this machine's cache, through the same
+    /// gate as every other cache save. A save that fails leaves the record in memory for the next.
+    private func recordApplied(_ collection: String) {
+        guard collectionsCache.lastAppliedCollection != collection else { return }
+        collectionsCache.lastAppliedCollection = collection
+        guard collectionsLoaded else { return }
+        try? collectionsCache.save(to: service.paths.collectionsCacheURL, staging: service.paths.stagingDirURL)
     }
 
     /// The master list first, then the sidecar beside it, then this machine's cache — the order
@@ -802,6 +844,11 @@ public final class AppState: ObservableObject {
             if let failure = publishError, failure.collection == name {
                 publishError = CollectionPublishError(collection: trimmed, message: failure.message, kind: failure.kind)
             }
+            // Claude's file and its backups name the collection they were applied from, and the
+            // rename carries both. A backup record that fails to follow restores as refused, the
+            // name it holds being gone, never into the wrong collection.
+            if collectionsCache.lastAppliedCollection == name { collectionsCache.lastAppliedCollection = trimmed }
+            try? BackupCollections.rename(name, to: trimmed, in: service.paths.backupsDirURL, staging: service.paths.stagingDirURL)
         }
         persistStore()
         performApply()
@@ -1325,9 +1372,10 @@ public final class AppState: ObservableObject {
     /// `reviewedValues` is what the author's Publish in the sheet says must never travel as
     /// written: it replaces this machine's list of marked paths (`PublishBinding.markedValues`).
     /// nil — the banner's Choose Folder…, which nobody reviewed — keeps the list the collection
-    /// already had.
+    /// already had. `releasedValues` are the paths the author released in the sheet, let travel
+    /// in this collection's document although this machine keeps them back elsewhere.
     public func startPublishing(_ collection: String, to folder: String, intent: PublishIntent,
-                                reviewedValues: Set<String>? = nil) -> String? {
+                                reviewedValues: Set<String>? = nil, releasedValues: Set<String> = []) -> String? {
         // A synced collection has an author elsewhere, and a name that is not a collection has
         // nothing to publish. Nothing offers either, so both get the silence `locateSource` gives
         // a collection that is not synced.
@@ -1363,7 +1411,9 @@ public final class AppState: ObservableObject {
             folder: url.path,
             // A new folder has nothing in it this app wrote, so the next write is unconditional.
             lastWrittenHash: previous?.folder == url.path ? previous?.lastWrittenHash : nil,
-            markedValues: reviewedValues ?? previous?.markedValues ?? [])
+            markedValues: reviewedValues ?? previous?.markedValues ?? [],
+            releasedValues: AppState.released(previous?.releasedValues ?? [], adding: releasedValues,
+                                              marked: reviewedValues ?? previous?.markedValues ?? []))
         // persistStore ends in publishIfChanged, which is what writes the document.
         persistStore()
         // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
@@ -1396,13 +1446,18 @@ public final class AppState: ObservableObject {
     /// `reviewedValues`, from the sheet's Publish, replaces this machine's list of marked paths as
     /// `startPublishing` describes; it is the one way a path leaves that list.
     public func updatePublishIntent(_ collection: String, intent: PublishIntent,
-                                    reviewedValues: Set<String>? = nil) -> String? {
+                                    reviewedValues: Set<String>? = nil, releasedValues: Set<String> = []) -> String? {
         guard var entry = collectionsFile.collections[collection], let record = entry.publish else { return nil }
-        // The list is this machine's: another machine's publish record has no binding here.
-        let listChanged = reviewedValues != nil && collectionsCache.published[collection] != nil
-            && collectionsCache.published[collection]?.markedValues != reviewedValues
-        guard record.intent != intent || listChanged else { return nil }
-        if let reviewedValues, listChanged { collectionsCache.published[collection]?.markedValues = reviewedValues }
+        // The lists are this machine's: another machine's publish record has no binding here.
+        var binding = collectionsCache.published[collection]
+        if let reviewedValues, var changed = binding {
+            changed.releasedValues = AppState.released(changed.releasedValues, adding: releasedValues, marked: reviewedValues)
+            changed.markedValues = reviewedValues
+            binding = changed
+        }
+        let listsChanged = binding != collectionsCache.published[collection]
+        guard record.intent != intent || listsChanged else { return nil }
+        if listsChanged { collectionsCache.published[collection] = binding }
         entry.publish = CollectionsFile.PublishRecord(slug: record.slug, origin: record.origin, intent: intent)
         collectionsFile.collections[collection] = entry
         persistStore()
@@ -1479,15 +1534,15 @@ public final class AppState: ObservableObject {
 
     /// Export: the same document written once, wherever the user chose. nil on success.
     ///
-    /// `denying` holds paths that must not appear in it as written — the sheet passes the ones
-    /// it marks, so a copy of a marked path elsewhere in a connector refuses the export as it
-    /// would refuse a publish. The export binds nothing, so it leaves this machine's list of
-    /// marked paths as it was.
+    /// It is refused as a publish is when it carries a path this machine keeps back
+    /// (`keptBack(for:reviewed:released:)`); the sheet passes what it marks and what it released.
+    /// The export binds nothing, so it leaves this machine's lists as they were.
     public func writeExport(for collection: String, intent: PublishIntent, to path: String,
-                            only: [String]? = nil, denying: Set<String> = []) -> String? {
+                            only: [String]? = nil, reviewed: Set<String>? = nil,
+                            released: Set<String> = []) -> String? {
         do {
             let document = try exportDocument(for: collection, intent: intent, only: only)
-            try refuseKeptBackPaths(in: document, of: collection, values: denying)
+            try refuseKeptBackPaths(in: document, of: collection, reviewed: reviewed, released: released)
             try AtomicFile.write(try document.serialized(),
                                  to: URL(fileURLWithPath: path), staging: service.paths.stagingDirURL)
             return nil
@@ -1516,16 +1571,50 @@ public final class AppState: ObservableObject {
         return .writeFailed
     }
 
-    /// Refuses `document` when it carries, as written, a path this machine keeps back for
-    /// `collection`: one of `values`, or the folder this machine publishes it into. The folder
-    /// counts only as a folder of its own, so a sibling that merely begins with its name travels.
-    func refuseKeptBackPaths(in document: CollectionDocument, of collection: String, values: Set<String>) throws {
-        if let carrier = document.connectorCarrying(values) {
-            throw PublishIntentError.pathMarkMoved(connector: carrier)
+    /// Refuses `document` when it carries, as written, a path this machine keeps back from
+    /// `collection`'s document (`keptBack(for:reviewed:released:)`), naming the connector and the
+    /// field it sits in.
+    func refuseKeptBackPaths(in document: CollectionDocument, of collection: String,
+                             reviewed: Set<String>? = nil, released: Set<String> = []) throws {
+        let kept = keptBack(for: collection, reviewed: reviewed, released: released)
+        if let found = document.findings(of: kept.values).first {
+            throw PublishIntentError.keptPathCarried(connector: found.connector, field: found.field)
         }
-        if let folder = collectionsCache.published[collection]?.folder, let carrier = document.connectorCarrying(folder: folder) {
-            throw PublishIntentError.publishFolderCarried(connector: carrier)
+        if let found = document.findings(of: kept.folders).first {
+            throw PublishIntentError.publishFolderCarried(connector: found.connector)
         }
+    }
+
+    /// What this machine keeps back from `collection`'s document: every path on any of its lists
+    /// of marked paths, and every folder it binds — each collection's publish folder and each
+    /// synced collection's located folder — less the paths the author released for this
+    /// collection. The lists are not the collection's own alone: Claude's file carries whichever
+    /// collection was last applied, and a connector reaches another collection by a copy, an ingest
+    /// or a restore with its paths intact.
+    ///
+    /// `reviewed`, from the Publish sheet, is what the author has ticked there, added to the lists;
+    /// `released` is what they let go there, added to the collection's own released paths. A path
+    /// that is ticked is not released.
+    func keptBack(for collection: String, reviewed: Set<String>? = nil,
+                  released: Set<String> = []) -> (values: Set<String>, folders: Set<String>) {
+        var values = reviewed ?? []
+        var folders: Set<String> = []
+        for binding in collectionsCache.published.values {
+            values.formUnion(binding.markedValues)
+            folders.insert(binding.folder)
+        }
+        for (name, binding) in collectionsCache.synced where isSynced(name) {
+            if let path = binding.path { folders.insert(URL(fileURLWithPath: path).deletingLastPathComponent().path) }
+        }
+        let letGo = AppState.released(collectionsCache.published[collection]?.releasedValues ?? [],
+                                      adding: released, marked: reviewed ?? [])
+        return (values.subtracting(letGo), folders.subtracting(letGo))
+    }
+
+    /// A collection's released paths after the sheet's answer: what it released before and now,
+    /// less anything the author ticks, since a ticked path is kept back again.
+    static func released(_ before: Set<String>, adding released: Set<String>, marked: Set<String>) -> Set<String> {
+        before.union(released).subtracting(marked)
     }
 
     /// Every collection this machine publishes, written when what it says has changed. Only the
@@ -1547,7 +1636,7 @@ public final class AppState: ObservableObject {
                 // written: whatever the marks say — the other machine dropped them in a sidecar
                 // that landed before its master list, a connector came back without them — this
                 // machine does not send it. Only the author's Publish in the sheet clears it.
-                try refuseKeptBackPaths(in: document, of: collection, values: binding.markedValues)
+                try refuseKeptBackPaths(in: document, of: collection)
                 let hash = try AppState.publishHash(of: document)
                 guard hash != binding.lastWrittenHash || collection == forced else {
                     // The folder already holds what the store renders — the change that failed or
@@ -1563,6 +1652,8 @@ public final class AppState: ObservableObject {
                 // keeps back, never forget one.
                 let placed = record.intent.placedArguments(in: (store.collections[collection]?.mcps ?? [:]).mapValues(\.config))
                 collectionsCache.published[collection]?.markedValues.formUnion(placed)
+                // A path written as a placeholder is kept back again, so it is released no longer.
+                collectionsCache.published[collection]?.releasedValues.subtract(placed)
                 cacheChanged = true
                 if publishError?.collection == collection { publishError = nil }
             } catch {
@@ -1663,8 +1754,11 @@ public final class AppState: ObservableObject {
             return
         }
         collectionsFile = loaded.reconciled(with: store)
-        collectionsCache = CollectionsLocalCache.load(from: service.paths.collectionsCacheURL)
-            .reconciled(with: collectionsFile)
+        var cache = CollectionsLocalCache.load(from: service.paths.collectionsCacheURL).reconciled(with: collectionsFile)
+        // Only this machine writes its cache, so a record of the last apply made in memory is never
+        // older than the file's — and it may be newer, when the save it waited for was held back.
+        if let applied = collectionsCache.lastAppliedCollection { cache.lastAppliedCollection = applied }
+        collectionsCache = cache
         collectionsLoaded = true
         hasLoadedCollectionsOnce = true
         // What is on disk NOW, not what this app last wrote: another machine's sidecar is the
@@ -1719,6 +1813,12 @@ public final class AppState: ObservableObject {
         if case PublishIntentError.pathMarkMoved(let connector) = error {
             return pathMarkMovedError(connector)
         }
+        if case PublishIntentError.keptPathCarried(let connector, let field) = error {
+            return keptPathCarriedError(connector, field)
+        }
+        if case RestoreError.collectionGone(let collection) = error {
+            return restoreCollectionGoneError(collection)
+        }
         if case PublishIntentError.publishFolderCarried(let connector) = error {
             return publishFolderCarriedError(connector)
         }
@@ -1735,5 +1835,18 @@ public final class AppState: ObservableObject {
         storeWatcher = nil
         sourceWatchers.values.forEach { $0.watcher.stop() }
         sourceWatchers.removeAll()
+    }
+}
+
+/// Why a restore was refused before anything was written. Its description is the message the
+/// restore sheet shows.
+public enum RestoreError: Error, Equatable, LocalizedError {
+    /// The backup was taken from this collection, which no longer exists.
+    case collectionGone(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .collectionGone(let collection): return AppState.restoreCollectionGoneError(collection)
+        }
     }
 }

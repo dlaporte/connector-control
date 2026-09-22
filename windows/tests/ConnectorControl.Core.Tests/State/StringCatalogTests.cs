@@ -82,9 +82,11 @@ public class StringCatalogTests
         ["AppState.enabledSubtitle"] = ["3", "7"],
         ["AppState.malformedConfigMessage"] = ["X"],
         ["AppState.needsValueCaution"] = ["X"],
+        ["AppState.keptPathCarriedError"] = ["X", "Y"],
         ["AppState.pathMarkMovedError"] = ["X"],
         ["AppState.publishFolderCarriedError"] = ["X"],
         ["AppState.publishSlugTakenError"] = ["X"],
+        ["AppState.restoreCollectionGoneError"] = ["X"],
         ["AppState.sourceUnreadableError"] = ["X", "Y"],
         ["ClaudeProcess.notAClaudePackageError"] = ["X"],
         ["ClaudePublisher.subjectNoOrganizationError"] = ["X", "Y"],
@@ -126,7 +128,8 @@ public class StringCatalogTests
         ["PublishModel.folderLine"] = ["X"],
         ["PublishModel.footerLine"] = ["X", "Y"],
         ["PublishModel.title"] = ["X"],
-        ["PublishModel.unresolvedMarkNote"] = ["X"],
+        ["PublishModel.keptPathNote"] = ["X", "Y"],
+        ["PublishModel.unresolvedMarkNote"] = ["X", "Y"],
         ["PublishModel.warningLine"] = ["X", "Y"],
         // The parameter here is a RemoteField, not free text, so the fixed argument is the
         // label one of them renders as rather than the usual "X".
@@ -180,6 +183,7 @@ public class StringCatalogTests
         actual["AppState.newerDocumentError"] = AppState.NewerDocumentError;
         actual["AppState.noConnectorsSubtitle"] = AppState.NoConnectorsSubtitle;
         actual["AppState.ownCollectionError"] = AppState.OwnCollectionError;
+        actual["AppState.keptPathCarriedError"] = AppState.KeptPathCarriedError("X", "Y");
         actual["AppState.pathMarkMovedError"] = AppState.PathMarkMovedError("X");
         actual["AppState.publishFolderCarriedError"] = AppState.PublishFolderCarriedError("X");
         actual["AppState.publishIntoStoreError"] = AppState.PublishIntoStoreError;
@@ -192,6 +196,7 @@ public class StringCatalogTests
         actual["AppState.restartButton"] = AppState.RestartButton;
         actual["AppState.restartInformative"] = AppState.RestartInformative;
         actual["AppState.restartMessage"] = AppState.RestartMessage;
+        actual["AppState.restoreCollectionGoneError"] = AppState.RestoreCollectionGoneError("X");
         actual["AppState.sourceUnreadableError"] = AppState.SourceUnreadableError("X", "Y");
         actual["AppState.storeChangedBody"] = AppState.StoreChangedBody;
         actual["AppState.targetMustBeLocalError"] = AppState.TargetMustBeLocalError;
@@ -401,7 +406,9 @@ public class StringCatalogTests
         actual["PublishModel.publishButton"] = PublishModel.PublishButton;
         actual["PublishModel.shareValueLabel"] = PublishModel.ShareValueLabel;
         actual["PublishModel.title"] = PublishModel.Title("X");
-        actual["PublishModel.unresolvedMarkNote"] = PublishModel.UnresolvedMarkNote("X");
+        actual["PublishModel.keptPathNote"] = PublishModel.KeptPathNote("X", "Y");
+        actual["PublishModel.releaseValueButton"] = PublishModel.ReleaseValueButton;
+        actual["PublishModel.unresolvedMarkNote"] = PublishModel.UnresolvedMarkNote("X", "Y");
         actual["PublishModel.warningLine"] = PublishModel.WarningLine("X", "Y");
 
         // MARK: RemoteAuthKind

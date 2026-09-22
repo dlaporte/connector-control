@@ -21,6 +21,37 @@ public class ConfigServiceTests : IDisposable
 
     private static HashSet<string> Set(IEnumerable<string> keys) => keys.ToHashSet(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Claude's file holds the collection it was last applied from, so a load ingests it only while
+    /// that is still the active one; with nothing recorded — a first launch — it ingests as always.
+    /// </summary>
+    [Fact]
+    public void TheIngestTakesClaudesServersOnlyIntoTheCollectionTheyCameFrom()
+    {
+        // The recorded collection is the active one.
+        Assert.Equal(Set(["scoutbook", "aws-mcp", "service-now"]),
+                     Set(service.LoadAndReconcile(lastAppliedCollection: "Default").Store.Mcps.Keys));
+        File.Delete(paths.MasterStorePath);
+        // Written from another collection: nothing of it comes into this one.
+        Assert.Empty(service.LoadAndReconcile(lastAppliedCollection: "Team").Store.Mcps);
+    }
+
+    [Fact]
+    public void EachBackupRecordsTheCollectionItWasAppliedFrom()
+    {
+        service.Apply(new Dictionary<string, JsonValue> { ["x"] = JsonValue.Object(("command", JsonValue.String("x"))) }, "Team");
+        var backup = Assert.Single(service.Backups.Backups("claude_desktop_config"));   // the record is not listed as a backup
+        Assert.Equal("Team", BackupCollections.CollectionOf(backup, paths.BackupsDir));
+        // The backup itself stays a byte copy of Claude's file.
+        Assert.Equal(System.Text.Encoding.UTF8.GetBytes(Fixtures.RealisticClaudeConfig), File.ReadAllBytes(backup));
+        service.Apply(new Dictionary<string, JsonValue>());
+        Assert.Equal(2, service.Backups.Backups("claude_desktop_config").Count);
+        // An apply that names no collection records none.
+        Assert.Null(BackupCollections.CollectionOf(service.Backups.Backups("claude_desktop_config")[0], paths.BackupsDir));
+        // A file of the same name elsewhere is not the backup.
+        Assert.Null(BackupCollections.CollectionOf(dir.File(Path.GetFileName(backup)), paths.BackupsDir));
+    }
+
     [Fact]
     public void FirstLoadImportsAllServersEnabled()
     {

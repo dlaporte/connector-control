@@ -154,17 +154,18 @@ final class CollectionDocumentTests: XCTestCase {
 
     func testExportRefusesAnUnmarkedCopyOfAMarkedPath() throws {
         let intent = PublishIntent(shareValues: ["ledger": ["LEDGER"]], pathMarks: ["ledger": [arg(0): mark("/Users/d/ledger.js")]], hints: [:])
-        let copies: [String: JSONValue] = [
-            "another argument": .object(["command": .string("node"),
-                                         "args": .array([.string("/Users/d/ledger.js"), .string("/Users/d/ledger.js")])]),
-            "the command": .object(["command": .string("/Users/d/ledger.js"), "args": .array([.string("/Users/d/ledger.js")])]),
-            "an environment value": .object(["command": .string("node"), "args": .array([.string("/Users/d/ledger.js")]),
-                                             "env": .object(["LEDGER": .string("/Users/d/ledger.js")])]),
+        let copies: [(field: String, config: JSONValue)] = [
+            ("local.args[1]", .object(["command": .string("node"),
+                                       "args": .array([.string("/Users/d/ledger.js"), .string("/Users/d/ledger.js")])])),
+            ("local.command", .object(["command": .string("/Users/d/ledger.js"), "args": .array([.string("/Users/d/ledger.js")])])),
+            ("env.LEDGER.value", .object(["command": .string("node"), "args": .array([.string("/Users/d/ledger.js")]),
+                                          "env": .object(["LEDGER": .string("/Users/d/ledger.js")])])),
         ]
-        for (place, config) in copies {
+        for copy in copies {
             XCTAssertThrowsError(try CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z",
-                                                               connectors: ["ledger": config], intent: intent), place) {
-                XCTAssertEqual($0 as? PublishIntentError, .pathMarkMoved(connector: "ledger"), place)
+                                                               connectors: ["ledger": copy.config], intent: intent), copy.field) {
+                XCTAssertEqual($0 as? PublishIntentError, .keptPathCarried(connector: "ledger", field: copy.field),
+                               "a copy is not a mark that moved: the refusal says where the copy sits")
             }
         }
         // An environment value nobody ticked to share stays here as a hint, so it copies nothing.
@@ -174,31 +175,51 @@ final class CollectionDocumentTests: XCTestCase {
                                                        connectors: ["ledger": stripped], intent: intent))
     }
 
-    func testConnectorCarryingFindsAValueAsWrittenOrAsJSONSpellsIt() throws {
-        let document = CollectionDocument(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z", connectors: [
-            "inside": .init(launcher: .local(.init(command: "node", args: ["--config=/Users/d/a/b.json"], platform: .current))),
-            "escaped": .init(launcher: .local(.init(command: "node", args: [#"{"dir":"\/Users\/d\/c"}"#], platform: .current))),
-            "clean": .init(launcher: .local(.init(command: "node", args: ["x.js"], platform: .current))),
-        ])
-        XCTAssertEqual(document.connectorCarrying(["/Users/d/a"]), "inside", "held inside a longer string")
-        XCTAssertEqual(document.connectorCarrying(["/Users/d/c"]), "escaped", "held as a JSON blob spells it")
-        XCTAssertNil(document.connectorCarrying(["/Users/d/elsewhere"]))
-        XCTAssertNil(document.connectorCarrying([""]), "an empty value would match every string")
-        XCTAssertNil(document.connectorCarrying([]))
+    func testAKeptValueCountsAsTheWholeStringOrAsAPathOfItsOwn() {
+        XCTAssertTrue(KeptValue.holds("/Users/d/a", "/Users/d/a"))
+        XCTAssertTrue(KeptValue.holds("--config=/Users/d/a/b.json", "/Users/d/a"), "after =, before a separator")
+        XCTAssertTrue(KeptValue.holds("run /Users/d/a now", "/Users/d/a"))
+        XCTAssertTrue(KeptValue.holds(#"{"dir":"\/Users\/d\/a"}"#, "/Users/d/a"), "as a JSON blob spells it")
+        XCTAssertTrue(KeptValue.holds(#"{"dir":"C:\\Users\\d"}"#, #"C:\Users\d"#))
+        XCTAssertFalse(KeptValue.holds("/Users/d/a-tools/x.js", "/Users/d/a"), "a sibling that begins with its name")
+        XCTAssertFalse(KeptValue.holds("/home/Users/d/a", "/Users/d/a"), "a longer path that merely ends in it")
+        XCTAssertTrue(KeptValue.holds(".", "."))
+        XCTAssertFalse(KeptValue.holds("./start.sh", "."), "a relative value counts only as the whole string")
+        XCTAssertFalse(KeptValue.holds("https://mcp.notion.com/mcp", "."))
+        XCTAssertFalse(KeptValue.holds("anything", ""))
     }
 
-    func testConnectorCarryingAFolderCountsItOnlyAsAFolderOfItsOwn() {
-        func document(_ arg: String) -> CollectionDocument {
-            CollectionDocument(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z", connectors: [
-                "c": .init(launcher: .local(.init(command: "node", args: [arg], platform: .current))),
-            ])
-        }
-        XCTAssertEqual(document("/Users/d/share/tools/x.js").connectorCarrying(folder: "/Users/d/share"), "c")
-        XCTAssertEqual(document("--root=/Users/d/share").connectorCarrying(folder: "/Users/d/share"), "c")
-        XCTAssertEqual(document(#"{"root":"\/Users\/d\/share"}"#).connectorCarrying(folder: "/Users/d/share"), "c",
-                       "inside a JSON blob as JSON spells it")
-        XCTAssertNil(document("/Users/d/share-tools/x.js").connectorCarrying(folder: "/Users/d/share"))
-        XCTAssertNil(document("${COLLECTION_DIR}/tools/x.js").connectorCarrying(folder: "/Users/d/share"))
+    func testAKeptValueMatchesInEitherUnicodeNormalization() {
+        let composed = "/Users/d/caf\u{E9}/x.js", decomposed = "/Users/d/cafe\u{301}/x.js"
+        XCTAssertTrue(KeptValue.holds(decomposed, composed))
+        XCTAssertTrue(KeptValue.holds("--dir=" + composed, decomposed))
+        XCTAssertEqual(PublishIntent.placePathMarks([arg(0): mark(composed)], in: [decomposed]).placed, [0: mark(composed)])
+    }
+
+    func testFindingsNameTheConnectorAndTheFieldEveryPlaceAValueSits() throws {
+        let document = CollectionDocument(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z", connectors: [
+            "ledger": .init(launcher: .local(.init(command: "node", args: ["--root=/Users/d/a", "x.js"], platform: .current)),
+                            env: ["LOG": .value("/Users/d/a/log"), "TOKEN": .hint("like /Users/d/a")],
+                            needs: ["server_path": "your clone, not /Users/d/a"],
+                            additional: ["cwd": .string("/Users/d/a")]),
+            "remote": .init(launcher: .remote(.init(url: "https://mcp.example.com/", auth: .automatic, package: "mcp-remote",
+                                                    extraArgs: ["--config", "/Users/d/a/r.json"]))),
+            "clean": .init(launcher: .local(.init(command: "node", args: ["/Users/d/a-tools/x.js"], platform: .current))),
+        ])
+        XCTAssertEqual(document.findings(of: ["/Users/d/a"]).map { "\($0.connector) \($0.field)" }, [
+            "ledger additional.cwd", "ledger env.LOG.value", "ledger env.TOKEN.hint", "ledger local.args[0]",
+            "ledger needs.server_path.hint", "remote remote.extraArgs[1]",
+        ])
+        XCTAssertEqual(document.findings(of: ["."]), [], "a short value is found only where a string is exactly it")
+        XCTAssertEqual(document.findings(of: [""]), [])
+    }
+
+    func testCopiesOfMarkedPathsAreListedWithTheirFields() {
+        let intent = PublishIntent(shareValues: [:], pathMarks: ["ledger": [arg(0): mark("/Users/d/ledger.js")]], hints: [:])
+        let config: JSONValue = .object(["command": .string("/Users/d/ledger.js"),
+                                         "args": .array([.string("/Users/d/ledger.js"), .string("/Users/d/ledger.js")])])
+        XCTAssertEqual(CollectionDocument.copiesOfMarkedPaths(in: ["ledger": config], intent: intent).map(\.field),
+                       ["local.args[1]", "local.command"])
     }
 
     /// A character past U+FFFF sorts before U+FF5E by UTF-16 code unit, which is how C# orders, and

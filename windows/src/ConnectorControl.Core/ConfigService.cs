@@ -28,10 +28,18 @@ public sealed class ConfigService
     /// servers act as the baseline, so every reconciliation rule resolves
     /// store-wins — used when adopting a pre-existing (e.g. synced) store that
     /// must not be overwritten by this machine's state.
+    ///
+    /// <paramref name="lastAppliedCollection"/> is the collection Claude's file was last written from
+    /// on this machine. The file holds that collection's connectors, so they are ingested only while
+    /// it is still the active one: after the active collection changed elsewhere, ingesting would
+    /// pour one collection's connectors into another. The caller then applies the active collection
+    /// over the file. Null — never recorded — ingests as always, which a first launch needs to take
+    /// in what Claude already runs; so does rebuilding a corrupt store.
     /// </remarks>
     public LoadResult LoadAndReconcile(
         IReadOnlyDictionary<string, JsonValue>? baseline = null,
-        bool storeAuthoritative = false)
+        bool storeAuthoritative = false,
+        string? lastAppliedCollection = null)
     {
         var notes = new List<string>();
         var (store, corruptPath) = MasterStoreIO.Load(Paths.MasterStorePath);
@@ -76,7 +84,11 @@ public sealed class ConfigService
         {
             effectiveBaseline = baseline;
         }
-        var outcome = Reconciler.Reconcile(store, servers, effectiveBaseline);
+        var ingests = corruptPath is not null || lastAppliedCollection is null
+            || string.Equals(lastAppliedCollection, store.ActiveCollection, StringComparison.Ordinal);
+        var outcome = ingests
+            ? Reconciler.Reconcile(store, servers, effectiveBaseline)
+            : new ReconcileOutcome(store, false);
         if (outcome.StoreChanged || corruptPath is not null)
         {
             SaveStore(outcome.Store);
@@ -92,14 +104,35 @@ public sealed class ConfigService
     }
 
     /// <summary>Snapshot original (first run), backup Claude's config, then write the given servers into it.</summary>
-    public void Apply(IReadOnlyDictionary<string, JsonValue> servers)
+    /// <param name="backedUpFrom">
+    /// The collection the file being backed up was last applied from, recorded against the backup
+    /// (<see cref="BackupCollections"/>) so a restore of it goes back into that collection. A failed
+    /// record never fails the apply: the backup then restores as an unrecorded one.
+    /// </param>
+    public void Apply(IReadOnlyDictionary<string, JsonValue> servers, string? backedUpFrom = null)
     {
         Backups.EnsureOriginalSnapshot(Paths.ClaudeConfigPath);
-        Backups.BackUp(Paths.ClaudeConfigPath, "claude_desktop_config");
+        RecordBackup(Backups.BackUp(Paths.ClaudeConfigPath, "claude_desktop_config"), backedUpFrom);
         ClaudeConfigIO.Write(servers, Paths.ClaudeConfigPath);
     }
 
-    /// <summary>The active collection's enabled subset — see <see cref="Apply(IReadOnlyDictionary{string,JsonValue})"/>.</summary>
+    private void RecordBackup(string? backup, string? collection)
+    {
+        if (backup is null || collection is null)
+        {
+            return;
+        }
+        try
+        {
+            BackupCollections.Record(collection, backup, Paths.BackupsDir);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Best effort, as the summary says: the backup itself is already written.
+        }
+    }
+
+    /// <summary>The active collection's enabled subset — see <see cref="Apply(IReadOnlyDictionary{string,JsonValue},string?)"/>.</summary>
     public void Apply(MasterStore store) => Apply(store.EnabledServers);
 
     /// <summary>The sidecar beside the master list; a missing or unreadable file loads as empty (see <see cref="CollectionsFile.Load"/>).</summary>
@@ -121,8 +154,16 @@ public sealed class ConfigService
     /// The folder this machine publishes the active collection into; a connector whose store copy
     /// renders exactly as the snapshot keeps the store copy (<see cref="Reconciler.AdoptSnapshot"/>).
     /// </param>
+    /// <param name="backedUpFrom">As <see cref="Apply(IReadOnlyDictionary{string,JsonValue},string?)"/> takes it: records the file this restore overwrites.</param>
+    /// <param name="activating">
+    /// The snapshot is adopted into <paramref name="store"/>'s active collection; the caller makes that
+    /// the collection the backup was taken from, and says so here when that is not the collection the
+    /// saved store has active.
+    /// </param>
     public IReadOnlyDictionary<string, JsonValue> RestoreClaudeConfig(string backupPath, MasterStore store,
-                                                                     string? publishFolder = null)
+                                                                     string? publishFolder = null,
+                                                                     string? backedUpFrom = null,
+                                                                     bool activating = false)
     {
         var data = File.ReadAllBytes(backupPath);
         var name = Path.GetFileName(backupPath);
@@ -140,7 +181,7 @@ public sealed class ConfigService
         {
             throw new ClaudeConfigException($"backup {name} has an invalid mcpServers section");
         }
-        Backups.BackUp(Paths.ClaudeConfigPath, "claude_desktop_config");
+        RecordBackup(Backups.BackUp(Paths.ClaudeConfigPath, "claude_desktop_config"), backedUpFrom);
         AtomicFile.Write(data, Paths.ClaudeConfigPath);
         // The bytes just written are what was already parsed above — reading the servers back off
         // the disk file would just reparse the same bytes a second time.
@@ -148,7 +189,10 @@ public sealed class ConfigService
             ? new Dictionary<string, JsonValue>(StringComparer.Ordinal)
             : rawServers.ObjectProperties;
         var outcome = Reconciler.AdoptSnapshot(store, servers, publishFolder);
-        if (outcome.StoreChanged)
+        // A backup restored into a collection other than the active one makes that collection
+        // active, so Claude's file and the store agree on where its connectors live — even when the
+        // adoption itself changed nothing.
+        if (outcome.StoreChanged || activating)
         {
             SaveStore(outcome.Store);
         }

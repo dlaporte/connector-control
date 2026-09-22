@@ -24,6 +24,32 @@ final class ConfigServiceTests: XCTestCase {
         tempDir.dispose()
     }
 
+    /// Claude's file holds the collection it was last applied from, so a load ingests it only while
+    /// that is still the active one; with nothing recorded — a first launch — it ingests as always.
+    func testTheIngestTakesClaudesServersOnlyIntoTheCollectionTheyCameFrom() throws {
+        XCTAssertEqual(Set(try service.loadAndReconcile(lastAppliedCollection: "Default").store.mcps.keys),
+                       ["scoutbook", "aws-mcp", "service-now"], "the recorded collection is the active one")
+        try FileManager.default.removeItem(at: paths.masterStoreURL)
+        XCTAssertEqual(try service.loadAndReconcile(lastAppliedCollection: "Team").store.mcps, [:],
+                       "written from another collection: nothing of it comes into this one")
+    }
+
+    func testEachBackupRecordsTheCollectionItWasAppliedFrom() throws {
+        try service.apply(servers: ["x": .object(["command": .string("x")])], backedUpFrom: "Team")
+        let backup = try XCTUnwrap(try service.backups.backups(series: "claude_desktop_config").first)
+        XCTAssertEqual(BackupCollections.collection(of: backup, in: paths.backupsDirURL), "Team")
+        XCTAssertEqual(try Data(contentsOf: backup), Data(Fixtures.realisticClaudeConfig.utf8),
+                       "the backup itself stays a byte copy of Claude's file")
+        XCTAssertEqual(try service.backups.backups(series: "claude_desktop_config").count, 1,
+                       "the record is not listed as a backup")
+        try service.apply(servers: [:])
+        XCTAssertEqual(try service.backups.backups(series: "claude_desktop_config").count, 2)
+        XCTAssertNil(BackupCollections.collection(of: try XCTUnwrap(try service.backups.backups(series: "claude_desktop_config").first),
+                                                  in: paths.backupsDirURL), "an apply that names no collection records none")
+        XCTAssertNil(BackupCollections.collection(of: dir.appendingPathComponent(backup.lastPathComponent), in: paths.backupsDirURL),
+                     "a file of the same name elsewhere is not the backup")
+    }
+
     func testFirstLoadImportsAllServersEnabled() throws {
         let result = try service.loadAndReconcile()
         XCTAssertEqual(Set(result.store.mcps.keys),

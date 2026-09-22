@@ -70,12 +70,12 @@ public partial class PublishDialog : DialogWindow
         }
     }
 
-    /// <summary>Each unresolved mark's line is bound to its connector's name, which is all the model needs.</summary>
+    /// <summary>Each unresolved mark's line is bound to that mark, whose id is all the model needs.</summary>
     private void OnForgetMark(object sender, RoutedEventArgs e)
     {
-        if (((FrameworkElement)sender).DataContext is string connector)
+        if (((FrameworkElement)sender).DataContext is PublishModel.UnresolvedMark mark)
         {
-            Model.ForgetUnresolvedMark(connector);
+            Model.ForgetUnresolvedMark(mark.Id);
         }
     }
 
@@ -117,14 +117,14 @@ public partial class PublishDialog : DialogWindow
 }
 
 /// <summary>
-/// An unresolved mark's line, from the connector name the list holds. The sentence is the model's
-/// static and names the connector mid-sentence, so a binding cannot compose it from parts without
+/// An unresolved mark's line, from the mark the list holds. The sentence is the model's static and
+/// names the mark and its connector mid-sentence, so a binding cannot compose it from parts without
 /// restating the wording here.
 /// </summary>
 public sealed class MarkNoteConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is string connector ? PublishModel.UnresolvedMarkNote(connector) : string.Empty;
+        value is PublishModel.UnresolvedMark mark ? PublishModel.UnresolvedMarkNote(mark.Connector, mark.Name) : string.Empty;
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();

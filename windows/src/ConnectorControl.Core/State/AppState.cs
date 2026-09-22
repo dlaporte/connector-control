@@ -55,6 +55,8 @@ public sealed class AppState : ObservableObject, IDisposable
     public static string PublishSlugTakenError(string fileName) => $"{fileName} already exists there and belongs to a different collection.";
     public static string PathMarkMovedError(string connector) => $"A path marked in “{connector}” has moved. Open Publish… to mark it again.";
     public static string PublishFolderCarriedError(string connector) => $"“{connector}” carries this machine's publish folder as written. Write ${{COLLECTION_DIR}} in its place, or mark the path in Publish…";
+    public static string KeptPathCarriedError(string connector, string field) => $"“{connector}” carries a path this machine keeps back, in {field}. Open Publish… to review it.";
+    public static string RestoreCollectionGoneError(string collection) => $"This backup was taken from “{collection}”, which no longer exists. Nothing was restored.";
     /// <summary>Claude's launch time is re-read 3 s after the restart completes.</summary>
     public static readonly TimeSpan RestartRecheckDelay = TimeSpan.FromSeconds(3);
     /// <summary>
@@ -539,15 +541,33 @@ public sealed class AppState : ObservableObject, IDisposable
     /// Restores Claude's config from a backup and syncs the reconciliation baseline to the restored
     /// contents BEFORE reloading, so the app's own restore isn't misread as an external change or a re-add.
     /// Throws on a bad backup; nothing is written then.
+    ///
+    /// The snapshot goes back into the collection the backup was taken from, which becomes the
+    /// active one again, since Claude's file held that collection's connectors. A backup whose
+    /// collection is gone is refused (<see cref="RestoreCollectionGoneException"/>). One with no
+    /// record — older than the record, the first-run original, a file from elsewhere — goes into the
+    /// active collection, and publishing still keeps back any path or folder it carries.
     /// </summary>
     public void RestoreClaudeConfig(string backupPath)
     {
+        var target = Store.Clone();
+        if (BackupCollections.CollectionOf(backupPath, Service.Paths.BackupsDir) is { } recorded)
+        {
+            if (!Store.Collections.ContainsKey(recorded))
+            {
+                throw new RestoreCollectionGoneException(recorded);
+            }
+            target.ActiveCollection = recorded;
+        }
         // Every apply backed Claude's file up with this machine's publish folder where the store
         // holds ${COLLECTION_DIR}: a connector that renders just as the backup does keeps its token.
         // Only this machine's own binding counts; another machine's record has no folder here.
-        var active = Store.ActiveCollection;
-        var publishFolder = IsPublished(active) ? CollectionsCache.Published.GetValueOrDefault(active)?.Folder : null;
-        var servers = Service.RestoreClaudeConfig(backupPath, Store, publishFolder);
+        var collection = target.ActiveCollection;
+        var publishFolder = IsPublished(collection) ? CollectionsCache.Published.GetValueOrDefault(collection)?.Folder : null;
+        var servers = Service.RestoreClaudeConfig(backupPath, target, publishFolder,
+            backedUpFrom: CollectionsCache.LastAppliedCollection,
+            activating: !string.Equals(collection, Store.ActiveCollection, StringComparison.Ordinal));
+        RecordApplied(collection);
         AppliedServers = servers;
         hasLoadedOnce = true;
         settings.LastApplyDate = host.Now();
@@ -588,7 +608,8 @@ public sealed class AppState : ObservableObject, IDisposable
 
             var result = Service.LoadAndReconcile(
                 baseline: hasLoadedOnce ? AppliedServers : null,
-                storeAuthoritative: trigger != ReloadTrigger.Routine);
+                storeAuthoritative: trigger != ReloadTrigger.Routine,
+                lastAppliedCollection: LastAppliedCollection);
             Store = result.Store;
             LoadCollections();
             var claudeConfigChangedExternally = false;
@@ -637,6 +658,12 @@ public sealed class AppState : ObservableObject, IDisposable
                 regenerated = !ApplyRetryNeeded;
                 // Notify a failure only on the transition into it — retry reloads (every flyout open) must not re-post it.
                 regenerationFailed = ApplyRetryNeeded && !alreadyFailing;
+            }
+            else if (result.ClaudeServers is not null)
+            {
+                // Claude's file already holds exactly what the active collection renders, so it holds
+                // that collection — which a first launch, with no apply yet, needs recorded.
+                RecordApplied(ActiveCollection);
             }
 
             // Fire notifications AFTER all state above has been assigned, never on first load or for
@@ -718,7 +745,8 @@ public sealed class AppState : ObservableObject, IDisposable
         try
         {
             var enabled = ExpandedServers;
-            Service.Apply(enabled);
+            Service.Apply(enabled, CollectionsCache.LastAppliedCollection);
+            RecordApplied(ActiveCollection);
             AppliedServers = enabled;
             settings.LastApplyDate = host.Now();   // ISettings setters never throw, so this cannot turn a good apply into a failed one
             RefreshRestartState();
@@ -731,6 +759,41 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             LastError = Friendly(ex);
             ApplyRetryNeeded = true;
+        }
+    }
+
+    /// <summary>
+    /// The collection Claude's file was last written from, for the launch ingest: in memory once the
+    /// collections files are loaded, and read from this machine's cache before then — at launch the
+    /// store loads first.
+    /// </summary>
+    private string? LastAppliedCollection => hasLoadedCollectionsOnce
+        ? CollectionsCache.LastAppliedCollection
+        : CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath).LastAppliedCollection;
+
+    /// <summary>
+    /// Records that Claude's file now holds <paramref name="collection"/>, in this machine's cache,
+    /// through the same gate as every other cache save. A save that fails leaves the record in
+    /// memory for the next.
+    /// </summary>
+    private void RecordApplied(string collection)
+    {
+        if (string.Equals(CollectionsCache.LastAppliedCollection, collection, StringComparison.Ordinal))
+        {
+            return;
+        }
+        CollectionsCache = CollectionsCache with { LastAppliedCollection = collection };
+        if (!collectionsLoaded)
+        {
+            return;
+        }
+        try
+        {
+            CollectionsCache.Save(Service.Paths.CollectionsCachePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Kept in memory; the next cache save writes it.
         }
     }
 
@@ -1128,8 +1191,20 @@ public sealed class AppState : ObservableObject, IDisposable
         if (trimmed != name)
         {
             CollectionsFile = new CollectionsFile(Moved(CollectionsFile.Collections, name, trimmed));
+            // Claude's file and its backups name the collection they were applied from, and the
+            // rename carries both. A backup record that fails to follow restores as refused, the
+            // name it holds being gone, never into the wrong collection.
             CollectionsCache = new CollectionsLocalCache(
-                Moved(CollectionsCache.Synced, name, trimmed), Moved(CollectionsCache.Published, name, trimmed));
+                Moved(CollectionsCache.Synced, name, trimmed), Moved(CollectionsCache.Published, name, trimmed),
+                CollectionsCache.LastAppliedCollection == name ? trimmed : CollectionsCache.LastAppliedCollection);
+            try
+            {
+                BackupCollections.Rename(name, trimmed, Service.Paths.BackupsDir);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // As above: such a backup is refused on restore.
+            }
             PendingUpdates = Moved(PendingUpdates, name, trimmed);
             SourceErrors = Moved(SourceErrors, name, trimmed);
             MoveInPlace(pendingRendered, name, trimmed);
@@ -1170,7 +1245,8 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         CollectionsFile = new CollectionsFile(Without(CollectionsFile.Collections, name));
         CollectionsCache = new CollectionsLocalCache(
-            Without(CollectionsCache.Synced, name), Without(CollectionsCache.Published, name));
+            Without(CollectionsCache.Synced, name), Without(CollectionsCache.Published, name),
+            CollectionsCache.LastAppliedCollection);
         PendingUpdates = Without(PendingUpdates, name);
         SourceErrors = Without(SourceErrors, name);
         ForgetSource(name);
@@ -1225,14 +1301,16 @@ public sealed class AppState : ObservableObject, IDisposable
     private void SetBinding(string collection, CollectionsLocalCache.SyncedBinding? binding) =>
         CollectionsCache = new CollectionsLocalCache(
             binding is null ? Without(CollectionsCache.Synced, collection) : With(CollectionsCache.Synced, collection, binding),
-            CollectionsCache.Published);
+            CollectionsCache.Published,
+            CollectionsCache.LastAppliedCollection);
 
     private void SetPublishBinding(string collection, CollectionsLocalCache.PublishBinding? binding) =>
         CollectionsCache = new CollectionsLocalCache(
             CollectionsCache.Synced,
             binding is null
                 ? Without(CollectionsCache.Published, collection)
-                : With(CollectionsCache.Published, collection, binding));
+                : With(CollectionsCache.Published, collection, binding),
+            CollectionsCache.LastAppliedCollection);
 
     private static Dictionary<string, TValue> With<TValue>(IReadOnlyDictionary<string, TValue> source, string name, TValue value)
     {
@@ -1944,8 +2022,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// Null — the banner's Choose Folder…, which nobody reviewed — keeps the list the collection
     /// already had.
     /// </param>
+    /// <param name="releasedValues">
+    /// The paths the author released in the dialog, let travel in this collection's document
+    /// although this machine keeps them back elsewhere.
+    /// </param>
     public string? StartPublishing(string collection, string folder, PublishIntent intent,
-                                   IReadOnlySet<string>? reviewedValues = null)
+                                   IReadOnlySet<string>? reviewedValues = null, IReadOnlySet<string>? releasedValues = null)
     {
         // A synced collection has an author elsewhere, and a name that is not a collection has
         // nothing to publish. Nothing offers either, so both get the silence LocateSource gives a
@@ -1988,7 +2070,8 @@ public sealed class AppState : ObservableObject, IDisposable
             full,
             // A new folder has nothing in it this app wrote, so the next write is unconditional.
             string.Equals(previous?.Folder, full, StringComparison.Ordinal) ? previous?.LastWrittenHash : null,
-            reviewedValues ?? previous?.MarkedValues));
+            reviewedValues ?? previous?.MarkedValues,
+            Released(previous?.ReleasedValues, releasedValues, reviewedValues ?? previous?.MarkedValues)));
         // PersistStore ends in PublishIfChanged, which is what writes the document.
         PersistStore();
         // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
@@ -2035,22 +2118,28 @@ public sealed class AppState : ObservableObject, IDisposable
     /// From the dialog's Publish: replaces this machine's list of marked paths as
     /// <see cref="StartPublishing"/> describes. It is the one way a path leaves that list.
     /// </param>
-    public string? UpdatePublishIntent(string collection, PublishIntent intent, IReadOnlySet<string>? reviewedValues = null)
+    /// <param name="releasedValues">As <see cref="StartPublishing"/> takes them.</param>
+    public string? UpdatePublishIntent(string collection, PublishIntent intent, IReadOnlySet<string>? reviewedValues = null,
+                                       IReadOnlySet<string>? releasedValues = null)
     {
         if (CollectionsFile.Collections.GetValueOrDefault(collection) is not { Publish: { } record } entry)
         {
             return null;
         }
-        // The list is this machine's: another machine's publish record has no binding here.
+        // The lists are this machine's: another machine's publish record has no binding here.
         var binding = CollectionsCache.Published.GetValueOrDefault(collection);
-        var listChanged = reviewedValues is not null && binding is not null && !binding.MarkedValues.SetEquals(reviewedValues);
-        if (record.Intent.Equals(intent) && !listChanged)
+        var changed = reviewedValues is not null && binding is not null
+            ? new CollectionsLocalCache.PublishBinding(binding.Folder, binding.LastWrittenHash, reviewedValues,
+                                                       Released(binding.ReleasedValues, releasedValues, reviewedValues))
+            : binding;
+        var listsChanged = !Equals(changed, binding);
+        if (record.Intent.Equals(intent) && !listsChanged)
         {
             return null;
         }
-        if (listChanged)
+        if (listsChanged)
         {
-            SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(binding!.Folder, binding.LastWrittenHash, reviewedValues));
+            SetPublishBinding(collection, changed);
         }
         SetSidecarEntry(collection, new CollectionsFile.Entry(
             entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs,
@@ -2157,24 +2246,26 @@ public sealed class AppState : ObservableObject, IDisposable
             intent);
     }
 
-    /// <summary>Export: the same document written once, wherever the user chose. null on success.</summary>
-    /// <param name="denying">
-    /// Paths that must not appear in it as written — the dialog passes the ones it marks, so a copy
-    /// of a marked path elsewhere in a connector refuses the export as it would refuse a publish.
-    /// The export binds nothing, so it leaves this machine's list of marked paths as it was.
-    /// </param>
+    /// <summary>
+    /// Export: the same document written once, wherever the user chose. null on success.
+    ///
+    /// It is refused as a publish is when it carries a path this machine keeps back
+    /// (<see cref="KeptBack"/>); the dialog passes what it marks and what it released. The export
+    /// binds nothing, so it leaves this machine's lists as they were.
+    /// </summary>
     public string? WriteExport(string collection, PublishIntent intent, string path,
-                               IReadOnlyList<string>? only = null, IReadOnlySet<string>? denying = null)
+                               IReadOnlyList<string>? only = null, IReadOnlySet<string>? reviewed = null,
+                               IReadOnlySet<string>? released = null)
     {
         try
         {
             var document = ExportDocument(collection, intent, only);
-            RefuseKeptBackPaths(document, collection, denying);
+            RefuseKeptBackPaths(document, collection, reviewed, released);
             AtomicFile.Write(document.Serialize(), path);
             return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException
-                                   or PathMarkMovedException or PublishFolderCarriedException)
+                                   or PathMarkMovedException or PublishFolderCarriedException or KeptPathCarriedException)
         {
             return Friendly(ex);
         }
@@ -2226,7 +2317,7 @@ public sealed class AppState : ObservableObject, IDisposable
                 // written: whatever the marks say — the other machine dropped them in a sidecar that
                 // landed before its master list, a connector came back without them — this machine
                 // does not send it. Only the author's Publish in the dialog clears it.
-                RefuseKeptBackPaths(document, collection, binding.MarkedValues);
+                RefuseKeptBackPaths(document, collection);
                 var hash = PublishHash(document);
                 if (hash == binding.LastWrittenHash && collection != forced)
                 {
@@ -2245,8 +2336,11 @@ public sealed class AppState : ObservableObject, IDisposable
                 var held = Store.Collections.TryGetValue(collection, out var heldCollection)
                     ? heldCollection.Mcps.ToDictionary(p => p.Key, p => p.Value.Config, StringComparer.Ordinal)
                     : new Dictionary<string, JsonValue>(StringComparer.Ordinal);
+                var placed = record.Intent.PlacedArguments(held).ToHashSet(StringComparer.Ordinal);
                 SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(
-                    binding.Folder, hash, binding.MarkedValues.Concat(record.Intent.PlacedArguments(held))));
+                    binding.Folder, hash, binding.MarkedValues.Concat(placed),
+                    // A path written as a placeholder is kept back again, so it is released no longer.
+                    binding.ReleasedValues.Where(value => !placed.Contains(value))));
                 cacheChanged = true;
                 if (PublishError?.Collection == collection)
                 {
@@ -2254,7 +2348,7 @@ public sealed class AppState : ObservableObject, IDisposable
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException
-                                       or PathMarkMovedException or PublishFolderCarriedException)
+                                       or PathMarkMovedException or PublishFolderCarriedException or KeptPathCarriedException)
             {
                 // The recorded hash is left as it was, so the next change tries this write again.
                 // A mark that has moved lands here too, before anything is written: the document
@@ -2394,7 +2488,12 @@ public sealed class AppState : ObservableObject, IDisposable
             return;
         }
         CollectionsFile = loaded.Reconciled(Store);
-        CollectionsCache = CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath).Reconciled(CollectionsFile);
+        var cache = CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath).Reconciled(CollectionsFile);
+        // Only this machine writes its cache, so a record of the last apply made in memory is never
+        // older than the file's — and it may be newer, when the save it waited for was held back.
+        CollectionsCache = CollectionsCache.LastAppliedCollection is { } applied
+            ? cache with { LastAppliedCollection = applied }
+            : cache;
         collectionsLoaded = true;
         hasLoadedCollectionsOnce = true;
         // What is on disk NOW, not what this app last wrote: another machine's sidecar is the
@@ -2444,7 +2543,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return;
         }
-        CollectionsCache = new CollectionsLocalCache(synced, CollectionsCache.Published);
+        CollectionsCache = new CollectionsLocalCache(synced, CollectionsCache.Published, CollectionsCache.LastAppliedCollection);
         try
         {
             CollectionsCache.Save(Service.Paths.CollectionsCachePath);
@@ -2481,27 +2580,69 @@ public sealed class AppState : ObservableObject, IDisposable
     /// block a publish for review belongs here, so the banner can tell it from a failed write.
     /// </summary>
     internal static PublishErrorKind PublishErrorKindOf(Exception error) =>
-        error is PathMarkMovedException or PublishFolderCarriedException
+        error is PathMarkMovedException or PublishFolderCarriedException or KeptPathCarriedException
             ? PublishErrorKind.BlockedForReview
             : PublishErrorKind.WriteFailed;
 
     /// <summary>
     /// Refuses <paramref name="document"/> when it carries, as written, a path this machine keeps
-    /// back for <paramref name="collection"/>: one of <paramref name="values"/>, or the folder this
-    /// machine publishes it into. The folder counts only as a folder of its own, so a sibling that
-    /// merely begins with its name travels.
+    /// back from <paramref name="collection"/>'s document (<see cref="KeptBack"/>), naming the
+    /// connector and the field it sits in.
     /// </summary>
-    internal void RefuseKeptBackPaths(CollectionDocument document, string collection, IReadOnlySet<string>? values)
+    internal void RefuseKeptBackPaths(CollectionDocument document, string collection,
+                                      IReadOnlySet<string>? reviewed = null, IReadOnlySet<string>? released = null)
     {
-        if (values is not null && document.ConnectorCarrying(values) is { } carrier)
+        var (values, folders) = KeptBack(collection, reviewed, released);
+        if (document.Findings(values).FirstOrDefault() is { } value)
         {
-            throw new PathMarkMovedException(carrier);
+            throw new KeptPathCarriedException(value.Connector, value.Field);
         }
-        if (CollectionsCache.Published.GetValueOrDefault(collection)?.Folder is { } folder
-            && document.ConnectorCarryingFolder(folder) is { } holder)
+        if (document.Findings(folders).FirstOrDefault() is { } folder)
         {
-            throw new PublishFolderCarriedException(holder);
+            throw new PublishFolderCarriedException(folder.Connector);
         }
+    }
+
+    /// <summary>
+    /// What this machine keeps back from <paramref name="collection"/>'s document: every path on any
+    /// of its lists of marked paths, and every folder it binds — each collection's publish folder
+    /// and each synced collection's located folder — less the paths the author released for this
+    /// collection. The lists are not the collection's own alone: Claude's file carries whichever
+    /// collection was last applied, and a connector reaches another collection by a copy, an ingest
+    /// or a restore with its paths intact.
+    /// </summary>
+    /// <param name="reviewed">From the Publish dialog, what the author has ticked there, added to the lists.</param>
+    /// <param name="released">What they let go there, added to the collection's own released paths. A path that is ticked is not released.</param>
+    internal (IReadOnlySet<string> Values, IReadOnlySet<string> Folders) KeptBack(
+        string collection, IReadOnlySet<string>? reviewed = null, IReadOnlySet<string>? released = null)
+    {
+        var values = new HashSet<string>(reviewed ?? new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
+        var folders = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var binding in CollectionsCache.Published.Values)
+        {
+            values.UnionWith(binding.MarkedValues);
+            folders.Add(binding.Folder);
+        }
+        foreach (var (name, binding) in CollectionsCache.Synced)
+        {
+            if (IsSynced(name) && binding.Path is { } path && Path.GetDirectoryName(path) is { Length: > 0 } folder)
+            {
+                folders.Add(folder);
+            }
+        }
+        var letGo = Released(CollectionsCache.Published.GetValueOrDefault(collection)?.ReleasedValues, released, reviewed);
+        values.ExceptWith(letGo);
+        folders.ExceptWith(letGo);
+        return (values, folders);
+    }
+
+    /// <summary>A collection's released paths after the dialog's answer: what it released before and now, less anything the author ticks, since a ticked path is kept back again.</summary>
+    internal static IReadOnlySet<string> Released(IEnumerable<string>? before, IEnumerable<string>? released, IEnumerable<string>? marked)
+    {
+        var result = new HashSet<string>(before ?? [], StringComparer.Ordinal);
+        result.UnionWith(released ?? []);
+        result.ExceptWith(marked ?? []);
+        return result;
     }
 
     /// <summary>friendly(): the malformed-config case gets the guided message; everything else its own text.</summary>
@@ -2509,6 +2650,8 @@ public sealed class AppState : ObservableObject, IDisposable
     {
         ClaudeConfigException malformed => MalformedConfigMessage(malformed.Detail),
         PathMarkMovedException moved => PathMarkMovedError(moved.Connector),
+        KeptPathCarriedException kept => KeptPathCarriedError(kept.Connector, kept.Field),
+        RestoreCollectionGoneException gone => RestoreCollectionGoneError(gone.Collection),
         PublishFolderCarriedException carried => PublishFolderCarriedError(carried.Connector),
         _ => error.Message,
     };
@@ -2527,4 +2670,16 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         sourceWatchers.Clear();
     }
+}
+
+/// <summary>
+/// A restore refused before anything was written: the backup was taken from a collection that no
+/// longer exists. Its message is the one the restore dialog shows.
+///
+/// Mirror: <c>RestoreError.collectionGone</c> in Sources/ConnectorControlState/AppState.swift
+/// </summary>
+public sealed class RestoreCollectionGoneException(string collection)
+    : Exception(AppState.RestoreCollectionGoneError(collection))
+{
+    public string Collection { get; } = collection;
 }

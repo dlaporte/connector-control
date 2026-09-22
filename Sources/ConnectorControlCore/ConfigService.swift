@@ -23,8 +23,16 @@ public struct ConfigService: Sendable {
     /// baseline, so every reconciliation rule resolves store-wins — used when
     /// adopting a pre-existing (e.g. synced) store that must not be overwritten
     /// by this machine's state.
+    ///
+    /// `lastAppliedCollection` is the collection Claude's file was last written from on this
+    /// machine. The file holds that collection's connectors, so they are ingested only while it is
+    /// still the active one: after the active collection changed elsewhere, ingesting would pour
+    /// one collection's connectors into another. The caller then applies the active collection
+    /// over the file. nil — never recorded — ingests as always, which a first launch needs to
+    /// take in what Claude already runs; so does rebuilding a corrupt store.
     public func loadAndReconcile(baseline: [String: JSONValue]? = nil,
-                                 storeAuthoritative: Bool = false) throws
+                                 storeAuthoritative: Bool = false,
+                                 lastAppliedCollection: String? = nil) throws
         -> (store: MasterStore, notes: [String],
             claudeServers: [String: JSONValue]?) {
         var notes: [String] = []
@@ -63,9 +71,11 @@ public struct ConfigService: Sendable {
         } else {
             effectiveBaseline = baseline
         }
-        let outcome = Reconciler.reconcile(
-            store: loaded.store, claudeServers: servers,
-            baseline: effectiveBaseline)
+        let ingests = loaded.corruptFileURL != nil || lastAppliedCollection == nil
+            || lastAppliedCollection == loaded.store.activeCollection
+        let outcome = ingests
+            ? Reconciler.reconcile(store: loaded.store, claudeServers: servers, baseline: effectiveBaseline)
+            : ReconcileOutcome(store: loaded.store, storeChanged: false)
         if outcome.storeChanged || loaded.corruptFileURL != nil {
             try saveStore(outcome.store)
         }
@@ -80,11 +90,21 @@ public struct ConfigService: Sendable {
 
     /// Snapshot original (first run), backup Claude's config, then write the
     /// given servers into it, preserving all other keys.
-    public func apply(servers: [String: JSONValue]) throws {
+    ///
+    /// `backedUpFrom` is the collection the file being backed up was last applied from, recorded
+    /// against the backup (`BackupCollections`) so a restore of it goes back into that collection.
+    /// A failed record never fails the apply: the backup then restores as an unrecorded one.
+    public func apply(servers: [String: JSONValue], backedUpFrom collection: String? = nil) throws {
         try backups.ensureOriginalSnapshot(of: paths.claudeConfigURL)
-        try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config")
+        let backup = try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config")
+        recordBackup(backup, from: collection)
         try ClaudeConfigIO.write(mcpServers: servers, to: paths.claudeConfigURL,
                                  staging: paths.stagingDirURL)
+    }
+
+    private func recordBackup(_ backup: URL?, from collection: String?) {
+        guard let backup, let collection else { return }
+        try? BackupCollections.record(collection, for: backup, in: paths.backupsDirURL, staging: paths.stagingDirURL)
     }
 
     /// The active collection's enabled subset — see `apply(servers:)`.
@@ -115,10 +135,17 @@ public struct ConfigService: Sendable {
     /// `publishFolder` is the folder this machine publishes the active collection into; a
     /// connector whose store copy renders exactly as the snapshot keeps the store copy
     /// (`Reconciler.adoptSnapshot`).
+    ///
+    /// The snapshot is adopted into `store`'s active collection; the caller makes that the
+    /// collection the backup was taken from, and says `activating` when that is not the collection
+    /// the saved store has active. `backedUpFrom`, as `apply` takes it, records the file this
+    /// restore overwrites.
     @discardableResult
     public func restoreClaudeConfig(from backup: URL,
                                     mergedWith store: MasterStore,
-                                    publishFolder: String? = nil) throws
+                                    publishFolder: String? = nil,
+                                    backedUpFrom collection: String? = nil,
+                                    activating: Bool = false) throws
         -> [String: JSONValue] {
         let data = try Data(contentsOf: backup)
         let root: [String: Any]
@@ -135,11 +162,14 @@ public struct ConfigService: Sendable {
             throw ClaudeConfigError.malformed(
                 "backup \(backup.lastPathComponent) has an invalid mcpServers section")
         }
-        try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config")
+        recordBackup(try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config"), from: collection)
         try AtomicFile.write(data, to: paths.claudeConfigURL, staging: paths.stagingDirURL)
         let servers = (root["mcpServers"] as? [String: Any] ?? [:]).mapValues(JSONValue.init(any:))
         let outcome = Reconciler.adoptSnapshot(store: store, servers: servers, publishFolder: publishFolder)
-        if outcome.storeChanged { try saveStore(outcome.store) }
+        // A backup restored into a collection other than the active one makes that collection
+        // active, so Claude's file and the store agree on where its connectors live — even when
+        // the adoption itself changed nothing.
+        if outcome.storeChanged || activating { try saveStore(outcome.store) }
         return servers
     }
 }

@@ -56,6 +56,18 @@ final class CollectionsLocalCacheTests: XCTestCase {
         XCTAssertEqual(try CollectionsLocalCache.decode(older).published["Consulting"]?.markedValues, [])
     }
 
+    func testReleasedValuesAndTheLastAppliedCollectionRoundTripAndAreAbsentInAnOlderCache() throws {
+        let cache = CollectionsLocalCache(synced: [:], published: [
+            "Consulting": .init(folder: "/Users/d/Acme/mcp", lastWrittenHash: nil, markedValues: ["/a"], releasedValues: ["/b"]),
+        ], lastAppliedCollection: "Consulting")
+        XCTAssertEqual(try CollectionsLocalCache.decode(cache.encode()), cache)
+        XCTAssertEqual(cache.reconciled(with: CollectionsFile(collections: [:])).lastAppliedCollection, "Consulting",
+                       "which collection Claude's file holds is not a binding to prune")
+        let older = try CollectionsLocalCache.decode(Self.sample.encode())
+        XCTAssertNil(older.lastAppliedCollection)
+        XCTAssertEqual(older.published["Consulting"]?.releasedValues, [])
+    }
+
     func testAnUnknownVersionDecodesAsMalformed() {
         XCTAssertThrowsError(try CollectionsLocalCache.decode(.object(["version": .int(9), "synced": .object([:]), "published": .object([:])])))
     }

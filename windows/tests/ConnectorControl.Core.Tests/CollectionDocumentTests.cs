@@ -245,20 +245,21 @@ public class CollectionDocumentTests
             []);
         var copies = new Dictionary<string, JsonValue>
         {
-            ["another argument"] = Local("/Users/d/ledger.js", "/Users/d/ledger.js"),
-            ["the command"] = JsonValue.Object(
+            ["local.args[1]"] = Local("/Users/d/ledger.js", "/Users/d/ledger.js"),
+            ["local.command"] = JsonValue.Object(
                 ("command", JsonValue.String("/Users/d/ledger.js")),
                 ("args", JsonValue.Array([JsonValue.String("/Users/d/ledger.js")]))),
-            ["an environment value"] = JsonValue.Object(
+            ["env.LEDGER.value"] = JsonValue.Object(
                 ("command", JsonValue.String("node")),
                 ("args", JsonValue.Array([JsonValue.String("/Users/d/ledger.js")])),
                 ("env", JsonValue.Object(("LEDGER", JsonValue.String("/Users/d/ledger.js"))))),
         };
-        foreach (var (place, config) in copies)
+        foreach (var (field, config) in copies)
         {
-            var refused = Assert.Throws<PathMarkMovedException>(() => CollectionDocument.Export("x", null, null, "2026-09-21T15:00:00Z",
+            // A copy is not a mark that moved: the refusal says where the copy sits.
+            var refused = Assert.Throws<KeptPathCarriedException>(() => CollectionDocument.Export("x", null, null, "2026-09-21T15:00:00Z",
                 new Dictionary<string, JsonValue> { ["ledger"] = config }, intent));
-            Assert.True(refused.Connector == "ledger", place);
+            Assert.Equal(("ledger", field), (refused.Connector, refused.Field));
         }
         // An environment value nobody ticked to share stays here as a hint, so it copies nothing.
         var stripped = JsonValue.Object(
@@ -270,37 +271,66 @@ public class CollectionDocumentTests
     }
 
     [Fact]
-    public void ConnectorCarryingFindsAValueAsWrittenOrAsJsonSpellsIt()
+    public void AKeptValueCountsAsTheWholeStringOrAsAPathOfItsOwn()
     {
-        CollectionDocument.Connector LocalConnector(string arg) =>
-            new(new CollectionDocument.Launcher.Local("node", [arg], CollectionPlatforms.Current));
-        var document = new CollectionDocument("x", null, null, "2026-09-21T15:00:00Z", new Dictionary<string, CollectionDocument.Connector>
-        {
-            ["inside"] = LocalConnector("--config=/Users/d/a/b.json"),
-            ["escaped"] = LocalConnector("""{"dir":"\/Users\/d\/c"}"""),
-            ["clean"] = LocalConnector("x.js"),
-        });
-        Assert.Equal("inside", document.ConnectorCarrying(["/Users/d/a"]));   // held inside a longer string
-        Assert.Equal("escaped", document.ConnectorCarrying(["/Users/d/c"]));  // held as a JSON blob spells it
-        Assert.Null(document.ConnectorCarrying(["/Users/d/elsewhere"]));
-        Assert.Null(document.ConnectorCarrying([""]));   // an empty value would match every string
-        Assert.Null(document.ConnectorCarrying([]));
+        Assert.True(KeptValue.Holds("/Users/d/a", "/Users/d/a"));
+        Assert.True(KeptValue.Holds("--config=/Users/d/a/b.json", "/Users/d/a"));   // after =, before a separator
+        Assert.True(KeptValue.Holds("run /Users/d/a now", "/Users/d/a"));
+        Assert.True(KeptValue.Holds("""{"dir":"\/Users\/d\/a"}""", "/Users/d/a"));   // as a JSON blob spells it
+        Assert.True(KeptValue.Holds("""{"dir":"C:\\Users\\d"}""", @"C:\Users\d"));
+        Assert.False(KeptValue.Holds("/Users/d/a-tools/x.js", "/Users/d/a"));   // a sibling that begins with its name
+        Assert.False(KeptValue.Holds("/home/Users/d/a", "/Users/d/a"));   // a longer path that merely ends in it
+        Assert.True(KeptValue.Holds(".", "."));
+        Assert.False(KeptValue.Holds("./start.sh", "."));   // a relative value counts only as the whole string
+        Assert.False(KeptValue.Holds("https://mcp.notion.com/mcp", "."));
+        Assert.False(KeptValue.Holds("anything", ""));
     }
 
     [Fact]
-    public void ConnectorCarryingAFolderCountsItOnlyAsAFolderOfItsOwn()
+    public void AKeptValueMatchesInEitherUnicodeNormalization()
     {
-        static CollectionDocument Document(string arg) => new("x", null, null, "2026-09-21T15:00:00Z",
-            new Dictionary<string, CollectionDocument.Connector>
-            {
-                ["c"] = new(new CollectionDocument.Launcher.Local("node", [arg], CollectionPlatforms.Current)),
-            });
-        Assert.Equal("c", Document(@"C:\Users\d\share\tools\x.js").ConnectorCarryingFolder(@"C:\Users\d\share"));
-        Assert.Equal("c", Document(@"--root=C:\Users\d\share").ConnectorCarryingFolder(@"C:\Users\d\share"));
-        // Inside a JSON blob as JSON spells it.
-        Assert.Equal("c", Document("""{"root":"C:\\Users\\d\\share"}""").ConnectorCarryingFolder(@"C:\Users\d\share"));
-        Assert.Null(Document(@"C:\Users\d\share-tools\x.js").ConnectorCarryingFolder(@"C:\Users\d\share"));
-        Assert.Null(Document("${COLLECTION_DIR}/tools/x.js").ConnectorCarryingFolder(@"C:\Users\d\share"));
+        const string composed = "/Users/d/caf\u00E9/x.js", decomposed = "/Users/d/cafe\u0301/x.js";
+        Assert.True(KeptValue.Holds(decomposed, composed));
+        Assert.True(KeptValue.Holds("--dir=" + composed, decomposed));
+        var placed = PublishIntent.PlacePathMarks(Marks((0, Mark(composed))), [decomposed]).Placed;
+        Assert.Equal(Mark(composed), Assert.Single(placed, p => p.Key == 0).Value);
+    }
+
+    [Fact]
+    public void FindingsNameTheConnectorAndTheFieldEveryPlaceAValueSits()
+    {
+        var document = new CollectionDocument("x", null, null, "2026-09-21T15:00:00Z", new Dictionary<string, CollectionDocument.Connector>
+        {
+            ["ledger"] = new(
+                new CollectionDocument.Launcher.Local("node", ["--root=/Users/d/a", "x.js"], CollectionPlatforms.Current),
+                new Dictionary<string, CollectionDocument.EnvValue>
+                {
+                    ["LOG"] = new CollectionDocument.EnvValue.Value("/Users/d/a/log"),
+                    ["TOKEN"] = new CollectionDocument.EnvValue.Hint("like /Users/d/a"),
+                },
+                new Dictionary<string, string?> { ["server_path"] = "your clone, not /Users/d/a" },
+                new Dictionary<string, JsonValue> { ["cwd"] = JsonValue.String("/Users/d/a") }),
+            ["remote"] = new(new CollectionDocument.Launcher.Remote("https://mcp.example.com/", CollectionDocument.Auth.Auto, "mcp-remote",
+                                                                   ["--config", "/Users/d/a/r.json"])),
+            ["clean"] = new(new CollectionDocument.Launcher.Local("node", ["/Users/d/a-tools/x.js"], CollectionPlatforms.Current)),
+        });
+        Assert.Equal(
+            ["ledger additional.cwd", "ledger env.LOG.value", "ledger env.TOKEN.hint", "ledger local.args[0]",
+             "ledger needs.server_path.hint", "remote remote.extraArgs[1]"],
+            document.Findings(["/Users/d/a"]).Select(f => $"{f.Connector} {f.Field}"));
+        Assert.Empty(document.Findings(["."]));   // a short value is found only where a string is exactly it
+        Assert.Empty(document.Findings([""]));
+    }
+
+    [Fact]
+    public void CopiesOfMarkedPathsAreListedWithTheirFields()
+    {
+        var intent = LedgerIntent(Mark("/Users/d/ledger.js"));
+        var config = JsonValue.Object(
+            ("command", JsonValue.String("/Users/d/ledger.js")),
+            ("args", JsonValue.Array([JsonValue.String("/Users/d/ledger.js"), JsonValue.String("/Users/d/ledger.js")])));
+        Assert.Equal(["local.args[1]", "local.command"],
+            CollectionDocument.CopiesOfMarkedPaths(new Dictionary<string, JsonValue> { ["ledger"] = config }, intent).Select(f => f.Field));
     }
 
     /// <summary>

@@ -27,6 +27,9 @@ public final class PublishModel: ObservableObject {
     /// The button beside an unresolved mark's note: drop the mark and let the path travel as the
     /// preview shows it.
     public static let forgetMarkButton = "Forget Mark"
+    /// The button beside a kept path's note: let that path travel as written in this collection's
+    /// document, which the preview above shows.
+    public static let releaseValueButton = "Release"
 
     public static func title(_ collection: String) -> String { "Publish “\(collection)”" }
 
@@ -41,7 +44,28 @@ public final class PublishModel: ObservableObject {
 
     public static func footerLine(_ fileName: String, _ originShort: String) -> String { "\(fileName) · \(originShort)" }
 
-    public static func unresolvedMarkNote(_ connector: String) -> String { "A path marked in “\(connector)” has moved. Tick it where it now sits, or forget the mark." }
+    public static func unresolvedMarkNote(_ connector: String, _ name: String) -> String { "A path marked “\(name)” in “\(connector)” has moved. Tick it where it now sits, or forget the mark." }
+
+    public static func keptPathNote(_ connector: String, _ field: String) -> String { "“\(connector)” carries a path this machine keeps back, in \(field). Tick it where it sits, or release it." }
+
+    /// A path mark that lost its argument: its text is held by no argument now. It waits for the
+    /// author to tick the path where it now sits, which answers it, or to forget it.
+    public struct UnresolvedMark: Identifiable, Equatable {
+        public let id: String
+        public let connector: String
+        public let name: String
+        public let hint: String?
+        let pointer: JSONPointer
+    }
+
+    /// A path this machine keeps back that the document would carry as written, and where.
+    public struct KeptPath: Identifiable, Equatable {
+        public var id: String { connector + "\u{0}" + field + "\u{0}" + value }
+        public let value: String
+        public let connector: String
+        /// Its place in the connector's document form, as the preview shows it.
+        public let field: String
+    }
 
     /// One environment variable of one connector. Stripped by default: its name and hint travel,
     /// its value does not. A struct the sheet edits through its index, as every other row here
@@ -98,17 +122,37 @@ public final class PublishModel: ObservableObject {
     /// Folder… is the only thing that fills it.
     @Published public var folder: String?
     @Published public var envRows: [EnvRow]
-    @Published public var pathRows: [PathRow]
+    @Published public var pathRows: [PathRow] {
+        // A tick made since the sheet opened answers the next lost mark of its connector and takes
+        // its name and hint. Guarded: the assignment writes the rows again, and a published
+        // property's own observer would otherwise run for ever.
+        didSet {
+            guard !answering else { return }
+            answering = true
+            defer { answering = false }
+            answerLostMarks(since: oldValue)
+        }
+    }
 
     private let state: AppState
-    /// Connectors whose recorded path mark found no argument when the sheet opened, and those the
-    /// collection no longer holds that still carry one. Kept rather than dropped: the rows alone
-    /// show such a path unticked, and publishing or exporting what they say would send it as
-    /// written. Each waits for the author to tick the path where it now sits, or to forget it.
-    @Published private var lostMarks: Set<String>
+    /// Every path mark the sheet found lost on open, each on its own: its text is held by no
+    /// argument of its connector, or the connector is gone. Kept rather than dropped, because the
+    /// rows alone would show such a path unticked and publishing them would send it as written.
+    /// In connector, then pointer, order.
+    private let lostMarks: [UnresolvedMark]
+    /// The lost marks the author chose to forget.
+    @Published private var forgotten: Set<String> = []
+    /// Row → the lost mark its tick answers.
+    private var answers: [String: String] = [:]
+    /// The paths the author released in this sheet, to travel as written in this document.
+    @Published private var released: Set<String> = []
     /// The path rows ticked when the sheet opened. Those are marks already on record, so only a
     /// tick made since can stand in for a lost one.
     private let tickedAtOpen: Set<String>
+    /// Each row's name as the sheet opened it, so a tick that answers a lost mark gives it that
+    /// mark's name only while the author has not typed one of their own.
+    private let namesAtOpen: [String: String]
+    private var answering = false
 
     public init(state: AppState, collection: String, connectors: [String]? = nil) {
         self.state = state
@@ -120,14 +164,15 @@ public final class PublishModel: ObservableObject {
         folder = state.collectionsCache.published[collection]?.folder
         var env: [EnvRow] = []
         var paths: [PathRow] = []
-        var lost: Set<String> = []
-        // What this machine has already published as placeholders for the collection. A row
-        // holding one of them starts ticked even when the record no longer marks it — the other
-        // machine may have dropped the mark while this one still sends the path — so the author
-        // unticks it on purpose, in view of the preview, or it stays a placeholder.
-        let denied = state.collectionsCache.published[collection]?.markedValues ?? []
+        var lost: [UnresolvedMark] = []
+        // What this machine keeps back from the collection's document: its lists of marked paths
+        // and the folders it binds. A row holding one of them starts ticked even when the record
+        // no longer marks it — the other machine may have dropped the mark while this one still
+        // sends the path — so the author unticks it on purpose, in view of the preview, or it
+        // stays a placeholder.
+        let denied = Set(state.keptBack(for: collection).values.map(KeptValue.nfc))
         let held = PublishModel.held(in: state, collection, only: connectors)
-        for name in held.keys.sorted() {
+        for name in held.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
             guard let config = held[name]?.config else { continue }
             let shared = intent.shareValues[name] ?? []
             let hints = intent.hints[name] ?? [:]
@@ -147,35 +192,41 @@ public final class PublishModel: ObservableObject {
             let marks = intent.pathMarks[name] ?? [:]
             let placement = PublishIntent.placePathMarks(marks, in: arguments)
             let byValue = PublishModel.marksByValue(marks)
-            // A mark whose text no argument holds any more has nothing to tick: the connector
-            // waits for the author to tick the path where it now sits, and the rows that could be
-            // that path carry the lost mark's name and hint so the tick keeps them.
-            let lostHere = placement.unresolved.sorted { $0.key.description.ordinallyPrecedes($1.key.description) }
-                .map(\.value).filter { mark in mark.value.map { !arguments.contains($0) } ?? false }
-            if !lostHere.isEmpty { lost.insert(name) }
+            // A mark whose text no argument holds any more has nothing to tick: it waits, on its
+            // own, for the author to tick the path where it now sits.
+            let texts = Set(arguments.map(KeptValue.nfc))
+            lost += PublishModel.sortedByPointer(placement.unresolved)
+                .filter { $0.value.value.map { !texts.contains(KeptValue.nfc($0)) } ?? false }
+                .map { UnresolvedMark(id: name + $0.key.description, connector: name,
+                                      name: $0.value.name, hint: $0.value.hint, pointer: $0.key) }
             for (index, argument) in arguments.enumerated() {
-                let mark = placement.placed[index] ?? byValue[argument]
-                let ticked = mark != nil || denied.contains(argument)
+                let mark = placement.placed[index] ?? byValue[KeptValue.nfc(argument)]
+                let ticked = mark != nil || denied.contains(KeptValue.nfc(argument))
                 guard PublishModel.looksLikeAPath(argument) || ticked else { continue }
                 found += 1
-                let carried = mark ?? (ticked ? nil : lostHere.first)
                 paths.append(PathRow(connector: name, pointer: JSONPointer(["args", String(index)]), value: argument,
                                      marked: ticked,
-                                     name: carried?.name ?? PublishModel.defaultPathName(found),
-                                     hint: carried?.hint ?? ""))
+                                     name: mark?.name ?? PublishModel.defaultPathName(found),
+                                     hint: mark?.hint ?? ""))
             }
         }
         // A mark for a connector the collection no longer holds was made on one renamed or
         // removed where the record could not follow, and the exporter refuses it whatever the
-        // subset. No row can be ticked for it, so it waits to be forgotten.
+        // subset. No row can be ticked for it, so each waits to be forgotten.
         let all = state.store.collections[collection]?.mcps ?? [:]
-        for (name, marks) in intent.pathMarks where all[name] == nil && marks.values.contains(where: { $0.value != nil }) {
-            lost.insert(name)
+        for name in intent.pathMarks.keys.sorted(by: { $0.ordinallyPrecedes($1) }) where all[name] == nil {
+            lost += PublishModel.sortedByPointer(intent.pathMarks[name] ?? [:]).filter { $0.value.value != nil }
+                .map { UnresolvedMark(id: name + $0.key.description, connector: name,
+                                      name: $0.value.name, hint: $0.value.hint, pointer: $0.key) }
         }
         envRows = env
         pathRows = paths
-        lostMarks = lost
+        lostMarks = lost.sorted { a, b in
+            a.connector != b.connector ? a.connector.ordinallyPrecedes(b.connector)
+                : a.pointer.description.ordinallyPrecedes(b.pointer.description)
+        }
         tickedAtOpen = Set(paths.filter(\.marked).map(\.id))
+        namesAtOpen = Dictionary(uniqueKeysWithValues: paths.map { ($0.id, $0.name) })
     }
 
     public var title: String { PublishModel.title(collection) }
@@ -212,29 +263,82 @@ public final class PublishModel: ObservableObject {
         return origin.isEmpty ? fileName : PublishModel.footerLine(fileName, origin)
     }
 
-    /// Nothing is published while a mark is unresolved: the rows would send its path as written.
-    public var canPublish: Bool { !(folder ?? "").isEmpty && unresolvedMarks.isEmpty }
+    /// Nothing is published while a mark is unresolved or a kept path unanswered: the rows would
+    /// send the path as written.
+    public var canPublish: Bool { !(folder ?? "").isEmpty && unresolvedMarks.isEmpty && keptPaths.isEmpty }
 
-    /// Nothing is exported while a mark is unresolved, for the same reason.
-    public var canExport: Bool { unresolvedMarks.isEmpty }
+    /// Nothing is exported while either waits, for the same reason.
+    public var canExport: Bool { unresolvedMarks.isEmpty && keptPaths.isEmpty }
 
-    /// The connectors whose path mark was lost and is still unanswered, sorted. One leaves the
-    /// list when a path row of it is ticked that was not ticked on open, with a name the
-    /// placeholder can carry — the new tick replaces the lost mark — or when the mark is
-    /// forgotten. Unticking that row puts it back.
-    public var unresolvedMarks: [String] {
-        lostMarks.filter { connector in
-            !pathRows.contains { row in
-                row.connector == connector && row.marked && !tickedAtOpen.contains(row.id)
-                    && !PublishModel.placeholderName(row.name).isEmpty
-            }
-        }.sorted { $0.ordinallyPrecedes($1) }
+    /// The lost marks still unanswered, one note each, in connector then pointer order. A lost
+    /// mark is answered by its own tick — a path row of its connector ticked since the sheet
+    /// opened, with a name the placeholder can carry, each tick answering the next lost mark in
+    /// pointer order — or by forgetting it. Unticking the row puts it back.
+    public var unresolvedMarks: [UnresolvedMark] {
+        let answered = Set(pathRows.compactMap { row in
+            row.marked && !PublishModel.placeholderName(row.name).isEmpty ? answers[row.id] : nil
+        })
+        return lostMarks.filter { !forgotten.contains($0.id) && !answered.contains($0.id) }
     }
 
-    /// Drops a lost mark by the author's explicit choice: the path then travels as the preview
+    /// Drops one lost mark by the author's explicit choice: its path then travels as the preview
     /// shows it, as written unless a row of it is ticked.
-    public func forgetUnresolvedMark(_ connector: String) {
-        lostMarks.remove(connector)
+    public func forgetUnresolvedMark(_ id: String) {
+        forgotten.insert(id)
+        answers = answers.filter { $0.value != id }
+    }
+
+    /// Every path this machine keeps back that the document, as the rows now make it, would carry
+    /// as written, with its connector and field: a copy of a ticked path; a path on one of this
+    /// machine's lists of marked paths, this collection's or another's; a folder it binds. Each
+    /// is answered by ticking it where it sits in an argument row, or by releasing it.
+    public var keptPaths: [KeptPath] {
+        let held = PublishModel.held(in: state, collection, only: connectors).mapValues(\.config)
+        var found = CollectionDocument.copiesOfMarkedPaths(in: held, intent: intent)
+        if found.isEmpty, let document = try? state.exportDocument(for: collection, intent: intent, only: connectors) {
+            let kept = state.keptBack(for: collection, reviewed: reviewedValues, released: released)
+            found = document.findings(of: kept.values) + document.findings(of: kept.folders)
+        }
+        var seen: Set<String> = []
+        return found.map { KeptPath(value: $0.value, connector: $0.connector, field: $0.field) }
+            .filter { seen.insert($0.id).inserted }
+    }
+
+    /// Lets one kept path travel as written in this collection's document, by the author's
+    /// explicit choice after reading the preview. Everywhere: every row holding it is unticked,
+    /// since a path both marked and released would be both a placeholder and not.
+    public func releaseKeptPath(_ value: String) {
+        let text = KeptValue.nfc(value)
+        released.insert(value)
+        for index in pathRows.indices where pathRows[index].marked && KeptValue.nfc(pathRows[index].value) == text {
+            pathRows[index].marked = false
+        }
+    }
+
+    /// Answers lost marks with the ticks made since `previous`: each row newly ticked, not ticked
+    /// on open, answers the next unanswered lost mark of its connector in pointer order, and takes
+    /// its name and hint while the author has not typed their own. A row unticked gives its lost
+    /// mark back.
+    private func answerLostMarks(since previous: [PathRow]) {
+        let before = Dictionary(uniqueKeysWithValues: previous.map { ($0.id, $0.marked) })
+        var rows = pathRows
+        for row in rows where !row.marked { answers.removeValue(forKey: row.id) }
+        var renamed = false
+        for index in rows.indices {
+            let row = rows[index]
+            guard row.marked, before[row.id] == false, !tickedAtOpen.contains(row.id), answers[row.id] == nil else { continue }
+            let taken = Set(answers.values)
+            guard let mark = lostMarks.first(where: {
+                $0.connector == row.connector && !forgotten.contains($0.id) && !taken.contains($0.id)
+            }) else { continue }
+            answers[row.id] = mark.id
+            if row.name == namesAtOpen[row.id], row.hint.isEmpty {
+                rows[index].name = mark.name
+                rows[index].hint = mark.hint ?? ""
+                renamed = true
+            }
+        }
+        if renamed { pathRows = rows }
     }
 
     /// What the rows say, in the form the exporter reads. A marked row whose name is not a legal
@@ -268,14 +372,13 @@ public final class PublishModel: ObservableObject {
     }
 
     /// The document itself, as the editor would show it. Every byte that leaves this machine is
-    /// in here. When the ticks can no longer be placed — the collection changed under the open
-    /// sheet — there is no document, and the preview says why rather than showing one that
-    /// would not be written.
+    /// in here, kept paths included, so the author reads them before releasing any
+    /// (`keptPaths`). When the ticks can no longer be placed — the collection changed under the
+    /// open sheet, or a ticked path is also copied unticked — there is no document, and the
+    /// preview says why rather than showing one that would not be written.
     public var preview: String {
         do {
-            let document = try state.exportDocument(for: collection, intent: intent, only: connectors)
-            try state.refuseKeptBackPaths(in: document, of: collection, values: reviewedValues)
-            return document.encode().editorText()
+            return try state.exportDocument(for: collection, intent: intent, only: connectors).encode().editorText()
         } catch {
             return AppState.friendly(error)
         }
@@ -286,6 +389,13 @@ public final class PublishModel: ObservableObject {
     /// list of marked paths — the author's reviewed answer, replacing whatever was kept before.
     private var reviewedValues: Set<String> {
         Set(intent.pathMarks.values.flatMap { $0.values.compactMap(\.value) })
+    }
+
+    /// The first thing still waiting for the author, as the note the sheet shows for it.
+    private var firstUnanswered: String? {
+        if let lost = unresolvedMarks.first { return PublishModel.unresolvedMarkNote(lost.connector, lost.name) }
+        if let kept = keptPaths.first { return PublishModel.keptPathNote(kept.connector, kept.field) }
+        return nil
     }
 
     /// The connectors a sheet over `collection` speaks for, which is every one of them unless an
@@ -312,26 +422,30 @@ public final class PublishModel: ObservableObject {
 
     /// Publish, or re-publish with what the sheet now says. A folder that is not the one on
     /// record starts publishing again there, which is how the failed-write banner's Choose
-    /// Folder… moves a collection. nil on success. Refused with the note while a mark is
-    /// unresolved, behind the disabled button: what the rows say would send its path as written.
+    /// Folder… moves a collection. nil on success. Refused with the first note while a mark is
+    /// unresolved or a kept path unanswered, behind the disabled button: what the rows say would
+    /// send the path as written. What the author released goes on record with the ticks.
     public func publish() -> String? {
-        if let lost = unresolvedMarks.first { return PublishModel.unresolvedMarkNote(lost) }
+        if let note = firstUnanswered { return note }
         guard let chosen = folder?.trimmingCharacters(in: .whitespaces), !chosen.isEmpty else { return nil }
+        let letGo = released.subtracting(reviewedValues)
         guard state.isPublished(collection), state.collectionsCache.published[collection]?.folder == chosen else {
-            return state.startPublishing(collection, to: chosen, intent: intent, reviewedValues: reviewedValues)
+            return state.startPublishing(collection, to: chosen, intent: intent, reviewedValues: reviewedValues,
+                                         releasedValues: letGo)
         }
         // The same folder, already publishing: the ticks go on record, and then the document is
         // written whether or not it changed. Pressing Publish again is how a write that failed is
         // retried, and by then nothing about the document is different — only the folder is.
-        _ = state.updatePublishIntent(collection, intent: intent, reviewedValues: reviewedValues)
+        _ = state.updatePublishIntent(collection, intent: intent, reviewedValues: reviewedValues, releasedValues: letGo)
         return state.republish(collection)
     }
 
-    /// The same document, written once, binding nothing. nil on success. Refused with the note
-    /// while a mark is unresolved, as `publish()` is.
+    /// The same document, written once, binding nothing. nil on success. Refused with the first
+    /// note while anything waits, as `publish()` is.
     public func export(to path: String) -> String? {
-        if let lost = unresolvedMarks.first { return PublishModel.unresolvedMarkNote(lost) }
-        return state.writeExport(for: collection, intent: intent, to: path, only: connectors, denying: reviewedValues)
+        if let note = firstUnanswered { return note }
+        return state.writeExport(for: collection, intent: intent, to: path, only: connectors,
+                                 reviewed: reviewedValues, released: released.subtracting(reviewedValues))
     }
 
     // MARK: - Rows
@@ -363,18 +477,22 @@ public final class PublishModel: ObservableObject {
         return FileManager.default.fileExists(atPath: argument)
     }
 
-    /// "path", then "path_2", "path_3" — numbered inside each connector, since a recipient fills
-    /// one connector's placeholders at a time.
-    /// A connector's recorded marks by the text each was made on; where two share a text, the
-    /// first in pointer order speaks for both.
+    /// A connector's recorded marks by the text each was made on, in NFC; where two share a text,
+    /// the first in pointer order speaks for both.
     private static func marksByValue(_ marks: [JSONPointer: PublishIntent.PathMark]) -> [String: PublishIntent.PathMark] {
         var out: [String: PublishIntent.PathMark] = [:]
-        for (_, mark) in marks.sorted(by: { $0.key.description.ordinallyPrecedes($1.key.description) }) {
-            if let value = mark.value, out[value] == nil { out[value] = mark }
+        for (_, mark) in sortedByPointer(marks) {
+            if let value = mark.value.map(KeptValue.nfc), out[value] == nil { out[value] = mark }
         }
         return out
     }
 
+    private static func sortedByPointer(_ marks: [JSONPointer: PublishIntent.PathMark]) -> [(key: JSONPointer, value: PublishIntent.PathMark)] {
+        marks.sorted { $0.key.description.ordinallyPrecedes($1.key.description) }
+    }
+
+    /// "path", then "path_2", "path_3" — numbered inside each connector, since a recipient fills
+    /// one connector's placeholders at a time.
     private static func defaultPathName(_ index: Int) -> String {
         index <= 1 ? "path" : "path_\(index)"
     }

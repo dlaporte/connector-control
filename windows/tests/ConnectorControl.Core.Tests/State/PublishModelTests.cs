@@ -213,7 +213,7 @@ public class PublishModelTests
         var before = File.ReadAllBytes(file);
 
         var sheet = new PublishModel(state, state.ActiveCollection);
-        Assert.Equal(["c"], sheet.UnresolvedMarks);
+        Assert.Equal(["c"], sheet.UnresolvedMarks.Select(m => m.Connector));
         // The path it lost is not where it was.
         Assert.False(sheet.PathRows.First(r => r.Connector == "c").Marked);
         Assert.NotNull(sheet.Folder);
@@ -222,9 +222,9 @@ public class PublishModelTests
         Assert.False(sheet.CanExport);
 
         var output = h.Dir.File(Path.Combine("away", "copy.json"));
-        Assert.Equal(PublishModel.UnresolvedMarkNote("c"), sheet.Export(output));
+        Assert.Equal(PublishModel.UnresolvedMarkNote("c", "srv"), sheet.Export(output));
         Assert.False(File.Exists(output));
-        Assert.Equal(PublishModel.UnresolvedMarkNote("c"), sheet.Publish());
+        Assert.Equal(PublishModel.UnresolvedMarkNote("c", "srv"), sheet.Publish());
         Assert.Equal(before, File.ReadAllBytes(file));
         // The record is left as it was.
         Assert.Equal("/Users/d/x.js", Assert.Single(RecordedMarks(state, "c")!).Value.Value);
@@ -245,11 +245,11 @@ public class PublishModelTests
         Assert.True(sheet.CanExport);
         // A tick with no name to carry would publish the path, so it answers nothing.
         row.Name = "  ";
-        Assert.Equal(["c"], sheet.UnresolvedMarks);
+        Assert.Equal(["c"], sheet.UnresolvedMarks.Select(m => m.Connector));
         // Unticking puts it back.
         row.Marked = false;
         row.Name = "srv";
-        Assert.Equal(["c"], sheet.UnresolvedMarks);
+        Assert.Equal(["c"], sheet.UnresolvedMarks.Select(m => m.Connector));
 
         row.Marked = true;
         Assert.Null(sheet.Publish());
@@ -278,7 +278,7 @@ public class PublishModelTests
         var sheet = new PublishModel(state, state.ActiveCollection);
         Assert.Equal(["/Users/d/one.js"], sheet.PathRows.Where(r => r.Connector == "two" && r.Marked).Select(r => r.Value));
         // The tick on one.js was already on record, so it stands in for nothing.
-        Assert.Equal(["two"], sheet.UnresolvedMarks);
+        Assert.Equal(["two"], sheet.UnresolvedMarks.Select(m => m.Connector));
         sheet.PathRows.Single(r => r.Value == "/Users/d/2.js").Marked = true;
         Assert.Empty(sheet.UnresolvedMarks);
     }
@@ -293,7 +293,7 @@ public class PublishModelTests
         // The preview shows what forgetting the mark would send.
         Assert.Equal(["/Users/d/y.js", "--quiet"], DocumentArgs("c", System.Text.Encoding.UTF8.GetBytes(sheet.Preview)));
 
-        sheet.ForgetUnresolvedMark("c");
+        sheet.ForgetUnresolvedMark(sheet.UnresolvedMarks.Single(m => m.Connector == "c").Id);
         Assert.Empty(sheet.UnresolvedMarks);
         Assert.True(sheet.CanPublish);
         Assert.True(sheet.CanExport);
@@ -328,7 +328,7 @@ public class PublishModelTests
                 entry.Provenance))
             : p)).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
         state.Reload();
-        Assert.Equal(AppState.PathMarkMovedError("c"), state.PublishError?.Message);
+        Assert.Equal(AppState.KeptPathCarriedError("c", "local.args[0]"), state.PublishError?.Message);
 
         var sheet = new PublishModel(state, state.ActiveCollection);
         // The record no longer marks it, but this machine has sent it as a placeholder.
@@ -358,12 +358,12 @@ public class PublishModelTests
         state.Reload(ReloadTrigger.ExternalStoreAdoption);
 
         var sheet = new PublishModel(state, state.ActiveCollection);
-        Assert.Equal(["c"], sheet.UnresolvedMarks);
+        Assert.Equal(["c"], sheet.UnresolvedMarks.Select(m => m.Connector));
         sheet.PathRows.First(r => r.Connector == "d").Marked = true;
         // A tick in another connector answers nothing about this one.
-        Assert.Equal(["c"], sheet.UnresolvedMarks);
+        Assert.Equal(["c"], sheet.UnresolvedMarks.Select(m => m.Connector));
         Assert.False(sheet.CanPublish);
-        sheet.ForgetUnresolvedMark("c");
+        sheet.ForgetUnresolvedMark(sheet.UnresolvedMarks.Single(m => m.Connector == "c").Id);
         Assert.True(sheet.CanPublish);
         Assert.Null(sheet.Publish());
         Assert.Null(state.PublishError);
@@ -390,15 +390,216 @@ public class PublishModelTests
         Assert.Contains(nameof(PublishModel.CanExport), raised);
 
         sheet.PathRows.Single(r => r.Connector == "c").Marked = false;
+        var lost = Assert.Single(sheet.UnresolvedMarks);
         raised.Clear();
-        sheet.ForgetUnresolvedMark("c");
+        sheet.ForgetUnresolvedMark(lost.Id);
         Assert.Contains(nameof(PublishModel.UnresolvedMarks), raised);
+        Assert.Contains(nameof(PublishModel.KeptPaths), raised);
         Assert.Contains(nameof(PublishModel.CanPublish), raised);
         Assert.Contains(nameof(PublishModel.CanExport), raised);
         // Forgetting what is already forgotten says nothing.
         raised.Clear();
-        sheet.ForgetUnresolvedMark("c");
+        sheet.ForgetUnresolvedMark(lost.Id);
         Assert.Empty(raised);
+    }
+
+    // MARK: each lost mark on its own
+
+    private static PublishIntent LedgerMarks(params (int Index, PublishIntent.PathMark Mark)[] marks) => new(
+        [],
+        [new("ledger", marks.ToDictionary(
+            m => new JsonPointer(["args", m.Index.ToString(System.Globalization.CultureInfo.InvariantCulture)]), m => m.Mark))],
+        []);
+
+    /// <summary>
+    /// "ledger" published with two marked paths, then both paths edited outside the editor, so each
+    /// mark has lost its argument. Returns the document's path.
+    /// </summary>
+    private static string PublishTwoMarksThenLoseBoth(AppStateHarness h, AppState state)
+    {
+        Assert.Null(state.Upsert("ledger", new McpEntry(Node("/Users/d/a/one.js", "/Users/d/b/two.js")), null));
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, LedgerMarks(
+            (0, new PublishIntent.PathMark("first", "h1", "/Users/d/a/one.js")),
+            (1, new PublishIntent.PathMark("second", "h2", "/Users/d/b/two.js"))),
+            new HashSet<string>(["/Users/d/a/one.js", "/Users/d/b/two.js"], StringComparer.Ordinal)));
+        Assert.Null(state.Upsert("ledger", new McpEntry(Node("/Users/d/a2/one.js", "/Users/d/b2/two.js")), "ledger"));
+        return Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
+    }
+
+    [Fact]
+    public void EachLostMarkIsAnsweredByATickOfItsOwn()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var file = PublishTwoMarksThenLoseBoth(h, state);
+        var before = File.ReadAllBytes(file);
+        var sheet = new PublishModel(state, state.ActiveCollection);
+        Assert.Equal(["ledger first", "ledger second"], sheet.UnresolvedMarks.Select(m => $"{m.Connector} {m.Name}"));
+        var one = sheet.PathRows.Single(r => r.Value == "/Users/d/a2/one.js");
+        var two = sheet.PathRows.Single(r => r.Value == "/Users/d/b2/two.js");
+
+        one.Marked = true;
+        // One tick answers one mark.
+        Assert.Equal(["second"], sheet.UnresolvedMarks.Select(m => m.Name));
+        Assert.Equal(("first", "h1"), (one.Name, one.Hint));
+        Assert.False(sheet.CanPublish);
+        Assert.Equal(PublishModel.UnresolvedMarkNote("ledger", "second"), sheet.Publish());
+        // The second moved path does not travel.
+        Assert.Equal(before, File.ReadAllBytes(file));
+
+        two.Marked = true;
+        Assert.Empty(sheet.UnresolvedMarks);
+        // Each tick carries the name of the mark it answers.
+        Assert.Equal(("second", "h2"), (two.Name, two.Hint));
+        Assert.Null(sheet.Publish());
+        Assert.Equal(["${CC_NEEDS:first}", "${CC_NEEDS:second}"], DocumentArgs("ledger", File.ReadAllBytes(file)));
+        var recorded = RecordedMarks(state, "ledger")!;
+        Assert.Equal(new PublishIntent.PathMark("first", "h1", "/Users/d/a2/one.js"), recorded[new JsonPointer(["args", "0"])]);
+        Assert.Equal(new PublishIntent.PathMark("second", "h2", "/Users/d/b2/two.js"), recorded[new JsonPointer(["args", "1"])]);
+    }
+
+    [Fact]
+    public void UntickingPutsBackTheMarkItAnsweredAndEachMarkIsForgottenAlone()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        PublishTwoMarksThenLoseBoth(h, state);
+        var sheet = new PublishModel(state, state.ActiveCollection);
+        var one = sheet.PathRows.Single(r => r.Value == "/Users/d/a2/one.js");
+        var two = sheet.PathRows.Single(r => r.Value == "/Users/d/b2/two.js");
+        one.Marked = true;
+        two.Marked = true;
+        one.Marked = false;
+        // Unticking gives back the mark that row answered.
+        Assert.Equal(["first"], sheet.UnresolvedMarks.Select(m => m.Name));
+
+        var first = sheet.UnresolvedMarks[0];
+        two.Marked = false;
+        Assert.Equal(["first", "second"], sheet.UnresolvedMarks.Select(m => m.Name));
+        sheet.ForgetUnresolvedMark(first.Id);
+        // Forget Mark forgets that one mark.
+        Assert.Equal(["second"], sheet.UnresolvedMarks.Select(m => m.Name));
+        Assert.False(sheet.CanPublish);
+    }
+
+    // MARK: a kept value outside the argument rows
+
+    private const string KeptPathValue = "/Users/d/ledger/dist/index.js";
+
+    /// <summary>
+    /// "ledger" published with its path marked; then the other machine's save drops the mark and
+    /// leaves the path only in an <c>additional</c> field no row offers.
+    /// </summary>
+    private static string PublishThenMoveThePathOutOfTheRows(AppStateHarness h, AppState state)
+    {
+        Assert.Null(state.Upsert("ledger", new McpEntry(Node(KeptPathValue)), null));
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder,
+            LedgerMarks((0, new PublishIntent.PathMark("server_path", null, KeptPathValue))),
+            new HashSet<string>([KeptPathValue], StringComparer.Ordinal)));
+        var entry = state.CollectionsFile.Collections[state.ActiveCollection];
+        var record = entry.Publish!;
+        new CollectionsFile(state.CollectionsFile.Collections.Select(p => p.Key == state.ActiveCollection
+            ? new KeyValuePair<string, CollectionsFile.Entry>(p.Key, new CollectionsFile.Entry(
+                entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs,
+                new CollectionsFile.PublishRecord(record.Slug, record.Origin,
+                    record.Intent.ReplacingPathMarks("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark>())),
+                entry.Provenance))
+            : p)).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        var store = h.StoreOnDisk();
+        var mcps = store.Collections[store.ActiveCollection].Mcps;
+        mcps["ledger"] = mcps["ledger"] with
+        {
+            Config = JsonValue.Object(
+                ("command", JsonValue.String("node")),
+                ("args", JsonValue.Array([JsonValue.String("--serve")])),
+                ("cwd", JsonValue.String(KeptPathValue))),
+        };
+        MasterStoreIO.Save(store, h.MasterStorePath);
+        state.Reload(ReloadTrigger.ExternalStoreAdoption);
+        Assert.Equal(AppState.KeptPathCarriedError("ledger", "additional.cwd"), state.PublishError?.Message);
+        return Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
+    }
+
+    [Fact]
+    public void AKeptValueOutsideTheRowsIsListedAndHoldsPublishUntilReleased()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var file = PublishThenMoveThePathOutOfTheRows(h, state);
+        var before = File.ReadAllBytes(file);
+        var sheet = new PublishModel(state, state.ActiveCollection);
+        Assert.Empty(sheet.UnresolvedMarks);
+        Assert.Equal([new PublishModel.KeptPath(KeptPathValue, "ledger", "additional.cwd")], sheet.KeptPaths);
+        Assert.False(sheet.CanPublish);
+        Assert.False(sheet.CanExport);
+        Assert.Equal(PublishModel.KeptPathNote("ledger", "additional.cwd"), sheet.Publish());
+        var output = h.Dir.File(Path.Combine("away", "copy.json"));
+        Assert.Equal(PublishModel.KeptPathNote("ledger", "additional.cwd"), sheet.Export(output));
+        Assert.False(File.Exists(output));
+        Assert.Equal(before, File.ReadAllBytes(file));
+        // Nothing released it.
+        Assert.Equal([KeptPathValue], state.CollectionsCache.Published[state.ActiveCollection].MarkedValues);
+
+        sheet.ReleaseKeptPath(KeptPathValue);
+        Assert.Empty(sheet.KeptPaths);
+        Assert.True(sheet.CanPublish);
+        Assert.Null(sheet.Publish());
+        Assert.Null(state.PublishError);
+        // The author's explicit choice: the path travels as written.
+        Assert.True(JsonText.Contains(File.ReadAllBytes(file), KeptPathValue));
+        var binding = state.CollectionsCache.Published[state.ActiveCollection];
+        Assert.Empty(binding.MarkedValues);
+        Assert.Equal([KeptPathValue], binding.ReleasedValues);
+        state.Reload();
+        // A released path stays released.
+        Assert.Null(state.PublishError);
+    }
+
+    [Fact]
+    public void AHintHoldingAMarkedPathIsListedWhereItSits()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.Upsert("ledger", new McpEntry(Node(KeptPathValue)), null));
+        var sheet = new PublishModel(state, state.ActiveCollection) { Folder = PublishFolder(h) };
+        sheet.PathRows[0].Marked = true;
+        sheet.PathRows[0].Name = "server_path";
+        sheet.PathRows[0].Hint = $"like mine, {KeptPathValue}";
+        Assert.Equal(["ledger needs.server_path.hint"], sheet.KeptPaths.Select(k => $"{k.Connector} {k.Field}"));
+        Assert.False(sheet.CanPublish);
+        Assert.Equal(PublishModel.KeptPathNote("ledger", "needs.server_path.hint"), sheet.Publish());
+        Assert.False(File.Exists(Path.Combine(PublishFolder(h), sheet.FileName)));
+        sheet.PathRows[0].Hint = "your ledger clone";
+        Assert.True(sheet.CanPublish);
+        Assert.Null(sheet.Publish());
+    }
+
+    /// <summary>
+    /// A filesystem server started on "." and a remote connector beside it: a relative value counts
+    /// only where a string is exactly it, so the dots in a URL are not the marked path.
+    /// </summary>
+    [Fact]
+    public void AShortRelativeMarkHoldsBackOnlyItself()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.Upsert("files", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("npx")),
+            ("args", JsonValue.Array([JsonValue.String("-y"), JsonValue.String("@modelcontextprotocol/server-filesystem"), JsonValue.String(".")])))),
+            null));
+        Assert.Null(state.Upsert("notion", new McpEntry(AppStateHarness.Remote("https://mcp.notion.com/mcp")), null));
+        var sheet = new PublishModel(state, state.ActiveCollection) { Folder = PublishFolder(h) };
+        sheet.PathRows.Single(r => r.Value == ".").Marked = true;
+        Assert.Empty(sheet.KeptPaths);
+        Assert.True(sheet.CanPublish);
+        Assert.Null(sheet.Publish());
+        Assert.Null(state.PublishError);
+        Assert.Equal(["-y", "@modelcontextprotocol/server-filesystem", "${CC_NEEDS:path}"],
+                     DocumentArgs("files", File.ReadAllBytes(Path.Combine(PublishFolder(h), sheet.FileName))));
+        state.Reload();
+        Assert.Null(state.PublishError);
     }
 
     [Fact]
