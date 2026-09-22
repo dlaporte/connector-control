@@ -10,6 +10,11 @@ public sealed class FakeDialogs : IDialogs
     public sealed record OfferCall(string NewVersion, string CurrentVersion, string? Notes);
 
     public bool NextConfirm { get; set; } = true;
+    /// <summary>
+    /// Answers for a flow that raises more than one confirmation, taken in order; NextConfirm
+    /// answers whatever is left. One flag cannot say "delete it, but keep the file".
+    /// </summary>
+    public Queue<bool> ConfirmAnswers { get; } = new();
     public string? NextPromptAnswer { get; set; }
     public bool NextOffer { get; set; }
     public Exception? OfferFailure { get; set; }
@@ -21,7 +26,7 @@ public sealed class FakeDialogs : IDialogs
     public bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle, bool destructive)
     {
         Confirms.Add(new ConfirmCall(message, informativeText, primaryTitle, cancelTitle, destructive));
-        return NextConfirm;
+        return ConfirmAnswers.Count > 0 ? ConfirmAnswers.Dequeue() : NextConfirm;
     }
 
     public string? PromptForName(string title, string initial)

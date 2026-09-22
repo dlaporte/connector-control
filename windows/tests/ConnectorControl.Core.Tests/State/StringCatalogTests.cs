@@ -87,6 +87,12 @@ public class StringCatalogTests
         ["ClaudeProcess.notAClaudePackageError"] = ["X"],
         ["ClaudePublisher.subjectNoOrganizationError"] = ["X", "Y"],
         ["ClaudeSignature.notFoundMessage"] = ["X"],
+        ["CollectionsModel.deletePublishedFileQuestion"] = ["X"],
+        ["CollectionsModel.exportButton"] = ["3"],
+        ["CollectionsModel.localDetail"] = ["3"],
+        ["CollectionsModel.localType"] = ["X"],
+        ["CollectionsModel.publishedDetail"] = ["X"],
+        ["CollectionsModel.syncedDetail"] = ["X", "Y"],
         ["ConfigService.corruptStoreNote"] = ["X"],
         ["ConfigService.invalidBackupError"] = ["X", "Y"],
         ["ConfigService.invalidBackupMcpServersError"] = ["X"],
@@ -203,6 +209,33 @@ public class StringCatalogTests
         // "O=Y" parses with an organization ("y" normalized) that is not Anthropic's, so
         // SubjectProblem takes the not-Anthropic branch; the echoed subject is the raw "O=Y".
         actual["ClaudePublisher.subjectNotAnthropicError"] = ClaudePublisher.SubjectProblem("O=Y", "X")!;
+
+        // MARK: CollectionsModel
+
+        actual["CollectionsModel.activeSuffix"] = CollectionsModel.ActiveSuffix;
+        actual["CollectionsModel.deleteAction"] = CollectionsModel.DeleteAction;
+        actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.DeletePublishedFileQuestion("X");
+        actual["CollectionsModel.exportButton"] = CollectionsModel.ExportButton(3);
+        actual["CollectionsModel.importButton"] = CollectionsModel.ImportButton;
+        actual["CollectionsModel.keepFileButton"] = CollectionsModel.KeepFileButton;
+        actual["CollectionsModel.localDetail"] = CollectionsModel.LocalDetail(3);
+        actual["CollectionsModel.localType"] = CollectionsModel.LocalType("X");
+        actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.MakeLocalCopyButton;
+        actual["CollectionsModel.newButton"] = CollectionsModel.NewButton;
+        actual["CollectionsModel.publishButton"] = CollectionsModel.PublishButton;
+        actual["CollectionsModel.publishedDetail"] = CollectionsModel.PublishedDetail("X");
+        actual["CollectionsModel.refreshButton"] = CollectionsModel.RefreshButton;
+        actual["CollectionsModel.remoteType"] = CollectionsModel.RemoteType;
+        actual["CollectionsModel.removeFileButton"] = CollectionsModel.RemoveFileButton;
+        actual["CollectionsModel.renameAction"] = CollectionsModel.RenameAction;
+        actual["CollectionsModel.stopPublishingAction"] = CollectionsModel.StopPublishingAction;
+        actual["CollectionsModel.stopSyncingAction"] = CollectionsModel.StopSyncingAction;
+        actual["CollectionsModel.subscribeButton"] = CollectionsModel.SubscribeButton;
+        actual["CollectionsModel.syncedDetail"] = CollectionsModel.SyncedDetail("X", "Y");
+        actual["CollectionsModel.unlocatedDetail"] = CollectionsModel.UnlocatedDetail;
+        actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.UpdateAvailableStatus;
+        actual["CollectionsModel.upToDateStatus"] = CollectionsModel.UpToDateStatus;
+        actual["CollectionsModel.windowTitle"] = CollectionsModel.WindowTitle;
 
         // MARK: ConfigService
         // Every one of these is an inline literal built inside a throw or a notes list,

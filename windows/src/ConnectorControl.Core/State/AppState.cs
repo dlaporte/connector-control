@@ -775,15 +775,26 @@ public sealed class AppState : ObservableObject, IDisposable
         return result.Protected;
     }
 
-    /// <summary>Toggles take effect immediately; the Restart Required button is the only follow-up step.</summary>
-    public void SetEnabled(string name, bool on)
+    /// <summary>
+    /// Toggles take effect immediately; the Restart Required button is the only follow-up step.
+    ///
+    /// <paramref name="collection"/> (null: the active one) follows <see cref="Upsert"/>: only the
+    /// active collection reaches Claude, so a toggle anywhere else stops at the store.
+    /// </summary>
+    public void SetEnabled(string name, bool on, string? collection = null)
     {
-        if (Store.Mcps.TryGetValue(name, out var entry))
+        var target = collection ?? ActiveCollection;
+        // Read-only lookup: a collection that isn't there has nothing to toggle, and must not be
+        // brought into being by the attempt — what Swift's optional chain gives for free.
+        if (Store.Collections.TryGetValue(target, out var held) && held.Mcps.TryGetValue(name, out var entry))
         {
-            Store.Mcps[name] = entry with { Enabled = on };
+            held.Mcps[name] = entry with { Enabled = on };
         }
         PersistStore();
-        PerformApply();
+        if (target == ActiveCollection)
+        {
+            PerformApply();
+        }
         RaiseAll();
     }
 
@@ -1136,6 +1147,13 @@ public sealed class AppState : ObservableObject, IDisposable
 
     public CollectionsLocalCache.SyncedBinding? SourceBinding(string collection) =>
         CollectionsCache.Synced.TryGetValue(collection, out var binding) ? binding : null;
+
+    /// <summary>
+    /// Whether this machine can reach the collection's document: true for a local collection,
+    /// which has none to find. The same predicate the Locate banner asks, so a window and a
+    /// banner can never disagree about whether a file has been found.
+    /// </summary>
+    public bool IsLocated(string collection) => UnlocatedFileName(collection) is null;
 
     public bool ActiveCollectionIsSynced => IsSynced(ActiveCollection);
 

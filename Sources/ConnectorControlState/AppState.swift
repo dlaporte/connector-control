@@ -606,10 +606,14 @@ public final class AppState: ObservableObject {
     }
 
     /// Toggles take effect immediately; the Restart Required button is the only follow-up step.
-    public func setEnabled(_ name: String, _ on: Bool) {
-        store.mcps[name]?.enabled = on
+    ///
+    /// `collection` (nil: the active one) follows `upsert(in:)`: only the active collection
+    /// reaches Claude, so a toggle anywhere else stops at the store.
+    public func setEnabled(_ name: String, _ on: Bool, in collection: String? = nil) {
+        let target = collection ?? activeCollection
+        store.collections[target]?.mcps[name]?.enabled = on
         persistStore()
-        performApply()
+        if target == activeCollection { performApply() }
     }
 
     /// The popover's retry button: unconditional.
@@ -769,6 +773,11 @@ public final class AppState: ObservableObject {
     public func sourceBinding(of collection: String) -> CollectionsLocalCache.SyncedBinding? {
         collectionsCache.synced[collection]
     }
+
+    /// Whether this machine can reach the collection's document: true for a local collection,
+    /// which has none to find. The same predicate the Locate banner asks, so a window and a
+    /// banner can never disagree about whether a file has been found.
+    public func isLocated(_ collection: String) -> Bool { unlocatedFileName(of: collection) == nil }
 
     public var activeCollectionIsSynced: Bool { isSynced(activeCollection) }
 

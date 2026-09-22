@@ -108,6 +108,47 @@
       "format": "{0} is not an app bundle this app can inspect."
     }
   },
+  "CollectionsModel.activeSuffix": " · active",
+  "CollectionsModel.deleteAction": "Delete…",
+  "CollectionsModel.deletePublishedFileQuestion": {
+    "format": "Also remove {0} from the folder?"
+  },
+  "CollectionsModel.exportButton": {
+    "format": "Export {0}…"
+  },
+  "CollectionsModel.importButton": "Import…",
+  "CollectionsModel.keepFileButton": "Keep",
+  "CollectionsModel.localDetail": {
+    "format": "local · {0} connectors"
+  },
+  "CollectionsModel.localType": {
+    "format": "local · {0}"
+  },
+  "CollectionsModel.makeLocalCopyButton": "Make Local Copy…",
+  "CollectionsModel.newButton": "New…",
+  "CollectionsModel.publishButton": "Publish…",
+  "CollectionsModel.publishedDetail": {
+    "mac": {
+      "format": "publishes to {0} from this Mac"
+    },
+    "win": {
+      "format": "publishes to {0} from this PC"
+    }
+  },
+  "CollectionsModel.refreshButton": "Refresh",
+  "CollectionsModel.remoteType": "remote",
+  "CollectionsModel.removeFileButton": "Remove",
+  "CollectionsModel.renameAction": "Rename…",
+  "CollectionsModel.stopPublishingAction": "Stop Publishing",
+  "CollectionsModel.stopSyncingAction": "Stop Syncing (keeps a local copy)",
+  "CollectionsModel.subscribeButton": "Subscribe…",
+  "CollectionsModel.syncedDetail": {
+    "format": "synced from {0} · read-only · {1}"
+  },
+  "CollectionsModel.unlocatedDetail": "synced · file not located on this machine",
+  "CollectionsModel.upToDateStatus": "up to date",
+  "CollectionsModel.updateAvailableStatus": "update available",
+  "CollectionsModel.windowTitle": "Collections",
   "ConfigService.corruptStoreNote": {
     "format": "The MCP list file was unreadable; it was preserved as {0} and rebuilt from Claude's config."
   },

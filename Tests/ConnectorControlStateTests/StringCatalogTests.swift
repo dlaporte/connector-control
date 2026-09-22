@@ -81,6 +81,12 @@ final class StringCatalogTests: XCTestCase {
         "ClaudeSignature.notFoundMessage": ["X"],
         "ClaudeSignature.refusalMessage": ["X", "Y"],
         "ClaudeSignature.uninspectableMessage": ["X"],
+        "CollectionsModel.deletePublishedFileQuestion": ["X"],
+        "CollectionsModel.exportButton": ["3"],
+        "CollectionsModel.localDetail": ["3"],
+        "CollectionsModel.localType": ["X"],
+        "CollectionsModel.publishedDetail": ["X"],
+        "CollectionsModel.syncedDetail": ["X", "Y"],
         "ConfigService.corruptStoreNote": ["X"],
         "ConfigService.invalidBackupError": ["X", "Y"],
         "ConfigService.invalidBackupMcpServersError": ["X"],
@@ -192,6 +198,33 @@ final class StringCatalogTests: XCTestCase {
         actual["ConfigService.invalidBackupMcpServersError"] = "backup X has an invalid mcpServers section"
         actual["ConfigService.malformedClaudeConfigNote"] =
             "Claude's config file is not valid JSON. Your MCP list is safe; use Backups \u{25B8} Restore\u{2026} to repair the file."
+
+        // MARK: CollectionsModel
+
+        actual["CollectionsModel.activeSuffix"] = CollectionsModel.activeSuffix
+        actual["CollectionsModel.deleteAction"] = CollectionsModel.deleteAction
+        actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.deletePublishedFileQuestion("X")
+        actual["CollectionsModel.exportButton"] = CollectionsModel.exportButton(3)
+        actual["CollectionsModel.importButton"] = CollectionsModel.importButton
+        actual["CollectionsModel.keepFileButton"] = CollectionsModel.keepFileButton
+        actual["CollectionsModel.localDetail"] = CollectionsModel.localDetail(3)
+        actual["CollectionsModel.localType"] = CollectionsModel.localType("X")
+        actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.makeLocalCopyButton
+        actual["CollectionsModel.newButton"] = CollectionsModel.newButton
+        actual["CollectionsModel.publishButton"] = CollectionsModel.publishButton
+        actual["CollectionsModel.publishedDetail"] = CollectionsModel.publishedDetail("X")
+        actual["CollectionsModel.refreshButton"] = CollectionsModel.refreshButton
+        actual["CollectionsModel.remoteType"] = CollectionsModel.remoteType
+        actual["CollectionsModel.removeFileButton"] = CollectionsModel.removeFileButton
+        actual["CollectionsModel.renameAction"] = CollectionsModel.renameAction
+        actual["CollectionsModel.stopPublishingAction"] = CollectionsModel.stopPublishingAction
+        actual["CollectionsModel.stopSyncingAction"] = CollectionsModel.stopSyncingAction
+        actual["CollectionsModel.subscribeButton"] = CollectionsModel.subscribeButton
+        actual["CollectionsModel.syncedDetail"] = CollectionsModel.syncedDetail("X", "Y")
+        actual["CollectionsModel.unlocatedDetail"] = CollectionsModel.unlocatedDetail
+        actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.updateAvailableStatus
+        actual["CollectionsModel.upToDateStatus"] = CollectionsModel.upToDateStatus
+        actual["CollectionsModel.windowTitle"] = CollectionsModel.windowTitle
 
         // MARK: ConnectorRow / Dialogs / AlertDialogs
 

@@ -1,0 +1,379 @@
+import Combine
+import XCTest
+import ConnectorControlCore
+import ConnectorControlTestSupport
+@testable import ConnectorControlState
+
+/// windows/tests/ConnectorControl.Core.Tests/State/CollectionsModelTests.cs. The two panes of the
+/// Collections window: the collections as items, the selected one's connectors as rows, the
+/// toolbar's enablement, and the actions that go through the dialog seam.
+@MainActor
+final class CollectionsModelTests: XCTestCase {
+    private func synced(fileName: String) -> CollectionsFile.Entry {
+        CollectionsFile.Entry(kind: .synced, fileName: fileName)
+    }
+
+    private func published(slug: String) -> CollectionsFile.Entry {
+        CollectionsFile.Entry(kind: .local, publish: CollectionsFile.PublishRecord(slug: slug, origin: "origin", intent: .none))
+    }
+
+    private func bound(_ path: String?) -> CollectionsLocalCache.SyncedBinding {
+        CollectionsLocalCache.SyncedBinding(path: path, lastHash: nil, excluded: [:])
+    }
+
+    /// Writes both collection files where the app reads them, then reloads so the state picks
+    /// them up — the shape a subscribe or a publish would leave behind.
+    private func seed(_ h: AppStateHarness, _ state: AppState,
+                      file: CollectionsFile, cache: CollectionsLocalCache? = nil) throws {
+        try file.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        try (cache ?? CollectionsLocalCache(synced: [:], published: [:]))
+            .save(to: state.service.paths.collectionsCacheURL, staging: nil)
+        state.reload()
+    }
+
+    private func local(_ command: String, _ args: [String] = []) -> MCPEntry {
+        MCPEntry(config: .object(["command": .string(command), "args": .array(args.map(JSONValue.string))]))
+    }
+
+    // MARK: - Items
+
+    func testItemsMirrorTheStoreAndMarkSyncedPublishedAndPending() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Shared"))
+        XCTAssertNil(state.createCollection(named: "Team"))
+        state.switchCollection(to: "Default")
+        let file = CollectionsFile(collections: ["Shared": published(slug: "shared"), "Team": synced(fileName: "team.json")])
+        let cache = CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")],
+                                          published: ["Shared": .init(folder: "/tmp/share", lastWrittenHash: nil)])
+        try seed(h, state, file: file, cache: cache)
+
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        XCTAssertEqual(model.items.map(\.name), ["Default", "Shared", "Team"])   // the chip menu's order
+        XCTAssertEqual(model.items.map(\.id), ["Default", "Shared", "Team"])
+        XCTAssertEqual(model.items.map(\.kind), [.local, .local, .synced])
+        XCTAssertEqual(model.items.map(\.isActive), [true, false, false])
+        XCTAssertEqual(model.items.map(\.isPublished), [false, true, false])
+        XCTAssertEqual(model.items.map(\.hasPendingUpdate), [false, false, false])
+        XCTAssertEqual(model.items.map(\.isLocated), [true, true, true], "a local collection has no file to find")
+
+        // The republish is what repaints the view, and it is the one line a passthrough cannot prove.
+        var repaints = 0
+        let sink = model.objectWillChange.sink { _ in repaints += 1 }
+        defer { sink.cancel() }
+        state.pendingUpdates = ["Team": CollectionDiff(added: ["jira"], removed: [], changed: [])]
+        XCTAssertEqual(model.items.map(\.hasPendingUpdate), [false, false, true])
+        XCTAssertGreaterThan(repaints, 0)
+
+        // The binding gone, the sidecar still names the file: the item says it is not located.
+        try seed(h, state, file: file, cache: CollectionsLocalCache(synced: [:], published: cache.published))
+        XCTAssertEqual(model.items.map(\.isLocated), [true, true, false])
+        XCTAssertFalse(state.isLocated("Team"))
+        XCTAssertTrue(state.isLocated("Default"))
+
+        // dispose() cuts the republish: the items still read through, nothing repaints.
+        model.dispose()
+        let before = repaints
+        state.pendingUpdates = [:]
+        XCTAssertEqual(model.items.map(\.hasPendingUpdate), [false, false, false])
+        XCTAssertEqual(repaints, before)
+    }
+
+    // MARK: - Rows
+
+    func testRowsForASyncedCollectionAreLockedAndUncheckable() throws {
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.upsert(name: "github", entry: MCPEntry(config: AppStateHarness.remote("https://github.example/mcp")),
+                                  renamedFrom: nil, in: "Team"))
+        XCTAssertNil(state.upsert(name: "Ledger", entry: local("/usr/local/bin/node", ["index.js"]), renamedFrom: nil, in: "Team"))
+        XCTAssertNil(state.upsert(name: "jira", entry: MCPEntry(config: .object([
+            "command": .string("npx"),
+            "env": .object(["JIRA_TOKEN": .string(Placeholder.marker("JIRA_TOKEN"))]),
+        ])), renamedFrom: nil, in: "Team"))
+        XCTAssertNil(state.upsert(name: "notes", entry: local("uvx"), renamedFrom: nil, in: "Default"))
+        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]),
+                 cache: CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")], published: [:]))
+
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Team"
+        XCTAssertEqual(model.rows.map(\.name), ["github", "jira", "Ledger"], "case-insensitive by name")
+        XCTAssertEqual(model.rows.map(\.id), ["github", "jira", "Ledger"])
+        XCTAssertEqual(model.rows.map(\.typeText), ["remote", "local · npx", "local · node"])
+        XCTAssertTrue(model.rows.allSatisfy(\.isLocked), "every row of a synced collection carries the lock")
+        XCTAssertEqual(model.rows.map(\.caution), [nil, AppState.needsValueCaution("JIRA_TOKEN"), nil])
+        XCTAssertEqual(model.rows.map(\.enabled), [true, true, true])
+
+        // Nothing in a synced collection can be exported, so nothing in one can be ticked.
+        model.setChecked("github", true)
+        XCTAssertTrue(model.rows.allSatisfy { !$0.checked })
+        XCTAssertEqual(model.checkedNames, [])
+        XCTAssertEqual(model.exportIntentForChecked(), [])
+        XCTAssertFalse(model.canExport)
+
+        // The same rows in a local collection do tick, and the ticks belong to that collection.
+        model.selected = "Default"
+        XCTAssertEqual(model.rows.map(\.name), ["notes"])
+        XCTAssertEqual(model.rows.map(\.typeText), ["local · uvx"])
+        XCTAssertTrue(model.rows.allSatisfy { !$0.isLocked })
+        model.setChecked("notes", true)
+        XCTAssertEqual(model.rows.map(\.checked), [true])
+        XCTAssertEqual(model.checkedNames, ["notes"])
+        XCTAssertEqual(model.exportIntentForChecked(), ["notes"])
+        XCTAssertTrue(model.canExport)
+        model.setChecked("notes", false)
+        XCTAssertFalse(model.canExport)
+
+        // The pencil opens the row in the collection the window is showing, not the active one.
+        model.selected = "Team"
+        let target = model.editTarget(for: "jira")
+        XCTAssertEqual(target.collection, "Team")
+        XCTAssertEqual(target.name, "jira")
+        XCTAssertFalse(target.isNew)
+        XCTAssertEqual(target.entry.config, state.store.collections["Team"]?.mcps["jira"]?.config)
+    }
+
+    // MARK: - Toolbar
+
+    func testToolbarEnablementFollowsTheSelection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Shared"))
+        XCTAssertNil(state.createCollection(named: "Team"))
+        state.switchCollection(to: "Default")
+        let file = CollectionsFile(collections: ["Shared": published(slug: "shared"), "Team": synced(fileName: "team.json")])
+        let located = CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")],
+                                            published: ["Shared": .init(folder: "/tmp/share", lastWrittenHash: nil)])
+        try seed(h, state, file: file, cache: located)
+
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        XCTAssertEqual(model.selected, "Default", "the selection starts on the active collection")
+        XCTAssertFalse(model.canExport, "nothing is ticked yet")
+        model.setChecked("aws-mcp", true)
+        XCTAssertTrue(model.canExport)
+        XCTAssertTrue(model.canPublish)
+        XCTAssertFalse(model.canRefresh)
+        XCTAssertFalse(model.canMakeLocalCopy)
+        XCTAssertFalse(model.canStopSyncing)
+        XCTAssertFalse(model.canStopPublishing)
+        XCTAssertTrue(model.canDelete)
+
+        model.selected = "Shared"
+        XCTAssertFalse(model.canExport, "the ticks belonged to the collection that was showing")
+        XCTAssertFalse(model.canPublish, "this machine already publishes it")
+        XCTAssertTrue(model.canStopPublishing)
+        XCTAssertFalse(model.canRefresh)
+        XCTAssertTrue(model.canDelete)
+
+        model.selected = "Team"
+        XCTAssertFalse(model.canExport)
+        XCTAssertFalse(model.canPublish)
+        XCTAssertFalse(model.canStopPublishing)
+        XCTAssertTrue(model.canRefresh)
+        XCTAssertTrue(model.canMakeLocalCopy)
+        XCTAssertTrue(model.canStopSyncing)
+        XCTAssertTrue(model.canDelete, "a synced collection is always deletable")
+
+        // Nothing to refresh until the file is found on this machine.
+        try seed(h, state, file: file, cache: CollectionsLocalCache(synced: [:], published: located.published))
+        XCTAssertFalse(model.canRefresh)
+        XCTAssertTrue(model.canMakeLocalCopy)
+
+        // With the second local collection gone, the last one cannot be deleted.
+        XCTAssertNil(state.deleteCollection(named: "Shared"))
+        model.selected = "Default"
+        XCTAssertFalse(model.canDelete)
+        model.selected = "Team"
+        XCTAssertTrue(model.canDelete)
+    }
+
+    // MARK: - Create, rename, delete
+
+    func testCreateRenameDeleteGoThroughTheDialogs() throws {
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Work"))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        XCTAssertEqual(model.selected, "Work")
+
+        // A cancelled prompt does nothing at all.
+        h.dialogs.nextPromptAnswer = nil
+        model.create()
+        XCTAssertEqual(h.dialogs.prompts.last, FakeDialogs.PromptCall(title: AppState.newCollectionTitle, initial: ""))
+        XCTAssertEqual(state.collectionNames, ["Default", "Work"])
+        XCTAssertNil(model.lastError)
+
+        h.dialogs.nextPromptAnswer = "  Team  "
+        model.create()
+        XCTAssertEqual(state.collectionNames, ["Default", "Team", "Work"])
+        XCTAssertEqual(model.selected, "Team", "the window shows what it just made")
+        XCTAssertNil(model.lastError)
+
+        // A name the store refuses comes back as the model's error.
+        h.dialogs.nextPromptAnswer = "Work"
+        model.create()
+        XCTAssertNotNil(model.lastError)
+        XCTAssertEqual(state.collectionNames, ["Default", "Team", "Work"])
+
+        h.dialogs.nextPromptAnswer = "Team B"
+        model.rename()
+        XCTAssertEqual(h.dialogs.prompts.last, FakeDialogs.PromptCall(title: AppState.renameCollectionTitle, initial: "Team"))
+        XCTAssertEqual(state.collectionNames, ["Default", "Team B", "Work"])
+        XCTAssertEqual(model.selected, "Team B", "the selection follows the name it just gave")
+        XCTAssertNil(model.lastError, "a successful action clears the last one's error")
+
+        // Declined: the collection stays.
+        h.dialogs.nextConfirm = false
+        model.delete()
+        let asked = try XCTUnwrap(h.dialogs.confirms.last)
+        XCTAssertEqual(asked.message, AppState.deleteCollectionMessage("Team B"))
+        XCTAssertEqual(asked.primary, AppState.deleteButton)
+        XCTAssertTrue(asked.destructive)
+        XCTAssertEqual(state.collectionNames, ["Default", "Team B", "Work"])
+
+        h.dialogs.nextConfirm = true
+        model.delete()
+        XCTAssertEqual(state.collectionNames, ["Default", "Work"])
+        XCTAssertEqual(h.dialogs.confirms.count, 2, "an unpublished collection is asked about once")
+        XCTAssertEqual(model.selected, state.activeCollection)
+    }
+
+    func testDeletingAPublishedCollectionAsksAboutTheFile() throws {
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        let folder = h.dir.file("share")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        XCTAssertNil(state.createCollection(named: "Shared"))
+        XCTAssertNil(state.createCollection(named: "Consulting"))
+        XCTAssertNil(state.startPublishing("Shared", to: folder.path, intent: .none))
+        XCTAssertNil(state.startPublishing("Consulting", to: folder.path, intent: .none))
+        let sharedFile = folder.appendingPathComponent("shared.json")
+        let consultingFile = folder.appendingPathComponent("consulting.json")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sharedFile.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: consultingFile.path))
+
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Shared"
+        h.dialogs.confirmAnswers = [true, false]   // delete the collection, keep the document
+        model.delete()
+        XCTAssertEqual(h.dialogs.confirms.map(\.message),
+                       [AppState.deleteCollectionMessage("Shared"),
+                        CollectionsModel.deletePublishedFileQuestion("shared.json")])
+        let fileQuestion = try XCTUnwrap(h.dialogs.confirms.last)
+        XCTAssertEqual(fileQuestion.primary, CollectionsModel.removeFileButton)
+        XCTAssertEqual(fileQuestion.cancel, CollectionsModel.keepFileButton)
+        XCTAssertFalse(fileQuestion.destructive)
+        XCTAssertFalse(state.collectionNames.contains("Shared"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sharedFile.path),
+                      "Keep leaves the copy the team reads where it is")
+
+        // The same question on its own, answered the other way.
+        model.selected = "Consulting"
+        h.dialogs.confirmAnswers = [true]
+        model.stopPublishing()
+        XCTAssertEqual(h.dialogs.confirms.last?.message, CollectionsModel.deletePublishedFileQuestion("consulting.json"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: consultingFile.path))
+        XCTAssertFalse(state.isPublished("Consulting"))
+        XCTAssertTrue(state.collectionNames.contains("Consulting"), "Stop Publishing keeps the collection")
+        XCTAssertFalse(model.canStopPublishing)
+    }
+
+    // MARK: - Toggles
+
+    func testSetEnabledInAnInactiveCollectionLeavesClaudesConfigAlone() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Work"))
+        state.switchCollection(to: "Default")
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+
+        model.selected = "Work"
+        model.setEnabled("aws-mcp", false)
+        XCTAssertEqual(state.store.collections["Work"]?.mcps["aws-mcp"]?.enabled, false)
+        XCTAssertEqual(try h.storeOnDisk().collections["Work"]?.mcps["aws-mcp"]?.enabled, false)
+        XCTAssertEqual(state.store.collections["Default"]?.mcps["aws-mcp"]?.enabled, true)
+        XCTAssertNotNil(try h.claudeServers()["aws-mcp"], "Claude runs the active collection, which did not change")
+        XCTAssertEqual(model.rows.first { $0.name == "aws-mcp" }?.enabled, false)
+
+        // The same toggle in the active collection does reach Claude.
+        model.selected = "Default"
+        model.setEnabled("aws-mcp", false)
+        XCTAssertNil(try h.claudeServers()["aws-mcp"])
+    }
+
+    // MARK: - Detail line
+
+    func testDetailLineFollowsTheCollectionState() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Shared"))
+        XCTAssertNil(state.createCollection(named: "Team"))
+        state.switchCollection(to: "Default")
+        let file = CollectionsFile(collections: ["Shared": published(slug: "shared"), "Team": synced(fileName: "team.json")])
+        let located = CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")],
+                                            published: ["Shared": .init(folder: "/Acme/mcp", lastWrittenHash: nil)])
+        try seed(h, state, file: file, cache: located)
+
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        XCTAssertEqual(model.detailLine, CollectionsModel.localDetail(3) + CollectionsModel.activeSuffix)
+
+        model.selected = "Shared"
+        XCTAssertEqual(model.detailLine,
+                       CollectionsModel.localDetail(3) + " · " + CollectionsModel.publishedDetail("/Acme/mcp"))
+
+        model.selected = "Team"
+        XCTAssertEqual(model.detailLine,
+                       CollectionsModel.syncedDetail("/shared/team.json", CollectionsModel.upToDateStatus))
+        state.pendingUpdates = ["Team": CollectionDiff(added: ["jira"], removed: [], changed: [])]
+        XCTAssertEqual(model.detailLine,
+                       CollectionsModel.syncedDetail("/shared/team.json", CollectionsModel.updateAvailableStatus))
+        state.sourceErrors = ["Team": "team.json couldn’t be read"]
+        XCTAssertEqual(model.detailLine,
+                       CollectionsModel.syncedDetail("/shared/team.json", "team.json couldn’t be read"),
+                       "what went wrong outranks what is waiting")
+
+        // Not located: there is nothing to say about the file except that it is missing.
+        try seed(h, state, file: file, cache: CollectionsLocalCache(synced: [:], published: located.published))
+        XCTAssertEqual(model.detailLine, CollectionsModel.unlocatedDetail)
+    }
+
+    // MARK: - Selection
+
+    func testSelectionFallsBackToTheActiveCollectionWhenItsCollectionDisappears() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.createCollection(named: "Spare"))
+        state.switchCollection(to: "Default")
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+
+        model.selected = "Work"
+        XCTAssertEqual(model.selected, "Work")
+        model.setChecked("aws-mcp", true)
+        XCTAssertEqual(model.checkedNames, ["aws-mcp"])
+
+        XCTAssertNil(state.deleteCollection(named: "Work"))
+        XCTAssertEqual(model.selected, "Default")
+        XCTAssertEqual(model.selected, state.activeCollection)
+        XCTAssertEqual(model.checkedNames, [], "the ticks belonged to the collection that is gone")
+
+        // A rename anywhere else is the same disappearance: the name selected is no longer a collection.
+        model.selected = "Spare"
+        XCTAssertNil(state.renameCollection("Spare", to: "Spare Parts"))
+        XCTAssertEqual(model.selected, state.activeCollection)
+
+        // Switching the active collection from the window goes through AppState.
+        model.switchTo("Spare Parts")
+        XCTAssertEqual(state.activeCollection, "Spare Parts")
+        XCTAssertEqual(model.items.first { $0.isActive }?.name, "Spare Parts")
+    }
+}

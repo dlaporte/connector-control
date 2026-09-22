@@ -1,0 +1,394 @@
+using ConnectorControl.Core.State;
+using ConnectorControl.Core.Tests.TestSupport;
+
+namespace ConnectorControl.Core.Tests.State;
+
+/// <summary>
+/// Tests/ConnectorControlStateTests/CollectionsModelTests.swift. The two panes of the Collections
+/// window: the collections as items, the selected one's connectors as rows, the toolbar's
+/// enablement, and the actions that go through the dialog seam.
+/// </summary>
+public class CollectionsModelTests
+{
+    private static CollectionsFile.Entry Synced(string fileName) => new(CollectionKind.Synced, fileName);
+
+    private static CollectionsFile.Entry Published(string slug) =>
+        new(CollectionKind.Local, publish: new CollectionsFile.PublishRecord(slug, "origin", PublishIntent.None));
+
+    private static CollectionsLocalCache.SyncedBinding Bound(string? path) => new(path, null);
+
+    private static CollectionsFile File_(params (string Name, CollectionsFile.Entry Entry)[] entries) =>
+        new(entries.Select(e => new KeyValuePair<string, CollectionsFile.Entry>(e.Name, e.Entry)));
+
+    private static CollectionsLocalCache Cache(
+        IEnumerable<KeyValuePair<string, CollectionsLocalCache.SyncedBinding>>? synced = null,
+        IEnumerable<KeyValuePair<string, CollectionsLocalCache.PublishBinding>>? published = null) =>
+        new(synced ?? [], published ?? []);
+
+    /// <summary>
+    /// Writes both collection files where the app reads them, then reloads so the state picks them
+    /// up — the shape a subscribe or a publish would leave behind.
+    /// </summary>
+    private static void Seed(AppStateHarness h, AppState state, CollectionsFile file, CollectionsLocalCache? cache = null)
+    {
+        file.Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        (cache ?? Cache()).Save(state.Service.Paths.CollectionsCachePath);
+        state.Reload();
+    }
+
+    private static McpEntry Local(string command, params string[] args) =>
+        new(JsonValue.Object(
+            ("command", JsonValue.String(command)),
+            ("args", JsonValue.Array(args.Select(JsonValue.String)))));
+
+    private static Dictionary<string, CollectionDiff> Pending(string collection) =>
+        new(StringComparer.Ordinal) { [collection] = new CollectionDiff(["jira"], [], []) };
+
+    // MARK: items
+
+    [Fact]
+    public void ItemsMirrorTheStoreAndMarkSyncedPublishedAndPending()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Shared"));
+        Assert.Null(state.CreateCollection("Team"));
+        state.SwitchCollection("Default");
+        var file = File_(("Shared", Published("shared")), ("Team", Synced("team.json")));
+        var cache = Cache([new("Team", Bound("/shared/team.json"))],
+                          [new("Shared", new CollectionsLocalCache.PublishBinding("/tmp/share", null))]);
+        Seed(h, state, file, cache);
+
+        using var model = new CollectionsModel(state, h.Dialogs);
+        Assert.Equal(["Default", "Shared", "Team"], model.Items.Select(i => i.Name));   // the chip menu's order
+        Assert.Equal(["Default", "Shared", "Team"], model.Items.Select(i => i.Id));
+        Assert.Equal([CollectionKind.Local, CollectionKind.Local, CollectionKind.Synced], model.Items.Select(i => i.Kind));
+        Assert.Equal([true, false, false], model.Items.Select(i => i.IsActive));
+        Assert.Equal([false, true, false], model.Items.Select(i => i.IsPublished));
+        Assert.Equal([false, false, false], model.Items.Select(i => i.HasPendingUpdate));
+        // A local collection has no file to find.
+        Assert.Equal([true, true, true], model.Items.Select(i => i.IsLocated));
+
+        // The republish is what repaints the view, and it is the one line a passthrough cannot prove.
+        var repaints = 0;
+        model.PropertyChanged += (_, _) => repaints++;
+        state.PendingUpdates = Pending("Team");
+        Assert.Equal([false, false, true], model.Items.Select(i => i.HasPendingUpdate));
+        Assert.True(repaints > 0);
+
+        // The binding gone, the sidecar still names the file: the item says it is not located.
+        Seed(h, state, file, Cache(published: cache.Published));
+        Assert.Equal([true, true, false], model.Items.Select(i => i.IsLocated));
+        Assert.False(state.IsLocated("Team"));
+        Assert.True(state.IsLocated("Default"));
+
+        // Dispose cuts the republish: the items still read through, nothing repaints.
+        model.Dispose();
+        var before = repaints;
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal);
+        Assert.Equal([false, false, false], model.Items.Select(i => i.HasPendingUpdate));
+        Assert.Equal(before, repaints);
+    }
+
+    // MARK: rows
+
+    [Fact]
+    public void RowsForASyncedCollectionAreLockedAndUncheckable()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.Upsert("github", new McpEntry(AppStateHarness.Remote("https://github.example/mcp")), null, "Team"));
+        Assert.Null(state.Upsert("Ledger", Local("/usr/local/bin/node", "index.js"), null, "Team"));
+        Assert.Null(state.Upsert("jira", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("npx")),
+            ("env", JsonValue.Object(("JIRA_TOKEN", JsonValue.String(Placeholder.Marker("JIRA_TOKEN"))))))), null, "Team"));
+        Assert.Null(state.Upsert("notes", Local("uvx"), null, "Default"));
+        Seed(h, state, File_(("Team", Synced("team.json"))), Cache([new("Team", Bound("/shared/team.json"))]));
+
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Team";
+        Assert.Equal(["github", "jira", "Ledger"], model.Rows.Select(r => r.Name));   // case-insensitive by name
+        Assert.Equal(["github", "jira", "Ledger"], model.Rows.Select(r => r.Id));
+        Assert.Equal(["remote", "local · npx", "local · node"], model.Rows.Select(r => r.TypeText));
+        // Every row of a synced collection carries the lock.
+        Assert.All(model.Rows, r => Assert.True(r.IsLocked));
+        Assert.Equal([null, AppState.NeedsValueCaution("JIRA_TOKEN"), null], model.Rows.Select(r => r.Caution));
+        Assert.Equal([true, true, true], model.Rows.Select(r => r.Enabled));
+
+        // Nothing in a synced collection can be exported, so nothing in one can be ticked.
+        model.SetChecked("github", true);
+        Assert.All(model.Rows, r => Assert.False(r.Checked));
+        Assert.Empty(model.CheckedNames);
+        Assert.Empty(model.ExportIntentForChecked());
+        Assert.False(model.CanExport);
+
+        // The same rows in a local collection do tick, and the ticks belong to that collection.
+        model.Selected = "Default";
+        Assert.Equal(["notes"], model.Rows.Select(r => r.Name));
+        Assert.Equal(["local · uvx"], model.Rows.Select(r => r.TypeText));
+        Assert.All(model.Rows, r => Assert.False(r.IsLocked));
+        model.SetChecked("notes", true);
+        Assert.Equal([true], model.Rows.Select(r => r.Checked));
+        Assert.Equal(["notes"], model.CheckedNames);
+        Assert.Equal(["notes"], model.ExportIntentForChecked());
+        Assert.True(model.CanExport);
+        model.SetChecked("notes", false);
+        Assert.False(model.CanExport);
+
+        // The pencil opens the row in the collection the window is showing, not the active one.
+        model.Selected = "Team";
+        var target = model.EditTargetFor("jira");
+        Assert.Equal("Team", target.Collection);
+        Assert.Equal("jira", target.Name);
+        Assert.False(target.IsNew);
+        Assert.Equal(state.Store.Collections["Team"].Mcps["jira"].Config, target.Entry.Config);
+    }
+
+    // MARK: toolbar
+
+    [Fact]
+    public void ToolbarEnablementFollowsTheSelection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Shared"));
+        Assert.Null(state.CreateCollection("Team"));
+        state.SwitchCollection("Default");
+        var file = File_(("Shared", Published("shared")), ("Team", Synced("team.json")));
+        var located = Cache([new("Team", Bound("/shared/team.json"))],
+                            [new("Shared", new CollectionsLocalCache.PublishBinding("/tmp/share", null))]);
+        Seed(h, state, file, located);
+
+        using var model = new CollectionsModel(state, h.Dialogs);
+        Assert.Equal("Default", model.Selected);   // the selection starts on the active collection
+        Assert.False(model.CanExport);             // nothing is ticked yet
+        model.SetChecked("aws-mcp", true);
+        Assert.True(model.CanExport);
+        Assert.True(model.CanPublish);
+        Assert.False(model.CanRefresh);
+        Assert.False(model.CanMakeLocalCopy);
+        Assert.False(model.CanStopSyncing);
+        Assert.False(model.CanStopPublishing);
+        Assert.True(model.CanDelete);
+
+        model.Selected = "Shared";
+        Assert.False(model.CanExport);    // the ticks belonged to the collection that was showing
+        Assert.False(model.CanPublish);   // this machine already publishes it
+        Assert.True(model.CanStopPublishing);
+        Assert.False(model.CanRefresh);
+        Assert.True(model.CanDelete);
+
+        model.Selected = "Team";
+        Assert.False(model.CanExport);
+        Assert.False(model.CanPublish);
+        Assert.False(model.CanStopPublishing);
+        Assert.True(model.CanRefresh);
+        Assert.True(model.CanMakeLocalCopy);
+        Assert.True(model.CanStopSyncing);
+        Assert.True(model.CanDelete);   // a synced collection is always deletable
+
+        // Nothing to refresh until the file is found on this machine.
+        Seed(h, state, file, Cache(published: located.Published));
+        Assert.False(model.CanRefresh);
+        Assert.True(model.CanMakeLocalCopy);
+
+        // With the second local collection gone, the last one cannot be deleted.
+        Assert.Null(state.DeleteCollection("Shared"));
+        model.Selected = "Default";
+        Assert.False(model.CanDelete);
+        model.Selected = "Team";
+        Assert.True(model.CanDelete);
+    }
+
+    // MARK: create, rename, delete
+
+    [Fact]
+    public void CreateRenameDeleteGoThroughTheDialogs()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Work"));
+        using var model = new CollectionsModel(state, h.Dialogs);
+        Assert.Equal("Work", model.Selected);
+
+        // A cancelled prompt does nothing at all.
+        h.Dialogs.NextPromptAnswer = null;
+        model.Create();
+        Assert.Equal(new FakeDialogs.PromptCall(AppState.NewCollectionTitle, ""), h.Dialogs.Prompts[^1]);
+        Assert.Equal(["Default", "Work"], state.CollectionNames);
+        Assert.Null(model.LastError);
+
+        h.Dialogs.NextPromptAnswer = "  Team  ";
+        model.Create();
+        Assert.Equal(["Default", "Team", "Work"], state.CollectionNames);
+        Assert.Equal("Team", model.Selected);   // the window shows what it just made
+        Assert.Null(model.LastError);
+
+        // A name the store refuses comes back as the model's error.
+        h.Dialogs.NextPromptAnswer = "Work";
+        model.Create();
+        Assert.NotNull(model.LastError);
+        Assert.Equal(["Default", "Team", "Work"], state.CollectionNames);
+
+        h.Dialogs.NextPromptAnswer = "Team B";
+        model.Rename();
+        Assert.Equal(new FakeDialogs.PromptCall(AppState.RenameCollectionTitle, "Team"), h.Dialogs.Prompts[^1]);
+        Assert.Equal(["Default", "Team B", "Work"], state.CollectionNames);
+        Assert.Equal("Team B", model.Selected);   // the selection follows the name it just gave
+        Assert.Null(model.LastError);             // a successful action clears the last one's error
+
+        // Declined: the collection stays.
+        h.Dialogs.NextConfirm = false;
+        model.Delete();
+        var asked = h.Dialogs.Confirms[^1];
+        Assert.Equal(AppState.DeleteCollectionMessage("Team B"), asked.Message);
+        Assert.Equal(AppState.DeleteButton, asked.Primary);
+        Assert.True(asked.Destructive);
+        Assert.Equal(["Default", "Team B", "Work"], state.CollectionNames);
+
+        h.Dialogs.NextConfirm = true;
+        model.Delete();
+        Assert.Equal(["Default", "Work"], state.CollectionNames);
+        Assert.Equal(2, h.Dialogs.Confirms.Count);   // an unpublished collection is asked about once
+        Assert.Equal(state.ActiveCollection, model.Selected);
+    }
+
+    [Fact]
+    public void DeletingAPublishedCollectionAsksAboutTheFile()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        var folder = h.Dir.File("share");
+        Directory.CreateDirectory(folder);
+        Assert.Null(state.CreateCollection("Shared"));
+        Assert.Null(state.CreateCollection("Consulting"));
+        Assert.Null(state.StartPublishing("Shared", folder, PublishIntent.None));
+        Assert.Null(state.StartPublishing("Consulting", folder, PublishIntent.None));
+        var sharedFile = Path.Combine(folder, "shared.json");
+        var consultingFile = Path.Combine(folder, "consulting.json");
+        Assert.True(File.Exists(sharedFile));
+        Assert.True(File.Exists(consultingFile));
+
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Shared";
+        h.Dialogs.ConfirmAnswers.Enqueue(true);    // delete the collection
+        h.Dialogs.ConfirmAnswers.Enqueue(false);   // keep the document
+        model.Delete();
+        Assert.Equal(
+            [AppState.DeleteCollectionMessage("Shared"), CollectionsModel.DeletePublishedFileQuestion("shared.json")],
+            h.Dialogs.Confirms.Select(c => c.Message));
+        var fileQuestion = h.Dialogs.Confirms[^1];
+        Assert.Equal(CollectionsModel.RemoveFileButton, fileQuestion.Primary);
+        Assert.Equal(CollectionsModel.KeepFileButton, fileQuestion.Cancel);
+        Assert.False(fileQuestion.Destructive);
+        Assert.DoesNotContain("Shared", state.CollectionNames);
+        // Keep leaves the copy the team reads where it is.
+        Assert.True(File.Exists(sharedFile));
+
+        // The same question on its own, answered the other way.
+        model.Selected = "Consulting";
+        h.Dialogs.ConfirmAnswers.Enqueue(true);
+        model.StopPublishing();
+        Assert.Equal(CollectionsModel.DeletePublishedFileQuestion("consulting.json"), h.Dialogs.Confirms[^1].Message);
+        Assert.False(File.Exists(consultingFile));
+        Assert.False(state.IsPublished("Consulting"));
+        // Stop Publishing keeps the collection.
+        Assert.Contains("Consulting", state.CollectionNames);
+        Assert.False(model.CanStopPublishing);
+    }
+
+    // MARK: toggles
+
+    [Fact]
+    public void SetEnabledInAnInactiveCollectionLeavesClaudesConfigAlone()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Work"));
+        state.SwitchCollection("Default");
+        using var model = new CollectionsModel(state, h.Dialogs);
+
+        model.Selected = "Work";
+        model.SetEnabled("aws-mcp", false);
+        Assert.False(state.Store.Collections["Work"].Mcps["aws-mcp"].Enabled);
+        Assert.False(h.StoreOnDisk().Collections["Work"].Mcps["aws-mcp"].Enabled);
+        Assert.True(state.Store.Collections["Default"].Mcps["aws-mcp"].Enabled);
+        // Claude runs the active collection, which did not change.
+        Assert.True(h.ClaudeServers().ContainsKey("aws-mcp"));
+        Assert.False(model.Rows.Single(r => r.Name == "aws-mcp").Enabled);
+
+        // The same toggle in the active collection does reach Claude.
+        model.Selected = "Default";
+        model.SetEnabled("aws-mcp", false);
+        Assert.False(h.ClaudeServers().ContainsKey("aws-mcp"));
+    }
+
+    // MARK: detail line
+
+    [Fact]
+    public void DetailLineFollowsTheCollectionState()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Shared"));
+        Assert.Null(state.CreateCollection("Team"));
+        state.SwitchCollection("Default");
+        var file = File_(("Shared", Published("shared")), ("Team", Synced("team.json")));
+        var located = Cache([new("Team", Bound("/shared/team.json"))],
+                            [new("Shared", new CollectionsLocalCache.PublishBinding("/Acme/mcp", null))]);
+        Seed(h, state, file, located);
+
+        using var model = new CollectionsModel(state, h.Dialogs);
+        Assert.Equal(CollectionsModel.LocalDetail(3) + CollectionsModel.ActiveSuffix, model.DetailLine);
+
+        model.Selected = "Shared";
+        Assert.Equal(CollectionsModel.LocalDetail(3) + " · " + CollectionsModel.PublishedDetail("/Acme/mcp"), model.DetailLine);
+
+        model.Selected = "Team";
+        Assert.Equal(CollectionsModel.SyncedDetail("/shared/team.json", CollectionsModel.UpToDateStatus), model.DetailLine);
+        state.PendingUpdates = Pending("Team");
+        Assert.Equal(CollectionsModel.SyncedDetail("/shared/team.json", CollectionsModel.UpdateAvailableStatus), model.DetailLine);
+        state.SourceErrors = new Dictionary<string, string>(StringComparer.Ordinal) { ["Team"] = "team.json couldn’t be read" };
+        // What went wrong outranks what is waiting.
+        Assert.Equal(CollectionsModel.SyncedDetail("/shared/team.json", "team.json couldn’t be read"), model.DetailLine);
+
+        // Not located: there is nothing to say about the file except that it is missing.
+        Seed(h, state, file, Cache(published: located.Published));
+        Assert.Equal(CollectionsModel.UnlocatedDetail, model.DetailLine);
+    }
+
+    // MARK: selection
+
+    [Fact]
+    public void SelectionFallsBackToTheActiveCollectionWhenItsCollectionDisappears()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateCollection("Spare"));
+        state.SwitchCollection("Default");
+        using var model = new CollectionsModel(state, h.Dialogs);
+
+        model.Selected = "Work";
+        Assert.Equal("Work", model.Selected);
+        model.SetChecked("aws-mcp", true);
+        Assert.Equal(["aws-mcp"], model.CheckedNames);
+
+        Assert.Null(state.DeleteCollection("Work"));
+        Assert.Equal("Default", model.Selected);
+        Assert.Equal(state.ActiveCollection, model.Selected);
+        // The ticks belonged to the collection that is gone.
+        Assert.Empty(model.CheckedNames);
+
+        // A rename anywhere else is the same disappearance: the name selected is no longer a collection.
+        model.Selected = "Spare";
+        Assert.Null(state.RenameCollection("Spare", "Spare Parts"));
+        Assert.Equal(state.ActiveCollection, model.Selected);
+
+        // Switching the active collection from the window goes through AppState.
+        model.SwitchTo("Spare Parts");
+        Assert.Equal("Spare Parts", state.ActiveCollection);
+        Assert.Equal("Spare Parts", model.Items.Single(i => i.IsActive).Name);
+    }
+}

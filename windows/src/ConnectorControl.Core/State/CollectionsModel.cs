@@ -1,0 +1,478 @@
+using System.ComponentModel;
+
+namespace ConnectorControl.Core.State;
+
+/// <summary>
+/// The Collections window, minus pixels: the collections as items in the left pane, the selected
+/// collection's connectors as rows in the right one, the detail line above them, and a toolbar
+/// whose every button follows the selection. Everything is derived from AppState; the model owns
+/// only what the window itself knows — which collection is showing and which rows are ticked.
+///
+/// Mirror: Sources/ConnectorControlState/CollectionsModel.swift
+/// </summary>
+public sealed class CollectionsModel : ObservableObject, IDisposable
+{
+    public const string WindowTitle = "Collections";
+    public const string ImportButton = "Import…";
+    public const string SubscribeButton = "Subscribe…";
+    public const string PublishButton = "Publish…";
+    public const string RefreshButton = "Refresh";
+    public const string MakeLocalCopyButton = "Make Local Copy…";
+    public const string NewButton = "New…";
+    public const string RenameAction = "Rename…";
+    public const string DeleteAction = "Delete…";
+    public const string StopPublishingAction = "Stop Publishing";
+    public const string StopSyncingAction = "Stop Syncing (keeps a local copy)";
+    public const string ActiveSuffix = " · active";
+    public const string UnlocatedDetail = "synced · file not located on this machine";
+    /// <summary>
+    /// The source's status in the detail line. The cache records no timestamp, so this says what
+    /// is true of the file, not how long ago it last changed.
+    /// </summary>
+    public const string UpdateAvailableStatus = "update available";
+    public const string UpToDateStatus = "up to date";
+    /// <summary>
+    /// The two answers to the published-document question. Keep is the default: a file the team
+    /// reads is not something to remove by pressing Return.
+    /// </summary>
+    public const string RemoveFileButton = "Remove";
+    public const string KeepFileButton = "Keep";
+    public const string RemoteType = "remote";
+
+    public static string ExportButton(int count) => $"Export {count}…";
+
+    public static string LocalType(string command) => $"local · {command}";
+
+    public static string LocalDetail(int count) => $"local · {count} connectors";
+
+    public static string SyncedDetail(string origin, string status) => $"synced from {origin} · read-only · {status}";
+
+    /// <summary>"this PC" is the platform-forced half of this sentence; the Mac mirror says "this Mac".</summary>
+    public static string PublishedDetail(string folder) => $"publishes to {folder} from this PC";
+
+    public static string DeletePublishedFileQuestion(string fileName) => $"Also remove {fileName} from the folder?";
+
+    /// <summary>
+    /// One collection in the left pane. A published collection carries no mark of its own there —
+    /// IsPublished is what the detail line says, not a sidebar glyph.
+    /// </summary>
+    public sealed record Item(string Name, CollectionKind Kind, bool IsActive, bool IsPublished,
+        bool HasPendingUpdate, bool IsLocated)
+    {
+        public string Id => Name;
+    }
+
+    /// <summary>
+    /// One connector of the selected collection. Checked is the window's own state — an export
+    /// tick, not anything the store holds — so it is the one field the model fills in itself.
+    /// </summary>
+    public sealed record Row(string Name, bool Enabled, string? Caution, bool IsLocked, bool Checked, string TypeText)
+    {
+        public string Id => Name;
+    }
+
+    /// <summary>Property names this window actually depends on — everything else AppState raises is noise for it.</summary>
+    private static readonly string[] RelevantProperties =
+    [
+        nameof(AppState.Store), nameof(AppState.CollectionsFile), nameof(AppState.CollectionsCache),
+        nameof(AppState.PendingUpdates), nameof(AppState.SourceErrors),
+    ];
+
+    private readonly AppState state;
+    private readonly IDialogs dialogs;
+    private readonly HashSet<string> checkedNames = new(StringComparer.Ordinal);
+    private string? lastError;
+    /// <summary>What the view last picked, which may name a collection that no longer exists; Selected resolves it.</summary>
+    private string? selection;
+    /// <summary>
+    /// Which collection the ticks above belong to. The window shows one collection at a time, and
+    /// a tick must not survive into another one that happens to hold a connector of that name.
+    /// </summary>
+    private string? checkedCollection;
+
+    public CollectionsModel(AppState state, IDialogs dialogs)
+    {
+        this.state = state;
+        this.dialogs = dialogs;
+        state.PropertyChanged += OnStateChanged;
+    }
+
+    /// <summary>What the last action AppState refused reported, cleared by the next one that succeeds.</summary>
+    public string? LastError { get => lastError; private set => Set(ref lastError, value); }
+
+    // MARK: selection
+
+    /// <summary>
+    /// The collection the right pane is showing. It defaults to the active one and falls back to
+    /// it whenever the chosen name stops being a collection — deleted here, or renamed from
+    /// anywhere else.
+    /// </summary>
+    public string? Selected
+    {
+        get => SelectedCollection;
+        set
+        {
+            selection = value;
+            checkedNames.Clear();
+            checkedCollection = null;
+            RaiseAll();
+        }
+    }
+
+    private string SelectedCollection =>
+        selection is { } chosen && state.Store.Collections.ContainsKey(chosen) ? chosen : state.ActiveCollection;
+
+    /// <summary>The ticks, but only while the collection they were made in is still the one showing.</summary>
+    private IReadOnlySet<string> ActiveChecks =>
+        checkedCollection == SelectedCollection ? checkedNames : new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Moves the window to a collection this model just created or renamed, keeping the ticks with
+    /// it — unlike Selected, which is the user picking a different collection.
+    /// </summary>
+    private void Retarget(string name)
+    {
+        if (checkedCollection is not null)
+        {
+            checkedCollection = name;
+        }
+        selection = name;
+        RaiseAll();
+    }
+
+    // MARK: panes
+
+    public IReadOnlyList<Item> Items
+    {
+        get
+        {
+            var active = state.ActiveCollection;
+            return state.CollectionNames
+                .Select(name => new Item(name, state.KindOf(name), name == active, state.IsPublished(name),
+                    state.PendingUpdates.ContainsKey(name), state.IsLocated(name)))
+                .ToList();
+        }
+    }
+
+    public IReadOnlyList<Row> Rows
+    {
+        get
+        {
+            var collection = SelectedCollection;
+            var locked = state.IsSynced(collection);
+            var checks = ActiveChecks;
+            var mcps = state.Store.Collections.TryGetValue(collection, out var held)
+                ? held.Mcps
+                : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
+            // Case-insensitive by name, with the ordinal order as the tie-break so two names that
+            // differ only in case still have one settled order.
+            return mcps.Keys
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ThenBy(n => n, StringComparer.Ordinal)
+                .Select(name => new Row(name, mcps[name].Enabled, state.ConnectorCaution(name, collection),
+                    locked, checks.Contains(name), TypeTextOf(mcps[name].Config)))
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// The type column: the bridge the remote form recognises, or the launcher this connector
+    /// runs, named the way it would be typed rather than by its full path.
+    /// </summary>
+    private static string TypeTextOf(JsonValue config) =>
+        RemotePattern.Detect(config) is not null
+            ? RemoteType
+            : LocalType(LauncherName(FormMapper.Analyze(config).Model.Command));
+
+    /// <summary>
+    /// The last component of a command, splitting on both separators rather than this platform's:
+    /// a collection carries connectors authored on either, and a Mac command's launcher is still
+    /// worth naming on a PC. Split by hand, because the path APIs on the two platforms disagree
+    /// about which separators count.
+    /// </summary>
+    private static string LauncherName(string command)
+    {
+        var parts = command.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length > 0 ? parts[^1] : command;
+    }
+
+    public string DetailLine
+    {
+        get
+        {
+            var collection = SelectedCollection;
+            if (state.IsSynced(collection))
+            {
+                return state.IsLocated(collection)
+                    ? SyncedDetail(SourceDescription(collection), SyncStatus(collection))
+                    : UnlocatedDetail;
+            }
+            var count = state.Store.Collections.TryGetValue(collection, out var held) ? held.Mcps.Count : 0;
+            var line = LocalDetail(count);
+            if (collection == state.ActiveCollection)
+            {
+                line += ActiveSuffix;
+            }
+            // Only this machine's binding says where the document goes, so only this machine's
+            // window says it publishes. Another machine's publish record is not a fact about this one.
+            if (state.CollectionsCache.Published.TryGetValue(collection, out var binding))
+            {
+                line += " · " + PublishedDetail(binding.Folder);
+            }
+            return line;
+        }
+    }
+
+    /// <summary>
+    /// Where the document sits: the file this machine is bound to, or — for a binding that has
+    /// gone missing between the check above and this read — the name the sidecar recorded.
+    /// </summary>
+    private string SourceDescription(string collection) =>
+        state.SourceBinding(collection)?.Path
+        ?? (state.CollectionsFile.Collections.TryGetValue(collection, out var entry) ? entry.FileName : null)
+        ?? "";
+
+    /// <summary>What the source is doing, in precedence order: what went wrong outranks what is waiting.</summary>
+    private string SyncStatus(string collection)
+    {
+        if (state.SourceErrors.TryGetValue(collection, out var failure))
+        {
+            return failure;
+        }
+        return state.PendingUpdates.ContainsKey(collection) ? UpdateAvailableStatus : UpToDateStatus;
+    }
+
+    // MARK: toolbar
+
+    public bool CanExport => !state.IsSynced(SelectedCollection) && ActiveChecks.Count > 0;
+
+    /// <summary>
+    /// Publishing a second time from the same machine is what the sheet's folder picker is for, so
+    /// the toolbar offers it only to a collection this machine does not already publish.
+    /// </summary>
+    public bool CanPublish
+    {
+        get
+        {
+            var collection = SelectedCollection;
+            return !state.IsSynced(collection) && !state.CollectionsCache.Published.ContainsKey(collection);
+        }
+    }
+
+    public bool CanRefresh
+    {
+        get
+        {
+            var collection = SelectedCollection;
+            return state.IsSynced(collection) && state.IsLocated(collection);
+        }
+    }
+
+    public bool CanMakeLocalCopy => state.IsSynced(SelectedCollection);
+
+    public bool CanStopSyncing => state.IsSynced(SelectedCollection);
+
+    public bool CanStopPublishing => state.IsPublished(SelectedCollection);
+
+    /// <summary>
+    /// The last local collection stays, because only a local one takes a new connector. A synced
+    /// collection is never the last of those, so it is always deletable.
+    /// </summary>
+    public bool CanDelete
+    {
+        get
+        {
+            var collection = SelectedCollection;
+            return state.IsSynced(collection) || state.LocalCollectionNames.Count > 1;
+        }
+    }
+
+    public IReadOnlyList<string> CheckedNames => Rows.Where(r => r.Checked).Select(r => r.Name).ToList();
+
+    // MARK: rows
+
+    /// <summary>A synced collection's rows cannot be exported, so they cannot be ticked either.</summary>
+    public void SetChecked(string name, bool on)
+    {
+        var collection = SelectedCollection;
+        if (state.IsSynced(collection))
+        {
+            return;
+        }
+        if (checkedCollection != collection)
+        {
+            checkedNames.Clear();
+            checkedCollection = collection;
+        }
+        if (on)
+        {
+            checkedNames.Add(name);
+        }
+        else
+        {
+            checkedNames.Remove(name);
+        }
+        RaiseAll();
+    }
+
+    /// <summary>The row switch, in the collection the window is showing rather than the active one.</summary>
+    public void SetEnabled(string name, bool on)
+    {
+        state.SetEnabled(name, on, SelectedCollection);
+        LastError = null;
+    }
+
+    /// <summary>
+    /// The pencil: the same connector in two collections is two windows, so the target carries the
+    /// collection this window is showing. The Mac calls this <c>editTarget(for:)</c>; here the
+    /// returned type already owns that name.
+    /// </summary>
+    public EditTarget EditTargetFor(string row)
+    {
+        var collection = SelectedCollection;
+        var entry = state.Store.Collections.TryGetValue(collection, out var held) && held.Mcps.TryGetValue(row, out var found)
+            ? found
+            : new McpEntry(JsonValue.Object());
+        return EditTarget.Existing(row, entry, collection);
+    }
+
+    /// <summary>The names the export sheet writes, in the order the rows show them.</summary>
+    public IReadOnlyList<string> ExportIntentForChecked() => CheckedNames;
+
+    // MARK: collection actions
+
+    public void Create()
+    {
+        if (dialogs.PromptForName(AppState.NewCollectionTitle, "") is not { } typed)
+        {
+            return;
+        }
+        if (Report(state.CreateCollection(typed)))
+        {
+            Retarget(typed.TrimSpaces());
+        }
+    }
+
+    public void Rename()
+    {
+        var collection = SelectedCollection;
+        if (dialogs.PromptForName(AppState.RenameCollectionTitle, collection) is not { } typed)
+        {
+            return;
+        }
+        // The store trimmed the name the same way; following it keeps the window on the collection
+        // the user just renamed rather than dropping back to the active one.
+        if (Report(state.RenameCollection(collection, typed)))
+        {
+            Retarget(typed.TrimSpaces());
+        }
+    }
+
+    public void Delete()
+    {
+        var collection = SelectedCollection;
+        if (!dialogs.Confirm(AppState.DeleteCollectionMessage(collection), null, AppState.DeleteButton, destructive: true))
+        {
+            return;
+        }
+        // The store refuses to delete the last local collection. Asked here as well as in the
+        // toolbar, so a refusal cannot arrive after the publishing below has already stopped.
+        if (!CanDelete)
+        {
+            Report(AppState.LastLocalCollectionError);
+            return;
+        }
+        if (PublishedFileName(collection) is { } fileName)
+        {
+            state.StopPublishing(collection, AskAboutPublishedFile(fileName));
+        }
+        if (Report(state.DeleteCollection(collection)))
+        {
+            Selected = null;   // back to the active collection
+        }
+    }
+
+    /// <summary>Stop Publishing: the collection stays, and only the document in the folder is in question.</summary>
+    public void StopPublishing()
+    {
+        var collection = SelectedCollection;
+        if (!state.IsPublished(collection))
+        {
+            return;
+        }
+        // Nothing on this machine writes the document when there is no binding for it, so there is
+        // no file here to offer to remove.
+        var deleteFile = PublishedFileName(collection) is { } fileName && AskAboutPublishedFile(fileName);
+        state.StopPublishing(collection, deleteFile);
+        LastError = null;
+    }
+
+    /// <summary>
+    /// Stop Syncing keeps every connector, every filled value and every switch, so there is
+    /// nothing to warn about and nothing to confirm.
+    /// </summary>
+    public void StopSyncing()
+    {
+        state.StopSyncing(SelectedCollection);
+        LastError = null;
+    }
+
+    public void Refresh()
+    {
+        state.RefreshSource(SelectedCollection);
+        LastError = null;
+    }
+
+    /// <summary>The whole synced collection again as a local one the user can edit.</summary>
+    public void MakeLocalCopy()
+    {
+        var collection = SelectedCollection;
+        if (!state.IsSynced(collection))
+        {
+            return;
+        }
+        if (dialogs.PromptForName(AppState.NewCollectionTitle, collection) is not { } typed)
+        {
+            return;
+        }
+        if (Report(state.MakeLocalCopyOfCollection(collection, typed)))
+        {
+            Retarget(typed.TrimSpaces());
+        }
+    }
+
+    public void SwitchTo(string name)
+    {
+        state.SwitchCollection(name);
+        LastError = null;
+    }
+
+    // MARK: helpers
+
+    /// <summary>The document this machine writes for the collection, or null when nothing here publishes it.</summary>
+    private string? PublishedFileName(string collection) =>
+        state.CollectionsCache.Published.ContainsKey(collection)
+        && state.CollectionsFile.Collections.TryGetValue(collection, out var entry)
+        && entry.Publish is { } record
+            ? record.Slug + "." + CollectionDocument.FileExtension
+            : null;
+
+    /// <summary>Default no: the view's default button is Keep, and this model only records the answer.</summary>
+    private bool AskAboutPublishedFile(string fileName) =>
+        dialogs.Confirm(DeletePublishedFileQuestion(fileName), null, RemoveFileButton, KeepFileButton, destructive: false);
+
+    private bool Report(string? error)
+    {
+        LastError = error;
+        return error is null;
+    }
+
+    private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (RelevantProperties.Any(name => Affects(e, name)))
+        {
+            RaiseAll();
+        }
+    }
+
+    public void Dispose() => state.PropertyChanged -= OnStateChanged;
+}
