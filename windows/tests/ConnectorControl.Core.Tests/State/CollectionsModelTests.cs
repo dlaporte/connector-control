@@ -82,15 +82,13 @@ public class CollectionsModelTests
         Assert.False(state.IsLocated("Team"));
         Assert.True(state.IsLocated("Default"));
 
-        // Dispose cuts the republish: nothing repaints. The kept list stops following the state
-        // with it — the window that read it is gone. This is where the mirrors part: the Mac's
-        // items are computed on every read and still read through, because SwiftUI's List needs
-        // no kept list to hold its focus.
+        // Dispose cuts the republish: nothing repaints. What the kept list holds afterwards is not
+        // asserted — nobody reads it once the window is gone, and pinning a stale value would make
+        // a behaviour of it.
         model.Dispose();
         var before = repaints;
         state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal);
         Assert.Equal(before, repaints);
-        Assert.Equal([false, false, true], model.Items.Select(i => i.HasPendingUpdate));
     }
 
     // MARK: rows
@@ -624,6 +622,28 @@ public class CollectionsModelTests
         Assert.NotEmpty(raised);
         Assert.Equal("Default", model.Selected);
     }
+    /// <summary>
+    /// No write-back at all, which is the Mac's path and the only one that isolates the store-change
+    /// trigger: the test below writes the selection back and so exercises the other trigger, and
+    /// would still pass without this one.
+    /// </summary>
+    [Fact]
+    public void ASelectionRenamedAwayIsForgottenWithoutAnyWriteBack()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Spare"));
+        state.SwitchCollection("Default");
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Spare";
+
+        Assert.Null(state.RenameCollection("Spare", "Spare Parts"));
+        Assert.Equal("Default", model.Selected);
+        Assert.Null(state.RenameCollection("Spare Parts", "Spare"));
+        // A returning name must not pull the window to it.
+        Assert.Equal("Default", model.Selected);
+    }
+
     [Fact]
     public void ASelectionRenamedAwayDoesNotPullTheWindowBackWhenItReturns()
     {

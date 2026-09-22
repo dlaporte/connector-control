@@ -597,6 +597,25 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertGreaterThan(repaints, 0)
         XCTAssertEqual(model.selected, "Default")
     }
+    /// The Mac's own path: SwiftUI's `List` never writes its selection back, so nothing but the
+    /// store change itself can let go of the vanished name. The test below adds a write-back and so
+    /// exercises the other trigger; this one would still pass without that trigger and fails only
+    /// without the store-change one.
+    func testASelectionRenamedAwayIsForgottenWithoutAnyWriteBack() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Spare"))
+        state.switchCollection(to: "Default")
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Spare"
+
+        XCTAssertNil(state.renameCollection("Spare", to: "Spare Parts"))
+        XCTAssertEqual(model.selected, "Default")
+        XCTAssertNil(state.renameCollection("Spare Parts", to: "Spare"))
+        XCTAssertEqual(model.selected, "Default", "a returning name must not pull the window to it")
+    }
+
     func testASelectionRenamedAwayDoesNotPullTheWindowBackWhenItReturns() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
