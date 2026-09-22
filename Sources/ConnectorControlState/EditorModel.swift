@@ -114,7 +114,9 @@ public final class EditorModel: ObservableObject {
     /// record keys a path mark by its pointer, so a hint belongs to a position in the document
     /// that was published, not to whatever position the row holds now — and a published
     /// collection's editor is fully editable, so rows move. Fixed at open and never retaken,
-    /// unlike the asked-for snapshot: the document it describes does not change under the window.
+    /// unlike the asked-for snapshot, on the assumption that the published document does not
+    /// change under the window. A republish from the Collections window while this editor is
+    /// open breaks that assumption: the hints then describe the document as it was at open.
     private var openArgIndexByRow: [UUID: Int] = [:]
     /// The other local collections that held a byte-identical copy of this connector when the
     /// window opened. Fixed there rather than re-derived: the checkbox names them, and the save
@@ -574,7 +576,9 @@ public final class EditorModel: ObservableObject {
     /// flips it after this returns), which is what keeps `isRemoteChanged`'s
     /// bridge-discard branch — gated on `view == .form` — from firing mid-load.
     private func adoptForm(_ config: JSONValue) {
+        let carried = carriedRecords()
         load(config)
+        restore(carried)
         // A JSON edit that changed the config consumes the template, exactly
         // like a discard would — so a later Type toggle to Local re-derives
         // nothing and leaves what the user typed alone. An unchanged round
@@ -582,6 +586,39 @@ public final class EditorModel: ObservableObject {
         // flag set.
         isUntouchedTemplate = isUntouchedTemplate && config == target.entry.config
         evaluateRequiredTool()
+    }
+
+    /// Both row-keyed records, re-keyed onto something a rebuilt row still has. `load` gives every
+    /// row a new identity, so without this a JSON round trip would leave the asked-for record and
+    /// the published positions recognising no row at all — a synced form's placeholders would
+    /// lock, a published form's argument hints would vanish. They are carried, never retaken: a
+    /// retake reads current values and so would unlock nothing the user has already filled.
+    ///
+    /// Env rows are keyed by name, which is unique within a connector. Arguments are keyed by
+    /// position, which is exact in a synced form — its JSON is read-only, so the round trip is
+    /// always unchanged — and approximate only in an editable published form after a JSON edit
+    /// that reorders arguments, which is the one case this cannot follow.
+    private struct CarriedRecords {
+        let askedEnvNames: Set<String>
+        let askedArgPositions: Set<Int>
+        let openArgIndexByPosition: [Int: Int]
+    }
+
+    private func carriedRecords() -> CarriedRecords {
+        CarriedRecords(
+            askedEnvNames: Set(envRows.filter { askedEnvRows.contains($0.id) }.map(\.name)),
+            askedArgPositions: Set(args.indices.filter { askedArgs.contains(args[$0].id) }),
+            openArgIndexByPosition: Dictionary(uniqueKeysWithValues: args.indices.compactMap { position in
+                openArgIndexByRow[args[position].id].map { (position, $0) }
+            }))
+    }
+
+    private func restore(_ carried: CarriedRecords) {
+        askedEnvRows = Set(envRows.filter { carried.askedEnvNames.contains($0.name) }.map(\.id))
+        askedArgs = Set(carried.askedArgPositions.filter { args.indices.contains($0) }.map { args[$0].id })
+        openArgIndexByRow = Dictionary(uniqueKeysWithValues: carried.openArgIndexByPosition
+            .filter { args.indices.contains($0.key) }
+            .map { (args[$0.key].id, $0.value) })
     }
 
     /// Loads `config` into every form/remote field and (re)computes `isRemote`.

@@ -533,4 +533,62 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertTrue(dbt.asksFor(envRow: token.id))
         XCTAssertTrue(dbt.isPlaceholder(envRow: token.id))
     }
+    // MARK: - A JSON round trip keeps both records
+
+    func testAJSONRoundTripKeepsWhatASyncedFormAskedFor() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        try subscribeToDataTeam(rig)
+
+        // The round trip rebuilds every row; the record has to recognise the rebuilt ones.
+        let dbt = rig.editor("dbt", in: "Data team")
+        dbt.requestView(.json)
+        dbt.requestView(.form)
+        XCTAssertEqual(dbt.view, .form)
+        XCTAssertTrue(dbt.asksFor(envRow: try envRow(dbt, "DBT_TOKEN").id),
+                      "the placeholder field stays live, so the value can still be filled")
+        XCTAssertFalse(dbt.asksFor(envRow: try envRow(dbt, "DBT_REGION").id))
+
+        let ledger = rig.editor("ledger", in: "Data team")
+        ledger.requestView(.json)
+        ledger.requestView(.form)
+        XCTAssertTrue(ledger.asksFor(arg: 0))
+
+        // Carried, not retaken: a value filled before the trip keeps its field live.
+        let index = try XCTUnwrap(dbt.envRows.firstIndex { $0.name == "DBT_TOKEN" })
+        dbt.envRows[index].value = "secret_abc"
+        dbt.requestView(.json)
+        dbt.requestView(.form)
+        XCTAssertTrue(dbt.asksFor(envRow: try envRow(dbt, "DBT_TOKEN").id))
+
+        // The auth flags are not row-keyed, so a round trip has nothing to carry for them.
+        let notion = rig.editor("notion", in: "Data team")
+        notion.requestView(.json)
+        notion.requestView(.form)
+        XCTAssertTrue(notion.asksForBearerToken)
+    }
+
+    func testAJSONRoundTripKeepsAPublishedArgumentsHint() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let state = rig.state
+        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.upsert(name: "svc", entry: MCPEntry(config: .object([
+            "command": .string("node"),
+            "args": .array([.string("/Users/d/server.js")]),
+        ])), renamedFrom: nil, in: "Team"))
+        let folder = rig.h.dir.file("share")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let intent = PublishIntent(
+            shareValues: [:],
+            pathMarks: ["svc": [JSONPointer(["args", "0"]): .init(name: "server_path", hint: "your clone")]],
+            hints: [:])
+        XCTAssertNil(state.startPublishing("Team", to: folder.path, intent: intent))
+
+        let editor = rig.editor("svc", in: "Team")
+        XCTAssertEqual(editor.publishedHint(arg: 0), "your clone")
+        editor.requestView(.json)
+        editor.requestView(.form)
+        XCTAssertEqual(editor.publishedHint(arg: 0), "your clone", "the hint survives an unchanged round trip")
+    }
 }

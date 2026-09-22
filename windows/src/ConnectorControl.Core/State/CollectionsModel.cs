@@ -132,11 +132,22 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// it whenever the chosen name stops being a collection — deleted here, or renamed from
     /// anywhere else.
     /// </summary>
+    /// <remarks>
+    /// An assignment that would show the collection already showing does nothing at all — no
+    /// raise, no cleared ticks, not even the name remembered. The sidebar's two-way binding writes
+    /// its selection straight back, and a raise here fed it until the stack ran out; remembering
+    /// the name would pin the window to a collection it was only showing because it was the
+    /// active one.
+    /// </remarks>
     public string? Selected
     {
         get => SelectedCollection;
         set
         {
+            if (EffectiveCollection(value) == SelectedCollection)
+            {
+                return;
+            }
             selection = value;
             checkedNames.Clear();
             checkedCollection = null;
@@ -144,8 +155,11 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         }
     }
 
-    private string SelectedCollection =>
-        selection is { } chosen && state.Store.Collections.ContainsKey(chosen) ? chosen : state.ActiveCollection;
+    private string SelectedCollection => EffectiveCollection(selection);
+
+    /// <summary>What a chosen name resolves to: itself while it is a collection, the active one otherwise.</summary>
+    private string EffectiveCollection(string? chosen) =>
+        chosen is { } name && state.Store.Collections.ContainsKey(name) ? name : state.ActiveCollection;
 
     /// <summary>The ticks, but only while the collection they were made in is still the one showing.</summary>
     private IReadOnlySet<string> ActiveChecks =>

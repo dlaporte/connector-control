@@ -159,9 +159,15 @@ public final class CollectionsModel: ObservableObject {
     /// The collection the right pane is showing. It defaults to the active one and falls back to
     /// it whenever the chosen name stops being a collection — deleted here, or renamed from
     /// anywhere else.
+    ///
+    /// An assignment that would show the collection already showing does nothing at all — no
+    /// republish, no cleared ticks, not even the name remembered. A view that writes its selection
+    /// straight back would otherwise feed itself, and remembering the name would pin the window
+    /// to a collection it was only showing because it was the active one.
     public var selected: String? {
         get { selectedCollection }
         set {
+            guard effectiveCollection(for: newValue) != selectedCollection else { return }
             objectWillChange.send()
             selection = newValue
             checkedNames_ = []
@@ -169,8 +175,11 @@ public final class CollectionsModel: ObservableObject {
         }
     }
 
-    private var selectedCollection: String {
-        if let selection, state.store.collections[selection] != nil { return selection }
+    private var selectedCollection: String { effectiveCollection(for: selection) }
+
+    /// What a chosen name resolves to: itself while it is a collection, the active one otherwise.
+    private func effectiveCollection(for chosen: String?) -> String {
+        if let chosen, state.store.collections[chosen] != nil { return chosen }
         return state.activeCollection
     }
 

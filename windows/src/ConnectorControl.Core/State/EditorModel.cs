@@ -161,9 +161,11 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// keys a path mark by its pointer, so a hint belongs to a position in the document that was
     /// published, not to whatever position the row holds now — and a published collection's
     /// editor is fully editable, so rows move. Fixed at open and never retaken, unlike the
-    /// asked-for snapshot: the document it describes does not change under the window.
+    /// asked-for snapshot, on the assumption that the published document does not change under
+    /// the window. A republish from the Collections window while this editor is open breaks that
+    /// assumption: the hints then describe the document as it was at open.
     /// </summary>
-    private readonly Dictionary<ArgRow, int> openArgIndexByRow = [];
+    private Dictionary<ArgRow, int> openArgIndexByRow = [];
     private string? validationError;
     private Tool? requiredTool;
     private bool suppressToolEvaluation;
@@ -950,7 +952,9 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     private void AdoptForm(JsonValue config)
     {
+        var carried = CarriedRecords();
         Load(config);
+        Restore(carried);
         // A JSON edit that changed the config consumes the template, exactly
         // like a discard would — so a later Type toggle to Local re-derives
         // nothing and leaves what the user typed alone. An unchanged round
@@ -959,6 +963,51 @@ public sealed class EditorModel : ObservableObject, IDisposable
         isUntouchedTemplate = isUntouchedTemplate && config == Target.Entry.Config;
         EvaluateRequiredTool();
         RaiseAll();
+    }
+
+    /// <summary>
+    /// Both row-keyed records, re-keyed onto something a rebuilt row still has. Load gives every
+    /// row a new object, so without this a JSON round trip would leave the asked-for record and
+    /// the published positions recognising no row at all — a synced form's placeholders would
+    /// lock, a published form's argument hints would vanish. They are carried, never retaken: a
+    /// retake reads current values and so would unlock nothing the user has already filled.
+    ///
+    /// Env rows are keyed by name, which is unique within a connector. Arguments are keyed by
+    /// position, which is exact in a synced form — its JSON is read-only, so the round trip is
+    /// always unchanged — and approximate only in an editable published form after a JSON edit
+    /// that reorders arguments, which is the one case this cannot follow.
+    /// </summary>
+    private sealed record Carried(
+        HashSet<string> AskedEnvNames, HashSet<int> AskedArgPositions, Dictionary<int, int> OpenArgIndexByPosition);
+
+    private Carried CarriedRecords()
+    {
+        var byPosition = new Dictionary<int, int>();
+        var askedPositions = new HashSet<int>();
+        for (var i = 0; i < Args.Count; i++)
+        {
+            if (askedArgs.Contains(Args[i]))
+            {
+                askedPositions.Add(i);
+            }
+            if (openArgIndexByRow.TryGetValue(Args[i], out var open))
+            {
+                byPosition[i] = open;
+            }
+        }
+        return new Carried(
+            EnvRows.Where(askedEnvRows.Contains).Select(r => r.Name).ToHashSet(StringComparer.Ordinal),
+            askedPositions,
+            byPosition);
+    }
+
+    private void Restore(Carried carried)
+    {
+        askedEnvRows = EnvRows.Where(r => carried.AskedEnvNames.Contains(r.Name)).ToHashSet();
+        askedArgs = carried.AskedArgPositions.Where(i => i < Args.Count).Select(i => Args[i]).ToHashSet();
+        openArgIndexByRow = carried.OpenArgIndexByPosition
+            .Where(pair => pair.Key < Args.Count)
+            .ToDictionary(pair => Args[pair.Key], pair => pair.Value);
     }
 
     /// <summary>

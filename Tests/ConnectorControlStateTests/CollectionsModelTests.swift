@@ -566,4 +566,33 @@ final class CollectionsModelTests: XCTestCase {
         defer { popover.dispose() }
         XCTAssertEqual(CollectionsModel.syncedGlyphTooltip(unlocated), popover.sourceTooltip)
     }
+    func testChoosingTheCollectionAlreadyShowingChangesNothing() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Work"))
+        state.switchCollection(to: "Default")
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.setChecked("aws-mcp", true)
+        var repaints = 0
+        let sink = model.objectWillChange.sink { _ in repaints += 1 }
+        defer { sink.cancel() }
+
+        // The active collection is what is showing, so naming it again is the same selection —
+        // as is naming a collection that does not exist, which falls back to the same one.
+        model.selected = "Default"
+        model.selected = nil
+        model.selected = "No such collection"
+        XCTAssertEqual(repaints, 0, "a view writing its selection back must not feed itself")
+        XCTAssertEqual(model.checkedNames, ["aws-mcp"], "and the ticks made in it survive")
+
+        // Not remembered either: the window still follows the active collection.
+        state.switchCollection(to: "Work")
+        XCTAssertEqual(model.selected, "Work")
+
+        // A real change still announces itself.
+        model.selected = "Default"
+        XCTAssertGreaterThan(repaints, 0)
+        XCTAssertEqual(model.selected, "Default")
+    }
 }

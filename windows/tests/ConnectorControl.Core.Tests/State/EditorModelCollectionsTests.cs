@@ -722,4 +722,66 @@ public class EditorModelCollectionsTests
         Assert.True(dbt.AsksFor(token));
         Assert.True(dbt.IsPlaceholder(token));
     }
+    // MARK: a JSON round trip keeps both records
+
+    [Fact]
+    public void AJsonRoundTripKeepsWhatASyncedFormAskedFor()
+    {
+        using var rig = new EditorRig();
+        SubscribeToDataTeam(rig);
+
+        // The round trip rebuilds every row; the record has to recognise the rebuilt ones.
+        using var dbt = rig.Editor("dbt", "Data team");
+        dbt.RequestView(EditView.Json);
+        dbt.RequestView(EditView.Form);
+        Assert.Equal(EditView.Form, dbt.View);
+        // The placeholder field stays live, so the value can still be filled.
+        Assert.True(dbt.AsksFor(EnvRow(dbt, "DBT_TOKEN")));
+        Assert.False(dbt.AsksFor(EnvRow(dbt, "DBT_REGION")));
+
+        using var ledger = rig.Editor("ledger", "Data team");
+        ledger.RequestView(EditView.Json);
+        ledger.RequestView(EditView.Form);
+        Assert.True(ledger.AsksForArg(0));
+
+        // Carried, not retaken: a value filled before the trip keeps its field live.
+        EnvRow(dbt, "DBT_TOKEN").Value = "secret_abc";
+        dbt.RequestView(EditView.Json);
+        dbt.RequestView(EditView.Form);
+        Assert.True(dbt.AsksFor(EnvRow(dbt, "DBT_TOKEN")));
+
+        // The auth flags are not row-keyed, so a round trip has nothing to carry for them.
+        using var notion = rig.Editor("notion", "Data team");
+        notion.RequestView(EditView.Json);
+        notion.RequestView(EditView.Form);
+        Assert.True(notion.AsksForBearerToken);
+    }
+
+    [Fact]
+    public void AJsonRoundTripKeepsAPublishedArgumentsHint()
+    {
+        using var rig = new EditorRig();
+        var state = rig.State;
+        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.Upsert("svc", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String("/Users/d/server.js")])))), null, "Team"));
+        var folder = rig.H.Dir.File("share");
+        Directory.CreateDirectory(folder);
+        var intent = new PublishIntent(
+            [],
+            [new("svc", new Dictionary<JsonPointer, PublishIntent.PathMark>
+            {
+                [new JsonPointer(["args", "0"])] = new("server_path", "your clone"),
+            })],
+            []);
+        Assert.Null(state.StartPublishing("Team", folder, intent));
+
+        using var editor = rig.Editor("svc", "Team");
+        Assert.Equal("your clone", editor.PublishedHintForArg(0));
+        editor.RequestView(EditView.Json);
+        editor.RequestView(EditView.Form);
+        // The hint survives an unchanged round trip.
+        Assert.Equal("your clone", editor.PublishedHintForArg(0));
+    }
 }

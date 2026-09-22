@@ -588,4 +588,35 @@ public class CollectionsModelTests
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal(flyout.SourceTooltip, CollectionsModel.SyncedGlyphTooltip(unlocated));
     }
+    [Fact]
+    public void ChoosingTheCollectionAlreadyShowingChangesNothing()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Work"));
+        state.SwitchCollection("Default");
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.SetChecked("aws-mcp", true);
+        var raised = new List<string?>();
+        model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        // The active collection is what is showing, so naming it again is the same selection —
+        // as is naming a collection that does not exist, which falls back to the same one.
+        model.Selected = "Default";
+        model.Selected = null;
+        model.Selected = "No such collection";
+        // A view writing its selection back must not feed itself, and the ticks made in it survive.
+        Assert.Empty(raised);
+        Assert.Equal(["aws-mcp"], model.CheckedNames);
+
+        // Not remembered either: the window still follows the active collection.
+        state.SwitchCollection("Work");
+        Assert.Equal("Work", model.Selected);
+
+        // A real change still announces itself.
+        raised.Clear();
+        model.Selected = "Default";
+        Assert.NotEmpty(raised);
+        Assert.Equal("Default", model.Selected);
+    }
 }
