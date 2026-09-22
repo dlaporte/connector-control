@@ -377,4 +377,44 @@ public class PublishDialogTests
             window.Close();
         });
     }
+
+    [Fact]
+    public void AFolderTheSheetCannotRewriteSaysWhereToWriteTheToken()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = h.Dir.File("pub");
+        Directory.CreateDirectory(folder);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var bound = state.CollectionsCache.Published[state.ActiveCollection].Folder;
+        // The folder as a remote connector's header name, which the sheet's rewrite cannot reach.
+        Assert.Null(state.Upsert("svc", new McpEntry(RemotePattern.Encode(new RemoteConfig(
+            "https://mcp.example.com/", new RemoteAuth.Header(bound, "v"), RemoteLaunchStyle.Npx, package: "mcp-remote"))), null));
+        WpfApp.Invoke(() =>
+        {
+            var model = new PublishModel(state, state.ActiveCollection);
+            var window = Shown(model);
+
+            // A folder of this collection's own wherever it sits, so the token is still its answer,
+            // but the note says the connector's editor is where to write it.
+            var kept = Assert.Single(model.KeptPaths);
+            Assert.Equal(("svc", "remote.auth.name", PublishModel.KeptPathKind.Folder), (kept.Connector, kept.Field, kept.Kind));
+            var note = PublishModel.PublishFolderEditNote("svc", "remote.auth.name");
+            Assert.Equal(note, RowElements.Find<TextBlock>(window.KeptList, kept, "KeptNoteText").Text);
+            var use = RowElements.Find<Button>(window.KeptList, kept, "UseDirectoryToken");
+            Assert.Equal(Visibility.Visible, use.Visibility);
+            Assert.Equal(Visibility.Collapsed, RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue").Visibility);
+            Assert.False(window.PublishButton.IsEnabled);
+
+            Press(use);
+            Layout(window);
+
+            // Nothing was written: the entry stays, and the sheet says what does answer it.
+            Assert.Single(window.KeptList.Items);
+            Assert.Equal(Visibility.Visible, window.FailureText.Visibility);
+            Assert.Equal(note, window.FailureText.Text);
+            Assert.False(window.PublishButton.IsEnabled);
+            window.Close();
+        });
+    }
 }

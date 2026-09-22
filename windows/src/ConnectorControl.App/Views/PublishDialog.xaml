@@ -132,8 +132,14 @@
                   <ColumnDefinition Width="*" />
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock x:Name="MarkNoteText" Text="{Binding Converter={StaticResource UnansweredNote}}" Style="{StaticResource CautionText}"
-                           VerticalAlignment="Center" Margin="0,0,12,0" />
+                <TextBlock x:Name="MarkNoteText" Style="{StaticResource CautionText}" VerticalAlignment="Center" Margin="0,0,12,0">
+                  <TextBlock.Text>
+                    <MultiBinding Converter="{StaticResource UnansweredNote}">
+                      <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                      <Binding />
+                    </MultiBinding>
+                  </TextBlock.Text>
+                </TextBlock>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                   <Button x:Name="ForgetMark" Content="{x:Static state:PublishModel.ForgetMarkButton}" Click="OnForgetMark" />
                 </StackPanel>
@@ -149,8 +155,18 @@
                   <ColumnDefinition Width="*" />
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock x:Name="KeptNoteText" Text="{Binding Converter={StaticResource UnansweredNote}}" Style="{StaticResource CautionText}"
-                           VerticalAlignment="Center" Margin="0,0,12,0" />
+                <!-- The note is the model's for this entry, never composed here: whether a folder
+                     can be rewritten from this sheet, and whose folder it is, are facts the sheet
+                     does not hold. The model comes down the second binding, as the editor's own
+                     rule bindings take it. -->
+                <TextBlock x:Name="KeptNoteText" Style="{StaticResource CautionText}" VerticalAlignment="Center" Margin="0,0,12,0">
+                  <TextBlock.Text>
+                    <MultiBinding Converter="{StaticResource UnansweredNote}">
+                      <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                      <Binding />
+                    </MultiBinding>
+                  </TextBlock.Text>
+                </TextBlock>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                   <Button x:Name="ReleaseValue" Content="{x:Static state:PublishModel.ReleaseValueButton}" Click="OnReleaseValue" />
                   <Button x:Name="UseDirectoryToken" Content="{x:Static state:PublishModel.UseDirectoryTokenButton}" Click="OnUseDirectoryToken" />

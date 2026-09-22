@@ -139,21 +139,25 @@ public partial class PublishDialog : DialogWindow
 }
 
 /// <summary>
-/// The note on an entry that holds the sheet, from the entry the list holds. Each sentence is the
-/// model's static and names its parts mid-sentence, so a binding cannot compose it without
-/// restating the wording here. One converter for every kind of entry, so a new kind is one case.
+/// The note on an entry that holds the sheet. A kept path's is the model's own, because whether a
+/// folder can be rewritten from here, and whose folder it is, are facts only the model holds; the
+/// model arrives as the first bound value, as the editor's rule bindings take it. A lost mark's
+/// sentence is a static that names the mark and its connector mid-sentence, which a binding cannot
+/// compose without restating the wording here.
 /// </summary>
-public sealed class UnansweredNoteConverter : IValueConverter
+public sealed class UnansweredNoteConverter : IMultiValueConverter
 {
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value switch
-    {
-        PublishModel.UnresolvedMark mark => PublishModel.UnresolvedMarkNote(mark.Connector, mark.Name),
-        PublishModel.KeptPath { Kind: PublishModel.KeptPathKind.Folder } folder =>
-            PublishModel.PublishFolderNote(folder.Connector, folder.Field),
-        PublishModel.KeptPath kept => PublishModel.KeptPathNote(kept.Connector, kept.Field),
-        _ => string.Empty,
-    };
+    public object Convert(object[] values, Type targetType, object? parameter, CultureInfo culture) =>
+        values.Length == 2 && values[0] is PublishModel model
+            ? values[1] switch
+            {
+                PublishModel.UnresolvedMark mark => PublishModel.UnresolvedMarkNote(mark.Connector, mark.Name),
+                PublishModel.KeptPath kept => model.Note(kept),
+                // A container the list has let go carries WPF's disconnected sentinel, not an entry.
+                _ => string.Empty,
+            }
+            : string.Empty;
 
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+    public object[] ConvertBack(object value, Type[] targetTypes, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();
 }

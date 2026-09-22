@@ -130,18 +130,19 @@ struct PublishSheetView: View {
                             Button(PublishModel.forgetMarkButton) { model.forgetUnresolvedMark(mark.id) }
                         }
                     }
-                    // A folder of this collection's own is answered only by writing the token in its
-                    // place, never by releasing it: released, the folder would travel as written.
-                    // Anything else keeps the kept-path note and Release.
+                    // The note is the model's for each entry, never composed here: whether a folder
+                    // can be rewritten from this sheet, and whose folder it is, are facts the sheet
+                    // does not hold. A folder of this collection's own is answered by writing the
+                    // token in its place, never by releasing it, since released it would travel as
+                    // written; anything else is answered by Release. Both answers hand back the
+                    // entry's note when they refuse, which is what the failure line then says.
                     ForEach(kept) { path in
-                        switch path.kind {
-                        case .folder:
-                            unansweredLine(PublishModel.publishFolderNote(path.connector, path.field)) {
+                        unansweredLine(model.note(for: path)) {
+                            switch path.kind {
+                            case .folder:
                                 Button(PublishModel.useDirectoryTokenButton) { failure = model.useDirectoryToken(path) }
-                            }
-                        case .path:
-                            unansweredLine(PublishModel.keptPathNote(path.connector, path.field)) {
-                                Button(PublishModel.releaseValueButton) { model.releaseKeptPath(path.value) }
+                            case .path:
+                                Button(PublishModel.releaseValueButton) { failure = model.releaseKeptPath(path.value) }
                             }
                         }
                     }
