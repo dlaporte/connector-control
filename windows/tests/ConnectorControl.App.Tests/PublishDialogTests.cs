@@ -67,8 +67,10 @@ public class PublishDialogTests
             Assert.False(tick.IsChecked);
             Assert.Equal(PublishModel.HintPlaceholder, hint.Tag);
             Assert.Equal(Visibility.Visible, hint.Visibility);
-            // The tick is a decision about this value, so the row shows it.
-            Assert.Equal("sk-live-secret", RowElements.Find<TextBlock>(window.EnvList, row, "ValueText").Text);
+            // A stripped value is not in the document and not on the row: the hint field is what
+            // this row is asking for.
+            var value = RowElements.Find<TextBlock>(window.EnvList, row, "ValueText");
+            Assert.Equal(Visibility.Collapsed, value.Visibility);
 
             hint.Text = "the ledger dashboard ▸ API tokens";
             Assert.Equal("the ledger dashboard ▸ API tokens", row.Hint);
@@ -78,8 +80,11 @@ public class PublishDialogTests
             ClickTick(tick, true);
             Layout(window);
 
-            // A shared value needs no hint: its own value is what travels.
+            // A shared value needs no hint: its own value is what travels, so the row shows it and
+            // drops the hint field.
             Assert.Equal(Visibility.Collapsed, hint.Visibility);
+            Assert.Equal(Visibility.Visible, value.Visibility);
+            Assert.Equal("sk-live-secret", value.Text);
             Assert.True(row.Share);
             Assert.Equal("A", Assert.Single(model.Intent.ShareValues["c"]));
             window.Close();

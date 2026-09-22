@@ -37,13 +37,18 @@
                     <ColumnDefinition Width="210" />
                   </Grid.ColumnDefinitions>
                   <TextBlock Text="{Binding Connector}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" />
+                  <!-- Variable names are short by convention but the author's to write, so a long
+                       one trims rather than crowding out the column beside it. -->
                   <TextBlock Grid.Column="1" Text="{Binding Name}" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                             MaxWidth="180" TextTrimming="CharacterEllipsis"
                              VerticalAlignment="Center" Margin="10,0" />
-                  <!-- The value the tick would publish, so the decision is made with it in view. The
-                       model keeps it whole and leaves the eliding here: a credential is long and the
-                       name beside it must stay readable. -->
+                  <!-- Shown only on a ticked row, where the value is what travels: the tick is then
+                       a decision made with the bytes it would send in view. A stripped value is not
+                       in the document, and the hint field beside it is what that row is asking for.
+                       The model keeps the value whole and leaves the eliding here. -->
                   <TextBlock x:Name="ValueText" Grid.Column="2" Text="{Binding Value}" Style="{StaticResource CaptionText}"
                              FontFamily="{StaticResource MonoFont}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                             Visibility="{Binding IsChecked, ElementName=ShareTick, Converter={StaticResource Vis}}"
                              VerticalAlignment="Center" Margin="0,0,10,0" />
                   <CheckBox x:Name="ShareTick" Grid.Column="3" Content="{x:Static state:PublishModel.ShareValueLabel}" FontSize="12"
                             IsChecked="{Binding Share, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,10,0" />

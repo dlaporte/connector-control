@@ -126,24 +126,30 @@ struct PublishSheetView: View {
                 Text(row.connector)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                // Variable names are short by convention but the author's to write, so a long one
+                // trims rather than crowding out what follows it.
                 Text(row.name)
                     .font(.system(.callout, design: .monospaced))
-                // The value the tick would publish, so the decision is made with it in view.
-                // The model keeps it whole and leaves the eliding here: one line, middle-truncated,
-                // because a credential is long and the name beside it must stay readable.
-                Text(row.value)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                    .frame(maxWidth: 180, alignment: .leading)
                 Spacer()
                 Toggle(PublishModel.shareValueLabel, isOn: $row.share)
                     .toggleStyle(.checkbox)
                     .font(.caption)
-                // A stripped value travels as a name and a hint; a shared one needs no hint,
-                // and the column keeps its width so ticking a row moves nothing else.
+                // One slot, two states: a stripped value travels as its name and a hint, so the
+                // hint field is here; a shared one travels as itself, so the value is, and the
+                // tick is a decision made with the bytes it would send in view. The width is
+                // fixed, so ticking a row moves nothing else.
                 Group {
-                    if !row.share {
+                    if row.share {
+                        Text(row.value)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
                         TextField(PublishModel.hintPlaceholder, text: $row.hint)
                             .textFieldStyle(.roundedBorder)
                             .font(.caption)
