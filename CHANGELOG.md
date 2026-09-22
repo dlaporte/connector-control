@@ -62,12 +62,17 @@ bullet once the section is about to ship.
   or client secret in a remote connector's Authentication fields always travels as a
   placeholder, and a preview shows every byte before it leaves, flagging any argument or
   shared value that looks like a credential.
+- The sheet also lists every mark it could not place and every path this machine keeps
+  back that the document would otherwise carry as written, each with its connector and
+  field; Publish and Export wait until every one is ticked where it now sits, forgotten
+  or released. The folder a collection publishes into never travels: Use
+  `${COLLECTION_DIR}` answers it by rewriting the connector.
 - A publish that fails says so on the collection banner, with Choose Folder… and Stop
   Publishing, and pressing Publish again retries the write at once. A path marked for
-  others to supply stays marked when you add, remove or reorder arguments, correct it in
-  place, or rename the connector. If the app cannot follow it, publishing and Export…
-  stop, the document in the folder stays as it was, and the banner asks you to mark it
-  again in Publish…, so a marked path never goes out as written.
+  others to supply survives added, removed or reordered arguments, an in-place
+  correction and a connector rename; if the app can no longer place it, publishing stops
+  rather than send the path as written, the document already in the folder is left as it
+  was, and the banner asks you to open Publish… and mark it again.
 - The Collections window lists every collection beside its connectors, marking the
   active one and the synced ones, with a detail line saying where the selected one
   publishes to or syncs from. Import…, Subscribe…, Export…, Publish…, Refresh, Make
@@ -81,6 +86,8 @@ bullet once the section is about to ship.
   button that answers it.
 - Saving a connector that another local collection holds an identical copy of offers, in
   one checkbox, to apply the same change there too.
+- Restoring a backup of Claude's configuration puts it back into the collection it was
+  taken from, and makes that collection active.
 - In a synced collection, a local server authored on the other platform is marked on its
   row; remote connectors cross either way.
 - A folder the app watches — Claude's config folder, the master list's, or a synced
