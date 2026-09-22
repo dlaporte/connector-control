@@ -7,9 +7,50 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ApplicationBackgroundBrush}">
   <Window.Resources>
+    <views:NotConverter x:Key="Not" />
+    <views:HeaderStateConverter x:Key="HeaderState" />
+    <views:EditorRuleConverter x:Key="EditorRule" />
     <Style x:Key="FieldLabel" TargetType="TextBlock">
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Margin" Value="0,0,12,0" />
+    </Style>
+    <!-- A field label's row, so the small lock can sit beside the words. -->
+    <Style x:Key="FieldLabelRow" TargetType="StackPanel">
+      <Setter Property="Orientation" Value="Horizontal" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,0,12,0" />
+    </Style>
+    <!-- The lock that marks a value belonging to the collection's author. -->
+    <Style x:Key="LabelLock" TargetType="TextBlock">
+      <Setter Property="Text" Value="{StaticResource LockGlyph}" />
+      <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Opacity" Value="0.55" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="4,0,0,0" />
+      <Setter Property="Visibility" Value="Collapsed" />
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding IsReadOnly}" Value="True">
+          <Setter Property="Visibility" Value="Visible" />
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+    <!-- The ring round a value this machine still owes the collection. Its thickness is the
+         binding: the mark clears the moment the value is in. -->
+    <Style x:Key="PlaceholderMark" TargetType="Border">
+      <Setter Property="BorderBrush" Value="{DynamicResource SystemFillColorCautionBrush}" />
+      <Setter Property="CornerRadius" Value="5" />
+    </Style>
+    <!-- The grey line the synced and published headers share. -->
+    <Style x:Key="HeaderCapsule" TargetType="Border">
+      <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Padding" Value="9,5" />
+    </Style>
+    <Style x:Key="HeaderGlyph" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <DataTemplate x:Key="MaskedValue">
       <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
@@ -40,15 +81,55 @@
       <RadioButton x:Name="JsonToggle" Content="JSON" GroupName="View" MinWidth="72" Margin="4,0,0,0" IsChecked="{Binding View, Converter={StaticResource EnumToBool}, ConverterParameter=Json}" Style="{DynamicResource DefaultToggleButtonStyle}" />
     </StackPanel>
 
+    <!-- Where this connector came from. An ordinary connector in an ordinary local collection has
+         nothing to say here and takes no room. -->
+    <StackPanel x:Name="CollectionHeader" DockPanel.Dock="Top" Margin="16,0,16,8" Visibility="{Binding HasHeaderNote, Converter={StaticResource Vis}}">
+      <Border x:Name="SyncedHeader" Style="{StaticResource HeaderCapsule}" Visibility="{Binding Header, Converter={StaticResource HeaderState}, ConverterParameter=Synced}">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="{StaticResource ChainGlyph}" Style="{StaticResource HeaderGlyph}" />
+          <TextBlock Grid.Column="1" Text="{Binding HeaderNote}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="6,0,0,0" />
+          <Button x:Name="WhatCanIChange" Grid.Column="2" Content="{x:Static state:EditorModel.WhatCanIChange}" Style="{StaticResource LinkButton}"
+                  Margin="8,0,0,0" ToolTipService.ShowDuration="60000" Click="OnWhatCanIChange">
+            <Button.ToolTip>
+              <ToolTip>
+                <TextBlock Text="{x:Static state:EditorModel.WhatCanIChangeAnswer}" TextWrapping="Wrap" MaxWidth="260" />
+              </ToolTip>
+            </Button.ToolTip>
+          </Button>
+        </Grid>
+      </Border>
+      <Border x:Name="PublishedHeader" Style="{StaticResource HeaderCapsule}" Visibility="{Binding Header, Converter={StaticResource HeaderState}, ConverterParameter=Published}">
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Text="{StaticResource ShareGlyph}" Style="{StaticResource HeaderGlyph}" />
+          <TextBlock Text="{Binding HeaderNote}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="6,0,0,0" />
+        </StackPanel>
+      </Border>
+      <TextBlock x:Name="ImportedHeader" Text="{Binding HeaderNote}" Style="{StaticResource CaptionText}" FontStyle="Italic"
+                 Visibility="{Binding Header, Converter={StaticResource HeaderState}, ConverterParameter=Imported}" />
+    </StackPanel>
+
     <!-- Bottom bar -->
     <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
-      <Grid Margin="16">
-        <Button Content="{x:Static state:EditorModel.RemoveButton}" HorizontalAlignment="Left" Style="{StaticResource DestructiveButton}" Visibility="{Binding CanRemove, Converter={StaticResource Vis}}" Click="OnRemove" />
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-          <Button Content="Cancel" MinWidth="80" Click="OnCancel" />
-          <Button Content="Save" MinWidth="80" Margin="8,0,0,0" IsDefault="True" IsEnabled="{Binding CanSave}" Style="{DynamicResource AccentButtonStyle}" Click="OnSave" />
-        </StackPanel>
-      </Grid>
+      <StackPanel Margin="16">
+        <CheckBox x:Name="PropagateLine" IsChecked="{Binding Propagate}" Margin="0,0,0,10" Visibility="{Binding ShowPropagate, Converter={StaticResource Vis}}">
+          <TextBlock Text="{Binding PropagateMessage}" TextWrapping="Wrap" />
+        </CheckBox>
+        <Grid>
+          <Button Content="{x:Static state:EditorModel.RemoveButton}" HorizontalAlignment="Left" Style="{StaticResource DestructiveButton}" Visibility="{Binding CanRemove, Converter={StaticResource Vis}}" Click="OnRemove" />
+          <!-- Remove's slot, for a connector that is not this machine's to delete. -->
+          <Button x:Name="MakeLocalCopyButton" Content="{x:Static state:EditorModel.MakeLocalCopyButton}" HorizontalAlignment="Left"
+                  Visibility="{Binding IsReadOnly, Converter={StaticResource Vis}}" Click="OnMakeLocalCopy" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancel" MinWidth="80" Click="OnCancel" />
+            <Button Content="Save" MinWidth="80" Margin="8,0,0,0" IsDefault="True" IsEnabled="{Binding CanSave}" Style="{DynamicResource AccentButtonStyle}" Click="OnSave" />
+          </StackPanel>
+        </Grid>
+      </StackPanel>
     </Border>
 
     <!-- Validation error -->
@@ -70,9 +151,12 @@
         <StackPanel>
           <Border Style="{StaticResource Card}">
             <StackPanel>
-              <Grid x:Name="TypePicker" Margin="0,0,0,8" Visibility="{Binding ShowTypePicker, Converter={StaticResource Vis}}">
+              <Grid x:Name="TypePicker" Margin="0,0,0,8" Visibility="{Binding ShowTypePicker, Converter={StaticResource Vis}}" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                <TextBlock Text="Type" Style="{StaticResource FieldLabel}" />
+                <StackPanel Style="{StaticResource FieldLabelRow}">
+                  <TextBlock Text="Type" />
+                  <TextBlock Style="{StaticResource LabelLock}" />
+                </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                   <RadioButton Content="Remote" GroupName="Type" MinWidth="72" IsChecked="{Binding IsRemote}" Style="{DynamicResource DefaultToggleButtonStyle}" />
                   <RadioButton Content="Local" GroupName="Type" MinWidth="72" Margin="4,0,0,0" IsChecked="{Binding IsLocal}" Style="{DynamicResource DefaultToggleButtonStyle}" />
@@ -80,8 +164,11 @@
               </Grid>
               <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                <TextBlock Text="Name" Style="{StaticResource FieldLabel}" />
-                <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="my-mcp" />
+                <StackPanel Style="{StaticResource FieldLabelRow}">
+                  <TextBlock Text="Name" />
+                  <TextBlock Style="{StaticResource LabelLock}" />
+                </StackPanel>
+                <TextBox x:Name="NameBox" Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="my-mcp" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
               </Grid>
             </StackPanel>
           </Border>
@@ -91,8 +178,11 @@
               <StackPanel>
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                  <TextBlock Text="Server URL" Style="{StaticResource FieldLabel}" />
-                  <TextBox Grid.Column="1" Text="{Binding RemoteUrl, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="https://example.com/mcp" />
+                  <StackPanel Style="{StaticResource FieldLabelRow}">
+                    <TextBlock Text="Server URL" />
+                    <TextBlock Style="{StaticResource LabelLock}" />
+                  </StackPanel>
+                  <TextBox Grid.Column="1" Text="{Binding RemoteUrl, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="https://example.com/mcp" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
                 </Grid>
                 <TextBlock Text="{x:Static state:EditorModel.UrlHint}" Style="{StaticResource ErrorText}" FontSize="12" Margin="110,4,0,0" Visibility="{Binding ShowUrlHint, Converter={StaticResource Vis}}" />
                 <TextBlock Text="{Binding UrlCaution}" Style="{StaticResource CautionText}" FontSize="12" Margin="110,4,0,0" TextWrapping="Wrap" Visibility="{Binding ShowUrlCaution, Converter={StaticResource Vis}}" />
@@ -105,46 +195,136 @@
                 <TextBlock Text="Authentication" Style="{StaticResource SectionTitle}" />
                 <Grid Margin="0,0,0,8">
                   <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                  <TextBlock Text="Type" Style="{StaticResource FieldLabel}" />
-                  <ComboBox Grid.Column="1" ItemsSource="{x:Static state:EditorModel.AuthKindTitles}" SelectedIndex="{Binding AuthKindIndex}" HorizontalAlignment="Left" MinWidth="220" />
+                  <StackPanel Style="{StaticResource FieldLabelRow}">
+                    <TextBlock Text="Type" />
+                    <TextBlock Style="{StaticResource LabelLock}" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{x:Static state:EditorModel.AuthKindTitles}" SelectedIndex="{Binding AuthKindIndex}" HorizontalAlignment="Left" MinWidth="220" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
                 </Grid>
                 <TextBlock Text="{x:Static state:EditorModel.AutomaticCaption}" Style="{StaticResource CaptionText}" Visibility="{Binding IsAutomatic, Converter={StaticResource Vis}}" />
                 <StackPanel Visibility="{Binding IsBearer, Converter={StaticResource Vis}}">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Token" Style="{StaticResource FieldLabel}" />
-                    <PasswordBox x:Name="BearerTokenBox" Grid.Column="1" views:PasswordBoxHelper.BoundPassword="{Binding BearerToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <Border Grid.Column="1" Style="{StaticResource PlaceholderMark}">
+                      <Border.BorderThickness>
+                        <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="MarkThickness:BearerToken">
+                          <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                          <Binding Path="BearerToken" />
+                        </MultiBinding>
+                      </Border.BorderThickness>
+                      <PasswordBox x:Name="BearerTokenBox" views:PasswordBoxHelper.BoundPassword="{Binding BearerToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                        <PasswordBox.IsEnabled>
+                          <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="IsLive:BearerToken">
+                            <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                            <Binding Path="BearerToken" />
+                          </MultiBinding>
+                        </PasswordBox.IsEnabled>
+                      </PasswordBox>
+                    </Border>
                   </Grid>
+                  <TextBlock Style="{StaticResource CautionText}" Margin="110,2,0,0">
+                    <TextBlock.Text>
+                      <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint:BearerToken">
+                        <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                        <Binding Path="BearerToken" />
+                      </MultiBinding>
+                    </TextBlock.Text>
+                    <TextBlock.Visibility>
+                      <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="HintVisibility:BearerToken">
+                        <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                        <Binding Path="BearerToken" />
+                      </MultiBinding>
+                    </TextBlock.Visibility>
+                  </TextBlock>
                   <TextBlock Text="{x:Static state:EditorModel.BearerCaption}" Style="{StaticResource CaptionText}" Margin="0,6,0,0" />
                 </StackPanel>
                 <StackPanel Visibility="{Binding IsHeader, Converter={StaticResource Vis}}">
                   <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Header name" Style="{StaticResource FieldLabel}" />
-                    <TextBox Grid.Column="1" Text="{Binding HeaderName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="X-API-Key" />
+                    <TextBox Grid.Column="1" Text="{Binding HeaderName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="X-API-Key" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
                   </Grid>
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Header value" Style="{StaticResource FieldLabel}" />
-                    <PasswordBox Grid.Column="1" views:PasswordBoxHelper.BoundPassword="{Binding HeaderValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <Border Grid.Column="1" Style="{StaticResource PlaceholderMark}">
+                      <Border.BorderThickness>
+                        <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="MarkThickness:HeaderValue">
+                          <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                          <Binding Path="HeaderValue" />
+                        </MultiBinding>
+                      </Border.BorderThickness>
+                      <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding HeaderValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                        <PasswordBox.IsEnabled>
+                          <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="IsLive:HeaderValue">
+                            <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                            <Binding Path="HeaderValue" />
+                          </MultiBinding>
+                        </PasswordBox.IsEnabled>
+                      </PasswordBox>
+                    </Border>
                   </Grid>
+                  <TextBlock Style="{StaticResource CautionText}" Margin="110,2,0,0">
+                    <TextBlock.Text>
+                      <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint:HeaderValue">
+                        <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                        <Binding Path="HeaderValue" />
+                      </MultiBinding>
+                    </TextBlock.Text>
+                    <TextBlock.Visibility>
+                      <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="HintVisibility:HeaderValue">
+                        <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                        <Binding Path="HeaderValue" />
+                      </MultiBinding>
+                    </TextBlock.Visibility>
+                  </TextBlock>
                 </StackPanel>
                 <StackPanel Visibility="{Binding IsOAuth, Converter={StaticResource Vis}}">
                   <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Client ID" Style="{StaticResource FieldLabel}" />
-                    <TextBox Grid.Column="1" Text="{Binding OAuthClientId, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBox Grid.Column="1" Text="{Binding OAuthClientId, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
                   </Grid>
                   <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Client Secret" Style="{StaticResource FieldLabel}" />
-                    <PasswordBox Grid.Column="1" views:PasswordBoxHelper.BoundPassword="{Binding OAuthClientSecret, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <Border Grid.Column="1" Style="{StaticResource PlaceholderMark}">
+                      <Border.BorderThickness>
+                        <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="MarkThickness:OAuthClientSecret">
+                          <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                          <Binding Path="OAuthClientSecret" />
+                        </MultiBinding>
+                      </Border.BorderThickness>
+                      <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding OAuthClientSecret, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                        <PasswordBox.IsEnabled>
+                          <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="IsLive:OAuthClientSecret">
+                            <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                            <Binding Path="OAuthClientSecret" />
+                          </MultiBinding>
+                        </PasswordBox.IsEnabled>
+                      </PasswordBox>
+                    </Border>
                   </Grid>
-                  <TextBlock Text="{x:Static state:EditorModel.OAuthSecretCaption}" Style="{StaticResource CaptionText}" Margin="0,-2,0,8" TextWrapping="Wrap" />
+                  <TextBlock Style="{StaticResource CautionText}" Margin="110,2,0,0">
+                    <TextBlock.Text>
+                      <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint:OAuthClientSecret">
+                        <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                        <Binding Path="OAuthClientSecret" />
+                      </MultiBinding>
+                    </TextBlock.Text>
+                    <TextBlock.Visibility>
+                      <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="HintVisibility:OAuthClientSecret">
+                        <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                        <Binding Path="OAuthClientSecret" />
+                      </MultiBinding>
+                    </TextBlock.Visibility>
+                  </TextBlock>
+                  <TextBlock Text="{x:Static state:EditorModel.OAuthSecretCaption}" Style="{StaticResource CaptionText}" Margin="0,4,0,8" TextWrapping="Wrap" />
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Scopes (optional)" Style="{StaticResource FieldLabel}" />
-                    <TextBox Grid.Column="1" Text="{Binding OAuthScopes, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="space separated" />
+                    <TextBox Grid.Column="1" Text="{Binding OAuthScopes, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="space separated" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
                   </Grid>
                 </StackPanel>
               </StackPanel>
@@ -156,15 +336,21 @@
               <StackPanel>
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                  <TextBlock Text="Command" Style="{StaticResource FieldLabel}" />
-                  <TextBox Grid.Column="1" Text="{Binding Command, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="npx" />
+                  <StackPanel Style="{StaticResource FieldLabelRow}">
+                    <TextBlock Text="Command" />
+                    <TextBlock Style="{StaticResource LabelLock}" />
+                  </StackPanel>
+                  <TextBox x:Name="CommandBox" Grid.Column="1" Text="{Binding Command, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="npx" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
                 </Grid>
                 <views:ToolNoteBlock x:Name="LocalToolNote" Note="{Binding ToolNote}" Margin="110,6,0,0" />
               </StackPanel>
             </Border>
             <Border Style="{StaticResource Card}">
               <StackPanel>
-                <TextBlock Text="Arguments" Style="{StaticResource SectionTitle}" />
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="Arguments" Style="{StaticResource SectionTitle}" />
+                  <TextBlock Style="{StaticResource LabelLock}" Margin="4,0,0,8" />
+                </StackPanel>
                 <ItemsControl x:Name="ArgList" ItemsSource="{Binding Args}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -173,13 +359,63 @@
                           <ColumnDefinition />
                           <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}" Style="{StaticResource Watermarked}" Tag="argument" />
-                        <Button Grid.Column="1" Style="{StaticResource IconButton}" Content="&#xE711;" Margin="6,0,0,0" Click="OnRemoveArg" />
+                        <StackPanel>
+                          <Border x:Name="ArgMark" Style="{StaticResource PlaceholderMark}">
+                            <Border.BorderThickness>
+                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="MarkThickness">
+                                <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                <Binding />
+                                <Binding Path="Value" />
+                              </MultiBinding>
+                            </Border.BorderThickness>
+                            <Grid>
+                              <!-- A path the document asks this machine for: live even here, and
+                                   marked until it is filled in. -->
+                              <TextBox x:Name="ArgPlaceholder" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}"
+                                       Style="{StaticResource Watermarked}" Tag="{x:Static state:EditorModel.NeedsPath}">
+                                <TextBox.Visibility>
+                                  <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="PlaceholderVisibility">
+                                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                    <Binding />
+                                  </MultiBinding>
+                                </TextBox.Visibility>
+                              </TextBox>
+                              <TextBox x:Name="ArgValue" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}"
+                                       Style="{StaticResource Watermarked}" Tag="argument"
+                                       IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}">
+                                <TextBox.Visibility>
+                                  <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="FilledVisibility">
+                                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                    <Binding />
+                                  </MultiBinding>
+                                </TextBox.Visibility>
+                              </TextBox>
+                            </Grid>
+                          </Border>
+                          <TextBlock x:Name="ArgHint" Style="{StaticResource CautionText}" Margin="0,2,0,0">
+                            <TextBlock.Text>
+                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint">
+                                <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                <Binding />
+                                <Binding Path="Value" />
+                              </MultiBinding>
+                            </TextBlock.Text>
+                            <TextBlock.Visibility>
+                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="HintVisibility">
+                                <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                <Binding />
+                                <Binding Path="Value" />
+                              </MultiBinding>
+                            </TextBlock.Visibility>
+                          </TextBlock>
+                        </StackPanel>
+                        <Button Grid.Column="1" Style="{StaticResource IconButton}" Content="&#xE711;" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnRemoveArg"
+                                IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
                       </Grid>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <Button Content="{x:Static state:EditorModel.AddArgumentTitle}" Style="{StaticResource LinkButton}" Click="OnAddArg" />
+                <Button x:Name="AddArgButton" Content="{x:Static state:EditorModel.AddArgumentTitle}" Style="{StaticResource LinkButton}" Click="OnAddArg" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
               </StackPanel>
             </Border>
             <Border Style="{StaticResource Card}">
@@ -205,28 +441,80 @@
                           <ColumnDefinition />
                           <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBox x:Name="EnvName" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}" />
-                        <ContentControl Grid.Column="2" Content="{Binding}">
-                          <ContentControl.Style>
-                            <Style TargetType="ContentControl">
-                              <Setter Property="ContentTemplate" Value="{StaticResource MaskedValue}" />
-                              <Style.Triggers>
-                                <DataTrigger Binding="{Binding Revealed}" Value="True">
-                                  <Setter Property="ContentTemplate" Value="{StaticResource RevealedValue}" />
-                                </DataTrigger>
-                              </Style.Triggers>
-                            </Style>
-                          </ContentControl.Style>
-                        </ContentControl>
-                        <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="6,0,0,0">
+                        <!-- The read-only save projection matches leaves by pointer, so the name
+                             and the row itself are the author's even here: only a value the
+                             document asked this machine for is live. -->
+                        <TextBox x:Name="EnvName" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Top"
+                                 IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
+                        <StackPanel Grid.Column="2">
+                          <Border x:Name="EnvMark" Style="{StaticResource PlaceholderMark}">
+                            <Border.BorderThickness>
+                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="MarkThickness">
+                                <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                <Binding />
+                                <Binding Path="Value" />
+                              </MultiBinding>
+                            </Border.BorderThickness>
+                            <Grid>
+                              <!-- A marker is nobody's secret, and masking it would hide which
+                                   value the author is asking for. -->
+                              <TextBox x:Name="EnvPlaceholder" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}"
+                                       Style="{StaticResource Watermarked}" Tag="{x:Static state:EditorModel.NeedsValue}">
+                                <TextBox.Visibility>
+                                  <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="PlaceholderVisibility">
+                                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                    <Binding />
+                                  </MultiBinding>
+                                </TextBox.Visibility>
+                              </TextBox>
+                              <ContentControl x:Name="EnvValue" Content="{Binding}"
+                                              IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}">
+                                <ContentControl.Visibility>
+                                  <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="FilledVisibility">
+                                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                    <Binding />
+                                  </MultiBinding>
+                                </ContentControl.Visibility>
+                                <ContentControl.Style>
+                                  <Style TargetType="ContentControl">
+                                    <Setter Property="ContentTemplate" Value="{StaticResource MaskedValue}" />
+                                    <Style.Triggers>
+                                      <DataTrigger Binding="{Binding Revealed}" Value="True">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource RevealedValue}" />
+                                      </DataTrigger>
+                                    </Style.Triggers>
+                                  </Style>
+                                </ContentControl.Style>
+                              </ContentControl>
+                            </Grid>
+                          </Border>
+                          <TextBlock x:Name="EnvHint" Style="{StaticResource CautionText}" Margin="0,2,0,0">
+                            <TextBlock.Text>
+                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint">
+                                <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                <Binding />
+                                <Binding Path="Value" />
+                              </MultiBinding>
+                            </TextBlock.Text>
+                            <TextBlock.Visibility>
+                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="HintVisibility">
+                                <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                <Binding />
+                                <Binding Path="Value" />
+                              </MultiBinding>
+                            </TextBlock.Visibility>
+                          </TextBlock>
+                        </StackPanel>
+                        <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="6,0,0,0" VerticalAlignment="Top">
                           <Button Style="{StaticResource IconButton}" Content="&#xE7B3;" Click="OnToggleReveal" />
-                          <Button Style="{StaticResource IconButton}" Content="&#xE711;" Click="OnRemoveEnv" />
+                          <Button Style="{StaticResource IconButton}" Content="&#xE711;" Click="OnRemoveEnv"
+                                  IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
                         </StackPanel>
                       </Grid>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <Button Content="{x:Static state:EditorModel.AddVariableTitle}" Style="{StaticResource LinkButton}" Click="OnAddEnv" />
+                <Button x:Name="AddEnvButton" Content="{x:Static state:EditorModel.AddVariableTitle}" Style="{StaticResource LinkButton}" Click="OnAddEnv" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
               </StackPanel>
             </Border>
           </StackPanel>
@@ -259,29 +547,34 @@
           <RowDefinition />
           <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid Margin="0,0,0,8">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition />
           </Grid.ColumnDefinitions>
-          <TextBlock Text="Name" Style="{StaticResource FieldLabel}" />
-          <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="my-mcp" />
+          <StackPanel Style="{StaticResource FieldLabelRow}">
+            <TextBlock Text="Name" />
+            <TextBlock Style="{StaticResource LabelLock}" />
+          </StackPanel>
+          <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="my-mcp" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
         </Grid>
-        <TextBox x:Name="JsonEditor" Grid.Row="1" Style="{StaticResource JsonBox}" Text="{Binding JsonText, UpdateSourceTrigger=PropertyChanged}" />
-        <TextBlock Grid.Row="2" Text="{Binding JsonStatusText}" Margin="0,6,0,0" TextWrapping="Wrap" FontSize="12">
-          <TextBlock.Style>
-            <Style TargetType="TextBlock">
-              <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-              <Style.Triggers>
-                <DataTrigger Binding="{Binding HasJsonError}" Value="True">
-                  <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                </DataTrigger>
-              </Style.Triggers>
-            </Style>
-          </TextBlock.Style>
+        <TextBox x:Name="JsonEditor" Grid.Row="1" Style="{StaticResource JsonBox}" Text="{Binding JsonText, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsReadOnly}" />
+        <!-- The two halves of JsonStatusText, bound apart: the tip offers a paste this pane cannot
+             accept when the connector is somebody else's. -->
+        <TextBlock x:Name="JsonErrorLine" Grid.Row="2" Text="{Binding JsonError}" Margin="0,6,0,0" TextWrapping="Wrap" FontSize="12"
+                   Foreground="{DynamicResource SystemFillColorCriticalBrush}" Visibility="{Binding HasJsonError, Converter={StaticResource Vis}}" />
+        <TextBlock x:Name="JsonTipLine" Grid.Row="3" Text="{x:Static state:EditorModel.JsonTip}" Margin="0,6,0,0" TextWrapping="Wrap" FontSize="12"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+          <TextBlock.Visibility>
+            <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="TipVisibility">
+              <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+              <Binding Path="HasJsonError" />
+            </MultiBinding>
+          </TextBlock.Visibility>
         </TextBlock>
-        <views:ToolNoteBlock x:Name="JsonToolNote" Grid.Row="3" Note="{Binding ToolNote}" Margin="0,6,0,0" />
+        <views:ToolNoteBlock x:Name="JsonToolNote" Grid.Row="4" Note="{Binding ToolNote}" Margin="0,6,0,0" />
       </Grid>
     </Grid>
   </DockPanel>
