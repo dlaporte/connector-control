@@ -6,70 +6,41 @@ using ConnectorControl.Core.State;
 namespace ConnectorControl.App.Views;
 
 /// <summary>
-/// Which of the header lines an element belongs to: EditorModel.HeaderState is a record, which a
-/// DataTrigger cannot match, so the parameter names the state and the binding answers with a
-/// visibility. Goes away once the model carries IsSynced / IsPublished / IsImported.
-/// </summary>
-public sealed class HeaderStateConverter : IValueConverter
-{
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        var kind = value is EditorModel.HeaderState.Synced ? "Synced"
-            : value is EditorModel.HeaderState.Published ? "Published"
-            : value is EditorModel.HeaderState.Imported ? "Imported"
-            : "None";
-        return kind == (string?)parameter ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        throw new NotSupportedException();
-}
-
-/// <summary>The caution ring round a value this machine still owes: one pixel, or none.</summary>
-public sealed class MarkThicknessConverter : IValueConverter
-{
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        new Thickness(value is true ? 1 : 0);
-
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        throw new NotSupportedException();
-}
-
-/// <summary>
-/// The per-row half of a synced collection's rules. EditorModel answers those per env row and per
-/// argument index, and a DataTemplate's own DataContext is the row — so a plain binding cannot ask
-/// the question. Every other part of the editor's collection state is a plain binding on the
-/// model.
+/// The parts of a collection's rules that no plain binding can reach, because EditorModel answers
+/// them per env row, per argument index or per named auth field: a DataTemplate's own DataContext
+/// is the row, the model indexes arguments by position, and XAML cannot pick a property by name.
+/// Everything else the editor needs is a plain binding on the model.
 ///
-/// The bound values are the EditorWindow, which carries both the model and the snapshot of what
-/// the document asked for when it opened, then the row, then the row's value — the last only so
-/// that the binding re-evaluates as the value is typed into.
+/// The bound values are the model, then the row (or, for an auth field, that field's text, with
+/// the parameter naming it after a colon). A row's value is bound as well, so the binding
+/// re-evaluates as it is typed into.
 ///
-/// Which control renders a row, and whether it is live, come from the snapshot, so that filling a
-/// value cannot disable or replace the box it is going into. The caution ring and the hint follow
-/// the value: the ring stands while the value is still owed (a marker, or emptied), and the hint
-/// is whatever the author said about finding it.
+/// Both forms answer the same three questions, so a row and a decoded secret behave alike: whether
+/// the document asks this machine for the field (fixed when the window opened, so that filling a
+/// value cannot disable or replace the box it is going into), whether the value is still owed
+/// (asked for, and either still a marker or emptied since), and what the author said about it.
 /// </summary>
 public sealed class EditorRuleConverter : IMultiValueConverter
 {
     public object Convert(object[] values, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (values.Length < 2 || values[0] is not EditorWindow window)
+        if (values.Length < 2 || values[0] is not EditorModel model)
         {
             return DependencyProperty.UnsetValue;
         }
-        var model = window.Model;
-        var row = values[1];
-        var asks = window.AskedFor(row);
-        return (string?)parameter switch
+        var parts = ((string?)parameter ?? string.Empty).Split(':');
+        var answer = parts.Length > 1
+            ? Field(model, parts[1], values[1] as string ?? string.Empty)
+            : Row(model, values[1]);
+        return parts[0] switch
         {
-            "PlaceholderVisibility" => asks ? Visibility.Visible : Visibility.Collapsed,
-            "FilledVisibility" => asks ? Visibility.Collapsed : Visibility.Visible,
-            // A field the user has emptied still owes the value the document asked for, so it
-            // keeps its mark; one that now holds a real value does not.
-            "OwedThickness" => new Thickness(asks && Owed(model, row) ? 1 : 0),
-            "OwedVisibility" => asks && Owed(model, row) ? Visibility.Visible : Visibility.Collapsed,
-            "Hint" => Hint(model, row) ?? string.Empty,
+            "Live" => !model.IsReadOnly || answer.Asks,
+            "PlaceholderVisibility" => answer.Asks ? Visibility.Visible : Visibility.Collapsed,
+            "FilledVisibility" => answer.Asks ? Visibility.Collapsed : Visibility.Visible,
+            "OwedThickness" => new Thickness(answer.Owed ? 1 : 0),
+            "OwedVisibility" => answer.Owed ? Visibility.Visible : Visibility.Collapsed,
+            "Hint" => answer.Hint ?? string.Empty,
+            "PublishedHint" => answer.Published ?? string.Empty,
             _ => DependencyProperty.UnsetValue,
         };
     }
@@ -77,18 +48,42 @@ public sealed class EditorRuleConverter : IMultiValueConverter
     public object[] ConvertBack(object value, Type[] targetTypes, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();
 
-    private static bool Owed(EditorModel model, object? row) => row switch
-    {
-        EnvRow env => model.IsPlaceholder(env) || env.Value.Length == 0,
-        ArgRow arg => model.ArgsWithPlaceholders.Contains(model.Args.IndexOf(arg)) || arg.Value.Length == 0,
-        _ => false,
-    };
+    private readonly record struct Answer(bool Asks, bool Owed, string? Hint, string? Published);
 
-    private static string? Hint(EditorModel model, object? row) => row switch
+    /// <summary>A value is owed while the author's marker stands, and again if the user empties
+    /// the field without putting anything in its place.</summary>
+    private static Answer Owing(bool asks, bool isPlaceholder, string value, string? hint, string? published) =>
+        new(asks, asks && (isPlaceholder || value.Length == 0), hint, published);
+
+    private static Answer Row(EditorModel model, object? row)
     {
-        EnvRow env => model.PlaceholderHint(env),
-        // The model indexes arguments by position; an ItemsControl hands over the row.
-        ArgRow arg => model.PlaceholderHintForArg(model.Args.IndexOf(arg)),
-        _ => null,
+        switch (row)
+        {
+            case EnvRow env:
+                return Owing(model.AsksFor(env), model.IsPlaceholder(env), env.Value,
+                             model.PlaceholderHint(env), model.PublishedHint(env));
+            case ArgRow arg:
+                // The model indexes arguments by position; an ItemsControl hands over the row.
+                var index = model.Args.IndexOf(arg);
+                return Owing(model.AsksForArg(index), model.ArgsWithPlaceholders.Contains(index), arg.Value,
+                             model.PlaceholderHintForArg(index), model.PublishedHintForArg(index));
+            default:
+                return default;
+        }
+    }
+
+    /// <summary>
+    /// A decoded auth field. Publishing strips values by env-var name and by argument pointer, so
+    /// there is no published hint for one of these.
+    /// </summary>
+    private static Answer Field(EditorModel model, string field, string value) => field switch
+    {
+        nameof(EditorModel.BearerToken) =>
+            Owing(model.AsksForBearerToken, model.BearerTokenIsPlaceholder, value, model.BearerTokenHint, null),
+        nameof(EditorModel.HeaderValue) =>
+            Owing(model.AsksForHeaderValue, model.HeaderValueIsPlaceholder, value, model.HeaderValueHint, null),
+        nameof(EditorModel.OAuthClientSecret) =>
+            Owing(model.AsksForClientSecret, model.ClientSecretIsPlaceholder, value, model.ClientSecretHint, null),
+        _ => default,
     };
 }

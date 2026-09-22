@@ -394,6 +394,26 @@ public class EditorWindowTests
                 Assert.True(published.NameBox.IsEnabled);
             });
 
+            // What the author told their readers to put in place of the value publishing strips
+            // shows beside that value here, where the value itself stays.
+            var hints = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal)
+            {
+                ["dbt"] = new Dictionary<string, string>(StringComparer.Ordinal) { ["DBT_REGION"] = "the region your account is in" },
+            };
+            Assert.Null(state.UpdatePublishIntent("Team", new PublishIntent([], [], hints)));
+            Editing(state, In(state, "Team", "dbt"), author =>
+            {
+                Assert.True(author.Model.HasPublishedHints);
+                var region = author.Model.EnvRows.Single(r => r.Name == "DBT_REGION");
+                Assert.Equal("the region your account is in",
+                             RowElements.Find<TextBlock>(author.EnvList, region, "EnvPublishedHint").Text);
+                // A shared value is nobody's debt, so the caution block stays away.
+                Assert.Equal(Visibility.Collapsed, RowElements.Find<StackPanel>(author.EnvList, region, "EnvNeeds").Visibility);
+                // And a variable the author said nothing about shows nothing.
+                var token = author.Model.EnvRows.Single(r => r.Name == "DBT_TOKEN");
+                Assert.Equal(Visibility.Collapsed, RowElements.Find<TextBlock>(author.EnvList, token, "EnvPublishedHint").Visibility);
+            }, rows: true);
+
             // The editor model republishes on tool statuses alone, so the window itself has to
             // watch AppState: a collection that stops syncing under an open editor repaints it.
             Editing(state, In(state, "Data team", "dbt"), open =>

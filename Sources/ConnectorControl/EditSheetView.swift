@@ -12,13 +12,6 @@ struct EditSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var hostWindow: NSWindow?
     @State private var whatCanIChangeShown = false
-    /// What the collection's document asked this machine for when the window opened. The model's
-    /// placeholder flags are deliberately live — a field stops asking the moment it is filled —
-    /// which is what the caution mark and the hint want, and the opposite of what the field itself
-    /// can stand: a value going in must not lock the box it is being typed into, or swap it for
-    /// another control mid-keystroke. nil until the first appearance, when the live flags are
-    /// still the open-time ones because nothing has been typed yet.
-    @State private var asked: Asked?
     @FocusState private var envFocus: UUID?
 
     init(state: AppState, target: EditTarget) {
@@ -26,48 +19,23 @@ struct EditSheetView: View {
         _model = StateObject(wrappedValue: EditorModel(state: state, target: target, dialogs: state.dialogs))
     }
 
-    private struct Asked {
-        var envRows: Set<UUID>
-        var args: Set<UUID>
-        var bearerToken: Bool
-        var headerValue: Bool
-        var clientSecret: Bool
-    }
-
-    /// The document's questions as they stand now. Arguments are kept by row identity, not by
-    /// position: an insert above a marker moves every index below it.
-    private func snapshot() -> Asked {
-        Asked(envRows: Set(model.envRows.filter { model.isPlaceholder(envRow: $0.id) }.map(\.id)),
-              args: Set(model.argsWithPlaceholders.compactMap {
-                  model.args.indices.contains($0) ? model.args[$0].id : nil
-              }),
-              bearerToken: model.bearerTokenIsPlaceholder,
-              headerValue: model.headerValueIsPlaceholder,
-              clientSecret: model.clientSecretIsPlaceholder)
-    }
-
-    private func askedForEnv(_ id: UUID) -> Bool {
-        asked.map { $0.envRows.contains(id) } ?? model.isPlaceholder(envRow: id)
-    }
-
-    private func askedForArg(_ row: ArgRow) -> Bool {
-        if let asked { return asked.args.contains(row.id) }
-        return model.argsWithPlaceholders.contains(model.args.firstIndex { $0.id == row.id } ?? -1)
-    }
-
     /// What the lock glyph says to a screen reader. A glyph on its own reads as nothing, and a
     /// lock is only ever on screen while the collection is synced, so this is the very sentence
     /// the header shows — which is what the Windows glyph names too.
     private var lockLabel: String { EditorModel.lockedFieldsNote(model.collectionName) }
 
-    /// Still owed: the author's marker is standing, or the user has emptied the field without
-    /// putting anything in its place.
+    /// Still owed: the document asked for this value, and it is either still the author's marker
+    /// or the user has emptied the field without putting anything in its place.
     private func envOwed(_ row: EnvRow) -> Bool {
-        model.isPlaceholder(envRow: row.id) || row.value.isEmpty
+        model.asksFor(envRow: row.id) && (model.isPlaceholder(envRow: row.id) || row.value.isEmpty)
     }
 
     private func argOwed(_ index: Int, _ value: String) -> Bool {
-        model.argsWithPlaceholders.contains(index) || value.isEmpty
+        model.asksFor(arg: index) && (model.argsWithPlaceholders.contains(index) || value.isEmpty)
+    }
+
+    private func fieldOwed(_ asks: Bool, _ isPlaceholder: Bool, _ value: String) -> Bool {
+        asks && (isPlaceholder || value.isEmpty)
     }
 
     var body: some View {
@@ -157,15 +125,6 @@ struct EditSheetView: View {
             }
         }
         .background(WindowFinder { hostWindow = $0 })
-        .onAppear {
-            if asked == nil { asked = snapshot() }
-        }
-        // The snapshot keeps a field steady while the user types into it, which is only worth
-        // doing while the form is the collection author's. Once the collection stops syncing, an
-        // unmasked marker box has become an ordinary secret field and has to be masked again.
-        .onChange(of: model.isReadOnly) { _, _ in
-            asked = snapshot()
-        }
     }
 
     // MARK: header
@@ -281,11 +240,12 @@ struct EditSheetView: View {
         ForEach($model.args) { $row in
             // The model indexes arguments by position; SwiftUI hands over the row.
             let index = model.args.firstIndex { $0.id == row.id } ?? -1
-            let asks = askedForArg(row)
+            let asks = model.asksFor(arg: index)
             HStack(alignment: .top) {
-                PlaceholderField(marked: asks && argOwed(index, row.value),
+                PlaceholderField(marked: argOwed(index, row.value),
                                  needs: EditorModel.needsPath,
-                                 hint: model.placeholderHint(arg: index)) {
+                                 hint: model.placeholderHint(arg: index),
+                                 published: model.publishedHint(arg: index)) {
                     TextField("argument", text: $row.value,
                               prompt: asks ? Text(EditorModel.needsPath) : nil)
                         .font(.system(.body, design: .monospaced))
@@ -329,11 +289,12 @@ struct EditSheetView: View {
                             .font(.system(.body, design: .monospaced))
                             .focused($envFocus, equals: row.id)
                             .disabled(model.isReadOnly)
-                        PlaceholderField(marked: askedForEnv(row.id) && envOwed(row),
+                        PlaceholderField(marked: envOwed(row),
                                          needs: EditorModel.needsValue,
-                                         hint: model.placeholderHint(envRow: row.id)) {
+                                         hint: model.placeholderHint(envRow: row.id),
+                                         published: model.publishedHint(envRow: row.id)) {
                             Group {
-                                if askedForEnv(row.id) {
+                                if model.asksFor(envRow: row.id) {
                                     // A marker is nobody's secret, and masking it would hide
                                     // which value the author is asking for.
                                     TextField("Value", text: $row.value, prompt: Text(EditorModel.needsValue))
@@ -388,10 +349,11 @@ struct EditSheetView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         case .bearer:
-            let asksToken = asked?.bearerToken ?? model.bearerTokenIsPlaceholder
-            PlaceholderField(marked: model.bearerTokenIsPlaceholder,
+            let asksToken = model.asksForBearerToken
+            PlaceholderField(marked: fieldOwed(asksToken, model.bearerTokenIsPlaceholder, model.bearerToken),
                              needs: EditorModel.needsValue,
-                             hint: model.bearerTokenHint) {
+                             hint: model.bearerTokenHint,
+                             published: nil) {
                 SecureField("Token", text: $model.bearerToken,
                             prompt: asksToken ? Text(EditorModel.needsValue) : nil)
                     .disabled(model.isReadOnly && !asksToken)
@@ -402,10 +364,11 @@ struct EditSheetView: View {
         case .header:
             TextField("Header name", text: $model.headerName, prompt: Text("X-API-Key"))
                 .disabled(model.isReadOnly)
-            let asksHeaderValue = asked?.headerValue ?? model.headerValueIsPlaceholder
-            PlaceholderField(marked: model.headerValueIsPlaceholder,
+            let asksHeaderValue = model.asksForHeaderValue
+            PlaceholderField(marked: fieldOwed(asksHeaderValue, model.headerValueIsPlaceholder, model.headerValue),
                              needs: EditorModel.needsValue,
-                             hint: model.headerValueHint) {
+                             hint: model.headerValueHint,
+                             published: nil) {
                 SecureField("Header value", text: $model.headerValue,
                             prompt: asksHeaderValue ? Text(EditorModel.needsValue) : nil)
                     .disabled(model.isReadOnly && !asksHeaderValue)
@@ -413,10 +376,11 @@ struct EditSheetView: View {
         case .oauthClient:
             TextField("Client ID", text: $model.oauthClientID)
                 .disabled(model.isReadOnly)
-            let asksSecret = asked?.clientSecret ?? model.clientSecretIsPlaceholder
-            PlaceholderField(marked: model.clientSecretIsPlaceholder,
+            let asksSecret = model.asksForClientSecret
+            PlaceholderField(marked: fieldOwed(asksSecret, model.clientSecretIsPlaceholder, model.oauthClientSecret),
                              needs: EditorModel.needsValue,
-                             hint: model.clientSecretHint) {
+                             hint: model.clientSecretHint,
+                             published: nil) {
                 SecureField("Client Secret", text: $model.oauthClientSecret,
                             prompt: asksSecret ? Text(EditorModel.needsValue) : nil)
                     .disabled(model.isReadOnly && !asksSecret)
@@ -461,7 +425,7 @@ struct EditSheetView: View {
                     .overlay(RoundedRectangle(cornerRadius: 6)
                         .stroke(model.hasJSONError ? Color.red : Color.secondary.opacity(0.3)))
             }
-            // The two halves of jsonStatusText, bound apart: the tip offers a paste this pane
+            // The error and the paste tip are separate lines: the tip offers a paste this pane
             // cannot accept when the connector is somebody else's.
             if let error = model.jsonError {
                 Text(error)
@@ -547,6 +511,9 @@ private struct PlaceholderField<Content: View>: View {
     let marked: Bool
     let needs: String
     let hint: String?
+    /// What a published connector tells its readers about the value it strips out of the
+    /// document. Nothing to do with the caution state: this machine keeps the secret itself.
+    let published: String?
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -571,6 +538,12 @@ private struct PlaceholderField<Content: View>: View {
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            }
+            if let published {
+                Text(published)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

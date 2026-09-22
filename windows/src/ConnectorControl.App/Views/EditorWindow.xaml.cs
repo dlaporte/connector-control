@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -19,83 +18,23 @@ public partial class EditorWindow : Window
     public const RemoteLaunchStyle NewRemoteStyle = RemoteLaunchStyle.CmdNpx;
 
     private readonly AppState state;
-    private (bool ReadOnly, string? Note) collectionFacts;
-
-    /// <summary>
-    /// What the collection's document asked this machine for, as of the last time the form's shape
-    /// could change. The model's placeholder flags are deliberately live — a field stops asking
-    /// the moment it is filled — which is what the caution mark and the hint want, and the
-    /// opposite of what the field itself can stand: a value going in must not disable the box it
-    /// is being typed into, or swap it for another control mid-keystroke.
-    /// </summary>
-    private readonly HashSet<object> asked = [];
 
     public EditorWindow(AppState state, EditTarget target)
     {
         InitializeComponent();
         this.state = state;
         Model = new EditorModel(state, target, new WpfDialogs(() => this), NewRemoteStyle);
-        TakeSnapshot();
         DataContext = Model;
-        collectionFacts = (Model.IsReadOnly, Model.HeaderNote);
         Title = Model.WindowTitle;
         Model.CloseRequested += () => Dispatcher.BeginInvoke(new Action(Close));
         Model.FocusEnvRowRequested += row => Dispatcher.BeginInvoke(new Action(() => FocusEnvRow(row)), DispatcherPriority.Loaded);
         PreviewKeyDown += OnPreviewKeyDown;
-        state.PropertyChanged += OnStateChanged;
-        Closed += (_, _) =>
-        {
-            state.PropertyChanged -= OnStateChanged;
-            Model.Dispose();   // stop listening to AppState.ToolStatuses
-        };
+        // The model watches AppState for everything the collection decides and raises it, so the
+        // window has nothing of its own to subscribe to and nothing to re-seat.
+        Closed += (_, _) => Model.Dispose();
     }
 
     public EditorModel Model { get; }
-
-    /// <summary>Whether the document asks this machine for this row. See <see cref="asked"/> for
-    /// why that is not the live flag.</summary>
-    internal bool AskedFor(object? key) => key is not null && asked.Contains(key);
-
-    private void TakeSnapshot()
-    {
-        asked.Clear();
-        foreach (var row in Model.EnvRows)
-        {
-            if (Model.IsPlaceholder(row))
-            {
-                asked.Add(row);
-            }
-        }
-        foreach (var index in Model.ArgsWithPlaceholders)
-        {
-            asked.Add(Model.Args[index]);
-        }
-    }
-
-    /// <summary>
-    /// The editor model republishes on tool statuses alone, but its header, its locks and its
-    /// placeholder hints all read AppState — so a collection that stops syncing while this window
-    /// is open has to repaint it from here. Re-seating the DataContext is what makes every binding
-    /// re-read the model; the guard keeps that to a change which actually moves one of those two
-    /// facts, so a finished tool probe cannot rebuild the form under the user's hands.
-    ///
-    /// The snapshot is retaken with it. It exists to keep a field steady while the user types into
-    /// it, and that is only worth doing while the form is the collection author's; once the
-    /// collection stops syncing, an unmasked marker box has become an ordinary secret field and
-    /// has to go back to being masked.
-    /// </summary>
-    private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        var facts = (Model.IsReadOnly, Model.HeaderNote);
-        if (facts == collectionFacts)
-        {
-            return;
-        }
-        collectionFacts = facts;
-        TakeSnapshot();
-        DataContext = null;
-        DataContext = Model;
-    }
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {

@@ -8,8 +8,6 @@
         Background="{DynamicResource ApplicationBackgroundBrush}">
   <Window.Resources>
     <views:NotConverter x:Key="Not" />
-    <views:HeaderStateConverter x:Key="HeaderState" />
-    <views:MarkThicknessConverter x:Key="Mark" />
     <views:EditorRuleConverter x:Key="EditorRule" />
     <Style x:Key="FieldLabel" TargetType="TextBlock">
       <Setter Property="VerticalAlignment" Value="Center" />
@@ -96,7 +94,7 @@
     <!-- Where this connector came from. An ordinary connector in an ordinary local collection has
          nothing to say here and takes no room. -->
     <StackPanel x:Name="CollectionHeader" DockPanel.Dock="Top" Margin="16,0,16,8" Visibility="{Binding HasHeaderNote, Converter={StaticResource Vis}}">
-      <Border x:Name="SyncedHeader" Style="{StaticResource HeaderCapsule}" Visibility="{Binding Header, Converter={StaticResource HeaderState}, ConverterParameter=Synced}">
+      <Border x:Name="SyncedHeader" Style="{StaticResource HeaderCapsule}" Visibility="{Binding Header.IsSynced, Converter={StaticResource Vis}}">
         <Grid>
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
@@ -115,14 +113,14 @@
           </Button>
         </Grid>
       </Border>
-      <Border x:Name="PublishedHeader" Style="{StaticResource HeaderCapsule}" Visibility="{Binding Header, Converter={StaticResource HeaderState}, ConverterParameter=Published}">
+      <Border x:Name="PublishedHeader" Style="{StaticResource HeaderCapsule}" Visibility="{Binding Header.IsPublished, Converter={StaticResource Vis}}">
         <StackPanel Orientation="Horizontal">
           <TextBlock Text="{StaticResource ShareGlyph}" Style="{StaticResource HeaderGlyph}" />
           <TextBlock x:Name="PublishedHeaderText" Text="{Binding HeaderNote}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="6,0,0,0" />
         </StackPanel>
       </Border>
       <TextBlock x:Name="ImportedHeader" Text="{Binding HeaderNote}" Style="{StaticResource CaptionText}" FontStyle="Italic"
-                 Visibility="{Binding Header, Converter={StaticResource HeaderState}, ConverterParameter=Imported}" />
+                 Visibility="{Binding Header.IsImported, Converter={StaticResource Vis}}" />
     </StackPanel>
 
     <!-- Bottom bar -->
@@ -218,29 +216,32 @@
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Token" Style="{StaticResource FieldLabel}" />
-                    <Border Grid.Column="1" BorderBrush="{DynamicResource SystemFillColorCautionBrush}" CornerRadius="5"
-                            BorderThickness="{Binding BearerTokenIsPlaceholder, Converter={StaticResource Mark}}">
-                      <Border.Style>
-                        <!-- Disabling the ring disables the box inside it, so the whole "locked
-                             unless the document asks for it" rule is one trigger, not a
-                             converter. -->
-                        <Style TargetType="Border">
-                          <Style.Triggers>
-                            <MultiDataTrigger>
-                              <MultiDataTrigger.Conditions>
-                                <Condition Binding="{Binding IsReadOnly}" Value="True" />
-                                <Condition Binding="{Binding BearerTokenIsPlaceholder}" Value="False" />
-                              </MultiDataTrigger.Conditions>
-                              <Setter Property="IsEnabled" Value="False" />
-                            </MultiDataTrigger>
-                          </Style.Triggers>
-                        </Style>
-                      </Border.Style>
+                    <Border Grid.Column="1" Style="{StaticResource PlaceholderMark}">
+                      <Border.BorderThickness>
+                        <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedThickness:BearerToken">
+                          <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                          <Binding Path="BearerToken" />
+                        </MultiBinding>
+                      </Border.BorderThickness>
                       <PasswordBox x:Name="BearerTokenBox" views:PasswordBoxHelper.BoundPassword="{Binding BearerToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                   AutomationProperties.HelpText="{Binding BearerTokenHint}" />
+                                   AutomationProperties.HelpText="{Binding BearerTokenHint}">
+                        <PasswordBox.IsEnabled>
+                          <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Live:BearerToken">
+                            <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                            <Binding Path="BearerToken" />
+                            <Binding Path="IsReadOnly" />
+                          </MultiBinding>
+                        </PasswordBox.IsEnabled>
+                      </PasswordBox>
                     </Border>
                   </Grid>
-                  <StackPanel x:Name="BearerNeeds" Margin="110,2,0,0" Visibility="{Binding BearerTokenIsPlaceholder, Converter={StaticResource Vis}}">
+                  <StackPanel x:Name="BearerNeeds" Margin="110,2,0,0">
+                    <StackPanel.Visibility>
+                      <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedVisibility:BearerToken">
+                        <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                        <Binding Path="BearerToken" />
+                      </MultiBinding>
+                    </StackPanel.Visibility>
                     <!-- The field itself holds the marker the document left, so the phrase
                          that names the state goes here rather than in a watermark that
                          nothing empty would ever show. -->
@@ -258,29 +259,32 @@
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Header value" Style="{StaticResource FieldLabel}" />
-                    <Border Grid.Column="1" BorderBrush="{DynamicResource SystemFillColorCautionBrush}" CornerRadius="5"
-                            BorderThickness="{Binding HeaderValueIsPlaceholder, Converter={StaticResource Mark}}">
-                      <Border.Style>
-                        <!-- Disabling the ring disables the box inside it, so the whole "locked
-                             unless the document asks for it" rule is one trigger, not a
-                             converter. -->
-                        <Style TargetType="Border">
-                          <Style.Triggers>
-                            <MultiDataTrigger>
-                              <MultiDataTrigger.Conditions>
-                                <Condition Binding="{Binding IsReadOnly}" Value="True" />
-                                <Condition Binding="{Binding HeaderValueIsPlaceholder}" Value="False" />
-                              </MultiDataTrigger.Conditions>
-                              <Setter Property="IsEnabled" Value="False" />
-                            </MultiDataTrigger>
-                          </Style.Triggers>
-                        </Style>
-                      </Border.Style>
+                    <Border Grid.Column="1" Style="{StaticResource PlaceholderMark}">
+                      <Border.BorderThickness>
+                        <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedThickness:HeaderValue">
+                          <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                          <Binding Path="HeaderValue" />
+                        </MultiBinding>
+                      </Border.BorderThickness>
                       <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding HeaderValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                   AutomationProperties.HelpText="{Binding HeaderValueHint}" />
+                                   AutomationProperties.HelpText="{Binding HeaderValueHint}">
+                        <PasswordBox.IsEnabled>
+                          <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Live:HeaderValue">
+                            <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                            <Binding Path="HeaderValue" />
+                            <Binding Path="IsReadOnly" />
+                          </MultiBinding>
+                        </PasswordBox.IsEnabled>
+                      </PasswordBox>
                     </Border>
                   </Grid>
-                  <StackPanel x:Name="HeaderValueNeeds" Margin="110,2,0,0" Visibility="{Binding HeaderValueIsPlaceholder, Converter={StaticResource Vis}}">
+                  <StackPanel x:Name="HeaderValueNeeds" Margin="110,2,0,0">
+                    <StackPanel.Visibility>
+                      <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedVisibility:HeaderValue">
+                        <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                        <Binding Path="HeaderValue" />
+                      </MultiBinding>
+                    </StackPanel.Visibility>
                     <!-- The field itself holds the marker the document left, so the phrase
                          that names the state goes here rather than in a watermark that
                          nothing empty would ever show. -->
@@ -297,29 +301,32 @@
                   <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Client Secret" Style="{StaticResource FieldLabel}" />
-                    <Border Grid.Column="1" BorderBrush="{DynamicResource SystemFillColorCautionBrush}" CornerRadius="5"
-                            BorderThickness="{Binding ClientSecretIsPlaceholder, Converter={StaticResource Mark}}">
-                      <Border.Style>
-                        <!-- Disabling the ring disables the box inside it, so the whole "locked
-                             unless the document asks for it" rule is one trigger, not a
-                             converter. -->
-                        <Style TargetType="Border">
-                          <Style.Triggers>
-                            <MultiDataTrigger>
-                              <MultiDataTrigger.Conditions>
-                                <Condition Binding="{Binding IsReadOnly}" Value="True" />
-                                <Condition Binding="{Binding ClientSecretIsPlaceholder}" Value="False" />
-                              </MultiDataTrigger.Conditions>
-                              <Setter Property="IsEnabled" Value="False" />
-                            </MultiDataTrigger>
-                          </Style.Triggers>
-                        </Style>
-                      </Border.Style>
+                    <Border Grid.Column="1" Style="{StaticResource PlaceholderMark}">
+                      <Border.BorderThickness>
+                        <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedThickness:OAuthClientSecret">
+                          <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                          <Binding Path="OAuthClientSecret" />
+                        </MultiBinding>
+                      </Border.BorderThickness>
                       <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding OAuthClientSecret, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                   AutomationProperties.HelpText="{Binding ClientSecretHint}" />
+                                   AutomationProperties.HelpText="{Binding ClientSecretHint}">
+                        <PasswordBox.IsEnabled>
+                          <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Live:OAuthClientSecret">
+                            <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                            <Binding Path="OAuthClientSecret" />
+                            <Binding Path="IsReadOnly" />
+                          </MultiBinding>
+                        </PasswordBox.IsEnabled>
+                      </PasswordBox>
                     </Border>
                   </Grid>
-                  <StackPanel x:Name="ClientSecretNeeds" Margin="110,2,0,0" Visibility="{Binding ClientSecretIsPlaceholder, Converter={StaticResource Vis}}">
+                  <StackPanel x:Name="ClientSecretNeeds" Margin="110,2,0,0">
+                    <StackPanel.Visibility>
+                      <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedVisibility:OAuthClientSecret">
+                        <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                        <Binding Path="OAuthClientSecret" />
+                      </MultiBinding>
+                    </StackPanel.Visibility>
                     <!-- The field itself holds the marker the document left, so the phrase
                          that names the state goes here rather than in a watermark that
                          nothing empty would ever show. -->
@@ -366,7 +373,7 @@
                           <Border x:Name="ArgMark" Style="{StaticResource PlaceholderMark}">
                             <Border.BorderThickness>
                               <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedThickness">
-                                <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                 <Binding />
                                 <Binding Path="Value" />
                               </MultiBinding>
@@ -380,14 +387,14 @@
                                      for anyone reading the form aloud. -->
                                 <AutomationProperties.HelpText>
                                   <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint">
-                                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                    <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                     <Binding />
                                     <Binding Path="Value" />
                                   </MultiBinding>
                                 </AutomationProperties.HelpText>
                                 <TextBox.Visibility>
                                   <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="PlaceholderVisibility">
-                                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                    <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                     <Binding />
                                   </MultiBinding>
                                 </TextBox.Visibility>
@@ -397,7 +404,7 @@
                                        IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}">
                                 <TextBox.Visibility>
                                   <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="FilledVisibility">
-                                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                    <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                     <Binding />
                                   </MultiBinding>
                                 </TextBox.Visibility>
@@ -407,7 +414,7 @@
                           <StackPanel x:Name="ArgNeeds" Margin="0,2,0,0">
                             <StackPanel.Visibility>
                               <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedVisibility">
-                                <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                 <Binding />
                                 <Binding Path="Value" />
                               </MultiBinding>
@@ -419,13 +426,27 @@
                             <TextBlock x:Name="ArgHint" Style="{StaticResource HintLine}">
                               <TextBlock.Text>
                                 <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint">
-                                  <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                  <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                   <Binding />
                                   <Binding Path="Value" />
                                 </MultiBinding>
                               </TextBlock.Text>
                             </TextBlock>
                           </StackPanel>
+                          <!-- A published connector keeps its secrets here and sends the author's hint in their
+                               place, so the hint is what this machine's own editor shows beside the value. -->
+                          <TextBlock x:Name="ArgPublishedHint" Style="{StaticResource HintLine}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,2,0,0">
+                            <TextBlock.Text>
+                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="PublishedHint">
+                                <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                <Binding />
+                                <Binding Path="Value" />
+                                <!-- Only so this asks again when the collection starts
+                                or stops being published. -->
+                                <Binding Path="DataContext.HasPublishedHints" RelativeSource="{RelativeSource AncestorType=Window}" />
+                              </MultiBinding>
+                            </TextBlock.Text>
+                          </TextBlock>
                         </StackPanel>
                         <Button Grid.Column="1" Style="{StaticResource IconButton}" Content="&#xE711;" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnRemoveArg"
                                 IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
@@ -468,7 +489,7 @@
                           <Border x:Name="EnvMark" Style="{StaticResource PlaceholderMark}">
                             <Border.BorderThickness>
                               <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedThickness">
-                                <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                 <Binding />
                                 <Binding Path="Value" />
                               </MultiBinding>
@@ -482,14 +503,14 @@
                                      for anyone reading the form aloud. -->
                                 <AutomationProperties.HelpText>
                                   <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint">
-                                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                    <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                     <Binding />
                                     <Binding Path="Value" />
                                   </MultiBinding>
                                 </AutomationProperties.HelpText>
                                 <TextBox.Visibility>
                                   <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="PlaceholderVisibility">
-                                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                    <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                     <Binding />
                                   </MultiBinding>
                                 </TextBox.Visibility>
@@ -498,7 +519,7 @@
                                               IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}">
                                 <ContentControl.Visibility>
                                   <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="FilledVisibility">
-                                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                    <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                     <Binding />
                                   </MultiBinding>
                                 </ContentControl.Visibility>
@@ -518,7 +539,7 @@
                           <StackPanel x:Name="EnvNeeds" Margin="0,2,0,0">
                             <StackPanel.Visibility>
                               <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedVisibility">
-                                <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                 <Binding />
                                 <Binding Path="Value" />
                               </MultiBinding>
@@ -530,13 +551,27 @@
                             <TextBlock x:Name="EnvHint" Style="{StaticResource HintLine}">
                               <TextBlock.Text>
                                 <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint">
-                                  <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                  <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                   <Binding />
                                   <Binding Path="Value" />
                                 </MultiBinding>
                               </TextBlock.Text>
                             </TextBlock>
                           </StackPanel>
+                          <!-- A published connector keeps its secrets here and sends the author's hint in their
+                               place, so the hint is what this machine's own editor shows beside the value. -->
+                          <TextBlock x:Name="EnvPublishedHint" Style="{StaticResource HintLine}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,2,0,0">
+                            <TextBlock.Text>
+                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="PublishedHint">
+                                <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                <Binding />
+                                <Binding Path="Value" />
+                                <!-- Only so this asks again when the collection starts
+                                or stops being published. -->
+                                <Binding Path="DataContext.HasPublishedHints" RelativeSource="{RelativeSource AncestorType=Window}" />
+                              </MultiBinding>
+                            </TextBlock.Text>
+                          </TextBlock>
                         </StackPanel>
                         <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="6,0,0,0" VerticalAlignment="Top">
                           <Button Style="{StaticResource IconButton}" Content="&#xE7B3;" Click="OnToggleReveal" />
@@ -594,8 +629,8 @@
           <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="my-mcp" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
         </Grid>
         <TextBox x:Name="JsonEditor" Grid.Row="1" Style="{StaticResource JsonBox}" Text="{Binding JsonText, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsReadOnly}" />
-        <!-- The two halves of JsonStatusText, bound apart: the tip offers a paste this pane cannot
-             accept when the connector is somebody else's. -->
+        <!-- The error and the paste tip are separate lines: the tip offers a paste this pane
+             cannot accept when the connector is somebody else's. -->
         <TextBlock x:Name="JsonErrorLine" Grid.Row="2" Text="{Binding JsonError}" Margin="0,6,0,0" TextWrapping="Wrap" FontSize="12"
                    Foreground="{DynamicResource SystemFillColorCriticalBrush}" Visibility="{Binding HasJsonError, Converter={StaticResource Vis}}" />
         <TextBlock x:Name="JsonTipLine" Grid.Row="3" Text="{x:Static state:EditorModel.JsonTip}" Margin="0,6,0,0" TextWrapping="Wrap" FontSize="12"
