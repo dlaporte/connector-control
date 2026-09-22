@@ -86,36 +86,46 @@ be deleted, so there is always somewhere to add a connector.
 somebody else publishes. You fill in the values the author left for you and
 switch connectors on and off; nothing else can be edited, and nothing can be
 added — the header's **+** is disabled with the tooltip "Additions go in a
-local collection." A chain glyph follows the collection's name wherever it
-appears, with the source file's path in its tooltip, and an amber dot joins
-it while an update is waiting to be reviewed. Every row carries a lock.
+local collection." A chain glyph follows the collection's name on the chip
+and in the Collections window, with the source file's path in its tooltip,
+and an amber dot joins it while an update is waiting to be reviewed. In the
+chip's menu on a Mac the chain is the row's icon and a waiting update reads
+"· update available" after the name, because a macOS menu row draws one
+title and one image; the Windows menu draws the chain and the dot. Every row
+of a synced collection carries a lock.
 
 **Published** collections are local collections that also write their
 document to a folder whenever their content changes. Publishing is a fact
 about one machine rather than about the collection, so a published
-collection carries no glyph of its own; the Collections window's detail line
-is where it says so.
+collection carries no glyph of its own. On the machine that publishes it,
+the Collections window's detail line says so, and so does the editor, in a
+line at the top: "Published to <folder> — saving updates the file your team
+reads. Secrets stay here."
 
 **Manage Collections…** opens the Collections window: the collections on the
 left, the selected one's connectors on the right, and a detail line over
-them — "local · 5 connectors · active", "synced from
-~/Acme/mcp/data-team.json · read-only · up to date", or "local · 4
-connectors · publishes to ~/Acme/mcp from this Mac". The toolbar carries
-**Import…**, **Subscribe…**, **Export <n>…** for the rows you tick,
-**Publish…** and **New…**; with a synced collection selected, **Refresh**
-and **Make Local Copy…** take the place of Export and Publish. **Rename…**,
-**Delete…**, **Stop Publishing** and **Stop Syncing (keeps a local copy)**
-sit under the rows. A switch can be flipped in any collection from here —
-only the active collection reaches Claude, so a toggle elsewhere is saved
-and nothing is restarted.
+them that starts with the collection's name — "Personal · local · 5
+connectors · active", "Data team · synced from
+/Users/you/Acme/mcp/data-team.json · read-only · up to date", or
+"Consulting · local · 4 connectors · publishes to /Users/you/Acme/mcp from
+this Mac". The toolbar carries **Import…**, **Subscribe…**, **Export <n>…**
+for the rows you tick, **Publish…**, **Refresh**, **Make Local Copy…** and,
+at its right, **New…**. A button greys out while it does not apply: Export
+until you tick a row of a local collection, Publish… for a synced
+collection, and Refresh and Make Local Copy… unless a synced collection is
+selected. Under the rows sit the links that
+apply to the selected collection: **Rename…**, **Delete…**, **Publish…**,
+**Stop Publishing** and **Stop Syncing (keeps a local copy)**. A switch can
+be flipped in any collection from here — only the active collection reaches
+Claude, so a toggle elsewhere is saved and nothing is restarted.
 
 <p align="center">
   <img src="docs/screenshots/mac-collections-window.png" width="620" alt="The Collections window on macOS: collections in the left pane with a chain on the synced one, and the selected collection's connectors on the right with locks, a type column, toggles and edit pencils.">
 </p>
 
-The master list file (mcps.json) is v2 (collection-aware); older files from a
-build that predates collections are simply rebuilt from Claude's current
-config the same way any corrupted file is (see How it works). Beside it, a
+The master list file (mcps.json) is v2 (collection-aware); older v1 files,
+from a build before 1.1, are simply rebuilt from Claude's current config the
+same way any corrupted file is (see How it works). Beside it, a
 collections.json records which collection is which kind and what each one
 still needs. **If you sync mcps.json across machines, every machine must run
 1.1 or later** — an older app can't parse the v2 file and will treat it as
@@ -142,24 +152,31 @@ collection later does not rename the file.
 The sheet decides what leaves the machine:
 
 - **Environment values · stripped unless shared** lists every variable of
-  every connector, its value in full, and a **share value** tick. Left
-  unticked, which is the default, only the variable's name and the hint you
-  write travel, and each subscriber supplies the value. Ticked, the value
-  itself goes into the document.
+  every connector with a **share value** tick. Unticked, which is the
+  default, the row takes your hint: only the variable's name and that hint
+  travel, and each subscriber supplies the value. Ticked, the row shows the
+  value that will travel, and the value goes into the document.
 - **Machine-specific paths · found in arguments** lists every argument that
   looks like a path on this machine, each with a tick, a placeholder name
-  and a hint. Marked, it travels as a placeholder every subscriber fills in
-  for themselves.
+  and a hint. Unmarked, which is the default, it travels as written. Marked,
+  it travels as a placeholder every subscriber fills in for themselves.
 - **Document preview** is the document itself, exactly as it will be
-  written. Anything in it that looks like a credential is listed under the
-  preview, each line naming the connector it came from. Nothing is ever
-  edited on your behalf; the preview is there so you see every byte before
-  it leaves.
+  written. An argument or shared value that looks like a credential is
+  listed under the preview, each line naming the connector it came from.
+  Nothing is ever edited on your behalf; the preview is there so you see
+  every byte before it leaves.
 
-Remote connectors travel without their secrets whatever you tick: a bearer
-token, a custom header's value and an OAuth client secret always become
-placeholders. Enabled flags never travel, so turning a connector on or off
-never rewrites the document.
+Open **Publish…** again at any time to change what is shared or to re-mark a
+path: the sheet reopens on the folder and every tick the collection
+publishes with, and pressing Publish there updates what is shared and
+rewrites the document.
+
+The bearer token, custom header value or OAuth client secret set in a
+remote connector's Authentication fields always becomes a placeholder,
+whatever you tick. A header typed straight into the arguments travels as
+written, so check the preview for one; the warnings under it catch a value
+that looks like a credential. Enabled flags never travel, so turning a
+connector on or off never rewrites the document.
 
 `${COLLECTION_DIR}` is the other way to keep a path out of a document. Write
 it into a local server's command, arguments or environment values and each
@@ -170,24 +187,37 @@ shares one entry:
     "command": "node",
     "args": ["${COLLECTION_DIR}/ledger/dist/index.js"]
 
+On the machine that publishes the collection, `${COLLECTION_DIR}` stands for
+the publish folder, so a tool you keep beside the document runs from there
+from the moment publishing starts. The published document still carries the
+token as written, and each subscriber resolves it against their own copy of
+the folder. In a local collection this machine does not publish — never
+published, stopped, or published from your other machine — the token has no
+folder: Claude gets it unexpanded, and the connector's row says
+"${COLLECTION_DIR} has no folder until this collection is published from
+this Mac." ("this PC" on Windows). Stop Publishing leaves the token in place
+rather than writing the folder into those connectors.
+
 The document is rewritten whenever what the collection runs changes, by the
 machine that published it. **That machine has to be running for a change to
 reach the team**: an edit made on your other machine travels through the
 master list and is published the next time the publishing machine sees it. A
 write that fails puts "Couldn’t publish …" on the banner with **Choose
-Folder…** and **Stop Publishing** beside it, and pressing Publish again
-retries the write there and then.
+Folder…** and **Stop Publishing** beside it. The Publish sheet stays open on
+a failure, and pressing Publish there, or in the sheet opened again later,
+retries at once; otherwise the next change retries the write.
 
-**Export “<name>”…** writes the same document once, wherever you choose,
-with the same preview and warnings, and can carry just the rows you tick. A
-synced collection is the author's document already, so it is never offered
-for export.
+Export writes the same document once, wherever you choose, with the same
+preview and warnings. The chip menu's **Export “<name>”…** always writes the
+whole active collection; the Collections window's **Export <n>…** writes
+only the rows you tick. A synced collection is the author's document
+already, so it is never offered for export.
 
 #### Subscribing
 
 **Subscribe…** picks a document and opens the Import sheet on **Keep as its
 own collection, in sync with this file**; **Import…** opens the same sheet on
-the other mode. Either way the sheet names the document, its author and its
+the other mode. Either way the sheet names the document and lists its
 connectors before anything happens. A subscribed collection arrives with
 every connector switched off and does not become the active one.
 
@@ -238,35 +268,49 @@ from “<name>” on <date>. Edits stay here."
 Wherever the author stripped a value, the connector waits for yours. The row
 shows a caution, the editor marks the field "needs your value" or "needs
 your path", and the author's hint sits with it. Filled values are yours:
-they live in your master list, they go nowhere, and they survive every
-update from the source. A synced collection that uses `${COLLECTION_DIR}`
-but has not found its file yet says "Locate the collection file to resolve
-paths." on the rows that need it.
+they live in your master list, they never go into a document, and they
+survive every update from the source. A synced collection that uses
+`${COLLECTION_DIR}` but has not found its file yet says "Locate the
+collection file to resolve paths." on the rows that need it.
 
 #### Trust
 
 Every connector in a document is a command Claude runs. Anyone with write
 access to the shared folder can change what Claude runs on every subscriber,
 once those subscribers apply the change — the review step is the control.
-Treat write access to a published collection's folder as you would treat
-access to the machines that follow it.
+A connector that runs a program kept in the shared folder through
+`${COLLECTION_DIR}` is the exception: a change to that program reaches every
+subscriber the next time Claude starts it, with nothing to review, because
+the review covers the document and not the files it points at. Treat write
+access to a published collection's folder as you would treat access to the
+machines that follow it.
 
 #### Worth knowing
 
 - **Stop Publishing** — and deleting a published collection — asks "Also
-  remove <file> from the folder?", and keeping it is the default. Keep it,
-  and publishing that collection into the same folder again is refused with
-  "<file> already exists there and belongs to a different collection.": the
+  remove <file> from the folder?", and keeping it is the default. Stop
+  Publishing from the failed-write banner, or while the last write is
+  failing, keeps the file without asking. Once the file is kept, publishing
+  that collection into the same folder again is refused with "<file>
+  already exists there and belongs to a different collection.": the
   leftover file carries the identity the collection had before, and the app
   never writes over a document it cannot vouch for. Delete the file from the
   folder, then publish again.
-- A hint you write for an argument is remembered by the argument's position.
-  Insert an argument above a marked one and the hint moves to its neighbour;
-  reopen the Publish sheet to put it right.
+- A path you mark in **Publish…** is remembered together with the text it
+  had, so it stays a placeholder when you add, remove or reorder arguments
+  around it, correct it in place in the editor's form, or rename the
+  connector. If it changes somewhere the app cannot follow — the JSON view,
+  your other machine, or an older version of the app — and the app can no
+  longer tell which argument it is, the app stops publishing that
+  collection rather than send the path as written. The banner gives the
+  reason, "A path marked in “<connector>” has moved. Open Publish… to mark
+  it again.", the document already in the folder stays exactly as it was,
+  and Export… refuses the same way. While the collection is stopped like
+  this, subscribers receive none of its other changes either; tick the path
+  again in **Publish…** and press Publish to clear it.
 - An export of part of a published collection still carries that
-  collection's identity, so every app reading it treats it as the same
-  collection — including yours, which refuses to subscribe to a document it
-  publishes itself.
+  collection's identity, so your own app refuses to subscribe to it, as it
+  refuses the published document itself.
 - Replacing an imported copy keeps a filled value only where the author left
   the placeholder in the same place. A copy is not a subscription and has
   nothing recording where the value used to be; a synced collection does,
@@ -347,6 +391,9 @@ the time — the app leaves Claude's config valid on the way out.
 ```
 ~/Library/Application Support/Connector Control/
 ├── mcps.json          ← master list: every connector + enabled flag (source of truth)
+├── collections.json   ← collection kinds and needs; moves with mcps.json
+├── collections-local.json
+│                      ← this machine's document and publish folders; never synced
 └── backups/           ← timestamped copies of both files, rotated; machine-local
     └── claude_desktop_config.original.json   ← first-run snapshot, never pruned
 
@@ -361,6 +408,9 @@ profile, so backups stay on the machine that made them):
 ```
 %LOCALAPPDATA%\Connector Control\
 ├── mcps.json          ← master list (source of truth)
+├── collections.json   ← collection kinds and needs; moves with mcps.json
+├── collections-local.json
+│                      ← this machine's document and publish folders; never synced
 ├── settings.json      ← app settings
 └── backups\           ← timestamped copies of both files, rotated; machine-local
     └── claude_desktop_config.original.json   ← first snapshot, never pruned
@@ -424,20 +474,22 @@ changes live (the file is watched). Notes:
   Each app preserves the other platform's entries untouched — an entry may
   simply fail to start in Claude on the other OS until you edit it there.
   Because cmd.exe re-parses everything after `cmd /c`, the Windows editor
-  refuses a URL, header name or OAuth client field containing `& | < > ^ "`
-  or a space for such a connector; use the JSON view if you really need one.
+  refuses a URL, header name, OAuth client ID or client secret containing
+  `& | < > ^ "` or a space, and OAuth scopes containing any of those but a
+  space, for such a connector; use the JSON view if you really need one.
 - A shared **collection** document behaves better across platforms: it
   stores remote connectors in a neutral form, so a Mac author's remote
   connectors start on Windows and a Windows author's start on a Mac, each
   app writing its own launcher. Local servers travel as written and carry
-  the platform they were authored on; on the other OS their row shows
-  "authored on macOS" or "authored on Windows".
+  the platform they were authored on; in a synced collection on the other
+  OS their row shows "authored on macOS" or "authored on Windows".
 - The same `cmd /c` rule applies to a connector arriving from a document,
   not just to one typed into the editor: Windows skips a remote connector
-  whose Server URL, header name or OAuth client field contains
-  `& | < > ^ "` or a space. The Import sheet lists it as skipped with the
-  field at fault, and every later update from that document leaves it out.
-  The same document imports whole on a Mac, which writes bare `npx`.
+  whose Server URL, header name or OAuth client ID contains `& | < > ^ "` or
+  a space, or whose OAuth scopes contain any of those but a space. The
+  Import sheet lists it as skipped with the field at fault, and every later
+  update from that document leaves it out. The same document imports whole
+  on a Mac, which writes bare `npx`.
 - An app older than collections, sharing the same master list, has no idea a
   collection is synced and edits it as an ordinary one. This app then reads
   those edits as a pending update from the source, and applying reverts
