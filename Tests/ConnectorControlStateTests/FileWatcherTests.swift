@@ -241,15 +241,82 @@ final class FileWatcherTests: XCTestCase {
         defer { replacement.dispose() }
         XCTAssertEqual(renamex_np(replacement.url.path, r.dir.url.path, UInt32(RENAME_SWAP)), 0,
                        "the atomic swap has to succeed for the rest of this test to mean anything")
-        _ = r.ui.pumpUntil({ false }, timeout: settle)   // let the swap's own callback land
-        let beforeTheWrite = r.hits
-
         XCTAssertFalse(watcher.isArmed, "the descriptor is no longer the directory at the path")
         watcher.start()   // AppState re-arms on every reload: this is where recovery happens
         XCTAssertTrue(watcher.isArmed)
-        try TempDir.touch(r.file, "bb")
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits > beforeTheWrite }, timeout: wait),
+        // The swap took the watched file out of the path, and the re-arm's own
+        // re-check reports that whether or not an event ever arrives for the
+        // swap. Exactly one callback either way: whichever of the two gets
+        // there first leaves the last-seen date at "no file", and the other
+        // then finds nothing changed. So the count below can only be the write.
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait),
+                      "the swap itself is reported: the watched file is not in the folder that is there now")
+        try TempDir.touch(r.file, "back")
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 2 }, timeout: wait),
                       "the watcher follows the path, not the descriptor it happened to open")
+    }
+
+    /// The replacement no event can report: a sync client swapping the folder
+    /// ABOVE the watched one. Nothing touches the watched directory's own inode
+    /// or the file's — only what the path resolves to changes — so no kqueue
+    /// event is delivered for either, and the re-arm's own re-check is the only
+    /// thing that can notice the difference. This is the shape a synced
+    /// collection meets when the shared folder holding it is replaced.
+    func testAReplacedGrandparentIsReCheckedByTheReArm() throws {
+        let r = Rig()
+        defer { r.dispose() }
+        let team = r.dir.file("team")
+        let file = team.appendingPathComponent("collection/watched.json")
+        try TempDir.touch(file, "a")
+        let watcher = r.make(file)
+        watcher.start()
+        XCTAssertTrue(watcher.isArmed)
+
+        // A whole tree swapped in atomically, holding an empty collection
+        // folder: the watched file is not in it, and the watcher's descriptor
+        // is on the collection folder of the tree that was swapped away.
+        let replacement = TempDir(prefix: "watch-team")
+        defer { replacement.dispose() }
+        try FileManager.default.createDirectory(
+            at: replacement.file("collection"), withIntermediateDirectories: true)
+        XCTAssertEqual(renamex_np(replacement.url.path, team.path, UInt32(RENAME_SWAP)), 0)
+
+        XCTAssertFalse(watcher.isArmed, "the descriptor is no longer the directory at the path")
+        _ = r.ui.pumpUntil({ false }, timeout: settle)
+        XCTAssertEqual(r.hits, 0, "no inode the watcher holds was touched, so no event can fire")
+        watcher.start()   // AppState re-arms on every reload
+        XCTAssertTrue(watcher.isArmed)
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait),
+                      "the re-arm has to re-check: nothing else will ever report this change")
+    }
+
+    /// A re-arm that cannot open the replacement has to leave the watcher on
+    /// the directory it already has. Giving the live source up for an open that
+    /// then fails would disarm it silently, and the next start() would come in
+    /// cold and re-baseline the last-seen date, swallowing whatever change was
+    /// waiting. Swapping the original directory back is the proof: the
+    /// descriptor the watcher kept is the directory at the path again, so it
+    /// reports itself armed on it without another start(), which a watcher that
+    /// had thrown that descriptor away cannot do.
+    func testAReArmThatCannotOpenTheReplacementKeepsTheLiveSource() throws {
+        let r = Rig()
+        defer { r.dispose() }
+        try Data("a".utf8).write(to: r.file)
+        let watcher = r.make()
+        watcher.start()
+
+        // A directory the watcher is not permitted to open, so the re-arm's
+        // open() fails while the path still resolves to a directory.
+        let unopenable = TempDir(prefix: "watch-unopenable")
+        defer { _ = chmod(unopenable.url.path, 0o755); unopenable.dispose() }
+        XCTAssertEqual(chmod(unopenable.url.path, 0), 0)
+        XCTAssertEqual(renamex_np(unopenable.url.path, r.dir.url.path, UInt32(RENAME_SWAP)), 0)
+        XCTAssertFalse(watcher.isArmed, "the descriptor is no longer the directory at the path")
+        watcher.start()
+        XCTAssertFalse(watcher.isArmed, "and the replacement could not be opened")
+
+        XCTAssertEqual(renamex_np(unopenable.url.path, r.dir.url.path, UInt32(RENAME_SWAP)), 0)
+        XCTAssertTrue(watcher.isArmed, "the failed re-arm must not have thrown the live source away")
     }
 
     func testStaysUnarmedUntilTheParentDirectoryExists() throws {

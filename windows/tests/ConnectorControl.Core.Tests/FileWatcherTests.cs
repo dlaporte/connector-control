@@ -311,10 +311,13 @@ public class FileWatcherTests : IDisposable
     /// The real shape of the above: a sync client renames the shared folder away and puts
     /// another copy at the path. A rename raises no error on Windows — the handle follows the
     /// folder it was opened on — so nothing but the next Start() can notice, which is why
-    /// IsArmed has to tell the truth. Only the end state is asserted, because a platform is
-    /// free to report the rename as an error and recover before the assertions run; what must
-    /// hold either way is that the watcher ends up armed and reporting changes in the folder
-    /// that is there now.
+    /// IsArmed has to tell the truth. The creation time of the replacement is set explicitly
+    /// because NTFS hands a name recreated in the same parent within about fifteen seconds its
+    /// predecessor's creation time, and without that line this test would quietly stop
+    /// exercising the identity check on Windows; a folder a sync client puts there minutes
+    /// later brings its own. The arm count is what gives the test teeth on both platforms: on
+    /// the Mac the runtime's watcher follows the path anyway, so the reporting at the end
+    /// would pass with or without the swap.
     /// </summary>
     [Fact]
     public void AWatchedFolderRenamedAwayAndReplacedIsFollowedOnTheNextStart()
@@ -327,6 +330,7 @@ public class FileWatcherTests : IDisposable
         using var watcher = new FileWatcher(file, a => a(), counter.Hit);
         watcher.Start();
         Assert.True(watcher.IsArmed);
+        var armed = watcher.ArmCount;
         Thread.Sleep(Settle);
 
         Directory.Move(folder, dir.File("collection-renamed-away"));
@@ -335,10 +339,121 @@ public class FileWatcherTests : IDisposable
 
         watcher.Start();
         Assert.True(watcher.IsArmed);
-        Thread.Sleep(Settle);
+        Assert.Equal(armed + 1, watcher.ArmCount);   // it swapped onto the folder that is there
+        // The file is not in the replacement, and the re-arm's own re-check reports that, so
+        // the count is settled before the write below rather than racing it.
+        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "the re-arm must report the file missing from the folder that is there now");
         var before = counter.Count;
         TempDir.Touch(file, "two");   // creates the file in the folder that is there now
         Assert.True(Wait.Until(() => counter.Count >= before + 1, WaitTimeout), "the watcher must follow the path, not the folder it happened to open");
+    }
+
+    /// <summary>
+    /// The re-arm has to re-check, not only re-arm: a folder put at the path with a file that
+    /// already differs will never fire for a change that happened before the new watcher
+    /// existed, so without the re-check that change waits for an unrelated write. The path
+    /// probe stands in for the replacement's contents, which is what makes this deterministic
+    /// on any platform — no real write happens, so no FileSystemWatcher event of any kind can
+    /// report the change for the wrong reason.
+    /// </summary>
+    [Fact]
+    public void TheReArmOnAReplacedFolderReportsAChangeAlreadyWaitingInIt()
+    {
+        var probe = new FakePathProbe().AddFile(path, DateTime.UnixEpoch);
+        var counter = new Counter();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, probe: probe);
+        watcher.Start();
+        probe.AddFile(path, DateTime.UnixEpoch.AddHours(1));
+        Directory.SetCreationTimeUtc(dir.Path, Directory.GetCreationTimeUtc(dir.Path).AddHours(-1));
+        Assert.False(watcher.IsArmed);
+
+        watcher.Start();
+
+        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "the re-arm must re-check the file, not wait for the next write to it");
+    }
+
+    /// <summary>
+    /// A lost buffer says nothing about which folder the handle is on, and a folder syncing a
+    /// large batch can overflow the buffer again and again, so an overflow re-checks and keeps
+    /// the watcher it has.
+    /// </summary>
+    [Fact]
+    public void ALostBufferRechecksWithoutRebuilding()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
+        watcher.Start();
+        var armed = watcher.ArmCount;
+        watcher.HandleError(rebuild: false);   // what OnError passes for an InternalBufferOverflowException
+        Assert.True(watcher.IsArmed);
+        Assert.Equal(armed, watcher.ArmCount);
+        TempDir.Touch(path, "two");
+        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "the re-check still reports");
+    }
+
+    [Fact]
+    public void OnlyAnErrorThatCouldMeanTheWrongFolderWarrantsARebuild()
+    {
+        Assert.False(FileWatcher.WarrantsRebuild(new InternalBufferOverflowException()));
+        Assert.True(FileWatcher.WarrantsRebuild(new IOException("the watched directory is gone")));
+        Assert.True(FileWatcher.WarrantsRebuild(null));
+    }
+
+    /// <summary>
+    /// Errors arrive in storms, and each rebuild costs a directory handle and a window in which
+    /// events are missed, so they are bounded to one per cooldown. The cooldown is injected
+    /// rather than waited out, which is what makes the count exact instead of a race with the
+    /// clock.
+    /// </summary>
+    [Fact]
+    public void AStormOfErrorsCostsOneRebuild()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, rebuildCooldown: TimeSpan.FromMinutes(5));
+        watcher.Start();
+        var armed = watcher.ArmCount;
+        for (var i = 0; i < 25; i++)
+        {
+            watcher.HandleError();
+        }
+        Assert.True(watcher.IsArmed);
+        Assert.Equal(armed + 1, watcher.ArmCount);
+        TempDir.Touch(path, "two");
+        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "and the watcher it kept still reports changes");
+    }
+
+    [Fact]
+    public void AnErrorPastTheCooldownRebuildsAgain()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, rebuildCooldown: TimeSpan.Zero);
+        watcher.Start();
+        var armed = watcher.ArmCount;
+        watcher.HandleError();
+        watcher.HandleError();
+        Assert.Equal(armed + 2, watcher.ArmCount);
+    }
+
+    /// <summary>
+    /// A FileSystemWatcher's error can arrive after the watcher was stopped. There is nothing
+    /// armed to recover and nothing was lost, so it must not be reported as a change: Stop() is
+    /// public, and a caller that stopped a watcher deliberately is not expecting a callback
+    /// from it afterwards.
+    /// </summary>
+    [Fact]
+    public void ALateErrorAfterStopIsNotReportedAsAChange()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
+        watcher.Start();
+        watcher.Stop();
+        watcher.HandleError();
+        Assert.False(watcher.IsArmed);
+        Assert.Equal(0, counter.Count);
     }
 
     [Fact]
