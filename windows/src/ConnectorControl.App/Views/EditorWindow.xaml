@@ -411,6 +411,9 @@
                                     <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                     <Binding />
                                     <Binding Path="Value" />
+                                    <!-- The needs a hint comes from go with the subscription, so a hint must not
+                                       outlive it. -->
+                                    <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                                   </MultiBinding>
                                 </AutomationProperties.HelpText>
                                 <TextBox.Visibility>
@@ -459,6 +462,9 @@
                                   <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                   <Binding />
                                   <Binding Path="Value" />
+                                  <!-- The needs a hint comes from go with the subscription, so a hint must not
+                                     outlive it. -->
+                                  <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                                 </MultiBinding>
                               </TextBlock.Text>
                             </TextBlock>
@@ -539,6 +545,9 @@
                                     <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                     <Binding />
                                     <Binding Path="Value" />
+                                    <!-- The needs a hint comes from go with the subscription, so a hint must not
+                                       outlive it. -->
+                                    <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                                   </MultiBinding>
                                 </AutomationProperties.HelpText>
                                 <TextBox.Visibility>
@@ -596,6 +605,9 @@
                                   <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                   <Binding />
                                   <Binding Path="Value" />
+                                  <!-- The needs a hint comes from go with the subscription, so a hint must not
+                                     outlive it. -->
+                                  <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                                 </MultiBinding>
                               </TextBlock.Text>
                             </TextBlock>

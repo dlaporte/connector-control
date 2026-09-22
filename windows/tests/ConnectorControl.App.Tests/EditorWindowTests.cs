@@ -427,16 +427,33 @@ public class EditorWindowTests
                 token.Value = "dbt_pat_123";
                 Layout(open);
 
-                state.StopSyncing("Data team");
-                Layout(open);
-                Assert.False(open.Model.IsReadOnly);
-                Assert.Equal(Visibility.Collapsed, open.SyncedHeader.Visibility);
-                Assert.True(open.NameBox.IsEnabled);
-                // The model retook its snapshot, so the filled value is an ordinary secret again
-                // and goes back behind the mask rather than staying in the clear.
-                Assert.False(open.Model.AsksFor(token));
-                Assert.Equal(Visibility.Collapsed, RowElements.Find<TextBox>(open.EnvList, token, "EnvPlaceholder").Visibility);
-                Assert.Equal(Visibility.Visible, RowElements.Find<ContentControl>(open.EnvList, token, "EnvValue").Visibility);
+                // A second window on the same collection, whose marker nobody fills: the two
+                // halves of the retake only show up together.
+                Editing(state, In(state, "Data team", "ledger"), ledger =>
+                {
+                    var arg = Assert.Single(ledger.Model.Args);
+                    Assert.Equal("your ledger clone, then dist/index.js",
+                                 RowElements.Find<TextBlock>(ledger.ArgList, arg, "ArgHint").Text);
+
+                    state.StopSyncing("Data team");
+                    Layout(open);
+                    Layout(ledger);
+
+                    Assert.False(open.Model.IsReadOnly);
+                    Assert.Equal(Visibility.Collapsed, open.SyncedHeader.Visibility);
+                    Assert.True(open.NameBox.IsEnabled);
+                    // The model retook its snapshot, so the filled value is an ordinary secret
+                    // again and goes back behind the mask rather than staying in the clear.
+                    Assert.False(open.Model.AsksFor(token));
+                    Assert.Equal(Visibility.Collapsed, RowElements.Find<TextBox>(open.EnvList, token, "EnvPlaceholder").Visibility);
+                    Assert.Equal(Visibility.Visible, RowElements.Find<ContentControl>(open.EnvList, token, "EnvValue").Visibility);
+
+                    // ledger's marker survives, so its box stays the live one — but the needs the
+                    // hint came from went with the subscription, and the hint must not outlive them.
+                    Assert.True(ledger.Model.AsksForArg(0));
+                    Assert.Equal(Visibility.Visible, RowElements.Find<TextBox>(ledger.ArgList, arg, "ArgPlaceholder").Visibility);
+                    Assert.Equal("", RowElements.Find<TextBlock>(ledger.ArgList, arg, "ArgHint").Text);
+                }, rows: true);
             }, rows: true);
         });
     }
