@@ -53,6 +53,43 @@ final class ImportModelTests: XCTestCase {
         XCTAssertEqual(state.kind(of: "Default"), .local)
     }
 
+    /// The platform-forced half of a mirrored pair: the Mac never writes the `cmd /c` launcher,
+    /// so a header name cmd.exe would re-parse excludes nothing here, where the Windows mirror
+    /// asserts the row is excluded, uncountable and skipped.
+    func testAnExcludedRowShowsItsReasonStaysOutOfTheCountAndIsSkipped() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("shared/risky.json")
+        try write(riskyHeaderDocument, at: url)
+
+        let model = ImportModel(state: state, path: url.path)
+        XCTAssertEqual(model.rows.map(\.name), ["bad", "good"])
+        XCTAssertTrue(model.rows.allSatisfy { $0.excludedReason == nil })
+        XCTAssertTrue(model.rows.allSatisfy(\.include))
+        XCTAssertEqual(model.importCount, 2)
+        model.mode = .keepInSync
+        XCTAssertEqual(model.importCount, 2)
+
+        model.mode = .addToCollection
+        XCTAssertNil(model.perform())
+        let mcps = try XCTUnwrap(state.store.collections["Default"]).mcps
+        XCTAssertNotNil(mcps["good"])
+        XCTAssertNotNil(mcps["bad"], "a header name is only unsafe where cmd.exe re-parses it")
+    }
+
+    /// Two remote connectors, one with a header name carrying the `&` the Windows `cmd /c`
+    /// launcher cannot hand to cmd.exe.
+    private var riskyHeaderDocument: CollectionDocument {
+        CollectionDocument(
+            name: "Risky", author: "Acme", origin: "o-risky", exported: "2026-09-21T14:02:11Z",
+            connectors: [
+                "bad": .init(launcher: .remote(.init(url: "https://h/mcp", auth: .header(name: "X&Y"),
+                                                     package: "mcp-remote", extraArgs: []))),
+                "good": .init(launcher: .remote(.init(url: "https://h/mcp", auth: .automatic,
+                                                      package: "mcp-remote", extraArgs: []))),
+            ])
+    }
+
     func testSyncModeDefaultsTheNameAndSuffixesATakenOne() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

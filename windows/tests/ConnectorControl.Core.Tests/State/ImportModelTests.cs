@@ -62,6 +62,58 @@ public class ImportModelTests
         Assert.Equal(CollectionKind.Local, state.KindOf("Default"));
     }
 
+    /// <summary>
+    /// Two remote connectors, one with a header name carrying the &amp; the Windows cmd /c
+    /// launcher cannot hand to cmd.exe.
+    /// </summary>
+    private static CollectionDocument RiskyHeaderDocument() => new(
+        "Risky", "Acme", "o-risky", "2026-09-21T14:02:11Z",
+        new Dictionary<string, CollectionDocument.Connector>
+        {
+            ["bad"] = new(new CollectionDocument.Launcher.Remote(
+                "https://h/mcp", new CollectionDocument.Auth.Header("X&Y"), "mcp-remote", [])),
+            ["good"] = new(new CollectionDocument.Launcher.Remote(
+                "https://h/mcp", CollectionDocument.Auth.Auto, "mcp-remote", [])),
+        });
+
+    /// <summary>
+    /// The platform-forced half of a mirrored pair: only this build writes the cmd /c launcher,
+    /// so the Mac mirror asserts the same document excludes nothing and every row counts.
+    /// </summary>
+    [Fact]
+    public void AnExcludedRowShowsItsReasonStaysOutOfTheCountAndIsSkipped()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = Path.Combine(h.Dir.File("shared"), "risky.json");
+        Write(RiskyHeaderDocument(), path);
+
+        var model = new ImportModel(state, path);
+        Assert.Equal(["bad", "good"], model.Rows.Select(r => r.Name));
+        var bad = model.Rows[0];
+        Assert.Equal(RemotePattern.CmdUnsafeReason(RemoteField.HeaderName), bad.ExcludedReason);
+        Assert.Equal("skipped: " + RemotePattern.CmdUnsafeReason(RemoteField.HeaderName),
+            ImportModel.SkippedBadge(bad.ExcludedReason!));
+        Assert.False(bad.Include);
+        Assert.Null(model.Rows[1].ExcludedReason);
+        Assert.True(model.Rows[1].Include);
+
+        // Out of the count in both modes: this machine has no way to run it either way.
+        Assert.Equal(1, model.ImportCount);
+        model.ImportMode = ImportModel.Mode.KeepInSync;
+        Assert.Equal(1, model.ImportCount);
+        model.ImportMode = ImportModel.Mode.AddToCollection;
+
+        // Ticking it makes no difference — an excluded row cannot be included.
+        bad.Include = true;
+        Assert.Equal(1, model.ImportCount);
+        Assert.Null(model.Perform());
+        var mcps = state.Store.Collections["Default"].Mcps;
+        Assert.True(mcps.ContainsKey("good"));
+        Assert.False(mcps.ContainsKey("bad"));
+        Assert.False(state.CollectionsFile.Collections["Default"].Provenance.ContainsKey("bad"));
+    }
+
     [Fact]
     public void SyncModeDefaultsTheNameAndSuffixesATakenOne()
     {
