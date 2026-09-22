@@ -12,7 +12,8 @@ been known to overwrite or wipe
 [#56296](https://github.com/anthropics/claude-code/issues/56296),
 [#37286](https://github.com/anthropics/claude-code/issues/37286)). Connector
 Control keeps its own **master list** as the source of truth, treats Claude's
-config as generated output, and backs up both files before every write — so a
+config as generated output, and backs up each file it manages — Claude's
+config, the master list and collections.json — before writing to it, so a
 wiped or mangled config is always one click from restored.
 
 <p align="center">
@@ -37,9 +38,10 @@ wiped or mangled config is always one click from restored.
   from it (Claude update, cloud sync, crash), a banner offers one-click
   restore from the master list, and a notification fires even when the
   app's window is closed.
-- **Automatic backups** — timestamped copies of both files before every
-  write (configurable retention, plus a permanent first-run snapshot), with
-  in-app restore.
+- **Automatic backups** — timestamped copies of Claude's config, the master
+  list and collections.json, each taken before that file is written
+  (configurable retention, plus a permanent first-run snapshot), with in-app
+  restore.
 - **Syncable** — point the master list at a folder synced by git, iCloud, or
   Dropbox and share one connector catalog across machines; backups always
   stay machine-local so they never pollute the synced folder.
@@ -112,10 +114,11 @@ this Mac". The toolbar carries **Import…**, **Subscribe…**, **Export <n>…*
 for the rows you tick, **Publish…**, **Refresh**, **Make Local Copy…** and,
 at its right, **New…**. A button greys out while it does not apply: Export
 until you tick a row of a local collection, Publish… for a synced
-collection, and Refresh and Make Local Copy… unless a synced collection is
-selected. Under the rows sit the links that
-apply to the selected collection: **Rename…**, **Delete…**, **Publish…**,
-**Stop Publishing** and **Stop Syncing (keeps a local copy)**. A switch can
+collection, Make Local Copy… unless a synced collection is selected, and
+Refresh unless a synced collection whose file has been found is selected.
+Under the rows sit the links that apply to the selected collection:
+**Rename…**, **Delete…**, **Publish…**, **Stop Publishing** and **Stop
+Syncing (keeps a local copy)**. A switch can
 be flipped in any collection from here — only the active collection reaches
 Claude, so a toggle elsewhere is saved and nothing is restarted.
 
@@ -126,10 +129,11 @@ Claude, so a toggle elsewhere is saved and nothing is restarted.
 The master list file (mcps.json) is v2 (collection-aware); older v1 files,
 from a build before 1.1, are simply rebuilt from Claude's current config the
 same way any corrupted file is (see How it works). Beside it, a
-collections.json records which collection is which kind and what each one
-still needs. **If you sync mcps.json across machines, every machine must run
-1.1 or later** — an older app can't parse the v2 file and will treat it as
-corrupt.
+collections.json records which collection is which kind, what each one
+still needs, and each published collection's settings, including the text
+of every path you marked. **If you sync mcps.json across machines, every
+machine must run 1.1 or later** — an older app can't parse the v2 file and
+will treat it as corrupt.
 
 ### Sharing a collection with a team
 
@@ -283,7 +287,7 @@ A connector that runs a program kept in the shared folder through
 subscriber the next time Claude starts it, with nothing to review, because
 the review covers the document and not the files it points at. Treat write
 access to a published collection's folder as you would treat access to the
-machines that follow it.
+machines that follow it, including the one that publishes it.
 
 #### Worth knowing
 
@@ -300,14 +304,30 @@ machines that follow it.
   had, so it stays a placeholder when you add, remove or reorder arguments
   around it, correct it in place in the editor's form, or rename the
   connector. If it changes somewhere the app cannot follow — the JSON view,
-  your other machine, or an older version of the app — and the app can no
-  longer tell which argument it is, the app stops publishing that
+  a hand edit, or an older version of the app on any machine — and the app
+  can no longer tell which argument it is, the app stops publishing that
   collection rather than send the path as written. The banner gives the
   reason, "A path marked in “<connector>” has moved. Open Publish… to mark
-  it again.", the document already in the folder stays exactly as it was,
-  and Export… refuses the same way. While the collection is stopped like
-  this, subscribers receive none of its other changes either; tick the path
-  again in **Publish…** and press Publish to clear it.
+  it again.", the document already in the folder is left exactly as it was,
+  and subscribers receive none of that collection's other changes until the
+  entry is answered.
+- Reopen **Publish…** and the sheet lists every mark it could not place,
+  and every path this machine keeps back that turns up elsewhere in the
+  document, each with its connector and the field it sits in. Publish and
+  Export stay unavailable until every entry is answered: tick the path
+  where it now sits, or **Forget Mark**, or **Release** it to let it travel
+  as written once you have read the preview. This machine's publish folder
+  is the one entry you cannot release. It takes **Use ${COLLECTION_DIR}**,
+  which rewrites that connector to the token, because a document that would
+  carry the folder is never written.
+- A differently spelled version of a marked path is a different path to the
+  app — another case, `~` in place of your home folder, a trailing slash.
+  It is not recognised as the one you marked, so it travels as written;
+  read the preview.
+- Restoring a backup of Claude's configuration puts it back into the
+  collection it was taken from and makes that collection active. A backup
+  whose collection is gone is refused: "This backup was taken from
+  “<name>”, which no longer exists. Nothing was restored."
 - An export of part of a published collection still carries that
   collection's identity, so your own app refuses to subscribe to it, as it
   refuses the published document itself.
@@ -391,10 +411,11 @@ the time — the app leaves Claude's config valid on the way out.
 ```
 ~/Library/Application Support/Connector Control/
 ├── mcps.json          ← master list: every connector + enabled flag (source of truth)
-├── collections.json   ← collection kinds and needs; moves with mcps.json
+├── collections.json   ← collection kinds, needs and publish settings; moves with mcps.json
 ├── collections-local.json
 │                      ← this machine's document and publish folders; never synced
-└── backups/           ← timestamped copies of both files, rotated; machine-local
+└── backups/           ← timestamped copies of Claude's config, mcps.json and
+                         collections.json, rotated; machine-local
     └── claude_desktop_config.original.json   ← first-run snapshot, never pruned
 
 ~/Library/Application Support/Claude/claude_desktop_config.json
@@ -408,11 +429,12 @@ profile, so backups stay on the machine that made them):
 ```
 %LOCALAPPDATA%\Connector Control\
 ├── mcps.json          ← master list (source of truth)
-├── collections.json   ← collection kinds and needs; moves with mcps.json
+├── collections.json   ← collection kinds, needs and publish settings; moves with mcps.json
 ├── collections-local.json
 │                      ← this machine's document and publish folders; never synced
 ├── settings.json      ← app settings
-└── backups\           ← timestamped copies of both files, rotated; machine-local
+└── backups\           ← timestamped copies of Claude's config, mcps.json and
+                         collections.json, rotated; machine-local
     └── claude_desktop_config.original.json   ← first snapshot, never pruned
 
 %APPDATA%\Claude\claude_desktop_config.json   ← generated output, as above
