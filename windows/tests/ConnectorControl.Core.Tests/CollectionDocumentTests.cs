@@ -367,6 +367,12 @@ public class CollectionDocumentTests
             RemoteLaunchStyle.Npx, extraArgs: ["--config", "/share/r.json"], package: "mcp-remote"));
         var fixedUp = CollectionDocument.UsingDirectoryToken(remote, "remote.extraArgs[1]", "/share");
         Assert.Equal(["--config", $"{token}/r.json"], RemotePattern.Decode(fixedUp!)!.ExtraArgs);
+
+        // The command line carries a client id inside a JSON blob, which no field of it reads as
+        // written: the dialog says so rather than reporting a rewrite it did not make.
+        var oauth = RemotePattern.Encode(new RemoteConfig("https://mcp.example.com/",
+            new RemoteAuth.OAuthClient("/share", "s", ""), RemoteLaunchStyle.Npx, package: "mcp-remote"));
+        Assert.Null(CollectionDocument.UsingDirectoryToken(oauth, "remote.auth.clientId", "/share"));
     }
 
     [Fact]

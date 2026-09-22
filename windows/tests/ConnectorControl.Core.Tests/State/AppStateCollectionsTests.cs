@@ -1743,9 +1743,9 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
-    /// An own folder where the rewrite cannot reach — a remote connector's header name — is a folder
-    /// entry all the same: it says the dialog cannot write there, both answers say so, and the
-    /// connector's editor is the way out.
+    /// An own folder where the rewrite cannot reach — a remote connector's client id, which the
+    /// command line carries inside a JSON blob — is a folder entry all the same: it says the dialog
+    /// cannot write there, both answers say so, and the connector's editor is the way out.
     /// </summary>
     [Fact]
     public void AnOwnFolderTheSheetCannotRewriteSaysWhereToWriteTheToken()
@@ -1758,14 +1758,15 @@ public class AppStateCollectionsTests
         var file = Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
         var before = File.ReadAllBytes(file);
         Assert.Null(state.Upsert("svc", new McpEntry(RemotePattern.Encode(new RemoteConfig(
-            "https://mcp.example.com/", new RemoteAuth.Header(bound, "v"), RemoteLaunchStyle.Npx, package: "mcp-remote"))), null));
-        Assert.Equal(AppState.PublishFolderCarriedError("svc", "remote.auth.name"), state.PublishError?.Message);
+            "https://mcp.example.com/", new RemoteAuth.OAuthClient(bound, "s", ""), RemoteLaunchStyle.Npx,
+            package: "mcp-remote"))), null));
+        Assert.Equal(AppState.PublishFolderCarriedError("svc", "remote.auth.clientId"), state.PublishError?.Message);
 
         var dialog = new PublishModel(state, state.ActiveCollection);
         var kept = dialog.KeptPaths[0];
         // A folder of this collection's own, wherever it sits.
         Assert.Equal(PublishModel.KeptPathKind.Folder, kept.Kind);
-        var note = PublishModel.PublishFolderEditNote("svc", "remote.auth.name");
+        var note = PublishModel.PublishFolderEditNote("svc", "remote.auth.clientId");
         Assert.Equal(note, dialog.Note(kept));
         // The dialog says it did nothing, and what does answer it.
         Assert.Equal(note, dialog.UseDirectoryToken(kept));
@@ -1778,8 +1779,10 @@ public class AppStateCollectionsTests
         // The editor is the way out, and taking it clears the block.
         using var editor = new EditorModel(state, EditTarget.Existing("svc", state.Store.Mcps["svc"], state.ActiveCollection),
                                            h.Dialogs, RemoteLaunchStyle.Npx);
-        var carrying = editor.Args.First(row => row.Value.Contains(bound, StringComparison.Ordinal));
-        carrying.Value = carrying.Value.Replace(bound, Placeholder.DirectoryToken, StringComparison.Ordinal);
+        // The command line carries it JSON-escaped, which is why the dialog cannot write over it and
+        // the author rewrites the argument itself.
+        var carrying = editor.Args.First(row => KeptValue.Holds(row.Value, bound));
+        carrying.Value = """{"client_id":"${COLLECTION_DIR}","client_secret":"s"}""";
         Assert.True(editor.Save());
         Assert.Null(state.PublishError);
         Assert.False(JsonText.FileContains(file, bound));

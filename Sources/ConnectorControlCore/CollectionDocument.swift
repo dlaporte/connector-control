@@ -570,16 +570,17 @@ public struct CollectionDocument: Equatable, Sendable {
         }
     }
 
+    /// In the order `places(in:)` walks a connector: the shared environment values by name, then
+    /// the arguments by index, then the command. The exporter names the first of these, so both
+    /// platforms refuse the same field.
     private static func copies(in model: FormModel, placed: [Int: PublishIntent.PathMark],
                                shared: Set<String>) -> [(field: String, text: String)] {
         let marked = Set(placed.keys.map { KeptValue.nfc(model.args[$0]) })
         guard !marked.isEmpty else { return [] }
-        var unmarked: [(field: String, text: String)] = model.args.indices
-            .filter { placed[$0] == nil }.map { ("local.args[\($0)]", model.args[$0]) }
+        var unmarked: [(field: String, text: String)] = model.env.keys.sorted { $0.ordinallyPrecedes($1) }
+            .filter(shared.contains).map { ("env.\($0).value", model.env[$0] ?? "") }
+        unmarked += model.args.indices.filter { placed[$0] == nil }.map { ("local.args[\($0)]", model.args[$0]) }
         unmarked.append(("local.command", model.command))
-        for key in model.env.keys.sorted(by: { $0.ordinallyPrecedes($1) }) where shared.contains(key) {
-            unmarked.append(("env.\(key).value", model.env[key] ?? ""))
-        }
         return unmarked.filter { marked.contains(KeptValue.nfc($0.text)) }
     }
 
@@ -604,9 +605,12 @@ public struct CollectionDocument: Equatable, Sendable {
         return out
     }
 
-    /// Every string in a connector's document form with the field it sits in, keys sorted ordinally
-    /// so both platforms walk alike. Keys count only below `env`, `needs` and `additional`, the
-    /// objects whose names the author chose; the rest are the format's own.
+    /// Every string in a connector's document form with the field it sits in. One order, and the
+    /// only one any refusal or sheet entry names a field in, so the two platforms always name the
+    /// same one: the connector's own keys in ordinal order (`additional`, `env`, `local`, `needs`,
+    /// `remote`), each object's keys in ordinal order under them, and each array by index. Keys
+    /// count as places only below `env`, `needs` and `additional`, the objects whose names the
+    /// author chose; the rest are the format's own.
     static func places(in json: JSONValue) -> [(field: String, text: String)] {
         walk(json).map { ($0.field, $0.text) }
     }

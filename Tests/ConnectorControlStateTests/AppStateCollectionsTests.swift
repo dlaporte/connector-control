@@ -1514,9 +1514,9 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNotNil(s.store.collections["Team A"]?.mcps["team-only"])
     }
 
-    /// An own folder where the rewrite cannot reach — a remote connector's header name — is a
-    /// folder entry all the same: it says the sheet cannot write there, both answers say so, and
-    /// the connector's editor is the way out.
+    /// An own folder where the rewrite cannot reach — a remote connector's client id, which the
+    /// command line carries inside a JSON blob — is a folder entry all the same: it says the sheet
+    /// cannot write there, both answers say so, and the connector's editor is the way out.
     func testAnOwnFolderTheSheetCannotRewriteSaysWhereToWriteTheToken() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
@@ -1526,14 +1526,14 @@ final class AppStateCollectionsTests: XCTestCase {
         let file = folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json")
         let before = try Data(contentsOf: file)
         XCTAssertNil(state.upsert(name: "svc", entry: MCPEntry(config: RemotePattern.encode(RemoteConfig(
-            url: "https://mcp.example.com/", auth: .header(name: bound, value: "v"),
+            url: "https://mcp.example.com/", auth: .oauthClient(clientID: bound, clientSecret: "s", scopes: ""),
             extraArgs: [], passthroughEnv: [:], package: "mcp-remote"))), renamedFrom: nil))
-        XCTAssertEqual(state.publishError?.message, AppState.publishFolderCarriedError("svc", "remote.auth.name"))
+        XCTAssertEqual(state.publishError?.message, AppState.publishFolderCarriedError("svc", "remote.auth.clientId"))
 
         let sheet = PublishModel(state: state, collection: state.activeCollection)
         let kept = try XCTUnwrap(sheet.keptPaths.first)
         XCTAssertEqual(kept.kind, .folder, "a folder of this collection's own, wherever it sits")
-        let note = PublishModel.publishFolderEditNote("svc", "remote.auth.name")
+        let note = PublishModel.publishFolderEditNote("svc", "remote.auth.clientId")
         XCTAssertEqual(sheet.note(for: kept), note)
         XCTAssertEqual(sheet.useDirectoryToken(kept), note, "the sheet says it did nothing, and what does answer it")
         XCTAssertEqual(sheet.releaseKeptPath(kept.value), note)
@@ -1545,9 +1545,10 @@ final class AppStateCollectionsTests: XCTestCase {
         // The editor is the way out, and taking it clears the block.
         let editor = EditorModel(state: state, target: .existing(name: "svc", entry: try XCTUnwrap(state.store.mcps["svc"]),
                                                                  in: state.activeCollection), dialogs: h.dialogs)
-        let carrying = try XCTUnwrap(editor.args.firstIndex { $0.value.contains(bound) })
-        editor.args[carrying].value = editor.args[carrying].value
-            .replacingOccurrences(of: bound, with: Placeholder.directoryToken)
+        // The command line carries it JSON-escaped, which is why the sheet cannot write over it and
+        // the author rewrites the argument itself.
+        let carrying = try XCTUnwrap(editor.args.firstIndex { KeptValue.holds($0.value, bound) })
+        editor.args[carrying].value = #"{"client_id":"${COLLECTION_DIR}","client_secret":"s"}"#
         XCTAssertTrue(editor.save())
         XCTAssertNil(state.publishError)
         XCTAssertFalse(try jsonFile(file, contains: bound))

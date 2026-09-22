@@ -1095,6 +1095,11 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         return out_;
     }
 
+    /// <summary>
+    /// In the order <see cref="Places"/> walks a connector: the shared environment values by name,
+    /// then the arguments by index, then the command. The exporter names the first of these, so both
+    /// platforms refuse the same field.
+    /// </summary>
     private static IReadOnlyList<(string Field, string Text)> Copies(FormModel model, IReadOnlyDictionary<int, PublishIntent.PathMark> placed,
                                                                     IReadOnlySet<string> shared)
     {
@@ -1103,11 +1108,11 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         {
             return [];
         }
-        var unmarked = Enumerable.Range(0, model.Args.Count).Where(i => !placed.ContainsKey(i))
-            .Select(i => ($"local.args[{i}]", model.Args[i]))
-            .Append(("local.command", model.Command))
-            .Concat(model.Env.Where(p => shared.Contains(p.Key)).OrderBy(p => p.Key, StringComparer.Ordinal)
-                .Select(p => ($"env.{p.Key}.value", p.Value)));
+        var unmarked = model.Env.Where(p => shared.Contains(p.Key)).OrderBy(p => p.Key, StringComparer.Ordinal)
+            .Select(p => ($"env.{p.Key}.value", p.Value))
+            .Concat(Enumerable.Range(0, model.Args.Count).Where(i => !placed.ContainsKey(i))
+                .Select(i => ($"local.args[{i}]", model.Args[i])))
+            .Append(("local.command", model.Command));
         return unmarked.Where(u => marked.Contains(KeptValue.Nfc(u.Item2))).ToList();
     }
 
@@ -1139,8 +1144,11 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     }
 
     /// <summary>
-    /// Every string in a connector's document form with the field it sits in, keys sorted ordinally
-    /// so both platforms walk alike. Keys count only below <c>env</c>, <c>needs</c> and
+    /// Every string in a connector's document form with the field it sits in. One order, and the
+    /// only one any refusal or dialog entry names a field in, so the two platforms always name the
+    /// same one: the connector's own keys in ordinal order (<c>additional</c>, <c>env</c>,
+    /// <c>local</c>, <c>needs</c>, <c>remote</c>), each object's keys in ordinal order under them,
+    /// and each array by index. Keys count as places only below <c>env</c>, <c>needs</c> and
     /// <c>additional</c>, the objects whose names the author chose; the rest are the format's own.
     /// </summary>
     internal static IReadOnlyList<(string Field, string Text)> Places(JsonValue json) =>

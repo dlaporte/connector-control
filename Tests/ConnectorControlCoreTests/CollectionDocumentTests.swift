@@ -252,6 +252,13 @@ final class CollectionDocumentTests: XCTestCase {
                                                        extraArgs: ["--config", "/share/r.json"], passthroughEnv: [:], package: "mcp-remote"))
         let fixed = CollectionDocument.usingDirectoryToken(in: remote, field: "remote.extraArgs[1]", folder: "/share")
         XCTAssertEqual(fixed.flatMap(RemotePattern.decode)?.extraArgs, ["--config", "\(token)/r.json"])
+
+        // The command line carries a client id inside a JSON blob, which no field of it reads as
+        // written: the sheet says so rather than reporting a rewrite it did not make.
+        let oauth = RemotePattern.encode(RemoteConfig(url: "https://mcp.example.com/",
+                                                      auth: .oauthClient(clientID: "/share", clientSecret: "s", scopes: ""),
+                                                      extraArgs: [], passthroughEnv: [:], package: "mcp-remote"))
+        XCTAssertNil(CollectionDocument.usingDirectoryToken(in: oauth, field: "remote.auth.clientId", folder: "/share"))
     }
 
     func testCopiesOfMarkedPathsAreListedWithTheirFields() {
