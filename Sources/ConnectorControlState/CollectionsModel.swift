@@ -37,8 +37,10 @@ public final class CollectionsModel: ObservableObject {
     public static let editTooltip = "Edit"
     /// The sidebar's double-click, and the same action in its context menu.
     public static let makeActiveAction = "Make Active"
-    /// The lock at the head of a synced collection's row.
-    public static let lockedGlyphTooltip = "Read-only: synced from the collection's author"
+    /// The lock at the head of a synced collection's row, and on the popover's rows too, which
+    /// is why it is `nonisolated`: `ConnectorRow` is a plain value that reads it off the main
+    /// actor, the same reason `AppState.chooseClaude` is spelled that way.
+    nonisolated public static let lockedGlyphTooltip = "Read-only: synced from the collection's author"
 
     public static func exportButton(_ count: Int) -> String { "Export \(count)…" }
 
@@ -78,8 +80,8 @@ public final class CollectionsModel: ObservableObject {
         /// Where a synced collection's document is, as far as this machine knows: the path it is
         /// bound to, or the name the sidecar recorded while the file is still to be found. nil
         /// for a local collection, which has no source, and for a synced one the sidecar never
-        /// named. The same two steps `PopoverModel.sourceTooltip` takes, so the sidebar's chain
-        /// and the chip cannot name the same collection differently.
+        /// named. `AppState.sourceLocation(of:)` is the rule, shared with the popover's chip and
+        /// menu, so the sidebar's chain and the chip cannot name the same collection differently.
         public let source: String?
 
         public init(name: String, kind: CollectionKind, isActive: Bool, isPublished: Bool,
@@ -192,16 +194,8 @@ public final class CollectionsModel: ObservableObject {
         return state.collectionNames.map { name in
             Item(name: name, kind: state.kind(of: name), isActive: name == active,
                  isPublished: state.isPublished(name), hasPendingUpdate: state.pendingUpdates[name] != nil,
-                 isLocated: state.isLocated(name), source: self.source(of: name))
+                 isLocated: state.isLocated(name), source: state.sourceLocation(of: name))
         }
-    }
-
-    /// Only a synced collection has a document to point at; see `Item.source` for the two steps.
-    private func source(of collection: String) -> String? {
-        guard state.isSynced(collection) else { return nil }
-        guard let found = state.sourceBinding(of: collection)?.path
-            ?? state.collectionsFile.collections[collection]?.fileName, !found.isEmpty else { return nil }
-        return found
     }
 
     public var rows: [Row] {

@@ -22,8 +22,30 @@ public final class PopoverModel: ObservableObject {
     public static let retryGlyph = "exclamationmark.arrow.circlepath"
     public static let restartGlyph = "arrow.clockwise"
     public static let toolWarningGlyph = "exclamationmark.triangle.fill"
+    /// The same glyph under the name the other surfaces call it by: the row caution it was
+    /// written for is one of several the app now draws with it — an unfilled placeholder, a
+    /// connector authored elsewhere, a document still to be located. One value, so the two
+    /// cannot drift; two names, so neither call site has to lie about what it is marking.
+    public static let cautionGlyph = toolWarningGlyph
+    /// The amber dot's spoken form. The popover owns it rather than borrowing the Collections
+    /// window's status word, so the menu's wording has one home beside the title that uses it.
+    public static let pendingSpokenLabel = "update available"
+    /// What a menu row says in place of the amber dot. A macOS `Menu` row draws one title and
+    /// one image, and the image is the chain, so a pending update has to be words — the same
+    /// words the dot speaks, so a row reads the same whether it is seen or heard.
+    public static let pendingMenuMark = " · " + pendingSpokenLabel
 
-    public static func collectionChipText(_ active: String) -> String { "\(active) ▾" }
+    /// One row of the collections menu. The chain is the row's single image, so a collection
+    /// with news says so in the title instead of after it.
+    public static func menuTitle(for item: CollectionMenuItem) -> String {
+        item.hasPendingUpdate ? item.name + pendingMenuMark : item.name
+    }
+
+    /// One row's chain tooltip, naming where that collection's document is — every synced row,
+    /// not only the active one the chip names. nil for a row with no chain to explain.
+    public static func menuTooltip(for item: CollectionMenuItem) -> String? {
+        item.source.map(sourceTooltipFormat)
+    }
 
     /// Carries the C#-forced name on this side too, so the pair reads the same in both files: a
     /// static and an instance member cannot share one name there, and one spelling of the
@@ -48,7 +70,8 @@ public final class PopoverModel: ObservableObject {
 
     public var subtitle: String { state.headerSubtitle }
 
-    public var collectionChipText: String { PopoverModel.collectionChipText(state.activeCollection) }
+    /// The chip's text is the bare name; the ▾, the chain and the dot are the view's glyphs.
+    public var activeCollection: String { state.activeCollection }
 
     /// The menu's Export item, which names the collection it would write.
     public var exportTitle: String { PopoverModel.exportTitleFor(state.activeCollection) }
@@ -66,18 +89,15 @@ public final class PopoverModel: ObservableObject {
     /// whose tooltip modifier takes a plain String coalesces it (`?? ""`) — the chain is drawn
     /// only for a synced collection, which is the case that has something to say.
     public var sourceTooltip: String? {
-        let active = state.activeCollection
-        guard state.isSynced(active) else { return nil }
-        guard let source = state.sourceBinding(of: active)?.path
-            ?? state.collectionsFile.collections[active]?.fileName else { return nil }
-        return PopoverModel.sourceTooltipFormat(source)
+        state.sourceLocation(of: state.activeCollection).map(PopoverModel.sourceTooltipFormat)
     }
 
     public var collectionItems: [CollectionMenuItem] {
         let active = state.activeCollection
         return state.collectionNames.map {
             CollectionMenuItem(name: $0, isActive: $0 == active, isSynced: state.isSynced($0),
-                               hasPendingUpdate: state.pendingUpdates[$0] != nil)
+                               hasPendingUpdate: state.pendingUpdates[$0] != nil,
+                               source: state.sourceLocation(of: $0))
         }
     }
 

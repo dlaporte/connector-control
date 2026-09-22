@@ -78,8 +78,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// Where a synced collection's document is, as far as this machine knows: the path it is
     /// bound to, or the name the sidecar recorded while the file is still to be found. Null for
     /// a local collection, which has no source, and for a synced one the sidecar never named.
-    /// The same two steps <c>FlyoutModel.SourceTooltip</c> takes, so the sidebar's chain and the
-    /// chip cannot name the same collection differently.
+    /// <c>AppState.SourceLocation</c> is the rule, shared with the flyout's chip and menu, so the
+    /// sidebar's chain and the chip cannot name the same collection differently.
     /// </param>
     public sealed record Item(string Name, CollectionKind Kind, bool IsActive, bool IsPublished,
         bool HasPendingUpdate, bool IsLocated, string? Source = null)
@@ -174,21 +174,9 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             var active = state.ActiveCollection;
             return state.CollectionNames
                 .Select(name => new Item(name, state.KindOf(name), name == active, state.IsPublished(name),
-                    state.PendingUpdates.ContainsKey(name), state.IsLocated(name), SourceOf(name)))
+                    state.PendingUpdates.ContainsKey(name), state.IsLocated(name), state.SourceLocation(name)))
                 .ToList();
         }
-    }
-
-    /// <summary>Only a synced collection has a document to point at; see <c>Item.Source</c> for the two steps.</summary>
-    private string? SourceOf(string collection)
-    {
-        if (!state.IsSynced(collection))
-        {
-            return null;
-        }
-        var found = state.SourceBinding(collection)?.Path
-            ?? (state.CollectionsFile.Collections.TryGetValue(collection, out var entry) ? entry.FileName : null);
-        return string.IsNullOrEmpty(found) ? null : found;
     }
 
     public IReadOnlyList<Row> Rows

@@ -24,6 +24,25 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public const string RestartGlyph = "\ue72c";
     /// <summary>Segoe Fluent Icons: Warning, on a row whose launcher is missing. The same code point the retry footer uses, named separately so changing one does not move the other.</summary>
     public const string ToolWarningGlyph = "\ue7ba";
+    /// <summary>
+    /// The same glyph under the name the other surfaces call it by: the row caution it was
+    /// written for is one of several the app now draws with it — an unfilled placeholder, a
+    /// connector authored elsewhere, a document still to be located. One value, so the two
+    /// cannot drift; two names, so neither call site has to lie about what it is marking.
+    /// </summary>
+    public const string CautionGlyph = ToolWarningGlyph;
+    /// <summary>
+    /// The amber dot's spoken form. The flyout owns it rather than borrowing the Collections
+    /// window's status word, so the menu's wording has one home beside the title that uses it.
+    /// </summary>
+    public const string PendingSpokenLabel = "update available";
+    /// <summary>
+    /// What a menu row says in place of the amber dot. The Mac's Menu row draws one title and
+    /// one image, and the image is the chain, so a pending update has to be words — the same
+    /// words the dot speaks, so a row reads the same whether it is seen or heard. This side
+    /// carries it for parity and uses it in the same place.
+    /// </summary>
+    public const string PendingMenuMark = " · " + PendingSpokenLabel;
     /// <summary>Shown in the error banner when nothing worse is: the store's folder refused the owner-only permission.</summary>
     public const string StoreNotPrivateCaution = "The master list could not be made private: its folder refused the permission change, so connector secrets in it are readable by anyone who can read that folder.";
 
@@ -33,6 +52,20 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     /// <summary>A static and an instance member cannot share one name here; the Mac carries this same name rather than shadowing, so the pair reads the same in both files.</summary>
     public static string ExportTitleFor(string active) => $"Export “{active}”…";
+
+    /// <summary>
+    /// One row of the collections menu. The chain is the row's single image on the Mac, so a
+    /// collection with news says so in the title instead of after it; this side matches.
+    /// </summary>
+    public static string MenuTitle(CollectionMenuItem item) =>
+        item.HasPendingUpdate ? item.Name + PendingMenuMark : item.Name;
+
+    /// <summary>
+    /// One row's chain tooltip, naming where that collection's document is — every synced row,
+    /// not only the active one the chip names. Null for a row with no chain to explain.
+    /// </summary>
+    public static string? MenuTooltip(CollectionMenuItem item) =>
+        item.Source is { } source ? SourceTooltipFormat(source) : null;
 
     /// <summary>The chain glyph's tooltip. The Mac carries the same <c>Format</c> suffix, for the reason <see cref="ExportTitleFor"/> is spelled that way.</summary>
     public static string SourceTooltipFormat(string source) => $"Synced from {source}";
@@ -62,10 +95,8 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public string Subtitle => state.HeaderSubtitle;
 
-    /// <summary>The Mac's static and an instance property of the same name can coexist there; C# forbids that, so the instance property below calls this.</summary>
-    public static string CollectionChipTextFor(string active) => $"{active} ▾";
-
-    public string CollectionChipText => CollectionChipTextFor(state.ActiveCollection);
+    /// <summary>The chip's text is the bare name; the ▾, the chain and the dot are the view's glyphs.</summary>
+    public string ActiveCollection => state.ActiveCollection;
 
     /// <summary>The menu's Export item, which names the collection it would write.</summary>
     public string ExportTitle => ExportTitleFor(state.ActiveCollection);
@@ -86,20 +117,8 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     /// that needs a plain string coalesces it; the chain is drawn only for a synced collection,
     /// which is the case that has something to say.
     /// </summary>
-    public string? SourceTooltip
-    {
-        get
-        {
-            var active = state.ActiveCollection;
-            if (!state.IsSynced(active))
-            {
-                return null;
-            }
-            var source = state.SourceBinding(active)?.Path
-                ?? (state.CollectionsFile.Collections.TryGetValue(active, out var entry) ? entry.FileName : null);
-            return source is null ? null : SourceTooltipFormat(source);
-        }
-    }
+    public string? SourceTooltip =>
+        state.SourceLocation(state.ActiveCollection) is { } source ? SourceTooltipFormat(source) : null;
 
     public IReadOnlyList<CollectionMenuItem> CollectionItems => collectionItems;
 
@@ -334,7 +353,8 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
         }
         var active = state.ActiveCollection;
         collectionItems = state.CollectionNames
-            .Select(n => new CollectionMenuItem(n, n == active, state.IsSynced(n), state.PendingUpdates.ContainsKey(n)))
+            .Select(n => new CollectionMenuItem(n, n == active, state.IsSynced(n), state.PendingUpdates.ContainsKey(n),
+                state.SourceLocation(n)))
             .ToList();
         RaiseAll();
     }

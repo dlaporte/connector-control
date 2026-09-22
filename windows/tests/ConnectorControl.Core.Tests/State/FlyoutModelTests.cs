@@ -13,7 +13,7 @@ public class FlyoutModelTests
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal("Connector Control", FlyoutModel.Title);
         Assert.Equal("No connectors configured", flyout.Subtitle);
-        Assert.Equal("Default ▾", flyout.CollectionChipText);
+        Assert.Equal("Default", flyout.ActiveCollection);
         Assert.True(flyout.IsEmpty);
         Assert.Equal("No connectors configured yet — add one below.", FlyoutModel.EmptyText);
         state.Upsert("z", new McpEntry(AppStateHarness.Remote("https://z.example/mcp")), null);
@@ -76,9 +76,9 @@ public class FlyoutModelTests
         Assert.Equal(
             [new CollectionMenuItem("Default", false), new CollectionMenuItem("Work", true)],
             flyout.CollectionItems);
-        Assert.Equal("Work ▾", flyout.CollectionChipText);
+        Assert.Equal("Work", flyout.ActiveCollection);
         flyout.SwitchCollection("Default");
-        Assert.Equal("Default ▾", flyout.CollectionChipText);
+        Assert.Equal("Default", flyout.ActiveCollection);
     }
 
     [Fact]
@@ -96,7 +96,8 @@ public class FlyoutModelTests
             ["Team"] = new CollectionDiff(["jira"], [], []),
         };
         Assert.Equal(
-            [new CollectionMenuItem("Default", false), new CollectionMenuItem("Team", true, IsSynced: true, HasPendingUpdate: true)],
+            [new CollectionMenuItem("Default", false),
+             new CollectionMenuItem("Team", true, IsSynced: true, HasPendingUpdate: true, Source: "team.json")],
             flyout.CollectionItems);
         Assert.False(flyout.CanAddConnector);
         Assert.Equal("Additions go in a local collection.", FlyoutModel.AddDisabledTooltip);
@@ -520,5 +521,84 @@ public class FlyoutModelTests
         Assert.Null(state.PublishError);
         // The document in the folder stays: a folder this machine cannot reach is not one to delete from.
         Assert.True(System.IO.File.Exists(Path.Combine(folder, "default.json")));
+    }
+    [Fact]
+    public void AMenuRowSpellsOutWhatItsSingleImageCannotShow()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        new CollectionsFile([Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json"))])
+            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        state.Reload();
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        // No news: the row is the name, and the chain is the one image the Mac can draw.
+        var quiet = flyout.CollectionItems.Single(i => i.Name == "Team");
+        Assert.Equal("Team", FlyoutModel.MenuTitle(quiet));
+
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
+        {
+            ["Team"] = new CollectionDiff(["jira"], [], []),
+        };
+        var pending = flyout.CollectionItems.Single(i => i.Name == "Team");
+        Assert.Equal("Team · update available", FlyoutModel.MenuTitle(pending));
+        // The mark is the dot's spoken form, so a row reads the same whether seen or heard.
+        Assert.Equal(" · " + FlyoutModel.PendingSpokenLabel, FlyoutModel.PendingMenuMark);
+        Assert.Equal("update available", FlyoutModel.PendingSpokenLabel);
+
+        // A local collection with news says so too — the mark is about the news, not the chain.
+        var local = flyout.CollectionItems.Single(i => i.Name == "Default");
+        Assert.Equal("Default", FlyoutModel.MenuTitle(local));
+    }
+
+    [Fact]
+    public void ARowsLockSaysWhatTheWindowsLockSays()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        using var flyout = new FlyoutModel(state, h.Settings);
+        var row = flyout.Rows[0];
+        Assert.Equal(CollectionsModel.LockedGlyphTooltip, row.LockTooltip);
+        Assert.Equal("Read-only: synced from the collection's author", row.LockTooltip);
+        // One glyph, two names.
+        Assert.Equal(FlyoutModel.ToolWarningGlyph, FlyoutModel.CautionGlyph);
+    }
+    [Fact]
+    public void EverySyncedMenuRowNamesItsOwnSource()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateCollection("Ops"));
+        state.SwitchCollection("Default");
+        new CollectionsFile([
+            Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json")),
+            Sidecar("Ops", new CollectionsFile.Entry(CollectionKind.Synced, "ops.json")),
+        ]).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        new CollectionsLocalCache(
+            [new KeyValuePair<string, CollectionsLocalCache.SyncedBinding>(
+                "Team", new CollectionsLocalCache.SyncedBinding("/Acme/mcp/team.json", null))],
+            []).Save(state.Service.Paths.CollectionsCachePath);
+        state.Reload();
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        CollectionMenuItem Item(string name) => flyout.CollectionItems.Single(i => i.Name == name);
+        // Neither synced row is the active one, and each still names its own document: the bound
+        // path where there is one, the sidecar's file name where the file is still to be found.
+        Assert.Equal("/Acme/mcp/team.json", Item("Team").Source);
+        Assert.Equal("Synced from /Acme/mcp/team.json", FlyoutModel.MenuTooltip(Item("Team")));
+        Assert.Equal("ops.json", Item("Ops").Source);
+        Assert.Equal("Synced from ops.json", FlyoutModel.MenuTooltip(Item("Ops")));
+        Assert.Null(Item("Default").Source);
+        Assert.Null(FlyoutModel.MenuTooltip(Item("Default")));
+
+        // One rule for every surface: the chip, the menu and the window's sidebar all agree.
+        Assert.Equal(state.SourceLocation("Team"), Item("Team").Source);
+        state.SwitchCollection("Team");
+        Assert.Equal(FlyoutModel.MenuTooltip(Item("Team")), flyout.SourceTooltip);
+        using var window = new CollectionsModel(state, h.Dialogs);
+        var sidebar = window.Items.Single(i => i.Name == "Team");
+        Assert.Equal(FlyoutModel.MenuTooltip(Item("Team")), CollectionsModel.SyncedGlyphTooltip(sidebar));
     }
 }

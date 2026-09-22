@@ -22,4 +22,8 @@ public struct ConnectorRow: Identifiable, Equatable, Sendable {
     public var id: String { name }
 
     public var editTooltip: String { "Edit “\(name)”" }
+
+    /// The lock's tooltip, the same sentence the Collections window's rows show for the same
+    /// fact, borrowed rather than written twice.
+    public var lockTooltip: String { CollectionsModel.lockedGlyphTooltip }
 }

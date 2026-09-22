@@ -1181,6 +1181,24 @@ public sealed class AppState : ObservableObject, IDisposable
         CollectionsCache.Synced.TryGetValue(collection, out var binding) ? binding : null;
 
     /// <summary>
+    /// Where a synced collection's document is, as far as this machine knows: the path it is
+    /// bound to, or the name the sidecar recorded while the file is still to be found. Null for a
+    /// local collection, and for a synced one the sidecar never named. The flyout's chip, its
+    /// menu rows and the Collections window's sidebar all name a source this way, so the rule
+    /// lives here once rather than in each of them.
+    /// </summary>
+    public string? SourceLocation(string collection)
+    {
+        if (!IsSynced(collection))
+        {
+            return null;
+        }
+        var found = SourceBinding(collection)?.Path
+            ?? (CollectionsFile.Collections.TryGetValue(collection, out var entry) ? entry.FileName : null);
+        return string.IsNullOrEmpty(found) ? null : found;
+    }
+
+    /// <summary>
     /// Whether this machine can reach the collection's document: true for a local collection,
     /// which has none to find. The same predicate the Locate banner asks, so a window and a
     /// banner can never disagree about whether a file has been found.

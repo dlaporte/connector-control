@@ -117,7 +117,6 @@ public class StringCatalogTests
         ["ImportModel.sourceLine"] = ["X", "Y", "3"],
         ["MasterStore.duplicateCollectionNameError"] = ["X"],
         ["MasterStore.unknownCollectionError"] = ["X"],
-        ["PopoverModel.collectionChipText"] = ["X"],
         ["PopoverModel.exportTitleFor"] = ["X"],
         ["PopoverModel.locateButton"] = ["X"],
         ["PopoverModel.sourceTooltipFormat"] = ["X"],
@@ -363,12 +362,13 @@ public class StringCatalogTests
         actual["PopoverModel.addDisabledTooltip"] = FlyoutModel.AddDisabledTooltip;
         actual["PopoverModel.addTooltip"] = FlyoutModel.AddTooltip;
         actual["PopoverModel.chooseFolderButton"] = FlyoutModel.ChooseFolderButton;
-        actual["PopoverModel.collectionChipText"] = FlyoutModel.CollectionChipTextFor("X");
         actual["PopoverModel.emptyText"] = FlyoutModel.EmptyText;
         actual["PopoverModel.exportTitleFor"] = FlyoutModel.ExportTitleFor("X");
         actual["PopoverModel.importTitle"] = FlyoutModel.ImportTitle;
         actual["PopoverModel.locateButton"] = FlyoutModel.LocateButton("X");
         actual["PopoverModel.manageTitle"] = FlyoutModel.ManageTitle;
+        actual["PopoverModel.pendingMenuMark"] = FlyoutModel.PendingMenuMark;
+        actual["PopoverModel.pendingSpokenLabel"] = FlyoutModel.PendingSpokenLabel;
         actual["PopoverModel.quitTooltip"] = FlyoutModel.QuitTooltip;
         actual["PopoverModel.restartTitle"] = FlyoutModel.RestartTitle;
         actual["PopoverModel.retryTitle"] = FlyoutModel.RetryTitle;

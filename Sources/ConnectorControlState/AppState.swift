@@ -793,6 +793,18 @@ public final class AppState: ObservableObject {
         collectionsCache.synced[collection]
     }
 
+    /// Where a synced collection's document is, as far as this machine knows: the path it is
+    /// bound to, or the name the sidecar recorded while the file is still to be found. nil for a
+    /// local collection, and for a synced one the sidecar never named. The popover's chip, its
+    /// menu rows and the Collections window's sidebar all name a source this way, so the rule
+    /// lives here once rather than in each of them.
+    public func sourceLocation(of collection: String) -> String? {
+        guard isSynced(collection),
+              let found = sourceBinding(of: collection)?.path ?? collectionsFile.collections[collection]?.fileName,
+              !found.isEmpty else { return nil }
+        return found
+    }
+
     /// Whether this machine can reach the collection's document: true for a local collection,
     /// which has none to find. The same predicate the Locate banner asks, so a window and a
     /// banner can never disagree about whether a file has been found.

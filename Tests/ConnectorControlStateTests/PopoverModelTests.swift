@@ -15,7 +15,7 @@ final class PopoverModelTests: XCTestCase {
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertEqual(popover.subtitle, "No connectors configured")
-        XCTAssertEqual(popover.collectionChipText, "Default ▾")
+        XCTAssertEqual(popover.activeCollection, "Default")
         XCTAssertTrue(popover.isEmpty)
         XCTAssertNil(state.upsert(name: "z", entry: MCPEntry(config: AppStateHarness.remote("https://z.example/mcp")), renamedFrom: nil))
         XCTAssertEqual(popover.subtitle, "1 of 1 enabled")
@@ -83,9 +83,9 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(popover.collectionItems.map(\.isActive), [false, true])
         XCTAssertEqual(popover.collectionItems.map(\.isSynced), [false, false])
         XCTAssertEqual(popover.collectionItems.map(\.hasPendingUpdate), [false, false])
-        XCTAssertEqual(popover.collectionChipText, "Work ▾")
+        XCTAssertEqual(popover.activeCollection, "Work")
         popover.switchCollection("Default")
-        XCTAssertEqual(popover.collectionChipText, "Default ▾")
+        XCTAssertEqual(popover.activeCollection, "Default")
     }
 
     func testASyncedCollectionIsMarkedInTheMenuAndClosedToAdditions() throws {
@@ -292,6 +292,7 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(PopoverModel.retryGlyph, "exclamationmark.arrow.circlepath")
         XCTAssertEqual(PopoverModel.restartGlyph, "arrow.clockwise")
         XCTAssertEqual(PopoverModel.toolWarningGlyph, "exclamationmark.triangle.fill")
+        XCTAssertEqual(PopoverModel.cautionGlyph, PopoverModel.toolWarningGlyph, "one glyph, two names")
     }
 
     // MARK: - Collection menu titles, chip marks and locks
@@ -477,5 +478,74 @@ final class PopoverModelTests: XCTestCase {
         state.pendingUpdates = ["Team": CollectionDiff(added: ["jira"], removed: [], changed: [])]
         XCTAssertTrue(popover.collectionBannerAction())
         XCTAssertEqual(state.takeCollectionsWindowRequest(), .review(collection: "Team"))
+    }
+    func testAMenuRowSpellsOutWhatItsSingleImageCannotShow() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        try CollectionsFile(collections: ["Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json")])
+            .save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        state.reload()
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+
+        // No news: the row is the name, and the chain is the one image it can draw.
+        let quiet = try XCTUnwrap(popover.collectionItems.first { $0.name == "Team" })
+        XCTAssertEqual(PopoverModel.menuTitle(for: quiet), "Team")
+
+        state.pendingUpdates = ["Team": CollectionDiff(added: ["jira"], removed: [], changed: [])]
+        let pending = try XCTUnwrap(popover.collectionItems.first { $0.name == "Team" })
+        XCTAssertEqual(PopoverModel.menuTitle(for: pending), "Team · update available")
+        // The mark is the dot's spoken form, so a row reads the same whether seen or heard.
+        XCTAssertEqual(PopoverModel.pendingMenuMark, " · " + PopoverModel.pendingSpokenLabel)
+        XCTAssertEqual(PopoverModel.pendingSpokenLabel, "update available")
+
+        // A local collection with news says so too — the mark is about the news, not the chain.
+        let local = try XCTUnwrap(popover.collectionItems.first { $0.name == "Default" })
+        XCTAssertEqual(PopoverModel.menuTitle(for: local), "Default")
+    }
+
+    func testARowsLockSaysWhatTheWindowsLockSays() {
+        let row = ConnectorRow(name: "aws-mcp", enabled: true, toolWarning: nil, isLocked: true)
+        XCTAssertEqual(row.lockTooltip, CollectionsModel.lockedGlyphTooltip)
+        XCTAssertEqual(row.lockTooltip, "Read-only: synced from the collection's author")
+    }
+    func testEverySyncedMenuRowNamesItsOwnSource() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createCollection(named: "Ops"))
+        state.switchCollection(to: "Default")
+        try CollectionsFile(collections: [
+            "Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json"),
+            "Ops": CollectionsFile.Entry(kind: .synced, fileName: "ops.json"),
+        ]).save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        try CollectionsLocalCache(synced: ["Team": .init(path: "/Acme/mcp/team.json", lastHash: nil, excluded: [:])],
+                                  published: [:])
+            .save(to: state.service.paths.collectionsCacheURL, staging: nil)
+        state.reload()
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+
+        func item(_ name: String) throws -> CollectionMenuItem {
+            try XCTUnwrap(popover.collectionItems.first { $0.name == name })
+        }
+        // Neither synced row is the active one, and each still names its own document: the bound
+        // path where there is one, the sidecar's file name where the file is still to be found.
+        XCTAssertEqual(try item("Team").source, "/Acme/mcp/team.json")
+        XCTAssertEqual(PopoverModel.menuTooltip(for: try item("Team")), "Synced from /Acme/mcp/team.json")
+        XCTAssertEqual(try item("Ops").source, "ops.json")
+        XCTAssertEqual(PopoverModel.menuTooltip(for: try item("Ops")), "Synced from ops.json")
+        XCTAssertNil(try item("Default").source)
+        XCTAssertNil(PopoverModel.menuTooltip(for: try item("Default")))
+
+        // One rule for every surface: the chip, the menu and the window's sidebar all agree.
+        XCTAssertEqual(try item("Team").source, state.sourceLocation(of: "Team"))
+        state.switchCollection(to: "Team")
+        XCTAssertEqual(popover.sourceTooltip, PopoverModel.menuTooltip(for: try item("Team")))
+        let window = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { window.dispose() }
+        let sidebar = try XCTUnwrap(window.items.first { $0.name == "Team" })
+        XCTAssertEqual(CollectionsModel.syncedGlyphTooltip(sidebar), PopoverModel.menuTooltip(for: try item("Team")))
     }
 }

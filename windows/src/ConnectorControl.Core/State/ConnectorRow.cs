@@ -22,6 +22,12 @@ public sealed class ConnectorRow : ObservableObject
     public string EditTooltip => $"Edit “{Name}”";
 
     /// <summary>
+    /// The lock's tooltip, the same sentence the Collections window's rows show for the same
+    /// fact, borrowed rather than written twice.
+    /// </summary>
+    public string LockTooltip => CollectionsModel.LockedGlyphTooltip;
+
+    /// <summary>
     /// The caution glyph's tooltip, or null for no glyph: this connector's
     /// launcher is not where Claude Desktop looks. Advisory only — the row
     /// still toggles. <see cref="FlyoutModel"/> keeps it in step with AppState.ToolStatuses.

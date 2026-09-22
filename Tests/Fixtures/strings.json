@@ -293,9 +293,6 @@
   "PopoverModel.addDisabledTooltip": "Additions go in a local collection.",
   "PopoverModel.addTooltip": "Add Connector",
   "PopoverModel.chooseFolderButton": "Choose Folder…",
-  "PopoverModel.collectionChipText": {
-    "format": "{0} ▾"
-  },
   "PopoverModel.emptyText": "No connectors configured yet — add one below.",
   "PopoverModel.exportTitleFor": {
     "format": "Export “{0}”…"
@@ -305,6 +302,8 @@
     "format": "Locate {0}…"
   },
   "PopoverModel.manageTitle": "Manage Collections…",
+  "PopoverModel.pendingMenuMark": " · update available",
+  "PopoverModel.pendingSpokenLabel": "update available",
   "PopoverModel.quitTooltip": "Quit Connector Control",
   "PopoverModel.restartTitle": "Restart Required",
   "PopoverModel.retryTitle": "Apply Failed — Retry",
