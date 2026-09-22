@@ -7,8 +7,8 @@ namespace ConnectorControl.App.Tests.TestSupport;
 /// <summary>
 /// A named element inside a generated row. A DataTemplate's names live in the template's own
 /// namescope, out of the window's reach, but every element still carries its Name — so a walk of
-/// the row's own visual tree finds it. EditorWindowTests has the same walk file-private; this is
-/// the shared copy, for the window tests that reach into rows from more than one file.
+/// the row's own visual tree finds it. The one copy of that walk, for every window test that
+/// reaches into rows.
 /// </summary>
 internal static class RowElements
 {
