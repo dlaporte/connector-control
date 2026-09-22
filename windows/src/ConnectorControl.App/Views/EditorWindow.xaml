@@ -236,7 +236,8 @@
                           </Style.Triggers>
                         </Style>
                       </Border.Style>
-                      <PasswordBox x:Name="BearerTokenBox" views:PasswordBoxHelper.BoundPassword="{Binding BearerToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                      <PasswordBox x:Name="BearerTokenBox" views:PasswordBoxHelper.BoundPassword="{Binding BearerToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                   AutomationProperties.HelpText="{Binding BearerTokenHint}" />
                     </Border>
                   </Grid>
                   <StackPanel x:Name="BearerNeeds" Margin="110,2,0,0" Visibility="{Binding BearerTokenIsPlaceholder, Converter={StaticResource Vis}}">
@@ -275,7 +276,8 @@
                           </Style.Triggers>
                         </Style>
                       </Border.Style>
-                      <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding HeaderValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                      <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding HeaderValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                   AutomationProperties.HelpText="{Binding HeaderValueHint}" />
                     </Border>
                   </Grid>
                   <StackPanel x:Name="HeaderValueNeeds" Margin="110,2,0,0" Visibility="{Binding HeaderValueIsPlaceholder, Converter={StaticResource Vis}}">
@@ -313,7 +315,8 @@
                           </Style.Triggers>
                         </Style>
                       </Border.Style>
-                      <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding OAuthClientSecret, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                      <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding OAuthClientSecret, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                   AutomationProperties.HelpText="{Binding ClientSecretHint}" />
                     </Border>
                   </Grid>
                   <StackPanel x:Name="ClientSecretNeeds" Margin="110,2,0,0" Visibility="{Binding ClientSecretIsPlaceholder, Converter={StaticResource Vis}}">
@@ -373,6 +376,15 @@
                                    marked until it is filled in. -->
                               <TextBox x:Name="ArgPlaceholder" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}"
                                        Style="{StaticResource Watermarked}" Tag="{x:Static state:EditorModel.NeedsPath}">
+                                <!-- The caution line beneath is sight-only; the box carries the author's hint
+                                     for anyone reading the form aloud. -->
+                                <AutomationProperties.HelpText>
+                                  <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint">
+                                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                    <Binding />
+                                    <Binding Path="Value" />
+                                  </MultiBinding>
+                                </AutomationProperties.HelpText>
                                 <TextBox.Visibility>
                                   <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="PlaceholderVisibility">
                                     <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
@@ -466,6 +478,15 @@
                                    value the author is asking for. -->
                               <TextBox x:Name="EnvPlaceholder" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}"
                                        Style="{StaticResource Watermarked}" Tag="{x:Static state:EditorModel.NeedsValue}">
+                                <!-- The caution line beneath is sight-only; the box carries the author's hint
+                                     for anyone reading the form aloud. -->
+                                <AutomationProperties.HelpText>
+                                  <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint">
+                                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                    <Binding />
+                                    <Binding Path="Value" />
+                                  </MultiBinding>
+                                </AutomationProperties.HelpText>
                                 <TextBox.Visibility>
                                   <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="PlaceholderVisibility">
                                     <Binding RelativeSource="{RelativeSource AncestorType=Window}" />

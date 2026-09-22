@@ -55,6 +55,11 @@ struct EditSheetView: View {
         return model.argsWithPlaceholders.contains(model.args.firstIndex { $0.id == row.id } ?? -1)
     }
 
+    /// What the lock glyph says to a screen reader. A glyph on its own reads as nothing, and a
+    /// lock is only ever on screen while the collection is synced, so this is the very sentence
+    /// the header shows — which is what the Windows glyph names too.
+    private var lockLabel: String { EditorModel.lockedFieldsNote(model.collectionName) }
+
     /// Still owed: the author's marker is standing, or the user has emptied the field without
     /// putting anything in its place.
     private func envOwed(_ row: EnvRow) -> Bool {
@@ -214,14 +219,14 @@ struct EditSheetView: View {
                         Text("Remote").tag(true)
                         Text("Local").tag(false)
                     } label: {
-                        LockedLabel("Type", locked: model.isReadOnly)
+                        LockedLabel("Type", locked: model.isReadOnly, lockLabel: lockLabel)
                     }
                     .pickerStyle(.segmented)
                     .fixedSize()
                     .disabled(model.isReadOnly)
                 }
                 TextField(text: $model.name, prompt: Text("my-mcp")) {
-                    LockedLabel("Name", locked: model.isReadOnly)
+                    LockedLabel("Name", locked: model.isReadOnly, lockLabel: lockLabel)
                 }
                 .disabled(model.isReadOnly)
             }
@@ -229,7 +234,7 @@ struct EditSheetView: View {
             if model.isRemote {
                 Section {
                     TextField(text: $model.remoteURL, prompt: Text("https://example.com/mcp")) {
-                        LockedLabel("Server URL", locked: model.isReadOnly)
+                        LockedLabel("Server URL", locked: model.isReadOnly, lockLabel: lockLabel)
                     }
                     .disabled(model.isReadOnly)
                     if model.showURLHint {
@@ -247,7 +252,7 @@ struct EditSheetView: View {
             } else {
                 Section {
                     TextField(text: $model.command, prompt: Text("npx")) {
-                        LockedLabel("Command", locked: model.isReadOnly)
+                        LockedLabel("Command", locked: model.isReadOnly, lockLabel: lockLabel)
                     }
                     .disabled(model.isReadOnly)
                     if let note = model.toolNote {
@@ -372,7 +377,7 @@ struct EditSheetView: View {
                 Text(kind.title).tag(kind)
             }
         } label: {
-            LockedLabel("Type", locked: model.isReadOnly)
+            LockedLabel("Type", locked: model.isReadOnly, lockLabel: lockLabel)
         }
         .pickerStyle(.menu)
         .disabled(model.isReadOnly)
@@ -431,7 +436,7 @@ struct EditSheetView: View {
             // Name lives in the Form's group box; JSON view needs its own so a
             // raw-JSON paste for a new MCP can be named without switching views.
             HStack(spacing: 8) {
-                LockedLabel("Name", locked: model.isReadOnly)
+                LockedLabel("Name", locked: model.isReadOnly, lockLabel: lockLabel)
                 TextField("my-mcp", text: $model.name)
                     .textFieldStyle(.roundedBorder)
                     .disabled(model.isReadOnly)
@@ -515,10 +520,12 @@ private struct HeaderCapsule<Content: View>: View {
 private struct LockedLabel: View {
     private let title: String
     private let locked: Bool
+    private let lockLabel: String
 
-    init(_ title: String, locked: Bool) {
+    init(_ title: String, locked: Bool, lockLabel: String) {
         self.title = title
         self.locked = locked
+        self.lockLabel = lockLabel
     }
 
     var body: some View {
@@ -528,6 +535,7 @@ private struct LockedLabel: View {
                 Image(systemName: "lock.fill")
                     .font(.caption2)
                     .opacity(0.55)
+                    .accessibilityLabel(lockLabel)
             }
         }
     }
@@ -548,6 +556,9 @@ private struct PlaceholderField<Content: View>: View {
             content
                 .overlay(RoundedRectangle(cornerRadius: 5)
                     .stroke(marked ? Color.orange : Color.clear))
+                // The caution line beneath is sight-only; the field itself carries the author's
+                // hint for anyone reading the form aloud. An empty hint is no hint.
+                .accessibilityHint(Text(hint ?? ""))
             if marked {
                 // The field itself holds the marker the document left, so the phrase that names
                 // the state goes here rather than in a prompt nothing empty would show.
