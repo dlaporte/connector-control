@@ -130,9 +130,19 @@ struct PublishSheetView: View {
                             Button(PublishModel.forgetMarkButton) { model.forgetUnresolvedMark(mark.id) }
                         }
                     }
+                    // A folder of this collection's own is answered only by writing the token in its
+                    // place, never by releasing it: released, the folder would travel as written.
+                    // Anything else keeps the kept-path note and Release.
                     ForEach(kept) { path in
-                        unansweredLine(PublishModel.keptPathNote(path.connector, path.field)) {
-                            Button(PublishModel.releaseValueButton) { model.releaseKeptPath(path.value) }
+                        switch path.kind {
+                        case .folder:
+                            unansweredLine(PublishModel.publishFolderNote(path.connector, path.field)) {
+                                Button(PublishModel.useDirectoryTokenButton) { failure = model.useDirectoryToken(path) }
+                            }
+                        case .path:
+                            unansweredLine(PublishModel.keptPathNote(path.connector, path.field)) {
+                                Button(PublishModel.releaseValueButton) { model.releaseKeptPath(path.value) }
+                            }
                         }
                     }
                 }

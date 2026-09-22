@@ -88,6 +88,19 @@ public partial class PublishDialog : DialogWindow
         }
     }
 
+    /// <summary>
+    /// A folder entry's line is bound to that entry, which the model rewrites where it sits. The
+    /// rewrite is a save of the connector, so it can fail, and its message goes where a failed
+    /// publish's does.
+    /// </summary>
+    private void OnUseDirectoryToken(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is PublishModel.KeptPath kept)
+        {
+            ShowFailure(Model.UseDirectoryToken(kept));
+        }
+    }
+
     private void OnPublish(object sender, RoutedEventArgs e) => Finish(Model.Publish());
 
     private void OnExport(object sender, RoutedEventArgs e)
@@ -135,6 +148,8 @@ public sealed class UnansweredNoteConverter : IValueConverter
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value switch
     {
         PublishModel.UnresolvedMark mark => PublishModel.UnresolvedMarkNote(mark.Connector, mark.Name),
+        PublishModel.KeptPath { Kind: PublishModel.KeptPathKind.Folder } folder =>
+            PublishModel.PublishFolderNote(folder.Connector, folder.Field),
         PublishModel.KeptPath kept => PublishModel.KeptPathNote(kept.Connector, kept.Field),
         _ => string.Empty,
     };

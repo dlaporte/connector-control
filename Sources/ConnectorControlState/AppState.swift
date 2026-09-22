@@ -1590,9 +1590,10 @@ public final class AppState: ObservableObject {
         }
     }
 
-    /// What this machine keeps back from `collection`'s document, less the paths the author
-    /// released for this collection. `folders` are the collection's own: every folder this machine
-    /// has published it into, which `${COLLECTION_DIR}` stands for. `values` are everything else —
+    /// What this machine keeps back from `collection`'s document. `folders` are the collection's
+    /// own: every folder this machine has published it into, which `${COLLECTION_DIR}` stands for,
+    /// and none of them is ever released. `values` are everything else, less the paths the author
+    /// released for this collection —
     /// every path on any of its lists of marked paths, and every other folder it binds: another
     /// collection's publish folders and each synced collection's located folder. The lists are not
     /// the collection's own alone: Claude's file carries whichever collection was last applied,
@@ -1616,7 +1617,9 @@ public final class AppState: ObservableObject {
         }
         let letGo = AppState.released(collectionsCache.published[collection]?.releasedValues ?? [],
                                       adding: released, marked: reviewed ?? [])
-        return (values.subtracting(folders).subtracting(letGo), folders.subtracting(letGo))
+        // The collection's own folders are never let go: the token stands for them, and writing it
+        // in their place is the one answer.
+        return (values.subtracting(folders).subtracting(letGo), folders)
     }
 
     /// A collection's released paths after the sheet's answer: what it released before and now,

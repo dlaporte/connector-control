@@ -2611,10 +2611,10 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// What this machine keeps back from <paramref name="collection"/>'s document, less the paths the
-    /// author released for this collection. <c>Folders</c> are the collection's own: every folder
-    /// this machine has published it into, which <c>${COLLECTION_DIR}</c> stands for. <c>Values</c>
-    /// are everything else — every path on any of its lists of marked paths, and every other folder
+    /// What this machine keeps back from <paramref name="collection"/>'s document. <c>Folders</c> are
+    /// the collection's own: every folder this machine has published it into, which
+    /// <c>${COLLECTION_DIR}</c> stands for, and none of them is ever released. <c>Values</c> are
+    /// everything else, less the paths the author released for this collection — every path on any of its lists of marked paths, and every other folder
     /// it binds: another collection's publish folders and each synced collection's located folder.
     /// The lists are not the collection's own alone: Claude's file carries whichever collection was
     /// last applied, and a connector reaches another collection by a copy, an ingest or a restore
@@ -2650,7 +2650,8 @@ public sealed class AppState : ObservableObject, IDisposable
         var letGo = Released(CollectionsCache.Published.GetValueOrDefault(collection)?.ReleasedValues, released, reviewed);
         values.ExceptWith(folders);
         values.ExceptWith(letGo);
-        folders.ExceptWith(letGo);
+        // The collection's own folders are never let go: the token stands for them, and writing it in
+        // their place is the one answer.
         return (values, folders);
     }
 

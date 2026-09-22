@@ -72,10 +72,24 @@ public final class PublishModel: ObservableObject {
         /// `local.args[1]`, `env.NAME.value`, `env.NAME.hint`, `needs.NAME.hint`, `additional.cwd`,
         /// `remote.extraArgs[0]`.
         public let field: String
-        /// A folder of this collection's own that can be written as `${COLLECTION_DIR}` where it
-        /// sits: its answer is `useDirectoryToken`. Anything else is answered by ticking it in
-        /// an argument row or by `releaseKeptPath`.
-        public let canUseDirectoryToken: Bool
+        /// Which answer the entry takes.
+        public let kind: Kind
+
+        public enum Kind: Equatable {
+            /// A path this machine keeps back: ticked where it sits in an argument row, or released
+            /// with `releaseKeptPath`.
+            case path
+            /// A folder of this collection's own, which `${COLLECTION_DIR}` stands for, in a place
+            /// the token can be written: answered with `useDirectoryToken`.
+            case folder
+        }
+
+        public init(value: String, connector: String, field: String, kind: Kind = .path) {
+            self.value = value
+            self.connector = connector
+            self.field = field
+            self.kind = kind
+        }
     }
 
     /// One environment variable of one connector. Stripped by default: its name and hint travel,
@@ -306,14 +320,14 @@ public final class PublishModel: ObservableObject {
     public var keptPaths: [KeptPath] {
         let held = PublishModel.held(in: state, collection, only: connectors).mapValues(\.config)
         var found = CollectionDocument.copiesOfMarkedPaths(in: held, intent: intent)
-            .map { KeptPath(value: $0.value, connector: $0.connector, field: $0.field, canUseDirectoryToken: false) }
+            .map { KeptPath(value: $0.value, connector: $0.connector, field: $0.field) }
         if found.isEmpty, let document = try? state.exportDocument(for: collection, intent: intent, only: connectors) {
             let kept = state.keptBack(for: collection, reviewed: reviewedValues, released: released)
             found = document.findings(of: kept.values)
-                .map { KeptPath(value: $0.value, connector: $0.connector, field: $0.field, canUseDirectoryToken: false) }
+                .map { KeptPath(value: $0.value, connector: $0.connector, field: $0.field) }
                 + document.findings(of: kept.folders).map {
                     KeptPath(value: $0.value, connector: $0.connector, field: $0.field,
-                             canUseDirectoryToken: canWriteDirectoryToken(connector: $0.connector, field: $0.field, folder: $0.value))
+                             kind: canWriteDirectoryToken(connector: $0.connector, field: $0.field, folder: $0.value) ? .folder : .path)
                 }
         }
         var seen: Set<String> = []
@@ -325,7 +339,7 @@ public final class PublishModel: ObservableObject {
     /// save is and applied to Claude's config when the collection is the active one. The author's
     /// own edit, in view of the preview. nil on success, else the message.
     public func useDirectoryToken(_ kept: KeptPath) -> String? {
-        guard kept.canUseDirectoryToken else { return nil }
+        guard kept.kind == .folder else { return nil }
         let token = Placeholder.directoryToken
         if let name = PublishModel.hintName(kept.field, "env") {
             for index in envRows.indices where envRows[index].connector == kept.connector && envRows[index].name == name {
@@ -386,12 +400,23 @@ public final class PublishModel: ObservableObject {
     /// Lets one kept path travel as written in this collection's document, by the author's
     /// explicit choice after reading the preview. Everywhere: every row holding it is unticked,
     /// since a path both marked and released would be both a placeholder and not.
-    public func releaseKeptPath(_ value: String) {
+    ///
+    /// A folder of this collection's own is never released, whatever the view offers: it is
+    /// answered by `useDirectoryToken`, or by writing `${COLLECTION_DIR}` in the connector's
+    /// editor. nil when the path is released; otherwise the note of the entry that still holds it
+    /// back, and nothing changes.
+    @discardableResult
+    public func releaseKeptPath(_ value: String) -> String? {
         let text = KeptValue.nfc(value)
+        if state.keptBack(for: collection).folders.contains(where: { KeptValue.nfc($0) == text }) {
+            return keptPaths.first { KeptValue.nfc($0.value) == text }
+                .map { PublishModel.publishFolderNote($0.connector, $0.field) }
+        }
         released.insert(value)
         for index in pathRows.indices where pathRows[index].marked && KeptValue.nfc(pathRows[index].value) == text {
             pathRows[index].marked = false
         }
+        return nil
     }
 
     /// Answers lost marks with the ticks made since `previous`: each row newly ticked, not ticked
@@ -474,7 +499,7 @@ public final class PublishModel: ObservableObject {
     private var firstUnanswered: String? {
         if let lost = unresolvedMarks.first { return PublishModel.unresolvedMarkNote(lost.connector, lost.name) }
         if let kept = keptPaths.first {
-            return kept.canUseDirectoryToken ? PublishModel.publishFolderNote(kept.connector, kept.field)
+            return kept.kind == .folder ? PublishModel.publishFolderNote(kept.connector, kept.field)
                 : PublishModel.keptPathNote(kept.connector, kept.field)
         }
         return nil

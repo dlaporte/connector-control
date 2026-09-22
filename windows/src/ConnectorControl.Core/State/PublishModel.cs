@@ -63,18 +63,24 @@ public sealed class PublishModel : ObservableObject
         internal JsonPointer Pointer { get; init; } = new([]);
     }
 
+    /// <summary>Which answer a <see cref="KeptPath"/> takes.</summary>
+    public enum KeptPathKind
+    {
+        /// <summary>A path this machine keeps back: ticked where it sits in an argument row, or released with <see cref="ReleaseKeptPath"/>.</summary>
+        Path,
+
+        /// <summary>A folder of this collection's own, which <c>${COLLECTION_DIR}</c> stands for, in a place the token can be written: answered with <see cref="UseDirectoryToken"/>.</summary>
+        Folder,
+    }
+
     /// <summary>A path this machine keeps back that the document would carry as written, and where.</summary>
     /// <param name="Field">
     /// Its place in the connector's document form, as the preview shows it: <c>local.command</c>,
     /// <c>local.args[1]</c>, <c>env.NAME.value</c>, <c>env.NAME.hint</c>, <c>needs.NAME.hint</c>,
     /// <c>additional.cwd</c>, <c>remote.extraArgs[0]</c>.
     /// </param>
-    /// <param name="CanUseDirectoryToken">
-    /// A folder of this collection's own that can be written as <c>${COLLECTION_DIR}</c> where it
-    /// sits: its answer is <see cref="UseDirectoryToken"/>. Anything else is answered by ticking it in
-    /// an argument row or by <see cref="ReleaseKeptPath"/>.
-    /// </param>
-    public sealed record KeptPath(string Value, string Connector, string Field, bool CanUseDirectoryToken = false)
+    /// <param name="Kind">Which answer the entry takes.</param>
+    public sealed record KeptPath(string Value, string Connector, string Field, KeptPathKind Kind = KeptPathKind.Path)
     {
         public string Id => Connector + "\0" + Field + "\0" + Value;
     }
@@ -481,7 +487,8 @@ public sealed class PublishModel : ObservableObject
                     var (values, folders) = state.KeptBack(Collection, ReviewedValues, released);
                     found.AddRange(document.Findings(values).Select(f => new KeptPath(f.Value, f.Connector, f.Field)));
                     found.AddRange(document.Findings(folders).Select(f => new KeptPath(
-                        f.Value, f.Connector, f.Field, CanWriteDirectoryToken(f.Connector, f.Field, f.Value))));
+                        f.Value, f.Connector, f.Field,
+                        CanWriteDirectoryToken(f.Connector, f.Field, f.Value) ? KeptPathKind.Folder : KeptPathKind.Path)));
                 }
                 catch (Exception refused) when (refused is PathMarkMovedException or KeptPathCarriedException)
                 {
@@ -496,16 +503,29 @@ public sealed class PublishModel : ObservableObject
     /// Lets one kept path travel as written in this collection's document, by the author's explicit
     /// choice after reading the preview. Everywhere: every row holding it is unticked, since a path
     /// both marked and released would be both a placeholder and not.
+    /// <para>
+    /// A folder of this collection's own is never released, whatever the view offers: it is
+    /// answered by <see cref="UseDirectoryToken"/>, or by writing <c>${COLLECTION_DIR}</c> in the
+    /// connector's editor. null when the path is released; otherwise the note of the entry that still
+    /// holds it back, and nothing changes.
+    /// </para>
     /// </summary>
-    public void ReleaseKeptPath(string value)
+    public string? ReleaseKeptPath(string value)
     {
         var text = KeptValue.Nfc(value);
+        if (state.KeptBack(Collection).Folders.Any(folder => KeptValue.Nfc(folder) == text))
+        {
+            return KeptPaths.FirstOrDefault(kept => KeptValue.Nfc(kept.Value) == text) is { } entry
+                ? PublishFolderNote(entry.Connector, entry.Field)
+                : null;
+        }
         released.Add(value);
         foreach (var row in PathRows.Where(row => row.Marked && KeptValue.Nfc(row.Value) == text))
         {
             row.Marked = false;
         }
         RaiseMarkGates();
+        return null;
     }
 
     /// <summary>
@@ -516,7 +536,7 @@ public sealed class PublishModel : ObservableObject
     /// </summary>
     public string? UseDirectoryToken(KeptPath kept)
     {
-        if (!kept.CanUseDirectoryToken)
+        if (kept.Kind != KeptPathKind.Folder)
         {
             return null;
         }
@@ -745,7 +765,7 @@ public sealed class PublishModel : ObservableObject
                 return UnresolvedMarkNote(lost.Connector, lost.Name);
             }
             return KeptPaths.FirstOrDefault() is { } kept
-                ? kept.CanUseDirectoryToken ? PublishFolderNote(kept.Connector, kept.Field) : KeptPathNote(kept.Connector, kept.Field)
+                ? kept.Kind == KeptPathKind.Folder ? PublishFolderNote(kept.Connector, kept.Field) : KeptPathNote(kept.Connector, kept.Field)
                 : null;
         }
     }

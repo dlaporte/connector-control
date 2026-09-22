@@ -1918,8 +1918,8 @@ public class AppStateCollectionsTests
 
         // The dialog lists the folder where it sits, and holds Export until it is answered.
         var dialog = new PublishModel(state, state.ActiveCollection);
-        Assert.Equal([$"typed local.args[0] {bound} True"],
-                     dialog.KeptPaths.Select(k => $"{k.Connector} {k.Field} {k.Value} {k.CanUseDirectoryToken}"));
+        Assert.Equal([$"typed local.args[0] {bound} Folder"],
+                     dialog.KeptPaths.Select(k => $"{k.Connector} {k.Field} {k.Value} {k.Kind}"));
         var output = h.Dir.File(Path.Combine("away", "copy.json"));
         Assert.Equal(PublishModel.PublishFolderNote("typed", "local.args[0]"), dialog.Export(output));
         Assert.False(File.Exists(output));
@@ -1948,8 +1948,8 @@ public class AppStateCollectionsTests
 
         var dialog = new PublishModel(state, state.ActiveCollection);
         dialog.EnvRows.Single(r => r.Name == "PATH_EXTRA").Share = true;
-        Assert.Equal(["tool env.PATH_EXTRA.value True", "tool local.command True"],
-                     dialog.KeptPaths.Select(k => $"{k.Connector} {k.Field} {k.CanUseDirectoryToken}"));
+        Assert.Equal(["tool env.PATH_EXTRA.value Folder", "tool local.command Folder"],
+                     dialog.KeptPaths.Select(k => $"{k.Connector} {k.Field} {k.Kind}"));
         Assert.False(dialog.CanPublish);
         Assert.Equal(PublishModel.PublishFolderNote("tool", "env.PATH_EXTRA.value"), dialog.Publish());
         Assert.Equal(before, File.ReadAllBytes(file));
@@ -1977,6 +1977,56 @@ public class AppStateCollectionsTests
         Assert.True(JsonText.FileContains(file, token));
     }
 
+    /// <summary>
+    /// Release is no answer for a folder of the collection's own, whatever the view offers: the entry
+    /// stays, Publish and Export stay held, and the folder reaches no document. Only writing the token
+    /// takes it out of the preview.
+    /// </summary>
+    [Fact]
+    public void ReleasingAFolderEntryIsRefused()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var bound = state.CollectionsCache.Published[state.ActiveCollection].Folder;
+        var file = Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
+        Assert.Null(state.Upsert("tool", new McpEntry(true, JsonValue.Object(("command", JsonValue.String(bound + "/bin/tool")))), null));
+        var before = File.ReadAllBytes(file);
+        var note = PublishModel.PublishFolderNote("tool", "local.command");
+
+        var dialog = new PublishModel(state, state.ActiveCollection);
+        var kept = dialog.KeptPaths[0];
+        Assert.Equal(PublishModel.KeptPathKind.Folder, kept.Kind);
+        var preview = dialog.Preview;
+        Assert.Equal(note, dialog.ReleaseKeptPath(kept.Value));
+        Assert.Equal([kept], dialog.KeptPaths);
+        // The refused release changed nothing.
+        Assert.Equal(preview, dialog.Preview);
+        Assert.False(dialog.CanPublish);
+        Assert.False(dialog.CanExport);
+        Assert.Equal(note, dialog.Publish());
+        var output = h.Dir.File(Path.Combine("away", "copy.json"));
+        Assert.Equal(note, dialog.Export(output));
+        Assert.False(File.Exists(output));
+        Assert.Equal(before, File.ReadAllBytes(file));
+        Assert.False(JsonText.FileContains(file, bound));
+
+        // Nor does the state let it go when asked directly, or when the list says so.
+        var releasing = new HashSet<string>([bound], StringComparer.Ordinal);
+        Assert.Equal(AppState.PublishFolderCarriedError("tool", "local.command"),
+                     state.WriteExport(state.ActiveCollection, dialog.Intent, output, released: releasing));
+        Assert.False(File.Exists(output));
+        Assert.Equal(AppState.PublishFolderCarriedError("tool", "local.command"),
+                     state.UpdatePublishIntent(state.ActiveCollection, dialog.Intent, new HashSet<string>(StringComparer.Ordinal), releasing));
+        Assert.False(JsonText.FileContains(file, bound));
+
+        Assert.True(JsonText.Contains(dialog.Preview, bound));
+        Assert.Null(dialog.UseDirectoryToken(kept));
+        Assert.False(JsonText.Contains(dialog.Preview, bound));
+        Assert.True(dialog.CanPublish);
+    }
+
     /// <summary>The folder in the author's own hint is the dialog's to rewrite: the token goes into the hint.</summary>
     [Fact]
     public void UseDirectoryTokenRewritesAHintInTheSheet()
@@ -1992,7 +2042,7 @@ public class AppStateCollectionsTests
         var row = dialog.EnvRows.Single(r => r.Connector == "svc" && r.Name == "TOKEN");
         row.Hint = $"see {bound}/README";
         var kept = dialog.KeptPaths[0];
-        Assert.Equal("svc env.TOKEN.hint True", $"{kept.Connector} {kept.Field} {kept.CanUseDirectoryToken}");
+        Assert.Equal("svc env.TOKEN.hint Folder", $"{kept.Connector} {kept.Field} {kept.Kind}");
         Assert.Null(dialog.UseDirectoryToken(kept));
         Assert.Equal($"see {Placeholder.DirectoryToken}/README", row.Hint);
         Assert.Empty(dialog.KeptPaths);
@@ -2034,7 +2084,7 @@ public class AppStateCollectionsTests
         Assert.False(JsonText.FileContains(file, oldFolder));
         var dialog = new PublishModel(state, state.ActiveCollection);
         var kept = dialog.KeptPaths[0];
-        Assert.Equal($"local.args[1] {oldFolder} True", $"{kept.Field} {kept.Value} {kept.CanUseDirectoryToken}");
+        Assert.Equal($"local.args[1] {oldFolder} Folder", $"{kept.Field} {kept.Value} {kept.Kind}");
         Assert.Null(dialog.UseDirectoryToken(kept));
         Assert.Null(state.PublishError);
         Assert.False(JsonText.FileContains(file, oldFolder));
@@ -2086,7 +2136,7 @@ public class AppStateCollectionsTests
                      state.StartPublishing("Clients", clients, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
         var dialog = new PublishModel(state, "Clients");
         var kept = dialog.KeptPaths.Single(k => k.Connector == "shared");
-        Assert.False(kept.CanUseDirectoryToken);
+        Assert.Equal(PublishModel.KeptPathKind.Path, kept.Kind);
         dialog.ReleaseKeptPath(kept.Value);
         Assert.Null(dialog.Publish());
         // The author's explicit choice.

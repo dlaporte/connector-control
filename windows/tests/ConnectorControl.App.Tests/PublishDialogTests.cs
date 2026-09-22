@@ -307,6 +307,10 @@ public class PublishDialogTests
                 RowElements.Find<TextBlock>(window.KeptList, kept, "KeptNoteText").Text);
             Assert.Equal(PublishModel.ForgetMarkButton, RowElements.Find<Button>(window.UnresolvedList, lost, "ForgetMark").Content);
             Assert.Equal(PublishModel.ReleaseValueButton, RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue").Content);
+            // A kept path, not a folder of the collection's own: Release is its answer, and the token is not offered.
+            Assert.Equal(PublishModel.KeptPathKind.Path, kept.Kind);
+            Assert.Equal(Visibility.Visible, RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue").Visibility);
+            Assert.Equal(Visibility.Collapsed, RowElements.Find<Button>(window.KeptList, kept, "UseDirectoryToken").Visibility);
             // The export button is bound to its gate in both modes, so one sheet shows both.
             Assert.False(window.PublishButton.IsEnabled);
             Assert.False(window.ExportButton.IsEnabled);
@@ -327,6 +331,49 @@ public class PublishDialogTests
             Assert.False(RowElements.Find<CheckBox>(window.PathList, ledger, "MarkTick").IsChecked);
             Assert.True(window.PublishButton.IsEnabled);
             Assert.True(window.ExportButton.IsEnabled);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public void AFolderInTheCommandIsAnsweredByTheDirectoryTokenAlone()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = h.Dir.File("pub");
+        Directory.CreateDirectory(folder);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var bound = state.CollectionsCache.Published[state.ActiveCollection].Folder;
+        // The collection's own publish folder, written out where no argument row reaches it.
+        Assert.Null(state.Upsert("tool", new McpEntry(true, JsonValue.Object(
+            ("command", JsonValue.String(bound + "/bin/tool")))), null));
+        WpfApp.Invoke(() =>
+        {
+            var model = new PublishModel(state, state.ActiveCollection);
+            var window = Shown(model);
+
+            var kept = Assert.Single(model.KeptPaths);
+            Assert.Equal(("tool", "local.command", PublishModel.KeptPathKind.Folder), (kept.Connector, kept.Field, kept.Kind));
+            Assert.Equal(PublishModel.PublishFolderNote("tool", "local.command"),
+                RowElements.Find<TextBlock>(window.KeptList, kept, "KeptNoteText").Text);
+            // One answer only: released, the folder would travel as written.
+            var use = RowElements.Find<Button>(window.KeptList, kept, "UseDirectoryToken");
+            Assert.Equal(PublishModel.UseDirectoryTokenButton, use.Content);
+            Assert.Equal(Visibility.Visible, use.Visibility);
+            Assert.Equal(Visibility.Collapsed, RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue").Visibility);
+            // A folder is on record, and the entry still holds Publish.
+            Assert.False(string.IsNullOrEmpty(model.Folder));
+            Assert.False(window.PublishButton.IsEnabled);
+
+            Press(use);
+            Layout(window);
+
+            // The token is written in the connector itself, where the folder sat.
+            Assert.Equal(JsonValue.Object(("command", JsonValue.String($"{Placeholder.DirectoryToken}/bin/tool"))),
+                state.Store.Collections[state.ActiveCollection].Mcps["tool"].Config);
+            Assert.Empty(window.KeptList.Items);
+            Assert.Equal(Visibility.Collapsed, window.FailureText.Visibility);
+            Assert.True(window.PublishButton.IsEnabled);
             window.Close();
         });
     }

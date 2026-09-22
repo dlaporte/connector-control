@@ -153,8 +153,22 @@
                            VerticalAlignment="Center" Margin="0,0,12,0" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                   <Button x:Name="ReleaseValue" Content="{x:Static state:PublishModel.ReleaseValueButton}" Click="OnReleaseValue" />
+                  <Button x:Name="UseDirectoryToken" Content="{x:Static state:PublishModel.UseDirectoryTokenButton}" Click="OnUseDirectoryToken" />
                 </StackPanel>
               </Grid>
+              <DataTemplate.Triggers>
+                <!-- One answer per entry, chosen by its kind. A folder of this collection's own is
+                     answered only by writing the token in its place, never by releasing it:
+                     released, the folder would travel as written. Neither button carries a
+                     Visibility of its own, because a local value would outrank these setters. An
+                     entry is a record and never changes kind, so nothing here needs to re-evaluate. -->
+                <DataTrigger Binding="{Binding Kind}" Value="{x:Static state:PublishModel+KeptPathKind.Folder}">
+                  <Setter TargetName="ReleaseValue" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="{x:Static state:PublishModel+KeptPathKind.Path}">
+                  <Setter TargetName="UseDirectoryToken" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+              </DataTemplate.Triggers>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>

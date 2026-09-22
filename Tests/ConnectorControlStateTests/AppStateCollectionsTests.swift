@@ -1650,8 +1650,8 @@ final class AppStateCollectionsTests: XCTestCase {
 
         // The sheet lists the folder where it sits, and holds Export until it is answered.
         let sheet = PublishModel(state: state, collection: state.activeCollection)
-        XCTAssertEqual(sheet.keptPaths.map { "\($0.connector) \($0.field) \($0.value) \($0.canUseDirectoryToken)" },
-                       ["typed local.args[0] \(bound) true"])
+        XCTAssertEqual(sheet.keptPaths.map { "\($0.connector) \($0.field) \($0.value) \($0.kind)" },
+                       ["typed local.args[0] \(bound) folder"])
         let out = h.dir.file("away/copy.json")
         XCTAssertEqual(sheet.export(to: out.path), PublishModel.publishFolderNote("typed", "local.args[0]"))
         XCTAssertFalse(FileManager.default.fileExists(atPath: out.path))
@@ -1676,8 +1676,8 @@ final class AppStateCollectionsTests: XCTestCase {
 
         let sheet = PublishModel(state: state, collection: state.activeCollection)
         sheet.envRows[try XCTUnwrap(sheet.envRows.firstIndex { $0.name == "PATH_EXTRA" })].share = true
-        XCTAssertEqual(sheet.keptPaths.map { "\($0.connector) \($0.field) \($0.canUseDirectoryToken)" },
-                       ["tool env.PATH_EXTRA.value true", "tool local.command true"])
+        XCTAssertEqual(sheet.keptPaths.map { "\($0.connector) \($0.field) \($0.kind)" },
+                       ["tool env.PATH_EXTRA.value folder", "tool local.command folder"])
         XCTAssertFalse(sheet.canPublish)
         XCTAssertEqual(sheet.publish(), PublishModel.publishFolderNote("tool", "env.PATH_EXTRA.value"))
         XCTAssertEqual(try Data(contentsOf: file), before)
@@ -1698,6 +1698,51 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertTrue(try jsonFile(file, contains: Placeholder.directoryToken))
     }
 
+    /// Release is no answer for a folder of the collection's own, whatever the view offers: the
+    /// entry stays, Publish and Export stay held, and the folder reaches no document. Only writing
+    /// the token takes it out of the preview.
+    func testReleasingAFolderEntryIsRefused() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        let bound = try XCTUnwrap(state.collectionsCache.published[state.activeCollection]?.folder)
+        let file = folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json")
+        XCTAssertNil(state.upsert(name: "tool", entry: MCPEntry(enabled: true, config: .object(["command": .string(bound + "/bin/tool")])),
+                                  renamedFrom: nil))
+        let before = try Data(contentsOf: file)
+        let note = PublishModel.publishFolderNote("tool", "local.command")
+
+        let sheet = PublishModel(state: state, collection: state.activeCollection)
+        let kept = try XCTUnwrap(sheet.keptPaths.first)
+        XCTAssertEqual(kept.kind, .folder)
+        let preview = sheet.preview
+        XCTAssertEqual(sheet.releaseKeptPath(kept.value), note)
+        XCTAssertEqual(sheet.keptPaths, [kept])
+        XCTAssertEqual(sheet.preview, preview, "the refused release changed nothing")
+        XCTAssertFalse(sheet.canPublish)
+        XCTAssertFalse(sheet.canExport)
+        XCTAssertEqual(sheet.publish(), note)
+        let out = h.dir.file("away/copy.json")
+        XCTAssertEqual(sheet.export(to: out.path), note)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: out.path))
+        XCTAssertEqual(try Data(contentsOf: file), before)
+        XCTAssertFalse(try jsonFile(file, contains: bound))
+
+        // Nor does the state let it go when asked directly, or when the list says so.
+        XCTAssertEqual(state.writeExport(for: state.activeCollection, intent: sheet.intent, to: out.path, released: [bound]),
+                       AppState.publishFolderCarriedError("tool", "local.command"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: out.path))
+        XCTAssertEqual(state.updatePublishIntent(state.activeCollection, intent: sheet.intent, reviewedValues: [], releasedValues: [bound]),
+                       AppState.publishFolderCarriedError("tool", "local.command"))
+        XCTAssertFalse(try jsonFile(file, contains: bound))
+
+        XCTAssertTrue(jsonText(sheet.preview, contains: bound))
+        XCTAssertNil(sheet.useDirectoryToken(kept))
+        XCTAssertFalse(jsonText(sheet.preview, contains: bound))
+        XCTAssertTrue(sheet.canPublish)
+    }
+
     /// The folder in the author's own hint is the sheet's to rewrite: the token goes into the hint.
     func testUseDirectoryTokenRewritesAHintInTheSheet() throws {
         let (h, state) = AppStateHarness.started()
@@ -1711,7 +1756,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let row = try XCTUnwrap(sheet.envRows.firstIndex { $0.connector == "svc" && $0.name == "TOKEN" })
         sheet.envRows[row].hint = "see \(bound)/README"
         let kept = try XCTUnwrap(sheet.keptPaths.first)
-        XCTAssertEqual("\(kept.connector) \(kept.field) \(kept.canUseDirectoryToken)", "svc env.TOKEN.hint true")
+        XCTAssertEqual("\(kept.connector) \(kept.field) \(kept.kind)", "svc env.TOKEN.hint folder")
         XCTAssertNil(sheet.useDirectoryToken(kept))
         XCTAssertEqual(sheet.envRows[row].hint, "see \(Placeholder.directoryToken)/README")
         XCTAssertEqual(sheet.keptPaths, [])
@@ -1750,7 +1795,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertFalse(try jsonFile(file, contains: oldFolder))
         let sheet = PublishModel(state: state, collection: state.activeCollection)
         let kept = try XCTUnwrap(sheet.keptPaths.first)
-        XCTAssertEqual("\(kept.field) \(kept.value) \(kept.canUseDirectoryToken)", "local.args[1] \(oldFolder) true")
+        XCTAssertEqual("\(kept.field) \(kept.value) \(kept.kind)", "local.args[1] \(oldFolder) folder")
         XCTAssertNil(sheet.useDirectoryToken(kept))
         XCTAssertNil(state.publishError)
         XCTAssertFalse(try jsonFile(file, contains: oldFolder))
@@ -1796,7 +1841,7 @@ final class AppStateCollectionsTests: XCTestCase {
                        AppState.keptPathCarriedError("shared", "local.args[0]"))
         let sheet = PublishModel(state: state, collection: "Clients")
         let kept = try XCTUnwrap(sheet.keptPaths.first { $0.connector == "shared" })
-        XCTAssertFalse(kept.canUseDirectoryToken)
+        XCTAssertEqual(kept.kind, .path)
         sheet.releaseKeptPath(kept.value)
         XCTAssertNil(sheet.publish())
         XCTAssertTrue(try jsonFile(clients.appendingPathComponent(Slug.make("Clients") + ".json"), contains: teamFolder),
