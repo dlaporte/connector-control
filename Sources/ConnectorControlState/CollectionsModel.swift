@@ -257,7 +257,10 @@ public final class CollectionsModel: ObservableObject {
     /// The strip's button. True says the news needs nothing from the file system, so the view has
     /// only to put the Review sheet in front of the selected collection. False says the view owes
     /// a picker and must hand what it gets to `locateSource` or `choosePublishFolder`.
-    @discardableResult
+    ///
+    /// Deliberately not `@discardableResult`, unlike the popover's, which sets the window request
+    /// on its way past: everything this one does is in the answer, so a call that drops it did
+    /// nothing at all.
     public func bannerAction() -> Bool {
         guard case .updateAvailable = banner else { return false }
         return true
@@ -387,8 +390,13 @@ public final class CollectionsModel: ObservableObject {
         let collection = selectedCollection
         guard state.isPublished(collection) else { return }
         // Nothing on this machine writes the document when there is no binding for it, so there
-        // is no file here to offer to remove.
-        let deleteFile = publishedFileName(of: collection).map(askAboutPublishedFile) ?? false
+        // is no file here to offer to remove. Nor is there anything to ask while the last write
+        // failed: the folder that refused it would refuse the delete too, so the question would
+        // be one whose Remove cannot be honoured. The banner's own Stop Publishing says the same
+        // by passing false outright.
+        let deleteFile = state.publishError?.collection == collection
+            ? false
+            : publishedFileName(of: collection).map(askAboutPublishedFile) ?? false
         state.stopPublishing(collection, deleteFile: deleteFile)
         lastError = nil
     }

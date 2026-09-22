@@ -462,8 +462,13 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             return;
         }
         // Nothing on this machine writes the document when there is no binding for it, so there is
-        // no file here to offer to remove.
-        var deleteFile = PublishedFileName(collection) is { } fileName && AskAboutPublishedFile(fileName);
+        // no file here to offer to remove. Nor is there anything to ask while the last write
+        // failed: the folder that refused it would refuse the delete too, so the question would be
+        // one whose Remove cannot be honoured. The banner's own Stop Publishing says the same by
+        // passing false outright.
+        var deleteFile = state.PublishError?.Collection != collection
+            && PublishedFileName(collection) is { } fileName
+            && AskAboutPublishedFile(fileName);
         state.StopPublishing(collection, deleteFile);
         LastError = null;
     }

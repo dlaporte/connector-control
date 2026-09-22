@@ -25,8 +25,9 @@ internal static class CollectionBannerPresentation
         CollectionBanner.Locate locate => locate.Collection,
         CollectionBanner.PublishFailed failed => failed.Collection,
         // Unreachable: the record hierarchy's constructor is private, so these are all of them.
-        // An empty name is the safe answer anyway, since no collection answers to one.
-        _ => string.Empty,
+        // Throwing rather than answering blandly, because a strip that claims to have news and
+        // then shows nothing is harder to notice than a crash.
+        _ => throw new ArgumentOutOfRangeException(nameof(banner)),
     };
 
     internal static string Text(CollectionBanner banner, AppState state) => banner switch
@@ -39,7 +40,7 @@ internal static class CollectionBannerPresentation
             failed.Collection,
             state.CollectionsCache.Published.TryGetValue(failed.Collection, out var binding) ? binding.Folder : "",
             failed.Message),
-        _ => string.Empty,
+        _ => throw new ArgumentOutOfRangeException(nameof(banner)),
     };
 
     internal static string Button(CollectionBanner banner) => banner switch
@@ -47,7 +48,7 @@ internal static class CollectionBannerPresentation
         CollectionBanner.UpdateAvailable => FlyoutModel.ReviewAndApplyButton,
         CollectionBanner.Locate locate => FlyoutModel.LocateButton(locate.FileName),
         CollectionBanner.PublishFailed => FlyoutModel.ChooseFolderButton,
-        _ => string.Empty,
+        _ => throw new ArgumentOutOfRangeException(nameof(banner)),
     };
 
     /// <summary>

@@ -18,8 +18,19 @@ public sealed class PublishModel : ObservableObject
     public const string PathNamePlaceholder = "placeholder name";
     public const string PublishButton = "Publish";
     public const string ExportButton = "Export…";
+    public const string CancelButton = "Cancel";
+    /// <summary>This sheet's own folder picker, not the failed-publish banner's button of the same words: a sheet's buttons are its model's, as Settings' and the Import sheet's already are.</summary>
+    public const string ChooseFolderButton = "Choose Folder…";
+    /// <summary>What a screen reader says for the bare tick beside a path row, which has no visible label.</summary>
+    public const string MarkPathLabel = "Mark as a path this machine supplies";
 
     public static string Title(string collection) => $"Publish “{collection}”";
+
+    /// <summary>
+    /// The sheet's own title in export mode. No trailing ellipsis: the one on the menu item that
+    /// opens it (<see cref="FlyoutModel.ExportTitleFor"/>) says a sheet follows, and this is that sheet.
+    /// </summary>
+    public static string ExportTitle(string collection) => $"Export “{collection}”";
 
     /// <summary>"this PC" is the platform-forced half of this sentence; the Mac mirror says "this Mac".</summary>
     public static string FolderLine(string fileName) => $"writes {fileName} from this PC on every change";
@@ -31,30 +42,52 @@ public sealed class PublishModel : ObservableObject
     /// <summary>
     /// One environment variable of one connector. Stripped by default: its name and hint travel,
     /// its value does not. A class, not a record: the sheet edits <see cref="Share"/> and
-    /// <see cref="Hint"/> in place through two-way bindings.
+    /// <see cref="Hint"/> in place through two-way bindings. It raises PropertyChanged so the
+    /// model can re-raise what a tick changes; the Mac needs none of this, because its rows are
+    /// structs inside a @Published array and the array itself is what announces the edit.
     /// </summary>
-    public sealed class EnvRow(string connector, string name, bool share, string hint)
+    public sealed class EnvRow(string connector, string name, string value, bool share, string hint) : ObservableObject
     {
+        private bool share = share;
+        private string hint = hint;
+
         public string Id { get; } = connector + "/env/" + name;
         public string Connector { get; } = connector;
         public string Name { get; } = name;
-        public bool Share { get; set; } = share;
-        public string Hint { get; set; } = hint;
+
+        /// <summary>
+        /// What the variable holds now, in full and unelided, so the tick beside it is a decision
+        /// made with the value in view. Shortening it is the sheet's business, not the model's.
+        /// </summary>
+        public string Value { get; } = value;
+
+        public bool Share { get => share; set => Set(ref share, value); }
+
+        public string Hint { get => hint; set => Set(ref hint, value); }
     }
 
     /// <summary>
     /// One argument that looks like a path on this machine. Marking it replaces it with a
-    /// placeholder every recipient fills in for themselves.
+    /// placeholder every recipient fills in for themselves. Raises PropertyChanged for the reason
+    /// <see cref="EnvRow"/> does.
     /// </summary>
     public sealed class PathRow(string connector, JsonPointer pointer, string value, bool marked, string name, string hint)
+        : ObservableObject
     {
+        private bool marked = marked;
+        private string name = name;
+        private string hint = hint;
+
         public string Id { get; } = connector + pointer;
         public string Connector { get; } = connector;
         public JsonPointer Pointer { get; } = pointer;
         public string Value { get; } = value;
-        public bool Marked { get; set; } = marked;
-        public string Name { get; set; } = name;
-        public string Hint { get; set; } = hint;
+
+        public bool Marked { get => marked; set => Set(ref marked, value); }
+
+        public string Name { get => name; set => Set(ref name, value); }
+
+        public string Hint { get => hint; set => Set(ref hint, value); }
     }
 
     private readonly AppState state;
@@ -82,9 +115,11 @@ public sealed class PublishModel : ObservableObject
             IReadOnlyDictionary<string, string> hints = intent.Hints.TryGetValue(name, out var h)
                 ? h
                 : new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var key in EnvNames(config))
+            var variables = Env(config);
+            foreach (var key in variables.Keys.Order(StringComparer.Ordinal))
             {
-                env.Add(new EnvRow(name, key, shared.Contains(key), hints.GetValueOrDefault(key) ?? string.Empty));
+                env.Add(new EnvRow(name, key, variables[key], shared.Contains(key),
+                                   hints.GetValueOrDefault(key) ?? string.Empty));
             }
             var arguments = Arguments(config);
             var found = 0;
@@ -101,18 +136,72 @@ public sealed class PublishModel : ObservableObject
                                       mark?.Name ?? DefaultPathName(found), mark?.Hint ?? string.Empty));
             }
         }
-        EnvRows = env;
-        PathRows = paths;
+        ReplaceRows(env, paths);
     }
 
     public string Collection { get; }
 
     /// <summary>Where the document is written, null until the user chooses. Settable: the sheet's Choose Folder… is the only thing that fills it.</summary>
-    public string? Folder { get => folder; set => Set(ref folder, value); }
+    public string? Folder
+    {
+        get => folder;
+        set
+        {
+            if (Set(ref folder, value))
+            {
+                Raise(nameof(CanPublish));
+            }
+        }
+    }
 
-    public IReadOnlyList<EnvRow> EnvRows { get; }
+    public IReadOnlyList<EnvRow> EnvRows { get; private set; } = [];
 
-    public IReadOnlyList<PathRow> PathRows { get; }
+    public IReadOnlyList<PathRow> PathRows { get; private set; } = [];
+
+    /// <summary>
+    /// Whether each section has anything to show. A collection of remote connectors with no
+    /// passthrough environment has neither, and an empty heading over nothing is worse than no
+    /// heading; the sheet binds these rather than counting rows itself.
+    /// </summary>
+    public bool HasEnvRows => EnvRows.Count > 0;
+
+    public bool HasPathRows => PathRows.Count > 0;
+
+    /// <summary>
+    /// Takes a new set of rows, listening to each one and letting the previous set go. Every tick
+    /// and every keystroke in a row changes what the document says, so the model re-raises what
+    /// the rows feed rather than leaving the sheet to refresh itself. The rows live and die with
+    /// this model, so there is nothing to unsubscribe beyond a replacement.
+    /// </summary>
+    private void ReplaceRows(IReadOnlyList<EnvRow> env, IReadOnlyList<PathRow> paths)
+    {
+        foreach (var row in EnvRows)
+        {
+            row.PropertyChanged -= OnRowChanged;
+        }
+        foreach (var row in PathRows)
+        {
+            row.PropertyChanged -= OnRowChanged;
+        }
+        EnvRows = env;
+        PathRows = paths;
+        foreach (var row in env)
+        {
+            row.PropertyChanged += OnRowChanged;
+        }
+        foreach (var row in paths)
+        {
+            row.PropertyChanged += OnRowChanged;
+        }
+    }
+
+    /// <summary>Everything below the rows is derived from them, and nothing above is.</summary>
+    private void OnRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        Raise(nameof(Intent));
+        Raise(nameof(Preview));
+        Raise(nameof(Warnings));
+    }
 
     /// <summary>The Mac calls this <c>title</c>; here the static factory already owns that name.</summary>
     public string SheetTitle => Title(Collection);
@@ -276,10 +365,8 @@ public sealed class PublishModel : ObservableObject
     // MARK: rows
 
     /// <summary>The environment variables the exporter will read, from the same place it reads them: a remote connector's are its passthrough env, a local one's are the config's own.</summary>
-    private static IReadOnlyList<string> EnvNames(JsonValue config) =>
-        RemotePattern.Decode(config) is { } remote
-            ? remote.PassthroughEnv.Keys.Order(StringComparer.Ordinal).ToList()
-            : FormMapper.Analyze(config).Model.Env.Keys.Order(StringComparer.Ordinal).ToList();
+    private static IReadOnlyDictionary<string, string> Env(JsonValue config) =>
+        RemotePattern.Decode(config) is { } remote ? remote.PassthroughEnv : FormMapper.Analyze(config).Model.Env;
 
     /// <summary>Only a local connector's arguments are the author's own. A remote connector's are built by the launcher on each machine, so there is nothing there to mark.</summary>
     private static IReadOnlyList<string> Arguments(JsonValue config) =>

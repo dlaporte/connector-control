@@ -179,7 +179,7 @@ public class ImportModelTests
     }
 
     [Fact]
-    public void TheNeedsTooltipListsTheNamesInOrder()
+    public void ARowsCautionIsTheSentenceAConnectorAlreadyCarries()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -187,10 +187,21 @@ public class ImportModelTests
         Write(CollectionDocumentSamples.DataTeam, path);
         var model = new ImportModel(state, path);
 
-        Assert.Equal("Needs your values: DBT_TOKEN", ImportModel.NeedsTooltip(["DBT_TOKEN"]));
-        Assert.Equal("Needs your values: DBT_TOKEN, server_path", ImportModel.NeedsTooltip(["DBT_TOKEN", "server_path"]));
-        // The row's own names, in the order the row already sorts them.
+        // The document's own needs, sorted, in the wording the window and the editor use.
         var dbt = model.Rows.Single(r => r.Name == "dbt");
-        Assert.Equal("Needs your values: DBT_TOKEN", ImportModel.NeedsTooltip(dbt.Needs));
+        Assert.Equal(["DBT_TOKEN"], dbt.Needs);
+        Assert.Equal(AppState.NeedsValueCaution("DBT_TOKEN"), dbt.NeedsCaution);
+        var notion = model.Rows.Single(r => r.Name == "notion");
+        Assert.Equal(["token"], notion.Needs);
+        Assert.Equal(AppState.NeedsValueCaution("token"), notion.NeedsCaution);
+
+        // No glyph for a connector the author left nothing to fill in.
+        var github = model.Rows.Single(r => r.Name == "github");
+        Assert.Empty(github.Needs);
+        Assert.Null(github.NeedsCaution);
+
+        // The same connector, once imported, says exactly the same thing in the window.
+        Assert.Null(model.Perform());
+        Assert.Equal(dbt.NeedsCaution, state.ConnectorCaution("dbt", "Default"));
     }
 }

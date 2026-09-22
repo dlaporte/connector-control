@@ -35,12 +35,6 @@ public sealed class ImportModel : ObservableObject
 
     public static string SkippedBadge(string reason) => $"skipped: {reason}";
 
-    /// <summary>
-    /// The caution glyph's tooltip on a row the author left values to fill in, naming them in
-    /// the order the row lists them.
-    /// </summary>
-    public static string NeedsTooltip(IEnumerable<string> names) => "Needs your values: " + string.Join(", ", names);
-
     public static string ImportButton(int count) =>
         "Import " + count.ToString(CultureInfo.InvariantCulture);
 
@@ -80,7 +74,7 @@ public sealed class ImportModel : ObservableObject
     /// bindings, where the Mac mutates a struct through its index.
     /// </summary>
     public sealed class Row(string name, bool include, bool present, ImportChoice choice,
-                            string? excludedReason, IReadOnlyList<string> needs)
+                            string? excludedReason, IReadOnlyList<string> needs, string? needsCaution)
     {
         public string Id { get; } = name;
         public string Name { get; } = name;
@@ -89,6 +83,13 @@ public sealed class ImportModel : ObservableObject
         public ImportChoice Choice { get; set; } = choice;
         public string? ExcludedReason { get; } = excludedReason;
         public IReadOnlyList<string> Needs { get; } = needs;
+
+        /// <summary>
+        /// The caution glyph's tooltip, or null for no glyph — the same sentence a connector of
+        /// the collection this row lands in already carries for the same condition, rather than a
+        /// second wording of it. Filled by the model, as <c>CollectionsModel.Row.Caution</c> is.
+        /// </summary>
+        public string? NeedsCaution { get; } = needsCaution;
     }
 
     private readonly AppState state;
@@ -238,11 +239,14 @@ public sealed class ImportModel : ObservableObject
         {
             var reason = rendered.Excluded.GetValueOrDefault(name);
             var present = held.ContainsKey(name);
+            // Sorted, unlike the config-marker caller's first-appearance order: these come from
+            // the document's Needs map, which has no order of its own.
             IReadOnlyList<string> needs = rendered.Connectors.TryGetValue(name, out var connector)
                 ? connector.Needs.Keys.Order(StringComparer.Ordinal).ToList()
                 : [];
             return new Row(name, reason is null && !present, present,
-                           present ? ImportChoice.Replace : ImportChoice.Add, reason, needs);
+                           present ? ImportChoice.Replace : ImportChoice.Add, reason, needs,
+                           needs.Count == 0 ? null : AppState.NeedsValueCaution(string.Join(", ", needs)));
         }).ToList();
     }
 

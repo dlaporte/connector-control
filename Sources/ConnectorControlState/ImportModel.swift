@@ -33,12 +33,6 @@ public final class ImportModel: ObservableObject {
 
     public static func skippedBadge(_ reason: String) -> String { "skipped: \(reason)" }
 
-    /// The caution glyph's tooltip on a row the author left values to fill in, naming them in
-    /// the order the row lists them.
-    public static func needsTooltip(_ names: [String]) -> String {
-        "Needs your values: \(names.joined(separator: ", "))"
-    }
-
     public static func importButton(_ count: Int) -> String { "Import \(count)" }
 
     /// What a collision offers, in the order the row's picker lists them. `add` is not among
@@ -72,9 +66,14 @@ public final class ImportModel: ObservableObject {
         public var choice: ImportChoice
         public let excludedReason: String?
         public let needs: [String]
+        /// The caution glyph's tooltip, or nil for no glyph — the same sentence a connector of
+        /// the collection this row lands in already carries for the same condition, rather than
+        /// a second wording of it. Filled by the model, as `CollectionsModel.Row.caution` is,
+        /// because the sentence belongs to AppState and a row is not on its actor.
+        public let needsCaution: String?
 
         public init(name: String, include: Bool, present: Bool, choice: ImportChoice,
-                    excludedReason: String?, needs: [String]) {
+                    excludedReason: String?, needs: [String], needsCaution: String?) {
             self.id = name
             self.name = name
             self.include = include
@@ -82,6 +81,7 @@ public final class ImportModel: ObservableObject {
             self.choice = choice
             self.excludedReason = excludedReason
             self.needs = needs
+            self.needsCaution = needsCaution
         }
     }
 
@@ -192,9 +192,13 @@ public final class ImportModel: ObservableObject {
         rows = Set(rendered.connectors.keys).union(rendered.excluded.keys).sorted().map { name in
             let reason = rendered.excluded[name]
             let present = held[name] != nil
+            // Sorted, unlike the config-marker caller's first-appearance order: these come from
+            // the document's `needs` map, which has no order of its own.
+            let needs = rendered.connectors[name]?.needs.keys.sorted() ?? []
             return Row(name: name, include: reason == nil && !present, present: present,
-                       choice: present ? .replace : .add, excludedReason: reason,
-                       needs: rendered.connectors[name]?.needs.keys.sorted() ?? [])
+                       choice: present ? .replace : .add, excludedReason: reason, needs: needs,
+                       needsCaution: needs.isEmpty
+                           ? nil : AppState.needsValueCaution(needs.joined(separator: ", ")))
         }
     }
 

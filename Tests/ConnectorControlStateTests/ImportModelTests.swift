@@ -146,18 +146,28 @@ final class ImportModelTests: XCTestCase {
                        ["Replace", "Keep both", "Skip"])
     }
 
-    func testTheNeedsTooltipListsTheNamesInOrder() throws {
+    func testARowsCautionIsTheSentenceAConnectorAlreadyCarries() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let url = h.dir.file("data-team.json")
         try write(CollectionDocumentSamples.dataTeam, at: url)
         let model = ImportModel(state: state, path: url.path)
 
-        XCTAssertEqual(ImportModel.needsTooltip(["DBT_TOKEN"]), "Needs your values: DBT_TOKEN")
-        XCTAssertEqual(ImportModel.needsTooltip(["DBT_TOKEN", "server_path"]),
-                       "Needs your values: DBT_TOKEN, server_path")
-        // The row's own names, in the order the row already sorts them.
+        // The document's own needs, sorted, in the wording the window and the editor use.
         let dbt = try XCTUnwrap(model.rows.first { $0.name == "dbt" })
-        XCTAssertEqual(ImportModel.needsTooltip(dbt.needs), "Needs your values: DBT_TOKEN")
+        XCTAssertEqual(dbt.needs, ["DBT_TOKEN"])
+        XCTAssertEqual(dbt.needsCaution, AppState.needsValueCaution("DBT_TOKEN"))
+        let notion = try XCTUnwrap(model.rows.first { $0.name == "notion" })
+        XCTAssertEqual(notion.needs, ["token"])
+        XCTAssertEqual(notion.needsCaution, AppState.needsValueCaution("token"))
+
+        // No glyph for a connector the author left nothing to fill in.
+        let github = try XCTUnwrap(model.rows.first { $0.name == "github" })
+        XCTAssertEqual(github.needs, [])
+        XCTAssertNil(github.needsCaution)
+
+        // The same connector, once imported, says exactly the same thing in the window.
+        XCTAssertNil(model.perform())
+        XCTAssertEqual(state.connectorCaution("dbt", in: "Default"), dbt.needsCaution)
     }
 }

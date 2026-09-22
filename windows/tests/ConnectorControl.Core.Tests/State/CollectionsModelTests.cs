@@ -315,6 +315,41 @@ public class CollectionsModelTests
         Assert.False(model.CanStopPublishing);
     }
 
+    [Fact]
+    public void AFailedPublishIsStoppedWithoutAskingAboutTheFile()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        var folder = h.Dir.File("share");
+        Directory.CreateDirectory(folder);
+        Assert.Null(state.CreateCollection("Shared"));
+        Assert.Null(state.StartPublishing("Shared", folder, PublishIntent.None));
+        var file = Path.Combine(folder, "shared.json");
+        Assert.True(File.Exists(file));
+
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Shared";
+        // The folder that refused the write would refuse the delete, so Remove is not offered.
+        state.PublishError = new CollectionPublishError("Shared", "the folder is read-only");
+        model.StopPublishing();
+        // Nothing to ask when Remove could not be honoured.
+        Assert.Empty(h.Dialogs.Confirms);
+        Assert.False(state.IsPublished("Shared"));
+        // The document stays where it is.
+        Assert.True(File.Exists(file));
+        Assert.Null(state.PublishError);
+
+        // Another collection's failure is not this one's, so the question comes back.
+        Assert.Null(state.CreateCollection("Consulting"));
+        Assert.Null(state.StartPublishing("Consulting", folder, PublishIntent.None));
+        model.Selected = "Consulting";
+        state.PublishError = new CollectionPublishError("Shared", "the folder is read-only");
+        h.Dialogs.ConfirmAnswers.Enqueue(false);
+        model.StopPublishing();
+        Assert.Equal([CollectionsModel.DeletePublishedFileQuestion("consulting.json")],
+                     h.Dialogs.Confirms.Select(c => c.Message));
+    }
+
     // MARK: toggles
 
     [Fact]

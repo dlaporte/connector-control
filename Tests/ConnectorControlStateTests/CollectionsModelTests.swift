@@ -301,6 +301,38 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertFalse(model.canStopPublishing)
     }
 
+    func testAFailedPublishIsStoppedWithoutAskingAboutTheFile() throws {
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        let folder = h.dir.file("share")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        XCTAssertNil(state.createCollection(named: "Shared"))
+        XCTAssertNil(state.startPublishing("Shared", to: folder.path, intent: .none))
+        let file = folder.appendingPathComponent("shared.json")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Shared"
+        // The folder that refused the write would refuse the delete, so Remove is not offered.
+        state.publishError = (collection: "Shared", message: "the folder is read-only")
+        model.stopPublishing()
+        XCTAssertTrue(h.dialogs.confirms.isEmpty, "nothing to ask when Remove could not be honoured")
+        XCTAssertFalse(state.isPublished("Shared"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path), "the document stays where it is")
+        XCTAssertNil(state.publishError)
+
+        // Another collection's failure is not this one's, so the question comes back.
+        XCTAssertNil(state.createCollection(named: "Consulting"))
+        XCTAssertNil(state.startPublishing("Consulting", to: folder.path, intent: .none))
+        model.selected = "Consulting"
+        state.publishError = (collection: "Shared", message: "the folder is read-only")
+        h.dialogs.confirmAnswers = [false]
+        model.stopPublishing()
+        XCTAssertEqual(h.dialogs.confirms.map(\.message),
+                       [CollectionsModel.deletePublishedFileQuestion("consulting.json")])
+    }
+
     // MARK: - Toggles
 
     func testSetEnabledInAnInactiveCollectionLeavesClaudesConfigAlone() throws {

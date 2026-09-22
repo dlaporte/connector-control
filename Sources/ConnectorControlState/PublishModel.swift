@@ -18,8 +18,18 @@ public final class PublishModel: ObservableObject {
     public static let pathNamePlaceholder = "placeholder name"
     public static let publishButton = "Publish"
     public static let exportButton = "Export…"
+    public static let cancelButton = "Cancel"
+    /// This sheet's own folder picker, not the failed-publish banner's button of the same words:
+    /// a sheet's buttons are its model's, as Settings' and the Import sheet's already are.
+    public static let chooseFolderButton = "Choose Folder…"
+    /// What a screen reader says for the bare tick beside a path row, which has no visible label.
+    public static let markPathLabel = "Mark as a path this machine supplies"
 
     public static func title(_ collection: String) -> String { "Publish “\(collection)”" }
+
+    /// The sheet's own title in export mode. No trailing ellipsis: the one on the menu item that
+    /// opens it (`PopoverModel.exportTitleFor`) says a sheet follows, and this is that sheet.
+    public static func exportTitle(_ collection: String) -> String { "Export “\(collection)”" }
 
     /// "this Mac" is the platform-forced half of this sentence; the Windows mirror says "this PC".
     public static func folderLine(_ fileName: String) -> String { "writes \(fileName) from this Mac on every change" }
@@ -35,13 +45,17 @@ public final class PublishModel: ObservableObject {
         public let id: String
         public let connector: String
         public let name: String
+        /// What the variable holds now, in full and unelided, so the tick beside it is a decision
+        /// made with the value in view. Shortening it is the sheet's business, not the model's.
+        public let value: String
         public var share: Bool
         public var hint: String
 
-        public init(connector: String, name: String, share: Bool, hint: String) {
+        public init(connector: String, name: String, value: String, share: Bool, hint: String) {
             self.id = connector + "/env/" + name
             self.connector = connector
             self.name = name
+            self.value = value
             self.share = share
             self.hint = hint
         }
@@ -92,8 +106,10 @@ public final class PublishModel: ObservableObject {
             guard let config = connectors[name]?.config else { continue }
             let shared = intent.shareValues[name] ?? []
             let hints = intent.hints[name] ?? [:]
-            for key in PublishModel.envNames(of: config) {
-                env.append(EnvRow(connector: name, name: key, share: shared.contains(key), hint: hints[key] ?? ""))
+            let variables = PublishModel.env(of: config)
+            for key in variables.keys.sorted() {
+                env.append(EnvRow(connector: name, name: key, value: variables[key] ?? "",
+                                  share: shared.contains(key), hint: hints[key] ?? ""))
             }
             var found = 0
             for (index, argument) in PublishModel.arguments(of: config).enumerated()
@@ -121,6 +137,13 @@ public final class PublishModel: ObservableObject {
     }
 
     public var folderLine: String { PublishModel.folderLine(fileName) }
+
+    /// Whether each section has anything to show. A collection of remote connectors with no
+    /// passthrough environment has neither, and an empty heading over nothing is worse than no
+    /// heading; the sheet binds these rather than counting rows itself.
+    public var hasEnvRows: Bool { !envRows.isEmpty }
+
+    public var hasPathRows: Bool { !pathRows.isEmpty }
 
     /// The eight characters of the origin the footer shows — enough to tell one publisher's
     /// document from another's at a glance, which is all the footer is for. Empty until the
@@ -206,9 +229,9 @@ public final class PublishModel: ObservableObject {
 
     /// The environment variables the exporter will read, from the same place it reads them: a
     /// remote connector's are its passthrough env, a local one's are the config's own.
-    private static func envNames(of config: JSONValue) -> [String] {
-        if let remote = RemotePattern.decode(config) { return remote.passthroughEnv.keys.sorted() }
-        return FormMapper.analyze(config).model.env.keys.sorted()
+    private static func env(of config: JSONValue) -> [String: String] {
+        if let remote = RemotePattern.decode(config) { return remote.passthroughEnv }
+        return FormMapper.analyze(config).model.env
     }
 
     /// Only a local connector's arguments are the author's own. A remote connector's are built by

@@ -232,4 +232,96 @@ public class PublishModelTests
         // The document an export writes carries that same origin, so both sheets show one thing.
         Assert.Equal(origin, state.ExportDocument(collection, PublishIntent.None).Origin);
     }
+    [Fact]
+    public void EachSectionKnowsWhetherItHasAnythingToShow()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var model = new PublishModel(state, state.ActiveCollection);
+        Assert.True(model.HasEnvRows);
+        Assert.True(model.HasPathRows);
+
+        // A remote connector carries no passthrough environment and no arguments of its own, so
+        // the sheet over one has neither section.
+        Assert.Null(state.CreateCollection("Remote"));
+        state.Remove("c", "Remote");
+        Assert.Null(state.Upsert("r", new McpEntry(AppStateHarness.Remote("https://r.example/mcp")), null, "Remote"));
+        var bare = new PublishModel(state, "Remote");
+        Assert.Empty(bare.EnvRows);
+        Assert.Empty(bare.PathRows);
+        Assert.False(bare.HasEnvRows);
+        Assert.False(bare.HasPathRows);
+    }
+
+    [Fact]
+    public void AnEnvRowCarriesTheValueTheTickWouldPublish()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var model = new PublishModel(state, state.ActiveCollection);
+
+        // In full and unelided: the tick beside it is a decision about exactly these bytes.
+        Assert.Equal(["A", "B"], model.EnvRows.Select(r => r.Name));
+        Assert.Equal(["sk-live-secret", "us"], model.EnvRows.Select(r => r.Value));
+        // Stripped until it is ticked.
+        Assert.DoesNotContain("sk-live-secret", model.Preview, StringComparison.Ordinal);
+        model.EnvRows[0].Share = true;
+        Assert.Contains("sk-live-secret", model.Preview, StringComparison.Ordinal);
+        // The tick does not change what is there.
+        Assert.Equal("sk-live-secret", model.EnvRows[0].Value);
+    }
+
+    [Fact]
+    public void TheSheetOwnsItsButtonsAndItsExportTitle()
+    {
+        Assert.Equal("Cancel", PublishModel.CancelButton);
+        Assert.Equal("Choose Folder…", PublishModel.ChooseFolderButton);
+        Assert.Equal("Mark as a path this machine supplies", PublishModel.MarkPathLabel);
+        // The menu item that opens this sheet ends in an ellipsis; the sheet itself does not.
+        Assert.Equal("Export “Data team”", PublishModel.ExportTitle("Data team"));
+        Assert.Equal("Export “Data team”…", FlyoutModel.ExportTitleFor("Data team"));
+    }
+
+    /// <summary>
+    /// The Mac has no mirror of this: its rows are structs inside @Published arrays, so editing
+    /// one publishes the array. Here the rows are objects the sheet edits in place, and this is
+    /// what spares the dialog a refresh of its own after every tick and keystroke.
+    /// </summary>
+    [Fact]
+    public void EditingARowRaisesWhatIsDerivedFromItWithoutAViewCall()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var model = new PublishModel(state, state.ActiveCollection);
+        var raised = new List<string>();
+        model.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");
+
+        model.EnvRows[0].Share = true;
+        Assert.Contains(nameof(PublishModel.Preview), raised);
+        Assert.Contains(nameof(PublishModel.Warnings), raised);
+        Assert.Contains(nameof(PublishModel.Intent), raised);
+
+        // A keystroke in a hint counts too, and so does a path row.
+        raised.Clear();
+        model.EnvRows[1].Hint = "the region";
+        Assert.Contains(nameof(PublishModel.Preview), raised);
+        raised.Clear();
+        model.PathRows[0].Marked = true;
+        Assert.Contains(nameof(PublishModel.Preview), raised);
+        raised.Clear();
+        model.PathRows[0].Name = "server";
+        Assert.Contains(nameof(PublishModel.Preview), raised);
+
+        // Setting a row to what it already holds says nothing.
+        raised.Clear();
+        model.PathRows[0].Marked = true;
+        Assert.Empty(raised);
+
+        // Choosing a folder is what decides whether Publish is reachable.
+        raised.Clear();
+        Assert.False(model.CanPublish);
+        model.Folder = PublishFolder(h);
+        Assert.True(model.CanPublish);
+        Assert.Contains(nameof(PublishModel.CanPublish), raised);
+    }
 }

@@ -111,7 +111,6 @@ public class StringCatalogTests
         ["FlyoutModel.settingsNotSavedCaution"] = ["X"],
         ["ImportModel.addModeTitle"] = ["X"],
         ["ImportModel.importButton"] = ["3"],
-        ["ImportModel.needsTooltip"] = ["X, Y"],
         ["ImportModel.skippedBadge"] = ["X"],
         ["ImportModel.sourceLine"] = ["X", "Y", "3"],
         ["MasterStore.duplicateCollectionNameError"] = ["X"],
@@ -121,6 +120,7 @@ public class StringCatalogTests
         ["PopoverModel.locateButton"] = ["X"],
         ["PopoverModel.sourceTooltipFormat"] = ["X"],
         ["PublishModel.folderLine"] = ["X"],
+        ["PublishModel.exportTitle"] = ["X"],
         ["PublishModel.footerLine"] = ["X", "Y"],
         ["PublishModel.title"] = ["X"],
         ["PublishModel.warningLine"] = ["X", "Y"],
@@ -321,7 +321,6 @@ public class StringCatalogTests
         actual["ImportModel.addTitle"] = ImportModel.AddTitle;
         actual["ImportModel.cancelButton"] = ImportModel.CancelButton;
         actual["ImportModel.importButton"] = ImportModel.ImportButton(3);
-        actual["ImportModel.needsTooltip"] = ImportModel.NeedsTooltip(["X", "Y"]);
         actual["ImportModel.keepBothTitle"] = ImportModel.KeepBothTitle;
         actual["ImportModel.newBadge"] = ImportModel.NewBadge;
         actual["ImportModel.presentBadge"] = ImportModel.PresentBadge;
@@ -372,11 +371,15 @@ public class StringCatalogTests
 
         // MARK: PublishModel
 
+        actual["PublishModel.cancelButton"] = PublishModel.CancelButton;
+        actual["PublishModel.chooseFolderButton"] = PublishModel.ChooseFolderButton;
         actual["PublishModel.envSectionTitle"] = PublishModel.EnvSectionTitle;
         actual["PublishModel.exportButton"] = PublishModel.ExportButton;
+        actual["PublishModel.exportTitle"] = PublishModel.ExportTitle("X");
         actual["PublishModel.folderLine"] = PublishModel.FolderLine("X");
         actual["PublishModel.footerLine"] = PublishModel.FooterLine("X", "Y");
         actual["PublishModel.hintPlaceholder"] = PublishModel.HintPlaceholder;
+        actual["PublishModel.markPathLabel"] = PublishModel.MarkPathLabel;
         actual["PublishModel.pathNamePlaceholder"] = PublishModel.PathNamePlaceholder;
         actual["PublishModel.pathsSectionTitle"] = PublishModel.PathsSectionTitle;
         actual["PublishModel.previewTitle"] = PublishModel.PreviewTitle;

@@ -103,7 +103,6 @@ final class StringCatalogTests: XCTestCase {
         "EditorModel.removedOutsideMessage": ["X"],
         "ImportModel.addModeTitle": ["X"],
         "ImportModel.importButton": ["3"],
-        "ImportModel.needsTooltip": ["X, Y"],
         "ImportModel.skippedBadge": ["X"],
         "ImportModel.sourceLine": ["X", "Y", "3"],
         "MasterStore.duplicateCollectionNameError": ["X"],
@@ -113,6 +112,7 @@ final class StringCatalogTests: XCTestCase {
         "PopoverModel.locateButton": ["X"],
         "PopoverModel.sourceTooltipFormat": ["X"],
         "PublishModel.folderLine": ["X"],
+        "PublishModel.exportTitle": ["X"],
         "PublishModel.footerLine": ["X", "Y"],
         "PublishModel.title": ["X"],
         "PublishModel.warningLine": ["X", "Y"],
@@ -289,7 +289,6 @@ final class StringCatalogTests: XCTestCase {
         actual["ImportModel.addTitle"] = ImportModel.addTitle
         actual["ImportModel.cancelButton"] = ImportModel.cancelButton
         actual["ImportModel.importButton"] = ImportModel.importButton(3)
-        actual["ImportModel.needsTooltip"] = ImportModel.needsTooltip(["X", "Y"])
         actual["ImportModel.keepBothTitle"] = ImportModel.keepBothTitle
         actual["ImportModel.newBadge"] = ImportModel.newBadge
         actual["ImportModel.presentBadge"] = ImportModel.presentBadge
@@ -340,11 +339,15 @@ final class StringCatalogTests: XCTestCase {
 
         // MARK: PublishModel
 
+        actual["PublishModel.cancelButton"] = PublishModel.cancelButton
+        actual["PublishModel.chooseFolderButton"] = PublishModel.chooseFolderButton
         actual["PublishModel.envSectionTitle"] = PublishModel.envSectionTitle
         actual["PublishModel.exportButton"] = PublishModel.exportButton
+        actual["PublishModel.exportTitle"] = PublishModel.exportTitle("X")
         actual["PublishModel.folderLine"] = PublishModel.folderLine("X")
         actual["PublishModel.footerLine"] = PublishModel.footerLine("X", "Y")
         actual["PublishModel.hintPlaceholder"] = PublishModel.hintPlaceholder
+        actual["PublishModel.markPathLabel"] = PublishModel.markPathLabel
         actual["PublishModel.pathNamePlaceholder"] = PublishModel.pathNamePlaceholder
         actual["PublishModel.pathsSectionTitle"] = PublishModel.pathsSectionTitle
         actual["PublishModel.previewTitle"] = PublishModel.previewTitle

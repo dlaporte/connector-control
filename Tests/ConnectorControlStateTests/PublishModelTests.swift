@@ -181,6 +181,49 @@ final class PublishModelTests: XCTestCase {
         XCTAssertTrue(model.preview.contains("/Users/d/x.js"))
     }
 
+    func testEachSectionKnowsWhetherItHasAnythingToShow() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let model = PublishModel(state: state, collection: state.activeCollection)
+        XCTAssertTrue(model.hasEnvRows)
+        XCTAssertTrue(model.hasPathRows)
+
+        // A remote connector carries no passthrough environment and no arguments of its own,
+        // so the sheet over one has neither section.
+        XCTAssertNil(state.createCollection(named: "Remote"))
+        state.remove(name: "c", in: "Remote")
+        XCTAssertNil(state.upsert(name: "r", entry: MCPEntry(config: AppStateHarness.remote("https://r.example/mcp")),
+                                  renamedFrom: nil, in: "Remote"))
+        let bare = PublishModel(state: state, collection: "Remote")
+        XCTAssertEqual(bare.envRows, [])
+        XCTAssertEqual(bare.pathRows, [])
+        XCTAssertFalse(bare.hasEnvRows)
+        XCTAssertFalse(bare.hasPathRows)
+    }
+
+    func testAnEnvRowCarriesTheValueTheTickWouldPublish() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let model = PublishModel(state: state, collection: state.activeCollection)
+
+        // In full and unelided: the tick beside it is a decision about exactly these bytes.
+        XCTAssertEqual(model.envRows.map(\.name), ["A", "B"])
+        XCTAssertEqual(model.envRows.map(\.value), ["sk-live-secret", "us"])
+        XCTAssertFalse(model.preview.contains("sk-live-secret"), "stripped until it is ticked")
+        model.envRows[0].share = true
+        XCTAssertTrue(model.preview.contains("sk-live-secret"))
+        XCTAssertEqual(model.envRows[0].value, "sk-live-secret", "the tick does not change what is there")
+    }
+
+    func testTheSheetOwnsItsButtonsAndItsExportTitle() {
+        XCTAssertEqual(PublishModel.cancelButton, "Cancel")
+        XCTAssertEqual(PublishModel.chooseFolderButton, "Choose Folder…")
+        XCTAssertEqual(PublishModel.markPathLabel, "Mark as a path this machine supplies")
+        // The menu item that opens this sheet ends in an ellipsis; the sheet itself does not.
+        XCTAssertEqual(PublishModel.exportTitle("Data team"), "Export “Data team”")
+        XCTAssertEqual(PopoverModel.exportTitleFor("Data team"), "Export “Data team”…")
+    }
+
     func testTheFooterNamesTheFileAndTheOriginOnceThereIsOne() throws {
         let (h, state) = try started()
         defer { h.dispose() }

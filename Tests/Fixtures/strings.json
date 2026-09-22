@@ -255,9 +255,6 @@
     "format": "Import {0}"
   },
   "ImportModel.keepBothTitle": "Keep both",
-  "ImportModel.needsTooltip": {
-    "format": "Needs your values: {0}"
-  },
   "ImportModel.newBadge": "new · arrives off",
   "ImportModel.presentBadge": "already present · skipped",
   "ImportModel.replaceKeepsValues": "keeps your filled values",
@@ -307,8 +304,13 @@
     "format": "Synced from {0}"
   },
   "PopoverModel.title": "Connector Control",
+  "PublishModel.cancelButton": "Cancel",
+  "PublishModel.chooseFolderButton": "Choose Folder…",
   "PublishModel.envSectionTitle": "Environment values · stripped unless shared",
   "PublishModel.exportButton": "Export…",
+  "PublishModel.exportTitle": {
+    "format": "Export “{0}”"
+  },
   "PublishModel.folderLine": {
     "mac": {
       "format": "writes {0} from this Mac on every change"
@@ -321,6 +323,7 @@
     "format": "{0} · {1}"
   },
   "PublishModel.hintPlaceholder": "hint for recipients",
+  "PublishModel.markPathLabel": "Mark as a path this machine supplies",
   "PublishModel.pathNamePlaceholder": "placeholder name",
   "PublishModel.pathsSectionTitle": "Machine-specific paths · found in arguments",
   "PublishModel.previewTitle": "Document preview",
