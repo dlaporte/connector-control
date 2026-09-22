@@ -89,6 +89,10 @@ final class StringCatalogTests: XCTestCase {
         "EditorModel.additionalTitle": ["3", "a, b"],
         "EditorModel.changedOutsideMessage": ["X"],
         "EditorModel.duplicateEnvError": ["X"],
+        "EditorModel.importedNote": ["X", "Y"],
+        "EditorModel.lockedFieldsNote": ["X"],
+        "EditorModel.propagateLabel": ["X", "Y"],
+        "EditorModel.publishedNote": ["X"],
         "EditorModel.removeMessage": ["X"],
         "EditorModel.removedOutsideMessage": ["X"],
         "ImportModel.addModeTitle": ["X"],
@@ -216,11 +220,18 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.envNamelessError"] = EditorModel.envNamelessError
         actual["EditorModel.headerNameError"] = EditorModel.headerNameError
         actual["EditorModel.headerValueError"] = EditorModel.headerValueError
+        actual["EditorModel.importedNote"] = EditorModel.importedNote("X", "Y")
         actual["EditorModel.invalidURLError"] = EditorModel.invalidURLError
         actual["EditorModel.jsonTip"] = EditorModel.jsonTip
+        actual["EditorModel.lockedFieldsNote"] = EditorModel.lockedFieldsNote("X")
         actual["EditorModel.lossWarningPrefix"] = EditorModel.lossWarningPrefix
+        actual["EditorModel.makeLocalCopyButton"] = EditorModel.makeLocalCopyButton
+        actual["EditorModel.needsPath"] = EditorModel.needsPath
+        actual["EditorModel.needsValue"] = EditorModel.needsValue
         actual["EditorModel.notValidJSON"] = EditorModel.notValidJSON
         actual["EditorModel.oauthSecretCaption"] = EditorModel.oauthSecretCaption
+        actual["EditorModel.propagateLabel"] = EditorModel.propagateLabel("X", "Y")
+        actual["EditorModel.publishedNote"] = EditorModel.publishedNote("X")
         actual["EditorModel.remoteFooter"] = EditorModel.remoteFooter
         actual["EditorModel.removeButton"] = EditorModel.removeButton
         actual["EditorModel.removeInformative"] = EditorModel.removeInformative
@@ -231,6 +242,8 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.stayInJSONButton"] = EditorModel.stayInJSONButton
         actual["EditorModel.switchAnywayButton"] = EditorModel.switchAnywayButton
         actual["EditorModel.urlHint"] = EditorModel.urlHint
+        actual["EditorModel.whatCanIChange"] = EditorModel.whatCanIChange
+        actual["EditorModel.whatCanIChangeAnswer"] = EditorModel.whatCanIChangeAnswer
 
         // MARK: ImportModel
 

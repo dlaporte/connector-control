@@ -805,34 +805,57 @@ public sealed class AppState : ObservableObject, IDisposable
         RaiseAll();
     }
 
-    /// <summary>Validates and saves an entry. Returns an error message, or null on success.</summary>
-    public string? Upsert(string name, McpEntry entry, string? renamedFrom)
+    /// <summary>
+    /// Validates and saves an entry into <paramref name="collection"/> (null: the active one).
+    /// Returns an error message, or null on success.
+    ///
+    /// Only the active collection reaches Claude, so a write to any other one stops at the
+    /// store: the caller's apply finds nothing Claude runs has changed and writes nothing.
+    /// </summary>
+    public string? Upsert(string name, McpEntry entry, string? renamedFrom, string? collection = null)
     {
+        var mcps = McpsIn(collection);
         var trimmed = name.TrimSpaces();
         if (trimmed.Length == 0)
         {
             return NameEmptyError;
         }
-        if (trimmed != renamedFrom && Store.Mcps.ContainsKey(trimmed))
+        if (trimmed != renamedFrom && mcps.ContainsKey(trimmed))
         {
             return DuplicateNameError(trimmed);
         }
         if (renamedFrom is { } old && old != trimmed)
         {
-            Store.Mcps.Remove(old);
+            mcps.Remove(old);
         }
-        Store.Mcps[trimmed] = entry;
+        mcps[trimmed] = entry;
         PersistStore();
         RaiseAll();
         return null;
     }
 
     /// <summary>Removes and persists; the caller applies (both happen in one turn).</summary>
-    public void Remove(string name)
+    public void Remove(string name, string? collection = null)
     {
-        Store.Mcps.Remove(name);
+        McpsIn(collection).Remove(name);
         PersistStore();
         RaiseAll();
+    }
+
+    /// <summary>
+    /// A named collection's connectors, ready to be written to. Store.Mcps is deliberately
+    /// side-effect free, so the one place that may create a missing collection is here — the
+    /// same thing Swift's <c>store.collections[target, default: Collection()]</c> does.
+    /// </summary>
+    private Dictionary<string, McpEntry> McpsIn(string? collection)
+    {
+        var target = collection ?? ActiveCollection;
+        if (!Store.Collections.TryGetValue(target, out var held))
+        {
+            held = new Collection();
+            Store.Collections[target] = held;
+        }
+        return held.Mcps;
     }
 
     // MARK: restart-required derivation
@@ -1891,16 +1914,6 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Every collection this machine publishes, written when what it says has changed. Only the
-    /// bindings in this machine's cache: the sidecar travels with the master list, so another
-    /// machine's publish folder is recorded there but is that machine's to write.
-    /// <para>
-    /// <paramref name="forced"/> names the one collection whose write happens whether or not the
-    /// document changed — a retry, where the recorded hash says the bytes are in a folder they
-    /// never reached.
-    /// </para>
-    /// </summary>
-    /// <summary>
     /// Publish now, whatever the recorded hash says: the sheet's Publish button pressed again
     /// after a write failed, where nothing about the document has changed and the only thing that
     /// did is that the folder is reachable again. null on success, else the message.
@@ -1916,6 +1929,15 @@ public sealed class AppState : ObservableObject, IDisposable
         return PublishError?.Collection == collection ? PublishError.Message : null;
     }
 
+    /// <summary>
+    /// Every collection this machine publishes, written when what it says has changed. Only the
+    /// bindings in this machine's cache: the sidecar travels with the master list, so another
+    /// machine's publish folder is recorded there but is that machine's to write.
+    /// </summary>
+    /// <param name="forced">
+    /// The one collection whose write happens whether or not the document changed — a retry,
+    /// where the recorded hash says the bytes are in a folder they never reached.
+    /// </param>
     internal void PublishIfChanged(string? forced = null)
     {
         if (CollectionsCache.Published.Count == 0)

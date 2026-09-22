@@ -624,22 +624,28 @@ public final class AppState: ObservableObject {
         performApply()
     }
 
-    /// Validates and saves an entry. Returns an error message, or nil on success.
-    public func upsert(name: String, entry: MCPEntry, renamedFrom oldName: String?) -> String? {
+    /// Validates and saves an entry into `collection` (nil: the active one). Returns an error
+    /// message, or nil on success.
+    ///
+    /// Only the active collection reaches Claude, so a write to any other one stops at the
+    /// store: the caller's apply finds nothing Claude runs has changed and writes nothing.
+    public func upsert(name: String, entry: MCPEntry, renamedFrom oldName: String?,
+                       in collection: String? = nil) -> String? {
+        let target = collection ?? activeCollection
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return AppState.nameEmptyError }
-        if trimmed != oldName, store.mcps[trimmed] != nil {
+        if trimmed != oldName, store.collections[target]?.mcps[trimmed] != nil {
             return AppState.duplicateNameError(trimmed)
         }
-        if let old = oldName, old != trimmed { store.mcps.removeValue(forKey: old) }
-        store.mcps[trimmed] = entry
+        if let old = oldName, old != trimmed { store.collections[target]?.mcps.removeValue(forKey: old) }
+        store.collections[target, default: Collection()].mcps[trimmed] = entry
         persistStore()
         return nil
     }
 
     /// Removes and persists; the caller applies (the editor's remove flow does both in one turn).
-    public func remove(name: String) {
-        store.mcps.removeValue(forKey: name)
+    public func remove(name: String, in collection: String? = nil) {
+        store.collections[collection ?? activeCollection]?.mcps.removeValue(forKey: name)
         persistStore()
     }
 

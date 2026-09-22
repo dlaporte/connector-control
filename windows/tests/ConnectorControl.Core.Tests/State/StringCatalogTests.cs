@@ -96,6 +96,10 @@ public class StringCatalogTests
         ["EditorModel.changedOutsideMessage"] = ["X"],
         ["EditorModel.cmdUnsafeError"] = ["X"],
         ["EditorModel.duplicateEnvError"] = ["X"],
+        ["EditorModel.importedNote"] = ["X", "Y"],
+        ["EditorModel.lockedFieldsNote"] = ["X"],
+        ["EditorModel.propagateLabel"] = ["X", "Y"],
+        ["EditorModel.publishedNote"] = ["X"],
         ["EditorModel.removeMessage"] = ["X"],
         ["EditorModel.removedOutsideMessage"] = ["X"],
         ["FlyoutModel.settingsNotSavedCaution"] = ["X"],
@@ -242,11 +246,18 @@ public class StringCatalogTests
         actual["EditorModel.envNamelessError"] = EditorModel.EnvNamelessError;
         actual["EditorModel.headerNameError"] = EditorModel.HeaderNameError;
         actual["EditorModel.headerValueError"] = EditorModel.HeaderValueError;
+        actual["EditorModel.importedNote"] = EditorModel.ImportedNote("X", "Y");
         actual["EditorModel.invalidURLError"] = EditorModel.InvalidUrlError;
         actual["EditorModel.jsonTip"] = EditorModel.JsonTip;
+        actual["EditorModel.lockedFieldsNote"] = EditorModel.LockedFieldsNote("X");
         actual["EditorModel.lossWarningPrefix"] = EditorModel.LossWarningPrefix;
+        actual["EditorModel.makeLocalCopyButton"] = EditorModel.MakeLocalCopyButton;
+        actual["EditorModel.needsPath"] = EditorModel.NeedsPath;
+        actual["EditorModel.needsValue"] = EditorModel.NeedsValue;
         actual["EditorModel.notValidJSON"] = EditorModel.NotValidJson;
         actual["EditorModel.oauthSecretCaption"] = EditorModel.OAuthSecretCaption;
+        actual["EditorModel.propagateLabel"] = EditorModel.PropagateLabel("X", "Y");
+        actual["EditorModel.publishedNote"] = EditorModel.PublishedNote("X");
         actual["EditorModel.remoteFooter"] = EditorModel.RemoteFooter;
         actual["EditorModel.removeButton"] = EditorModel.RemoveButton;
         actual["EditorModel.removeInformative"] = EditorModel.RemoveInformative;
@@ -257,6 +268,8 @@ public class StringCatalogTests
         actual["EditorModel.stayInJSONButton"] = EditorModel.StayInJsonButton;
         actual["EditorModel.switchAnywayButton"] = EditorModel.SwitchAnywayButton;
         actual["EditorModel.urlHint"] = EditorModel.UrlHint;
+        actual["EditorModel.whatCanIChange"] = EditorModel.WhatCanIChange;
+        actual["EditorModel.whatCanIChangeAnswer"] = EditorModel.WhatCanIChangeAnswer;
 
         // MARK: FirstRunTip / FlyoutModel
 

@@ -35,6 +35,25 @@ public final class EditorModel: ObservableObject {
     public static let addVariableTitle = "＋ Add variable"
     public static let changedOutsideDetail = "Saving will overwrite that change with this editor's version."
     public static let removedOutsideDetail = "Saving will add it back."
+    public static let whatCanIChange = "What can I change?"
+    public static let whatCanIChangeAnswer = "Fill in the highlighted values and switch it on or off. Everything else follows the source; make a local copy to change it."
+    public static let needsValue = "needs your value"
+    public static let needsPath = "needs your path"
+    public static let makeLocalCopyButton = "Make Local Copy…"
+
+    public static func lockedFieldsNote(_ collection: String) -> String { "Synced from \(collection) · read-only" }
+
+    public static func publishedNote(_ folder: String) -> String {
+        "Published to \(folder) — saving updates the file your team reads. Secrets stay here."
+    }
+
+    public static func importedNote(_ collection: String, _ date: String) -> String {
+        "Imported from “\(collection)” on \(date). Edits stay here."
+    }
+
+    public static func propagateLabel(_ collections: String, _ connector: String) -> String {
+        "Also apply this change to \(collections), which has an identical \(connector)"
+    }
 
     public static func duplicateEnvError(_ name: String) -> String { "Duplicate environment variable name: \(name)" }
 
@@ -45,6 +64,20 @@ public final class EditorModel: ObservableObject {
     public static func removedOutsideMessage(_ name: String) -> String { "“\(name)” was removed outside this editor." }
 
     public static func additionalTitle(count: Int, keys: [String]) -> String { "\(count) field(s) not editable here: \(keys.joined(separator: ", ")) — switch to JSON to edit" }
+
+    /// The grey line above the fields, and what it means for what the window may change.
+    ///
+    /// Mirror: windows/src/ConnectorControl.Core/State/EditorModel.cs
+    public enum HeaderState: Equatable, Sendable {
+        /// An ordinary connector in an ordinary local collection: today's editor, unchanged.
+        case none
+        /// Somebody else's collection: everything but the placeholders belongs to its author.
+        case synced(collection: String)
+        /// A local collection whose document this machine writes: saving rewrites it.
+        case published(folder: String)
+        /// A copy taken from another collection, which has gone its own way since.
+        case imported(from: String, date: String)
+    }
 
     public let target: EditTarget
     private let state: AppState
@@ -59,8 +92,16 @@ public final class EditorModel: ObservableObject {
     /// must not wipe what they typed. An unchanged JSON round trip (open
     /// JSON, switch straight back) leaves it set.
     private var isUntouchedTemplate: Bool
+    /// The other local collections that held a byte-identical copy of this connector when the
+    /// window opened. Fixed there rather than re-derived: the checkbox names them, and the save
+    /// that follows must write to the collections the user was shown, not to whatever matches
+    /// by the time they click.
+    public let propagateTargets: [String]
 
     // MARK: - Fields
+
+    /// The propagate checkbox: off unless the user ticks it.
+    @Published public var propagate = false
 
     @Published public private(set) var view: EditView {
         didSet { if oldValue != view { evaluateRequiredTool() } }
@@ -116,6 +157,7 @@ public final class EditorModel: ObservableObject {
         self.target = target
         self.dialogs = dialogs
         isUntouchedTemplate = target.isNew && target.forcesRemote
+        propagateTargets = EditorModel.twins(of: target, in: state)
         name = target.name
         view = target.entry.lastEditView
         let config = target.entry.config
@@ -178,12 +220,126 @@ public final class EditorModel: ObservableObject {
 
     public var removeConfirmationMessage: String { EditorModel.removeMessage(target.name) }
 
-    /// Save is disabled with a JSON error, or in the remote form without a valid URL.
+    /// Save is disabled with a JSON error, or in the remote form without a valid URL. A
+    /// read-only window saves only the placeholders, none of which can put it in either state,
+    /// so its Save stays enabled.
     public var canSave: Bool {
-        !((view == .json && jsonError != nil) || (view == .form && isRemote && !remoteURLValid))
+        isReadOnly || !((view == .json && jsonError != nil) || (view == .form && isRemote && !remoteURLValid))
     }
 
-    public var canRemove: Bool { !target.isNew }
+    /// Remove leaves the footer's left slot to Make Local Copy… when the connector is not this
+    /// machine's to delete.
+    public var canRemove: Bool { !target.isNew && !isReadOnly }
+
+    // MARK: - Collection
+
+    /// The collection this window edits, resolved: a target that names none edits whatever is
+    /// active, which is what every editor opened from the popover has always meant.
+    public var collectionName: String { target.collection ?? state.activeCollection }
+
+    /// A synced collection's connectors belong to the author of its document. Everything but
+    /// the values the document asks this machine for is locked, and a save may move only those.
+    public var isReadOnly: Bool { state.isSynced(collectionName) }
+
+    /// EditorModel.cs calls this `Header`: C# forbids a property and a nested type of the same
+    /// name on one class, and the type is the one both sides spell `HeaderState`.
+    public var headerState: HeaderState {
+        let collection = collectionName
+        if state.isSynced(collection) { return .synced(collection: collection) }
+        // Publishing is per machine: a collection somebody else publishes says nothing here,
+        // because this machine writes no file for it.
+        if let binding = state.collectionsCache.published[collection] {
+            return .published(folder: binding.folder)
+        }
+        if let provenance = state.collectionsFile.collections[collection]?.provenance[target.name] {
+            return .imported(from: provenance.from, date: provenance.date)
+        }
+        return .none
+    }
+
+    /// The one grey line the header shows, or nil for an ordinary local connector.
+    public var headerNote: String? {
+        switch headerState {
+        case .none:
+            return nil
+        case .synced(let collection):
+            return EditorModel.lockedFieldsNote(collection)
+        case .published(let folder):
+            return EditorModel.publishedNote(folder)
+        case .imported(let from, let date):
+            return EditorModel.importedNote(from, date)
+        }
+    }
+
+    /// The paste tip offers something a read-only JSON view cannot do.
+    public var showJSONTip: Bool { !isReadOnly && jsonError == nil }
+
+    public var showPropagate: Bool { !propagateTargets.isEmpty }
+
+    public var propagateMessage: String {
+        EditorModel.propagateLabel(propagateTargets.joined(separator: ", "), target.name)
+    }
+
+    /// The footer's Make Local Copy…, which takes Remove's slot for a synced connector. nil on
+    /// success, else the message; the view closes the window on success.
+    public func makeLocalCopy(into collection: String) -> String? {
+        state.makeLocalCopy(of: [target.name], from: collectionName, into: collection)
+    }
+
+    private static func twins(of target: EditTarget, in state: AppState) -> [String] {
+        let collection = target.collection ?? state.activeCollection
+        // A connector that does not exist yet has no twins, and a synced collection's copy is
+        // its author's — neither offers the checkbox.
+        guard !target.isNew, state.kind(of: collection) == .local else { return [] }
+        return state.localCollectionNames.filter { other in
+            other != collection && state.store.collections[other]?.mcps[target.name]?.config == target.entry.config
+        }
+    }
+
+    // MARK: - Placeholders
+
+    /// What the last Apply recorded this connector asking this machine for, by marker name.
+    private var collectionNeeds: [String: CollectionsFile.Need] {
+        state.needs(of: target.name, in: collectionName)
+    }
+
+    /// The hint for the first marker still standing in `text`, if the document supplied one. A
+    /// filled field carries no marker, so it asks for nothing and says nothing.
+    private func hint(in text: String) -> String? {
+        for marker in Placeholder.names(in: text) {
+            if let hint = collectionNeeds[marker]?.hint { return hint }
+        }
+        return nil
+    }
+
+    public func isPlaceholder(envRow id: UUID) -> Bool {
+        envRows.first { $0.id == id }.map { Placeholder.containsMarker($0.value) } ?? false
+    }
+
+    public func placeholderHint(envRow id: UUID) -> String? {
+        envRows.first { $0.id == id }.flatMap { hint(in: $0.value) }
+    }
+
+    /// Argument indexes still carrying a marker: locked in a synced collection, but live.
+    public var argsWithPlaceholders: Set<Int> {
+        Set(args.indices.filter { Placeholder.containsMarker(args[$0].value) })
+    }
+
+    public func placeholderHint(arg index: Int) -> String? {
+        args.indices.contains(index) ? hint(in: args[index].value) : nil
+    }
+
+    public var bearerTokenIsPlaceholder: Bool { Placeholder.containsMarker(bearerToken) }
+
+    public var headerValueIsPlaceholder: Bool { Placeholder.containsMarker(headerValue) }
+
+    public var clientSecretIsPlaceholder: Bool { Placeholder.containsMarker(oauthClientSecret) }
+
+    public var bearerTokenHint: String? { hint(in: bearerToken) }
+
+    public var headerValueHint: String? { hint(in: headerValue) }
+
+    public var clientSecretHint: String? { hint(in: oauthClientSecret) }
 
     // MARK: - Tool note
 
@@ -452,11 +608,31 @@ public final class EditorModel: ObservableObject {
 
     // MARK: - Save / remove
 
+    /// The config this window opened on, with the `${CC_NEEDS:…}` leaves — and only those —
+    /// carrying whatever the form now holds at the same JSON pointers. Anything else the fields
+    /// have been talked into saying is dropped on the floor, which is the whole point: the
+    /// author owns every other byte, and the next refresh would overwrite it anyway.
+    private func placeholdersFilledIn() -> JSONValue {
+        let original = target.entry.config
+        let candidate = view == .json ? (PasteRecovery.recover(jsonText)?.config ?? original) : currentFormConfig()
+        var result = original
+        for (pointer, _) in Placeholder.markers(in: original) {
+            guard case .string(let filled)? = candidate.value(at: pointer) else { continue }
+            result = result.replacing(at: pointer, with: .string(filled)) ?? result
+        }
+        return result
+    }
+
     /// True when the entry was saved and the window should close.
     public func save() -> Bool {
         validationError = nil
+        let readOnly = isReadOnly
         let config: JSONValue
-        if view == .json {
+        if readOnly {
+            // Nothing a read-only window can change can be invalid: the author's own save
+            // validated everything else, and a placeholder takes any text at all.
+            config = placeholdersFilledIn()
+        } else if view == .json {
             guard let effective = effectiveJSONConfig() else { return false }
             config = effective
         } else {
@@ -492,16 +668,17 @@ public final class EditorModel: ObservableObject {
             config = currentFormConfig()
         }
         // Only the canonical `[-y] mcp-remote <url>` shape must carry a valid URL; extra-args invocations pass.
-        if RemotePattern.isCanonicalShape(config), RemotePattern.detect(config) == nil {
+        if !readOnly, RemotePattern.isCanonicalShape(config), RemotePattern.detect(config) == nil {
             validationError = EditorModel.invalidURLError
             return false
         }
         // The editor works on a snapshot taken at window-open; if the store's copy has moved
         // underneath (external edit, delete, or rename reconciled in), do not silently
         // overwrite or resurrect it.
+        let collection = collectionName
         var current: MCPEntry?
         if !target.isNew {
-            current = state.store.mcps[target.name]
+            current = state.store.collections[collection]?.mcps[target.name]
             if current?.config != target.entry.config {
                 let missing = current == nil
                 let message = missing
@@ -513,16 +690,36 @@ public final class EditorModel: ObservableObject {
                 }
             }
         }
-        let entry = MCPEntry(enabled: current?.enabled ?? target.entry.enabled, config: config, lastEditView: view)
-        if let error = state.upsert(name: name, entry: entry, renamedFrom: target.isNew ? nil : target.name) {
+        // The name and the remembered view are the author's too, so a read-only save leaves
+        // both where it found them. The enabled flag is this machine's and is carried over
+        // from the store, exactly as every other save does.
+        let saved = readOnly ? target.name : name
+        let entry = MCPEntry(enabled: current?.enabled ?? target.entry.enabled, config: config,
+                             lastEditView: readOnly ? target.entry.lastEditView : view)
+        if let error = state.upsert(name: saved, entry: entry, renamedFrom: target.isNew ? nil : target.name,
+                                    in: target.collection) {
             validationError = error
             return false
         }
+        if propagate { propagateSavedConfig(config, as: saved) }
         // Apply, then let the view dismiss on `true`. The old view dismissed first
         // and applied after (and EditorModel.cs raises CloseRequested before it
         // applies); performApply shows no UI, so the order is not observable.
         state.applyInteractively()
         return true
+    }
+
+    /// The ticked checkbox: the same change again in each collection that held an identical
+    /// copy when this window opened. Each twin keeps its own on/off state, which is this
+    /// machine's business and not part of "this change"; a name already taken in one of them
+    /// leaves that collection alone rather than failing a save that has already landed.
+    private func propagateSavedConfig(_ config: JSONValue, as saved: String) {
+        for other in propagateTargets {
+            guard let twin = state.store.collections[other]?.mcps[target.name] else { continue }
+            _ = state.upsert(name: saved,
+                             entry: MCPEntry(enabled: twin.enabled, config: config, lastEditView: view),
+                             renamedFrom: target.name, in: other)
+        }
     }
 
     /// The Remove button: opens the confirmation sheet.
@@ -534,7 +731,7 @@ public final class EditorModel: ObservableObject {
     /// watcher-driven reload between the two once resurrected the connector.
     public func confirmRemove() {
         removeConfirmationPending = false
-        state.remove(name: target.name)
+        state.remove(name: target.name, in: target.collection)
         state.applyInteractively()
     }
 

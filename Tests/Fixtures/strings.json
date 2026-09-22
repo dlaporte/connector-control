@@ -154,13 +154,28 @@
   "EditorModel.envNamelessError": "An environment variable value is missing its name.",
   "EditorModel.headerNameError": "Enter a header name.",
   "EditorModel.headerValueError": "Enter a header value.",
+  "EditorModel.importedNote": {
+    "format": "Imported from “{0}” on {1}. Edits stay here."
+  },
   "EditorModel.invalidURLError": "Server URL must be a valid http(s) URL.",
   "EditorModel.jsonTip": "Tip: paste a README snippet or an mcpServers stanza — a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in.",
+  "EditorModel.lockedFieldsNote": {
+    "format": "Synced from {0} · read-only"
+  },
   "EditorModel.lossWarningPrefix": "Switching to Form view can’t fully represent this configuration. These elements would be lost or altered:\n",
+  "EditorModel.makeLocalCopyButton": "Make Local Copy…",
+  "EditorModel.needsPath": "needs your path",
+  "EditorModel.needsValue": "needs your value",
   "EditorModel.notValidJSON": "Not valid JSON — check for a stray brace, missing comma, or unquoted value.",
   "EditorModel.oauthSecretCaption": {
     "mac": "Passed to mcp-remote on its command line, which other programs running on this Mac can read.",
     "win": "Passed to mcp-remote on its command line, which other programs running on this PC can read."
+  },
+  "EditorModel.propagateLabel": {
+    "format": "Also apply this change to {0}, which has an identical {1}"
+  },
+  "EditorModel.publishedNote": {
+    "format": "Published to {0} — saving updates the file your team reads. Secrets stay here."
   },
   "EditorModel.remoteFooter": "Runs via npx mcp-remote — managed for you.",
   "EditorModel.removeButton": "Remove",
@@ -176,6 +191,8 @@
   "EditorModel.stayInJSONButton": "Stay in JSON",
   "EditorModel.switchAnywayButton": "Switch Anyway",
   "EditorModel.urlHint": "Enter a valid http(s) URL, e.g. https://example.com/mcp",
+  "EditorModel.whatCanIChange": "What can I change?",
+  "EditorModel.whatCanIChangeAnswer": "Fill in the highlighted values and switch it on or off. Everything else follows the source; make a local copy to change it.",
   "FirstRunTip.body": {
     "win": "Connector Control lives in the system tray. Drag its icon out of the overflow (^) to keep it visible."
   },

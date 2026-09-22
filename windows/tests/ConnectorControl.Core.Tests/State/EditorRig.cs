@@ -36,6 +36,14 @@ internal sealed class EditorRig : IDisposable
 
     public EditorModel Editor(EditTarget target) => new(State, target, H.Dialogs, RemoteLaunchStyle.CmdNpx);
 
+    /// <summary>
+    /// An editor on a named collection's copy of a connector, read out of the store the way the
+    /// Collections window's row will. A name that collection does not hold is a test bug, so it
+    /// throws rather than quietly opening an empty window.
+    /// </summary>
+    public EditorModel Editor(string name, string collection) =>
+        Editor(EditTarget.Existing(name, State.Store.Collections[collection].Mcps[name], collection));
+
     /// <summary>EditorModel.AuthKinds' index for <paramref name="kind"/> — the picker's own
     /// order, not an assumption about enum declaration order.</summary>
     public static int AuthKindIndexOf(RemoteAuthKind kind) => EditorModel.AuthKinds.ToList().IndexOf(kind);

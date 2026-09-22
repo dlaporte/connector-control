@@ -30,6 +30,14 @@ final class EditorRig {
         EditorModel(state: state, target: target, dialogs: h.dialogs)
     }
 
+    /// An editor on a named collection's copy of a connector, read out of the store the way the
+    /// Collections window's row will. A name that collection does not hold is a test bug, so it
+    /// trips the force-unwrap rather than quietly opening an empty window.
+    func editor(_ name: String, in collection: String) -> EditorModel {
+        editor(EditTarget.existing(name: name, entry: state.store.collections[collection]!.mcps[name]!,
+                                   in: collection))
+    }
+
     func dispose() {
         h.dispose()
     }
