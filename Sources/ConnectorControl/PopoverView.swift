@@ -12,9 +12,6 @@ struct PopoverView: View {
     @StateObject private var model: PopoverModel
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
-    /// A collection action's refusal, kept here because only the view knows when it has been
-    /// read: the model returns it rather than publishing it, and no OK button reaches back.
-    @State private var shownError: String?
 
     init(state: AppState) {
         _model = StateObject(wrappedValue: PopoverModel(state: state))
@@ -34,7 +31,6 @@ struct PopoverView: View {
         }
         .frame(minWidth: 240, maxWidth: 380)
         .background(WindowAutoSizer())
-        .alert(Text(shownError ?? ""), isPresented: errorShowing) { }
         .onAppear { model.opened() }
     }
 
@@ -191,12 +187,24 @@ struct PopoverView: View {
         }
         switch model.collectionBanner {
         case .locate:
-            if let path = chooseDocument() { shownError = model.locateSource(path) }
+            if let path = chooseDocument() { tell(model.locateSource(path)) }
         case .publishFailed:
-            if let folder = chooseFolder() { shownError = model.choosePublishFolder(folder) }
+            if let folder = chooseFolder() { tell(model.choosePublishFolder(folder)) }
         case .updateAvailable, nil:
             break
         }
+    }
+
+    /// A refusal, said app-modally. A panel takes key focus from the popover on its way in, and
+    /// the popover closes with it, so an alert attached to this view would have nothing left to
+    /// present it by the time there is anything to say.
+    private func tell(_ failure: String?) {
+        guard let failure else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = failure
+        alert.addButton(withTitle: AlertDialogs.okTitle)
+        alert.runModal()
     }
 
     /// The Collections window, which takes no arguments: whatever the popover wants in front of
@@ -227,12 +235,6 @@ struct PopoverView: View {
         panel.prompt = "Choose"
         guard panel.runModal() == .OK else { return nil }
         return panel.url?.path
-    }
-
-    /// The alert's own switch. Dismissing it drops the copy this view holds; there is nothing
-    /// behind it to clear, because the refusal was handed back rather than published.
-    private var errorShowing: Binding<Bool> {
-        Binding(get: { shownError != nil }, set: { if !$0 { shownError = nil } })
     }
 
     /// Cap before the list scrolls (~12 rows); large catalogs stay usable

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -282,19 +283,37 @@ public partial class FlyoutWindow : Window
         header.Children.Add(new TextBlock { Text = item.Name, VerticalAlignment = VerticalAlignment.Center });
         if (item.IsSynced)
         {
-            header.Children.Add(new TextBlock
+            var chain = new TextBlock
             {
                 Text = (string)FindResource("ChainGlyph"),
                 FontFamily = (FontFamily)FindResource("IconFont"),
                 Margin = new Thickness(6, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
-            });
+            };
+            // Where the document sits is known only for the collection the model is showing, so
+            // that row's chain says what the chip's says and the others stay quiet, exactly as
+            // the chip does when the model has no source to name.
+            Speak(chain, item.IsActive ? model.SourceTooltip : null);
+            header.Children.Add(chain);
         }
         if (item.HasPendingUpdate)
         {
-            header.Children.Add(new Ellipse { Style = (Style)FindResource("PendingDot"), Margin = new Thickness(6, 0, 0, 0) });
+            var dot = new Ellipse { Style = (Style)FindResource("PendingDot"), Margin = new Thickness(6, 0, 0, 0) };
+            Speak(dot, CollectionsModel.UpdateAvailableStatus);
+            header.Children.Add(dot);
         }
         return header;
+    }
+
+    /// <summary>A mark that would otherwise read as nothing, given the sentence it stands for.</summary>
+    private static void Speak(FrameworkElement mark, string? sentence)
+    {
+        if (sentence is null)
+        {
+            return;
+        }
+        mark.ToolTip = sentence;
+        AutomationProperties.SetName(mark, sentence);
     }
 
     /// <summary>

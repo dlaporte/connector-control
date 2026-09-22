@@ -99,6 +99,23 @@ public class FlyoutWindowTests
         return new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors);
     }
 
+    /// <summary>
+    /// Publishes the active collection, then puts a file where its folder was: that write fails
+    /// on both platforms and needs no permission games, and the next store change raises the
+    /// banner. Returns the path that is now a file rather than a folder.
+    /// </summary>
+    private static string BlockedPublish(AppStateHarness h, AppState state)
+    {
+        var folder = h.Dir.File("pub");
+        Directory.CreateDirectory(folder);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        Directory.Delete(folder, recursive: true);
+        File.WriteAllText(folder, "not a folder");
+        Assert.Null(state.Upsert("blocked", new McpEntry(AppStateHarness.Remote("https://example.test/")), null));
+        Assert.NotNull(state.PublishError);
+        return folder;
+    }
+
     private static void Click(ButtonBase button) =>
         button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
 
@@ -334,15 +351,7 @@ public class FlyoutWindowTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var folder = h.Dir.File("pub");
-        Directory.CreateDirectory(folder);
-        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
-        // A file where the folder belongs fails the write on both platforms and needs no
-        // permission games; the next store change is what raises the banner.
-        Directory.Delete(folder, recursive: true);
-        File.WriteAllText(folder, "not a folder");
-        Assert.Null(state.Upsert("blocked", new McpEntry(AppStateHarness.Remote("https://example.test/")), null));
-        Assert.NotNull(state.PublishError);
+        BlockedPublish(h, state);
 
         WpfApp.Invoke(() => Showing(h, state, (window, _, _) =>
         {
@@ -358,6 +367,55 @@ public class FlyoutWindowTests
             Assert.Null(state.PublishError);
             Assert.False(state.IsPublished(state.ActiveCollection));
             Assert.Equal(Visibility.Collapsed, window.CollectionBannerStrip.Visibility);
+        }));
+    }
+
+    [Fact]
+    public void TheFailedPublishBannerRepublishesToTheFolderYouChoose()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        BlockedPublish(h, state);
+        var chosen = h.Dir.File("elsewhere");
+        Directory.CreateDirectory(chosen);
+
+        WpfApp.Invoke(() => Showing(h, state, (window, _, recorder) =>
+        {
+            // Cancelling the picker changes nothing and says nothing.
+            Click(window.CollectionBannerButton);
+            Layout(window);
+            Assert.Empty(recorder.Informed);
+            Assert.NotNull(state.PublishError);
+            Assert.Equal(Visibility.Visible, window.CollectionBannerStrip.Visibility);
+
+            recorder.Folder = chosen;
+            Click(window.CollectionBannerButton);
+            Layout(window);
+            Assert.Empty(recorder.Informed);
+            Assert.Null(state.PublishError);
+            Assert.True(state.IsPublished(state.ActiveCollection));
+            Assert.Single(Directory.GetFiles(chosen, "*.json"));   // the document followed the folder
+            Assert.Equal(Visibility.Collapsed, window.CollectionBannerStrip.Visibility);
+        }));
+    }
+
+    [Fact]
+    public void AFolderThatRefusesTheWriteTooIsSaidSoAndTheBannerStays()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var blocked = BlockedPublish(h, state);
+
+        WpfApp.Invoke(() => Showing(h, state, (window, _, recorder) =>
+        {
+            recorder.Folder = blocked;   // the same path again: still a file where a folder belongs
+            Click(window.CollectionBannerButton);
+            Layout(window);
+            var told = Assert.Single(recorder.Informed);
+            var failure = state.PublishError;
+            Assert.NotNull(failure);
+            Assert.Equal(failure.Message, told);
+            Assert.Equal(Visibility.Visible, window.CollectionBannerStrip.Visibility);
         }));
     }
 
