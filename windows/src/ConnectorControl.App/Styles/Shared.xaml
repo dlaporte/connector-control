@@ -7,6 +7,21 @@
   <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
   <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas, Courier New</FontFamily>
 
+  <!-- Collection marks, glyphs only: a chain for a synced collection, a lock on a read-only row,
+       a share arrow for a published one where a view needs it. Same code points in both Segoe fonts. -->
+  <system:String x:Key="ChainGlyph">&#xE71B;</system:String>
+  <system:String x:Key="LockGlyph">&#xE72E;</system:String>
+  <system:String x:Key="ShareGlyph">&#xE72D;</system:String>
+
+  <!-- The amber dot that says an update is waiting for review; the caution colour, so it reads as
+       "look here" without being an error. -->
+  <Style x:Key="PendingDot" TargetType="Ellipse">
+    <Setter Property="Width" Value="6" />
+    <Setter Property="Height" Value="6" />
+    <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
   <!-- Every window used its own local copy of this; one instance, shared app-wide. -->
   <BooleanToVisibilityConverter x:Key="Vis" />
 
