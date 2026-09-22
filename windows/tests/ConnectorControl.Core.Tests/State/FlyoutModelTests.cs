@@ -482,4 +482,43 @@ public class FlyoutModelTests
         Assert.True(flyout.CollectionBannerAction());
         Assert.Equal(new CollectionsWindowRequest.Review("Team"), state.TakeCollectionsWindowRequest());
     }
+    [Fact]
+    public void OnlyTheFailedPublishBannerOffersStopPublishing()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        state.SwitchCollection("Default");
+        new CollectionsFile([
+            Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json")),
+            Sidecar("Default", new CollectionsFile.Entry(
+                CollectionKind.Local, publish: new CollectionsFile.PublishRecord("default", "origin", PublishIntent.None))),
+        ]).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        var folder = h.Dir.File("pub");
+        Directory.CreateDirectory(folder);
+        new CollectionsLocalCache([], [new KeyValuePair<string, CollectionsLocalCache.PublishBinding>(
+            "Default", new CollectionsLocalCache.PublishBinding(folder, null))])
+            .Save(state.Service.Paths.CollectionsCachePath);
+        state.Reload();
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        // The locate banner has one button, so there is no second one to show or to press.
+        Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
+        Assert.Null(flyout.CollectionBannerSecondaryButton);
+        flyout.CollectionBannerSecondaryAction();
+        // Nothing was stopped.
+        Assert.NotNull(state.CollectionsFile.Collections.GetValueOrDefault("Default")?.Publish);
+
+        state.PublishError = new CollectionPublishError("Default", "the folder is read-only");
+        Assert.Equal(CollectionsModel.StopPublishingAction, flyout.CollectionBannerSecondaryButton);
+        flyout.CollectionBannerSecondaryAction();
+        // The record is gone.
+        Assert.Null(state.CollectionsFile.Collections.GetValueOrDefault("Default")?.Publish);
+        // And so is this machine's binding.
+        Assert.False(state.CollectionsCache.Published.ContainsKey("Default"));
+        // With the record gone there is nothing left to have failed.
+        Assert.Null(state.PublishError);
+        // The document in the folder stays: a folder this machine cannot reach is not one to delete from.
+        Assert.True(System.IO.File.Exists(Path.Combine(folder, "default.json")));
+    }
 }

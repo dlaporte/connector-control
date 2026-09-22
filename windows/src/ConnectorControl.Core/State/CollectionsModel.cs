@@ -76,7 +76,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     private static readonly string[] RelevantProperties =
     [
         nameof(AppState.Store), nameof(AppState.CollectionsFile), nameof(AppState.CollectionsCache),
-        nameof(AppState.PendingUpdates), nameof(AppState.SourceErrors),
+        nameof(AppState.PendingUpdates), nameof(AppState.SourceErrors), nameof(AppState.PublishError),
     ];
 
     private readonly AppState state;
@@ -250,6 +250,49 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         }
         return state.PendingUpdates.ContainsKey(collection) ? UpdateAvailableStatus : UpToDateStatus;
     }
+
+    // MARK: banner strip
+
+    /// <summary>
+    /// The banner above the rows, or null. Unlike the flyout's slot, which speaks for whichever
+    /// collection has news, this answers only for the collection the window is showing: a strip
+    /// over one collection's rows saying something about another one would be a lie.
+    /// </summary>
+    private CollectionBanner? Banner =>
+        state.CollectionBanner is { } banner
+            && CollectionBannerPresentation.Collection(banner) == SelectedCollection
+            ? banner
+            : null;
+
+    public string? BannerText => Banner is { } banner ? CollectionBannerPresentation.Text(banner, state) : null;
+
+    public string? BannerButton => Banner is { } banner ? CollectionBannerPresentation.Button(banner) : null;
+
+    /// <summary>The Mac binds the optional above directly; XAML needs a bool for the strip's visibility.</summary>
+    public bool HasBanner => Banner is not null;
+
+    /// <summary>
+    /// The strip's button. True says the news needs nothing from the file system, so the view has
+    /// only to put the Review dialog in front of the selected collection. False says the view
+    /// owes a dialog and must hand what it gets to <see cref="LocateSource"/> or
+    /// <see cref="ChoosePublishFolder"/>.
+    /// </summary>
+    public bool BannerAction() => Banner is CollectionBanner.UpdateAvailable;
+
+    /// <summary>
+    /// The Locate button's file, for the collection the window is showing. Null on success, else
+    /// the message; also null when the strip is not asking for a file, so a dialog left open past
+    /// the news it belonged to cannot point anything anywhere.
+    /// </summary>
+    public string? LocateSource(string path) =>
+        Banner is CollectionBanner.Locate locate ? state.LocateSource(locate.Collection, path) : null;
+
+    /// <summary>
+    /// The Choose Folder button's folder, for the collection the window is showing. Null as
+    /// <see cref="LocateSource"/> returns null.
+    /// </summary>
+    public string? ChoosePublishFolder(string folder) =>
+        Banner is CollectionBanner.PublishFailed failed ? state.ChangePublishFolder(failed.Collection, folder) : null;
 
     // MARK: toolbar
 

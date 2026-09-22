@@ -26,6 +26,8 @@ public final class PublishModel: ObservableObject {
 
     public static func warningLine(_ connector: String, _ warning: String) -> String { "\(connector): \(warning)" }
 
+    public static func footerLine(_ fileName: String, _ originShort: String) -> String { "\(fileName) · \(originShort)" }
+
     /// One environment variable of one connector. Stripped by default: its name and hint travel,
     /// its value does not. A struct the sheet edits through its index, as every other row here
     /// is; the Windows mirror is a class, because WPF's two-way bindings need a row that stays put.
@@ -119,6 +121,22 @@ public final class PublishModel: ObservableObject {
     }
 
     public var folderLine: String { PublishModel.folderLine(fileName) }
+
+    /// The eight characters of the origin the footer shows — enough to tell one publisher's
+    /// document from another's at a glance, which is all the footer is for. Empty until the
+    /// collection has published once, because that is when the origin is minted. Read from the
+    /// publish record rather than through `exportDocument`, which carries the same value and
+    /// renders every connector to get there.
+    public var originShort: String {
+        String((state.collectionsFile.collections[collection]?.publish?.origin ?? "").prefix(8))
+    }
+
+    /// The footer: the file name, and the origin once there is one. The Windows mirror calls this
+    /// `FooterSentence`, where the static factory already owns the name.
+    public var footerLine: String {
+        let origin = originShort
+        return origin.isEmpty ? fileName : PublishModel.footerLine(fileName, origin)
+    }
 
     public var canPublish: Bool { !(folder ?? "").isEmpty }
 

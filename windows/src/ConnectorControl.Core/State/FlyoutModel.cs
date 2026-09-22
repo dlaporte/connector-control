@@ -31,7 +31,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public static string LocateButton(string fileName) => $"Locate {fileName}…";
 
-    /// <summary>The Mac names this <c>exportTitle</c>, where a static and an instance member of that name coexist; C# forbids that, so the instance property below calls this.</summary>
+    /// <summary>A static and an instance member cannot share one name here; the Mac carries this same name rather than shadowing, so the pair reads the same in both files.</summary>
     public static string ExportTitleFor(string active) => $"Export “{active}”…";
 
     /// <summary>The chain glyph's tooltip. The Mac carries the same <c>Format</c> suffix, for the reason <see cref="ExportTitleFor"/> is spelled that way.</summary>
@@ -82,7 +82,9 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     /// <summary>
     /// The chain's tooltip: where the active collection's document sits on this machine, or the
     /// name the sidecar recorded while the file has still to be found. Null for a local
-    /// collection, which has no source, and for a synced one the sidecar never named.
+    /// collection, which has no source, and for a synced one the sidecar never named. A binding
+    /// that needs a plain string coalesces it; the chain is drawn only for a synced collection,
+    /// which is the case that has something to say.
     /// </summary>
     public string? SourceTooltip
     {
@@ -118,26 +120,15 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public CollectionBanner? CollectionBanner => state.CollectionBanner;
 
-    public string? CollectionBannerText => state.CollectionBanner switch
-    {
-        State.CollectionBanner.UpdateAvailable update => AppState.CollectionUpdateBanner(update.Collection, update.Summary),
-        State.CollectionBanner.Locate locate => AppState.CollectionLocateBanner(locate.Collection),
-        // The folder is the binding's, not the banner's: publishing is what sets the error, so
-        // the collection that failed always has one.
-        State.CollectionBanner.PublishFailed failed => AppState.CollectionPublishFailedBanner(
-            failed.Collection,
-            state.CollectionsCache.Published.TryGetValue(failed.Collection, out var binding) ? binding.Folder : "",
-            failed.Message),
-        _ => null,
-    };
+    /// <summary>
+    /// The flyout's slot speaks for whichever collection has news, active or not — unlike the
+    /// Collections window's strip, which answers only for the collection it is showing.
+    /// </summary>
+    public string? CollectionBannerText =>
+        state.CollectionBanner is { } banner ? CollectionBannerPresentation.Text(banner, state) : null;
 
-    public string? CollectionBannerButton => state.CollectionBanner switch
-    {
-        State.CollectionBanner.UpdateAvailable => ReviewAndApplyButton,
-        State.CollectionBanner.Locate locate => LocateButton(locate.FileName),
-        State.CollectionBanner.PublishFailed => ChooseFolderButton,
-        _ => null,
-    };
+    public string? CollectionBannerButton =>
+        state.CollectionBanner is { } banner ? CollectionBannerPresentation.Button(banner) : null;
 
     public bool HasCollectionBanner => CollectionBannerText is not null;
 
@@ -195,9 +186,12 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public void SwitchCollection(string name) => state.SwitchCollection(name);
 
     /// <summary>
-    /// The banner's button, for the one banner that needs nothing from the user first. False
-    /// says the view has still to run its file dialog and call <see cref="LocateSource"/> or
-    /// <see cref="ChoosePublishFolder"/> with what it gets, which only a view can do.
+    /// The banner's button, for the one banner that needs nothing from the user first. The bool
+    /// is about order as much as outcome: on true the request is already waiting, so the view
+    /// opens the Collections window and does nothing else; on false nothing has happened yet and
+    /// the view runs its file dialog, then calls <see cref="LocateSource"/> or
+    /// <see cref="ChoosePublishFolder"/> with what it gets. Opening the window before the call
+    /// would let it take a null request.
     /// </summary>
     public bool CollectionBannerAction()
     {
@@ -207,6 +201,26 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
         }
         RequestReview();
         return true;
+    }
+
+    /// <summary>
+    /// The failed-publish banner's second button, where giving up on the folder is as reasonable
+    /// an answer as choosing another one. Null for every other banner, which has one button.
+    /// </summary>
+    public string? CollectionBannerSecondaryButton =>
+        state.CollectionBanner is { } banner ? CollectionBannerPresentation.SecondaryButton(banner) : null;
+
+    /// <summary>
+    /// Stop Publishing from the banner. The document in the folder is left where it is: this
+    /// banner is raised by a folder this machine could not write to, so deleting from it is the
+    /// one thing that cannot be offered. Nothing happens under any other banner.
+    /// </summary>
+    public void CollectionBannerSecondaryAction()
+    {
+        if (state.CollectionBanner is State.CollectionBanner.PublishFailed failed)
+        {
+            state.StopPublishing(failed.Collection, deleteFile: false);
+        }
     }
 
     /// <summary>
@@ -225,16 +239,10 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     /// the dialog is where what the document says gets edited. Null as <see cref="LocateSource"/>
     /// returns null.
     /// </summary>
-    public string? ChoosePublishFolder(string folder)
-    {
-        if (state.CollectionBanner is not State.CollectionBanner.PublishFailed failed)
-        {
-            return null;
-        }
-        var intent = state.CollectionsFile.Collections.TryGetValue(failed.Collection, out var entry)
-            && entry.Publish is { } record ? record.Intent : PublishIntent.None;
-        return state.StartPublishing(failed.Collection, folder, intent);
-    }
+    public string? ChoosePublishFolder(string folder) =>
+        state.CollectionBanner is State.CollectionBanner.PublishFailed failed
+            ? state.ChangePublishFolder(failed.Collection, folder)
+            : null;
 
     /// <summary>
     /// The menu's Import…: the dialog belongs to the Collections window, so opening it is all

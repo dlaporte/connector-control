@@ -111,12 +111,14 @@ public final class CollectionsModel: ObservableObject {
         self.state = state
         self.dialogs = dialogs
         // Everything this window reads: the store behind the items and rows, the sidecar and the
-        // cache behind their marks, and the two derived maps behind the detail line's status.
+        // cache behind their marks, the two derived maps behind the detail line's status, and
+        // the last failed publish behind the banner strip.
         relay(state.$store)
         relay(state.$collectionsFile)
         relay(state.$collectionsCache)
         relay(state.$pendingUpdates)
         relay(state.$sourceErrors)
+        relay(state.$publishError)
     }
 
     private func relay<P: Publisher>(_ publisher: P) where P.Failure == Never {
@@ -233,6 +235,47 @@ public final class CollectionsModel: ObservableObject {
         if let failure = state.sourceErrors[collection] { return failure }
         if state.pendingUpdates[collection] != nil { return CollectionsModel.updateAvailableStatus }
         return CollectionsModel.upToDateStatus
+    }
+
+    // MARK: - Banner strip
+
+    /// The banner above the rows, or nil. Unlike the popover's slot, which speaks for whichever
+    /// collection has news, this answers only for the collection the window is showing: a strip
+    /// over one collection's rows saying something about another one would be a lie.
+    private var banner: CollectionBanner? {
+        guard let banner = state.collectionBanner,
+              CollectionBannerPresentation.collection(of: banner) == selectedCollection else { return nil }
+        return banner
+    }
+
+    /// The Windows mirror also carries `HasBanner`: XAML cannot bind a row's visibility to "this
+    /// optional is not nil", where SwiftUI binds the optional itself.
+    public var bannerText: String? { banner.map { CollectionBannerPresentation.text($0, state) } }
+
+    public var bannerButton: String? { banner.map(CollectionBannerPresentation.button) }
+
+    /// The strip's button. True says the news needs nothing from the file system, so the view has
+    /// only to put the Review sheet in front of the selected collection. False says the view owes
+    /// a picker and must hand what it gets to `locateSource` or `choosePublishFolder`.
+    @discardableResult
+    public func bannerAction() -> Bool {
+        guard case .updateAvailable = banner else { return false }
+        return true
+    }
+
+    /// The Locate button's file, for the collection the window is showing. nil on success, else
+    /// the message; also nil when the strip is not asking for a file, so a picker left open past
+    /// the news it belonged to cannot point anything anywhere.
+    public func locateSource(_ path: String) -> String? {
+        guard case .locate(let collection, _) = banner else { return nil }
+        return state.locateSource(for: collection, path: path)
+    }
+
+    /// The Choose Folder button's folder, for the collection the window is showing. nil as
+    /// `locateSource` returns nil.
+    public func choosePublishFolder(_ path: String) -> String? {
+        guard case .publishFailed(let collection, _) = banner else { return nil }
+        return state.changePublishFolder(collection, to: path)
     }
 
     // MARK: - Toolbar

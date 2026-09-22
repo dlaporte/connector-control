@@ -134,4 +134,30 @@ final class ImportModelTests: XCTestCase {
         XCTAssertFalse(malformed.canImport)
         XCTAssertEqual(state.collectionNames, ["Default"], "a document that cannot be read creates nothing")
     }
+
+    func testEveryChoiceHasATitleAndACollisionOffersThree() {
+        XCTAssertEqual(ImportModel.choiceTitle(.add), "Add")
+        XCTAssertEqual(ImportModel.choiceTitle(.replace), "Replace")
+        XCTAssertEqual(ImportModel.choiceTitle(.keepBoth), "Keep both")
+        XCTAssertEqual(ImportModel.choiceTitle(.skip), "Skip")
+        // The picker is a collision's, so the case where nothing is in the way is not in it.
+        XCTAssertEqual(ImportModel.collisionChoices, [.replace, .keepBoth, .skip])
+        XCTAssertEqual(ImportModel.collisionChoices.map(ImportModel.choiceTitle),
+                       ["Replace", "Keep both", "Skip"])
+    }
+
+    func testTheNeedsTooltipListsTheNamesInOrder() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("data-team.json")
+        try write(CollectionDocumentSamples.dataTeam, at: url)
+        let model = ImportModel(state: state, path: url.path)
+
+        XCTAssertEqual(ImportModel.needsTooltip(["DBT_TOKEN"]), "Needs your values: DBT_TOKEN")
+        XCTAssertEqual(ImportModel.needsTooltip(["DBT_TOKEN", "server_path"]),
+                       "Needs your values: DBT_TOKEN, server_path")
+        // The row's own names, in the order the row already sorts them.
+        let dbt = try XCTUnwrap(model.rows.first { $0.name == "dbt" })
+        XCTAssertEqual(ImportModel.needsTooltip(dbt.needs), "Needs your values: DBT_TOKEN")
+    }
 }

@@ -103,15 +103,17 @@ final class StringCatalogTests: XCTestCase {
         "EditorModel.removedOutsideMessage": ["X"],
         "ImportModel.addModeTitle": ["X"],
         "ImportModel.importButton": ["3"],
+        "ImportModel.needsTooltip": ["X, Y"],
         "ImportModel.skippedBadge": ["X"],
         "ImportModel.sourceLine": ["X", "Y", "3"],
         "MasterStore.duplicateCollectionNameError": ["X"],
         "MasterStore.unknownCollectionError": ["X"],
         "PopoverModel.collectionChipText": ["X"],
-        "PopoverModel.exportTitle": ["X"],
+        "PopoverModel.exportTitleFor": ["X"],
         "PopoverModel.locateButton": ["X"],
         "PopoverModel.sourceTooltipFormat": ["X"],
         "PublishModel.folderLine": ["X"],
+        "PublishModel.footerLine": ["X", "Y"],
         "PublishModel.title": ["X"],
         "PublishModel.warningLine": ["X", "Y"],
         "RestoreModel.confirmMessage": ["X"],
@@ -284,8 +286,10 @@ final class StringCatalogTests: XCTestCase {
 
         actual["ImportModel.addModeDetail"] = ImportModel.addModeDetail
         actual["ImportModel.addModeTitle"] = ImportModel.addModeTitle("X")
+        actual["ImportModel.addTitle"] = ImportModel.addTitle
         actual["ImportModel.cancelButton"] = ImportModel.cancelButton
         actual["ImportModel.importButton"] = ImportModel.importButton(3)
+        actual["ImportModel.needsTooltip"] = ImportModel.needsTooltip(["X", "Y"])
         actual["ImportModel.keepBothTitle"] = ImportModel.keepBothTitle
         actual["ImportModel.newBadge"] = ImportModel.newBadge
         actual["ImportModel.presentBadge"] = ImportModel.presentBadge
@@ -322,7 +326,7 @@ final class StringCatalogTests: XCTestCase {
         actual["PopoverModel.chooseFolderButton"] = PopoverModel.chooseFolderButton
         actual["PopoverModel.collectionChipText"] = PopoverModel.collectionChipText("X")
         actual["PopoverModel.emptyText"] = PopoverModel.emptyText
-        actual["PopoverModel.exportTitle"] = PopoverModel.exportTitle("X")
+        actual["PopoverModel.exportTitleFor"] = PopoverModel.exportTitleFor("X")
         actual["PopoverModel.importTitle"] = PopoverModel.importTitle
         actual["PopoverModel.locateButton"] = PopoverModel.locateButton("X")
         actual["PopoverModel.manageTitle"] = PopoverModel.manageTitle
@@ -339,6 +343,7 @@ final class StringCatalogTests: XCTestCase {
         actual["PublishModel.envSectionTitle"] = PublishModel.envSectionTitle
         actual["PublishModel.exportButton"] = PublishModel.exportButton
         actual["PublishModel.folderLine"] = PublishModel.folderLine("X")
+        actual["PublishModel.footerLine"] = PublishModel.footerLine("X", "Y")
         actual["PublishModel.hintPlaceholder"] = PublishModel.hintPlaceholder
         actual["PublishModel.pathNamePlaceholder"] = PublishModel.pathNamePlaceholder
         actual["PublishModel.pathsSectionTitle"] = PublishModel.pathsSectionTitle

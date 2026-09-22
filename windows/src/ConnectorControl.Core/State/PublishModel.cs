@@ -26,6 +26,8 @@ public sealed class PublishModel : ObservableObject
 
     public static string WarningLine(string connector, string warning) => $"{connector}: {warning}";
 
+    public static string FooterLine(string fileName, string originShort) => $"{fileName} · {originShort}";
+
     /// <summary>
     /// One environment variable of one connector. Stripped by default: its name and hint travel,
     /// its value does not. A class, not a record: the sheet edits <see cref="Share"/> and
@@ -122,6 +124,36 @@ public sealed class PublishModel : ObservableObject
 
     /// <summary>The Mac calls this <c>folderLine</c>; here the static factory already owns that name.</summary>
     public string FolderSentence => FolderLine(FileName);
+
+    /// <summary>
+    /// The eight characters of the origin the footer shows — enough to tell one publisher's
+    /// document from another's at a glance, which is all the footer is for. Empty until the
+    /// collection has published once, because that is when the origin is minted. Read from the
+    /// publish record rather than through <c>ExportDocument</c>, which carries the same value and
+    /// renders every connector to get there.
+    /// </summary>
+    public string OriginShort
+    {
+        get
+        {
+            var origin = state.CollectionsFile.Collections.GetValueOrDefault(Collection)?.Publish?.Origin ?? "";
+            return origin.Length <= 8 ? origin : origin[..8];
+        }
+    }
+
+    /// <summary>
+    /// The footer: the file name, and the origin once there is one. The Mac calls this
+    /// <c>footerLine</c>; here the static factory already owns that name, as with
+    /// <see cref="FolderSentence"/>.
+    /// </summary>
+    public string FooterSentence
+    {
+        get
+        {
+            var origin = OriginShort;
+            return origin.Length == 0 ? FileName : FooterLine(FileName, origin);
+        }
+    }
 
     public bool CanPublish => !string.IsNullOrEmpty(Folder);
 

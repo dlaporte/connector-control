@@ -180,4 +180,27 @@ final class PublishModelTests: XCTestCase {
         XCTAssertNil(model.intent.pathMarks["c"])
         XCTAssertTrue(model.preview.contains("/Users/d/x.js"))
     }
+
+    func testTheFooterNamesTheFileAndTheOriginOnceThereIsOne() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let collection = state.activeCollection
+        let before = PublishModel(state: state, collection: collection)
+
+        // Nothing published yet, so there is no origin to show and the footer is the name alone.
+        XCTAssertEqual(before.originShort, "")
+        XCTAssertEqual(before.footerLine, before.fileName)
+
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(collection, to: folder.path, intent: .none))
+        let origin = try XCTUnwrap(state.collectionsFile.collections[collection]?.publish?.origin)
+        XCTAssertEqual(origin.count, 36, "a UUID, which is what the eight characters are cut from")
+
+        let after = PublishModel(state: state, collection: collection)
+        XCTAssertEqual(after.originShort, String(origin.prefix(8)))
+        XCTAssertEqual(after.footerLine, PublishModel.footerLine(after.fileName, after.originShort))
+        XCTAssertEqual(after.footerLine, "\(after.fileName) · \(after.originShort)")
+        // The document an export writes carries that same origin, so both sheets show one thing.
+        XCTAssertEqual(state.exportDocument(for: collection, intent: .none).origin, origin)
+    }
 }

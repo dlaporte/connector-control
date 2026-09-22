@@ -17,6 +17,7 @@ public final class ImportModel: ObservableObject {
     public static let newBadge = "new · arrives off"
     public static let presentBadge = "already present · skipped"
     public static let replaceKeepsValues = "keeps your filled values"
+    public static let addTitle = "Add"
     public static let replaceTitle = "Replace"
     public static let keepBothTitle = "Keep both"
     public static let skipTitle = "Skip"
@@ -32,7 +33,29 @@ public final class ImportModel: ObservableObject {
 
     public static func skippedBadge(_ reason: String) -> String { "skipped: \(reason)" }
 
+    /// The caution glyph's tooltip on a row the author left values to fill in, naming them in
+    /// the order the row lists them.
+    public static func needsTooltip(_ names: [String]) -> String {
+        "Needs your values: \(names.joined(separator: ", "))"
+    }
+
     public static func importButton(_ count: Int) -> String { "Import \(count)" }
+
+    /// What a collision offers, in the order the row's picker lists them. `add` is not among
+    /// them: a row with nothing in its way shows `newBadge` instead of a picker, so the view
+    /// binds this list rather than deciding for itself which cases a collision has.
+    public static let collisionChoices: [ImportChoice] = [.replace, .keepBoth, .skip]
+
+    /// One choice's picker label. Total over the enum, so a row's picker needs no logic of its
+    /// own; `add` is the answer for a name nothing here already holds.
+    public static func choiceTitle(_ choice: ImportChoice) -> String {
+        switch choice {
+        case .add: return addTitle
+        case .replace: return replaceTitle
+        case .keepBoth: return keepBothTitle
+        case .skip: return skipTitle
+        }
+    }
 
     public enum Mode: Equatable, Sendable { case addToCollection, keepInSync }
 

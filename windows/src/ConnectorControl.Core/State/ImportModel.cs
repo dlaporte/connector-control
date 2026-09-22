@@ -19,6 +19,7 @@ public sealed class ImportModel : ObservableObject
     public const string NewBadge = "new · arrives off";
     public const string PresentBadge = "already present · skipped";
     public const string ReplaceKeepsValues = "keeps your filled values";
+    public const string AddTitle = "Add";
     public const string ReplaceTitle = "Replace";
     public const string KeepBothTitle = "Keep both";
     public const string SkipTitle = "Skip";
@@ -34,8 +35,36 @@ public sealed class ImportModel : ObservableObject
 
     public static string SkippedBadge(string reason) => $"skipped: {reason}";
 
+    /// <summary>
+    /// The caution glyph's tooltip on a row the author left values to fill in, naming them in
+    /// the order the row lists them.
+    /// </summary>
+    public static string NeedsTooltip(IEnumerable<string> names) => "Needs your values: " + string.Join(", ", names);
+
     public static string ImportButton(int count) =>
         "Import " + count.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// What a collision offers, in the order the row's picker lists them. <see cref="ImportChoice.Add"/>
+    /// is not among them: a row with nothing in its way shows <see cref="NewBadge"/> instead of a
+    /// picker, so the view binds this list rather than deciding for itself which cases a
+    /// collision has.
+    /// </summary>
+    public static readonly IReadOnlyList<ImportChoice> CollisionChoices =
+        [ImportChoice.Replace, ImportChoice.KeepBoth, ImportChoice.Skip];
+
+    /// <summary>
+    /// One choice's picker label. Total over the enum, so a row's picker needs no logic of its
+    /// own; Add is the answer for a name nothing here already holds.
+    /// </summary>
+    public static string ChoiceTitle(ImportChoice choice) => choice switch
+    {
+        ImportChoice.Add => AddTitle,
+        ImportChoice.Replace => ReplaceTitle,
+        ImportChoice.KeepBoth => KeepBothTitle,
+        ImportChoice.Skip => SkipTitle,
+        _ => throw new ArgumentOutOfRangeException(nameof(choice)),
+    };
 
     public enum Mode
     {

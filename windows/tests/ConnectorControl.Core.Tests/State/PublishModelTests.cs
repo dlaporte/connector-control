@@ -208,4 +208,28 @@ public class PublishModelTests
         Assert.False(model.Intent.PathMarks.ContainsKey("c"));
         Assert.Contains("/Users/d/x.js", model.Preview, StringComparison.Ordinal);
     }
+    [Fact]
+    public void TheFooterNamesTheFileAndTheOriginOnceThereIsOne()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var collection = state.ActiveCollection;
+        var before = new PublishModel(state, collection);
+
+        // Nothing published yet, so there is no origin to show and the footer is the name alone.
+        Assert.Equal("", before.OriginShort);
+        Assert.Equal(before.FileName, before.FooterSentence);
+
+        Assert.Null(state.StartPublishing(collection, PublishFolder(h), PublishIntent.None));
+        var origin = state.CollectionsFile.Collections[collection].Publish!.Origin;
+        // A GUID, which is what the eight characters are cut from.
+        Assert.Equal(36, origin.Length);
+
+        var after = new PublishModel(state, collection);
+        Assert.Equal(origin[..8], after.OriginShort);
+        Assert.Equal(PublishModel.FooterLine(after.FileName, after.OriginShort), after.FooterSentence);
+        Assert.Equal($"{after.FileName} · {after.OriginShort}", after.FooterSentence);
+        // The document an export writes carries that same origin, so both sheets show one thing.
+        Assert.Equal(origin, state.ExportDocument(collection, PublishIntent.None).Origin);
+    }
 }

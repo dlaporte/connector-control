@@ -109,8 +109,10 @@ public final class AppState: ObservableObject {
     @Published public internal(set) var publishError: (collection: String, message: String)?
     /// What the popover asked the Collections window to do as it opened. It travels through the
     /// shared state because the two surfaces are separate windows with no reference to each
-    /// other; `takeCollectionsWindowRequest` is how the window consumes it.
-    @Published public var collectionsWindowRequest: CollectionsWindowRequest?
+    /// other; `takeCollectionsWindowRequest` is how the window consumes it. A newer request
+    /// replaces one nobody has taken yet: the menu items behind them cannot be pressed at once,
+    /// so the last one asked for is the one the user meant.
+    @Published public internal(set) var collectionsWindowRequest: CollectionsWindowRequest?
 
     /// The prompts AppState itself raises (quit, restart, collections); the editor owns its own.
     public let dialogs: Dialogs
@@ -707,8 +709,14 @@ public final class AppState: ObservableObject {
         performApply()
     }
 
-    /// The pending window request, cleared. The Collections window calls this as it appears, so
-    /// a request acted on once cannot be acted on again the next time that window opens.
+    /// The pending window request, cleared, so a request acted on once cannot be acted on again
+    /// the next time that window opens.
+    ///
+    /// The window has to call this twice over: once as it appears, and again whenever
+    /// `collectionsWindowRequest` changes while it is already on screen. A window that only
+    /// reads on appear strands every request raised after that — the popover can ask for a sheet
+    /// at any time, and a platform that re-activates an existing window instead of building a
+    /// new one never appears a second time.
     public func takeCollectionsWindowRequest() -> CollectionsWindowRequest? {
         defer { collectionsWindowRequest = nil }
         return collectionsWindowRequest
@@ -1282,6 +1290,15 @@ public final class AppState: ObservableObject {
         // persistStore ends in publishIfChanged, which is what writes the document.
         persistStore()
         return publishError?.collection == collection ? publishError?.message : nil
+    }
+
+    /// Publishing again into a different folder, which is what the failed-write banner's Choose
+    /// Folder… does from the popover and from the Collections window alike. The recorded intent
+    /// travels unchanged: the sheet is where what the document says gets edited, not this.
+    /// nil on success, else the message.
+    public func changePublishFolder(_ collection: String, to folder: String) -> String? {
+        startPublishing(collection, to: folder,
+                        intent: collectionsFile.collections[collection]?.publish?.intent ?? .none)
     }
 
     /// What the author ticked in the sheet, for a collection that already publishes. The document

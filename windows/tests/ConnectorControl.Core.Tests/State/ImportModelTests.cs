@@ -165,4 +165,32 @@ public class ImportModelTests
         // A document that cannot be read creates nothing.
         Assert.Equal(["Default"], state.CollectionNames);
     }
+
+    [Fact]
+    public void EveryChoiceHasATitleAndACollisionOffersThree()
+    {
+        Assert.Equal("Add", ImportModel.ChoiceTitle(ImportChoice.Add));
+        Assert.Equal("Replace", ImportModel.ChoiceTitle(ImportChoice.Replace));
+        Assert.Equal("Keep both", ImportModel.ChoiceTitle(ImportChoice.KeepBoth));
+        Assert.Equal("Skip", ImportModel.ChoiceTitle(ImportChoice.Skip));
+        // The picker is a collision's, so the case where nothing is in the way is not in it.
+        Assert.Equal([ImportChoice.Replace, ImportChoice.KeepBoth, ImportChoice.Skip], ImportModel.CollisionChoices);
+        Assert.Equal(["Replace", "Keep both", "Skip"], ImportModel.CollisionChoices.Select(ImportModel.ChoiceTitle));
+    }
+
+    [Fact]
+    public void TheNeedsTooltipListsTheNamesInOrder()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        Write(CollectionDocumentSamples.DataTeam, path);
+        var model = new ImportModel(state, path);
+
+        Assert.Equal("Needs your values: DBT_TOKEN", ImportModel.NeedsTooltip(["DBT_TOKEN"]));
+        Assert.Equal("Needs your values: DBT_TOKEN, server_path", ImportModel.NeedsTooltip(["DBT_TOKEN", "server_path"]));
+        // The row's own names, in the order the row already sorts them.
+        var dbt = model.Rows.Single(r => r.Name == "dbt");
+        Assert.Equal("Needs your values: DBT_TOKEN", ImportModel.NeedsTooltip(dbt.Needs));
+    }
 }

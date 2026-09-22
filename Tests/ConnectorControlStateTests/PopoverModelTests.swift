@@ -416,6 +416,40 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(state.collectionsCache.published["Default"]?.folder, second.path)
     }
 
+    func testOnlyTheFailedPublishBannerOffersStopPublishing() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        state.switchCollection(to: "Default")
+        try CollectionsFile(collections: [
+            "Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json"),
+            "Default": CollectionsFile.Entry(
+                kind: .local, publish: CollectionsFile.PublishRecord(slug: "default", origin: "origin", intent: .none)),
+        ]).save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        let folder = h.dir.file("pub")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try CollectionsLocalCache(synced: [:], published: ["Default": .init(folder: folder.path, lastWrittenHash: nil)])
+            .save(to: state.service.paths.collectionsCacheURL, staging: nil)
+        state.reload()
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+
+        // The locate banner has one button, so there is no second one to show or to press.
+        XCTAssertEqual(popover.collectionBanner, .locate(collection: "Team", fileName: "team.json"))
+        XCTAssertNil(popover.collectionBannerSecondaryButton)
+        popover.collectionBannerSecondaryAction()
+        XCTAssertNotNil(state.collectionsFile.collections["Default"]?.publish, "nothing was stopped")
+
+        state.publishError = (collection: "Default", message: "the folder is read-only")
+        XCTAssertEqual(popover.collectionBannerSecondaryButton, CollectionsModel.stopPublishingAction)
+        popover.collectionBannerSecondaryAction()
+        XCTAssertNil(state.collectionsFile.collections["Default"]?.publish, "the record is gone")
+        XCTAssertNil(state.collectionsCache.published["Default"], "and so is this machine's binding")
+        XCTAssertNil(state.publishError, "with the record gone there is nothing left to have failed")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: folder.appendingPathComponent("default.json").path),
+                      "the document in the folder stays: a folder this machine cannot reach is not one to delete from")
+    }
+
     func testTheCollectionsWindowRequestsRoundTripThroughAppState() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

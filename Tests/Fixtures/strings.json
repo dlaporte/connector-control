@@ -249,11 +249,15 @@
   "ImportModel.addModeTitle": {
     "format": "Add to a collection: {0}"
   },
+  "ImportModel.addTitle": "Add",
   "ImportModel.cancelButton": "Cancel",
   "ImportModel.importButton": {
     "format": "Import {0}"
   },
   "ImportModel.keepBothTitle": "Keep both",
+  "ImportModel.needsTooltip": {
+    "format": "Needs your values: {0}"
+  },
   "ImportModel.newBadge": "new · arrives off",
   "ImportModel.presentBadge": "already present · skipped",
   "ImportModel.replaceKeepsValues": "keeps your filled values",
@@ -286,7 +290,7 @@
     "format": "{0} ▾"
   },
   "PopoverModel.emptyText": "No connectors configured yet — add one below.",
-  "PopoverModel.exportTitle": {
+  "PopoverModel.exportTitleFor": {
     "format": "Export “{0}”…"
   },
   "PopoverModel.importTitle": "Import…",
@@ -312,6 +316,9 @@
     "win": {
       "format": "writes {0} from this PC on every change"
     }
+  },
+  "PublishModel.footerLine": {
+    "format": "{0} · {1}"
   },
   "PublishModel.hintPlaceholder": "hint for recipients",
   "PublishModel.pathNamePlaceholder": "placeholder name",

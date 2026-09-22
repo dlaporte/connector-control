@@ -419,4 +419,95 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.suggestedExportFileName, "acme-data-team.json",
                        "the same name the published document would take")
     }
+
+    // MARK: - Banner strip
+
+    /// Default, active and published into a real folder; Team, synced with its file still to be
+    /// found. The two banners the window can show therefore belong to different collections.
+    private func twoBanners(_ h: AppStateHarness, _ state: AppState, publishingInto folder: URL) throws {
+        XCTAssertNil(state.createCollection(named: "Team"))
+        state.switchCollection(to: "Default")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try seed(h, state,
+                 file: CollectionsFile(collections: ["Team": synced(fileName: "team.json"),
+                                                     "Default": published(slug: "default")]),
+                 cache: CollectionsLocalCache(
+                     synced: [:], published: ["Default": .init(folder: folder.path, lastWrittenHash: nil)]))
+    }
+
+    func testTheBannerStripSpeaksOnlyForTheSelectedCollection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = h.dir.file("pub")
+        try twoBanners(h, state, publishingInto: folder)
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+
+        // Team's file is missing, but the window is showing Default: the strip says nothing.
+        XCTAssertEqual(state.collectionBanner, .locate(collection: "Team", fileName: "team.json"))
+        XCTAssertNil(model.bannerText)
+        XCTAssertNil(model.bannerButton)
+        XCTAssertFalse(model.bannerAction())
+
+        model.selected = "Team"
+        XCTAssertEqual(model.bannerText, AppState.collectionLocateBanner("Team"))
+        XCTAssertEqual(model.bannerButton, PopoverModel.locateButton("team.json"))
+        XCTAssertFalse(model.bannerAction(), "the view owes a file picker")
+
+        // An update waiting is the one banner the strip can act on by itself.
+        let diff = CollectionDiff(added: ["jira"], removed: [], changed: [])
+        state.pendingUpdates = ["Team": diff]
+        XCTAssertEqual(model.bannerText, AppState.collectionUpdateBanner("Team", diff.summary()))
+        XCTAssertEqual(model.bannerButton, PopoverModel.reviewAndApplyButton)
+        XCTAssertTrue(model.bannerAction())
+
+        // A failed publish belongs to Default, so Team's strip goes quiet again.
+        var repaints = 0
+        let sink = model.objectWillChange.sink { _ in repaints += 1 }
+        defer { sink.cancel() }
+        state.publishError = (collection: "Default", message: "the folder is read-only")
+        XCTAssertGreaterThan(repaints, 0, "a failed publish repaints the window")
+        XCTAssertNil(model.bannerText)
+        model.selected = "Default"
+        XCTAssertEqual(model.bannerText,
+                       AppState.collectionPublishFailedBanner("Default", folder.path, "the folder is read-only"))
+        XCTAssertEqual(model.bannerButton, PopoverModel.chooseFolderButton)
+        XCTAssertFalse(model.bannerAction(), "the view owes a folder picker")
+    }
+
+    func testTheBannerStripLocatesAndRepointsTheSelectedCollection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let first = h.dir.file("first")
+        try twoBanners(h, state, publishingInto: first)
+        let second = h.dir.file("second")
+        try FileManager.default.createDirectory(at: second, withIntermediateDirectories: true)
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+
+        // The window is showing Default, which the locate banner is not about.
+        let document = h.dir.file("team.json")
+        try CollectionDocumentSamples.dataTeam.serialized().write(to: document)
+        XCTAssertNil(model.locateSource(document.path))
+        XCTAssertNil(state.sourceBinding(of: "Team"))
+
+        model.selected = "Team"
+        XCTAssertNil(model.locateSource(document.path))
+        XCTAssertEqual(state.sourceBinding(of: "Team")?.path, document.path)
+
+        // The document found, the banner has moved on, so the publish forwarding stays out of it.
+        XCTAssertNil(model.choosePublishFolder(second.path))
+        XCTAssertEqual(state.collectionsCache.published["Default"]?.folder, first.path)
+
+        // A failed publish belongs to Default, and only Default's window may answer it.
+        state.publishError = (collection: "Default", message: "the folder is read-only")
+        XCTAssertNil(model.choosePublishFolder(second.path), "Team is showing, not Default")
+        XCTAssertEqual(state.collectionsCache.published["Default"]?.folder, first.path)
+
+        model.selected = "Default"
+        XCTAssertNil(model.choosePublishFolder(second.path))
+        XCTAssertEqual(state.collectionsCache.published["Default"]?.folder, second.path)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second.appendingPathComponent("default.json").path),
+                      "the document lands in the folder just chosen")
+    }
 }

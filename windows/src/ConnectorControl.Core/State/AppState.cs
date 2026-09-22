@@ -218,12 +218,14 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// What the flyout asked the Collections window to do as it opened. It travels through the
     /// shared state because the two surfaces are separate windows with no reference to each
-    /// other; <see cref="TakeCollectionsWindowRequest"/> is how the window consumes it.
+    /// other; <see cref="TakeCollectionsWindowRequest"/> is how the window consumes it. A newer
+    /// request replaces one nobody has taken yet: the menu items behind them cannot be pressed
+    /// at once, so the last one asked for is the one the user meant.
     /// </summary>
     public CollectionsWindowRequest? CollectionsWindowRequest
     {
         get => collectionsWindowRequest;
-        set => Set(ref collectionsWindowRequest, value);
+        internal set => Set(ref collectionsWindowRequest, value);
     }
 
     public bool IsDirty => !DictionaryEquality.Equal(ExpandedServers, AppliedServers);
@@ -1006,8 +1008,15 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// The pending window request, cleared. The Collections window calls this as it appears, so
-    /// a request acted on once cannot be acted on again the next time that window opens.
+    /// The pending window request, cleared, so a request acted on once cannot be acted on again
+    /// the next time that window opens.
+    ///
+    /// The window has to call this twice over: once as it appears, and again on every
+    /// <see cref="INotifyPropertyChanged.PropertyChanged"/> for
+    /// <see cref="CollectionsWindowRequest"/> while it is already on screen. That second call is
+    /// what this platform needs most: <c>WindowRegistry</c> keeps one Collections window and
+    /// re-activates it, so a window that only reads on load would strand every request raised
+    /// after the first.
     /// </summary>
     public CollectionsWindowRequest? TakeCollectionsWindowRequest()
     {
@@ -1869,6 +1878,18 @@ public sealed class AppState : ObservableObject, IDisposable
         RaiseAll();
         return PublishError?.Collection == collection ? PublishError.Message : null;
     }
+
+    /// <summary>
+    /// Publishing again into a different folder, which is what the failed-write banner's Choose
+    /// Folder… does from the flyout and from the Collections window alike. The recorded intent
+    /// travels unchanged: the dialog is where what the document says gets edited, not this.
+    /// null on success, else the message.
+    /// </summary>
+    public string? ChangePublishFolder(string collection, string folder) =>
+        StartPublishing(collection, folder,
+            CollectionsFile.Collections.TryGetValue(collection, out var entry) && entry.Publish is { } record
+                ? record.Intent
+                : PublishIntent.None);
 
     /// <summary>
     /// What the author ticked in the sheet, for a collection that already publishes. The document

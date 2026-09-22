@@ -435,4 +435,97 @@ public class CollectionsModelTests
         // The same name the published document would take.
         Assert.Equal("acme-data-team.json", model.SuggestedExportFileName);
     }
+    // MARK: banner strip
+
+    /// <summary>
+    /// Default, active and published into a real folder; Team, synced with its file still to be
+    /// found. The two banners the window can show therefore belong to different collections.
+    /// </summary>
+    private static void TwoBanners(AppStateHarness h, AppState state, string folder)
+    {
+        Assert.Null(state.CreateCollection("Team"));
+        state.SwitchCollection("Default");
+        Directory.CreateDirectory(folder);
+        Seed(h, state, File_(("Team", Synced("team.json")), ("Default", Published("default"))),
+             Cache(published: [new("Default", new CollectionsLocalCache.PublishBinding(folder, null))]));
+    }
+
+    [Fact]
+    public void TheBannerStripSpeaksOnlyForTheSelectedCollection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = h.Dir.File("pub");
+        TwoBanners(h, state, folder);
+        using var model = new CollectionsModel(state, h.Dialogs);
+
+        // Team's file is missing, but the window is showing Default: the strip says nothing.
+        Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), state.CollectionBanner);
+        Assert.Null(model.BannerText);
+        Assert.Null(model.BannerButton);
+        Assert.False(model.HasBanner);
+        Assert.False(model.BannerAction());
+
+        model.Selected = "Team";
+        Assert.Equal(AppState.CollectionLocateBanner("Team"), model.BannerText);
+        Assert.Equal(FlyoutModel.LocateButton("team.json"), model.BannerButton);
+        Assert.True(model.HasBanner);
+        Assert.False(model.BannerAction());   // the view owes a file dialog
+
+        // An update waiting is the one banner the strip can act on by itself.
+        var diff = new CollectionDiff(["jira"], [], []);
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal) { ["Team"] = diff };
+        Assert.Equal(AppState.CollectionUpdateBanner("Team", diff.Summary()), model.BannerText);
+        Assert.Equal(FlyoutModel.ReviewAndApplyButton, model.BannerButton);
+        Assert.True(model.BannerAction());
+
+        // A failed publish belongs to Default, so Team's strip goes quiet again.
+        var repaints = 0;
+        model.PropertyChanged += (_, _) => repaints++;
+        state.PublishError = new CollectionPublishError("Default", "the folder is read-only");
+        Assert.True(repaints > 0, "a failed publish repaints the window");
+        Assert.Null(model.BannerText);
+        model.Selected = "Default";
+        Assert.Equal(AppState.CollectionPublishFailedBanner("Default", folder, "the folder is read-only"),
+                     model.BannerText);
+        Assert.Equal(FlyoutModel.ChooseFolderButton, model.BannerButton);
+        Assert.False(model.BannerAction());   // the view owes a folder dialog
+    }
+
+    [Fact]
+    public void TheBannerStripLocatesAndRepointsTheSelectedCollection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var first = h.Dir.File("first");
+        TwoBanners(h, state, first);
+        var second = h.Dir.File("second");
+        Directory.CreateDirectory(second);
+        using var model = new CollectionsModel(state, h.Dialogs);
+
+        // The window is showing Default, which the locate banner is not about.
+        var document = h.Dir.File("team.json");
+        System.IO.File.WriteAllBytes(document, CollectionDocumentSamples.DataTeam.Serialize());
+        Assert.Null(model.LocateSource(document));
+        Assert.Null(state.SourceBinding("Team"));
+
+        model.Selected = "Team";
+        Assert.Null(model.LocateSource(document));
+        Assert.Equal(document, state.SourceBinding("Team")?.Path);
+
+        // The document found, the banner has moved on, so the publish forwarding stays out of it.
+        Assert.Null(model.ChoosePublishFolder(second));
+        Assert.Equal(first, state.CollectionsCache.Published["Default"].Folder);
+
+        // A failed publish belongs to Default, and only Default's window may answer it.
+        state.PublishError = new CollectionPublishError("Default", "the folder is read-only");
+        Assert.Null(model.ChoosePublishFolder(second));   // Team is showing, not Default
+        Assert.Equal(first, state.CollectionsCache.Published["Default"].Folder);
+
+        model.Selected = "Default";
+        Assert.Null(model.ChoosePublishFolder(second));
+        Assert.Equal(second, state.CollectionsCache.Published["Default"].Folder);
+        // The document lands in the folder just chosen.
+        Assert.True(System.IO.File.Exists(Path.Combine(second, "default.json")));
+    }
 }

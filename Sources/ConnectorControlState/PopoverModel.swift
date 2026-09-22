@@ -25,7 +25,10 @@ public final class PopoverModel: ObservableObject {
 
     public static func collectionChipText(_ active: String) -> String { "\(active) ▾" }
 
-    public static func exportTitle(_ active: String) -> String { "Export “\(active)”…" }
+    /// Carries the C#-forced name on this side too, so the pair reads the same in both files: a
+    /// static and an instance member cannot share one name there, and one spelling of the
+    /// factory is easier to follow than two.
+    public static func exportTitleFor(_ active: String) -> String { "Export “\(active)”…" }
 
     public static func locateButton(_ fileName: String) -> String { "Locate \(fileName)…" }
 
@@ -48,7 +51,7 @@ public final class PopoverModel: ObservableObject {
     public var collectionChipText: String { PopoverModel.collectionChipText(state.activeCollection) }
 
     /// The menu's Export item, which names the collection it would write.
-    public var exportTitle: String { PopoverModel.exportTitle(state.activeCollection) }
+    public var exportTitle: String { PopoverModel.exportTitleFor(state.activeCollection) }
 
     /// The chain beside the chip, and the lock on every row below it.
     public var activeCollectionIsSynced: Bool { state.activeCollectionIsSynced }
@@ -59,7 +62,9 @@ public final class PopoverModel: ObservableObject {
 
     /// The chain's tooltip: where the active collection's document sits on this machine, or the
     /// name the sidecar recorded while the file has still to be found. nil for a local
-    /// collection, which has no source, and for a synced one the sidecar never named.
+    /// collection, which has no source, and for a synced one the sidecar never named. A view
+    /// whose tooltip modifier takes a plain String coalesces it (`?? ""`) — the chain is drawn
+    /// only for a synced collection, which is the case that has something to say.
     public var sourceTooltip: String? {
         let active = state.activeCollection
         guard state.isSynced(active) else { return nil }
@@ -93,29 +98,14 @@ public final class PopoverModel: ObservableObject {
     /// to "this optional is not nil", where SwiftUI binds the optional itself.
     public var collectionBanner: CollectionBanner? { state.collectionBanner }
 
+    /// The popover's slot speaks for whichever collection has news, active or not — unlike the
+    /// Collections window's strip, which answers only for the collection it is showing.
     public var collectionBannerText: String? {
-        switch state.collectionBanner {
-        case .updateAvailable(let collection, let summary):
-            return AppState.collectionUpdateBanner(collection, summary)
-        case .locate(let collection, _):
-            return AppState.collectionLocateBanner(collection)
-        case .publishFailed(let collection, let message):
-            // The folder is the binding's, not the banner's: publishing is what sets the error,
-            // so the collection that failed always has one.
-            return AppState.collectionPublishFailedBanner(
-                collection, state.collectionsCache.published[collection]?.folder ?? "", message)
-        case nil:
-            return nil
-        }
+        state.collectionBanner.map { CollectionBannerPresentation.text($0, state) }
     }
 
     public var collectionBannerButton: String? {
-        switch state.collectionBanner {
-        case .updateAvailable: return PopoverModel.reviewAndApplyButton
-        case .locate(_, let fileName): return PopoverModel.locateButton(fileName)
-        case .publishFailed: return PopoverModel.chooseFolderButton
-        case nil: return nil
-        }
+        state.collectionBanner.map(CollectionBannerPresentation.button)
     }
 
     // MARK: rows
@@ -176,14 +166,30 @@ public final class PopoverModel: ObservableObject {
 
     public func switchCollection(_ name: String) { state.switchCollection(to: name) }
 
-    /// The banner's button, for the one banner that needs nothing from the user first. False
-    /// says the view has still to run its file picker and call `locateSource` or
-    /// `choosePublishFolder` with what it gets, which only a view can do.
+    /// The banner's button, for the one banner that needs nothing from the user first. The Bool
+    /// is about order as much as outcome: on true the request is already waiting, so the view
+    /// opens the Collections window and does nothing else; on false nothing has happened yet and
+    /// the view runs its file picker, then calls `locateSource` or `choosePublishFolder` with
+    /// what it gets. Opening the window before the call would let it take a nil request.
     @discardableResult
     public func collectionBannerAction() -> Bool {
         guard case .updateAvailable = state.collectionBanner else { return false }
         requestReview()
         return true
+    }
+
+    /// The failed-publish banner's second button, where giving up on the folder is as reasonable
+    /// an answer as choosing another one. nil for every other banner, which has one button.
+    public var collectionBannerSecondaryButton: String? {
+        state.collectionBanner.flatMap(CollectionBannerPresentation.secondaryButton)
+    }
+
+    /// Stop Publishing from the banner. The document in the folder is left where it is: this
+    /// banner is raised by a folder this machine could not write to, so deleting from it is the
+    /// one thing that cannot be offered. Nothing happens under any other banner.
+    public func collectionBannerSecondaryAction() {
+        guard case .publishFailed(let collection, _) = state.collectionBanner else { return }
+        state.stopPublishing(collection, deleteFile: false)
     }
 
     /// The Locate banner's file, for the collection that banner names. nil on success, else the
@@ -199,8 +205,7 @@ public final class PopoverModel: ObservableObject {
     /// the sheet is where what the document says gets edited. nil as `locateSource` returns nil.
     public func choosePublishFolder(_ path: String) -> String? {
         guard case .publishFailed(let collection, _) = state.collectionBanner else { return nil }
-        let intent = state.collectionsFile.collections[collection]?.publish?.intent ?? .none
-        return state.startPublishing(collection, to: path, intent: intent)
+        return state.changePublishFolder(collection, to: path)
     }
 
     /// The menu's Import…: the picker and the sheet belong to the Collections window, so opening
