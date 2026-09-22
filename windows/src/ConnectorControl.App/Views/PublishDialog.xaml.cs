@@ -79,6 +79,15 @@ public partial class PublishDialog : DialogWindow
         }
     }
 
+    /// <summary>Each kept path's line is bound to that path, whose value is all the model needs.</summary>
+    private void OnReleaseValue(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is PublishModel.KeptPath kept)
+        {
+            Model.ReleaseKeptPath(kept.Value);
+        }
+    }
+
     private void OnPublish(object sender, RoutedEventArgs e) => Finish(Model.Publish());
 
     private void OnExport(object sender, RoutedEventArgs e)
@@ -117,14 +126,18 @@ public partial class PublishDialog : DialogWindow
 }
 
 /// <summary>
-/// An unresolved mark's line, from the mark the list holds. The sentence is the model's static and
-/// names the mark and its connector mid-sentence, so a binding cannot compose it from parts without
-/// restating the wording here.
+/// The note on an entry that holds the sheet, from the entry the list holds. Each sentence is the
+/// model's static and names its parts mid-sentence, so a binding cannot compose it without
+/// restating the wording here. One converter for every kind of entry, so a new kind is one case.
 /// </summary>
-public sealed class MarkNoteConverter : IValueConverter
+public sealed class UnansweredNoteConverter : IValueConverter
 {
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is PublishModel.UnresolvedMark mark ? PublishModel.UnresolvedMarkNote(mark.Connector, mark.Name) : string.Empty;
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value switch
+    {
+        PublishModel.UnresolvedMark mark => PublishModel.UnresolvedMarkNote(mark.Connector, mark.Name),
+        PublishModel.KeptPath kept => PublishModel.KeptPathNote(kept.Connector, kept.Field),
+        _ => string.Empty,
+    };
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();

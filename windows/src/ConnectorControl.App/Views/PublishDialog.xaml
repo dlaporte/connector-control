@@ -5,7 +5,7 @@
         xmlns:views="clr-namespace:ConnectorControl.App.Views"
         Width="620">
   <views:DialogWindow.Resources>
-    <views:MarkNoteConverter x:Key="MarkNote" />
+    <views:UnansweredNoteConverter x:Key="UnansweredNote" />
   </views:DialogWindow.Resources>
   <StackPanel Margin="16">
     <!-- The sheet's own heading, as well as the title bar's: the Mac sheet has no chrome to put
@@ -111,29 +111,54 @@
       </StackPanel>
     </ScrollViewer>
 
-    <!-- A path mark this sheet could not place: the reason Publish and Export are held, and the
-         way out besides ticking the path where it now sits. Outside the rows' scroll region so the
-         explanation of a disabled button is never scrolled away, and capped like the warnings so
-         the footer stays on screen. A connector that no longer exists has no row to tick, so its
-         line shows even when the sections above are empty. Each line carries its own top margin,
-         so the region takes no space at all when there is nothing to answer. -->
-    <ScrollViewer MaxHeight="72" VerticalScrollBarVisibility="Auto">
-      <ItemsControl x:Name="UnresolvedList" ItemsSource="{Binding UnresolvedMarks}">
-        <ItemsControl.ItemTemplate>
-          <DataTemplate>
-            <Grid Margin="0,8,0,0">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-              </Grid.ColumnDefinitions>
-              <TextBlock x:Name="MarkNoteText" Text="{Binding Converter={StaticResource MarkNote}}" Style="{StaticResource CautionText}"
-                         VerticalAlignment="Center" Margin="0,0,12,0" />
-              <Button x:Name="ForgetMark" Grid.Column="1" Content="{x:Static state:PublishModel.ForgetMarkButton}"
-                      VerticalAlignment="Center" Click="OnForgetMark" />
-            </Grid>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
+    <!-- Every entry that holds Publish and Export: a path mark this sheet could not place, and a
+         path this machine keeps back that the document would carry as written. Each line is the
+         reason and its way out besides a tick. Outside the rows' scroll region so the explanation
+         of a disabled button is never scrolled away, and capped so the footer stays on screen. A
+         connector that no longer exists has no row to tick, so its line shows even when the
+         sections above are empty. Each line carries its own top margin, so the region takes no
+         space at all when there is nothing to answer.
+
+         Every line has the same two columns: the note, and a horizontal panel of the answers that
+         entry takes. An entry that offers a second kind of answer adds a button to its panel and
+         changes nothing else. -->
+    <ScrollViewer MaxHeight="96" VerticalScrollBarVisibility="Auto">
+      <StackPanel>
+        <ItemsControl x:Name="UnresolvedList" ItemsSource="{Binding UnresolvedMarks}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="MarkNoteText" Text="{Binding Converter={StaticResource UnansweredNote}}" Style="{StaticResource CautionText}"
+                           VerticalAlignment="Center" Margin="0,0,12,0" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Button x:Name="ForgetMark" Content="{x:Static state:PublishModel.ForgetMarkButton}" Click="OnForgetMark" />
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <ItemsControl x:Name="KeptList" ItemsSource="{Binding KeptPaths}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="KeptNoteText" Text="{Binding Converter={StaticResource UnansweredNote}}" Style="{StaticResource CautionText}"
+                           VerticalAlignment="Center" Margin="0,0,12,0" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Button x:Name="ReleaseValue" Content="{x:Static state:PublishModel.ReleaseValueButton}" Click="OnReleaseValue" />
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
     </ScrollViewer>
 
     <!-- The document itself: every byte that leaves this PC, read-only. -->

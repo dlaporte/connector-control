@@ -49,6 +49,7 @@ public class PublishDialogTests
         window.EnvList.UpdateLayout();
         window.PathList.UpdateLayout();
         window.UnresolvedList.UpdateLayout();
+        window.KeptList.UpdateLayout();
         return window;
     }
 
@@ -270,6 +271,63 @@ public class PublishDialogTests
             Assert.Empty(export.UnresolvedList.Items);
             Assert.True(export.ExportButton.IsEnabled);
             export.Close();
+        });
+    }
+
+    private const string LedgerPath = "/Users/d/ledger/dist/index.js";
+
+    [Fact]
+    public void ALostMarkAndAKeptPathEachHoldTheSheetUntilAnswered()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        PublishThenMoveTheMarkedPath(h, state);
+        Assert.Null(state.Upsert("ledger", new McpEntry(true, JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String(LedgerPath)])))), null));
+        WpfApp.Invoke(() =>
+        {
+            var model = new PublishModel(state, state.ActiveCollection);
+            var window = Shown(model);
+
+            // A kept path: ledger's path ticked, then written out whole in its own hint, which
+            // would carry it into the document as written.
+            var ledger = model.PathRows.Single(r => r.Connector == "ledger");
+            RowElements.Find<CheckBox>(window.PathList, ledger, "MarkTick").IsChecked = true;
+            Layout(window);
+            RowElements.Find<TextBox>(window.PathList, ledger, "PathHintBox").Text = $"like mine, {LedgerPath}";
+            Layout(window);
+
+            // Both entries are listed, each with its own note and its own way out.
+            var lost = Assert.Single(model.UnresolvedMarks);
+            var kept = Assert.Single(model.KeptPaths);
+            Assert.Equal(PublishModel.UnresolvedMarkNote("c", "srv"),
+                RowElements.Find<TextBlock>(window.UnresolvedList, lost, "MarkNoteText").Text);
+            Assert.Equal(PublishModel.KeptPathNote("ledger", kept.Field),
+                RowElements.Find<TextBlock>(window.KeptList, kept, "KeptNoteText").Text);
+            Assert.Equal(PublishModel.ForgetMarkButton, RowElements.Find<Button>(window.UnresolvedList, lost, "ForgetMark").Content);
+            Assert.Equal(PublishModel.ReleaseValueButton, RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue").Content);
+            // The export button is bound to its gate in both modes, so one sheet shows both.
+            Assert.False(window.PublishButton.IsEnabled);
+            Assert.False(window.ExportButton.IsEnabled);
+
+            // Each entry is answered alone: forgetting the mark leaves the kept path holding both.
+            Press(RowElements.Find<Button>(window.UnresolvedList, lost, "ForgetMark"));
+            Layout(window);
+            Assert.Empty(window.UnresolvedList.Items);
+            Assert.Single(window.KeptList.Items);
+            Assert.False(window.PublishButton.IsEnabled);
+            Assert.False(window.ExportButton.IsEnabled);
+
+            // The list was re-read when the mark was forgotten, so its line is found again.
+            Press(RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue"));
+            Layout(window);
+            Assert.Empty(window.KeptList.Items);
+            // Released, the path travels as written, so no row goes on marking it.
+            Assert.False(RowElements.Find<CheckBox>(window.PathList, ledger, "MarkTick").IsChecked);
+            Assert.True(window.PublishButton.IsEnabled);
+            Assert.True(window.ExportButton.IsEnabled);
+            window.Close();
         });
     }
 }

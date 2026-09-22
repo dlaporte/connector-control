@@ -46,29 +46,7 @@ struct PublishSheetView: View {
                 .frame(maxHeight: 200)
             }
 
-            // A path mark this sheet could not place: the reason Publish and Export are held, and
-            // the way out besides ticking the path where it now sits. Outside the rows' scroll
-            // region so the explanation of a disabled button is never scrolled away, and capped
-            // like the warnings so the footer stays on screen. A connector that no longer exists
-            // has no row to tick, so its line shows even when the sections above are empty.
-            if !model.unresolvedMarks.isEmpty {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(model.unresolvedMarks) { mark in
-                            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text(PublishModel.unresolvedMarkNote(mark.connector, mark.name))
-                                    .font(.caption)
-                                    .foregroundStyle(.orange)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Spacer()
-                                Button(PublishModel.forgetMarkButton) { model.forgetUnresolvedMark(mark.id) }
-                                    .controlSize(.small)
-                            }
-                        }
-                    }
-                }
-                .frame(maxHeight: 72)
-            }
+            unanswered
 
             preview
 
@@ -129,6 +107,53 @@ struct PublishSheetView: View {
             Text(model.folderLine)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: what holds the sheet
+
+    /// Every entry that holds Publish and Export: a path mark this sheet could not place, and a
+    /// path this machine keeps back that the document would carry as written. Each line is the
+    /// reason and its way out besides a tick. Outside the rows' scroll region so the explanation
+    /// of a disabled button is never scrolled away, and capped so the footer stays on screen. A
+    /// connector that no longer exists has no row to tick, so its line shows even when the
+    /// sections above are empty. Each list is read once per render: the kept paths are found by
+    /// rendering the document.
+    @ViewBuilder private var unanswered: some View {
+        let marks = model.unresolvedMarks
+        let kept = model.keptPaths
+        if !marks.isEmpty || !kept.isEmpty {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(marks) { mark in
+                        unansweredLine(PublishModel.unresolvedMarkNote(mark.connector, mark.name)) {
+                            Button(PublishModel.forgetMarkButton) { model.forgetUnresolvedMark(mark.id) }
+                        }
+                    }
+                    ForEach(kept) { path in
+                        unansweredLine(PublishModel.keptPathNote(path.connector, path.field)) {
+                            Button(PublishModel.releaseValueButton) { model.releaseKeptPath(path.value) }
+                        }
+                    }
+                }
+            }
+            .frame(maxHeight: 96)
+        }
+    }
+
+    /// One entry's line: its note in caution, and its answers at the trailing edge. The answers
+    /// are a list of their own, so an entry that offers a second kind of answer adds a button here
+    /// and changes nothing else.
+    @ViewBuilder private func unansweredLine<Answers: View>(_ note: String,
+                                                           @ViewBuilder answers: () -> Answers) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(note)
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            HStack(spacing: 6) { answers() }
+                .controlSize(.small)
         }
     }
 
