@@ -9,6 +9,7 @@
   <Window.Resources>
     <views:NotConverter x:Key="Not" />
     <views:HeaderStateConverter x:Key="HeaderState" />
+    <views:MarkThicknessConverter x:Key="Mark" />
     <views:EditorRuleConverter x:Key="EditorRule" />
     <Style x:Key="FieldLabel" TargetType="TextBlock">
       <Setter Property="VerticalAlignment" Value="Center" />
@@ -20,9 +21,11 @@
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Margin" Value="0,0,12,0" />
     </Style>
-    <!-- The lock that marks a value belonging to the collection's author. -->
+    <!-- The lock that marks a value belonging to the collection's author. A private-use glyph
+         reads as nothing, so the header's own sentence is what a screen reader says instead. -->
     <Style x:Key="LabelLock" TargetType="TextBlock">
       <Setter Property="Text" Value="{StaticResource LockGlyph}" />
+      <Setter Property="AutomationProperties.Name" Value="{Binding HeaderNote}" />
       <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
       <Setter Property="FontSize" Value="10" />
       <Setter Property="Opacity" Value="0.55" />
@@ -40,6 +43,15 @@
     <Style x:Key="PlaceholderMark" TargetType="Border">
       <Setter Property="BorderBrush" Value="{DynamicResource SystemFillColorCautionBrush}" />
       <Setter Property="CornerRadius" Value="5" />
+    </Style>
+    <!-- The author's hint under a field they marked. A document that carried none leaves this
+         empty, and an empty caution line should take no room. -->
+    <Style x:Key="HintLine" TargetType="TextBlock" BasedOn="{StaticResource CautionText}">
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding RelativeSource={RelativeSource Self}, Path=Text}" Value="">
+          <Setter Property="Visibility" Value="Collapsed" />
+        </DataTrigger>
+      </Style.Triggers>
     </Style>
     <!-- The grey line the synced and published headers share. -->
     <Style x:Key="HeaderCapsule" TargetType="Border">
@@ -92,7 +104,7 @@
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
           <TextBlock Text="{StaticResource ChainGlyph}" Style="{StaticResource HeaderGlyph}" />
-          <TextBlock Grid.Column="1" Text="{Binding HeaderNote}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="6,0,0,0" />
+          <TextBlock x:Name="SyncedHeaderText" Grid.Column="1" Text="{Binding HeaderNote}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="6,0,0,0" />
           <Button x:Name="WhatCanIChange" Grid.Column="2" Content="{x:Static state:EditorModel.WhatCanIChange}" Style="{StaticResource LinkButton}"
                   Margin="8,0,0,0" ToolTipService.ShowDuration="60000" Click="OnWhatCanIChange">
             <Button.ToolTip>
@@ -106,7 +118,7 @@
       <Border x:Name="PublishedHeader" Style="{StaticResource HeaderCapsule}" Visibility="{Binding Header, Converter={StaticResource HeaderState}, ConverterParameter=Published}">
         <StackPanel Orientation="Horizontal">
           <TextBlock Text="{StaticResource ShareGlyph}" Style="{StaticResource HeaderGlyph}" />
-          <TextBlock Text="{Binding HeaderNote}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="6,0,0,0" />
+          <TextBlock x:Name="PublishedHeaderText" Text="{Binding HeaderNote}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="6,0,0,0" />
         </StackPanel>
       </Border>
       <TextBlock x:Name="ImportedHeader" Text="{Binding HeaderNote}" Style="{StaticResource CaptionText}" FontStyle="Italic"
@@ -206,37 +218,34 @@
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Token" Style="{StaticResource FieldLabel}" />
-                    <Border Grid.Column="1" Style="{StaticResource PlaceholderMark}">
-                      <Border.BorderThickness>
-                        <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="MarkThickness:BearerToken">
-                          <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
-                          <Binding Path="BearerToken" />
-                        </MultiBinding>
-                      </Border.BorderThickness>
-                      <PasswordBox x:Name="BearerTokenBox" views:PasswordBoxHelper.BoundPassword="{Binding BearerToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
-                        <PasswordBox.IsEnabled>
-                          <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="IsLive:BearerToken">
-                            <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
-                            <Binding Path="BearerToken" />
-                          </MultiBinding>
-                        </PasswordBox.IsEnabled>
-                      </PasswordBox>
+                    <Border Grid.Column="1" BorderBrush="{DynamicResource SystemFillColorCautionBrush}" CornerRadius="5"
+                            BorderThickness="{Binding BearerTokenIsPlaceholder, Converter={StaticResource Mark}}">
+                      <Border.Style>
+                        <!-- Disabling the ring disables the box inside it, so the whole "locked
+                             unless the document asks for it" rule is one trigger, not a
+                             converter. -->
+                        <Style TargetType="Border">
+                          <Style.Triggers>
+                            <MultiDataTrigger>
+                              <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsReadOnly}" Value="True" />
+                                <Condition Binding="{Binding BearerTokenIsPlaceholder}" Value="False" />
+                              </MultiDataTrigger.Conditions>
+                              <Setter Property="IsEnabled" Value="False" />
+                            </MultiDataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Border.Style>
+                      <PasswordBox x:Name="BearerTokenBox" views:PasswordBoxHelper.BoundPassword="{Binding BearerToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     </Border>
                   </Grid>
-                  <TextBlock Style="{StaticResource CautionText}" Margin="110,2,0,0">
-                    <TextBlock.Text>
-                      <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint:BearerToken">
-                        <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
-                        <Binding Path="BearerToken" />
-                      </MultiBinding>
-                    </TextBlock.Text>
-                    <TextBlock.Visibility>
-                      <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="HintVisibility:BearerToken">
-                        <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
-                        <Binding Path="BearerToken" />
-                      </MultiBinding>
-                    </TextBlock.Visibility>
-                  </TextBlock>
+                  <StackPanel x:Name="BearerNeeds" Margin="110,2,0,0" Visibility="{Binding BearerTokenIsPlaceholder, Converter={StaticResource Vis}}">
+                    <!-- The field itself holds the marker the document left, so the phrase
+                         that names the state goes here rather than in a watermark that
+                         nothing empty would ever show. -->
+                    <TextBlock Text="{x:Static state:EditorModel.NeedsValue}" Style="{StaticResource CautionText}" />
+                    <TextBlock Text="{Binding BearerTokenHint}" Style="{StaticResource HintLine}" />
+                  </StackPanel>
                   <TextBlock Text="{x:Static state:EditorModel.BearerCaption}" Style="{StaticResource CaptionText}" Margin="0,6,0,0" />
                 </StackPanel>
                 <StackPanel Visibility="{Binding IsHeader, Converter={StaticResource Vis}}">
@@ -248,37 +257,34 @@
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Header value" Style="{StaticResource FieldLabel}" />
-                    <Border Grid.Column="1" Style="{StaticResource PlaceholderMark}">
-                      <Border.BorderThickness>
-                        <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="MarkThickness:HeaderValue">
-                          <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
-                          <Binding Path="HeaderValue" />
-                        </MultiBinding>
-                      </Border.BorderThickness>
-                      <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding HeaderValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
-                        <PasswordBox.IsEnabled>
-                          <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="IsLive:HeaderValue">
-                            <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
-                            <Binding Path="HeaderValue" />
-                          </MultiBinding>
-                        </PasswordBox.IsEnabled>
-                      </PasswordBox>
+                    <Border Grid.Column="1" BorderBrush="{DynamicResource SystemFillColorCautionBrush}" CornerRadius="5"
+                            BorderThickness="{Binding HeaderValueIsPlaceholder, Converter={StaticResource Mark}}">
+                      <Border.Style>
+                        <!-- Disabling the ring disables the box inside it, so the whole "locked
+                             unless the document asks for it" rule is one trigger, not a
+                             converter. -->
+                        <Style TargetType="Border">
+                          <Style.Triggers>
+                            <MultiDataTrigger>
+                              <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsReadOnly}" Value="True" />
+                                <Condition Binding="{Binding HeaderValueIsPlaceholder}" Value="False" />
+                              </MultiDataTrigger.Conditions>
+                              <Setter Property="IsEnabled" Value="False" />
+                            </MultiDataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Border.Style>
+                      <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding HeaderValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     </Border>
                   </Grid>
-                  <TextBlock Style="{StaticResource CautionText}" Margin="110,2,0,0">
-                    <TextBlock.Text>
-                      <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint:HeaderValue">
-                        <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
-                        <Binding Path="HeaderValue" />
-                      </MultiBinding>
-                    </TextBlock.Text>
-                    <TextBlock.Visibility>
-                      <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="HintVisibility:HeaderValue">
-                        <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
-                        <Binding Path="HeaderValue" />
-                      </MultiBinding>
-                    </TextBlock.Visibility>
-                  </TextBlock>
+                  <StackPanel x:Name="HeaderValueNeeds" Margin="110,2,0,0" Visibility="{Binding HeaderValueIsPlaceholder, Converter={StaticResource Vis}}">
+                    <!-- The field itself holds the marker the document left, so the phrase
+                         that names the state goes here rather than in a watermark that
+                         nothing empty would ever show. -->
+                    <TextBlock Text="{x:Static state:EditorModel.NeedsValue}" Style="{StaticResource CautionText}" />
+                    <TextBlock Text="{Binding HeaderValueHint}" Style="{StaticResource HintLine}" />
+                  </StackPanel>
                 </StackPanel>
                 <StackPanel Visibility="{Binding IsOAuth, Converter={StaticResource Vis}}">
                   <Grid Margin="0,0,0,8">
@@ -289,37 +295,34 @@
                   <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Text="Client Secret" Style="{StaticResource FieldLabel}" />
-                    <Border Grid.Column="1" Style="{StaticResource PlaceholderMark}">
-                      <Border.BorderThickness>
-                        <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="MarkThickness:OAuthClientSecret">
-                          <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
-                          <Binding Path="OAuthClientSecret" />
-                        </MultiBinding>
-                      </Border.BorderThickness>
-                      <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding OAuthClientSecret, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
-                        <PasswordBox.IsEnabled>
-                          <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="IsLive:OAuthClientSecret">
-                            <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
-                            <Binding Path="OAuthClientSecret" />
-                          </MultiBinding>
-                        </PasswordBox.IsEnabled>
-                      </PasswordBox>
+                    <Border Grid.Column="1" BorderBrush="{DynamicResource SystemFillColorCautionBrush}" CornerRadius="5"
+                            BorderThickness="{Binding ClientSecretIsPlaceholder, Converter={StaticResource Mark}}">
+                      <Border.Style>
+                        <!-- Disabling the ring disables the box inside it, so the whole "locked
+                             unless the document asks for it" rule is one trigger, not a
+                             converter. -->
+                        <Style TargetType="Border">
+                          <Style.Triggers>
+                            <MultiDataTrigger>
+                              <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsReadOnly}" Value="True" />
+                                <Condition Binding="{Binding ClientSecretIsPlaceholder}" Value="False" />
+                              </MultiDataTrigger.Conditions>
+                              <Setter Property="IsEnabled" Value="False" />
+                            </MultiDataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Border.Style>
+                      <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding OAuthClientSecret, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     </Border>
                   </Grid>
-                  <TextBlock Style="{StaticResource CautionText}" Margin="110,2,0,0">
-                    <TextBlock.Text>
-                      <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint:OAuthClientSecret">
-                        <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
-                        <Binding Path="OAuthClientSecret" />
-                      </MultiBinding>
-                    </TextBlock.Text>
-                    <TextBlock.Visibility>
-                      <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="HintVisibility:OAuthClientSecret">
-                        <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
-                        <Binding Path="OAuthClientSecret" />
-                      </MultiBinding>
-                    </TextBlock.Visibility>
-                  </TextBlock>
+                  <StackPanel x:Name="ClientSecretNeeds" Margin="110,2,0,0" Visibility="{Binding ClientSecretIsPlaceholder, Converter={StaticResource Vis}}">
+                    <!-- The field itself holds the marker the document left, so the phrase
+                         that names the state goes here rather than in a watermark that
+                         nothing empty would ever show. -->
+                    <TextBlock Text="{x:Static state:EditorModel.NeedsValue}" Style="{StaticResource CautionText}" />
+                    <TextBlock Text="{Binding ClientSecretHint}" Style="{StaticResource HintLine}" />
+                  </StackPanel>
                   <TextBlock Text="{x:Static state:EditorModel.OAuthSecretCaption}" Style="{StaticResource CaptionText}" Margin="0,4,0,8" TextWrapping="Wrap" />
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
@@ -347,10 +350,7 @@
             </Border>
             <Border Style="{StaticResource Card}">
               <StackPanel>
-                <StackPanel Orientation="Horizontal">
-                  <TextBlock Text="Arguments" Style="{StaticResource SectionTitle}" />
-                  <TextBlock Style="{StaticResource LabelLock}" Margin="4,0,0,8" />
-                </StackPanel>
+                <TextBlock Text="Arguments" Style="{StaticResource SectionTitle}" />
                 <ItemsControl x:Name="ArgList" ItemsSource="{Binding Args}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -362,7 +362,7 @@
                         <StackPanel>
                           <Border x:Name="ArgMark" Style="{StaticResource PlaceholderMark}">
                             <Border.BorderThickness>
-                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="MarkThickness">
+                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedThickness">
                                 <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
                                 <Binding />
                                 <Binding Path="Value" />
@@ -392,22 +392,28 @@
                               </TextBox>
                             </Grid>
                           </Border>
-                          <TextBlock x:Name="ArgHint" Style="{StaticResource CautionText}" Margin="0,2,0,0">
-                            <TextBlock.Text>
-                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint">
+                          <StackPanel x:Name="ArgNeeds" Margin="0,2,0,0">
+                            <StackPanel.Visibility>
+                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedVisibility">
                                 <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
                                 <Binding />
                                 <Binding Path="Value" />
                               </MultiBinding>
-                            </TextBlock.Text>
-                            <TextBlock.Visibility>
-                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="HintVisibility">
-                                <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
-                                <Binding />
-                                <Binding Path="Value" />
-                              </MultiBinding>
-                            </TextBlock.Visibility>
-                          </TextBlock>
+                            </StackPanel.Visibility>
+                            <!-- The field itself holds the marker the document left, so the phrase
+                                 that names the state goes here rather than in a watermark that
+                                 nothing empty would ever show. -->
+                            <TextBlock Text="{x:Static state:EditorModel.NeedsPath}" Style="{StaticResource CautionText}" />
+                            <TextBlock x:Name="ArgHint" Style="{StaticResource HintLine}">
+                              <TextBlock.Text>
+                                <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint">
+                                  <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                  <Binding />
+                                  <Binding Path="Value" />
+                                </MultiBinding>
+                              </TextBlock.Text>
+                            </TextBlock>
+                          </StackPanel>
                         </StackPanel>
                         <Button Grid.Column="1" Style="{StaticResource IconButton}" Content="&#xE711;" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnRemoveArg"
                                 IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
@@ -449,7 +455,7 @@
                         <StackPanel Grid.Column="2">
                           <Border x:Name="EnvMark" Style="{StaticResource PlaceholderMark}">
                             <Border.BorderThickness>
-                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="MarkThickness">
+                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedThickness">
                                 <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
                                 <Binding />
                                 <Binding Path="Value" />
@@ -488,22 +494,28 @@
                               </ContentControl>
                             </Grid>
                           </Border>
-                          <TextBlock x:Name="EnvHint" Style="{StaticResource CautionText}" Margin="0,2,0,0">
-                            <TextBlock.Text>
-                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint">
+                          <StackPanel x:Name="EnvNeeds" Margin="0,2,0,0">
+                            <StackPanel.Visibility>
+                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedVisibility">
                                 <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
                                 <Binding />
                                 <Binding Path="Value" />
                               </MultiBinding>
-                            </TextBlock.Text>
-                            <TextBlock.Visibility>
-                              <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="HintVisibility">
-                                <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
-                                <Binding />
-                                <Binding Path="Value" />
-                              </MultiBinding>
-                            </TextBlock.Visibility>
-                          </TextBlock>
+                            </StackPanel.Visibility>
+                            <!-- The field itself holds the marker the document left, so the phrase
+                                 that names the state goes here rather than in a watermark that
+                                 nothing empty would ever show. -->
+                            <TextBlock Text="{x:Static state:EditorModel.NeedsValue}" Style="{StaticResource CautionText}" />
+                            <TextBlock x:Name="EnvHint" Style="{StaticResource HintLine}">
+                              <TextBlock.Text>
+                                <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Hint">
+                                  <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
+                                  <Binding />
+                                  <Binding Path="Value" />
+                                </MultiBinding>
+                              </TextBlock.Text>
+                            </TextBlock>
+                          </StackPanel>
                         </StackPanel>
                         <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="6,0,0,0" VerticalAlignment="Top">
                           <Button Style="{StaticResource IconButton}" Content="&#xE7B3;" Click="OnToggleReveal" />
@@ -566,14 +578,7 @@
         <TextBlock x:Name="JsonErrorLine" Grid.Row="2" Text="{Binding JsonError}" Margin="0,6,0,0" TextWrapping="Wrap" FontSize="12"
                    Foreground="{DynamicResource SystemFillColorCriticalBrush}" Visibility="{Binding HasJsonError, Converter={StaticResource Vis}}" />
         <TextBlock x:Name="JsonTipLine" Grid.Row="3" Text="{x:Static state:EditorModel.JsonTip}" Margin="0,6,0,0" TextWrapping="Wrap" FontSize="12"
-                   Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-          <TextBlock.Visibility>
-            <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="TipVisibility">
-              <Binding RelativeSource="{RelativeSource AncestorType=Window}" />
-              <Binding Path="HasJsonError" />
-            </MultiBinding>
-          </TextBlock.Visibility>
-        </TextBlock>
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" Visibility="{Binding ShowJsonTip, Converter={StaticResource Vis}}" />
         <views:ToolNoteBlock x:Name="JsonToolNote" Grid.Row="4" Note="{Binding ToolNote}" Margin="0,6,0,0" />
       </Grid>
     </Grid>

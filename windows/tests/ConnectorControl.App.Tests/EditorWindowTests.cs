@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
@@ -277,6 +278,9 @@ public class EditorWindowTests
                 Assert.Equal(EditorModel.NeedsValue, asked.Tag);
                 Assert.Equal(Visibility.Collapsed, RowElements.Find<ContentControl>(window.EnvList, token, "EnvValue").Visibility);
                 Assert.False(RowElements.Find<TextBox>(window.EnvList, token, "EnvName").IsEnabled);
+                // The field holds the marker, so the phrase that names the state is a caution
+                // line under it, not a watermark nothing empty would show.
+                Assert.Equal(Visibility.Visible, RowElements.Find<StackPanel>(window.EnvList, token, "EnvNeeds").Visibility);
                 var hint = RowElements.Find<TextBlock>(window.EnvList, token, "EnvHint");
                 Assert.Equal(Visibility.Visible, hint.Visibility);
                 Assert.Equal("cloud.getdbt.com ▸ API tokens", hint.Text);
@@ -288,6 +292,7 @@ public class EditorWindowTests
                 var shared = RowElements.Find<ContentControl>(window.EnvList, region, "EnvValue");
                 Assert.Equal(Visibility.Visible, shared.Visibility);
                 Assert.False(shared.IsEnabled);
+                Assert.Equal(Visibility.Collapsed, RowElements.Find<StackPanel>(window.EnvList, region, "EnvNeeds").Visibility);
                 Assert.Equal(Visibility.Collapsed, RowElements.Find<TextBlock>(window.EnvList, region, "EnvHint").Visibility);
                 Assert.Equal(new Thickness(0), RowElements.Find<Border>(window.EnvList, region, "EnvMark").BorderThickness);
 
@@ -299,8 +304,17 @@ public class EditorWindowTests
                 Assert.False(window.Model.IsPlaceholder(token));
                 Assert.Equal(Visibility.Visible, RowElements.Find<TextBox>(window.EnvList, token, "EnvPlaceholder").Visibility);
                 Assert.True(RowElements.Find<TextBox>(window.EnvList, token, "EnvPlaceholder").IsEnabled);
+                Assert.Equal(Visibility.Collapsed, RowElements.Find<StackPanel>(window.EnvList, token, "EnvNeeds").Visibility);
                 Assert.Equal(Visibility.Collapsed, RowElements.Find<TextBlock>(window.EnvList, token, "EnvHint").Visibility);
                 Assert.Equal(new Thickness(0), RowElements.Find<Border>(window.EnvList, token, "EnvMark").BorderThickness);
+
+                // Emptying it does not settle the debt: the marker is gone but the value is still
+                // owed, so the mark and the phrase come back and the box stays the live one.
+                token.Value = "";
+                Layout(window);
+                Assert.Equal(Visibility.Visible, RowElements.Find<StackPanel>(window.EnvList, token, "EnvNeeds").Visibility);
+                Assert.Equal(new Thickness(1), RowElements.Find<Border>(window.EnvList, token, "EnvMark").BorderThickness);
+                Assert.Equal(Visibility.Visible, RowElements.Find<TextBox>(window.EnvList, token, "EnvPlaceholder").Visibility);
 
                 // The JSON view of somebody else's connector is a reading view, and the paste tip
                 // offers something it cannot do.
@@ -320,6 +334,7 @@ public class EditorWindowTests
                 Assert.True(path.IsEnabled);
                 Assert.Equal(EditorModel.NeedsPath, path.Tag);
                 Assert.Equal(Visibility.Collapsed, RowElements.Find<TextBox>(ledger.ArgList, arg, "ArgValue").Visibility);
+                Assert.Equal(Visibility.Visible, RowElements.Find<StackPanel>(ledger.ArgList, arg, "ArgNeeds").Visibility);
                 Assert.Equal("your ledger clone, then dist/index.js", RowElements.Find<TextBlock>(ledger.ArgList, arg, "ArgHint").Text);
                 Assert.Equal(new Thickness(1), RowElements.Find<Border>(ledger.ArgList, arg, "ArgMark").BorderThickness);
                 Assert.False(ledger.CommandBox.IsEnabled);
@@ -352,7 +367,7 @@ public class EditorWindowTests
                 Assert.Equal(Visibility.Visible, synced.SyncedHeader.Visibility);
                 Assert.Equal(Visibility.Collapsed, synced.PublishedHeader.Visibility);
                 Assert.Equal(Visibility.Collapsed, synced.ImportedHeader.Visibility);
-                Assert.Equal("Synced from Data team · read-only", synced.Model.HeaderNote);
+                Assert.Equal("Synced from Data team · read-only", synced.SyncedHeaderText.Text);
                 Assert.Equal(EditorModel.WhatCanIChange, synced.WhatCanIChange.Content);
             });
 
@@ -373,6 +388,8 @@ public class EditorWindowTests
             {
                 Assert.Equal(Visibility.Visible, published.PublishedHeader.Visibility);
                 Assert.Equal(Visibility.Collapsed, published.SyncedHeader.Visibility);
+                Assert.Equal(published.Model.HeaderNote, published.PublishedHeaderText.Text);
+                Assert.StartsWith($"Published to {folder}", published.PublishedHeaderText.Text, StringComparison.Ordinal);
                 // Publishing locks nothing: the file is the author's own.
                 Assert.True(published.NameBox.IsEnabled);
             });
@@ -454,7 +471,17 @@ public class EditorWindowTests
 
                 window.Show();
                 Assert.True(window.IsVisible);
-                window.MakeLocalCopy("Default");
+
+                // Through the button, so the menu construction and its "never the collection I am
+                // in" filter run rather than being taken on trust.
+                window.MakeLocalCopyButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                var menu = window.MakeLocalCopyButton.ContextMenu;
+                Assert.NotNull(menu);
+                var targets = menu.Items.OfType<MenuItem>().ToList();
+                Assert.Equal(["Default"], targets.Select(i => (string)i.Header));
+                menu.IsOpen = false;   // leave no popup behind on the shared host
+
+                Assert.Single(targets).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 
                 Assert.True(closed);
                 Assert.False(window.IsVisible);

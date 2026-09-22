@@ -28,18 +28,41 @@ struct EditSheetView: View {
 
     private struct Asked {
         var envRows: Set<UUID>
-        var args: Set<Int>
+        var args: Set<UUID>
         var bearerToken: Bool
         var headerValue: Bool
         var clientSecret: Bool
+    }
+
+    /// The document's questions as they stand now. Arguments are kept by row identity, not by
+    /// position: an insert above a marker moves every index below it.
+    private func snapshot() -> Asked {
+        Asked(envRows: Set(model.envRows.filter { model.isPlaceholder(envRow: $0.id) }.map(\.id)),
+              args: Set(model.argsWithPlaceholders.compactMap {
+                  model.args.indices.contains($0) ? model.args[$0].id : nil
+              }),
+              bearerToken: model.bearerTokenIsPlaceholder,
+              headerValue: model.headerValueIsPlaceholder,
+              clientSecret: model.clientSecretIsPlaceholder)
     }
 
     private func askedForEnv(_ id: UUID) -> Bool {
         asked.map { $0.envRows.contains(id) } ?? model.isPlaceholder(envRow: id)
     }
 
-    private func askedForArg(_ index: Int) -> Bool {
-        asked.map { $0.args.contains(index) } ?? model.argsWithPlaceholders.contains(index)
+    private func askedForArg(_ row: ArgRow) -> Bool {
+        if let asked { return asked.args.contains(row.id) }
+        return model.argsWithPlaceholders.contains(model.args.firstIndex { $0.id == row.id } ?? -1)
+    }
+
+    /// Still owed: the author's marker is standing, or the user has emptied the field without
+    /// putting anything in its place.
+    private func envOwed(_ row: EnvRow) -> Bool {
+        model.isPlaceholder(envRow: row.id) || row.value.isEmpty
+    }
+
+    private func argOwed(_ index: Int, _ value: String) -> Bool {
+        model.argsWithPlaceholders.contains(index) || value.isEmpty
     }
 
     var body: some View {
@@ -130,13 +153,13 @@ struct EditSheetView: View {
         }
         .background(WindowFinder { hostWindow = $0 })
         .onAppear {
-            guard asked == nil else { return }
-            asked = Asked(
-                envRows: Set(model.envRows.filter { model.isPlaceholder(envRow: $0.id) }.map(\.id)),
-                args: model.argsWithPlaceholders,
-                bearerToken: model.bearerTokenIsPlaceholder,
-                headerValue: model.headerValueIsPlaceholder,
-                clientSecret: model.clientSecretIsPlaceholder)
+            if asked == nil { asked = snapshot() }
+        }
+        // The snapshot keeps a field steady while the user types into it, which is only worth
+        // doing while the form is the collection author's. Once the collection stops syncing, an
+        // unmasked marker box has become an ordinary secret field and has to be masked again.
+        .onChange(of: model.isReadOnly) { _, _ in
+            asked = snapshot()
         }
     }
 
@@ -231,11 +254,7 @@ struct EditSheetView: View {
                         ToolNoteView(note: note)
                     }
                 }
-                Section {
-                    argsEditor
-                } header: {
-                    LockedLabel("Arguments", locked: model.isReadOnly)
-                }
+                Section("Arguments") { argsEditor }
                 Section("Environment Variables") { envEditor }
             }
 
@@ -257,17 +276,15 @@ struct EditSheetView: View {
         ForEach($model.args) { $row in
             // The model indexes arguments by position; SwiftUI hands over the row.
             let index = model.args.firstIndex { $0.id == row.id } ?? -1
+            let asks = askedForArg(row)
             HStack(alignment: .top) {
-                PlaceholderField(marked: model.argsWithPlaceholders.contains(index),
+                PlaceholderField(marked: asks && argOwed(index, row.value),
+                                 needs: EditorModel.needsPath,
                                  hint: model.placeholderHint(arg: index)) {
-                    if askedForArg(index) {
-                        TextField("argument", text: $row.value, prompt: Text(EditorModel.needsPath))
-                            .font(.system(.body, design: .monospaced))
-                    } else {
-                        TextField("argument", text: $row.value)
-                            .font(.system(.body, design: .monospaced))
-                            .disabled(model.isReadOnly)
-                    }
+                    TextField("argument", text: $row.value,
+                              prompt: asks ? Text(EditorModel.needsPath) : nil)
+                        .font(.system(.body, design: .monospaced))
+                        .disabled(model.isReadOnly && !asks)
                 }
                 Button { model.removeArg(id: row.id) } label: {
                     Image(systemName: "xmark.circle")
@@ -307,7 +324,8 @@ struct EditSheetView: View {
                             .font(.system(.body, design: .monospaced))
                             .focused($envFocus, equals: row.id)
                             .disabled(model.isReadOnly)
-                        PlaceholderField(marked: model.isPlaceholder(envRow: row.id),
+                        PlaceholderField(marked: askedForEnv(row.id) && envOwed(row),
+                                         needs: EditorModel.needsValue,
                                          hint: model.placeholderHint(envRow: row.id)) {
                             Group {
                                 if askedForEnv(row.id) {
@@ -365,13 +383,13 @@ struct EditSheetView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         case .bearer:
-            PlaceholderField(marked: model.bearerTokenIsPlaceholder, hint: model.bearerTokenHint) {
-                if asked?.bearerToken ?? model.bearerTokenIsPlaceholder {
-                    SecureField("Token", text: $model.bearerToken, prompt: Text(EditorModel.needsValue))
-                } else {
-                    SecureField("Token", text: $model.bearerToken)
-                        .disabled(model.isReadOnly)
-                }
+            let asksToken = asked?.bearerToken ?? model.bearerTokenIsPlaceholder
+            PlaceholderField(marked: model.bearerTokenIsPlaceholder,
+                             needs: EditorModel.needsValue,
+                             hint: model.bearerTokenHint) {
+                SecureField("Token", text: $model.bearerToken,
+                            prompt: asksToken ? Text(EditorModel.needsValue) : nil)
+                    .disabled(model.isReadOnly && !asksToken)
             }
             Text(EditorModel.bearerCaption)
                 .font(.caption)
@@ -379,24 +397,24 @@ struct EditSheetView: View {
         case .header:
             TextField("Header name", text: $model.headerName, prompt: Text("X-API-Key"))
                 .disabled(model.isReadOnly)
-            PlaceholderField(marked: model.headerValueIsPlaceholder, hint: model.headerValueHint) {
-                if asked?.headerValue ?? model.headerValueIsPlaceholder {
-                    SecureField("Header value", text: $model.headerValue, prompt: Text(EditorModel.needsValue))
-                } else {
-                    SecureField("Header value", text: $model.headerValue)
-                        .disabled(model.isReadOnly)
-                }
+            let asksHeaderValue = asked?.headerValue ?? model.headerValueIsPlaceholder
+            PlaceholderField(marked: model.headerValueIsPlaceholder,
+                             needs: EditorModel.needsValue,
+                             hint: model.headerValueHint) {
+                SecureField("Header value", text: $model.headerValue,
+                            prompt: asksHeaderValue ? Text(EditorModel.needsValue) : nil)
+                    .disabled(model.isReadOnly && !asksHeaderValue)
             }
         case .oauthClient:
             TextField("Client ID", text: $model.oauthClientID)
                 .disabled(model.isReadOnly)
-            PlaceholderField(marked: model.clientSecretIsPlaceholder, hint: model.clientSecretHint) {
-                if asked?.clientSecret ?? model.clientSecretIsPlaceholder {
-                    SecureField("Client Secret", text: $model.oauthClientSecret, prompt: Text(EditorModel.needsValue))
-                } else {
-                    SecureField("Client Secret", text: $model.oauthClientSecret)
-                        .disabled(model.isReadOnly)
-                }
+            let asksSecret = asked?.clientSecret ?? model.clientSecretIsPlaceholder
+            PlaceholderField(marked: model.clientSecretIsPlaceholder,
+                             needs: EditorModel.needsValue,
+                             hint: model.clientSecretHint) {
+                SecureField("Client Secret", text: $model.oauthClientSecret,
+                            prompt: asksSecret ? Text(EditorModel.needsValue) : nil)
+                    .disabled(model.isReadOnly && !asksSecret)
             }
             Text(EditorModel.oauthSecretCaption)
                 .font(.caption)
@@ -515,26 +533,33 @@ private struct LockedLabel: View {
     }
 }
 
-/// A value the collection's document asks this machine for: the caution colour round the field
-/// and, under it, whatever the author said about finding it.
+/// A value the collection's document asks this machine for: the caution colour round the field,
+/// then the phrase that names the state and whatever the author said about finding it.
 private struct PlaceholderField<Content: View>: View {
     let marked: Bool
+    let needs: String
     let hint: String?
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
+            // One overlay whatever the state, so that filling the value recolours the ring rather
+            // than replacing the field the value is being typed into.
+            content
+                .overlay(RoundedRectangle(cornerRadius: 5)
+                    .stroke(marked ? Color.orange : Color.clear))
             if marked {
-                content
-                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.orange))
-            } else {
-                content
-            }
-            if marked, let hint {
-                Text(hint)
+                // The field itself holds the marker the document left, so the phrase that names
+                // the state goes here rather than in a prompt nothing empty would show.
+                Text(needs)
                     .font(.caption)
                     .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let hint {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
