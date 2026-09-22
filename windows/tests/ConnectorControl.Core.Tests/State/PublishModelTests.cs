@@ -198,9 +198,9 @@ public class PublishModelTests
         // A name nobody can fill must not publish the path the mark was hiding.
         Assert.DoesNotContain("/Users/d/x.js", model.Preview, StringComparison.Ordinal);
 
-        // A marker name cannot start with a digit.
+        // A leading digit is legal in a marker name; only the space is replaced.
         model.PathRows[0].Name = "2nd path";
-        Assert.Equal("p_2nd_path", model.Intent.PathMarks["c"][pointer].Name);
+        Assert.Equal("2nd_path", model.Intent.PathMarks["c"][pointer].Name);
 
         // Nothing to make a name out of is the one case left: the row stays unmarked rather than
         // writing a marker with no name in it.

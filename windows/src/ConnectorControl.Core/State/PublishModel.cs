@@ -286,9 +286,8 @@ public sealed class PublishModel : ObservableObject
 
     /// <summary>
     /// A legal placeholder name out of whatever the author typed: anything outside
-    /// <c>[A-Za-z0-9_]</c> becomes "_", and a leading digit takes a "p_" prefix, since a marker
-    /// name may not start with one. Empty for a name that is only whitespace — there is nothing
-    /// there to make a name out of.
+    /// <c>[A-Za-z0-9_]</c> becomes "_" (a leading digit is legal in a marker name). Empty for a
+    /// name that is only whitespace — there is nothing there to make a name out of.
     /// </summary>
     internal static string PlaceholderName(string typed)
     {
@@ -305,6 +304,6 @@ public sealed class PublishModel : ObservableObject
             var text = rune.ToString();
             name.Append(Placeholder.IsValidName(text) ? text : "_");
         }
-        return char.IsAsciiDigit(name[0]) ? "p_" + name : name.ToString();
+        return name.ToString();
     }
 }

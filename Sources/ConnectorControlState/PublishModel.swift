@@ -220,9 +220,8 @@ public final class PublishModel: ObservableObject {
     }
 
     /// A legal placeholder name out of whatever the author typed: anything outside
-    /// `[A-Za-z0-9_]` becomes "_", and a leading digit takes a "p_" prefix, since a marker name
-    /// may not start with one. Empty for a name that is only whitespace — there is nothing there
-    /// to make a name out of.
+    /// `[A-Za-z0-9_]` becomes "_" (a leading digit is legal in a marker name). Empty for a name
+    /// that is only whitespace — there is nothing there to make a name out of.
     static func placeholderName(_ typed: String) -> String {
         let trimmed = typed.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return "" }
@@ -231,9 +230,6 @@ public final class PublishModel: ObservableObject {
         // carry becomes one underscore on both platforms.
         for scalar in trimmed.unicodeScalars {
             name.unicodeScalars.append(Placeholder.isValidName(String(scalar)) ? scalar : "_")
-        }
-        if let first = name.unicodeScalars.first, first.value >= 0x30, first.value <= 0x39 {
-            name = "p_" + name
         }
         return name
     }

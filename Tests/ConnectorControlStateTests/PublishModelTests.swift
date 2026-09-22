@@ -171,8 +171,8 @@ final class PublishModelTests: XCTestCase {
                        "a name nobody can fill must not publish the path the mark was hiding")
 
         model.pathRows[0].name = "2nd path"
-        XCTAssertEqual(model.intent.pathMarks["c"]?[JSONPointer(["args", "0"])]?.name, "p_2nd_path",
-                       "a marker name cannot start with a digit")
+        XCTAssertEqual(model.intent.pathMarks["c"]?[JSONPointer(["args", "0"])]?.name, "2nd_path",
+                       "a leading digit is legal in a marker name; only the space is replaced")
 
         // Nothing to make a name out of is the one case left: the row stays unmarked rather
         // than writing a marker with no name in it.
