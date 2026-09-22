@@ -499,6 +499,11 @@ public class FileWatcherTests : IDisposable
 
         var away = dir.File("collection-away");
         Directory.Move(folder, away);
+        // The premise, pinned: the probe still reports the folder, and the path now holds none,
+        // whose creation time reads as 1601-01-01 rather than the one recorded at arm time. That
+        // is what sends Start() down the swap path below. Were it not read as a replacement,
+        // Start() would be a no-op and this test would pass with the build-first order reverted.
+        Assert.False(watcher.IsArmed, "the moved-away folder must read as replaced");
         watcher.Start();   // the build fails: it must neither throw nor give up the watcher it has
         Assert.Equal(armed, watcher.ArmCount);
 

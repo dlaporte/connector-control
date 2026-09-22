@@ -426,6 +426,13 @@ public sealed class FileWatcher : IDisposable
         return now is not null && armed is not null && now != armed;
     }
 
+    /// <summary>
+    /// The folder's creation time. For a path that does not exist, .NET does not throw: it
+    /// returns 1601-01-01 UTC, which differs from any time recorded at arm time, so a missing
+    /// folder is kept from reading as a replacement only by DirectoryWasReplaced's own existence
+    /// check. Null comes back only when the read itself fails for a transient reason, and a null
+    /// is never read as a replacement.
+    /// </summary>
     private static DateTime? CreationTime(string directory)
     {
         try
@@ -434,7 +441,7 @@ public sealed class FileWatcher : IDisposable
         }
         catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
-            return null;   // unknown, which is never read as a replacement
+            return null;
         }
     }
 
