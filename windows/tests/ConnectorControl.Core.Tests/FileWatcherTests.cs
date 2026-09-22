@@ -255,6 +255,92 @@ public class FileWatcherTests : IDisposable
         Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout));
     }
 
+    /// <summary>
+    /// The rebuild that keeps a replaced folder from being watched by a dead handle. Whatever
+    /// raised the error, the FileSystemWatcher behind it is spent, so a fresh one takes its
+    /// place — proved here by the arm count, which is a fact about this object and so does not
+    /// depend on what a platform's FileSystemWatcher does with a handle on a folder that has
+    /// been deleted. Nothing happens to the directory in this test, so the OS cannot raise an
+    /// error of its own to race the count.
+    /// </summary>
+    [Fact]
+    public void AnErrorWithTheDirectoryStillThereRebuildsTheFileSystemWatcher()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
+        watcher.Start();
+        var armed = watcher.ArmCount;
+        watcher.HandleError();
+        Assert.True(watcher.IsArmed);
+        Assert.Equal(armed + 1, watcher.ArmCount);
+        Thread.Sleep(Settle);
+        var before = counter.Count;   // the error's own re-check may already have reported
+        TempDir.Touch(path, "two");
+        Assert.True(Wait.Until(() => counter.Count >= before + 1, WaitTimeout), "the rebuilt FileSystemWatcher must still report changes");
+    }
+
+    /// <summary>
+    /// A FileSystemWatcher watches the folder it was armed on, not the path: a folder replaced
+    /// wholesale leaves it holding one that is no longer there, where it is silent for good. The
+    /// watcher's only handle on folder identity is the creation time it armed on, so changing
+    /// that is exactly the input a replacement produces — and it is the one way to produce it
+    /// without deleting or moving anything, which would let the OS raise an error of its own and
+    /// race these assertions. IsArmed must then say no, and the re-arm every reload performs
+    /// must swap the watcher onto the folder that is there.
+    /// </summary>
+    [Fact]
+    public void AFolderThatIsNoLongerTheOneArmedOnIsNotReportedAsArmed()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
+        watcher.Start();
+        Assert.True(watcher.IsArmed);
+        Directory.SetCreationTimeUtc(dir.Path, Directory.GetCreationTimeUtc(dir.Path).AddHours(-1));
+        Assert.False(watcher.IsArmed, "the folder at the path is not the one being watched");
+        watcher.Start();   // AppState re-arms on every reload: this is where recovery happens
+        Assert.True(watcher.IsArmed);
+        Thread.Sleep(Settle);
+        var before = counter.Count;
+        TempDir.Touch(path, "two");
+        Assert.True(Wait.Until(() => counter.Count >= before + 1, WaitTimeout), "the re-armed watcher must still report changes");
+    }
+
+    /// <summary>
+    /// The real shape of the above: a sync client renames the shared folder away and puts
+    /// another copy at the path. A rename raises no error on Windows — the handle follows the
+    /// folder it was opened on — so nothing but the next Start() can notice, which is why
+    /// IsArmed has to tell the truth. Only the end state is asserted, because a platform is
+    /// free to report the rename as an error and recover before the assertions run; what must
+    /// hold either way is that the watcher ends up armed and reporting changes in the folder
+    /// that is there now.
+    /// </summary>
+    [Fact]
+    public void AWatchedFolderRenamedAwayAndReplacedIsFollowedOnTheNextStart()
+    {
+        var folder = dir.File("collection");
+        Directory.CreateDirectory(folder);
+        var file = System.IO.Path.Combine(folder, "watched.json");
+        File.WriteAllText(file, "one");
+        var counter = new Counter();
+        using var watcher = new FileWatcher(file, a => a(), counter.Hit);
+        watcher.Start();
+        Assert.True(watcher.IsArmed);
+        Thread.Sleep(Settle);
+
+        Directory.Move(folder, dir.File("collection-renamed-away"));
+        Directory.CreateDirectory(folder);
+        Directory.SetCreationTimeUtc(folder, DateTime.UtcNow.AddHours(-1));
+
+        watcher.Start();
+        Assert.True(watcher.IsArmed);
+        Thread.Sleep(Settle);
+        var before = counter.Count;
+        TempDir.Touch(file, "two");   // creates the file in the folder that is there now
+        Assert.True(Wait.Until(() => counter.Count >= before + 1, WaitTimeout), "the watcher must follow the path, not the folder it happened to open");
+    }
+
     [Fact]
     public void CallbackGoesThroughMarshal()
     {
