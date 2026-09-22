@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
 using ConnectorControl.Core;
@@ -40,14 +41,36 @@ public class PublishDialogTests
     private static void ClickTick(CheckBox tick, bool on) => tick.IsChecked = on;
 
     /// <summary>A row list generates no containers until the window has had a real layout pass.</summary>
-    private static PublishDialog Shown(PublishModel model)
+    private static PublishDialog Shown(PublishModel model, PublishDialogMode mode = PublishDialogMode.Publish)
     {
-        var window = new PublishDialog(model, PublishDialogMode.Publish);
+        var window = new PublishDialog(model, mode);
         window.Show();
         Layout(window);
         window.EnvList.UpdateLayout();
         window.PathList.UpdateLayout();
+        window.UnresolvedList.UpdateLayout();
         return window;
+    }
+
+    /// <summary>A button press, raised the way WPF raises it: synchronously, on the button itself.</summary>
+    private static void Press(Button button) => button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+
+    /// <summary>
+    /// "c" published with its path marked "srv", then that path edited outside the sheet, so the
+    /// record's mark has lost the argument it hid. The folder stays on record.
+    /// </summary>
+    private static void PublishThenMoveTheMarkedPath(AppStateHarness h, AppState state)
+    {
+        var folder = h.Dir.File("pub");
+        Directory.CreateDirectory(folder);
+        var first = new PublishModel(state, state.ActiveCollection) { Folder = folder };
+        first.PathRows.Single(r => r.Connector == "c").Marked = true;
+        first.PathRows.Single(r => r.Connector == "c").Name = "srv";
+        Assert.Null(first.Publish());
+        var moved = JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String("/Users/d/y.js"), JsonValue.String("--quiet")])));
+        Assert.Null(state.Upsert("c", new McpEntry(true, moved), "c"));
     }
 
     [Fact]
@@ -200,7 +223,51 @@ public class PublishDialogTests
             Assert.Equal(Visibility.Collapsed, export.PublishButton.Visibility);
             Assert.Equal(Visibility.Visible, export.ExportButton.Visibility);
             Assert.Equal(PublishModel.ExportButton, export.ExportButton.Content);
+            // Nothing holds an export here: no mark is unresolved.
+            Assert.True(export.ExportButton.IsEnabled);
+            Assert.Empty(export.UnresolvedList.Items);
             Assert.False(export.Accepted);
+        });
+    }
+
+    [Fact]
+    public void AMovedMarkHoldsPublishAndExportUntilItIsForgotten()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        PublishThenMoveTheMarkedPath(h, state);
+        WpfApp.Invoke(() =>
+        {
+            var model = new PublishModel(state, state.ActiveCollection);
+            var window = Shown(model);
+
+            // A folder is on record, and still nothing can be published: the path the mark hid
+            // would travel as written. The sheet says why, beside the way out.
+            Assert.False(string.IsNullOrEmpty(model.Folder));
+            Assert.False(window.PublishButton.IsEnabled);
+            var note = RowElements.Find<TextBlock>(window.UnresolvedList, "c", "MarkNoteText");
+            Assert.Equal(PublishModel.UnresolvedMarkNote("c"), note.Text);
+            var forget = RowElements.Find<Button>(window.UnresolvedList, "c", "ForgetMark");
+            Assert.Equal(PublishModel.ForgetMarkButton, forget.Content);
+
+            Press(forget);
+            Layout(window);
+
+            Assert.Empty(window.UnresolvedList.Items);
+            Assert.True(window.PublishButton.IsEnabled);
+            window.Close();
+
+            // Forgetting belongs to the sheet it was pressed in: a fresh one on the same record
+            // holds Export the same way, until its own Forget Mark.
+            var export = Shown(new PublishModel(state, state.ActiveCollection), PublishDialogMode.Export);
+            Assert.False(export.ExportButton.IsEnabled);
+
+            Press(RowElements.Find<Button>(export.UnresolvedList, "c", "ForgetMark"));
+            Layout(export);
+
+            Assert.Empty(export.UnresolvedList.Items);
+            Assert.True(export.ExportButton.IsEnabled);
+            export.Close();
         });
     }
 }

@@ -4,6 +4,9 @@
         xmlns:state="clr-namespace:ConnectorControl.Core.State;assembly=ConnectorControl.Core"
         xmlns:views="clr-namespace:ConnectorControl.App.Views"
         Width="620">
+  <views:DialogWindow.Resources>
+    <views:MarkNoteConverter x:Key="MarkNote" />
+  </views:DialogWindow.Resources>
   <StackPanel Margin="16">
     <!-- The sheet's own heading, as well as the title bar's: the Mac sheet has no chrome to put
          it in, and both platforms read the same sentence. -->
@@ -108,6 +111,31 @@
       </StackPanel>
     </ScrollViewer>
 
+    <!-- A path mark this sheet could not place: the reason Publish and Export are held, and the
+         way out besides ticking the path where it now sits. Outside the rows' scroll region so the
+         explanation of a disabled button is never scrolled away, and capped like the warnings so
+         the footer stays on screen. A connector that no longer exists has no row to tick, so its
+         line shows even when the sections above are empty. Each line carries its own top margin,
+         so the region takes no space at all when there is nothing to answer. -->
+    <ScrollViewer MaxHeight="72" VerticalScrollBarVisibility="Auto">
+      <ItemsControl x:Name="UnresolvedList" ItemsSource="{Binding UnresolvedMarks}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Grid Margin="0,8,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock x:Name="MarkNoteText" Text="{Binding Converter={StaticResource MarkNote}}" Style="{StaticResource CautionText}"
+                         VerticalAlignment="Center" Margin="0,0,12,0" />
+              <Button x:Name="ForgetMark" Grid.Column="1" Content="{x:Static state:PublishModel.ForgetMarkButton}"
+                      VerticalAlignment="Center" Click="OnForgetMark" />
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
     <!-- The document itself: every byte that leaves this PC, read-only. -->
     <TextBlock Text="{x:Static state:PublishModel.PreviewTitle}" Style="{StaticResource SectionTitle}" Margin="0,12,0,8" />
     <TextBox x:Name="PreviewBox" Text="{Binding Preview, Mode=OneWay}" Height="180" IsReadOnly="True" IsReadOnlyCaretVisible="False"
@@ -144,7 +172,7 @@
         <Button x:Name="PublishButton" Content="{x:Static state:PublishModel.PublishButton}" MinWidth="90" Margin="8,0,0,0"
                 IsEnabled="{Binding CanPublish}" Style="{DynamicResource AccentButtonStyle}" Click="OnPublish" />
         <Button x:Name="ExportButton" Content="{x:Static state:PublishModel.ExportButton}" MinWidth="90" Margin="8,0,0,0"
-                Style="{DynamicResource AccentButtonStyle}" Click="OnExport" />
+                IsEnabled="{Binding CanExport}" Style="{DynamicResource AccentButtonStyle}" Click="OnExport" />
       </StackPanel>
     </Grid>
   </StackPanel>

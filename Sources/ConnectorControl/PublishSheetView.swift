@@ -46,6 +46,30 @@ struct PublishSheetView: View {
                 .frame(maxHeight: 200)
             }
 
+            // A path mark this sheet could not place: the reason Publish and Export are held, and
+            // the way out besides ticking the path where it now sits. Outside the rows' scroll
+            // region so the explanation of a disabled button is never scrolled away, and capped
+            // like the warnings so the footer stays on screen. A connector that no longer exists
+            // has no row to tick, so its line shows even when the sections above are empty.
+            if !model.unresolvedMarks.isEmpty {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(model.unresolvedMarks, id: \.self) { connector in
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(PublishModel.unresolvedMarkNote(connector))
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer()
+                                Button(PublishModel.forgetMarkButton) { model.forgetUnresolvedMark(connector) }
+                                    .controlSize(.small)
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 72)
+            }
+
             preview
 
             // One line per credential-looking value, and a connector that passes keys as
@@ -239,6 +263,7 @@ struct PublishSheetView: View {
             } else {
                 Button(PublishModel.exportButton) { export() }
                     .keyboardShortcut(.defaultAction)
+                    .disabled(!model.canExport)
             }
         }
     }

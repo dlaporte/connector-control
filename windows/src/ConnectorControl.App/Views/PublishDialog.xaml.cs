@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using ConnectorControl.Core.State;
 using Microsoft.Win32;
 
@@ -68,6 +70,15 @@ public partial class PublishDialog : DialogWindow
         }
     }
 
+    /// <summary>Each unresolved mark's line is bound to its connector's name, which is all the model needs.</summary>
+    private void OnForgetMark(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is string connector)
+        {
+            Model.ForgetUnresolvedMark(connector);
+        }
+    }
+
     private void OnPublish(object sender, RoutedEventArgs e) => Finish(Model.Publish());
 
     private void OnExport(object sender, RoutedEventArgs e)
@@ -103,4 +114,18 @@ public partial class PublishDialog : DialogWindow
         FailureText.Text = failure ?? string.Empty;
         FailureText.Visibility = failure is null ? Visibility.Collapsed : Visibility.Visible;
     }
+}
+
+/// <summary>
+/// An unresolved mark's line, from the connector name the list holds. The sentence is the model's
+/// static and names the connector mid-sentence, so a binding cannot compose it from parts without
+/// restating the wording here.
+/// </summary>
+public sealed class MarkNoteConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is string connector ? PublishModel.UnresolvedMarkNote(connector) : string.Empty;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
 }
