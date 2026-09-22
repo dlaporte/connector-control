@@ -20,6 +20,9 @@ public enum PublishIntentError: Error, Equatable {
     /// The argument it stood for may be anywhere, so no document is written rather than one that
     /// might carry that path as written.
     case pathMarkMoved(connector: String)
+    /// This connector carries, as written, the folder this machine publishes the collection into.
+    /// It is the author's own folder, and a subscriber's copy stands for it with the token.
+    case publishFolderCarried(connector: String)
 }
 
 /// What the author ticked in the Publish sheet: which env values travel as values rather than
@@ -456,6 +459,30 @@ public struct CollectionDocument: Equatable, Sendable {
             if strings.contains(where: { string in forms.contains { string.contains($0) } }) { return name }
         }
         return nil
+    }
+
+    /// The first connector, in ordinal order, any of whose strings holds `folder` as a folder —
+    /// followed by a separator, a closing quote or the end of the string — as written or as JSON
+    /// would escape it, or nil. A folder name that merely begins another name does not count, so
+    /// "/share" is not found in "/share-tools".
+    public func connectorCarrying(folder: String) -> String? {
+        guard !folder.isEmpty else { return nil }
+        let forms = CollectionDocument.writtenForms(folder)
+        for name in connectors.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+            guard let encoded = connectors[name]?.encode() else { continue }
+            let strings = encoded.stringLeaves.map(\.value) + CollectionDocument.keys(in: encoded)
+            if strings.contains(where: { string in forms.contains { CollectionDocument.holdsFolder(string, $0) } }) { return name }
+        }
+        return nil
+    }
+
+    private static func holdsFolder(_ string: String, _ folder: String) -> Bool {
+        var rest = Substring(string)
+        while let range = rest.range(of: folder) {
+            if range.upperBound == rest.endIndex || "/\\\"".contains(rest[range.upperBound]) { return true }
+            rest = rest[range.upperBound...]
+        }
+        return false
     }
 
     /// `value` as written, and as a JSON string would spell it: backslashes and quotes escaped,

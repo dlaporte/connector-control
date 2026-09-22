@@ -448,15 +448,12 @@ public sealed class PublishModel : ObservableObject
             try
             {
                 var document = state.ExportDocument(Collection, Intent, Connectors);
-                if (document.ConnectorCarrying(ReviewedValues) is { } carrier)
-                {
-                    throw new PathMarkMovedException(carrier);
-                }
+                state.RefuseKeptBackPaths(document, Collection, ReviewedValues);
                 return document.Encode().EditorText();
             }
-            catch (PathMarkMovedException moved)
+            catch (Exception refused) when (refused is PathMarkMovedException or PublishFolderCarriedException)
             {
-                return AppState.Friendly(moved);
+                return AppState.Friendly(refused);
             }
         }
     }

@@ -78,4 +78,48 @@ public static class Placeholder
         }
         return result;
     }
+
+    /// <summary>
+    /// <paramref name="config"/> with <paramref name="directory"/> written back as
+    /// <c>${COLLECTION_DIR}</c> wherever it stands as a folder of its own: not inside a longer
+    /// name, and followed by a separator or the end of the string. The way back from
+    /// <see cref="ExpandDirectoryToken"/> for a config that comes out of Claude's file, which holds
+    /// this machine's folder where the store holds the token.
+    /// </summary>
+    public static JsonValue CollapseDirectory(JsonValue config, string directory)
+    {
+        if (directory.Length == 0)
+        {
+            return config;
+        }
+        var result = config;
+        foreach (var leaf in config.StringLeaves())
+        {
+            if (leaf.Value.Contains(directory, StringComparison.Ordinal))
+            {
+                result = result.Replacing(leaf.Pointer, JsonValue.String(Collapse(leaf.Value, directory))) ?? result;
+            }
+        }
+        return result;
+    }
+
+    private static string Collapse(string text, string directory)
+    {
+        var output = new System.Text.StringBuilder();
+        var start = 0;
+        int found;
+        while ((found = text.IndexOf(directory, start, StringComparison.Ordinal)) >= 0)
+        {
+            var end = found + directory.Length;
+            var standsAlone = (found == 0 || !IsPathCharacter(text[found - 1]))
+                && (end == text.Length || text[end] == '/' || text[end] == '\\');
+            output.Append(text, start, found - start);
+            output.Append(standsAlone ? DirectoryToken : directory);
+            start = end;
+        }
+        return output.Append(text, start, text.Length - start).ToString();
+    }
+
+    /// <summary>A character that continues a path segment, so a folder found right after one is part of a longer name.</summary>
+    private static bool IsPathCharacter(char c) => char.IsLetterOrDigit(c) || "/\\._-~".Contains(c);
 }

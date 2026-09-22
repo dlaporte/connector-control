@@ -60,4 +60,37 @@ public enum Placeholder {
         }
         return result
     }
+
+    /// `config` with `directory` written back as `${COLLECTION_DIR}` wherever it stands as a folder
+    /// of its own: not inside a longer name, and followed by a separator or the end of the string.
+    /// The way back from `expandDirectoryToken` for a config that comes out of Claude's file, which
+    /// holds this machine's folder where the store holds the token.
+    public static func collapseDirectory(in config: JSONValue, directory: String) -> JSONValue {
+        guard !directory.isEmpty else { return config }
+        var result = config
+        for leaf in config.stringLeaves where leaf.value.contains(directory) {
+            result = result.replacing(at: leaf.pointer, with: .string(collapse(leaf.value, directory: directory))) ?? result
+        }
+        return result
+    }
+
+    private static func collapse(_ text: String, directory: String) -> String {
+        var out = ""
+        var rest = Substring(text)
+        while let range = rest.range(of: directory) {
+            let before = range.lowerBound == rest.startIndex ? out.last : rest[rest.index(before: range.lowerBound)]
+            let after = range.upperBound == rest.endIndex ? nil : rest[range.upperBound]
+            let standsAlone = (before.map { !isPathCharacter($0) } ?? true) && (after.map { $0 == "/" || $0 == "\\" } ?? true)
+            out += rest[..<range.lowerBound]
+            out += standsAlone ? directoryToken : String(rest[range])
+            rest = rest[range.upperBound...]
+        }
+        return out + rest
+    }
+
+    /// A character that continues a path segment, so a folder found right after one is part of a
+    /// longer name.
+    private static func isPathCharacter(_ c: Character) -> Bool {
+        c.isLetter || c.isNumber || "/\\._-~".contains(c)
+    }
 }

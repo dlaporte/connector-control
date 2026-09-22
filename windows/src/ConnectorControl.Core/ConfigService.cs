@@ -29,9 +29,15 @@ public sealed class ConfigService
     /// store-wins — used when adopting a pre-existing (e.g. synced) store that
     /// must not be overwritten by this machine's state.
     /// </remarks>
+    /// <param name="collectionDirectory">
+    /// For a collection, the folder <c>${COLLECTION_DIR}</c> stands for on this machine; it is asked
+    /// about the active collection once the store is loaded, and what it answers is written back as
+    /// the token in anything ingested from Claude's file.
+    /// </param>
     public LoadResult LoadAndReconcile(
         IReadOnlyDictionary<string, JsonValue>? baseline = null,
-        bool storeAuthoritative = false)
+        bool storeAuthoritative = false,
+        Func<string, string?>? collectionDirectory = null)
     {
         var notes = new List<string>();
         var (store, corruptPath) = MasterStoreIO.Load(Paths.MasterStorePath);
@@ -76,7 +82,7 @@ public sealed class ConfigService
         {
             effectiveBaseline = baseline;
         }
-        var outcome = Reconciler.Reconcile(store, servers, effectiveBaseline);
+        var outcome = Reconciler.Reconcile(store, servers, effectiveBaseline, collectionDirectory?.Invoke(store.ActiveCollection));
         if (outcome.StoreChanged || corruptPath is not null)
         {
             SaveStore(outcome.Store);
@@ -117,7 +123,12 @@ public sealed class ConfigService
     /// snapshot into the store. The backup is validated BEFORE the live file is
     /// touched. Returns the restored file's servers (the caller's new baseline).
     /// </summary>
-    public IReadOnlyDictionary<string, JsonValue> RestoreClaudeConfig(string backupPath, MasterStore store)
+    /// <param name="collectionDirectory">
+    /// The active collection's folder on this machine, written back as <c>${COLLECTION_DIR}</c> in
+    /// what the snapshot brings into the store (<see cref="Reconciler.AdoptSnapshot"/>).
+    /// </param>
+    public IReadOnlyDictionary<string, JsonValue> RestoreClaudeConfig(string backupPath, MasterStore store,
+                                                                     string? collectionDirectory = null)
     {
         var data = File.ReadAllBytes(backupPath);
         var name = Path.GetFileName(backupPath);
@@ -142,7 +153,7 @@ public sealed class ConfigService
         IReadOnlyDictionary<string, JsonValue> servers = rawServers is null
             ? new Dictionary<string, JsonValue>(StringComparer.Ordinal)
             : rawServers.ObjectProperties;
-        var outcome = Reconciler.AdoptSnapshot(store, servers);
+        var outcome = Reconciler.AdoptSnapshot(store, servers, collectionDirectory);
         if (outcome.StoreChanged)
         {
             SaveStore(outcome.Store);

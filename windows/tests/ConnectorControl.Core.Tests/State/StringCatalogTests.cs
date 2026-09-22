@@ -83,6 +83,7 @@ public class StringCatalogTests
         ["AppState.malformedConfigMessage"] = ["X"],
         ["AppState.needsValueCaution"] = ["X"],
         ["AppState.pathMarkMovedError"] = ["X"],
+        ["AppState.publishFolderCarriedError"] = ["X"],
         ["AppState.publishSlugTakenError"] = ["X"],
         ["AppState.sourceUnreadableError"] = ["X", "Y"],
         ["ClaudeProcess.notAClaudePackageError"] = ["X"],
@@ -180,6 +181,7 @@ public class StringCatalogTests
         actual["AppState.noConnectorsSubtitle"] = AppState.NoConnectorsSubtitle;
         actual["AppState.ownCollectionError"] = AppState.OwnCollectionError;
         actual["AppState.pathMarkMovedError"] = AppState.PathMarkMovedError("X");
+        actual["AppState.publishFolderCarriedError"] = AppState.PublishFolderCarriedError("X");
         actual["AppState.publishIntoStoreError"] = AppState.PublishIntoStoreError;
         actual["AppState.publishSlugTakenError"] = AppState.PublishSlugTakenError("X");
         actual["AppState.quitButton"] = AppState.QuitButton;

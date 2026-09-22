@@ -187,6 +187,20 @@ final class CollectionDocumentTests: XCTestCase {
         XCTAssertNil(document.connectorCarrying([]))
     }
 
+    func testConnectorCarryingAFolderCountsItOnlyAsAFolderOfItsOwn() {
+        func document(_ arg: String) -> CollectionDocument {
+            CollectionDocument(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z", connectors: [
+                "c": .init(launcher: .local(.init(command: "node", args: [arg], platform: .current))),
+            ])
+        }
+        XCTAssertEqual(document("/Users/d/share/tools/x.js").connectorCarrying(folder: "/Users/d/share"), "c")
+        XCTAssertEqual(document("--root=/Users/d/share").connectorCarrying(folder: "/Users/d/share"), "c")
+        XCTAssertEqual(document(#"{"root":"\/Users\/d\/share"}"#).connectorCarrying(folder: "/Users/d/share"), "c",
+                       "inside a JSON blob as JSON spells it")
+        XCTAssertNil(document("/Users/d/share-tools/x.js").connectorCarrying(folder: "/Users/d/share"))
+        XCTAssertNil(document("${COLLECTION_DIR}/tools/x.js").connectorCarrying(folder: "/Users/d/share"))
+    }
+
     /// A character past U+FFFF sorts before U+FF5E by UTF-16 code unit, which is how C# orders, and
     /// after it by Unicode scalar, which is Swift's `<`: the refusal names the same one on both.
     func testARefusalNamesTheFirstConnectorInOrdinalOrder() {

@@ -913,6 +913,26 @@ public class EditorModelCollectionsTests
     }
 
     [Fact]
+    public void MovingTheMarkedPathIntoTheCommandKeepsItBack()
+    {
+        using var rig = new EditorRig();
+        var file = PublishTeam(rig, ServerPath, "--quiet");
+        var before = File.ReadAllBytes(file);
+        using (var editor = rig.Editor("svc", "Team"))
+        {
+            editor.Command = ServerPath;
+            editor.Args.RemoveAt(0);
+            Assert.True(editor.Save());
+        }
+        // The path is still in the save, so the mark stays.
+        AssertMarks(MarkAt(0, ServerPath), Marks(rig));
+        Assert.Equal(AppState.PathMarkMovedError("svc"), rig.State.PublishError?.Message);
+        Assert.Equal(PublishErrorKind.BlockedForReview, rig.State.PublishError?.Kind);
+        Assert.Equal(before, File.ReadAllBytes(file));
+        Assert.False(JsonText.FileContains(file, ServerPath));
+    }
+
+    [Fact]
     public void ACopyOfTheMarkedPathWaitsUntilTheSheetTicksBoth()
     {
         using var rig = new EditorRig();

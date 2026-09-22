@@ -59,4 +59,27 @@ public class PlaceholderTests
         Assert.Equal(JsonValue.String(@"C:\Users\d\Acme\mcp"), expanded.ValueAt(new JsonPointer(["env", "ROOT"])));
         Assert.False(Placeholder.UsesDirectoryToken(expanded));
     }
+
+    [Fact]
+    public void CollapsesTheDirectoryOnlyWhereItStandsAsAFolder()
+    {
+        const string share = @"C:\Users\d\share";
+        var config = JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([
+                JsonValue.String(share + "/tools/x.js"), JsonValue.String("--root=" + share),
+                JsonValue.String(share + "-tools/y.js"), JsonValue.String(@"\\nas\" + share + @"\z.js"),
+            ])),
+            ("env", JsonValue.Object(("ROOT", JsonValue.String(share)))));
+        var collapsed = Placeholder.CollapseDirectory(config, share);
+        // A sibling that begins with the name, and a longer path that holds it, are left alone.
+        Assert.Equal(
+            ["${COLLECTION_DIR}/tools/x.js", "--root=${COLLECTION_DIR}", share + "-tools/y.js", @"\\nas\" + share + @"\z.js"],
+            collapsed.ValueAt(new JsonPointer(["args"]))!.ArrayItems.Select(a => a.StringValue));
+        Assert.Equal(JsonValue.String("${COLLECTION_DIR}"), collapsed.ValueAt(new JsonPointer(["env", "ROOT"])));
+        // Collapsing undoes what expanding did.
+        var one = JsonValue.Object(("args", JsonValue.Array([JsonValue.String(share + "/tools/x.js")])));
+        Assert.Equal(one, Placeholder.ExpandDirectoryToken(Placeholder.CollapseDirectory(one, share), share));
+        Assert.Equal(config, Placeholder.CollapseDirectory(config, ""));
+    }
 }

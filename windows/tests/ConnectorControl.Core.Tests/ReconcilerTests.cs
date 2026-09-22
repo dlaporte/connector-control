@@ -147,4 +147,33 @@ public class ReconcilerTests
         Assert.False(outcome.Store.Mcps["off"].Enabled);
         Assert.True(outcome.StoreChanged);
     }
+
+    // the collection folder written back as the token
+
+    private static JsonValue NodeAt(string arg) =>
+        JsonValue.Object(("command", JsonValue.String("node")), ("args", JsonValue.Array([JsonValue.String(arg)])));
+
+    private static readonly JsonValue Tokened = NodeAt("${COLLECTION_DIR}/x.js");
+    private static readonly JsonValue Expanded = NodeAt("/Users/d/share/x.js");
+
+    [Fact]
+    public void AnIngestedConfigTakesTheTokenBack()
+    {
+        var outcome = Reconciler.Reconcile(MasterStore.Empty(), Servers(("x", Expanded)), directory: "/Users/d/share");
+        Assert.Equal(Tokened, outcome.Store.Mcps["x"].Config);
+        // With no folder for the collection, the config is taken as it stands.
+        Assert.Equal(Expanded, Reconciler.Reconcile(MasterStore.Empty(), Servers(("x", Expanded))).Store.Mcps["x"].Config);
+    }
+
+    [Fact]
+    public void ARestoredSnapshotKeepsTheStoresTokenAndCollapsesTheRest()
+    {
+        var s = Store(("x", new McpEntry(true, Tokened)));
+        var outcome = Reconciler.AdoptSnapshot(s, Servers(("x", Expanded), ("back", NodeAt("/Users/d/share/y.js"))), "/Users/d/share");
+        // The store's copy already renders as the snapshot does.
+        Assert.Equal(Tokened, outcome.Store.Mcps["x"].Config);
+        Assert.Equal(NodeAt("${COLLECTION_DIR}/y.js"), outcome.Store.Mcps["back"].Config);
+        // Restoring what the store already renders changes nothing.
+        Assert.False(Reconciler.AdoptSnapshot(s, Servers(("x", Expanded)), "/Users/d/share").StoreChanged);
+    }
 }

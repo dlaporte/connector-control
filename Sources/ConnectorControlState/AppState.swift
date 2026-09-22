@@ -77,6 +77,8 @@ public final class AppState: ObservableObject {
 
     public static func pathMarkMovedError(_ connector: String) -> String { "A path marked in “\(connector)” has moved. Open Publish… to mark it again." }
 
+    public static func publishFolderCarriedError(_ connector: String) -> String { "“\(connector)” carries this machine's publish folder as written. Write ${COLLECTION_DIR} in its place, or mark the path in Publish…" }
+
     /// A synced connector-list change was adopted and written into Claude's config: say what it runs now.
     public static func connectorListChangedBody(_ delta: ServerDelta, restartRequired: Bool) -> String {
         let what = delta.isEmpty ? "was regenerated" : "now " + delta.summary()
@@ -415,7 +417,10 @@ public final class AppState: ObservableObject {
     /// baseline to the restored contents BEFORE reloading, so the app's own
     /// restore is not misread as an external change or a re-add.
     public func restoreClaudeConfig(from backup: URL) throws {
-        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: store)
+        // Every apply backed Claude's file up with this machine's folder where the store holds
+        // ${COLLECTION_DIR}; the restore writes it back as the token.
+        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: store,
+                                                      collectionDirectory: collectionDirectory(of: store.activeCollection))
         appliedServers = servers
         hasLoadedOnce = true
         settings.lastApplyDate = host.now()
@@ -479,7 +484,8 @@ public final class AppState: ObservableObject {
 
             let result = try service.loadAndReconcile(
                 baseline: hasLoadedOnce ? appliedServers : nil,
-                storeAuthoritative: trigger != .routine)
+                storeAuthoritative: trigger != .routine,
+                collectionDirectory: { [self] in ingestDirectory(of: $0) })
             store = result.store
             loadCollections()
             var claudeConfigChangedExternally = false
@@ -1480,9 +1486,7 @@ public final class AppState: ObservableObject {
                             only: [String]? = nil, denying: Set<String> = []) -> String? {
         do {
             let document = try exportDocument(for: collection, intent: intent, only: only)
-            if let carrier = document.connectorCarrying(denying) {
-                throw PublishIntentError.pathMarkMoved(connector: carrier)
-            }
+            try refuseKeptBackPaths(in: document, of: collection, values: denying)
             try AtomicFile.write(try document.serialized(),
                                  to: URL(fileURLWithPath: path), staging: service.paths.stagingDirURL)
             return nil
@@ -1505,8 +1509,36 @@ public final class AppState: ObservableObject {
     /// failed. A new reason to block a publish for review belongs here, so the banner can tell it
     /// from a failed write.
     static func publishErrorKind(of error: Error) -> PublishErrorKind {
-        if case PublishIntentError.pathMarkMoved = error { return .blockedForReview }
+        // Every refusal of the intent — a moved mark, a kept-back path, this machine's own folder —
+        // is answered by the author in the Publish sheet.
+        if error is PublishIntentError { return .blockedForReview }
         return .writeFailed
+    }
+
+    /// Refuses `document` when it carries, as written, a path this machine keeps back for
+    /// `collection`: one of `values`, or the folder this machine publishes it into. The folder
+    /// counts only as a folder of its own, so a sibling that merely begins with its name travels.
+    func refuseKeptBackPaths(in document: CollectionDocument, of collection: String, values: Set<String>) throws {
+        if let carrier = document.connectorCarrying(values) {
+            throw PublishIntentError.pathMarkMoved(connector: carrier)
+        }
+        if let folder = collectionsCache.published[collection]?.folder, let carrier = document.connectorCarrying(folder: folder) {
+            throw PublishIntentError.publishFolderCarried(connector: carrier)
+        }
+    }
+
+    /// The folder `${COLLECTION_DIR}` stands for in `collection`, for what a load ingests from
+    /// Claude's file. At launch the collections files have not been read yet — the store comes
+    /// first — so they are read here, straight from disk; after that, from what is loaded.
+    private func ingestDirectory(of collection: String) -> String? {
+        if hasLoadedCollectionsOnce { return collectionDirectory(of: collection) }
+        let file = CollectionsFile.load(from: service.paths.collectionsFileURL)
+        let cache = CollectionsLocalCache.load(from: service.paths.collectionsCacheURL)
+        if file.kind(of: collection) == .synced {
+            return cache.synced[collection]?.path.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }
+        }
+        guard file.collections[collection]?.publish != nil else { return nil }
+        return cache.published[collection]?.folder
     }
 
     /// Every collection this machine publishes, written when what it says has changed. Only the
@@ -1528,11 +1560,14 @@ public final class AppState: ObservableObject {
                 // written: whatever the marks say — the other machine dropped them in a sidecar
                 // that landed before its master list, a connector came back without them — this
                 // machine does not send it. Only the author's Publish in the sheet clears it.
-                if let carrier = document.connectorCarrying(binding.markedValues) {
-                    throw PublishIntentError.pathMarkMoved(connector: carrier)
-                }
+                try refuseKeptBackPaths(in: document, of: collection, values: binding.markedValues)
                 let hash = try AppState.publishHash(of: document)
-                guard hash != binding.lastWrittenHash || collection == forced else { continue }
+                guard hash != binding.lastWrittenHash || collection == forced else {
+                    // The folder already holds what the store renders — the change that failed or
+                    // was refused has been undone — so nothing is failing any more.
+                    if publishError?.collection == collection { publishError = nil }
+                    continue
+                }
                 let target = URL(fileURLWithPath: binding.folder)
                     .appendingPathComponent(record.slug + "." + CollectionDocument.fileExtension)
                 try AtomicFile.write(document.serialized(), to: target, staging: service.paths.stagingDirURL)
@@ -1696,6 +1731,9 @@ public final class AppState: ObservableObject {
         }
         if case PublishIntentError.pathMarkMoved(let connector) = error {
             return pathMarkMovedError(connector)
+        }
+        if case PublishIntentError.publishFolderCarried(let connector) = error {
+            return publishFolderCarriedError(connector)
         }
         return error.localizedDescription
     }

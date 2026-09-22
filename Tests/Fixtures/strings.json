@@ -60,6 +60,9 @@
   "AppState.pathMarkMovedError": {
     "format": "A path marked in “{0}” has moved. Open Publish… to mark it again."
   },
+  "AppState.publishFolderCarriedError": {
+    "format": "“{0}” carries this machine's publish folder as written. Write ${COLLECTION_DIR} in its place, or mark the path in Publish…"
+  },
   "AppState.publishIntoStoreError": "Choose a folder other than the master list folder or its backups.",
   "AppState.publishSlugTakenError": {
     "format": "{0} already exists there and belongs to a different collection."

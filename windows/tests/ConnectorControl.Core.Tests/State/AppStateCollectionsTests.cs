@@ -1271,10 +1271,9 @@ public class AppStateCollectionsTests
         Assert.Equal(AppState.PathMarkMovedError("ledger"), banner.Message);
         // No file is written: the old document, placeholder and all, stays.
         Assert.Equal(before, File.ReadAllBytes(file));
+        // Export… goes through the dialog, which holds the lost mark and will not write.
         var exported = h.Dir.File(Path.Combine("out", "copy.json"));
-        var record = state.CollectionsFile.Collections[state.ActiveCollection].Publish!;
-        // An export refuses the same way.
-        Assert.Equal(AppState.PathMarkMovedError("ledger"), state.WriteExport(state.ActiveCollection, record.Intent, exported));
+        Assert.Equal(PublishModel.UnresolvedMarkNote("ledger"), new PublishModel(state, state.ActiveCollection).Export(exported));
         Assert.False(File.Exists(exported));
 
         // Re-ticking in the Publish dialog records the path where it is now, and clears it.
@@ -1503,6 +1502,73 @@ public class AppStateCollectionsTests
         Assert.Null(state.ConnectorCaution("viaCmd", state.ActiveCollection));
     }
 
+    /// <summary>
+    /// Renamed on the other machine while this one was off, the rename carrying the marks along; at
+    /// launch Claude's config brings the old name back from this machine's own last apply.
+    /// </summary>
+    [Fact]
+    public void AConnectorRenamedElsewhereWhileOffIsNotPublishedUnderItsOldName()
+    {
+        using var h = new AppStateHarness();
+        string file;
+        CollectionsFile sidecar;
+        using (var first = h.Create())
+        {
+            file = PublishMarkedLedger(h, first, MarkedPath);
+            first.Apply();
+            var entry = first.CollectionsFile.Collections[first.ActiveCollection];
+            var record = entry.Publish!;
+            sidecar = new CollectionsFile(first.CollectionsFile.Collections.Select(p => p.Key == first.ActiveCollection
+                ? new KeyValuePair<string, CollectionsFile.Entry>(p.Key, new CollectionsFile.Entry(
+                    entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs,
+                    new CollectionsFile.PublishRecord(record.Slug, record.Origin, record.Intent.MovingConnector("ledger", "books")),
+                    entry.Provenance))
+                : p));
+        }
+        var before = File.ReadAllBytes(file);
+        var store = h.StoreOnDisk();
+        var mcps = store.Collections[store.ActiveCollection].Mcps;
+        mcps["books"] = mcps["ledger"];
+        mcps.Remove("ledger");
+        MasterStoreIO.Save(store, h.MasterStorePath);
+        sidecar.Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+
+        using var relaunched = h.Create();
+        // The old name came back.
+        Assert.True(relaunched.Store.Collections[relaunched.ActiveCollection].Mcps.ContainsKey("ledger"));
+        Assert.Equal(AppState.PathMarkMovedError("ledger"), relaunched.PublishError?.Message);
+        Assert.Equal(PublishErrorKind.BlockedForReview, relaunched.PublishError?.Kind);
+        Assert.Equal(before, File.ReadAllBytes(file));
+    }
+
+    [Fact]
+    public void AMarkedPathCarriedInAnyOtherFieldIsNotPublished()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var file = PublishMarkedLedger(h, state, MarkedPath);
+        var before = File.ReadAllBytes(file);
+        var carriers = new (string Name, JsonValue Config)[]
+        {
+            ("in the command", JsonValue.Object(("command", JsonValue.String(MarkedPath + "/bin/start")), ("args", JsonValue.Array([])))),
+            ("in a remote's arguments", RemotePattern.Encode(new RemoteConfig("https://mcp.example.com/", RemoteAuth.Auto,
+                RemoteLaunchStyle.CmdNpx, extraArgs: ["--config", MarkedPath], package: "mcp-remote"))),
+            ("in an additional field", JsonValue.Object(
+                ("command", JsonValue.String("node")), ("args", JsonValue.Array([JsonValue.String("x.js")])),
+                ("cwd", JsonValue.String(MarkedPath)))),
+        };
+        foreach (var (name, config) in carriers)
+        {
+            Assert.Null(state.Upsert(name, new McpEntry(config), null));
+            Assert.Equal(AppState.PathMarkMovedError(name), state.PublishError?.Message);
+            Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+            Assert.Equal(before, File.ReadAllBytes(file));
+            state.Remove(name);
+            // With it gone there is nothing left to keep back.
+            Assert.Null(state.PublishError);
+        }
+    }
+
     // MARK: the directory token on the publishing machine
 
     [Fact]
@@ -1547,6 +1613,102 @@ public class AppStateCollectionsTests
         Assert.True(state.IsPublished(state.ActiveCollection));
         Assert.Null(state.CollectionDirectory(state.ActiveCollection));
         Assert.Equal(AppState.UnpublishedDirectoryCaution, state.ConnectorCaution("x", state.ActiveCollection));
+    }
+
+    /// <summary>
+    /// A published collection with an enabled connector that runs a tool from its folder, applied, so
+    /// Claude's file holds the folder where the store holds the token. Returns the document and the
+    /// folder as this machine records it.
+    /// </summary>
+    private static (string Document, string Folder) PublishTokenConnector(AppStateHarness h, AppState state)
+    {
+        Assert.Null(state.Upsert("x", new McpEntry(true, NodeWith($"{Placeholder.DirectoryToken}/tools/x.js")), null));
+        state.Apply();
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var bound = state.CollectionsCache.Published[state.ActiveCollection].Folder;
+        Assert.Equal([bound + "/tools/x.js"], ArgsOf(h.ClaudeServers()["x"]));
+        return (Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json"), bound);
+    }
+
+    [Fact]
+    public void RestoringClaudesConfigKeepsTheTokenInAPublishedCollection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var (document, folder) = PublishTokenConnector(h, state);
+        // Every apply backs Claude's file up first, so any backup taken now holds the folder.
+        var backup = h.Dir.File("backup.json");
+        File.Copy(h.ClaudeConfigPath, backup);
+
+        state.RestoreClaudeConfig(backup);
+        // The store keeps its token.
+        Assert.Equal([$"{Placeholder.DirectoryToken}/tools/x.js"], ArgsOf(state.Store.Collections[state.ActiveCollection].Mcps["x"].Config));
+        Assert.True(JsonText.FileContains(document, Placeholder.DirectoryToken));
+        Assert.False(JsonText.FileContains(document, folder));
+
+        // Removed since the backup was taken, the connector comes back with the folder collapsed.
+        state.Remove("x");
+        state.RestoreClaudeConfig(backup);
+        Assert.Equal([$"{Placeholder.DirectoryToken}/tools/x.js"], ArgsOf(state.Store.Collections[state.ActiveCollection].Mcps["x"].Config));
+        Assert.False(JsonText.FileContains(document, folder));
+        Assert.Null(state.PublishError);
+    }
+
+    /// <summary>
+    /// Removed on the other machine while this one was off: at launch Claude's config brings the
+    /// connector back with this machine's folder in it, which is written back as the token.
+    /// </summary>
+    [Fact]
+    public void ALaunchIngestTakesTheTokenBackForThePublishFolder()
+    {
+        using var h = new AppStateHarness();
+        string document;
+        string folder;
+        using (var first = h.Create())
+        {
+            (document, folder) = PublishTokenConnector(h, first);
+        }
+        var store = h.StoreOnDisk();
+        store.Collections[store.ActiveCollection].Mcps.Remove("x");
+        MasterStoreIO.Save(store, h.MasterStorePath);
+
+        using var relaunched = h.Create();
+        // Ingested with the token, not the folder.
+        Assert.Equal([$"{Placeholder.DirectoryToken}/tools/x.js"],
+            ArgsOf(relaunched.Store.Collections[relaunched.ActiveCollection].Mcps["x"].Config));
+        Assert.False(JsonText.FileContains(document, folder));
+        Assert.Null(relaunched.PublishError);
+    }
+
+    [Fact]
+    public void ThisMachinesPublishFolderWrittenOutIsNotPublished()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var bound = state.CollectionsCache.Published[state.ActiveCollection].Folder;
+        var file = Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
+        var before = File.ReadAllBytes(file);
+
+        // A sibling folder that merely begins with its name is somebody else's path, and travels.
+        Assert.Null(state.Upsert("sibling", new McpEntry(NodeWith(bound + "-tools/x.js")), null));
+        Assert.Null(state.PublishError);
+        var withSibling = File.ReadAllBytes(file);
+        Assert.NotEqual(before, withSibling);
+
+        Assert.Null(state.Upsert("typed", new McpEntry(NodeWith(bound + "/tools/x.js")), null));
+        Assert.Equal(AppState.PublishFolderCarriedError("typed"), state.PublishError?.Message);
+        // Answered in the Publish dialog, not another folder.
+        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+        Assert.Equal(withSibling, File.ReadAllBytes(file));
+
+        var dialog = new PublishModel(state, state.ActiveCollection);
+        var output = h.Dir.File(Path.Combine("away", "copy.json"));
+        Assert.Equal(AppState.PublishFolderCarriedError("typed"), dialog.Export(output));
+        Assert.False(File.Exists(output));
+        Assert.Equal(AppState.PublishFolderCarriedError("typed"), dialog.Preview);
     }
 
     // MARK: import as copies

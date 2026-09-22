@@ -287,6 +287,22 @@ public class CollectionDocumentTests
         Assert.Null(document.ConnectorCarrying([]));
     }
 
+    [Fact]
+    public void ConnectorCarryingAFolderCountsItOnlyAsAFolderOfItsOwn()
+    {
+        static CollectionDocument Document(string arg) => new("x", null, null, "2026-09-21T15:00:00Z",
+            new Dictionary<string, CollectionDocument.Connector>
+            {
+                ["c"] = new(new CollectionDocument.Launcher.Local("node", [arg], CollectionPlatforms.Current)),
+            });
+        Assert.Equal("c", Document(@"C:\Users\d\share\tools\x.js").ConnectorCarryingFolder(@"C:\Users\d\share"));
+        Assert.Equal("c", Document(@"--root=C:\Users\d\share").ConnectorCarryingFolder(@"C:\Users\d\share"));
+        // Inside a JSON blob as JSON spells it.
+        Assert.Equal("c", Document("""{"root":"C:\\Users\\d\\share"}""").ConnectorCarryingFolder(@"C:\Users\d\share"));
+        Assert.Null(Document(@"C:\Users\d\share-tools\x.js").ConnectorCarryingFolder(@"C:\Users\d\share"));
+        Assert.Null(Document("${COLLECTION_DIR}/tools/x.js").ConnectorCarryingFolder(@"C:\Users\d\share"));
+    }
+
     /// <summary>
     /// A character past U+FFFF sorts before U+FF5E by UTF-16 code unit, which is how this side
     /// orders, and after it by Unicode scalar, which is Swift's <c>&lt;</c>: the refusal names the

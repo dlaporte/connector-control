@@ -696,6 +696,22 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertEqual(marks(rig), mark(at: 0, value: serverPath), "left for publishing to place by value")
     }
 
+    func testMovingTheMarkedPathIntoTheCommandKeepsItBack() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let file = try publishTeam(rig, args: [serverPath, "--quiet"])
+        let before = try Data(contentsOf: file)
+        let editor = rig.editor("svc", in: "Team")
+        editor.command = serverPath
+        editor.args.remove(at: 0)
+        XCTAssertTrue(editor.save())
+        XCTAssertEqual(marks(rig), mark(at: 0, value: serverPath), "the path is still in the save, so the mark stays")
+        XCTAssertEqual(rig.state.publishError?.message, AppState.pathMarkMovedError("svc"))
+        XCTAssertEqual(rig.state.publishError?.kind, .blockedForReview)
+        XCTAssertEqual(try Data(contentsOf: file), before)
+        XCTAssertFalse(try jsonFile(file, contains: serverPath))
+    }
+
     func testACopyOfTheMarkedPathWaitsUntilTheSheetTicksBoth() throws {
         let rig = EditorRig()
         defer { rig.dispose() }

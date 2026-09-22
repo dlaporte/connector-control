@@ -274,9 +274,7 @@ public final class PublishModel: ObservableObject {
     public var preview: String {
         do {
             let document = try state.exportDocument(for: collection, intent: intent, only: connectors)
-            if let carrier = document.connectorCarrying(reviewedValues) {
-                throw PublishIntentError.pathMarkMoved(connector: carrier)
-            }
+            try state.refuseKeptBackPaths(in: document, of: collection, values: reviewedValues)
             return document.encode().editorText()
         } catch {
             return AppState.friendly(error)

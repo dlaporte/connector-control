@@ -1102,10 +1102,10 @@ final class AppStateCollectionsTests: XCTestCase {
         }
         XCTAssertEqual(message, AppState.pathMarkMovedError("ledger"))
         XCTAssertEqual(try Data(contentsOf: file), before, "no file is written: the old document, placeholder and all, stays")
+        // Export… goes through the sheet, which holds the lost mark and will not write.
         let exported = h.dir.file("out/copy.json")
-        let record = try XCTUnwrap(state.collectionsFile.collections[state.activeCollection]?.publish)
-        XCTAssertEqual(state.writeExport(for: state.activeCollection, intent: record.intent, to: exported.path),
-                       AppState.pathMarkMovedError("ledger"), "an export refuses the same way")
+        XCTAssertEqual(PublishModel(state: state, collection: state.activeCollection).export(to: exported.path),
+                       PublishModel.unresolvedMarkNote("ledger"), "an export refuses too")
         XCTAssertFalse(FileManager.default.fileExists(atPath: exported.path))
 
         // Re-ticking in the Publish sheet records the path where it is now, and clears it.
@@ -1283,6 +1283,57 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(sheet.preview, AppState.pathMarkMovedError("ledger"), "the preview says why rather than show it")
     }
 
+    /// Renamed on the other machine while this one was off, the rename carrying the marks along;
+    /// at launch Claude's config brings the old name back from this machine's own last apply.
+    func testAConnectorRenamedElsewhereWhileOffIsNotPublishedUnderItsOldName() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let first = h.create()
+        let (_, file) = try publishMarkedLedger(h, first, args: [markedPath])
+        first.apply()
+        let before = try Data(contentsOf: file)
+        var sidecar = first.collectionsFile
+        var record = try XCTUnwrap(sidecar.collections[first.activeCollection]?.publish)
+        record.intent = record.intent.movingConnector("ledger", to: "books")
+        sidecar.collections[first.activeCollection]?.publish = record
+        first.dispose()
+        var store = try h.storeOnDisk()
+        let entry = try XCTUnwrap(store.collections[store.activeCollection]?.mcps.removeValue(forKey: "ledger"))
+        store.collections[store.activeCollection]?.mcps["books"] = entry
+        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        try sidecar.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+
+        let relaunched = h.create()
+        defer { relaunched.dispose() }
+        XCTAssertNotNil(relaunched.store.collections[relaunched.activeCollection]?.mcps["ledger"], "the old name came back")
+        XCTAssertEqual(relaunched.publishError?.message, AppState.pathMarkMovedError("ledger"))
+        XCTAssertEqual(relaunched.publishError?.kind, .blockedForReview)
+        XCTAssertEqual(try Data(contentsOf: file), before)
+    }
+
+    func testAMarkedPathCarriedInAnyOtherFieldIsNotPublished() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let (_, file) = try publishMarkedLedger(h, state, args: [markedPath])
+        let before = try Data(contentsOf: file)
+        let remote = RemotePattern.encode(RemoteConfig(url: "https://mcp.example.com/", auth: .automatic,
+                                                       extraArgs: ["--config", markedPath], passthroughEnv: [:], package: "mcp-remote"))
+        let carriers: [(name: String, config: JSONValue)] = [
+            ("in the command", .object(["command": .string(markedPath + "/bin/start"), "args": .array([])])),
+            ("in a remote's arguments", remote),
+            ("in an additional field", .object(["command": .string("node"), "args": .array([.string("x.js")]),
+                                                "cwd": .string(markedPath)])),
+        ]
+        for carrier in carriers {
+            XCTAssertNil(state.upsert(name: carrier.name, entry: MCPEntry(config: carrier.config), renamedFrom: nil))
+            XCTAssertEqual(state.publishError?.message, AppState.pathMarkMovedError(carrier.name), carrier.name)
+            XCTAssertEqual(state.publishError?.kind, .blockedForReview, carrier.name)
+            XCTAssertEqual(try Data(contentsOf: file), before, carrier.name)
+            state.remove(name: carrier.name)
+            XCTAssertNil(state.publishError, "with it gone there is nothing left to keep back")
+        }
+    }
+
     // MARK: - The directory token on the publishing machine
 
     func testThePublishFolderStandsForTheDirectoryTokenOnlyWhileThisMachinePublishes() throws {
@@ -1326,6 +1377,95 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertTrue(state.isPublished(state.activeCollection))
         XCTAssertNil(state.collectionDirectory(of: state.activeCollection))
         XCTAssertEqual(state.connectorCaution("x", in: state.activeCollection), AppState.unpublishedDirectoryCaution)
+    }
+
+    /// A published collection with an enabled connector that runs a tool from its folder, applied,
+    /// so Claude's file holds the folder where the store holds the token. Returns the document and
+    /// the folder as this machine records it.
+    private func publishTokenConnector(_ h: AppStateHarness, _ state: AppState) throws -> (document: URL, folder: String) {
+        XCTAssertNil(state.upsert(name: "x", entry: MCPEntry(enabled: true, config: .object([
+            "command": .string("node"), "args": .array([.string("\(Placeholder.directoryToken)/tools/x.js")]),
+        ])), renamedFrom: nil))
+        state.apply()
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        let bound = try XCTUnwrap(state.collectionsCache.published[state.activeCollection]?.folder)
+        XCTAssertEqual(args(of: try XCTUnwrap(h.claudeServers()["x"])), [bound + "/tools/x.js"])
+        return (folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json"), bound)
+    }
+
+    func testRestoringClaudesConfigKeepsTheTokenInAPublishedCollection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let (document, folder) = try publishTokenConnector(h, state)
+        // Every apply backs Claude's file up first, so any backup taken now holds the folder.
+        let backup = h.dir.file("backup.json")
+        try FileManager.default.copyItem(at: h.claudeConfigURL, to: backup)
+
+        try state.restoreClaudeConfig(from: backup)
+        XCTAssertEqual(args(of: try XCTUnwrap(state.store.collections[state.activeCollection]?.mcps["x"]?.config)),
+                       ["\(Placeholder.directoryToken)/tools/x.js"], "the store keeps its token")
+        XCTAssertTrue(try jsonFile(document, contains: Placeholder.directoryToken))
+        XCTAssertFalse(try jsonFile(document, contains: folder))
+
+        // Removed since the backup was taken, the connector comes back with the folder collapsed.
+        state.remove(name: "x")
+        try state.restoreClaudeConfig(from: backup)
+        XCTAssertEqual(args(of: try XCTUnwrap(state.store.collections[state.activeCollection]?.mcps["x"]?.config)),
+                       ["\(Placeholder.directoryToken)/tools/x.js"])
+        XCTAssertFalse(try jsonFile(document, contains: folder))
+        XCTAssertNil(state.publishError)
+    }
+
+    /// Removed on the other machine while this one was off: at launch Claude's config brings the
+    /// connector back with this machine's folder in it, which is written back as the token.
+    func testALaunchIngestTakesTheTokenBackForThePublishFolder() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let first = h.create()
+        let (document, folder) = try publishTokenConnector(h, first)
+        first.dispose()
+        var store = try h.storeOnDisk()
+        store.collections[store.activeCollection]?.mcps.removeValue(forKey: "x")
+        try MasterStoreIO.save(store, to: h.masterStoreURL)
+
+        let relaunched = h.create()
+        defer { relaunched.dispose() }
+        XCTAssertEqual(args(of: try XCTUnwrap(relaunched.store.collections[relaunched.activeCollection]?.mcps["x"]?.config)),
+                       ["\(Placeholder.directoryToken)/tools/x.js"], "ingested with the token, not the folder")
+        XCTAssertFalse(try jsonFile(document, contains: folder))
+        XCTAssertNil(relaunched.publishError)
+    }
+
+    func testThisMachinesPublishFolderWrittenOutIsNotPublished() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        let bound = try XCTUnwrap(state.collectionsCache.published[state.activeCollection]?.folder)
+        let file = folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json")
+        let before = try Data(contentsOf: file)
+
+        // A sibling folder that merely begins with its name is somebody else's path, and travels.
+        XCTAssertNil(state.upsert(name: "sibling", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string(bound + "-tools/x.js")]),
+        ])), renamedFrom: nil))
+        XCTAssertNil(state.publishError)
+        let withSibling = try Data(contentsOf: file)
+        XCTAssertNotEqual(withSibling, before)
+
+        XCTAssertNil(state.upsert(name: "typed", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string(bound + "/tools/x.js")]),
+        ])), renamedFrom: nil))
+        XCTAssertEqual(state.publishError?.message, AppState.publishFolderCarriedError("typed"))
+        XCTAssertEqual(state.publishError?.kind, .blockedForReview, "answered in the Publish sheet, not another folder")
+        XCTAssertEqual(try Data(contentsOf: file), withSibling)
+
+        let sheet = PublishModel(state: state, collection: state.activeCollection)
+        let out = h.dir.file("away/copy.json")
+        XCTAssertEqual(sheet.export(to: out.path), AppState.publishFolderCarriedError("typed"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: out.path))
+        XCTAssertEqual(sheet.preview, AppState.publishFolderCarriedError("typed"))
     }
 
     // MARK: - Import as copies

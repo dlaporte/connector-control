@@ -54,6 +54,7 @@ public sealed class AppState : ObservableObject, IDisposable
     public static string SourceUnreadableError(string fileName, string detail) => $"{fileName} couldn\u2019t be read: {detail}";
     public static string PublishSlugTakenError(string fileName) => $"{fileName} already exists there and belongs to a different collection.";
     public static string PathMarkMovedError(string connector) => $"A path marked in “{connector}” has moved. Open Publish… to mark it again.";
+    public static string PublishFolderCarriedError(string connector) => $"“{connector}” carries this machine's publish folder as written. Write ${{COLLECTION_DIR}} in its place, or mark the path in Publish…";
     /// <summary>Claude's launch time is re-read 3 s after the restart completes.</summary>
     public static readonly TimeSpan RestartRecheckDelay = TimeSpan.FromSeconds(3);
     /// <summary>
@@ -541,7 +542,9 @@ public sealed class AppState : ObservableObject, IDisposable
     /// </summary>
     public void RestoreClaudeConfig(string backupPath)
     {
-        var servers = Service.RestoreClaudeConfig(backupPath, Store);
+        // Every apply backed Claude's file up with this machine's folder where the store holds
+        // ${COLLECTION_DIR}; the restore writes it back as the token.
+        var servers = Service.RestoreClaudeConfig(backupPath, Store, CollectionDirectory(Store.ActiveCollection));
         AppliedServers = servers;
         hasLoadedOnce = true;
         settings.LastApplyDate = host.Now();
@@ -582,7 +585,8 @@ public sealed class AppState : ObservableObject, IDisposable
 
             var result = Service.LoadAndReconcile(
                 baseline: hasLoadedOnce ? AppliedServers : null,
-                storeAuthoritative: trigger != ReloadTrigger.Routine);
+                storeAuthoritative: trigger != ReloadTrigger.Routine,
+                collectionDirectory: IngestDirectory);
             Store = result.Store;
             LoadCollections();
             var claudeConfigChangedExternally = false;
@@ -2163,15 +2167,12 @@ public sealed class AppState : ObservableObject, IDisposable
         try
         {
             var document = ExportDocument(collection, intent, only);
-            if (denying is not null && document.ConnectorCarrying(denying) is { } carrier)
-            {
-                throw new PathMarkMovedException(carrier);
-            }
+            RefuseKeptBackPaths(document, collection, denying);
             AtomicFile.Write(document.Serialize(), path);
             return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException
-                                   or PathMarkMovedException)
+                                   or PathMarkMovedException or PublishFolderCarriedException)
         {
             return Friendly(ex);
         }
@@ -2223,13 +2224,16 @@ public sealed class AppState : ObservableObject, IDisposable
                 // written: whatever the marks say — the other machine dropped them in a sidecar that
                 // landed before its master list, a connector came back without them — this machine
                 // does not send it. Only the author's Publish in the dialog clears it.
-                if (document.ConnectorCarrying(binding.MarkedValues) is { } carrier)
-                {
-                    throw new PathMarkMovedException(carrier);
-                }
+                RefuseKeptBackPaths(document, collection, binding.MarkedValues);
                 var hash = PublishHash(document);
                 if (hash == binding.LastWrittenHash && collection != forced)
                 {
+                    // The folder already holds what the store renders — the change that failed or
+                    // was refused has been undone — so nothing is failing any more.
+                    if (PublishError?.Collection == collection)
+                    {
+                        PublishError = null;
+                    }
                     continue;
                 }
                 var target = Path.Combine(binding.Folder, record.Slug + "." + CollectionDocument.FileExtension);
@@ -2248,7 +2252,7 @@ public sealed class AppState : ObservableObject, IDisposable
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException
-                                       or PathMarkMovedException)
+                                       or PathMarkMovedException or PublishFolderCarriedException)
             {
                 // The recorded hash is left as it was, so the next change tries this write again.
                 // A mark that has moved lands here too, before anything is written: the document
@@ -2468,20 +2472,66 @@ public sealed class AppState : ObservableObject, IDisposable
         return $"The connector list changed outside Connector Control — Claude's config {what}. {then}";
     }
 
-    /// <summary>friendly(): the malformed-config case gets the guided message; everything else its own text.</summary>
     /// <summary>
     /// Which way a caught publish error did not land. A mark that has moved stops the write for the
-    /// author to review, so another folder is no answer to it; anything else is a write that
-    /// failed. A new reason to block a publish for review belongs here, so the banner can tell it
-    /// from a failed write.
+    /// author to review, so another folder is no answer to it, and so does a path this machine
+    /// keeps back or its own publish folder; anything else is a write that failed. A new reason to
+    /// block a publish for review belongs here, so the banner can tell it from a failed write.
     /// </summary>
     internal static PublishErrorKind PublishErrorKindOf(Exception error) =>
-        error is PathMarkMovedException ? PublishErrorKind.BlockedForReview : PublishErrorKind.WriteFailed;
+        error is PathMarkMovedException or PublishFolderCarriedException
+            ? PublishErrorKind.BlockedForReview
+            : PublishErrorKind.WriteFailed;
 
+    /// <summary>
+    /// Refuses <paramref name="document"/> when it carries, as written, a path this machine keeps
+    /// back for <paramref name="collection"/>: one of <paramref name="values"/>, or the folder this
+    /// machine publishes it into. The folder counts only as a folder of its own, so a sibling that
+    /// merely begins with its name travels.
+    /// </summary>
+    internal void RefuseKeptBackPaths(CollectionDocument document, string collection, IReadOnlySet<string>? values)
+    {
+        if (values is not null && document.ConnectorCarrying(values) is { } carrier)
+        {
+            throw new PathMarkMovedException(carrier);
+        }
+        if (CollectionsCache.Published.GetValueOrDefault(collection)?.Folder is { } folder
+            && document.ConnectorCarryingFolder(folder) is { } holder)
+        {
+            throw new PublishFolderCarriedException(holder);
+        }
+    }
+
+    /// <summary>
+    /// The folder <c>${COLLECTION_DIR}</c> stands for in <paramref name="collection"/>, for what a
+    /// load ingests from Claude's file. At launch the collections files have not been read yet — the
+    /// store comes first — so they are read here, straight from disk; after that, from what is loaded.
+    /// </summary>
+    private string? IngestDirectory(string collection)
+    {
+        if (hasLoadedCollectionsOnce)
+        {
+            return CollectionDirectory(collection);
+        }
+        var file = CollectionsFile.Load(Service.Paths.CollectionsFilePath);
+        var cache = CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath);
+        if (file.KindOf(collection) == CollectionKind.Synced)
+        {
+            return cache.Synced.GetValueOrDefault(collection)?.Path is { } path
+                ? Path.GetDirectoryName(Path.GetFullPath(path)) ?? path
+                : null;
+        }
+        return file.Collections.GetValueOrDefault(collection)?.Publish is null
+            ? null
+            : cache.Published.GetValueOrDefault(collection)?.Folder;
+    }
+
+    /// <summary>friendly(): the malformed-config case gets the guided message; everything else its own text.</summary>
     public static string Friendly(Exception error) => error switch
     {
         ClaudeConfigException malformed => MalformedConfigMessage(malformed.Detail),
         PathMarkMovedException moved => PathMarkMovedError(moved.Connector),
+        PublishFolderCarriedException carried => PublishFolderCarriedError(carried.Connector),
         _ => error.Message,
     };
 

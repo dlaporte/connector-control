@@ -77,6 +77,7 @@ final class StringCatalogTests: XCTestCase {
         "AppState.malformedConfigMessage": ["X"],
         "AppState.needsValueCaution": ["X"],
         "AppState.pathMarkMovedError": ["X"],
+        "AppState.publishFolderCarriedError": ["X"],
         "AppState.publishSlugTakenError": ["X"],
         "AppState.sourceUnreadableError": ["X", "Y"],
         "ClaudeSignature.notFoundMessage": ["X"],
@@ -162,6 +163,7 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.noConnectorsSubtitle"] = AppState.noConnectorsSubtitle
         actual["AppState.ownCollectionError"] = AppState.ownCollectionError
         actual["AppState.pathMarkMovedError"] = AppState.pathMarkMovedError("X")
+        actual["AppState.publishFolderCarriedError"] = AppState.publishFolderCarriedError("X")
         actual["AppState.publishIntoStoreError"] = AppState.publishIntoStoreError
         actual["AppState.publishSlugTakenError"] = AppState.publishSlugTakenError("X")
         actual["AppState.quitButton"] = AppState.quitButton

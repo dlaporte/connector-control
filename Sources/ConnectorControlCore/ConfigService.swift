@@ -23,8 +23,13 @@ public struct ConfigService: Sendable {
     /// baseline, so every reconciliation rule resolves store-wins — used when
     /// adopting a pre-existing (e.g. synced) store that must not be overwritten
     /// by this machine's state.
+    ///
+    /// `collectionDirectory` names, for a collection, the folder `${COLLECTION_DIR}` stands for
+    /// on this machine; it is asked about the active collection once the store is loaded, and
+    /// what it answers is written back as the token in anything ingested from Claude's file.
     public func loadAndReconcile(baseline: [String: JSONValue]? = nil,
-                                 storeAuthoritative: Bool = false) throws
+                                 storeAuthoritative: Bool = false,
+                                 collectionDirectory: (String) -> String? = { _ in nil }) throws
         -> (store: MasterStore, notes: [String],
             claudeServers: [String: JSONValue]?) {
         var notes: [String] = []
@@ -65,7 +70,7 @@ public struct ConfigService: Sendable {
         }
         let outcome = Reconciler.reconcile(
             store: loaded.store, claudeServers: servers,
-            baseline: effectiveBaseline)
+            baseline: effectiveBaseline, directory: collectionDirectory(loaded.store.activeCollection))
         if outcome.storeChanged || loaded.corruptFileURL != nil {
             try saveStore(outcome.store)
         }
@@ -112,9 +117,12 @@ public struct ConfigService: Sendable {
     /// The backup's content is validated BEFORE the live file is touched.
     /// Returns the restored file's servers so the caller can sync its
     /// reconciliation baseline to them.
+    /// `collectionDirectory` is the active collection's folder on this machine, written back as
+    /// `${COLLECTION_DIR}` in what the snapshot brings into the store (`Reconciler.adoptSnapshot`).
     @discardableResult
     public func restoreClaudeConfig(from backup: URL,
-                                    mergedWith store: MasterStore) throws
+                                    mergedWith store: MasterStore,
+                                    collectionDirectory: String? = nil) throws
         -> [String: JSONValue] {
         let data = try Data(contentsOf: backup)
         let root: [String: Any]
@@ -134,7 +142,7 @@ public struct ConfigService: Sendable {
         try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config")
         try AtomicFile.write(data, to: paths.claudeConfigURL, staging: paths.stagingDirURL)
         let servers = (root["mcpServers"] as? [String: Any] ?? [:]).mapValues(JSONValue.init(any:))
-        let outcome = Reconciler.adoptSnapshot(store: store, servers: servers)
+        let outcome = Reconciler.adoptSnapshot(store: store, servers: servers, directory: collectionDirectory)
         if outcome.storeChanged { try saveStore(outcome.store) }
         return servers
     }

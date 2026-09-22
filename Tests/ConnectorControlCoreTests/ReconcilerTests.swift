@@ -142,4 +142,27 @@ final class ReconcilerTests: XCTestCase {
         XCTAssertEqual(outcome.store.mcps["off"]?.enabled, false)
         XCTAssertTrue(outcome.storeChanged)
     }
+
+    // MARK: the collection folder written back as the token
+
+    private let tokened = JSONValue.object(["command": .string("node"), "args": .array([.string("${COLLECTION_DIR}/x.js")])])
+    private let expanded = JSONValue.object(["command": .string("node"), "args": .array([.string("/Users/d/share/x.js")])])
+
+    func testAnIngestedConfigTakesTheTokenBack() {
+        let outcome = Reconciler.reconcile(store: .empty, claudeServers: ["x": expanded], directory: "/Users/d/share")
+        XCTAssertEqual(outcome.store.mcps["x"]?.config, tokened)
+        XCTAssertEqual(Reconciler.reconcile(store: .empty, claudeServers: ["x": expanded]).store.mcps["x"]?.config, expanded,
+                       "with no folder for the collection, the config is taken as it stands")
+    }
+
+    func testARestoredSnapshotKeepsTheStoresTokenAndCollapsesTheRest() {
+        let s = store(["x": MCPEntry(enabled: true, config: tokened)])
+        let edited = JSONValue.object(["command": .string("node"), "args": .array([.string("/Users/d/share/y.js")])])
+        let outcome = Reconciler.adoptSnapshot(store: s, servers: ["x": expanded, "back": edited], directory: "/Users/d/share")
+        XCTAssertEqual(outcome.store.mcps["x"]?.config, tokened, "the store's copy already renders as the snapshot does")
+        XCTAssertEqual(outcome.store.mcps["back"]?.config,
+                       .object(["command": .string("node"), "args": .array([.string("${COLLECTION_DIR}/y.js")])]))
+        XCTAssertFalse(Reconciler.adoptSnapshot(store: s, servers: ["x": expanded], directory: "/Users/d/share").storeChanged,
+                       "restoring what the store already renders changes nothing")
+    }
 }

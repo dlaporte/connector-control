@@ -11,10 +11,16 @@ namespace ConnectorControl.Core;
 /// </summary>
 public static class Reconciler
 {
+    /// <param name="directory">
+    /// The folder <c>${COLLECTION_DIR}</c> stands for in the active collection on this machine,
+    /// which Claude's file holds in the token's place. An ingested config has it written back as the
+    /// token, so a published collection never takes the author's own folder in.
+    /// </param>
     public static ReconcileOutcome Reconcile(
         MasterStore store,
         IReadOnlyDictionary<string, JsonValue> claudeServers,
-        IReadOnlyDictionary<string, JsonValue>? baseline = null)
+        IReadOnlyDictionary<string, JsonValue>? baseline = null,
+        string? directory = null)
     {
         var result = store.Clone();
         bool changed = false;
@@ -26,7 +32,7 @@ public static class Reconciler
             }
             if (IsExternalAddition(name, config, baseline))
             {
-                result.Mcps[name] = new McpEntry(true, config);
+                result.Mcps[name] = new McpEntry(true, Collapsed(config, directory));
                 changed = true;
             }
             // else: matches the baseline but is gone from the store — a PENDING
@@ -50,7 +56,14 @@ public static class Reconciler
     /// absent from it are disabled, never deleted. The result renders exactly
     /// the snapshot, so no divergence survives the restore.
     /// </summary>
-    public static ReconcileOutcome AdoptSnapshot(MasterStore store, IReadOnlyDictionary<string, JsonValue> servers)
+    /// <param name="directory">
+    /// As <see cref="Reconcile"/> takes it: a config whose store copy already expands to what the
+    /// snapshot holds keeps the store copy, token and all, and any other has the folder written back
+    /// as the token. Every apply backs Claude's file up first, so a snapshot taken while a collection
+    /// publishes holds the author's folder, and adopting it as written would publish it.
+    /// </param>
+    public static ReconcileOutcome AdoptSnapshot(MasterStore store, IReadOnlyDictionary<string, JsonValue> servers,
+                                                 string? directory = null)
     {
         var result = store.Clone();
         var toDisable = result.Mcps
@@ -63,9 +76,15 @@ public static class Reconciler
         }
         foreach (var (name, config) in servers)
         {
-            var entry = result.Mcps.TryGetValue(name, out var existing) ? existing : new McpEntry(true, config);
-            result.Mcps[name] = entry with { Config = config, Enabled = true };
+            var held = result.Mcps.TryGetValue(name, out var existing);
+            var entry = held ? existing! : new McpEntry(true, config);
+            // The store's copy already renders as the snapshot does: it keeps its token.
+            var kept = held && directory is not null && Placeholder.ExpandDirectoryToken(entry.Config, directory) == config;
+            result.Mcps[name] = entry with { Config = kept ? entry.Config : Collapsed(config, directory), Enabled = true };
         }
         return new ReconcileOutcome(result, !result.Equals(store));
     }
+
+    private static JsonValue Collapsed(JsonValue config, string? directory) =>
+        directory is null ? config : Placeholder.CollapseDirectory(config, directory);
 }

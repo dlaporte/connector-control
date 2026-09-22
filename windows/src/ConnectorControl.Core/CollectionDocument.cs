@@ -49,6 +49,19 @@ public sealed class PathMarkMovedException(string connector)
 }
 
 /// <summary>
+/// <see cref="Connector"/> carries, as written, the folder this machine publishes the collection
+/// into. It is the author's own folder, and a subscriber's copy stands for it with the token. What
+/// the user reads is <c>AppState.PublishFolderCarriedError</c>.
+///
+/// Mirror: <c>PublishIntentError.publishFolderCarried</c> in Sources/ConnectorControlCore/CollectionDocument.swift
+/// </summary>
+public sealed class PublishFolderCarriedException(string connector)
+    : Exception($"\"{connector}\" carries the publish folder as written")
+{
+    public string Connector { get; } = connector;
+}
+
+/// <summary>
 /// What the author ticked in the Publish sheet: which env values travel as values rather than as
 /// stripped hints, which arguments become markers, and the hint text for each.
 /// </summary>
@@ -928,6 +941,47 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// The first connector, in ordinal order, any of whose strings holds <paramref name="folder"/>
+    /// as a folder — followed by a separator, a closing quote or the end of the string — as written
+    /// or as JSON would escape it, or null. A folder name that merely begins another name does not
+    /// count, so "/share" is not found in "/share-tools".
+    /// </summary>
+    public string? ConnectorCarryingFolder(string folder)
+    {
+        if (folder.Length == 0)
+        {
+            return null;
+        }
+        var forms = WrittenForms(folder);
+        foreach (var (name, connector) in Connectors.OrderBy(p => p.Key, StringComparer.Ordinal))
+        {
+            var encoded = connector.Encode();
+            var strings = encoded.StringLeaves().Select(leaf => leaf.Value).Concat(KeysIn(encoded));
+            if (strings.Any(s => forms.Any(form => HoldsFolder(s, form))))
+            {
+                return name;
+            }
+        }
+        return null;
+    }
+
+    private static bool HoldsFolder(string text, string folder)
+    {
+        var start = 0;
+        int found;
+        while ((found = text.IndexOf(folder, start, StringComparison.Ordinal)) >= 0)
+        {
+            var end = found + folder.Length;
+            if (end == text.Length || text[end] is '/' or '\\' or '"')
+            {
+                return true;
+            }
+            start = end;
+        }
+        return false;
     }
 
     /// <summary><paramref name="value"/> as written, and as a JSON string would spell it: backslashes and quotes escaped, with and without the slash escaped too.</summary>
