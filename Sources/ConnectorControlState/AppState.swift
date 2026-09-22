@@ -833,12 +833,6 @@ public final class AppState: ObservableObject {
     /// New Collection has always done. nil on success, else the message to show.
     public func createCollection(named name: String) -> String? {
         if let error = store.addCollection(named: name, copyingCurrent: true) { return error }
-        // A collection made with a deleted one's name is a different collection, and will publish
-        // under an origin of its own. What the old one kept back still holds — its paths are the
-        // author's, wherever they turn up — but its folders are another collection's to this one:
-        // releasable, and named as that collection's, rather than folders ${COLLECTION_DIR} stands
-        // for here.
-        collectionsCache.kept[name.trimmingCharacters(in: .whitespaces)]?.origin = nil
         persistStore()
         performApply()
         return nil
@@ -890,6 +884,7 @@ public final class AppState: ObservableObject {
         // the connector that carried one is still in another collection, or comes back by an
         // import, a copy or an ingest. What Stop Publishing remembers, this remembers too.
         rememberWhatWasKeptBack(of: name)
+        forgetOriginsOfDepartedCollections()
         pendingUpdates.removeValue(forKey: name)
         sourceErrors.removeValue(forKey: name)
         forgetSource(name)
@@ -1439,8 +1434,15 @@ public final class AppState: ObservableObject {
             markedValues: reviewedValues ?? marked,
             releasedValues: AppState.released(previous?.releasedValues ?? remembered?.releasedValues ?? [],
                                               adding: releasedValues, marked: reviewedValues ?? marked),
-            // The folder it left stays this machine's own: a backup or a connector can bring it back.
-            publishedFolders: (previous?.publishedFolders ?? remembered?.publishedFolders ?? [])
+            // The folder it left stays this machine's own: a backup or a connector can bring it
+            // back. Only a record this collection left, though — `record` is the origin it
+            // published under before this call, and one whose collection has gone took its
+            // folders with it. Taking them anyway would withdraw a release the sheet offered for
+            // a re-used name, and refuse every save after it with no answer left.
+            publishedFolders: (previous?.publishedFolders
+                               ?? (AppState.isOwn(remembered, filedUnder: collection, of: collection,
+                                                  publishing: record?.origin) ? remembered?.publishedFolders : nil)
+                               ?? [])
                 .union(previous.map { [$0.folder] } ?? []).union([url.path]),
             // Carried so what this binding leaves behind still says which collection's folders
             // they were, after the sidecar entry that names the origin has gone.
@@ -1661,14 +1663,14 @@ public final class AppState: ObservableObject {
         for (name, remembered) in collectionsCache.kept {
             values.formUnion(remembered.markedValues)
             // A record's folders are this collection's own — the ones ${COLLECTION_DIR} stands
-            // for, never released — only where the record is this collection's: it published
-            // under the origin this one publishes under now, or under none yet and the record is
-            // filed under this name. A collection made with a deleted one's name cleared that
-            // origin, so what the old one left is another collection's here, released rather than
-            // written over and named as that collection's in the sheet.
-            let own = remembered.origin.map { $0 == ownOrigin || (ownOrigin == nil && name == collection) } ?? false
-            if own { folders.formUnion(remembered.publishedFolders) }
-            else { values.formUnion(remembered.publishedFolders) }
+            // for, never released — only where the record is this collection's. Anywhere else
+            // they are a path it keeps back, released rather than written over and named as that
+            // collection's in the sheet.
+            if AppState.isOwn(remembered, filedUnder: name, of: collection, publishing: ownOrigin) {
+                folders.formUnion(remembered.publishedFolders)
+            } else {
+                values.formUnion(remembered.publishedFolders)
+            }
         }
         for (name, binding) in collectionsCache.synced where isSynced(name) {
             if let path = binding.path { values.insert(URL(fileURLWithPath: path).deletingLastPathComponent().path) }
@@ -1679,6 +1681,30 @@ public final class AppState: ObservableObject {
         // The collection's own folders are never let go: the token stands for them, and writing it
         // in their place is the one answer.
         return (values.subtracting(folders).subtracting(letGo), folders)
+    }
+
+    /// Whether a kept record filed under `name` belongs to `collection`, which publishes under
+    /// `origin`: it published under that same origin, or under none yet and the record is filed
+    /// under this name. A record whose collection has left the store carries no origin at all
+    /// (`forgetOriginsOfDepartedCollections`), so it belongs to no collection here and whatever
+    /// later bears the name inherits its paths but not its folders. One test for both readers: the
+    /// union that decides what a document may carry, and the binding a new publish builds.
+    static func isOwn(_ record: CollectionsLocalCache.KeptRecord?, filedUnder name: String,
+                      of collection: String, publishing origin: String?) -> Bool {
+        guard let recorded = record?.origin else { return false }
+        return recorded == origin || (origin == nil && name == collection)
+    }
+
+    /// A kept record belongs to the collection that published it. Once that collection has left
+    /// the store — deleted here, or gone from a store that synced — the record outlives it and
+    /// belongs to nothing: a collection that later bears the name, made here or arriving from the
+    /// author's other machine, is a different one, and the folders this one left are another
+    /// collection's to it. A collection that only stopped publishing never left, and keeps its own.
+    private func forgetOriginsOfDepartedCollections() {
+        for (name, remembered) in collectionsCache.kept
+        where remembered.origin != nil && store.collections[name] == nil {
+            collectionsCache.kept[name]?.origin = nil
+        }
     }
 
     /// Takes the binding away and keeps what it knew about paths that must not travel: the marked
@@ -1863,6 +1889,7 @@ public final class AppState: ObservableObject {
             cache.lastAppliedNames = collectionsCache.lastAppliedNames
         }
         collectionsCache = cache
+        forgetOriginsOfDepartedCollections()
         collectionsLoaded = true
         hasLoadedCollectionsOnce = true
         // What is on disk NOW, not what this app last wrote: another machine's sidecar is the

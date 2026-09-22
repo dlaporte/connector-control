@@ -1185,15 +1185,6 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return error;
         }
-        // A collection made with a deleted one's name is a different collection, and will publish
-        // under an origin of its own. What the old one kept back still holds — its paths are the
-        // author's, wherever they turn up — but its folders are another collection's to this one:
-        // releasable, and named as that collection's, rather than folders ${COLLECTION_DIR} stands
-        // for here.
-        if (CollectionsCache.Kept.GetValueOrDefault(name.TrimSpaces()) is { } inherited)
-        {
-            SetKeptRecord(name.TrimSpaces(), inherited with { Origin = null });
-        }
         PersistStore();
         PerformApply();
         RaiseAll();
@@ -1276,6 +1267,7 @@ public sealed class AppState : ObservableObject, IDisposable
         // connector that carried one is still in another collection, or comes back by an import, a
         // copy or an ingest. What Stop Publishing remembers, this remembers too.
         RememberWhatWasKeptBack(name);
+        ForgetOriginsOfDepartedCollections();
         PendingUpdates = Without(PendingUpdates, name);
         SourceErrors = Without(SourceErrors, name);
         ForgetSource(name);
@@ -1344,6 +1336,38 @@ public sealed class AppState : ObservableObject, IDisposable
             CollectionsCache.Kept,
             CollectionsCache.LastAppliedCollection,
             CollectionsCache.LastAppliedNames);
+
+    /// <summary>
+    /// Whether a kept record filed under <paramref name="name"/> belongs to
+    /// <paramref name="collection"/>, which publishes under <paramref name="origin"/>: it published
+    /// under that same origin, or under none yet and the record is filed under this name. A record
+    /// whose collection has left the store carries no origin at all
+    /// (<see cref="ForgetOriginsOfDepartedCollections"/>), so it belongs to no collection here and
+    /// whatever later bears the name inherits its paths but not its folders. One test for both
+    /// readers: the union that decides what a document may carry, and the binding a new publish
+    /// builds.
+    /// </summary>
+    internal static bool IsOwn(CollectionsLocalCache.KeptRecord? record, string name, string collection, string? origin) =>
+        record?.Origin is { } recorded
+        && (string.Equals(recorded, origin, StringComparison.Ordinal) || (origin is null && name == collection));
+
+    /// <summary>
+    /// A kept record belongs to the collection that published it. Once that collection has left the
+    /// store — deleted here, or gone from a store that synced — the record outlives it and belongs
+    /// to nothing: a collection that later bears the name, made here or arriving from the author's
+    /// other machine, is a different one, and the folders this one left are another collection's to
+    /// it. A collection that only stopped publishing never left, and keeps its own.
+    /// </summary>
+    private void ForgetOriginsOfDepartedCollections()
+    {
+        foreach (var (name, remembered) in CollectionsCache.Kept)
+        {
+            if (remembered.Origin is not null && !Store.Collections.ContainsKey(name))
+            {
+                SetKeptRecord(name, remembered with { Origin = null });
+            }
+        }
+    }
 
     /// <summary>
     /// Takes the binding away and keeps what it knew about paths that must not travel: the marked
@@ -2113,7 +2137,8 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         var entry = CollectionsFile.Collections.GetValueOrDefault(collection) ?? CollectionsFile.Entry.Local;
         var slug = entry.Publish?.Slug ?? Slug.Make(collection);
-        var origin = entry.Publish?.Origin ?? Guid.NewGuid().ToString("D").ToLowerInvariant();
+        var previousOrigin = entry.Publish?.Origin;
+        var origin = previousOrigin ?? Guid.NewGuid().ToString("D").ToLowerInvariant();
         var fileName = slug + "." + CollectionDocument.FileExtension;
         var target = Path.Combine(full, fileName);
         // Somebody else's document under the name this one would take: publishing over it would
@@ -2139,7 +2164,13 @@ public sealed class AppState : ObservableObject, IDisposable
             reviewedValues ?? marked,
             Released(previous?.ReleasedValues ?? remembered?.ReleasedValues, releasedValues, reviewedValues ?? marked),
             // The folder it left stays this machine's own: a backup or a connector can bring it back.
-            (previous?.PublishedFolders ?? remembered?.PublishedFolders ?? new HashSet<string>(StringComparer.Ordinal))
+            // Only a record this collection left, though — entry.Publish is the origin it published
+            // under before this call, and one whose collection has gone took its folders with it.
+            // Taking them anyway would withdraw a release the dialog offered for a re-used name, and
+            // refuse every save after it with no answer left.
+            (previous?.PublishedFolders
+                ?? (IsOwn(remembered, collection, collection, previousOrigin) ? remembered?.PublishedFolders : null)
+                ?? new HashSet<string>(StringComparer.Ordinal))
                 .Concat(previous is null ? [] : [previous.Folder]).Append(full),
             // Carried so what this binding leaves behind still says which collection's folders they
             // were, after the sidecar entry that names the origin has gone.
@@ -2570,6 +2601,7 @@ public sealed class AppState : ObservableObject, IDisposable
         CollectionsCache = CollectionsCache.LastAppliedCollection is { } applied
             ? cache with { LastAppliedCollection = applied, LastAppliedNames = CollectionsCache.LastAppliedNames }
             : cache;
+        ForgetOriginsOfDepartedCollections();
         collectionsLoaded = true;
         hasLoadedCollectionsOnce = true;
         // What is on disk NOW, not what this app last wrote: another machine's sidecar is the
@@ -2739,15 +2771,10 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             values.UnionWith(remembered.MarkedValues);
             // A record's folders are this collection's own — the ones ${COLLECTION_DIR} stands for,
-            // never released — only where the record is this collection's: it published under the
-            // origin this one publishes under now, or under none yet and the record is filed under
-            // this name. A collection made with a deleted one's name cleared that origin, so what
-            // the old one left is another collection's here, released rather than written over and
-            // named as that collection's in the dialog.
-            var own = remembered.Origin is { } recorded
-                && (string.Equals(recorded, ownOrigin, StringComparison.Ordinal)
-                    || (ownOrigin is null && name == collection));
-            if (own)
+            // never released — only where the record is this collection's. Anywhere else they are a
+            // path it keeps back, released rather than written over and named as that collection's
+            // in the dialog.
+            if (IsOwn(remembered, name, collection, ownOrigin))
             {
                 folders.UnionWith(remembered.PublishedFolders);
             }

@@ -111,8 +111,8 @@ public sealed class ConfigService
     /// against. The names the last apply wrote are that render, so those are left alone and
     /// everything else comes in: a connector an installer or a hand edit added survives, and a
     /// deleted collection's own connectors are not poured into the active one. Without those names —
-    /// a cache written before they were kept — nothing here tells the two apart, and the file comes
-    /// in whole, as it did before they were recorded.
+    /// a cache written before they were kept — nothing here tells the two apart, and nothing is taken
+    /// in rather than all of it.
     /// </para>
     /// </summary>
     internal static IReadOnlyDictionary<string, JsonValue> Ingestible(
@@ -125,8 +125,13 @@ public sealed class ConfigService
         }
         if (!store.Collections.TryGetValue(lastApplied, out var collection))
         {
+            // Nothing here says what that collection rendered, so nothing in the file can be told
+            // from it: taking it all in would pour a deleted collection's connectors, marked paths
+            // and all, into the active one. Taking none is the safe half of that trade, and costs
+            // only a hand-added connector, in the one state that reaches it — a cache from a build
+            // that recorded the collection without the names.
             return lastAppliedNames is null
-                ? servers
+                ? new Dictionary<string, JsonValue>(StringComparer.Ordinal)
                 : servers.Where(p => !lastAppliedNames.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
         }
         var rendered = collection.Mcps.Where(p => p.Value.Enabled).Select(p => p.Key).ToHashSet(StringComparer.Ordinal);

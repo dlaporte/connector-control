@@ -55,9 +55,11 @@ final class ConfigServiceTests: XCTestCase {
                                                         lastAppliedNames: ["scoutbook", "aws-mcp"]).store.mcps.keys),
                        ["service-now", "installer"],
                        "what the collection that is gone rendered is left where it is, and the rest comes in")
-        XCTAssertEqual(Set(try service.loadAndReconcile(lastAppliedCollection: "Gone").store.mcps.keys),
-                       ["scoutbook", "aws-mcp", "service-now", "installer"],
-                       "without those names nothing tells the two apart, and the file comes in whole")
+        // Without those names nothing in the file can be told from what that collection rendered,
+        // so none of it comes in and the store keeps exactly what the call before left it.
+        let kept = Set(try service.loadAndReconcile(lastAppliedCollection: "Gone").store.mcps.keys)
+        XCTAssertEqual(kept, ["service-now", "installer"])
+        XCTAssertFalse(kept.contains("scoutbook"), "the collection that is gone rendered it, and it is not guessed at")
     }
 
     func testEachBackupRecordsTheCollectionItWasAppliedFrom() throws {

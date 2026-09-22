@@ -1999,6 +1999,111 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// Team published here with a path marked, then deleted: what every test below starts from.
+    /// Returns the folder it published into.
+    /// </summary>
+    private static string PublishThenDeleteTeam(AppStateHarness h, AppState state)
+    {
+        var home = state.ActiveCollection;
+        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath)), null, "Team"));
+        var folder = PublishFolder(h, "pubTeam");
+        Assert.Null(state.StartPublishing("Team", folder, new PublishIntent(
+            [],
+            [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark> { [ArgPointer(0)] = new("server_path", null, MarkedPath) })],
+            []), new HashSet<string>([MarkedPath], StringComparer.Ordinal)));
+        state.SwitchCollection(home);
+        Assert.Null(state.DeleteCollection("Team"));
+        return folder;
+    }
+
+    /// <summary>
+    /// A record belongs to the collection that published it, and that collection leaving the store is
+    /// what ends the claim — wherever it leaves from. A collection of the same name arriving from the
+    /// author's other machine is as much a different collection as one made here.
+    /// </summary>
+    [Fact]
+    public void ACollectionOfTheSameNameArrivingFromAnotherMachineInheritsNoFolders()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishThenDeleteTeam(h, state);
+        // The other machine makes a collection called Team again, and the store syncs here.
+        var store = h.StoreOnDisk();
+        Assert.Null(store.AddCollection("Team", copyingCurrent: false));
+        store.ActiveCollection = state.ActiveCollection;
+        MasterStoreIO.Save(store, h.MasterStorePath);
+        state.Reload();
+        Assert.True(state.Store.Collections.ContainsKey("Team"));   // Team arrived
+        var kept = state.KeptBack("Team");
+        // It never published there, so the token stands for nothing; the folder is one this machine
+        // binds, and releasable, and the path the old Team marked is still the author's.
+        Assert.DoesNotContain(folder, kept.Folders);
+        Assert.Contains(folder, kept.Values);
+        Assert.Contains(MarkedPath, kept.Values);
+    }
+
+    /// <summary>
+    /// A collection that only stopped publishing never left the store, so the folders it published
+    /// into are still its own: the token stands for them, and publishing again takes them back.
+    /// </summary>
+    [Fact]
+    public void AStoppedCollectionKeepsItsOwnFoldersThroughTheNextPublish()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var home = state.ActiveCollection;
+        Assert.Null(state.StartPublishing(home, PublishFolder(h, "pub1"), PublishIntent.None,
+            new HashSet<string>(StringComparer.Ordinal)));
+        var old = state.CollectionsCache.Published[home].Folder;
+        state.StopPublishing(home, deleteFile: false);
+        // It never left the store, so the folder it published into is still its own.
+        Assert.Contains(old, state.KeptBack(home).Folders);
+        var second = PublishFolder(h, "pub2");
+        Assert.Null(state.StartPublishing(home, second, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
+        // And the binding takes the folders back with the record.
+        Assert.Contains(old, state.CollectionsCache.Published[home].PublishedFolders);
+        Assert.Contains(old, state.KeptBack(home).Folders);
+        Assert.False(state.CollectionsCache.Kept.ContainsKey(home));   // the record is spent
+    }
+
+    /// <summary>
+    /// The release the dialog offers for a re-used name holds. A record whose collection has gone
+    /// takes its folders with it, so a new collection of that name does not get them back through its
+    /// own binding: the author's answer stands, the first publish writes, and every save after it is
+    /// an ordinary one.
+    /// </summary>
+    [Fact]
+    public void AReleasedFolderStaysReleasedForACollectionMadeWithADeletedOnesName()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishThenDeleteTeam(h, state);
+        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.Upsert("tool", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String(folder + "/bin/tool")))), null, "Team"));
+        var second = PublishFolder(h, "pubTeam2");
+        var dialog = new PublishModel(state, "Team") { Folder = second };
+        var entry = dialog.KeptPaths.Single(k => k.Value == folder);
+        Assert.Equal(PublishModel.KeptPathKind.Path, entry.Kind);   // the old Team's folder, not this one's
+        Assert.Null(dialog.ReleaseKeptPath(folder));                // Release is the answer the dialog offers
+        Assert.True(dialog.CanPublish);
+        Assert.Null(dialog.Publish());                              // and publishing holds to it
+        var document = Path.Combine(second, Slug.Make("Team") + ".json");
+        Assert.True(JsonText.FileContains(document, folder));        // released, it travels as written
+        // And the old folder is not this collection's own, so it is not refused again.
+        Assert.DoesNotContain(folder, state.CollectionsCache.Published["Team"].PublishedFolders);
+        Assert.Contains(folder, state.CollectionsCache.Published["Team"].ReleasedValues);
+
+        // An ordinary save after it: the answer the author gave still stands, with no banner. Before
+        // this round the folder came back as the new binding's own and every save failed from here.
+        var before = File.ReadAllBytes(document);
+        Assert.Null(state.Upsert("other", new McpEntry(NodeWith("/tmp/other.js")), null, "Team"));
+        Assert.Null(state.PublishError);
+        Assert.NotEqual(before, File.ReadAllBytes(document));   // and the save reached the folder
+    }
+
+    /// <summary>
     /// A collection the author publishes from their other machine marks its paths in the sidecar,
     /// which syncs with the master list. Those marks are this machine's to keep back too, so a copy of
     /// that connector reaching a collection published here is refused, with no binding involved.
@@ -2092,7 +2197,10 @@ public class AppStateCollectionsTests
         // cache does not, so the collection can be gone from one and named by the other.
         var cachePath = Path.Combine(h.StoreDir, CollectionsLocalCache.FileName);
         var cache = CollectionsLocalCache.Load(cachePath);
-        new CollectionsLocalCache(cache.Synced, cache.Published, cache.Kept, "Second").Save(cachePath);
+        // Only which collection is faked: the names that apply wrote are kept, as the Swift mirror
+        // keeps them by mutating the record in place. A record with no names at all is the state
+        // Ingestible now takes nothing in for.
+        new CollectionsLocalCache(cache.Synced, cache.Published, cache.Kept, "Second", cache.LastAppliedNames).Save(cachePath);
         var store = h.StoreOnDisk();
         store.Collections.Remove("Second");
         store.ActiveCollection = home;

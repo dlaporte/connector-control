@@ -59,9 +59,12 @@ public class ConfigServiceTests : IDisposable
         Assert.Equal(Set(["service-now", "installer"]),
                      Set(service.LoadAndReconcile(lastAppliedCollection: "Gone",
                              lastAppliedNames: Set(["scoutbook", "aws-mcp"])).Store.Mcps.Keys));
-        // Without those names nothing tells the two apart, and the file comes in whole.
-        Assert.Equal(Set(["scoutbook", "aws-mcp", "service-now", "installer"]),
-                     Set(service.LoadAndReconcile(lastAppliedCollection: "Gone").Store.Mcps.Keys));
+        // Without those names nothing in the file can be told from what that collection rendered, so
+        // none of it comes in and the store keeps exactly what the call before left it.
+        var kept = Set(service.LoadAndReconcile(lastAppliedCollection: "Gone").Store.Mcps.Keys);
+        Assert.Equal(Set(["service-now", "installer"]), kept);
+        // The collection that is gone rendered it, and it is not guessed at.
+        Assert.DoesNotContain("scoutbook", kept);
     }
 
     [Fact]
