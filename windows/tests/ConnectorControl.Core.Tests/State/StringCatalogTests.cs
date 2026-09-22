@@ -485,7 +485,6 @@ public class StringCatalogTests
         actual["SettingsModel.launchTargetLabel"] = SettingsModel.LaunchTargetLabel;
         actual["SettingsModel.loginItemFailureNote"] = SettingsModel.StartupEntryFailureNote("X");
         actual["SettingsModel.masterListHeader"] = SettingsModel.MasterListHeader;
-        actual["SettingsModel.notifyCaption"] = SettingsModel.NotifyCaption;
         actual["SettingsModel.notifyTitle"] = SettingsModel.NotifyTitle;
         actual["SettingsModel.revealInFinderTitle"] = SettingsModel.ShowInExplorerTitle;
         actual["SettingsModel.storageTab"] = SettingsModel.StorageTab;

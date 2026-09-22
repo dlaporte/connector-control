@@ -15,7 +15,7 @@ public class FlyoutModelTests
         Assert.Equal("No connectors configured", flyout.Subtitle);
         Assert.Equal("Default", flyout.ActiveCollection);
         Assert.True(flyout.IsEmpty);
-        Assert.Equal("No connectors configured yet — add one below.", FlyoutModel.EmptyText);
+        Assert.Equal("No connectors configured yet.", FlyoutModel.EmptyText);
         state.Upsert("z", new McpEntry(AppStateHarness.Remote("https://z.example/mcp")), null);
         Assert.Equal("1 of 1 enabled", flyout.Subtitle);
         Assert.False(flyout.IsEmpty);

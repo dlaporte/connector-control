@@ -12,8 +12,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string LaunchAtStartupTitle = "Launch at startup";
     public const string ConfirmRestartTitle = "Confirm before restarting Claude";
     public const string ConfirmQuitTitle = "Confirm before quitting";
-    public const string NotifyTitle = "Notify about changes made outside Connector Control";
-    public const string NotifyCaption = "Covers edits to Claude's config and synced connector-list changes, including when a remote change needs a Claude restart.";
+    public const string NotifyTitle = "Notify on external changes";
     public const string UpdatesHeader = "Updates";
     public const string AutoUpdateTitle = "Automatically download and install updates";
     public const string CheckForUpdatesTitle = "Check for Updates…";

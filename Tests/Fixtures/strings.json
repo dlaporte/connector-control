@@ -325,7 +325,7 @@
   "PopoverModel.addDisabledTooltip": "Additions go in a local collection.",
   "PopoverModel.addTooltip": "Add Connector",
   "PopoverModel.chooseFolderButton": "Choose Folder…",
-  "PopoverModel.emptyText": "No connectors configured yet — add one below.",
+  "PopoverModel.emptyText": "No connectors configured yet.",
   "PopoverModel.exportTitleFor": {
     "format": "Export “{0}”…"
   },
@@ -465,8 +465,7 @@
     }
   },
   "SettingsModel.masterListHeader": "Master List Location",
-  "SettingsModel.notifyCaption": "Covers edits to Claude's config and synced connector-list changes, including when a remote change needs a Claude restart.",
-  "SettingsModel.notifyTitle": "Notify about changes made outside Connector Control",
+  "SettingsModel.notifyTitle": "Notify on external changes",
   "SettingsModel.restoreTitle": {
     "mac": "Restore…"
   },

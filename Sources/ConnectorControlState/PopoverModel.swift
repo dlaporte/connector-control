@@ -10,7 +10,7 @@ public final class PopoverModel: ObservableObject {
     public static let addTooltip = "Add Connector"
     public static let settingsTooltip = "Settings"
     public static let quitTooltip = "Quit Connector Control"
-    public static let emptyText = "No connectors configured yet — add one below."
+    public static let emptyText = "No connectors configured yet."
     public static let retryTitle = "Apply Failed — Retry"
     public static let restartTitle = "Restart Required"
     public static let addDisabledTooltip = "Additions go in a local collection."

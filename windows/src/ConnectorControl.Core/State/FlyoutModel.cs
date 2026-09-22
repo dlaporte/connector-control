@@ -11,7 +11,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public const string AddTooltip = "Add Connector";
     public const string SettingsTooltip = "Settings";
     public const string QuitTooltip = "Quit Connector Control";
-    public const string EmptyText = "No connectors configured yet — add one below.";
+    public const string EmptyText = "No connectors configured yet.";
     public const string RetryTitle = "Apply Failed — Retry";
     public const string RestartTitle = "Restart Required";
     public const string AddDisabledTooltip = "Additions go in a local collection.";

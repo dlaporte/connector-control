@@ -64,9 +64,6 @@ struct SettingsView: View {
 
             Section {
                 Toggle(SettingsModel.notifyTitle, isOn: $model.notifyExternalChanges)
-                Text(SettingsModel.notifyCaption)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
             Section(SettingsModel.updatesHeader) {
