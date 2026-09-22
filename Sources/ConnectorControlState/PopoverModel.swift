@@ -27,9 +27,10 @@ public final class PopoverModel: ObservableObject {
     /// connector authored elsewhere, a document still to be located. One value, so the two
     /// cannot drift; two names, so neither call site has to lie about what it is marking.
     public static let cautionGlyph = toolWarningGlyph
-    /// The amber dot's spoken form. The popover owns it rather than borrowing the Collections
-    /// window's status word, so the menu's wording has one home beside the title that uses it.
-    public static let pendingSpokenLabel = "update available"
+    /// The amber dot's spoken form, beside the title that uses it so a view finds it here. The
+    /// words are the Collections window's status for the same condition, borrowed rather than
+    /// written twice, as `ConnectorRow.lockTooltip` borrows that window's lock sentence.
+    public static let pendingSpokenLabel = CollectionsModel.updateAvailableStatus
     /// What a menu row says in place of the amber dot. A macOS `Menu` row draws one title and
     /// one image, and the image is the chain, so a pending update has to be words — the same
     /// words the dot speaks, so a row reads the same whether it is seen or heard.

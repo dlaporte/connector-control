@@ -336,7 +336,6 @@ final class StringCatalogTests: XCTestCase {
         actual["PopoverModel.locateButton"] = PopoverModel.locateButton("X")
         actual["PopoverModel.manageTitle"] = PopoverModel.manageTitle
         actual["PopoverModel.pendingMenuMark"] = PopoverModel.pendingMenuMark
-        actual["PopoverModel.pendingSpokenLabel"] = PopoverModel.pendingSpokenLabel
         actual["PopoverModel.quitTooltip"] = PopoverModel.quitTooltip
         actual["PopoverModel.restartTitle"] = PopoverModel.restartTitle
         actual["PopoverModel.retryTitle"] = PopoverModel.retryTitle

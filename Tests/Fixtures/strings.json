@@ -303,7 +303,6 @@
   },
   "PopoverModel.manageTitle": "Manage Collections…",
   "PopoverModel.pendingMenuMark": " · update available",
-  "PopoverModel.pendingSpokenLabel": "update available",
   "PopoverModel.quitTooltip": "Quit Connector Control",
   "PopoverModel.restartTitle": "Restart Required",
   "PopoverModel.retryTitle": "Apply Failed — Retry",

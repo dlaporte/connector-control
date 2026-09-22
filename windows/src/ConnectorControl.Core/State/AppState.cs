@@ -2165,12 +2165,15 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// The document a synced collection is waiting to be pointed at, or null when there is
     /// nothing to ask for: the collection is local, already bound, or the sidecar never recorded
-    /// a file name to name in the request.
+    /// a file name to name in the request. An empty name counts as none, as it does in
+    /// <see cref="SourceLocation"/>, so a malformed sidecar cannot raise "Locate …" over a blank
+    /// while the chip and the menu stay silent about the same collection.
     /// </summary>
     private string? UnlocatedFileName(string collection) =>
         CollectionsFile.Collections.TryGetValue(collection, out var entry)
             && entry.Kind == CollectionKind.Synced
             && SourceBinding(collection)?.Path is null
+            && !string.IsNullOrEmpty(entry.FileName)
             ? entry.FileName
             : null;
 

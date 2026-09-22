@@ -499,10 +499,17 @@ final class PopoverModelTests: XCTestCase {
         // The mark is the dot's spoken form, so a row reads the same whether seen or heard.
         XCTAssertEqual(PopoverModel.pendingMenuMark, " · " + PopoverModel.pendingSpokenLabel)
         XCTAssertEqual(PopoverModel.pendingSpokenLabel, "update available")
+        // One owner of the words: the window's status for the same condition.
+        XCTAssertEqual(PopoverModel.pendingSpokenLabel, CollectionsModel.updateAvailableStatus)
 
-        // A local collection with news says so too — the mark is about the news, not the chain.
+        // A quiet row is just its name.
         let local = try XCTUnwrap(popover.collectionItems.first { $0.name == "Default" })
         XCTAssertEqual(PopoverModel.menuTitle(for: local), "Default")
+
+        // The mark follows the news alone, not the chain: the title is pure over the flag, so a
+        // row carrying news is marked whatever else it is.
+        let unchained = CollectionMenuItem(name: "Default", isActive: false, isSynced: false, hasPendingUpdate: true)
+        XCTAssertEqual(PopoverModel.menuTitle(for: unchained), "Default · update available")
     }
 
     func testARowsLockSaysWhatTheWindowsLockSays() {
@@ -547,5 +554,25 @@ final class PopoverModelTests: XCTestCase {
         defer { window.dispose() }
         let sidebar = try XCTUnwrap(window.items.first { $0.name == "Team" })
         XCTAssertEqual(CollectionsModel.syncedGlyphTooltip(sidebar), PopoverModel.menuTooltip(for: try item("Team")))
+    }
+    func testAnEmptySidecarNameAsksForNothingAnywhere() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        // Only a hand-edited or malformed sidecar says this; nothing here writes an empty name.
+        try CollectionsFile(collections: ["Team": CollectionsFile.Entry(kind: .synced, fileName: "")])
+            .save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        state.reload()
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+
+        // The banner, the chip and the menu agree there is nothing to name: no "Locate " over a
+        // blank while the tooltips stay silent.
+        XCTAssertNil(popover.collectionBanner)
+        XCTAssertNil(state.sourceLocation(of: "Team"))
+        XCTAssertNil(popover.sourceTooltip)
+        let team = try XCTUnwrap(popover.collectionItems.first { $0.name == "Team" })
+        XCTAssertNil(PopoverModel.menuTooltip(for: team))
+        XCTAssertTrue(state.isLocated("Team"), "nothing to find, which is what located already means")
     }
 }

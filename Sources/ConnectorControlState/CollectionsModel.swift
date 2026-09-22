@@ -259,11 +259,11 @@ public final class CollectionsModel: ObservableObject {
     /// takes a hand-edited or foreign collections file — every writer here sets a file name — but
     /// the decoder accepts one, and there is nothing to refresh or to report about a document
     /// nobody can point at.
+    ///
+    /// Still its own rule — the detail line has a sentence of its own for an unlocated file — but
+    /// the naming is `AppState.sourceLocation(of:)`'s, so the derivation lives in one place.
     private func locatedSource(of collection: String) -> String? {
-        guard state.isSynced(collection), state.isLocated(collection) else { return nil }
-        let named = state.sourceBinding(of: collection)?.path
-            ?? state.collectionsFile.collections[collection]?.fileName
-        return (named?.isEmpty ?? true) ? nil : named
+        state.isLocated(collection) ? state.sourceLocation(of: collection) : nil
     }
 
     /// What the source is doing, in precedence order: what went wrong outranks what is waiting.

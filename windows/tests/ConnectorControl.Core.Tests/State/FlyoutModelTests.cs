@@ -546,10 +546,17 @@ public class FlyoutModelTests
         // The mark is the dot's spoken form, so a row reads the same whether seen or heard.
         Assert.Equal(" · " + FlyoutModel.PendingSpokenLabel, FlyoutModel.PendingMenuMark);
         Assert.Equal("update available", FlyoutModel.PendingSpokenLabel);
+        // One owner of the words: the window's status for the same condition.
+        Assert.Equal(CollectionsModel.UpdateAvailableStatus, FlyoutModel.PendingSpokenLabel);
 
-        // A local collection with news says so too — the mark is about the news, not the chain.
+        // A quiet row is just its name.
         var local = flyout.CollectionItems.Single(i => i.Name == "Default");
         Assert.Equal("Default", FlyoutModel.MenuTitle(local));
+
+        // The mark follows the news alone, not the chain: the title is pure over the flag, so a
+        // row carrying news is marked whatever else it is.
+        var unchained = new CollectionMenuItem("Default", false, IsSynced: false, HasPendingUpdate: true);
+        Assert.Equal("Default · update available", FlyoutModel.MenuTitle(unchained));
     }
 
     [Fact]
@@ -600,5 +607,26 @@ public class FlyoutModelTests
         using var window = new CollectionsModel(state, h.Dialogs);
         var sidebar = window.Items.Single(i => i.Name == "Team");
         Assert.Equal(FlyoutModel.MenuTooltip(Item("Team")), CollectionsModel.SyncedGlyphTooltip(sidebar));
+    }
+    [Fact]
+    public void AnEmptySidecarNameAsksForNothingAnywhere()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        // Only a hand-edited or malformed sidecar says this; nothing here writes an empty name.
+        new CollectionsFile([Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, ""))])
+            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        state.Reload();
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        // The banner, the chip and the menu agree there is nothing to name: no "Locate " over a
+        // blank while the tooltips stay silent.
+        Assert.Null(flyout.CollectionBanner);
+        Assert.Null(state.SourceLocation("Team"));
+        Assert.Null(flyout.SourceTooltip);
+        Assert.Null(FlyoutModel.MenuTooltip(flyout.CollectionItems.Single(i => i.Name == "Team")));
+        // Nothing to find, which is what located already means.
+        Assert.True(state.IsLocated("Team"));
     }
 }

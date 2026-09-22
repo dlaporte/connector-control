@@ -268,16 +268,12 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// the decoder accepts one, and there is nothing to refresh or to report about a document
     /// nobody can point at.
     /// </summary>
-    private string? LocatedSource(string collection)
-    {
-        if (!state.IsSynced(collection) || !state.IsLocated(collection))
-        {
-            return null;
-        }
-        var named = state.SourceBinding(collection)?.Path
-            ?? (state.CollectionsFile.Collections.TryGetValue(collection, out var entry) ? entry.FileName : null);
-        return string.IsNullOrEmpty(named) ? null : named;
-    }
+    /// <remarks>
+    /// Still its own rule — the detail line has a sentence of its own for an unlocated file — but
+    /// the naming is <c>AppState.SourceLocation</c>'s, so the derivation lives in one place.
+    /// </remarks>
+    private string? LocatedSource(string collection) =>
+        state.IsLocated(collection) ? state.SourceLocation(collection) : null;
 
     /// <summary>What the source is doing, in precedence order: what went wrong outranks what is waiting.</summary>
     private string SyncStatus(string collection)

@@ -368,7 +368,6 @@ public class StringCatalogTests
         actual["PopoverModel.locateButton"] = FlyoutModel.LocateButton("X");
         actual["PopoverModel.manageTitle"] = FlyoutModel.ManageTitle;
         actual["PopoverModel.pendingMenuMark"] = FlyoutModel.PendingMenuMark;
-        actual["PopoverModel.pendingSpokenLabel"] = FlyoutModel.PendingSpokenLabel;
         actual["PopoverModel.quitTooltip"] = FlyoutModel.QuitTooltip;
         actual["PopoverModel.restartTitle"] = FlyoutModel.RestartTitle;
         actual["PopoverModel.retryTitle"] = FlyoutModel.RetryTitle;

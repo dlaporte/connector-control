@@ -1473,10 +1473,13 @@ public final class AppState: ObservableObject {
 
     /// The document a synced collection is waiting to be pointed at, or nil when there is
     /// nothing to ask for: the collection is local, already bound, or the sidecar never recorded
-    /// a file name to name in the request.
+    /// a file name to name in the request. An empty name counts as none, as it does in
+    /// `sourceLocation(of:)`, so a malformed sidecar cannot raise "Locate …" over a blank while
+    /// the chip and the menu stay silent about the same collection.
     private func unlocatedFileName(of collection: String) -> String? {
         guard let entry = collectionsFile.collections[collection], entry.kind == .synced,
-              sourceBinding(of: collection)?.path == nil, let fileName = entry.fileName else { return nil }
+              sourceBinding(of: collection)?.path == nil, let fileName = entry.fileName,
+              !fileName.isEmpty else { return nil }
         return fileName
     }
 

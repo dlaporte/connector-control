@@ -32,15 +32,17 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     /// </summary>
     public const string CautionGlyph = ToolWarningGlyph;
     /// <summary>
-    /// The amber dot's spoken form. The flyout owns it rather than borrowing the Collections
-    /// window's status word, so the menu's wording has one home beside the title that uses it.
+    /// The amber dot's spoken form, beside the title that uses it so a view finds it here. The
+    /// words are the Collections window's status for the same condition, borrowed rather than
+    /// written twice, as <c>ConnectorRow.LockTooltip</c> borrows that window's lock sentence.
     /// </summary>
-    public const string PendingSpokenLabel = "update available";
+    public const string PendingSpokenLabel = CollectionsModel.UpdateAvailableStatus;
     /// <summary>
-    /// What a menu row says in place of the amber dot. The Mac's Menu row draws one title and
-    /// one image, and the image is the chain, so a pending update has to be words — the same
-    /// words the dot speaks, so a row reads the same whether it is seen or heard. This side
-    /// carries it for parity and uses it in the same place.
+    /// What a Mac menu row says in place of the amber dot: its Menu row draws one title and one
+    /// image, and the image is the chain, so a pending update has to be words. It is here for
+    /// parity only. The flyout draws a real dot per row and speaks <see cref="PendingSpokenLabel"/>
+    /// for it, so a Windows view that also used <see cref="MenuTitle"/> would mark each pending
+    /// row twice.
     /// </summary>
     public const string PendingMenuMark = " · " + PendingSpokenLabel;
     /// <summary>Shown in the error banner when nothing worse is: the store's folder refused the owner-only permission.</summary>
@@ -54,8 +56,9 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public static string ExportTitleFor(string active) => $"Export “{active}”…";
 
     /// <summary>
-    /// One row of the collections menu. The chain is the row's single image on the Mac, so a
-    /// collection with news says so in the title instead of after it; this side matches.
+    /// One row of the collections menu, as the Mac draws it: the chain is the row's single image
+    /// there, so a collection with news says so in the title. Here for parity; the flyout keeps
+    /// its dot, for the reason <see cref="PendingMenuMark"/> gives.
     /// </summary>
     public static string MenuTitle(CollectionMenuItem item) =>
         item.HasPendingUpdate ? item.Name + PendingMenuMark : item.Name;
