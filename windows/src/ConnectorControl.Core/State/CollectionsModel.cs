@@ -45,7 +45,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     public static string LocalDetail(int count) => $"local · {count} connectors";
 
-    public static string SyncedDetail(string origin, string status) => $"synced from {origin} · read-only · {status}";
+    /// <summary><paramref name="source"/> is the document's path on this machine, never the sidecar's origin, which is a UUID.</summary>
+    public static string SyncedDetail(string source, string status) => $"synced from {source} · read-only · {status}";
 
     /// <summary>"this PC" is the platform-forced half of this sentence; the Mac mirror says "this Mac".</summary>
     public static string PublishedDetail(string folder) => $"publishes to {folder} from this PC";
@@ -164,10 +165,10 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             var mcps = state.Store.Collections.TryGetValue(collection, out var held)
                 ? held.Mcps
                 : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
-            // Case-insensitive by name, with the ordinal order as the tie-break so two names that
-            // differ only in case still have one settled order.
+            // Ordinal, which is how the flyout sorts the same connectors of the same collection:
+            // two surfaces over one list must agree on its order.
             return mcps.Keys
-                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ThenBy(n => n, StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
                 .Select(name => new Row(name, mcps[name].Enabled, state.ConnectorCaution(name, collection),
                     locked, checks.Contains(name), TypeTextOf(mcps[name].Config)))
                 .ToList();
@@ -202,8 +203,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             var collection = SelectedCollection;
             if (state.IsSynced(collection))
             {
-                return state.IsLocated(collection)
-                    ? SyncedDetail(SourceDescription(collection), SyncStatus(collection))
+                return LocatedSource(collection) is { } source
+                    ? SyncedDetail(source, SyncStatus(collection))
                     : UnlocatedDetail;
             }
             var count = state.Store.Collections.TryGetValue(collection, out var held) ? held.Mcps.Count : 0;
@@ -223,13 +224,22 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Where the document sits: the file this machine is bound to, or — for a binding that has
-    /// gone missing between the check above and this read — the name the sidecar recorded.
+    /// The synced document as this machine can name it, or null when it cannot: not synced, no
+    /// binding, or a sidecar entry that records neither a path nor a file name. The last of those
+    /// takes a hand-edited or foreign collections file — every writer here sets a file name — but
+    /// the decoder accepts one, and there is nothing to refresh or to report about a document
+    /// nobody can point at.
     /// </summary>
-    private string SourceDescription(string collection) =>
-        state.SourceBinding(collection)?.Path
-        ?? (state.CollectionsFile.Collections.TryGetValue(collection, out var entry) ? entry.FileName : null)
-        ?? "";
+    private string? LocatedSource(string collection)
+    {
+        if (!state.IsSynced(collection) || !state.IsLocated(collection))
+        {
+            return null;
+        }
+        var named = state.SourceBinding(collection)?.Path
+            ?? (state.CollectionsFile.Collections.TryGetValue(collection, out var entry) ? entry.FileName : null);
+        return string.IsNullOrEmpty(named) ? null : named;
+    }
 
     /// <summary>What the source is doing, in precedence order: what went wrong outranks what is waiting.</summary>
     private string SyncStatus(string collection)
@@ -258,14 +268,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         }
     }
 
-    public bool CanRefresh
-    {
-        get
-        {
-            var collection = SelectedCollection;
-            return state.IsSynced(collection) && state.IsLocated(collection);
-        }
-    }
+    /// <summary>Refresh reads the bound document, so it needs one this machine can name.</summary>
+    public bool CanRefresh => LocatedSource(SelectedCollection) is not null;
 
     public bool CanMakeLocalCopy => state.IsSynced(SelectedCollection);
 
@@ -274,18 +278,25 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public bool CanStopPublishing => state.IsPublished(SelectedCollection);
 
     /// <summary>
-    /// The last local collection stays, because only a local one takes a new connector. A synced
-    /// collection is never the last of those, so it is always deletable.
+    /// The last local collection stays, because only a local one takes a new connector, and the
+    /// last collection of any kind stays, because the store always has an active one. A synced
+    /// collection is never the last local one, so only the second rule reaches it.
     /// </summary>
     public bool CanDelete
     {
         get
         {
             var collection = SelectedCollection;
-            return state.IsSynced(collection) || state.LocalCollectionNames.Count > 1;
+            return state.IsSynced(collection)
+                ? state.CollectionNames.Count > 1
+                : state.LocalCollectionNames.Count > 1;
         }
     }
 
+    /// <summary>
+    /// Through the rows rather than the tick set, so a tick on a connector that has since
+    /// vanished from the collection is dropped instead of exported.
+    /// </summary>
     public IReadOnlyList<string> CheckedNames => Rows.Where(r => r.Checked).Select(r => r.Name).ToList();
 
     // MARK: rows
@@ -374,11 +385,13 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             return;
         }
-        // The store refuses to delete the last local collection. Asked here as well as in the
-        // toolbar, so a refusal cannot arrive after the publishing below has already stopped.
+        // The store refuses to delete the last local collection, and the last one of any kind.
+        // Asked here as well as in the toolbar, so a refusal cannot arrive after the publishing
+        // below has already stopped. The store reports it: it refuses before it touches anything,
+        // so asking it early is a no-op that still produces the right message.
         if (!CanDelete)
         {
-            Report(AppState.LastLocalCollectionError);
+            Report(state.DeleteCollection(collection));
             return;
         }
         if (PublishedFileName(collection) is { } fileName)

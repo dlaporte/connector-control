@@ -100,11 +100,12 @@ final class CollectionsModelTests: XCTestCase {
         let model = CollectionsModel(state: state, dialogs: h.dialogs)
         defer { model.dispose() }
         model.selected = "Team"
-        XCTAssertEqual(model.rows.map(\.name), ["github", "jira", "Ledger"], "case-insensitive by name")
-        XCTAssertEqual(model.rows.map(\.id), ["github", "jira", "Ledger"])
-        XCTAssertEqual(model.rows.map(\.typeText), ["remote", "local · npx", "local · node"])
+        // Uppercase first: ordinal, the order the popover lists the same connectors in.
+        XCTAssertEqual(model.rows.map(\.name), ["Ledger", "github", "jira"])
+        XCTAssertEqual(model.rows.map(\.id), ["Ledger", "github", "jira"])
+        XCTAssertEqual(model.rows.map(\.typeText), ["local · node", "remote", "local · npx"])
         XCTAssertTrue(model.rows.allSatisfy(\.isLocked), "every row of a synced collection carries the lock")
-        XCTAssertEqual(model.rows.map(\.caution), [nil, AppState.needsValueCaution("JIRA_TOKEN"), nil])
+        XCTAssertEqual(model.rows.map(\.caution), [nil, nil, AppState.needsValueCaution("JIRA_TOKEN")])
         XCTAssertEqual(model.rows.map(\.enabled), [true, true, true])
 
         // Nothing in a synced collection can be exported, so nothing in one can be ticked.
@@ -134,6 +135,13 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(target.name, "jira")
         XCTAssertFalse(target.isNew)
         XCTAssertEqual(target.entry.config, state.store.collections["Team"]?.mcps["jira"]?.config)
+
+        // One connector list must not appear in two orders: the window lists the active
+        // collection's rows exactly as the popover does.
+        state.switchCollection(to: "Team")
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+        XCTAssertEqual(model.rows.map(\.name), popover.rows.map(\.name))
     }
 
     // MARK: - Toolbar
@@ -176,7 +184,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertTrue(model.canRefresh)
         XCTAssertTrue(model.canMakeLocalCopy)
         XCTAssertTrue(model.canStopSyncing)
-        XCTAssertTrue(model.canDelete, "a synced collection is always deletable")
+        XCTAssertTrue(model.canDelete, "a synced collection goes without taking the last local one with it")
 
         // Nothing to refresh until the file is found on this machine.
         try seed(h, state, file: file, cache: CollectionsLocalCache(synced: [:], published: located.published))
@@ -189,6 +197,15 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertFalse(model.canDelete)
         model.selected = "Team"
         XCTAssertTrue(model.canDelete)
+
+        // Nor can the last collection of any kind: the store always has an active one, so a lone
+        // synced collection is no more deletable than a lone local one.
+        XCTAssertNil(state.deleteCollection(named: "Team"))
+        try seed(h, state, file: CollectionsFile(collections: ["Default": synced(fileName: "default.json")]),
+                 cache: CollectionsLocalCache(synced: ["Default": bound("/shared/default.json")], published: [:]))
+        XCTAssertEqual(state.collectionNames, ["Default"])
+        XCTAssertTrue(state.isSynced("Default"))
+        XCTAssertFalse(model.canDelete)
     }
 
     // MARK: - Create, rename, delete
@@ -343,6 +360,16 @@ final class CollectionsModelTests: XCTestCase {
         // Not located: there is nothing to say about the file except that it is missing.
         try seed(h, state, file: file, cache: CollectionsLocalCache(synced: [:], published: located.published))
         XCTAssertEqual(model.detailLine, CollectionsModel.unlocatedDetail)
+        XCTAssertFalse(model.canRefresh)
+
+        // A synced entry that records no file name either — a hand-edited or foreign collections
+        // file. Nothing asks to be located, but there is still no document to name or to read.
+        try seed(h, state, file: CollectionsFile(collections: [
+            "Shared": published(slug: "shared"), "Team": CollectionsFile.Entry(kind: .synced),
+        ]), cache: CollectionsLocalCache(synced: [:], published: located.published))
+        XCTAssertTrue(state.isLocated("Team"), "nothing is waiting to be pointed at")
+        XCTAssertEqual(model.detailLine, CollectionsModel.unlocatedDetail)
+        XCTAssertFalse(model.canRefresh, "Refresh would read a document nobody can point at")
     }
 
     // MARK: - Selection

@@ -108,12 +108,13 @@ public class CollectionsModelTests
 
         using var model = new CollectionsModel(state, h.Dialogs);
         model.Selected = "Team";
-        Assert.Equal(["github", "jira", "Ledger"], model.Rows.Select(r => r.Name));   // case-insensitive by name
-        Assert.Equal(["github", "jira", "Ledger"], model.Rows.Select(r => r.Id));
-        Assert.Equal(["remote", "local · npx", "local · node"], model.Rows.Select(r => r.TypeText));
+        // Uppercase first: ordinal, the order the flyout lists the same connectors in.
+        Assert.Equal(["Ledger", "github", "jira"], model.Rows.Select(r => r.Name));
+        Assert.Equal(["Ledger", "github", "jira"], model.Rows.Select(r => r.Id));
+        Assert.Equal(["local · node", "remote", "local · npx"], model.Rows.Select(r => r.TypeText));
         // Every row of a synced collection carries the lock.
         Assert.All(model.Rows, r => Assert.True(r.IsLocked));
-        Assert.Equal([null, AppState.NeedsValueCaution("JIRA_TOKEN"), null], model.Rows.Select(r => r.Caution));
+        Assert.Equal([null, null, AppState.NeedsValueCaution("JIRA_TOKEN")], model.Rows.Select(r => r.Caution));
         Assert.Equal([true, true, true], model.Rows.Select(r => r.Enabled));
 
         // Nothing in a synced collection can be exported, so nothing in one can be ticked.
@@ -143,6 +144,12 @@ public class CollectionsModelTests
         Assert.Equal("jira", target.Name);
         Assert.False(target.IsNew);
         Assert.Equal(state.Store.Collections["Team"].Mcps["jira"].Config, target.Entry.Config);
+
+        // One connector list must not appear in two orders: the window lists the active
+        // collection's rows exactly as the flyout does.
+        state.SwitchCollection("Team");
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.Equal(flyout.Rows.Select(r => r.Name), model.Rows.Select(r => r.Name));
     }
 
     // MARK: toolbar
@@ -186,7 +193,8 @@ public class CollectionsModelTests
         Assert.True(model.CanRefresh);
         Assert.True(model.CanMakeLocalCopy);
         Assert.True(model.CanStopSyncing);
-        Assert.True(model.CanDelete);   // a synced collection is always deletable
+        // A synced collection goes without taking the last local one with it.
+        Assert.True(model.CanDelete);
 
         // Nothing to refresh until the file is found on this machine.
         Seed(h, state, file, Cache(published: located.Published));
@@ -199,6 +207,15 @@ public class CollectionsModelTests
         Assert.False(model.CanDelete);
         model.Selected = "Team";
         Assert.True(model.CanDelete);
+
+        // Nor can the last collection of any kind: the store always has an active one, so a lone
+        // synced collection is no more deletable than a lone local one.
+        Assert.Null(state.DeleteCollection("Team"));
+        Seed(h, state, File_(("Default", Synced("default.json"))),
+            Cache([new("Default", Bound("/shared/default.json"))]));
+        Assert.Equal(["Default"], state.CollectionNames);
+        Assert.True(state.IsSynced("Default"));
+        Assert.False(model.CanDelete);
     }
 
     // MARK: create, rename, delete
@@ -356,6 +373,16 @@ public class CollectionsModelTests
         // Not located: there is nothing to say about the file except that it is missing.
         Seed(h, state, file, Cache(published: located.Published));
         Assert.Equal(CollectionsModel.UnlocatedDetail, model.DetailLine);
+        Assert.False(model.CanRefresh);
+
+        // A synced entry that records no file name either — a hand-edited or foreign collections
+        // file. Nothing asks to be located, but there is still no document to name or to read.
+        Seed(h, state, File_(("Shared", Published("shared")), ("Team", new CollectionsFile.Entry(CollectionKind.Synced))),
+            Cache(published: located.Published));
+        Assert.True(state.IsLocated("Team"));   // nothing is waiting to be pointed at
+        Assert.Equal(CollectionsModel.UnlocatedDetail, model.DetailLine);
+        // Refresh would read a document nobody can point at.
+        Assert.False(model.CanRefresh);
     }
 
     // MARK: selection

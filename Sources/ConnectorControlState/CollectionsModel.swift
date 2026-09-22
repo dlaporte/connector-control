@@ -39,7 +39,8 @@ public final class CollectionsModel: ObservableObject {
 
     public static func localDetail(_ count: Int) -> String { "local · \(count) connectors" }
 
-    public static func syncedDetail(_ origin: String, _ status: String) -> String { "synced from \(origin) · read-only · \(status)" }
+    /// `source` is the document's path on this machine, never the sidecar's origin, which is a UUID.
+    public static func syncedDetail(_ source: String, _ status: String) -> String { "synced from \(source) · read-only · \(status)" }
 
     /// "this Mac" is the platform-forced half of this sentence; the Windows mirror says "this PC".
     public static func publishedDetail(_ folder: String) -> String { "publishes to \(folder) from this Mac" }
@@ -173,22 +174,14 @@ public final class CollectionsModel: ObservableObject {
         let locked = state.isSynced(collection)
         let checks = activeChecks
         let mcps = state.store.collections[collection]?.mcps ?? [:]
-        return mcps.keys.sorted(by: CollectionsModel.byName).map { name in
+        // Ordinal, which is how the popover sorts the same connectors of the same collection:
+        // two surfaces over one list must agree on its order.
+        return mcps.keys.sorted().map { name in
             let entry = mcps[name]
             return Row(name: name, enabled: entry?.enabled ?? false,
                        caution: state.connectorCaution(name, in: collection), isLocked: locked,
                        checked: checks.contains(name),
                        typeText: CollectionsModel.typeText(of: entry?.config ?? .object([:])))
-        }
-    }
-
-    /// Case-insensitive by name, with the ordinal order as the tie-break so two names that differ
-    /// only in case still have one settled order.
-    private static func byName(_ first: String, _ second: String) -> Bool {
-        switch first.caseInsensitiveCompare(second) {
-        case .orderedSame: return first < second
-        case .orderedAscending: return true
-        case .orderedDescending: return false
         }
     }
 
@@ -210,8 +203,8 @@ public final class CollectionsModel: ObservableObject {
     public var detailLine: String {
         let collection = selectedCollection
         if state.isSynced(collection) {
-            guard state.isLocated(collection) else { return CollectionsModel.unlocatedDetail }
-            return CollectionsModel.syncedDetail(sourceDescription(of: collection), syncStatus(of: collection))
+            guard let source = locatedSource(of: collection) else { return CollectionsModel.unlocatedDetail }
+            return CollectionsModel.syncedDetail(source, syncStatus(of: collection))
         }
         var line = CollectionsModel.localDetail(state.store.collections[collection]?.mcps.count ?? 0)
         if collection == state.activeCollection { line += CollectionsModel.activeSuffix }
@@ -223,10 +216,16 @@ public final class CollectionsModel: ObservableObject {
         return line
     }
 
-    /// Where the document sits: the file this machine is bound to, or — for a binding that has
-    /// gone missing between the check above and this read — the name the sidecar recorded.
-    private func sourceDescription(of collection: String) -> String {
-        state.sourceBinding(of: collection)?.path ?? state.collectionsFile.collections[collection]?.fileName ?? ""
+    /// The synced document as this machine can name it, or nil when it cannot: not synced, no
+    /// binding, or a sidecar entry that records neither a path nor a file name. The last of those
+    /// takes a hand-edited or foreign collections file — every writer here sets a file name — but
+    /// the decoder accepts one, and there is nothing to refresh or to report about a document
+    /// nobody can point at.
+    private func locatedSource(of collection: String) -> String? {
+        guard state.isSynced(collection), state.isLocated(collection) else { return nil }
+        let named = state.sourceBinding(of: collection)?.path
+            ?? state.collectionsFile.collections[collection]?.fileName
+        return (named?.isEmpty ?? true) ? nil : named
     }
 
     /// What the source is doing, in precedence order: what went wrong outranks what is waiting.
@@ -247,10 +246,8 @@ public final class CollectionsModel: ObservableObject {
         return !state.isSynced(collection) && state.collectionsCache.published[collection] == nil
     }
 
-    public var canRefresh: Bool {
-        let collection = selectedCollection
-        return state.isSynced(collection) && state.isLocated(collection)
-    }
+    /// Refresh reads the bound document, so it needs one this machine can name.
+    public var canRefresh: Bool { locatedSource(of: selectedCollection) != nil }
 
     public var canMakeLocalCopy: Bool { state.isSynced(selectedCollection) }
 
@@ -258,13 +255,18 @@ public final class CollectionsModel: ObservableObject {
 
     public var canStopPublishing: Bool { state.isPublished(selectedCollection) }
 
-    /// The last local collection stays, because only a local one takes a new connector. A synced
-    /// collection is never the last of those, so it is always deletable.
+    /// The last local collection stays, because only a local one takes a new connector, and the
+    /// last collection of any kind stays, because the store always has an active one. A synced
+    /// collection is never the last local one, so only the second rule reaches it.
     public var canDelete: Bool {
         let collection = selectedCollection
-        return state.isSynced(collection) || state.localCollectionNames.count > 1
+        return state.isSynced(collection)
+            ? state.collectionNames.count > 1
+            : state.localCollectionNames.count > 1
     }
 
+    /// Through the rows rather than the tick set, so a tick on a connector that has since
+    /// vanished from the collection is dropped instead of exported.
     public var checkedNames: [String] { rows.filter(\.checked).map(\.name) }
 
     // MARK: - Rows
@@ -319,9 +321,11 @@ public final class CollectionsModel: ObservableObject {
         let collection = selectedCollection
         guard dialogs.confirm(message: AppState.deleteCollectionMessage(collection), informative: nil,
                               primary: AppState.deleteButton, destructive: true) else { return }
-        // The store refuses to delete the last local collection. Asked here as well as in the
-        // toolbar, so a refusal cannot arrive after the publishing below has already stopped.
-        guard canDelete else { report(AppState.lastLocalCollectionError); return }
+        // The store refuses to delete the last local collection, and the last one of any kind.
+        // Asked here as well as in the toolbar, so a refusal cannot arrive after the publishing
+        // below has already stopped. The store reports it: it refuses before it touches anything,
+        // so asking it early is a no-op that still produces the right message.
+        guard canDelete else { report(state.deleteCollection(named: collection)); return }
         if let fileName = publishedFileName(of: collection) {
             state.stopPublishing(collection, deleteFile: askAboutPublishedFile(fileName))
         }
