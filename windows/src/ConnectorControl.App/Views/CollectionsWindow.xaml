@@ -143,18 +143,25 @@
 
       <!-- Selecting a collection only shows it. Making it the active one is a double-click, which
            is what this window has to offer: every labelled route to it is a flyout menu item. -->
-      <!-- The double-click is handled here and resolved to the container it landed on, so the
-           empty space under the items answers for nothing. -->
+      <!-- The selection is bound one way only, and the way back is OnSelectionChanged, guarded.
+           CollectionsModel's Selected setter raises for every write, changed or not, and every
+           raise hands this list a freshly built Items collection; a two-way binding answers that
+           rebuild by writing its re-resolved selection straight back, which raises again. That
+           was the loop that overflowed the stack. The double-click is handled here too and
+           resolved to the container it landed on, so the empty space under the items answers for
+           nothing. -->
       <ListBox x:Name="Sidebar" ItemsSource="{Binding Items}"
-               SelectedValuePath="Name" SelectedValue="{Binding Selected}"
+               SelectedValuePath="Name" SelectedValue="{Binding Selected, Mode=OneWay}"
+               SelectionChanged="OnSelectionChanged"
                PreviewMouseDoubleClick="OnActivate">
         <!-- The context menu is on the container rather than inside the template: one raised
              from the keyboard is looked for on the focused ListBoxItem, not on what it holds.
              Nothing in here may carry x:Name or an event handler — the markup compiler numbers
              such an element, WPF builds this subtree at another time, and the window's own
-             connection ids then land on the wrong elements. Hence a command and the item as its
-             parameter, with the target named explicitly so the window's binding is found from a
-             menu that lives outside its visual tree. -->
+             connection ids then land on the wrong elements. Hence a command, whose parameter and
+             target both come from the row the menu was raised over: this one ContextMenu is
+             shared by every container the style makes, so its own inherited DataContext belongs
+             to whichever row claimed it last, while its PlacementTarget is set per opening. -->
         <ListBox.ItemContainerStyle>
           <Style TargetType="ListBoxItem">
             <Setter Property="ContextMenu">
@@ -162,7 +169,7 @@
                 <ContextMenu>
                   <MenuItem Header="{x:Static state:CollectionsModel.MakeActiveAction}"
                             Command="{x:Static views:CollectionsWindow.MakeActiveCommand}"
-                            CommandParameter="{Binding}"
+                            CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                             CommandTarget="{Binding PlacementTarget, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                 </ContextMenu>
               </Setter.Value>

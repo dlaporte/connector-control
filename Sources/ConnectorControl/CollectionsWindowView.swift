@@ -26,6 +26,9 @@ struct CollectionsWindowView: View {
     @ObservedObject private var state: AppState
     @Environment(\.openWindow) private var openWindow
     @State private var sheet: Sheet?
+    /// A sheet asked for while another is still on screen. Dismissing one is animated, and the
+    /// replacement can only go up once that has finished — which is what `onDismiss` reports.
+    @State private var pendingSheet: Sheet?
     /// The model's last refusal, kept here because only the view knows when it has been read:
     /// `lastError` is cleared by the next action that succeeds, never by an OK button.
     @State private var shownError: String?
@@ -77,7 +80,7 @@ struct CollectionsWindowView: View {
         }
         .frame(minWidth: 720, minHeight: 480)
         .toolbar { toolbar }
-        .sheet(item: $sheet) { present($0) }
+        .sheet(item: $sheet, onDismiss: { presentPending() }) { present($0) }
         .alert(Text(shownError ?? ""), isPresented: errorShowing) { }
         // On appear and on every change, because the window stays open and is brought forward:
         // one that read the request only on appear would strand every later one. Both go through
@@ -102,13 +105,7 @@ struct CollectionsWindowView: View {
                 // The marks sit at the trailing edge, where the mockup and the Windows sidebar
                 // put them, rather than trailing the name at whatever width it happens to be.
                 Spacer(minLength: 6)
-                if item.kind == .synced {
-                    Image(systemName: "link")
-                        .imageScale(.small)
-                        .foregroundStyle(.secondary)
-                        .help(CollectionsModel.syncedGlyphTooltip(item) ?? "")
-                        .accessibilityLabel(CollectionsModel.syncedGlyphTooltip(item) ?? "")
-                }
+                if item.kind == .synced { chain(item) }
                 if item.hasPendingUpdate {
                     Circle()
                         .fill(.orange)
@@ -128,6 +125,20 @@ struct CollectionsWindowView: View {
             }
         }
         .navigationSplitViewColumnWidth(min: 160, ideal: CollectionsWindowView.sidebarWidth)
+    }
+
+    /// The chain, and the sentence naming the document behind it — which the model withholds for
+    /// a synced collection whose file it cannot name. An empty tooltip and a nameless label are
+    /// worse than neither, so the glyph goes up bare instead.
+    @ViewBuilder private func chain(_ item: CollectionsModel.Item) -> some View {
+        let glyph = Image(systemName: "link")
+            .imageScale(.small)
+            .foregroundStyle(Color.secondary)
+        if let tooltip = CollectionsModel.syncedGlyphTooltip(item) {
+            glyph.help(tooltip).accessibilityLabel(tooltip)
+        } else {
+            glyph
+        }
     }
 
     // MARK: - Detail
@@ -331,12 +342,20 @@ struct CollectionsWindowView: View {
     }
 
     /// Puts a sheet up, replacing whatever is already there. SwiftUI will not swap one item for
-    /// another in a single turn: the open sheet has to be dismissed first, and the new one
-    /// presented once that has taken effect.
+    /// another: the open sheet has to be dismissed first, and the new one presented after it has
+    /// gone — not one turn later, which is shorter than the dismissal itself.
     private func show(_ next: Sheet) {
         guard sheet != nil else { sheet = next; return }
+        pendingSheet = next
         sheet = nil
-        Task { @MainActor in sheet = next }
+    }
+
+    /// Whatever `show(_:)` had to put aside, now that the sheet in its way has gone. Nothing to
+    /// do for the ordinary case, where a sheet was dismissed and nothing is waiting behind it.
+    private func presentPending() {
+        guard let next = pendingSheet else { return }
+        pendingSheet = nil
+        sheet = next
     }
 
     /// What the popover asked for, taken so no other window can act on it twice.

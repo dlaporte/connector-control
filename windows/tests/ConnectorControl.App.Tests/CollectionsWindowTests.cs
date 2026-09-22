@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Automation;
 using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using ConnectorControl.App.Services;
@@ -129,6 +130,37 @@ public class CollectionsWindowTests
         where T : FrameworkElement =>
         RowElements.Find<T>(window.Sidebar, window.Model.Items.Single(i => i.Name == collection), name);
 
+    /// <summary>
+    /// What the Make Active item carries when the sidebar's context menu is raised over one row.
+    /// The menu is opened for real, because the parameter comes from its PlacementTarget, which
+    /// WPF sets only as it opens — and it is closed again, so nothing is left behind in the
+    /// shared WPF host.
+    /// </summary>
+    private static object? MenuParameterFor(CollectionsWindow window, CollectionsModel.Item item)
+    {
+        var container = (ListBoxItem)window.Sidebar.ItemContainerGenerator.ContainerFromItem(item)!;
+        var menu = container.ContextMenu!;
+        menu.PlacementTarget = container;
+        // A popup places itself against a target that is on screen, so the window goes back up
+        // for exactly as long as the menu is open. Nothing between these two lines pumps the
+        // dispatcher, so the window is never both visible and active while another test class's
+        // queued body could run inside this one.
+        window.Show();
+        menu.IsOpen = true;
+        try
+        {
+            menu.UpdateLayout();
+            var entry = (MenuItem)menu.Items[0];
+            Assert.Equal(CollectionsModel.MakeActiveAction, entry.Header);
+            return entry.CommandParameter;
+        }
+        finally
+        {
+            menu.IsOpen = false;
+            window.Hide();
+        }
+    }
+
     private static T InRow<T>(CollectionsWindow window, string connector, string name)
         where T : FrameworkElement =>
         RowElements.Find<T>(window.RowList, window.Model.Rows.Single(r => r.Name == connector), name);
@@ -163,13 +195,111 @@ public class CollectionsWindowTests
             Assert.Equal("Default", window.SelectedNameText.Text);
             Assert.Equal(" · " + window.Model.DetailLine, window.DetailText.Text);
             Assert.Equal(Visibility.Collapsed, window.BannerStrip.Visibility);
+        });
+    }
 
-            // Make Active reaches the window as a command carrying the collection it was raised
-            // over. The context menu holds no handler of its own: an element hooked inside a
-            // lazily built subtree takes one of the window's connection ids and shifts the rest.
-            Assert.True(CollectionsWindow.MakeActiveCommand.CanExecute(team, window));
-            CollectionsWindow.MakeActiveCommand.Execute(team, window);
+    /// <summary>
+    /// The loop that overflowed the test process's stack: the sidebar's selection, bound two way,
+    /// and the model's Selected setter, which raises on every write, feeding each other through
+    /// the rebuilt Items list every raise hands the sidebar. Bounded counts rather than a
+    /// timeout — the unguarded loop never returned, so without the guard this test does not fail,
+    /// it takes the process down.
+    /// </summary>
+    [Fact]
+    public void TheSidebarSelectionAndARebuildDoNotFeedEachOther()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        SubscribeToDataTeam(h, state);
+        Showing(h, state, (window, _) =>
+        {
+            var raises = 0;
+            var selections = 0;
+            window.Model.PropertyChanged += (_, _) => raises++;
+            window.Sidebar.SelectionChanged += (_, _) => selections++;
+
+            // A user picking a row reaches the model — the markup binds one way now, so this is
+            // the handler's doing — and the raise it causes stops there.
+            window.Sidebar.SelectedValue = "Data team";
+            Layout(window);
+            Assert.Equal("Data team", window.Model.Selected);
+            Assert.InRange(raises, 1, 5);
+            Assert.InRange(selections, 1, 4);
+
+            // Making that collection active rewrites every item, because IsActive moves: the
+            // rebuild the two-way binding used to answer with a write of its own, and so on.
+            raises = 0;
+            selections = 0;
+            CollectionsWindow.MakeActiveCommand.Execute(window.Model.Items.Single(i => i.Name == "Data team"), window);
+            Layout(window);
             Assert.Equal("Data team", state.ActiveCollection);
+            Assert.Equal("Data team", window.Model.Selected);
+            Assert.InRange(raises, 1, 30);
+            Assert.InRange(selections, 0, 6);
+        });
+    }
+
+    [Fact]
+    public void MakeActiveCarriesTheCollectionItsMenuWasRaisedOver()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        SubscribeToDataTeam(h, state);
+        Showing(h, state, (window, _) =>
+        {
+            // One ContextMenu instance is shared by every container the item container style
+            // makes, and WPF drops its inheritance context as soon as a second one claims it, so
+            // the command's parameter is the only thing that can say which row was clicked.
+            // Nothing here reads a DataContext.
+            Assert.Equal("Default", state.ActiveCollection);
+            var synced = window.Model.Items[0];
+            var active = window.Model.Items[1];
+            Assert.Equal("Data team", synced.Name);
+            Assert.Equal("Default", active.Name);
+
+            // The collection that is already active greys the item out rather than letting it do
+            // nothing visible.
+            Assert.False(CollectionsWindow.MakeActiveCommand.CanExecute(active, window));
+            Assert.True(CollectionsWindow.MakeActiveCommand.CanExecute(synced, window));
+
+            CollectionsWindow.MakeActiveCommand.Execute(synced, window);
+            Assert.Equal("Data team", state.ActiveCollection);
+
+            // Then the second collection, through that same shared menu: it lands on itself and
+            // not on the row that claimed the menu last.
+            var second = window.Model.Items[1];
+            Assert.Equal("Default", second.Name);
+            Assert.True(CollectionsWindow.MakeActiveCommand.CanExecute(second, window));
+            CollectionsWindow.MakeActiveCommand.Execute(second, window);
+            Assert.Equal("Default", state.ActiveCollection);
+        });
+    }
+
+    [Fact]
+    public void TheSidebarMenuCarriesTheCollectionItWasRaisedOver()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        SubscribeToDataTeam(h, state);
+        Assert.Null(state.CreateCollection("Spare"));
+        state.SwitchCollection("Default");
+        Showing(h, state, (window, _) =>
+        {
+            Assert.Equal(["Data team", "Default", "Spare"], window.Model.Items.Select(i => i.Name));
+            var synced = window.Model.Items[0];
+            var spare = window.Model.Items[2];
+
+            // One ContextMenu instance is shared by every container the item container style
+            // makes, and WPF drops its inheritance context as soon as a second container claims
+            // it. The parameter follows the PlacementTarget instead, which is the one thing
+            // about that shared menu still true per row: the first row claims it…
+            Assert.Equal(synced, MenuParameterFor(window, synced));
+            // …and the third takes it over.
+            var parameter = MenuParameterFor(window, spare);
+            Assert.Equal(spare, parameter);
+
+            CollectionsWindow.MakeActiveCommand.Execute(parameter, window);
+            Assert.Equal("Spare", state.ActiveCollection);
         });
     }
 
@@ -187,8 +317,10 @@ public class CollectionsWindowTests
             {
                 var lockGlyph = InRow<TextBlock>(window, row.Name, "RowLockGlyph");
                 Assert.Equal(Visibility.Visible, lockGlyph.Visibility);
-                // The glyph is a private-use code point, so the sentence beside it is the model's.
+                // The glyph is a private-use code point that reads as nothing, so the model's
+                // sentence is both what the pointer uncovers and what a screen reader says.
                 Assert.Equal(CollectionsModel.LockedGlyphTooltip, lockGlyph.ToolTip);
+                Assert.Equal(CollectionsModel.LockedGlyphTooltip, AutomationProperties.GetName(lockGlyph));
                 // A synced collection's rows cannot be exported, so they cannot be ticked either.
                 Assert.Equal(Visibility.Collapsed, InRow<CheckBox>(window, row.Name, "RowTick").Visibility);
             }

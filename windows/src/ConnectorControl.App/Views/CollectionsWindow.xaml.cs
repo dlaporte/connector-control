@@ -24,6 +24,19 @@ public partial class CollectionsWindow : Window
     private readonly IDialogs dialogs;
     private readonly PropertyChangedEventHandler onModelChanged;
     private readonly PropertyChangedEventHandler onStateChanged;
+    /// <summary>
+    /// Set the moment this window closes. What it guards is the deferred consume: a request
+    /// raised just before the close runs after it, and a dead window taking one would swallow it
+    /// — the next window to open would find nothing waiting.
+    /// </summary>
+    private bool closed;
+    /// <summary>
+    /// True while this window is writing the sidebar's selection into the model. The model's
+    /// Selected setter raises even when nothing changed, and that raise rebuilds the sidebar's
+    /// items, which can move its selection again: without this the two would take turns until
+    /// the stack ran out.
+    /// </summary>
+    private bool writingSelection;
 
     public CollectionsWindow(AppState state, WindowRegistry windows, IDialogs dialogs)
     {
@@ -48,10 +61,11 @@ public partial class CollectionsWindow : Window
         state.PropertyChanged += onStateChanged;
         // In code, not in XAML: every hookup the markup compiler numbers has to sit in this
         // window's own tree, and this one has no element to sit on.
-        CommandBindings.Add(new CommandBinding(MakeActiveCommand, OnMakeActive));
+        CommandBindings.Add(new CommandBinding(MakeActiveCommand, OnMakeActive, OnCanMakeActive));
         Loaded += (_, _) => ScheduleConsume();
         Closed += (_, _) =>
         {
+            closed = true;
             state.PropertyChanged -= onStateChanged;
             Model.PropertyChanged -= onModelChanged;
             Model.Dispose();
@@ -150,13 +164,41 @@ public partial class CollectionsWindow : Window
     // MARK: panes
 
     /// <summary>
+    /// The view-to-model half of the sidebar's selection, which the markup deliberately does not
+    /// bind. Only a real collection, and only a different one, reaches the model: a selection the
+    /// list cleared or re-resolved while its items were being replaced says nothing about which
+    /// collection the user wants to see.
+    /// </summary>
+    private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (writingSelection
+            || Sidebar.SelectedValue is not string name
+            || string.Equals(name, Model.Selected, StringComparison.Ordinal))
+        {
+            return;
+        }
+        writingSelection = true;
+        try
+        {
+            Model.Selected = name;
+        }
+        finally
+        {
+            writingSelection = false;
+        }
+    }
+
+    /// <summary>
     /// Double-clicking a collection makes it the active one; the click before it selected it.
     /// Resolved to the container the click landed on, so the empty space under the last item
     /// does nothing rather than activating whatever happens to be selected.
     /// </summary>
     private void OnActivate(object sender, MouseButtonEventArgs e)
     {
-        if (e.OriginalSource is DependencyObject source
+        // PreviewMouseDoubleClick fires for every button, and a double right-click over a row is
+        // not a request to activate it.
+        if (e.ChangedButton == MouseButton.Left
+            && e.OriginalSource is DependencyObject source
             && ItemsControl.ContainerFromElement(Sidebar, source) is ListBoxItem { DataContext: CollectionsModel.Item item })
         {
             Act(() => Model.SwitchTo(item.Name));
@@ -174,6 +216,15 @@ public partial class CollectionsWindow : Window
             Act(() => Model.SwitchTo(item.Name));
         }
     }
+
+    /// <summary>
+    /// Greyed out for the collection that is already active, as the Mac's menu item is. The
+    /// answer comes from the parameter, never from a DataContext: one ContextMenu instance is
+    /// shared by every container the item container style makes, so its inheritance context is
+    /// whatever claimed it last.
+    /// </summary>
+    private void OnCanMakeActive(object sender, CanExecuteRoutedEventArgs e) =>
+        e.CanExecute = e.Parameter is CollectionsModel.Item { IsActive: false };
 
     private void OnRowTicked(object sender, RoutedEventArgs e)
     {
@@ -241,12 +292,20 @@ public partial class CollectionsWindow : Window
     /// window forward, and a change notification arrives wherever the setter was called. A
     /// picker opened from either would stand in front of a window that is not on screen yet.
     /// </summary>
-    private void ScheduleConsume() => Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(Consume));
+    private void ScheduleConsume()
+    {
+        if (!closed)
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(Consume));
+        }
+    }
 
     /// <summary>What the flyout asked for, taken so nothing can act on it twice.</summary>
     private void Consume()
     {
-        if (state.TakeCollectionsWindowRequest() is not { } request)
+        // Queued below layout, so this can run after the window has gone: leave the request for
+        // whichever window opens next rather than taking it into a closed one.
+        if (closed || state.TakeCollectionsWindowRequest() is not { } request)
         {
             return;
         }
