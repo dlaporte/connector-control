@@ -140,10 +140,20 @@ final class FileWatcherTests: XCTestCase {
         XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait))
     }
 
-    /// The deletion of the watched directory itself (not just the file) is
-    /// delivered exactly once and disarms the watcher, however many of the
-    /// directory's and the file's own DispatchSource events fire for it — the
-    /// serial queue plus the top-of-function guard collapse them to one.
+    /// Removing the watched directory is two separate disappearances on disk —
+    /// the file is unlinked, then the directory itself — and the watcher
+    /// reports each one, so the tests below take them one at a time and wait
+    /// for the file's own change to be delivered before the directory goes.
+    /// Collapsing them into a single `removeItem(at: dir)` makes the watcher's
+    /// state at any given hit count a race: the first callback is whichever
+    /// disappearance the kernel reported first, and only the directory's
+    /// disarms. `testRemovingTheDirectoryWithTheFileStillInItReportsAndDisarms`
+    /// keeps that real-world shape, asserting only what holds either way.
+    ///
+    /// The directory's own deletion is delivered exactly once and disarms the
+    /// watcher, however many of the directory's and the file's DispatchSource
+    /// events fire for it — the serial queue plus the top-of-function guard
+    /// collapse them to one.
     func testADeletedDirectoryFiresOnceAndDisarms() throws {
         let r = Rig()
         defer { r.dispose() }
@@ -151,11 +161,26 @@ final class FileWatcherTests: XCTestCase {
         let watcher = r.make()
         watcher.start()
         XCTAssertTrue(watcher.isArmed)
+        try FileManager.default.removeItem(at: r.file)
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait), "the file's own disappearance")
         try FileManager.default.removeItem(at: r.dir.url)
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait))
-        XCTAssertFalse(watcher.isArmed)
+        XCTAssertTrue(r.ui.pumpUntil({ !watcher.isArmed }, timeout: wait), "the directory's deletion disarms")
         _ = r.ui.pumpUntil({ false }, timeout: settle)   // give a possible second event a chance to (mis)fire
-        XCTAssertEqual(r.hits, 1)
+        XCTAssertEqual(r.hits, 2, "one callback for the file, exactly one for the directory")
+    }
+
+    /// The shape the app actually meets: the directory goes with the file still
+    /// in it. Which disappearance the watcher sees first is the kernel's
+    /// choice, so only the end state is asserted — the change is reported and
+    /// the watcher ends up disarmed.
+    func testRemovingTheDirectoryWithTheFileStillInItReportsAndDisarms() throws {
+        let r = Rig()
+        defer { r.dispose() }
+        try Data("a".utf8).write(to: r.file)
+        let watcher = r.make()
+        watcher.start()
+        try FileManager.default.removeItem(at: r.dir.url)
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 && !watcher.isArmed }, timeout: wait))
     }
 
     func testADeletedDirectoryDisarmsTheWatcherSoTheNextStartReArms() throws {
@@ -164,9 +189,10 @@ final class FileWatcherTests: XCTestCase {
         try Data("a".utf8).write(to: r.file)
         let watcher = r.make()
         watcher.start()
+        try FileManager.default.removeItem(at: r.file)
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait), "the file's own disappearance")
         try FileManager.default.removeItem(at: r.dir.url)
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait))
-        XCTAssertFalse(watcher.isArmed)
+        XCTAssertTrue(r.ui.pumpUntil({ !watcher.isArmed }, timeout: wait), "the directory's deletion disarms")
         watcher.start()   // AppState retries on every reload; the directory is still gone
         XCTAssertFalse(watcher.isArmed)
     }
@@ -177,13 +203,18 @@ final class FileWatcherTests: XCTestCase {
         try Data("a".utf8).write(to: r.file)
         let watcher = r.make()
         watcher.start()
+        try FileManager.default.removeItem(at: r.file)
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait), "the file's own disappearance")
         try FileManager.default.removeItem(at: r.dir.url)
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait))
+        // The disarm has to be observed before the directory comes back: a
+        // watcher still armed on the deleted directory's descriptor treats the
+        // next start() as a no-op and never sees the new one's contents.
+        XCTAssertTrue(r.ui.pumpUntil({ !watcher.isArmed }, timeout: wait), "the directory's deletion disarms")
         try FileManager.default.createDirectory(at: r.dir.url, withIntermediateDirectories: true)
         watcher.start()
         XCTAssertTrue(watcher.isArmed)
         try TempDir.touch(r.file, "back")
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 2 }, timeout: wait), "the re-armed watcher still reports changes")
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 3 }, timeout: wait), "the re-armed watcher still reports changes")
     }
 
     func testStaysUnarmedUntilTheParentDirectoryExists() throws {
