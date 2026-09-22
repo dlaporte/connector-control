@@ -10,7 +10,8 @@ final class CollectionsLocalCacheTests: XCTestCase {
 
     static let sample = CollectionsLocalCache(
         synced: ["Data team": .init(path: "/Users/d/Acme/mcp/data-team.json", lastHash: "sha256:00", excluded: ["ledger": "reason"])],
-        published: ["Consulting": .init(folder: "/Users/d/Acme/mcp", lastWrittenHash: nil)])
+        published: ["Consulting": .init(folder: "/Users/d/Acme/mcp", lastWrittenHash: nil,
+                                        publishedFolders: ["/Users/d/Acme/mcp"])])
 
     func testRoundTripThroughDisk() throws {
         let url = tempDir.file("collections-local.json")
@@ -43,7 +44,8 @@ final class CollectionsLocalCacheTests: XCTestCase {
     func testMarkedValuesRoundTripAndAreEmptyInAnOlderCache() throws {
         let marked = CollectionsLocalCache(synced: [:], published: [
             "Consulting": .init(folder: "/Users/d/Acme/mcp", lastWrittenHash: "sha256:01",
-                                markedValues: ["/Users/d/ledger.js", "/Users/d/b.js"]),
+                                markedValues: ["/Users/d/ledger.js", "/Users/d/b.js"],
+                                publishedFolders: ["/Users/d/Acme/mcp"]),
         ])
         XCTAssertEqual(try CollectionsLocalCache.decode(marked.encode()), marked)
         XCTAssertEqual(marked.encode().value(at: JSONPointer(["published", "Consulting", "markedValues"])),
@@ -67,7 +69,24 @@ final class CollectionsLocalCacheTests: XCTestCase {
         let older = try CollectionsLocalCache.decode(Self.sample.encode())
         XCTAssertNil(older.lastAppliedCollection)
         XCTAssertEqual(older.published["Consulting"]?.releasedValues, [])
-        XCTAssertEqual(older.published["Consulting"]?.publishedFolders, [])
+    }
+
+    func testWhatAStoppedPublishLeftBehindRoundTripsAndOutlivesThePrune() throws {
+        let cache = CollectionsLocalCache(synced: [:], published: [:], kept: [
+            "Consulting": .init(markedValues: ["/a"], releasedValues: ["/b"], publishedFolders: ["/Users/d/old"]),
+            "Empty": .init(),
+        ])
+        let decoded = try CollectionsLocalCache.decode(cache.encode())
+        XCTAssertEqual(decoded.kept["Consulting"], cache.kept["Consulting"])
+        XCTAssertNil(decoded.kept["Empty"], "a record with nothing to say is not written")
+        XCTAssertEqual(decoded.reconciled(with: CollectionsFile(collections: [:])).kept, decoded.kept,
+                       "no sidecar vouches for it, and it is kept all the same")
+        let older = try JSONValue.parse(Data("""
+            {"version": 1, "synced": {}, "published": {"Consulting": {"folder": "/Users/d/Acme/mcp"}}}
+            """.utf8))
+        XCTAssertEqual(try CollectionsLocalCache.decode(older).kept, [:])
+        XCTAssertEqual(try CollectionsLocalCache.decode(older).published["Consulting"]?.publishedFolders,
+                       ["/Users/d/Acme/mcp"], "a binding knows it publishes into the folder it names")
     }
 
     func testAnUnknownVersionDecodesAsMalformed() {

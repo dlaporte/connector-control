@@ -24,14 +24,33 @@ final class ConfigServiceTests: XCTestCase {
         tempDir.dispose()
     }
 
-    /// Claude's file holds the collection it was last applied from, so a load ingests it only while
-    /// that is still the active one; with nothing recorded — a first launch — it ingests as always.
-    func testTheIngestTakesClaudesServersOnlyIntoTheCollectionTheyCameFrom() throws {
+    /// Claude's file holds the collection it was last applied from, so what that collection renders
+    /// is left where it is; with nothing recorded — a first launch — everything is ingested.
+    func testTheIngestLeavesTheRecordedCollectionsOwnServersWhereTheyAre() throws {
         XCTAssertEqual(Set(try service.loadAndReconcile(lastAppliedCollection: "Default").store.mcps.keys),
                        ["scoutbook", "aws-mcp", "service-now"], "the recorded collection is the active one")
+
+        // Claude's file holds Team's connectors and one an installer wrote while the app was off.
+        var store = try service.loadAndReconcile().store
+        XCTAssertNil(store.addCollection(named: "Team", copyingCurrent: true))
+        store.activeCollection = "Default"
+        store.collections["Team"]?.mcps.removeValue(forKey: "scoutbook")
+        store.collections["Default"]?.mcps.removeValue(forKey: "aws-mcp")
+        try service.saveStore(store)
+        var servers = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
+        servers["installer"] = .object(["command": .string("node")])
+        try service.apply(servers: servers)
+
+        let loaded = try service.loadAndReconcile(lastAppliedCollection: "Team")
+        XCTAssertNil(loaded.store.collections[loaded.store.activeCollection]?.mcps["aws-mcp"],
+                     "Team renders it, so it is not poured into the active collection")
+        XCTAssertNotNil(loaded.store.collections[loaded.store.activeCollection]?.mcps["installer"],
+                        "a name no collection renders is genuinely new and comes in")
+        XCTAssertNil(loaded.store.collections["Team"]?.mcps["installer"], "and only into the active one")
+
         try FileManager.default.removeItem(at: paths.masterStoreURL)
-        XCTAssertEqual(try service.loadAndReconcile(lastAppliedCollection: "Team").store.mcps, [:],
-                       "written from another collection: nothing of it comes into this one")
+        XCTAssertEqual(try service.loadAndReconcile(lastAppliedCollection: "Gone").store.mcps, [:],
+                       "a record naming a collection this store does not have takes nothing in")
     }
 
     func testEachBackupRecordsTheCollectionItWasAppliedFrom() throws {

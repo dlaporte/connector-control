@@ -129,6 +129,8 @@ public class StringCatalogTests
         ["PublishModel.footerLine"] = ["X", "Y"],
         ["PublishModel.title"] = ["X"],
         ["PublishModel.keptPathNote"] = ["X", "Y"],
+        ["PublishModel.otherFolderNote"] = ["X", "Y", "Z"],
+        ["PublishModel.publishFolderEditNote"] = ["X", "Y"],
         ["PublishModel.publishFolderNote"] = ["X", "Y"],
         ["PublishModel.unresolvedMarkNote"] = ["X", "Y"],
         ["PublishModel.warningLine"] = ["X", "Y"],
@@ -410,6 +412,8 @@ public class StringCatalogTests
         actual["PublishModel.keptPathNote"] = PublishModel.KeptPathNote("X", "Y");
         actual["PublishModel.releaseValueButton"] = PublishModel.ReleaseValueButton;
         actual["PublishModel.publishFolderNote"] = PublishModel.PublishFolderNote("X", "Y");
+        actual["PublishModel.publishFolderEditNote"] = PublishModel.PublishFolderEditNote("X", "Y");
+        actual["PublishModel.otherFolderNote"] = PublishModel.OtherFolderNote("X", "Y", "Z");
         actual["PublishModel.useDirectoryTokenButton"] = PublishModel.UseDirectoryTokenButton;
         actual["PublishModel.unresolvedMarkNote"] = PublishModel.UnresolvedMarkNote("X", "Y");
         actual["PublishModel.warningLine"] = PublishModel.WarningLine("X", "Y");

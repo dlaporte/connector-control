@@ -25,11 +25,10 @@ public struct ConfigService: Sendable {
     /// by this machine's state.
     ///
     /// `lastAppliedCollection` is the collection Claude's file was last written from on this
-    /// machine. The file holds that collection's connectors, so they are ingested only while it is
-    /// still the active one: after the active collection changed elsewhere, ingesting would pour
-    /// one collection's connectors into another. The caller then applies the active collection
-    /// over the file. nil — never recorded — ingests as always, which a first launch needs to
-    /// take in what Claude already runs; so does rebuilding a corrupt store.
+    /// machine. Once the active collection has changed elsewhere, the names that collection
+    /// renders are left where they are rather than poured into the active one; everything else the
+    /// file holds is still taken in (`ingestible(_:lastApplied:corrupt:store:)`). The caller then
+    /// applies the active collection over the file.
     public func loadAndReconcile(baseline: [String: JSONValue]? = nil,
                                  storeAuthoritative: Bool = false,
                                  lastAppliedCollection: String? = nil) throws
@@ -71,11 +70,11 @@ public struct ConfigService: Sendable {
         } else {
             effectiveBaseline = baseline
         }
-        let ingests = loaded.corruptFileURL != nil || lastAppliedCollection == nil
-            || lastAppliedCollection == loaded.store.activeCollection
-        let outcome = ingests
-            ? Reconciler.reconcile(store: loaded.store, claudeServers: servers, baseline: effectiveBaseline)
-            : ReconcileOutcome(store: loaded.store, storeChanged: false)
+        let outcome = Reconciler.reconcile(
+            store: loaded.store,
+            claudeServers: ConfigService.ingestible(servers, lastApplied: lastAppliedCollection,
+                                                    corrupt: loaded.corruptFileURL != nil, store: loaded.store),
+            baseline: effectiveBaseline)
         if outcome.storeChanged || loaded.corruptFileURL != nil {
             try saveStore(outcome.store)
         }
@@ -86,6 +85,25 @@ public struct ConfigService: Sendable {
     public func saveStore(_ store: MasterStore) throws {
         try backups.backUp(fileAt: paths.masterStoreURL, series: "mcps")
         try MasterStoreIO.save(store, to: paths.masterStoreURL, staging: paths.stagingDirURL)
+    }
+
+    /// What a load may take out of Claude's file and into the active collection.
+    ///
+    /// All of it while the record of the last apply is the active collection, is missing — a first
+    /// launch — or the store was corrupt and is being rebuilt from the file. Otherwise the file
+    /// holds another collection's connectors, and the names that collection renders are left
+    /// alone: pouring them into the active collection is what the record is for. Everything else
+    /// is genuinely new — an installer's connector, a hand edit — and belongs to the collection the
+    /// app is about to apply, whichever that is.
+    ///
+    /// A record naming a collection the store no longer has leaves everything alone: its
+    /// connectors are no collection's to take in, and nothing here keeps their marked paths back.
+    static func ingestible(_ servers: [String: JSONValue], lastApplied: String?, corrupt: Bool,
+                           store: MasterStore) -> [String: JSONValue] {
+        guard !corrupt, let lastApplied, lastApplied != store.activeCollection else { return servers }
+        guard let collection = store.collections[lastApplied] else { return [:] }
+        let rendered = Set(collection.mcps.filter { $0.value.enabled }.keys)
+        return servers.filter { !rendered.contains($0.key) }
     }
 
     /// Snapshot original (first run), backup Claude's config, then write the

@@ -1710,6 +1710,13 @@ public class AppStateCollectionsTests
         // Nothing was restored.
         Assert.Equal(claudeBefore, File.ReadAllBytes(h.ClaudeConfigPath));
         Assert.Equal(storeBefore, s.Store);
+
+        // The way back the message names: a collection of that name again, and the same backup goes in.
+        Assert.Contains("Create a collection named “Gone”", AppState.RestoreCollectionGoneError("Gone"));
+        Assert.Null(s.CreateCollection("Gone"));
+        s.RestoreClaudeConfig(backup);
+        Assert.Equal("Gone", s.ActiveCollection);
+        Assert.True(s.Store.Collections["Gone"].Mcps.ContainsKey("gone-only"));
     }
 
     /// <summary>
@@ -1733,6 +1740,120 @@ public class AppStateCollectionsTests
         s.RestoreClaudeConfig(backup);
         Assert.Equal("Team A", s.ActiveCollection);
         Assert.True(s.Store.Collections["Team A"].Mcps.ContainsKey("team-only"));
+    }
+
+    /// <summary>
+    /// An own folder where the rewrite cannot reach — a remote connector's header name — is a folder
+    /// entry all the same: it says the dialog cannot write there, both answers say so, and the
+    /// connector's editor is the way out.
+    /// </summary>
+    [Fact]
+    public void AnOwnFolderTheSheetCannotRewriteSaysWhereToWriteTheToken()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var bound = state.CollectionsCache.Published[state.ActiveCollection].Folder;
+        var file = Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
+        var before = File.ReadAllBytes(file);
+        Assert.Null(state.Upsert("svc", new McpEntry(RemotePattern.Encode(new RemoteConfig(
+            "https://mcp.example.com/", new RemoteAuth.Header(bound, "v"), RemoteLaunchStyle.Npx, package: "mcp-remote"))), null));
+        Assert.Equal(AppState.PublishFolderCarriedError("svc", "remote.auth.name"), state.PublishError?.Message);
+
+        var dialog = new PublishModel(state, state.ActiveCollection);
+        var kept = dialog.KeptPaths[0];
+        // A folder of this collection's own, wherever it sits.
+        Assert.Equal(PublishModel.KeptPathKind.Folder, kept.Kind);
+        var note = PublishModel.PublishFolderEditNote("svc", "remote.auth.name");
+        Assert.Equal(note, dialog.Note(kept));
+        // The dialog says it did nothing, and what does answer it.
+        Assert.Equal(note, dialog.UseDirectoryToken(kept));
+        Assert.Equal(note, dialog.ReleaseKeptPath(kept.Value));
+        Assert.False(dialog.CanPublish);
+        Assert.Equal(note, dialog.Publish());
+        Assert.Equal(before, File.ReadAllBytes(file));
+        Assert.False(JsonText.FileContains(file, bound));
+
+        // The editor is the way out, and taking it clears the block.
+        using var editor = new EditorModel(state, EditTarget.Existing("svc", state.Store.Mcps["svc"], state.ActiveCollection),
+                                           h.Dialogs, RemoteLaunchStyle.Npx);
+        var carrying = editor.Args.First(row => row.Value.Contains(bound, StringComparison.Ordinal));
+        carrying.Value = carrying.Value.Replace(bound, Placeholder.DirectoryToken, StringComparison.Ordinal);
+        Assert.True(editor.Save());
+        Assert.Null(state.PublishError);
+        Assert.False(JsonText.FileContains(file, bound));
+        Assert.True(new PublishModel(state, state.ActiveCollection).CanPublish);
+    }
+
+    /// <summary>
+    /// Stop Publishing gives up the folder, not this machine's memory: the paths it kept back and the
+    /// folders it published into still hold when the collection is published again.
+    /// </summary>
+    [Fact]
+    public void StopPublishingKeepsWhatMustNotTravel()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var firstDocument = PublishMarkedLedger(h, state, MarkedPath);
+        var oldFolder = state.CollectionsCache.Published[state.ActiveCollection].Folder;
+        state.StopPublishing(state.ActiveCollection, deleteFile: true);
+        Assert.False(state.CollectionsCache.Published.ContainsKey(state.ActiveCollection));
+        Assert.Equal([MarkedPath], state.CollectionsCache.Kept[state.ActiveCollection].MarkedValues);
+        Assert.Equal([oldFolder], state.CollectionsCache.Kept[state.ActiveCollection].PublishedFolders);
+        // And it is on disk.
+        Assert.Equal([MarkedPath],
+                     CollectionsLocalCache.Load(Path.Combine(h.StoreDir, CollectionsLocalCache.FileName))
+                        .Kept[state.ActiveCollection].MarkedValues);
+
+        // Published again, into another folder: the mark is still this machine's to keep back, and so
+        // is the folder the collection has left.
+        RewriteLedger(state, MarkedPath, "--root", oldFolder);
+        var second = PublishFolder(h, "again");
+        Assert.Equal(AppState.KeptPathCarriedError("ledger", "local.args[0]"),
+                     state.StartPublishing(state.ActiveCollection, second, PublishIntent.None));
+        Assert.False(File.Exists(Path.Combine(second, Slug.Make(state.ActiveCollection) + ".json")));
+        // The binding took the list back, and the record is spent.
+        Assert.Equal([MarkedPath], state.CollectionsCache.Published[state.ActiveCollection].MarkedValues);
+        Assert.Contains(oldFolder, state.CollectionsCache.Published[state.ActiveCollection].PublishedFolders);
+        Assert.False(state.CollectionsCache.Kept.ContainsKey(state.ActiveCollection));
+        Assert.False(File.Exists(firstDocument));   // Stop Publishing took the old document
+    }
+
+    /// <summary>
+    /// A connector an installer wrote straight into Claude's config while the app was off, and the
+    /// other machine switched collections meanwhile: the collection that was applied keeps its own,
+    /// and the new name still comes in to the collection now active.
+    /// </summary>
+    [Fact]
+    public void ALaunchAfterTheActiveCollectionChangedStillTakesInWhatIsNew()
+    {
+        using var h = new AppStateHarness();
+        string team;
+        using (var first = h.Create())
+        {
+            team = first.ActiveCollection;
+            Assert.Null(first.Upsert("a", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("a")))), null));
+            Assert.Null(first.CreateCollection("Second"));
+            first.Remove("a", "Second");
+            first.SwitchCollection(team);
+        }
+        var store = h.StoreOnDisk();
+        store.ActiveCollection = "Second";
+        MasterStoreIO.Save(store, h.MasterStorePath);
+        var servers = new Dictionary<string, JsonValue>(h.ClaudeServers(), StringComparer.Ordinal)
+        {
+            ["installer"] = NodeWith("/opt/installer/srv.js"),
+        };
+        h.WriteClaudeServers(servers.Select(p => (p.Key, p.Value)).ToArray());
+
+        using var relaunched = h.Create();
+        // The hand-added connector came in, and Claude still runs it.
+        Assert.True(relaunched.Store.Collections["Second"].Mcps.ContainsKey("installer"));
+        Assert.True(h.ClaudeServers().ContainsKey("installer"));
+        // What the applied collection renders stays there.
+        Assert.False(relaunched.Store.Collections["Second"].Mcps.ContainsKey("a"));
+        Assert.False(relaunched.Store.Collections[team].Mcps.ContainsKey("installer"));
     }
 
     /// <summary>A copy of the marked path in an <c>additional</c> field is kept back, and the refusal says where it sits rather than that the mark moved.</summary>
@@ -2137,7 +2258,11 @@ public class AppStateCollectionsTests
         var dialog = new PublishModel(state, "Clients");
         var kept = dialog.KeptPaths.Single(k => k.Connector == "shared");
         Assert.Equal(PublishModel.KeptPathKind.Path, kept.Kind);
-        dialog.ReleaseKeptPath(kept.Value);
+        // Whose folder it is, before the author sends it.
+        Assert.Equal(PublishModel.OtherFolderNote("shared", "local.args[0]", team), dialog.Note(kept));
+        // The token stands for no folder here.
+        Assert.Equal(dialog.Note(kept), dialog.UseDirectoryToken(kept));
+        Assert.Null(dialog.ReleaseKeptPath(kept.Value));
         Assert.Null(dialog.Publish());
         // The author's explicit choice.
         Assert.True(JsonText.FileContains(Path.Combine(clients, Slug.Make("Clients") + ".json"), teamFolder));

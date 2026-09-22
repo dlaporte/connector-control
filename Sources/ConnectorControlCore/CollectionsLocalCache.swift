@@ -12,16 +12,37 @@ public struct CollectionsLocalCache: Equatable, Sendable {
 
     public var synced: [String: SyncedBinding]
     public var published: [String: PublishBinding]
+    /// What a collection's publish binding left behind when publishing stopped: this machine's
+    /// memory of the paths it kept back and the folders it published into, kept so a collection
+    /// published again still refuses them. A binding and a record never both hold a collection —
+    /// starting again takes the record back into the binding.
+    public var kept: [String: KeptRecord]
     /// The collection Claude's config was last written from on this machine. Claude's file holds
     /// that collection's connectors, so it is the only one a launch may ingest them into; nil
     /// until the first apply that records it.
     public var lastAppliedCollection: String?
 
     public init(synced: [String: SyncedBinding], published: [String: PublishBinding],
-                lastAppliedCollection: String? = nil) {
+                kept: [String: KeptRecord] = [:], lastAppliedCollection: String? = nil) {
         self.synced = synced
         self.published = published
+        self.kept = kept
         self.lastAppliedCollection = lastAppliedCollection
+    }
+
+    /// The lists a stopped publish left behind, as `PublishBinding` holds them while it publishes.
+    public struct KeptRecord: Equatable, Sendable {
+        public var markedValues: Set<String>
+        public var releasedValues: Set<String>
+        public var publishedFolders: Set<String>
+        public init(markedValues: Set<String> = [], releasedValues: Set<String> = [],
+                    publishedFolders: Set<String> = []) {
+            self.markedValues = markedValues
+            self.releasedValues = releasedValues
+            self.publishedFolders = publishedFolders
+        }
+
+        public var isEmpty: Bool { markedValues.isEmpty && releasedValues.isEmpty && publishedFolders.isEmpty }
     }
 
     public struct SyncedBinding: Equatable, Sendable {
@@ -72,6 +93,8 @@ public struct CollectionsLocalCache: Equatable, Sendable {
             "synced": .object(synced.mapValues { $0.encode() }),
             "published": .object(published.mapValues { $0.encode() }),
         ]
+        let remembered = kept.filter { !$0.value.isEmpty }
+        if !remembered.isEmpty { root["kept"] = .object(remembered.mapValues { $0.encode() }) }
         if let lastAppliedCollection { root["lastAppliedCollection"] = .string(lastAppliedCollection) }
         return .object(root)
     }
@@ -92,8 +115,12 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         for (name, value) in try CollectionsFile.objectValue(root["published"], "published") {
             published[name] = try PublishBinding.decode(value, what: "published \"\(name)\"")
         }
+        var kept: [String: KeptRecord] = [:]
+        for (name, value) in try CollectionsFile.objectValue(root["kept"], "kept") {
+            kept[name] = try KeptRecord.decode(value, what: "kept \"\(name)\"")
+        }
         return CollectionsLocalCache(
-            synced: synced, published: published,
+            synced: synced, published: published, kept: kept,
             // Absent in a cache written before it was recorded: the next apply records it.
             lastAppliedCollection: try CollectionsFile.optionalString(root["lastAppliedCollection"], "lastAppliedCollection"))
     }
@@ -115,10 +142,13 @@ public struct CollectionsLocalCache: Equatable, Sendable {
 
     /// Drops a binding the sidecar no longer vouches for: a source binding for a collection that
     /// is not synced any more, and a publish folder for one that is not published any more.
+    /// What a stopped publish left behind is not a binding the sidecar vouches for, and is kept
+    /// whatever it says: it is this machine's memory of what must not travel.
     public func reconciled(with file: CollectionsFile) -> CollectionsLocalCache {
         CollectionsLocalCache(
             synced: synced.filter { file.kind(of: $0.key) == .synced },
             published: published.filter { file.collections[$0.key]?.publish != nil },
+            kept: kept,
             lastAppliedCollection: lastAppliedCollection)
     }
 }
@@ -165,15 +195,36 @@ extension CollectionsLocalCache.PublishBinding {
 
     static func decode(_ json: JSONValue, what: String) throws -> CollectionsLocalCache.PublishBinding {
         guard case .object(let object) = json else { throw CollectionsFileError.malformed("\(what) is not a JSON object") }
+        let folder = try CollectionsFile.requiredString(object["folder"], "\(what) folder")
         return CollectionsLocalCache.PublishBinding(
-            folder: try CollectionsFile.requiredString(object["folder"], "\(what) folder"),
+            folder: folder,
             lastWrittenHash: try CollectionsFile.optionalString(object["lastWrittenHash"], "\(what) lastWrittenHash"),
             // Absent in a cache written before the list was kept: nothing marked yet, which the
             // next write fills in.
             markedValues: try CollectionsFile.stringSet(object["markedValues"], "\(what) markedValues"),
             releasedValues: try CollectionsFile.stringSet(object["releasedValues"], "\(what) releasedValues"),
-            // Absent in a cache written before it was kept: the current folder, which every check
-            // adds anyway, is all that is known.
+            // The folder a binding names is one it publishes into, whether or not the list says so:
+            // a binding written before the list was kept knows that much about itself.
+            publishedFolders: try CollectionsFile.stringSet(object["publishedFolders"], "\(what) publishedFolders")
+                .union([folder]))
+    }
+}
+
+extension CollectionsLocalCache.KeptRecord {
+    func encode() -> JSONValue {
+        var object: [String: JSONValue] = [:]
+        for (key, values) in [("markedValues", markedValues), ("releasedValues", releasedValues),
+                              ("publishedFolders", publishedFolders)] where !values.isEmpty {
+            object[key] = .array(values.sorted { $0.ordinallyPrecedes($1) }.map(JSONValue.string))
+        }
+        return .object(object)
+    }
+
+    static func decode(_ json: JSONValue, what: String) throws -> CollectionsLocalCache.KeptRecord {
+        let object = try CollectionsFile.objectValue(json, what)
+        return CollectionsLocalCache.KeptRecord(
+            markedValues: try CollectionsFile.stringSet(object["markedValues"], "\(what) markedValues"),
+            releasedValues: try CollectionsFile.stringSet(object["releasedValues"], "\(what) releasedValues"),
             publishedFolders: try CollectionsFile.stringSet(object["publishedFolders"], "\(what) publishedFolders"))
     }
 }

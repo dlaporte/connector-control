@@ -81,7 +81,9 @@ public final class AppState: ObservableObject {
 
     public static func keptPathCarriedError(_ connector: String, _ field: String) -> String { "“\(connector)” carries a path this machine keeps back, in \(field). Open Publish… to review it." }
 
-    nonisolated public static func restoreCollectionGoneError(_ collection: String) -> String { "This backup was taken from “\(collection)”, which no longer exists. Nothing was restored." }
+    /// The way back is the second sentence: the refusal holds whatever the user does, and a
+    /// collection of that name makes the same backup restorable.
+    nonisolated public static func restoreCollectionGoneError(_ collection: String) -> String { "This backup was taken from “\(collection)”, which no longer exists. Nothing was restored. Create a collection named “\(collection)” again, and this backup goes back into it." }
 
     /// A synced connector-list change was adopted and written into Claude's config: say what it runs now.
     public static func connectorListChangedBody(_ delta: ServerDelta, restartRequired: Bool) -> String {
@@ -839,6 +841,7 @@ public final class AppState: ObservableObject {
             move(&collectionsFile.collections, from: name, to: trimmed)
             move(&collectionsCache.synced, from: name, to: trimmed)
             move(&collectionsCache.published, from: name, to: trimmed)
+            move(&collectionsCache.kept, from: name, to: trimmed)
             move(&pendingUpdates, from: name, to: trimmed)
             move(&sourceErrors, from: name, to: trimmed)
             move(&pendingRendered, from: name, to: trimmed)
@@ -1410,15 +1413,20 @@ public final class AppState: ObservableObject {
         entry.publish = CollectionsFile.PublishRecord(slug: slug, origin: origin, intent: intent)
         collectionsFile.collections[collection] = entry
         let previous = collectionsCache.published[collection]
+        // Publishing again takes back what stopping left behind: the lists are this machine's
+        // memory of what must not travel, and they outlive the binding.
+        let remembered = collectionsCache.kept.removeValue(forKey: collection)
+        let marked = previous?.markedValues ?? remembered?.markedValues ?? []
         collectionsCache.published[collection] = CollectionsLocalCache.PublishBinding(
             folder: url.path,
             // A new folder has nothing in it this app wrote, so the next write is unconditional.
             lastWrittenHash: previous?.folder == url.path ? previous?.lastWrittenHash : nil,
-            markedValues: reviewedValues ?? previous?.markedValues ?? [],
-            releasedValues: AppState.released(previous?.releasedValues ?? [], adding: releasedValues,
-                                              marked: reviewedValues ?? previous?.markedValues ?? []),
+            markedValues: reviewedValues ?? marked,
+            releasedValues: AppState.released(previous?.releasedValues ?? remembered?.releasedValues ?? [],
+                                              adding: releasedValues, marked: reviewedValues ?? marked),
             // The folder it left stays this machine's own: a backup or a connector can bring it back.
-            publishedFolders: (previous?.publishedFolders ?? []).union(previous.map { [$0.folder] } ?? []).union([url.path]))
+            publishedFolders: (previous?.publishedFolders ?? remembered?.publishedFolders ?? [])
+                .union(previous.map { [$0.folder] } ?? []).union([url.path]))
         // persistStore ends in publishIfChanged, which is what writes the document.
         persistStore()
         // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
@@ -1482,7 +1490,14 @@ public final class AppState: ObservableObject {
         } else {
             collectionsFile.collections[collection] = entry
         }
-        collectionsCache.published.removeValue(forKey: collection)
+        // The binding goes; what it knew about paths that must not travel does not. A collection
+        // published again, here or from another folder, still refuses them.
+        if let binding = collectionsCache.published.removeValue(forKey: collection) {
+            let remembered = CollectionsLocalCache.KeptRecord(
+                markedValues: binding.markedValues, releasedValues: binding.releasedValues,
+                publishedFolders: binding.publishedFolders.union([binding.folder]))
+            if !remembered.isEmpty { collectionsCache.kept[collection] = remembered }
+        }
         if publishError?.collection == collection { publishError = nil }
         persistStore()
         // ${COLLECTION_DIR} has no folder here any more: Claude gets the token as written, and
@@ -1612,14 +1627,42 @@ public final class AppState: ObservableObject {
             let bound = binding.publishedFolders.union([binding.folder])
             if name == collection { folders.formUnion(bound) } else { values.formUnion(bound) }
         }
+        // What a stopped publish left behind keeps its say, so publishing the collection again —
+        // or another collection carrying one of its paths — is still refused.
+        for (name, remembered) in collectionsCache.kept {
+            values.formUnion(remembered.markedValues)
+            if name == collection { folders.formUnion(remembered.publishedFolders) }
+            else { values.formUnion(remembered.publishedFolders) }
+        }
         for (name, binding) in collectionsCache.synced where isSynced(name) {
             if let path = binding.path { values.insert(URL(fileURLWithPath: path).deletingLastPathComponent().path) }
         }
-        let letGo = AppState.released(collectionsCache.published[collection]?.releasedValues ?? [],
+        let letGo = AppState.released(collectionsCache.published[collection]?.releasedValues
+                                        ?? collectionsCache.kept[collection]?.releasedValues ?? [],
                                       adding: released, marked: reviewed ?? [])
         // The collection's own folders are never let go: the token stands for them, and writing it
         // in their place is the one answer.
         return (values.subtracting(folders).subtracting(letGo), folders)
+    }
+
+    /// The collection this machine binds `folder` to: the one it publishes there, now or before,
+    /// or the synced one whose document sits in it. Named in the sheet's note, so the author
+    /// releasing another collection's folder reads whose it is first.
+    func collectionBound(to folder: String) -> String? {
+        let wanted = KeptValue.nfc(folder)
+        for name in collectionsCache.published.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+            guard let binding = collectionsCache.published[name] else { continue }
+            if binding.publishedFolders.union([binding.folder]).contains(where: { KeptValue.nfc($0) == wanted }) { return name }
+        }
+        for name in collectionsCache.kept.keys.sorted(by: { $0.ordinallyPrecedes($1) })
+        where collectionsCache.kept[name]?.publishedFolders.contains(where: { KeptValue.nfc($0) == wanted }) ?? false {
+            return name
+        }
+        for name in collectionsCache.synced.keys.sorted(by: { $0.ordinallyPrecedes($1) }) where isSynced(name) {
+            guard let path = collectionsCache.synced[name]?.path else { continue }
+            if KeptValue.nfc(URL(fileURLWithPath: path).deletingLastPathComponent().path) == wanted { return name }
+        }
+        return nil
     }
 
     /// A collection's released paths after the sheet's answer: what it released before and now,

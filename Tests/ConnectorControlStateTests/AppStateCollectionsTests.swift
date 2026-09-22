@@ -1456,6 +1456,42 @@ final class AppStateCollectionsTests: XCTestCase {
         }
         XCTAssertEqual(try Data(contentsOf: h.claudeConfigURL), claudeBefore, "nothing was restored")
         XCTAssertEqual(s.store, storeBefore)
+
+        // The way back the message names: a collection of that name again, and the same backup goes in.
+        XCTAssertTrue(AppState.restoreCollectionGoneError("Gone").contains("Create a collection named “Gone”"))
+        XCTAssertNil(s.createCollection(named: "Gone"))
+        try s.restoreClaudeConfig(from: backup)
+        XCTAssertEqual(s.activeCollection, "Gone")
+        XCTAssertNotNil(s.store.collections["Gone"]?.mcps["gone-only"])
+    }
+
+    /// A connector an installer wrote straight into Claude's config while the app was off, and the
+    /// other machine switched collections meanwhile: the collection that was applied keeps its own,
+    /// and the new name still comes in to the collection now active.
+    func testALaunchAfterTheActiveCollectionChangedStillTakesInWhatIsNew() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let first = h.create()
+        let team = first.activeCollection
+        XCTAssertNil(first.upsert(name: "a", entry: MCPEntry(enabled: true, config: .object(["command": .string("a")])),
+                                  renamedFrom: nil))
+        XCTAssertNil(first.createCollection(named: "Second"))
+        first.remove(name: "a", in: "Second")
+        first.switchCollection(to: team)
+        first.dispose()
+        var store = try h.storeOnDisk()
+        store.activeCollection = "Second"
+        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        var servers = try h.claudeServers()
+        servers["installer"] = .object(["command": .string("node"), "args": .array([.string("/opt/installer/srv.js")])])
+        try h.writeClaudeServers(servers.map { ($0.key, $0.value) })
+
+        let relaunched = h.create()
+        defer { relaunched.dispose() }
+        XCTAssertNotNil(relaunched.store.collections["Second"]?.mcps["installer"], "the hand-added connector came in")
+        XCTAssertNotNil(try h.claudeServers()["installer"], "and Claude still runs it")
+        XCTAssertNil(relaunched.store.collections["Second"]?.mcps["a"], "what the applied collection renders stays there")
+        XCTAssertNil(relaunched.store.collections[team]?.mcps["installer"])
     }
 
     /// Renaming a collection carries what names it outside the store: the record of what Claude's
@@ -1476,6 +1512,75 @@ final class AppStateCollectionsTests: XCTestCase {
         try s.restoreClaudeConfig(from: backup)
         XCTAssertEqual(s.activeCollection, "Team A")
         XCTAssertNotNil(s.store.collections["Team A"]?.mcps["team-only"])
+    }
+
+    /// An own folder where the rewrite cannot reach — a remote connector's header name — is a
+    /// folder entry all the same: it says the sheet cannot write there, both answers say so, and
+    /// the connector's editor is the way out.
+    func testAnOwnFolderTheSheetCannotRewriteSaysWhereToWriteTheToken() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        let bound = try XCTUnwrap(state.collectionsCache.published[state.activeCollection]?.folder)
+        let file = folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json")
+        let before = try Data(contentsOf: file)
+        XCTAssertNil(state.upsert(name: "svc", entry: MCPEntry(config: RemotePattern.encode(RemoteConfig(
+            url: "https://mcp.example.com/", auth: .header(name: bound, value: "v"),
+            extraArgs: [], passthroughEnv: [:], package: "mcp-remote"))), renamedFrom: nil))
+        XCTAssertEqual(state.publishError?.message, AppState.publishFolderCarriedError("svc", "remote.auth.name"))
+
+        let sheet = PublishModel(state: state, collection: state.activeCollection)
+        let kept = try XCTUnwrap(sheet.keptPaths.first)
+        XCTAssertEqual(kept.kind, .folder, "a folder of this collection's own, wherever it sits")
+        let note = PublishModel.publishFolderEditNote("svc", "remote.auth.name")
+        XCTAssertEqual(sheet.note(for: kept), note)
+        XCTAssertEqual(sheet.useDirectoryToken(kept), note, "the sheet says it did nothing, and what does answer it")
+        XCTAssertEqual(sheet.releaseKeptPath(kept.value), note)
+        XCTAssertFalse(sheet.canPublish)
+        XCTAssertEqual(sheet.publish(), note)
+        XCTAssertEqual(try Data(contentsOf: file), before)
+        XCTAssertFalse(try jsonFile(file, contains: bound))
+
+        // The editor is the way out, and taking it clears the block.
+        let editor = EditorModel(state: state, target: .existing(name: "svc", entry: try XCTUnwrap(state.store.mcps["svc"]),
+                                                                 in: state.activeCollection), dialogs: h.dialogs)
+        let carrying = try XCTUnwrap(editor.args.firstIndex { $0.value.contains(bound) })
+        editor.args[carrying].value = editor.args[carrying].value
+            .replacingOccurrences(of: bound, with: Placeholder.directoryToken)
+        XCTAssertTrue(editor.save())
+        XCTAssertNil(state.publishError)
+        XCTAssertFalse(try jsonFile(file, contains: bound))
+        XCTAssertTrue(PublishModel(state: state, collection: state.activeCollection).canPublish)
+    }
+
+    /// Stop Publishing gives up the folder, not this machine's memory: the paths it kept back and
+    /// the folders it published into still hold when the collection is published again.
+    func testStopPublishingKeepsWhatMustNotTravel() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let (_, firstDocument) = try publishMarkedLedger(h, state, args: [markedPath])
+        let oldFolder = try XCTUnwrap(state.collectionsCache.published[state.activeCollection]?.folder)
+        state.stopPublishing(state.activeCollection, deleteFile: true)
+        XCTAssertNil(state.collectionsCache.published[state.activeCollection])
+        XCTAssertEqual(state.collectionsCache.kept[state.activeCollection]?.markedValues, [markedPath])
+        XCTAssertEqual(state.collectionsCache.kept[state.activeCollection]?.publishedFolders, [oldFolder])
+        XCTAssertEqual(CollectionsLocalCache.load(from: h.storeDir.appendingPathComponent(CollectionsLocalCache.fileName))
+                        .kept[state.activeCollection]?.markedValues, [markedPath], "and it is on disk")
+
+        // Published again, into another folder: the mark is still this machine's to keep back, and
+        // so is the folder the collection has left.
+        rewriteLedger(state, args: [markedPath, "--root", oldFolder])
+        let second = try publishFolder(h, "again")
+        XCTAssertEqual(state.startPublishing(state.activeCollection, to: second.path, intent: .none),
+                       AppState.keptPathCarriedError("ledger", "local.args[0]"))
+        let document = second.appendingPathComponent(Slug.make(state.activeCollection) + ".json")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: document.path))
+        XCTAssertEqual(state.collectionsCache.published[state.activeCollection]?.markedValues, [markedPath],
+                       "the binding took the list back")
+        XCTAssertTrue(state.collectionsCache.published[state.activeCollection]?.publishedFolders.contains(oldFolder) ?? false)
+        XCTAssertNil(state.collectionsCache.kept[state.activeCollection], "and the record is spent")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: firstDocument.path), "Stop Publishing took the old document")
     }
 
     /// A copy of the marked path in an `additional` field is kept back, and the refusal says where
@@ -1842,7 +1947,10 @@ final class AppStateCollectionsTests: XCTestCase {
         let sheet = PublishModel(state: state, collection: "Clients")
         let kept = try XCTUnwrap(sheet.keptPaths.first { $0.connector == "shared" })
         XCTAssertEqual(kept.kind, .path)
-        sheet.releaseKeptPath(kept.value)
+        XCTAssertEqual(sheet.note(for: kept), PublishModel.otherFolderNote("shared", "local.args[0]", team),
+                       "whose folder it is, before the author sends it")
+        XCTAssertEqual(sheet.useDirectoryToken(kept), sheet.note(for: kept), "the token stands for no folder here")
+        XCTAssertEqual(sheet.releaseKeptPath(kept.value), nil)
         XCTAssertNil(sheet.publish())
         XCTAssertTrue(try jsonFile(clients.appendingPathComponent(Slug.make("Clients") + ".json"), contains: teamFolder),
                       "the author's explicit choice")

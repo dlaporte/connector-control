@@ -56,7 +56,8 @@ public sealed class AppState : ObservableObject, IDisposable
     public static string PathMarkMovedError(string connector) => $"A path marked in “{connector}” has moved. Open Publish… to mark it again.";
     public static string PublishFolderCarriedError(string connector, string field) => $"“{connector}” carries this machine's publish folder as written, in {field}. Open Publish… to use ${{COLLECTION_DIR}} in its place.";
     public static string KeptPathCarriedError(string connector, string field) => $"“{connector}” carries a path this machine keeps back, in {field}. Open Publish… to review it.";
-    public static string RestoreCollectionGoneError(string collection) => $"This backup was taken from “{collection}”, which no longer exists. Nothing was restored.";
+    /// <summary>The way back is the second sentence: the refusal holds whatever the user does, and a collection of that name makes the same backup restorable.</summary>
+    public static string RestoreCollectionGoneError(string collection) => $"This backup was taken from “{collection}”, which no longer exists. Nothing was restored. Create a collection named “{collection}” again, and this backup goes back into it.";
     /// <summary>Claude's launch time is re-read 3 s after the restart completes.</summary>
     public static readonly TimeSpan RestartRecheckDelay = TimeSpan.FromSeconds(3);
     /// <summary>
@@ -1198,6 +1199,7 @@ public sealed class AppState : ObservableObject, IDisposable
             // name it holds being gone, never into the wrong collection.
             CollectionsCache = new CollectionsLocalCache(
                 Moved(CollectionsCache.Synced, name, trimmed), Moved(CollectionsCache.Published, name, trimmed),
+                Moved(CollectionsCache.Kept, name, trimmed),
                 CollectionsCache.LastAppliedCollection == name ? trimmed : CollectionsCache.LastAppliedCollection);
             try
             {
@@ -1247,7 +1249,7 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         CollectionsFile = new CollectionsFile(Without(CollectionsFile.Collections, name));
         CollectionsCache = new CollectionsLocalCache(
-            Without(CollectionsCache.Synced, name), Without(CollectionsCache.Published, name),
+            Without(CollectionsCache.Synced, name), Without(CollectionsCache.Published, name), CollectionsCache.Kept,
             CollectionsCache.LastAppliedCollection);
         PendingUpdates = Without(PendingUpdates, name);
         SourceErrors = Without(SourceErrors, name);
@@ -1304,6 +1306,7 @@ public sealed class AppState : ObservableObject, IDisposable
         CollectionsCache = new CollectionsLocalCache(
             binding is null ? Without(CollectionsCache.Synced, collection) : With(CollectionsCache.Synced, collection, binding),
             CollectionsCache.Published,
+            CollectionsCache.Kept,
             CollectionsCache.LastAppliedCollection);
 
     private void SetPublishBinding(string collection, CollectionsLocalCache.PublishBinding? binding) =>
@@ -1312,6 +1315,17 @@ public sealed class AppState : ObservableObject, IDisposable
             binding is null
                 ? Without(CollectionsCache.Published, collection)
                 : With(CollectionsCache.Published, collection, binding),
+            CollectionsCache.Kept,
+            CollectionsCache.LastAppliedCollection);
+
+    /// <summary>What a stopped publish left behind, set or dropped for one collection.</summary>
+    private void SetKeptRecord(string collection, CollectionsLocalCache.KeptRecord? record) =>
+        CollectionsCache = new CollectionsLocalCache(
+            CollectionsCache.Synced,
+            CollectionsCache.Published,
+            record is null
+                ? Without(CollectionsCache.Kept, collection)
+                : With(CollectionsCache.Kept, collection, record),
             CollectionsCache.LastAppliedCollection);
 
     private static Dictionary<string, TValue> With<TValue>(IReadOnlyDictionary<string, TValue> source, string name, TValue value)
@@ -2068,14 +2082,19 @@ public sealed class AppState : ObservableObject, IDisposable
             entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs,
             new CollectionsFile.PublishRecord(slug, origin, intent), entry.Provenance));
         var previous = CollectionsCache.Published.GetValueOrDefault(collection);
+        // Publishing again takes back what stopping left behind: the lists are this machine's memory
+        // of what must not travel, and they outlive the binding.
+        var remembered = CollectionsCache.Kept.GetValueOrDefault(collection);
+        var marked = previous?.MarkedValues ?? remembered?.MarkedValues;
+        SetKeptRecord(collection, null);
         SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(
             full,
             // A new folder has nothing in it this app wrote, so the next write is unconditional.
             string.Equals(previous?.Folder, full, StringComparison.Ordinal) ? previous?.LastWrittenHash : null,
-            reviewedValues ?? previous?.MarkedValues,
-            Released(previous?.ReleasedValues, releasedValues, reviewedValues ?? previous?.MarkedValues),
+            reviewedValues ?? marked,
+            Released(previous?.ReleasedValues ?? remembered?.ReleasedValues, releasedValues, reviewedValues ?? marked),
             // The folder it left stays this machine's own: a backup or a connector can bring it back.
-            (previous?.PublishedFolders ?? new HashSet<string>(StringComparer.Ordinal))
+            (previous?.PublishedFolders ?? remembered?.PublishedFolders ?? new HashSet<string>(StringComparer.Ordinal))
                 .Concat(previous is null ? [] : [previous.Folder]).Append(full)));
         // PersistStore ends in PublishIfChanged, which is what writes the document.
         PersistStore();
@@ -2171,6 +2190,14 @@ public sealed class AppState : ObservableObject, IDisposable
         // An entry with nothing left to say is no entry at all, which is how the sidecar writes it
         // and how the next load reads it back.
         SetSidecarEntry(collection, stripped.Equals(CollectionsFile.Entry.Local) ? null : stripped);
+        // The binding goes; what it knew about paths that must not travel does not. A collection
+        // published again, here or from another folder, still refuses them.
+        if (CollectionsCache.Published.GetValueOrDefault(collection) is { } binding)
+        {
+            var remembered = new CollectionsLocalCache.KeptRecord(
+                binding.MarkedValues, binding.ReleasedValues, binding.PublishedFolders.Append(binding.Folder));
+            SetKeptRecord(collection, remembered.IsEmpty ? null : remembered);
+        }
         SetPublishBinding(collection, null);
         if (PublishError?.Collection == collection)
         {
@@ -2550,7 +2577,8 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return;
         }
-        CollectionsCache = new CollectionsLocalCache(synced, CollectionsCache.Published, CollectionsCache.LastAppliedCollection);
+        CollectionsCache = new CollectionsLocalCache(synced, CollectionsCache.Published, CollectionsCache.Kept,
+                                                     CollectionsCache.LastAppliedCollection);
         try
         {
             CollectionsCache.Save(Service.Paths.CollectionsCachePath);
@@ -2640,6 +2668,20 @@ public sealed class AppState : ObservableObject, IDisposable
                 values.UnionWith(bound);
             }
         }
+        // What a stopped publish left behind keeps its say, so publishing the collection again — or
+        // another collection carrying one of its paths — is still refused.
+        foreach (var (name, remembered) in CollectionsCache.Kept)
+        {
+            values.UnionWith(remembered.MarkedValues);
+            if (name == collection)
+            {
+                folders.UnionWith(remembered.PublishedFolders);
+            }
+            else
+            {
+                values.UnionWith(remembered.PublishedFolders);
+            }
+        }
         foreach (var (name, binding) in CollectionsCache.Synced)
         {
             if (IsSynced(name) && binding.Path is { } path && Path.GetDirectoryName(path) is { Length: > 0 } folder)
@@ -2647,12 +2689,47 @@ public sealed class AppState : ObservableObject, IDisposable
                 values.Add(folder);
             }
         }
-        var letGo = Released(CollectionsCache.Published.GetValueOrDefault(collection)?.ReleasedValues, released, reviewed);
+        var letGo = Released(CollectionsCache.Published.GetValueOrDefault(collection)?.ReleasedValues
+                             ?? CollectionsCache.Kept.GetValueOrDefault(collection)?.ReleasedValues, released, reviewed);
         values.ExceptWith(folders);
         values.ExceptWith(letGo);
         // The collection's own folders are never let go: the token stands for them, and writing it in
         // their place is the one answer.
         return (values, folders);
+    }
+
+    /// <summary>
+    /// The collection this machine binds <paramref name="folder"/> to: the one it publishes there,
+    /// now or before, or the synced one whose document sits in it. Named in the dialog's note, so the
+    /// author releasing another collection's folder reads whose it is first.
+    /// </summary>
+    internal string? CollectionBound(string folder)
+    {
+        var wanted = KeptValue.Nfc(folder);
+        foreach (var name in CollectionsCache.Published.Keys.Order(StringComparer.Ordinal))
+        {
+            var binding = CollectionsCache.Published[name];
+            if (binding.PublishedFolders.Append(binding.Folder).Any(bound => KeptValue.Nfc(bound) == wanted))
+            {
+                return name;
+            }
+        }
+        foreach (var name in CollectionsCache.Kept.Keys.Order(StringComparer.Ordinal))
+        {
+            if (CollectionsCache.Kept[name].PublishedFolders.Any(bound => KeptValue.Nfc(bound) == wanted))
+            {
+                return name;
+            }
+        }
+        foreach (var name in CollectionsCache.Synced.Keys.Order(StringComparer.Ordinal))
+        {
+            if (IsSynced(name) && CollectionsCache.Synced[name].Path is { } path
+                && Path.GetDirectoryName(path) is { Length: > 0 } folderOf && KeptValue.Nfc(folderOf) == wanted)
+            {
+                return name;
+            }
+        }
+        return null;
     }
 
     /// <summary>A collection's released paths after the dialog's answer: what it released before and now, less anything the author ticks, since a ticked path is kept back again.</summary>

@@ -121,6 +121,8 @@ final class StringCatalogTests: XCTestCase {
         "PublishModel.footerLine": ["X", "Y"],
         "PublishModel.title": ["X"],
         "PublishModel.keptPathNote": ["X", "Y"],
+        "PublishModel.otherFolderNote": ["X", "Y", "Z"],
+        "PublishModel.publishFolderEditNote": ["X", "Y"],
         "PublishModel.publishFolderNote": ["X", "Y"],
         "PublishModel.unresolvedMarkNote": ["X", "Y"],
         "PublishModel.warningLine": ["X", "Y"],
@@ -377,6 +379,8 @@ final class StringCatalogTests: XCTestCase {
         actual["PublishModel.keptPathNote"] = PublishModel.keptPathNote("X", "Y")
         actual["PublishModel.releaseValueButton"] = PublishModel.releaseValueButton
         actual["PublishModel.publishFolderNote"] = PublishModel.publishFolderNote("X", "Y")
+        actual["PublishModel.publishFolderEditNote"] = PublishModel.publishFolderEditNote("X", "Y")
+        actual["PublishModel.otherFolderNote"] = PublishModel.otherFolderNote("X", "Y", "Z")
         actual["PublishModel.useDirectoryTokenButton"] = PublishModel.useDirectoryTokenButton
         actual["PublishModel.unresolvedMarkNote"] = PublishModel.unresolvedMarkNote("X", "Y")
         actual["PublishModel.warningLine"] = PublishModel.warningLine("X", "Y")

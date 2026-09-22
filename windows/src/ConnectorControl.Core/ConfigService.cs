@@ -30,11 +30,10 @@ public sealed class ConfigService
     /// must not be overwritten by this machine's state.
     ///
     /// <paramref name="lastAppliedCollection"/> is the collection Claude's file was last written from
-    /// on this machine. The file holds that collection's connectors, so they are ingested only while
-    /// it is still the active one: after the active collection changed elsewhere, ingesting would
-    /// pour one collection's connectors into another. The caller then applies the active collection
-    /// over the file. Null — never recorded — ingests as always, which a first launch needs to take
-    /// in what Claude already runs; so does rebuilding a corrupt store.
+    /// on this machine. Once the active collection has changed elsewhere, the names that collection
+    /// renders are left where they are rather than poured into the active one; everything else the
+    /// file holds is still taken in (<see cref="Ingestible"/>). The caller then applies the active
+    /// collection over the file.
     /// </remarks>
     public LoadResult LoadAndReconcile(
         IReadOnlyDictionary<string, JsonValue>? baseline = null,
@@ -84,16 +83,43 @@ public sealed class ConfigService
         {
             effectiveBaseline = baseline;
         }
-        var ingests = corruptPath is not null || lastAppliedCollection is null
-            || string.Equals(lastAppliedCollection, store.ActiveCollection, StringComparison.Ordinal);
-        var outcome = ingests
-            ? Reconciler.Reconcile(store, servers, effectiveBaseline)
-            : new ReconcileOutcome(store, false);
+        var outcome = Reconciler.Reconcile(
+            store, Ingestible(servers, lastAppliedCollection, corruptPath is not null, store), effectiveBaseline);
         if (outcome.StoreChanged || corruptPath is not null)
         {
             SaveStore(outcome.Store);
         }
         return new LoadResult(outcome.Store, notes, servers);
+    }
+
+    /// <summary>
+    /// What a load may take out of Claude's file and into the active collection.
+    /// <para>
+    /// All of it while the record of the last apply is the active collection, is missing — a first
+    /// launch — or the store was corrupt and is being rebuilt from the file. Otherwise the file holds
+    /// another collection's connectors, and the names that collection renders are left alone:
+    /// pouring them into the active collection is what the record is for. Everything else is
+    /// genuinely new — an installer's connector, a hand edit — and belongs to the collection the app
+    /// is about to apply, whichever that is.
+    /// </para>
+    /// <para>
+    /// A record naming a collection the store no longer has leaves everything alone: its connectors
+    /// are no collection's to take in, and nothing here keeps their marked paths back.
+    /// </para>
+    /// </summary>
+    internal static IReadOnlyDictionary<string, JsonValue> Ingestible(
+        IReadOnlyDictionary<string, JsonValue> servers, string? lastApplied, bool corrupt, MasterStore store)
+    {
+        if (corrupt || lastApplied is null || string.Equals(lastApplied, store.ActiveCollection, StringComparison.Ordinal))
+        {
+            return servers;
+        }
+        if (!store.Collections.TryGetValue(lastApplied, out var collection))
+        {
+            return new Dictionary<string, JsonValue>(StringComparer.Ordinal);
+        }
+        var rendered = collection.Mcps.Where(p => p.Value.Enabled).Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
+        return servers.Where(p => !rendered.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
     }
 
     /// <summary>Backup mcps.json (if present), then atomically save the store. Reports whether the file is owner-only.</summary>

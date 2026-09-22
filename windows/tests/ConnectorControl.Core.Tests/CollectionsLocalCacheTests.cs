@@ -18,7 +18,7 @@ public sealed class CollectionsLocalCacheTests : IDisposable
         },
         new Dictionary<string, CollectionsLocalCache.PublishBinding>
         {
-            ["Consulting"] = new("/Users/d/Acme/mcp", null),
+            ["Consulting"] = new("/Users/d/Acme/mcp", null, null, null, ["/Users/d/Acme/mcp"]),
         });
 
     [Fact]
@@ -63,7 +63,8 @@ public sealed class CollectionsLocalCacheTests : IDisposable
     {
         var marked = new CollectionsLocalCache([], new Dictionary<string, CollectionsLocalCache.PublishBinding>
         {
-            ["Consulting"] = new("/Users/d/Acme/mcp", "sha256:01", ["/Users/d/ledger.js", "/Users/d/b.js"]),
+            ["Consulting"] = new("/Users/d/Acme/mcp", "sha256:01", ["/Users/d/ledger.js", "/Users/d/b.js"], null,
+                                 ["/Users/d/Acme/mcp"]),
         });
         Assert.Equal(marked, CollectionsLocalCache.Decode(marked.Encode()));
         Assert.Equal(
@@ -83,15 +84,35 @@ public sealed class CollectionsLocalCacheTests : IDisposable
         var cache = new CollectionsLocalCache([], new Dictionary<string, CollectionsLocalCache.PublishBinding>
         {
             ["Consulting"] = new("/Users/d/Acme/mcp", null, ["/a"], ["/b"], ["/Users/d/old", "/Users/d/Acme/mcp"]),
-        }, "Consulting");
+        }, null, "Consulting");
         Assert.Equal(cache, CollectionsLocalCache.Decode(cache.Encode()));
         // Which collection Claude's file holds is not a binding to prune.
         Assert.Equal("Consulting", cache.Reconciled(new CollectionsFile([])).LastAppliedCollection);
         var older = CollectionsLocalCache.Decode(Sample.Encode());
         Assert.Null(older.LastAppliedCollection);
         Assert.Empty(older.Published["Consulting"].ReleasedValues);
-        Assert.Empty(older.Published["Consulting"].PublishedFolders);
         Assert.NotEqual(cache, cache with { LastAppliedCollection = "Other" });
+    }
+
+    [Fact]
+    public void WhatAStoppedPublishLeftBehindRoundTripsAndOutlivesThePrune()
+    {
+        var cache = new CollectionsLocalCache([], [], new Dictionary<string, CollectionsLocalCache.KeptRecord>
+        {
+            ["Consulting"] = new(["/a"], ["/b"], ["/Users/d/old"]),
+            ["Empty"] = new(),
+        });
+        var decoded = CollectionsLocalCache.Decode(cache.Encode());
+        Assert.Equal(cache.Kept["Consulting"], decoded.Kept["Consulting"]);
+        Assert.False(decoded.Kept.ContainsKey("Empty"));   // a record with nothing to say is not written
+        // No sidecar vouches for it, and it is kept all the same.
+        Assert.Equal(decoded.Kept, decoded.Reconciled(new CollectionsFile([])).Kept);
+        var older = JsonValue.Parse("""
+            {"version": 1, "synced": {}, "published": {"Consulting": {"folder": "/Users/d/Acme/mcp"}}}
+            """);
+        Assert.Empty(CollectionsLocalCache.Decode(older).Kept);
+        // A binding knows it publishes into the folder it names.
+        Assert.Equal(["/Users/d/Acme/mcp"], CollectionsLocalCache.Decode(older).Published["Consulting"].PublishedFolders);
     }
 
     [Fact]

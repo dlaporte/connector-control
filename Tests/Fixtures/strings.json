@@ -81,7 +81,7 @@
   "AppState.restartInformative": "Any in-progress Claude conversation will be interrupted.",
   "AppState.restartMessage": "Restart Claude Desktop now?",
   "AppState.restoreCollectionGoneError": {
-    "format": "This backup was taken from “{0}”, which no longer exists. Nothing was restored."
+    "format": "This backup was taken from “{0}”, which no longer exists. Nothing was restored. Create a collection named “{0}” again, and this backup goes back into it."
   },
   "AppState.sourceUnreadableError": {
     "format": "{0} couldn’t be read: {1}"
@@ -355,10 +355,16 @@
     "format": "“{0}” carries a path this machine keeps back, in {1}. Tick it where it sits, or release it."
   },
   "PublishModel.markPathLabel": "Mark as a path this machine supplies",
+  "PublishModel.otherFolderNote": {
+    "format": "“{0}” carries, in {1}, the folder this machine keeps “{2}” in. Tick it where it sits, or release it."
+  },
   "PublishModel.pathNamePlaceholder": "placeholder name",
   "PublishModel.pathsSectionTitle": "Machine-specific paths · found in arguments",
   "PublishModel.previewTitle": "Document preview",
   "PublishModel.publishButton": "Publish",
+  "PublishModel.publishFolderEditNote": {
+    "format": "“{0}” carries this machine's publish folder as written, in {1}, which this sheet cannot write over. Open “{0}” and write ${COLLECTION_DIR} there."
+  },
   "PublishModel.publishFolderNote": {
     "format": "“{0}” carries this machine's publish folder as written, in {1}. Use ${COLLECTION_DIR} in its place."
   },

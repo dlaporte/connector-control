@@ -22,18 +22,39 @@ public class ConfigServiceTests : IDisposable
     private static HashSet<string> Set(IEnumerable<string> keys) => keys.ToHashSet(StringComparer.Ordinal);
 
     /// <summary>
-    /// Claude's file holds the collection it was last applied from, so a load ingests it only while
-    /// that is still the active one; with nothing recorded — a first launch — it ingests as always.
+    /// Claude's file holds the collection it was last applied from, so what that collection renders
+    /// is left where it is; with nothing recorded — a first launch — everything is ingested.
     /// </summary>
     [Fact]
-    public void TheIngestTakesClaudesServersOnlyIntoTheCollectionTheyCameFrom()
+    public void TheIngestLeavesTheRecordedCollectionsOwnServersWhereTheyAre()
     {
         // The recorded collection is the active one.
         Assert.Equal(Set(["scoutbook", "aws-mcp", "service-now"]),
                      Set(service.LoadAndReconcile(lastAppliedCollection: "Default").Store.Mcps.Keys));
+
+        // Claude's file holds Team's connectors and one an installer wrote while the app was off.
+        var store = service.LoadAndReconcile().Store;
+        Assert.Null(store.AddCollection("Team", copyingCurrent: true));
+        store.ActiveCollection = "Default";
+        store.Collections["Team"].Mcps.Remove("scoutbook");
+        store.Collections["Default"].Mcps.Remove("aws-mcp");
+        service.SaveStore(store);
+        var servers = new Dictionary<string, JsonValue>(ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath), StringComparer.Ordinal)
+        {
+            ["installer"] = JsonValue.Object(("command", JsonValue.String("node"))),
+        };
+        service.Apply(servers);
+
+        var loaded = service.LoadAndReconcile(lastAppliedCollection: "Team");
+        // Team renders it, so it is not poured into the active collection.
+        Assert.False(loaded.Store.Collections[loaded.Store.ActiveCollection].Mcps.ContainsKey("aws-mcp"));
+        // A name no collection renders is genuinely new and comes in, and only into the active one.
+        Assert.True(loaded.Store.Collections[loaded.Store.ActiveCollection].Mcps.ContainsKey("installer"));
+        Assert.False(loaded.Store.Collections["Team"].Mcps.ContainsKey("installer"));
+
         File.Delete(paths.MasterStorePath);
-        // Written from another collection: nothing of it comes into this one.
-        Assert.Empty(service.LoadAndReconcile(lastAppliedCollection: "Team").Store.Mcps);
+        // A record naming a collection this store does not have takes nothing in.
+        Assert.Empty(service.LoadAndReconcile(lastAppliedCollection: "Gone").Store.Mcps);
     }
 
     [Fact]

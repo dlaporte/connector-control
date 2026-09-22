@@ -53,6 +53,13 @@ public final class PublishModel: ObservableObject {
 
     public static func publishFolderNote(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine's publish folder as written, in \(field). Use ${COLLECTION_DIR} in its place." }
 
+    /// The folder sits where this sheet cannot write: the author's editor is the way out.
+    public static func publishFolderEditNote(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine's publish folder as written, in \(field), which this sheet cannot write over. Open “\(connector)” and write ${COLLECTION_DIR} there." }
+
+    /// Another collection's folder, or a synced collection's: whose it is, since releasing it
+    /// sends one of this machine's own folders.
+    public static func otherFolderNote(_ connector: String, _ field: String, _ collection: String) -> String { "“\(connector)” carries, in \(field), the folder this machine keeps “\(collection)” in. Tick it where it sits, or release it." }
+
     /// A path mark that lost its argument: its text is held by no argument now. It waits for the
     /// author to tick the path where it now sits, which answers it, or to forget it.
     public struct UnresolvedMark: Identifiable, Equatable {
@@ -326,20 +333,40 @@ public final class PublishModel: ObservableObject {
             found = document.findings(of: kept.values)
                 .map { KeptPath(value: $0.value, connector: $0.connector, field: $0.field) }
                 + document.findings(of: kept.folders).map {
-                    KeptPath(value: $0.value, connector: $0.connector, field: $0.field,
-                             kind: canWriteDirectoryToken(connector: $0.connector, field: $0.field, folder: $0.value) ? .folder : .path)
+                    // A folder of this collection's own is a folder entry wherever it sits, even
+                    // where the rewrite cannot reach it: its note then says where to write the token.
+                    KeptPath(value: $0.value, connector: $0.connector, field: $0.field, kind: .folder)
                 }
         }
         var seen: Set<String> = []
         return found.filter { seen.insert($0.id).inserted }
     }
 
+    /// What the sheet says about one entry: how it is answered, and for a path kept back that is
+    /// another collection's folder, whose folder it is. The view shows this rather than composing
+    /// it, so a new kind of entry cannot reach the sheet with the wrong sentence.
+    public func note(for kept: KeptPath) -> String {
+        switch kept.kind {
+        case .folder:
+            return canWriteDirectoryToken(connector: kept.connector, field: kept.field, folder: kept.value)
+                ? PublishModel.publishFolderNote(kept.connector, kept.field)
+                : PublishModel.publishFolderEditNote(kept.connector, kept.field)
+        case .path:
+            if let owner = state.collectionBound(to: kept.value) {
+                return PublishModel.otherFolderNote(kept.connector, kept.field, owner)
+            }
+            return PublishModel.keptPathNote(kept.connector, kept.field)
+        }
+    }
+
     /// Writes `${COLLECTION_DIR}` where `kept`, a folder of this collection's own, sits: in the
     /// sheet's own hint for a hint, and otherwise in the connector itself, saved as an editor
     /// save is and applied to Claude's config when the collection is the active one. The author's
-    /// own edit, in view of the preview. nil on success, else the message.
+    /// own edit, in view of the preview. nil when the token is written; otherwise the entry's
+    /// note, which says what does answer it — Release for a path kept back, the connector's
+    /// editor for a folder this sheet cannot reach.
     public func useDirectoryToken(_ kept: KeptPath) -> String? {
-        guard kept.kind == .folder else { return nil }
+        guard kept.kind == .folder else { return note(for: kept) }
         let token = Placeholder.directoryToken
         if let name = PublishModel.hintName(kept.field, "env") {
             for index in envRows.indices where envRows[index].connector == kept.connector && envRows[index].name == name {
@@ -356,7 +383,7 @@ public final class PublishModel: ObservableObject {
         }
         guard var entry = state.store.collections[collection]?.mcps[kept.connector],
               let config = CollectionDocument.usingDirectoryToken(in: entry.config, field: kept.field, folder: kept.value)
-        else { return nil }
+        else { return note(for: kept) }
         entry.config = config
         if let error = state.upsert(name: kept.connector, entry: entry, renamedFrom: kept.connector, in: collection) { return error }
         if collection == state.activeCollection { state.apply() }
@@ -409,8 +436,7 @@ public final class PublishModel: ObservableObject {
     public func releaseKeptPath(_ value: String) -> String? {
         let text = KeptValue.nfc(value)
         if state.keptBack(for: collection).folders.contains(where: { KeptValue.nfc($0) == text }) {
-            return keptPaths.first { KeptValue.nfc($0.value) == text }
-                .map { PublishModel.publishFolderNote($0.connector, $0.field) }
+            return keptPaths.first { KeptValue.nfc($0.value) == text }.map(note(for:))
         }
         released.insert(value)
         for index in pathRows.indices where pathRows[index].marked && KeptValue.nfc(pathRows[index].value) == text {
@@ -498,10 +524,7 @@ public final class PublishModel: ObservableObject {
     /// The first thing still waiting for the author, as the note the sheet shows for it.
     private var firstUnanswered: String? {
         if let lost = unresolvedMarks.first { return PublishModel.unresolvedMarkNote(lost.connector, lost.name) }
-        if let kept = keptPaths.first {
-            return kept.kind == .folder ? PublishModel.publishFolderNote(kept.connector, kept.field)
-                : PublishModel.keptPathNote(kept.connector, kept.field)
-        }
+        if let kept = keptPaths.first { return note(for: kept) }
         return nil
     }
 

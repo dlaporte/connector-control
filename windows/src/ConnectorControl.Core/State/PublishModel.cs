@@ -54,6 +54,14 @@ public sealed class PublishModel : ObservableObject
     public static string PublishFolderNote(string connector, string field) =>
         $"“{connector}” carries this machine's publish folder as written, in {field}. Use ${{COLLECTION_DIR}} in its place.";
 
+    /// <summary>The folder sits where this dialog cannot write: the author's editor is the way out.</summary>
+    public static string PublishFolderEditNote(string connector, string field) =>
+        $"“{connector}” carries this machine's publish folder as written, in {field}, which this sheet cannot write over. Open “{connector}” and write ${{COLLECTION_DIR}} there.";
+
+    /// <summary>Another collection's folder, or a synced collection's: whose it is, since releasing it sends one of this machine's own folders.</summary>
+    public static string OtherFolderNote(string connector, string field, string collection) =>
+        $"“{connector}” carries, in {field}, the folder this machine keeps “{collection}” in. Tick it where it sits, or release it.";
+
     /// <summary>
     /// A path mark that lost its argument: its text is held by no argument now. It waits for the
     /// author to tick the path where it now sits, which answers it, or to forget it.
@@ -486,9 +494,10 @@ public sealed class PublishModel : ObservableObject
                     var document = state.ExportDocument(Collection, intent, Connectors);
                     var (values, folders) = state.KeptBack(Collection, ReviewedValues, released);
                     found.AddRange(document.Findings(values).Select(f => new KeptPath(f.Value, f.Connector, f.Field)));
+                    // A folder of this collection's own is a folder entry wherever it sits, even where
+                    // the rewrite cannot reach it: its note then says where to write the token.
                     found.AddRange(document.Findings(folders).Select(f => new KeptPath(
-                        f.Value, f.Connector, f.Field,
-                        CanWriteDirectoryToken(f.Connector, f.Field, f.Value) ? KeptPathKind.Folder : KeptPathKind.Path)));
+                        f.Value, f.Connector, f.Field, KeptPathKind.Folder)));
                 }
                 catch (Exception refused) when (refused is PathMarkMovedException or KeptPathCarriedException)
                 {
@@ -515,9 +524,7 @@ public sealed class PublishModel : ObservableObject
         var text = KeptValue.Nfc(value);
         if (state.KeptBack(Collection).Folders.Any(folder => KeptValue.Nfc(folder) == text))
         {
-            return KeptPaths.FirstOrDefault(kept => KeptValue.Nfc(kept.Value) == text) is { } entry
-                ? PublishFolderNote(entry.Connector, entry.Field)
-                : null;
+            return KeptPaths.FirstOrDefault(kept => KeptValue.Nfc(kept.Value) == text) is { } entry ? Note(entry) : null;
         }
         released.Add(value);
         foreach (var row in PathRows.Where(row => row.Marked && KeptValue.Nfc(row.Value) == text))
@@ -529,16 +536,36 @@ public sealed class PublishModel : ObservableObject
     }
 
     /// <summary>
+    /// What the dialog says about one entry: how it is answered, and for a path kept back that is
+    /// another collection's folder, whose folder it is. The view shows this rather than composing it,
+    /// so a new kind of entry cannot reach the dialog with the wrong sentence.
+    /// </summary>
+    public string Note(KeptPath kept)
+    {
+        if (kept.Kind == KeptPathKind.Folder)
+        {
+            return CanWriteDirectoryToken(kept.Connector, kept.Field, kept.Value)
+                ? PublishFolderNote(kept.Connector, kept.Field)
+                : PublishFolderEditNote(kept.Connector, kept.Field);
+        }
+        return state.CollectionBound(kept.Value) is { } owner
+            ? OtherFolderNote(kept.Connector, kept.Field, owner)
+            : KeptPathNote(kept.Connector, kept.Field);
+    }
+
+    /// <summary>
     /// Writes <c>${COLLECTION_DIR}</c> where <paramref name="kept"/>, a folder of this collection's
     /// own, sits: in the dialog's own hint for a hint, and otherwise in the connector itself, saved as
     /// an editor save is and applied to Claude's config when the collection is the active one. The
-    /// author's own edit, in view of the preview. null on success, else the message.
+    /// author's own edit, in view of the preview. null when the token is written; otherwise the
+    /// entry's note, which says what does answer it — Release for a path kept back, the connector's
+    /// editor for a folder this dialog cannot reach.
     /// </summary>
     public string? UseDirectoryToken(KeptPath kept)
     {
         if (kept.Kind != KeptPathKind.Folder)
         {
-            return null;
+            return Note(kept);
         }
         var token = Placeholder.DirectoryToken;
         if (HintName(kept.Field, "env") is { } variable)
@@ -560,7 +587,7 @@ public sealed class PublishModel : ObservableObject
         if (state.Store.Collections.GetValueOrDefault(Collection)?.Mcps.GetValueOrDefault(kept.Connector) is not { } entry
             || CollectionDocument.UsingDirectoryToken(entry.Config, kept.Field, kept.Value) is not { } config)
         {
-            return null;
+            return Note(kept);
         }
         if (state.Upsert(kept.Connector, entry with { Config = config }, kept.Connector, Collection) is { } error)
         {
@@ -764,9 +791,7 @@ public sealed class PublishModel : ObservableObject
             {
                 return UnresolvedMarkNote(lost.Connector, lost.Name);
             }
-            return KeptPaths.FirstOrDefault() is { } kept
-                ? kept.Kind == KeptPathKind.Folder ? PublishFolderNote(kept.Connector, kept.Field) : KeptPathNote(kept.Connector, kept.Field)
-                : null;
+            return KeptPaths.FirstOrDefault() is { } kept ? Note(kept) : null;
         }
     }
 
