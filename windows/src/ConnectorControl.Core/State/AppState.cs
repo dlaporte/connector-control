@@ -54,7 +54,7 @@ public sealed class AppState : ObservableObject, IDisposable
     public static string SourceUnreadableError(string fileName, string detail) => $"{fileName} couldn\u2019t be read: {detail}";
     public static string PublishSlugTakenError(string fileName) => $"{fileName} already exists there and belongs to a different collection.";
     public static string PathMarkMovedError(string connector) => $"A path marked in “{connector}” has moved. Open Publish… to mark it again.";
-    public static string PublishFolderCarriedError(string connector) => $"“{connector}” carries this machine's publish folder as written. Write ${{COLLECTION_DIR}} in its place, or mark the path in Publish…";
+    public static string PublishFolderCarriedError(string connector, string field) => $"“{connector}” carries this machine's publish folder as written, in {field}. Open Publish… to use ${{COLLECTION_DIR}} in its place.";
     public static string KeptPathCarriedError(string connector, string field) => $"“{connector}” carries a path this machine keeps back, in {field}. Open Publish… to review it.";
     public static string RestoreCollectionGoneError(string collection) => $"This backup was taken from “{collection}”, which no longer exists. Nothing was restored.";
     /// <summary>Claude's launch time is re-read 3 s after the restart completes.</summary>
@@ -560,11 +560,13 @@ public sealed class AppState : ObservableObject, IDisposable
             target.ActiveCollection = recorded;
         }
         // Every apply backed Claude's file up with this machine's publish folder where the store
-        // holds ${COLLECTION_DIR}: a connector that renders just as the backup does keeps its token.
-        // Only this machine's own binding counts; another machine's record has no folder here.
+        // holds ${COLLECTION_DIR}: a connector that renders just as the backup does keeps its token,
+        // with the folder of the day, the current one or one the collection has since left. Only
+        // this machine's own binding counts; another machine's record has no folder here.
         var collection = target.ActiveCollection;
-        var publishFolder = IsPublished(collection) ? CollectionsCache.Published.GetValueOrDefault(collection)?.Folder : null;
-        var servers = Service.RestoreClaudeConfig(backupPath, target, publishFolder,
+        var binding = IsPublished(collection) ? CollectionsCache.Published.GetValueOrDefault(collection) : null;
+        var earlier = binding is null ? [] : binding.PublishedFolders.Where(f => f != binding.Folder).Order(StringComparer.Ordinal).ToList();
+        var servers = Service.RestoreClaudeConfig(backupPath, target, binding?.Folder, earlier,
             backedUpFrom: CollectionsCache.LastAppliedCollection,
             activating: !string.Equals(collection, Store.ActiveCollection, StringComparison.Ordinal));
         RecordApplied(collection);
@@ -2071,7 +2073,10 @@ public sealed class AppState : ObservableObject, IDisposable
             // A new folder has nothing in it this app wrote, so the next write is unconditional.
             string.Equals(previous?.Folder, full, StringComparison.Ordinal) ? previous?.LastWrittenHash : null,
             reviewedValues ?? previous?.MarkedValues,
-            Released(previous?.ReleasedValues, releasedValues, reviewedValues ?? previous?.MarkedValues)));
+            Released(previous?.ReleasedValues, releasedValues, reviewedValues ?? previous?.MarkedValues),
+            // The folder it left stays this machine's own: a backup or a connector can bring it back.
+            (previous?.PublishedFolders ?? new HashSet<string>(StringComparer.Ordinal))
+                .Concat(previous is null ? [] : [previous.Folder]).Append(full)));
         // PersistStore ends in PublishIfChanged, which is what writes the document.
         PersistStore();
         // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
@@ -2130,7 +2135,8 @@ public sealed class AppState : ObservableObject, IDisposable
         var binding = CollectionsCache.Published.GetValueOrDefault(collection);
         var changed = reviewedValues is not null && binding is not null
             ? new CollectionsLocalCache.PublishBinding(binding.Folder, binding.LastWrittenHash, reviewedValues,
-                                                       Released(binding.ReleasedValues, releasedValues, reviewedValues))
+                                                       Released(binding.ReleasedValues, releasedValues, reviewedValues),
+                                                       binding.PublishedFolders)
             : binding;
         var listsChanged = !Equals(changed, binding);
         if (record.Intent.Equals(intent) && !listsChanged)
@@ -2340,7 +2346,8 @@ public sealed class AppState : ObservableObject, IDisposable
                 SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(
                     binding.Folder, hash, binding.MarkedValues.Concat(placed),
                     // A path written as a placeholder is kept back again, so it is released no longer.
-                    binding.ReleasedValues.Where(value => !placed.Contains(value))));
+                    binding.ReleasedValues.Where(value => !placed.Contains(value)),
+                    binding.PublishedFolders));
                 cacheChanged = true;
                 if (PublishError?.Collection == collection)
                 {
@@ -2599,17 +2606,19 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         if (document.Findings(folders).FirstOrDefault() is { } folder)
         {
-            throw new PublishFolderCarriedException(folder.Connector);
+            throw new PublishFolderCarriedException(folder.Connector, folder.Field);
         }
     }
 
     /// <summary>
-    /// What this machine keeps back from <paramref name="collection"/>'s document: every path on any
-    /// of its lists of marked paths, and every folder it binds — each collection's publish folder
-    /// and each synced collection's located folder — less the paths the author released for this
-    /// collection. The lists are not the collection's own alone: Claude's file carries whichever
-    /// collection was last applied, and a connector reaches another collection by a copy, an ingest
-    /// or a restore with its paths intact.
+    /// What this machine keeps back from <paramref name="collection"/>'s document, less the paths the
+    /// author released for this collection. <c>Folders</c> are the collection's own: every folder
+    /// this machine has published it into, which <c>${COLLECTION_DIR}</c> stands for. <c>Values</c>
+    /// are everything else — every path on any of its lists of marked paths, and every other folder
+    /// it binds: another collection's publish folders and each synced collection's located folder.
+    /// The lists are not the collection's own alone: Claude's file carries whichever collection was
+    /// last applied, and a connector reaches another collection by a copy, an ingest or a restore
+    /// with its paths intact.
     /// </summary>
     /// <param name="reviewed">From the Publish dialog, what the author has ticked there, added to the lists.</param>
     /// <param name="released">What they let go there, added to the collection's own released paths. A path that is ticked is not released.</param>
@@ -2618,19 +2627,28 @@ public sealed class AppState : ObservableObject, IDisposable
     {
         var values = new HashSet<string>(reviewed ?? new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
         var folders = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var binding in CollectionsCache.Published.Values)
+        foreach (var (name, binding) in CollectionsCache.Published)
         {
             values.UnionWith(binding.MarkedValues);
-            folders.Add(binding.Folder);
+            var bound = binding.PublishedFolders.Append(binding.Folder);
+            if (name == collection)
+            {
+                folders.UnionWith(bound);
+            }
+            else
+            {
+                values.UnionWith(bound);
+            }
         }
         foreach (var (name, binding) in CollectionsCache.Synced)
         {
             if (IsSynced(name) && binding.Path is { } path && Path.GetDirectoryName(path) is { Length: > 0 } folder)
             {
-                folders.Add(folder);
+                values.Add(folder);
             }
         }
         var letGo = Released(CollectionsCache.Published.GetValueOrDefault(collection)?.ReleasedValues, released, reviewed);
+        values.ExceptWith(folders);
         values.ExceptWith(letGo);
         folders.ExceptWith(letGo);
         return (values, folders);
@@ -2652,7 +2670,7 @@ public sealed class AppState : ObservableObject, IDisposable
         PathMarkMovedException moved => PathMarkMovedError(moved.Connector),
         KeptPathCarriedException kept => KeptPathCarriedError(kept.Connector, kept.Field),
         RestoreCollectionGoneException gone => RestoreCollectionGoneError(gone.Collection),
-        PublishFolderCarriedException carried => PublishFolderCarriedError(carried.Connector),
+        PublishFolderCarriedException carried => PublishFolderCarriedError(carried.Connector, carried.Field),
         _ => error.Message,
     };
 

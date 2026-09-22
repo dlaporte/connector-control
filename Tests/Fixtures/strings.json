@@ -64,7 +64,7 @@
     "format": "A path marked in “{0}” has moved. Open Publish… to mark it again."
   },
   "AppState.publishFolderCarriedError": {
-    "format": "“{0}” carries this machine's publish folder as written. Write ${COLLECTION_DIR} in its place, or mark the path in Publish…"
+    "format": "“{0}” carries this machine's publish folder as written, in {1}. Open Publish… to use ${COLLECTION_DIR} in its place."
   },
   "AppState.publishIntoStoreError": "Choose a folder other than the master list folder or its backups.",
   "AppState.publishSlugTakenError": {
@@ -359,6 +359,9 @@
   "PublishModel.pathsSectionTitle": "Machine-specific paths · found in arguments",
   "PublishModel.previewTitle": "Document preview",
   "PublishModel.publishButton": "Publish",
+  "PublishModel.publishFolderNote": {
+    "format": "“{0}” carries this machine's publish folder as written, in {1}. Use ${COLLECTION_DIR} in its place."
+  },
   "PublishModel.releaseValueButton": "Release",
   "PublishModel.shareValueLabel": "share value",
   "PublishModel.title": {
@@ -367,6 +370,7 @@
   "PublishModel.unresolvedMarkNote": {
     "format": "A path marked “{1}” in “{0}” has moved. Tick it where it now sits, or forget the mark."
   },
+  "PublishModel.useDirectoryTokenButton": "Use ${COLLECTION_DIR}",
   "PublishModel.warningLine": {
     "format": "{0}: {1}"
   },

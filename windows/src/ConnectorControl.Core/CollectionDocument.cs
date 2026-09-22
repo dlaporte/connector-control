@@ -49,22 +49,26 @@ public sealed class PathMarkMovedException(string connector)
 }
 
 /// <summary>
-/// <see cref="Connector"/> carries, as written, the folder this machine publishes the collection
-/// into. It is the author's own folder, and a subscriber's copy stands for it with the token. What
-/// the user reads is <c>AppState.PublishFolderCarriedError</c>.
+/// <see cref="Connector"/> carries, as written in <see cref="Field"/>, a folder this machine publishes
+/// the collection into, now or before. It is the author's own folder, and a subscriber's copy stands
+/// for it with the token. What the user reads is <c>AppState.PublishFolderCarriedError</c>.
 ///
 /// Mirror: <c>PublishIntentError.publishFolderCarried</c> in Sources/ConnectorControlCore/CollectionDocument.swift
 /// </summary>
-public sealed class PublishFolderCarriedException(string connector)
-    : Exception($"\"{connector}\" carries the publish folder as written")
+public sealed class PublishFolderCarriedException(string connector, string field)
+    : Exception($"\"{connector}\" carries the publish folder as written in {field}")
 {
     public string Connector { get; } = connector;
+
+    /// <summary>Its place in the connector's document form, e.g. <c>local.command</c>.</summary>
+    public string Field { get; } = field;
 }
 
 /// <summary>
 /// <see cref="Connector"/> carries, as written in <see cref="Field"/>, a path this machine keeps
-/// back: a copy of a path marked in it, or a path on one of this machine's lists of marked paths.
-/// What the user reads is <c>AppState.KeptPathCarriedError</c>.
+/// back: a copy of a path marked in it, a path on one of this machine's lists of marked paths, or a
+/// folder this machine binds another collection to. What the user reads is
+/// <c>AppState.KeptPathCarriedError</c>.
 ///
 /// Mirror: <c>PublishIntentError.keptPathCarried</c> in Sources/ConnectorControlCore/CollectionDocument.swift
 /// </summary>
@@ -82,7 +86,10 @@ public sealed class KeptPathCarriedException(string connector, string field)
 public sealed record KeptValueFinding(string Connector, string Field, string Value);
 
 /// <summary>
-/// How a path kept back is recognised in a string.
+/// How a path kept back is recognised in a string, and written over.
+///
+/// Both platforms walk the same UTF-16 code units, so an occurrence is found at the same place on
+/// each.
 ///
 /// Mirror: <c>KeptValue</c> in Sources/ConnectorControlCore/CollectionDocument.swift
 /// </summary>
@@ -90,13 +97,14 @@ public static class KeptValue
 {
     /// <summary>
     /// Whether <paramref name="text"/> holds <paramref name="value"/> as written. Any value counts as
-    /// the whole string. An absolute or home path also counts where it stands as a path of its own
-    /// inside a longer string: after the start, a space, a quote, <c>=</c>, <c>:</c> or <c>,</c>, and
-    /// before the end, a separator, a space, a quote, <c>:</c> or <c>,</c> — so "--root=/share/x"
-    /// holds "/share" and "/share-tools" does not. A short relative value such as "." counts only as
-    /// the whole string, or it would be found in every connector. The value also counts as JSON
-    /// spells it, as it reads inside a JSON blob carried as a single argument. Both sides are
-    /// compared in NFC, so an accented path matches in either normalization on both platforms.
+    /// the whole string. An absolute or home path also counts inside a longer string wherever it
+    /// stands as a path of its own: neither the character before it nor the one after continues a
+    /// file name (<see cref="ContinuesAName"/>). So "--root=/share/x", "/share:/opt/lib" and
+    /// "/share;x" hold "/share", and "/share-tools", "/share.bak" and "/home/share" do not. A
+    /// relative value such as "." counts only as the whole string, or it would be found in every
+    /// connector. The value also counts as JSON spells it, as it reads inside a JSON blob carried as
+    /// a single argument. Both sides are compared in NFC, so an accented path matches in either
+    /// normalization.
     /// </summary>
     public static bool Holds(string text, string value)
     {
@@ -110,25 +118,41 @@ public static class KeptValue
         {
             return true;
         }
+        return IsAbsolute(value) && WrittenForms(value).Any(form => Occurrences(form, text).Count > 0);
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with every occurrence <see cref="Holds"/> finds of
+    /// <paramref name="value"/> written as <paramref name="replacement"/> instead, the JSON spellings
+    /// first so an escaped path inside a JSON blob is replaced whole. The text comes back in NFC.
+    /// </summary>
+    public static string Replacing(string value, string text, string replacement)
+    {
+        text = Nfc(text);
+        value = Nfc(value);
+        if (value.Length == 0)
+        {
+            return text;
+        }
+        if (string.Equals(text, value, StringComparison.Ordinal))
+        {
+            return replacement;
+        }
         if (!IsAbsolute(value))
         {
-            return false;
+            return text;
         }
         foreach (var form in WrittenForms(value))
         {
-            var start = 0;
-            int found;
-            while ((found = text.IndexOf(form, start, StringComparison.Ordinal)) >= 0)
+            var builder = new System.Text.StringBuilder(text);
+            var found = Occurrences(form, text);
+            for (var i = found.Count - 1; i >= 0; i--)
             {
-                var end = found + form.Length;
-                if ((found == 0 || Openers.Contains(text[found - 1])) && (end == text.Length || Closers.Contains(text[end])))
-                {
-                    return true;
-                }
-                start = found + 1;
+                builder.Remove(found[i].Start, found[i].Length).Insert(found[i].Start, replacement);
             }
+            text = builder.ToString();
         }
-        return false;
+        return text;
     }
 
     /// <summary><paramref name="text"/> in Unicode NFC, the form every kept-value comparison is made in.</summary>
@@ -137,22 +161,58 @@ public static class KeptValue
     /// <summary>An absolute or home path: <c>/…</c>, <c>~…</c>, a UNC <c>\\…</c> path, or a drive letter with <c>:\</c> or <c>:/</c>.</summary>
     internal static bool IsAbsolute(string value) =>
         value.StartsWith('/') || value.StartsWith('~') || value.StartsWith(@"\\", StringComparison.Ordinal)
-        || (value.Length >= 3 && char.IsLetter(value[0]) && value[1] == ':' && value[2] is '\\' or '/');
+        || (value.Length >= 3 && char.IsAsciiLetter(value[0]) && value[1] == ':' && value[2] is '\\' or '/');
 
-    private static readonly HashSet<char> Openers = [' ', '"', '=', ':', ','];
-    private static readonly HashSet<char> Closers = ['/', '\\', ' ', '"', ':', ','];
+    /// <summary>
+    /// An ASCII letter or digit, <c>.</c>, <c>_</c>, <c>-</c>, or any character outside ASCII: one
+    /// that continues a file name, so a path beside it is part of a longer name rather than a path of
+    /// its own.
+    /// </summary>
+    internal static bool ContinuesAName(char unit) =>
+        unit > '\x7F' || char.IsAsciiLetterOrDigit(unit) || unit is '.' or '_' or '-';
 
-    /// <summary><paramref name="value"/> as written, and as a JSON string would spell it: backslashes and quotes escaped, with and without the slash escaped too.</summary>
+    /// <summary>Where <paramref name="needle"/> stands in <paramref name="haystack"/> as a path of its own, left to right and not overlapping.</summary>
+    private static List<(int Start, int Length)> Occurrences(string needle, string haystack)
+    {
+        var found = new List<(int Start, int Length)>();
+        if (needle.Length == 0)
+        {
+            return found;
+        }
+        var start = 0;
+        while (start + needle.Length <= haystack.Length)
+        {
+            var end = start + needle.Length;
+            if (string.CompareOrdinal(haystack, start, needle, 0, needle.Length) == 0
+                && (start == 0 || !ContinuesAName(haystack[start - 1]))
+                && (end == haystack.Length || !ContinuesAName(haystack[end])))
+            {
+                found.Add((start, needle.Length));
+                start = end;
+            }
+            else
+            {
+                start++;
+            }
+        }
+        return found;
+    }
+
+    /// <summary><paramref name="value"/> as a JSON string spells it — backslashes and quotes escaped, with and without the slash escaped too — and as written, longest first, each once.</summary>
     internal static IReadOnlyList<string> WrittenForms(string value)
     {
         var escaped = value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
-        return new HashSet<string>(StringComparer.Ordinal)
-        {
-            value,
-            value.Replace("/", "\\/", StringComparison.Ordinal),
-            escaped,
-            escaped.Replace("/", "\\/", StringComparison.Ordinal),
-        }.ToList();
+        return new[]
+            {
+                escaped.Replace("/", "\\/", StringComparison.Ordinal),
+                escaped,
+                value.Replace("/", "\\/", StringComparison.Ordinal),
+                value,
+            }
+            .Distinct(StringComparer.Ordinal)
+            .OrderByDescending(form => form.Length)
+            .ThenBy(form => form, StringComparer.Ordinal)
+            .ToList();
     }
 }
 
@@ -1083,39 +1143,181 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     /// so both platforms walk alike. Keys count only below <c>env</c>, <c>needs</c> and
     /// <c>additional</c>, the objects whose names the author chose; the rest are the format's own.
     /// </summary>
-    internal static IReadOnlyList<(string Field, string Text)> Places(JsonValue json)
+    internal static IReadOnlyList<(string Field, string Text)> Places(JsonValue json) =>
+        Walk(json).Select(place => (place.Field, place.Text)).ToList();
+
+    /// <summary>One step of a path into JSON: a key, or an index when <see cref="Key"/> is null.</summary>
+    private readonly record struct Step(string? Key, int Index);
+
+    /// <param name="IsName">The text is a key's own name, not a value under it.</param>
+    private sealed record Place(string Field, string Text, IReadOnlyList<Step> Path, bool IsName);
+
+    private static List<Place> Walk(JsonValue json)
     {
-        var places = new List<(string Field, string Text)>();
-        void Walk(JsonValue value, string field, bool namesCount)
+        var places = new List<Place>();
+        void Visit(JsonValue value, string field, List<Step> path, bool namesCount)
         {
             switch (value.Kind)
             {
                 case JsonKind.String:
-                    places.Add((field, value.StringValue));
+                    places.Add(new Place(field, value.StringValue, path, false));
                     break;
                 case JsonKind.Array:
                     var index = 0;
                     foreach (var item in value.ArrayItems)
                     {
-                        Walk(item, $"{field}[{index}]", false);
+                        Visit(item, $"{field}[{index}]", [.. path, new Step(null, index)], false);
                         index++;
                     }
                     break;
                 case JsonKind.Object:
                     foreach (var (key, child) in value.ObjectProperties.OrderBy(p => p.Key, StringComparer.Ordinal))
                     {
-                        var path = field.Length == 0 ? key : field + "." + key;
+                        var name = field.Length == 0 ? key : field + "." + key;
+                        List<Step> keyed = [.. path, new Step(key, 0)];
                         if (namesCount)
                         {
-                            places.Add((path, key));
+                            places.Add(new Place(name, key, keyed, true));
                         }
-                        Walk(child, path, field.Length == 0 && key is "env" or "needs" or "additional");
+                        Visit(child, name, keyed, field.Length == 0 && key is "env" or "needs" or "additional");
                     }
                     break;
             }
         }
-        Walk(json, string.Empty, false);
+        Visit(json, string.Empty, [], false);
         return places;
+    }
+
+    /// <summary>
+    /// <paramref name="config"/>, a connector as the store holds it, with <paramref name="folder"/>
+    /// written as <c>${COLLECTION_DIR}</c> in the place <paramref name="field"/> names in the
+    /// connector's document form (<see cref="Findings"/>), or null when the stored config has no such
+    /// place holding the folder: a hint, which is the Publish dialog's own, or a field the rewrite
+    /// cannot reach. A remote connector's <c>remote.url</c>, <c>remote.package</c> and
+    /// <c>remote.extraArgs[N]</c> are rewritten in every argument that reads the same, since each
+    /// importer builds that command line again from the document.
+    /// </summary>
+    public static JsonValue? UsingDirectoryToken(JsonValue config, string field, string folder)
+    {
+        if (config.Kind != JsonKind.Object)
+        {
+            return null;
+        }
+        var targets = new List<(IReadOnlyList<Step> Path, bool IsName)>();
+        void Consider(string candidate, string text, IReadOnlyList<Step> path, bool isName = false)
+        {
+            if (candidate == field && KeptValue.Holds(text, folder))
+            {
+                targets.Add((path, isName));
+            }
+        }
+        // The additional fields sit at the top of the stored config, under their own names.
+        var additional = JsonValue.Object(("additional", JsonValue.Object(FormMapper.Analyze(config).Model.Additional)));
+        foreach (var place in Walk(additional))
+        {
+            Consider(place.Field, place.Text, place.Path.Skip(1).ToList(), place.IsName);
+        }
+        if (config["env"] is { Kind: JsonKind.Object } env)
+        {
+            foreach (var (key, value) in env.ObjectProperties.OrderBy(p => p.Key, StringComparer.Ordinal))
+            {
+                IReadOnlyList<Step> at = [new Step("env", 0), new Step(key, 0)];
+                Consider($"env.{key}", key, at, isName: true);
+                if (value.Kind == JsonKind.String)
+                {
+                    Consider($"env.{key}.value", value.StringValue, at);
+                }
+            }
+        }
+        var line = new List<(string Text, IReadOnlyList<Step> Path)>();
+        if (config["command"] is { Kind: JsonKind.String } command)
+        {
+            line.Add((command.StringValue, [new Step("command", 0)]));
+        }
+        if (config["args"] is { Kind: JsonKind.Array } args)
+        {
+            var index = 0;
+            foreach (var item in args.ArrayItems)
+            {
+                if (item.Kind == JsonKind.String)
+                {
+                    line.Add((item.StringValue, [new Step("args", 0), new Step(null, index)]));
+                }
+                index++;
+            }
+        }
+        if (RemotePattern.Decode(config) is { } remote)
+        {
+            var fields = new List<(string Field, string Text)> { ("remote.url", remote.Url), ("remote.package", remote.Package) };
+            fields.AddRange(remote.ExtraArgs.Select((arg, i) => ($"remote.extraArgs[{i}]", arg)));
+            foreach (var (candidate, text) in fields.Where(f => f.Field == field))
+            {
+                foreach (var part in line.Where(p => p.Text == text))
+                {
+                    Consider(candidate, part.Text, part.Path);
+                }
+            }
+        }
+        else
+        {
+            foreach (var part in line.Where(p => p.Path[0].Key == "command"))
+            {
+                Consider("local.command", part.Text, part.Path);
+            }
+            // The document numbers only the arguments that are strings, as the form does.
+            var number = 0;
+            foreach (var part in line.Where(p => p.Path[0].Key == "args"))
+            {
+                Consider($"local.args[{number}]", part.Text, part.Path);
+                number++;
+            }
+        }
+        if (targets.Count == 0)
+        {
+            return null;
+        }
+        var rewritten = targets.Aggregate(config, (json, target) =>
+            Rewriting(json, target.Path, 0, target.IsName, text => KeptValue.Replacing(folder, text, Placeholder.DirectoryToken)));
+        return rewritten == config ? null : rewritten;
+    }
+
+    private static JsonValue Rewriting(JsonValue json, IReadOnlyList<Step> path, int at, bool isName, Func<string, string> transform)
+    {
+        if (at == path.Count)
+        {
+            return json.Kind == JsonKind.String ? JsonValue.String(transform(json.StringValue)) : json;
+        }
+        var step = path[at];
+        if (step.Key is { } key && json.Kind == JsonKind.Object)
+        {
+            if (json[key] is not { } child)
+            {
+                return json;
+            }
+            var props = json.ObjectProperties.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+            if (isName && at == path.Count - 1)
+            {
+                var renamed = transform(key);
+                if (renamed == key || props.ContainsKey(renamed))
+                {
+                    return json;
+                }
+                props.Remove(key);
+                props[renamed] = child;
+            }
+            else
+            {
+                props[key] = Rewriting(child, path, at + 1, isName, transform);
+            }
+            return JsonValue.Object(props);
+        }
+        if (step.Key is null && json.Kind == JsonKind.Array && step.Index < json.ArrayItems.Length)
+        {
+            var items = json.ArrayItems.ToArray();
+            items[step.Index] = Rewriting(items[step.Index], path, at + 1, isName, transform);
+            return JsonValue.Array(items);
+        }
+        return json;
     }
 
     /// <summary>

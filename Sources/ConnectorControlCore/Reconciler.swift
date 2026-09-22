@@ -55,9 +55,13 @@ public enum Reconciler {
     /// folder. A connector whose store copy expands to exactly what the snapshot holds keeps the
     /// store copy, token and all. Anything else is the snapshot's own, a genuine edit, and is
     /// adopted as written; a publish that would carry the folder is refused further on.
+    /// `earlierFolders`, the folders the collection published into before this one, count the
+    /// same way: a backup taken before the folder moved holds the folder it had then.
     public static func adoptSnapshot(
-        store: MasterStore, servers: [String: JSONValue], publishFolder: String? = nil
+        store: MasterStore, servers: [String: JSONValue], publishFolder: String? = nil,
+        earlierFolders: [String] = []
     ) -> ReconcileOutcome {
+        let folders = publishFolder.map { [$0] + earlierFolders } ?? []
         var result = store
         for (name, entry) in result.mcps where entry.enabled && servers[name] == nil {
             result.mcps[name]?.enabled = false
@@ -65,8 +69,8 @@ public enum Reconciler {
         for (name, config) in servers {
             let held = result.mcps[name]
             var entry = held ?? MCPEntry(enabled: true, config: config)
-            let rendersAsSnapshot = publishFolder.map { folder in
-                held.map { Placeholder.expandDirectoryToken(in: $0.config, directory: folder) == config } ?? false
+            let rendersAsSnapshot = held.map { held in
+                folders.contains { Placeholder.expandDirectoryToken(in: held.config, directory: $0) == config }
             } ?? false
             if !rendersAsSnapshot { entry.config = config }
             entry.enabled = true

@@ -160,8 +160,10 @@ public sealed class ConfigService
     /// the collection the backup was taken from, and says so here when that is not the collection the
     /// saved store has active.
     /// </param>
+    /// <param name="earlierFolders">The folders it published into before, which <see cref="Reconciler.AdoptSnapshot"/> counts the same way.</param>
     public IReadOnlyDictionary<string, JsonValue> RestoreClaudeConfig(string backupPath, MasterStore store,
                                                                      string? publishFolder = null,
+                                                                     IReadOnlyList<string>? earlierFolders = null,
                                                                      string? backedUpFrom = null,
                                                                      bool activating = false)
     {
@@ -188,7 +190,7 @@ public sealed class ConfigService
         IReadOnlyDictionary<string, JsonValue> servers = rawServers is null
             ? new Dictionary<string, JsonValue>(StringComparer.Ordinal)
             : rawServers.ObjectProperties;
-        var outcome = Reconciler.AdoptSnapshot(store, servers, publishFolder);
+        var outcome = Reconciler.AdoptSnapshot(store, servers, publishFolder, earlierFolders);
         // A backup restored into a collection other than the active one makes that collection
         // active, so Claude's file and the store agree on where its connectors live — even when the
         // adoption itself changed nothing.

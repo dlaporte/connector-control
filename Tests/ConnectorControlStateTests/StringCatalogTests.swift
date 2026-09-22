@@ -78,7 +78,7 @@ final class StringCatalogTests: XCTestCase {
         "AppState.needsValueCaution": ["X"],
         "AppState.keptPathCarriedError": ["X", "Y"],
         "AppState.pathMarkMovedError": ["X"],
-        "AppState.publishFolderCarriedError": ["X"],
+        "AppState.publishFolderCarriedError": ["X", "Y"],
         "AppState.publishSlugTakenError": ["X"],
         "AppState.restoreCollectionGoneError": ["X"],
         "AppState.sourceUnreadableError": ["X", "Y"],
@@ -121,6 +121,7 @@ final class StringCatalogTests: XCTestCase {
         "PublishModel.footerLine": ["X", "Y"],
         "PublishModel.title": ["X"],
         "PublishModel.keptPathNote": ["X", "Y"],
+        "PublishModel.publishFolderNote": ["X", "Y"],
         "PublishModel.unresolvedMarkNote": ["X", "Y"],
         "PublishModel.warningLine": ["X", "Y"],
         "RestoreModel.confirmMessage": ["X"],
@@ -167,7 +168,7 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.ownCollectionError"] = AppState.ownCollectionError
         actual["AppState.keptPathCarriedError"] = AppState.keptPathCarriedError("X", "Y")
         actual["AppState.pathMarkMovedError"] = AppState.pathMarkMovedError("X")
-        actual["AppState.publishFolderCarriedError"] = AppState.publishFolderCarriedError("X")
+        actual["AppState.publishFolderCarriedError"] = AppState.publishFolderCarriedError("X", "Y")
         actual["AppState.publishIntoStoreError"] = AppState.publishIntoStoreError
         actual["AppState.publishSlugTakenError"] = AppState.publishSlugTakenError("X")
         actual["AppState.quitButton"] = AppState.quitButton
@@ -375,6 +376,8 @@ final class StringCatalogTests: XCTestCase {
         actual["PublishModel.title"] = PublishModel.title("X")
         actual["PublishModel.keptPathNote"] = PublishModel.keptPathNote("X", "Y")
         actual["PublishModel.releaseValueButton"] = PublishModel.releaseValueButton
+        actual["PublishModel.publishFolderNote"] = PublishModel.publishFolderNote("X", "Y")
+        actual["PublishModel.useDirectoryTokenButton"] = PublishModel.useDirectoryTokenButton
         actual["PublishModel.unresolvedMarkNote"] = PublishModel.unresolvedMarkNote("X", "Y")
         actual["PublishModel.warningLine"] = PublishModel.warningLine("X", "Y")
 

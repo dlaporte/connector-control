@@ -58,9 +58,14 @@ public static class Reconciler
     /// all. Anything else is the snapshot's own, a genuine edit, and is adopted as written; a publish
     /// that would carry the folder is refused further on.
     /// </param>
+    /// <param name="earlierFolders">
+    /// The folders the collection published into before this one, which count the same way: a backup
+    /// taken before the folder moved holds the folder it had then.
+    /// </param>
     public static ReconcileOutcome AdoptSnapshot(MasterStore store, IReadOnlyDictionary<string, JsonValue> servers,
-                                                 string? publishFolder = null)
+                                                 string? publishFolder = null, IReadOnlyList<string>? earlierFolders = null)
     {
+        List<string> folders = publishFolder is null ? [] : [publishFolder, .. earlierFolders ?? []];
         var result = store.Clone();
         var toDisable = result.Mcps
             .Where(p => p.Value.Enabled && !servers.ContainsKey(p.Key))
@@ -74,8 +79,7 @@ public static class Reconciler
         {
             var held = result.Mcps.TryGetValue(name, out var existing);
             var entry = held ? existing! : new McpEntry(true, config);
-            var rendersAsSnapshot = held && publishFolder is not null
-                && Placeholder.ExpandDirectoryToken(entry.Config, publishFolder) == config;
+            var rendersAsSnapshot = held && folders.Any(folder => Placeholder.ExpandDirectoryToken(entry.Config, folder) == config);
             result.Mcps[name] = entry with { Config = rendersAsSnapshot ? entry.Config : config, Enabled = true };
         }
         return new ReconcileOutcome(result, !result.Equals(store));

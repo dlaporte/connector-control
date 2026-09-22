@@ -77,7 +77,7 @@ public final class AppState: ObservableObject {
 
     public static func pathMarkMovedError(_ connector: String) -> String { "A path marked in “\(connector)” has moved. Open Publish… to mark it again." }
 
-    public static func publishFolderCarriedError(_ connector: String) -> String { "“\(connector)” carries this machine's publish folder as written. Write ${COLLECTION_DIR} in its place, or mark the path in Publish…" }
+    public static func publishFolderCarriedError(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine's publish folder as written, in \(field). Open Publish… to use ${COLLECTION_DIR} in its place." }
 
     public static func keptPathCarriedError(_ connector: String, _ field: String) -> String { "“\(connector)” carries a path this machine keeps back, in \(field). Open Publish… to review it." }
 
@@ -434,10 +434,13 @@ public final class AppState: ObservableObject {
         }
         // Every apply backed Claude's file up with this machine's publish folder where the store
         // holds ${COLLECTION_DIR}: a connector that renders just as the backup does keeps its
-        // token. Only this machine's own binding counts; another machine's record has no folder here.
+        // token, with the folder of the day, the current one or one the collection has since left.
+        // Only this machine's own binding counts; another machine's record has no folder here.
         let collection = target.activeCollection
-        let publishFolder = isPublished(collection) ? collectionsCache.published[collection]?.folder : nil
-        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: target, publishFolder: publishFolder,
+        let binding = isPublished(collection) ? collectionsCache.published[collection] : nil
+        let earlier = (binding?.publishedFolders ?? []).subtracting([binding?.folder ?? ""]).sorted { $0.ordinallyPrecedes($1) }
+        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: target, publishFolder: binding?.folder,
+                                                      earlierFolders: earlier,
                                                       backedUpFrom: collectionsCache.lastAppliedCollection,
                                                       activating: target.activeCollection != store.activeCollection)
         recordApplied(collection)
@@ -1413,7 +1416,9 @@ public final class AppState: ObservableObject {
             lastWrittenHash: previous?.folder == url.path ? previous?.lastWrittenHash : nil,
             markedValues: reviewedValues ?? previous?.markedValues ?? [],
             releasedValues: AppState.released(previous?.releasedValues ?? [], adding: releasedValues,
-                                              marked: reviewedValues ?? previous?.markedValues ?? []))
+                                              marked: reviewedValues ?? previous?.markedValues ?? []),
+            // The folder it left stays this machine's own: a backup or a connector can bring it back.
+            publishedFolders: (previous?.publishedFolders ?? []).union(previous.map { [$0.folder] } ?? []).union([url.path]))
         // persistStore ends in publishIfChanged, which is what writes the document.
         persistStore()
         // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
@@ -1581,16 +1586,18 @@ public final class AppState: ObservableObject {
             throw PublishIntentError.keptPathCarried(connector: found.connector, field: found.field)
         }
         if let found = document.findings(of: kept.folders).first {
-            throw PublishIntentError.publishFolderCarried(connector: found.connector)
+            throw PublishIntentError.publishFolderCarried(connector: found.connector, field: found.field)
         }
     }
 
-    /// What this machine keeps back from `collection`'s document: every path on any of its lists
-    /// of marked paths, and every folder it binds — each collection's publish folder and each
-    /// synced collection's located folder — less the paths the author released for this
-    /// collection. The lists are not the collection's own alone: Claude's file carries whichever
-    /// collection was last applied, and a connector reaches another collection by a copy, an ingest
-    /// or a restore with its paths intact.
+    /// What this machine keeps back from `collection`'s document, less the paths the author
+    /// released for this collection. `folders` are the collection's own: every folder this machine
+    /// has published it into, which `${COLLECTION_DIR}` stands for. `values` are everything else —
+    /// every path on any of its lists of marked paths, and every other folder it binds: another
+    /// collection's publish folders and each synced collection's located folder. The lists are not
+    /// the collection's own alone: Claude's file carries whichever collection was last applied,
+    /// and a connector reaches another collection by a copy, an ingest or a restore with its paths
+    /// intact.
     ///
     /// `reviewed`, from the Publish sheet, is what the author has ticked there, added to the lists;
     /// `released` is what they let go there, added to the collection's own released paths. A path
@@ -1599,16 +1606,17 @@ public final class AppState: ObservableObject {
                   released: Set<String> = []) -> (values: Set<String>, folders: Set<String>) {
         var values = reviewed ?? []
         var folders: Set<String> = []
-        for binding in collectionsCache.published.values {
+        for (name, binding) in collectionsCache.published {
             values.formUnion(binding.markedValues)
-            folders.insert(binding.folder)
+            let bound = binding.publishedFolders.union([binding.folder])
+            if name == collection { folders.formUnion(bound) } else { values.formUnion(bound) }
         }
         for (name, binding) in collectionsCache.synced where isSynced(name) {
-            if let path = binding.path { folders.insert(URL(fileURLWithPath: path).deletingLastPathComponent().path) }
+            if let path = binding.path { values.insert(URL(fileURLWithPath: path).deletingLastPathComponent().path) }
         }
         let letGo = AppState.released(collectionsCache.published[collection]?.releasedValues ?? [],
                                       adding: released, marked: reviewed ?? [])
-        return (values.subtracting(letGo), folders.subtracting(letGo))
+        return (values.subtracting(folders).subtracting(letGo), folders.subtracting(letGo))
     }
 
     /// A collection's released paths after the sheet's answer: what it released before and now,
@@ -1819,8 +1827,8 @@ public final class AppState: ObservableObject {
         if case RestoreError.collectionGone(let collection) = error {
             return restoreCollectionGoneError(collection)
         }
-        if case PublishIntentError.publishFolderCarried(let connector) = error {
-            return publishFolderCarriedError(connector)
+        if case PublishIntentError.publishFolderCarried(let connector, let field) = error {
+            return publishFolderCarriedError(connector, field)
         }
         return error.localizedDescription
     }

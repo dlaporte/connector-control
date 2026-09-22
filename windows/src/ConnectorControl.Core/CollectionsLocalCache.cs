@@ -131,8 +131,15 @@ public sealed record CollectionsLocalCache
         /// </summary>
         public IReadOnlySet<string> ReleasedValues { get; }
 
+        /// <summary>
+        /// Every folder this binding has published into, the current one included. A connector can
+        /// bring an earlier one back as written — a backup taken before the folder moved — and the
+        /// author's old folder is no more a subscriber's than the current one.
+        /// </summary>
+        public IReadOnlySet<string> PublishedFolders { get; }
+
         public PublishBinding(string folder, string? lastWrittenHash, IEnumerable<string>? markedValues = null,
-                              IEnumerable<string>? releasedValues = null)
+                              IEnumerable<string>? releasedValues = null, IEnumerable<string>? publishedFolders = null)
         {
             Folder = folder;
             LastWrittenHash = lastWrittenHash;
@@ -142,6 +149,9 @@ public sealed record CollectionsLocalCache
             ReleasedValues = releasedValues is null
                 ? new HashSet<string>(StringComparer.Ordinal)
                 : new HashSet<string>(releasedValues, StringComparer.Ordinal);
+            PublishedFolders = publishedFolders is null
+                ? new HashSet<string>(StringComparer.Ordinal)
+                : new HashSet<string>(publishedFolders, StringComparer.Ordinal);
         }
 
         public bool Equals(PublishBinding? other) =>
@@ -149,7 +159,8 @@ public sealed record CollectionsLocalCache
             && string.Equals(Folder, other.Folder, StringComparison.Ordinal)
             && string.Equals(LastWrittenHash, other.LastWrittenHash, StringComparison.Ordinal)
             && MarkedValues.SetEquals(other.MarkedValues)
-            && ReleasedValues.SetEquals(other.ReleasedValues);
+            && ReleasedValues.SetEquals(other.ReleasedValues)
+            && PublishedFolders.SetEquals(other.PublishedFolders);
 
         public override int GetHashCode()
         {
@@ -162,6 +173,11 @@ public sealed record CollectionsLocalCache
             }
             hash.Add(ReleasedValues.Count);
             foreach (var value in ReleasedValues.Order(StringComparer.Ordinal))
+            {
+                hash.Add(value, StringComparer.Ordinal);
+            }
+            hash.Add(PublishedFolders.Count);
+            foreach (var value in PublishedFolders.Order(StringComparer.Ordinal))
             {
                 hash.Add(value, StringComparer.Ordinal);
             }
@@ -187,6 +203,10 @@ public sealed record CollectionsLocalCache
             {
                 props["releasedValues"] = JsonValue.Array(ReleasedValues.Order(StringComparer.Ordinal).Select(JsonValue.String));
             }
+            if (PublishedFolders.Count > 0)
+            {
+                props["publishedFolders"] = JsonValue.Array(PublishedFolders.Order(StringComparer.Ordinal).Select(JsonValue.String));
+            }
             return JsonValue.Object(props);
         }
 
@@ -202,7 +222,10 @@ public sealed record CollectionsLocalCache
                 // Absent in a cache written before the list was kept: nothing marked yet, which the
                 // next write fills in.
                 CollectionsFile.StringSet(json["markedValues"], $"{what} markedValues"),
-                CollectionsFile.StringSet(json["releasedValues"], $"{what} releasedValues"));
+                CollectionsFile.StringSet(json["releasedValues"], $"{what} releasedValues"),
+                // Absent in a cache written before it was kept: the current folder, which every check
+                // adds anyway, is all that is known.
+                CollectionsFile.StringSet(json["publishedFolders"], $"{what} publishedFolders"));
         }
     }
 

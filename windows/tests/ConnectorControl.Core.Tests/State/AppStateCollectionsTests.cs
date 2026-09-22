@@ -1840,7 +1840,7 @@ public class AppStateCollectionsTests
         var withoutX = File.ReadAllBytes(document);
         state.RestoreClaudeConfig(backup);
         Assert.Equal([folder + "/tools/x.js"], ArgsOf(state.Store.Collections[state.ActiveCollection].Mcps["x"].Config));
-        Assert.Equal(AppState.PublishFolderCarriedError("x"), state.PublishError?.Message);
+        Assert.Equal(AppState.PublishFolderCarriedError("x", "local.args[0]"), state.PublishError?.Message);
         Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
         Assert.Equal(withoutX, File.ReadAllBytes(document));
         Assert.False(JsonText.FileContains(document, folder));
@@ -1887,7 +1887,7 @@ public class AppStateCollectionsTests
         using var relaunched = h.Create();
         // Ingested as Claude's file has it.
         Assert.Equal([folder + "/tools/x.js"], ArgsOf(relaunched.Store.Collections[relaunched.ActiveCollection].Mcps["x"].Config));
-        Assert.Equal(AppState.PublishFolderCarriedError("x"), relaunched.PublishError?.Message);
+        Assert.Equal(AppState.PublishFolderCarriedError("x", "local.args[0]"), relaunched.PublishError?.Message);
         Assert.Equal(PublishErrorKind.BlockedForReview, relaunched.PublishError?.Kind);
         Assert.Equal(before, File.ReadAllBytes(document));
         Assert.False(JsonText.FileContains(document, folder));
@@ -1911,17 +1911,186 @@ public class AppStateCollectionsTests
         Assert.NotEqual(before, withSibling);
 
         Assert.Null(state.Upsert("typed", new McpEntry(NodeWith(bound + "/tools/x.js")), null));
-        Assert.Equal(AppState.PublishFolderCarriedError("typed"), state.PublishError?.Message);
+        Assert.Equal(AppState.PublishFolderCarriedError("typed", "local.args[0]"), state.PublishError?.Message);
         // Answered in the Publish dialog, not another folder.
         Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
         Assert.Equal(withSibling, File.ReadAllBytes(file));
 
         // The dialog lists the folder where it sits, and holds Export until it is answered.
         var dialog = new PublishModel(state, state.ActiveCollection);
-        Assert.Equal([$"typed local.args[0] {bound}"], dialog.KeptPaths.Select(k => $"{k.Connector} {k.Field} {k.Value}"));
+        Assert.Equal([$"typed local.args[0] {bound} True"],
+                     dialog.KeptPaths.Select(k => $"{k.Connector} {k.Field} {k.Value} {k.CanUseDirectoryToken}"));
         var output = h.Dir.File(Path.Combine("away", "copy.json"));
-        Assert.Equal(PublishModel.KeptPathNote("typed", "local.args[0]"), dialog.Export(output));
+        Assert.Equal(PublishModel.PublishFolderNote("typed", "local.args[0]"), dialog.Export(output));
         Assert.False(File.Exists(output));
+    }
+
+    /// <summary>
+    /// A folder written out where no row reaches it: the refusal names the field, the dialog lists it
+    /// and holds Publish, and Use ${COLLECTION_DIR} writes the token back into the connector itself,
+    /// which Claude's config and the document then follow.
+    /// </summary>
+    [Fact]
+    public void UseDirectoryTokenWritesTheTokenWhereTheFolderSits()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var bound = state.CollectionsCache.Published[state.ActiveCollection].Folder;
+        var file = Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
+        Assert.Null(state.Upsert("tool", new McpEntry(true, JsonValue.Object(
+            ("command", JsonValue.String(bound + "/bin/tool")),
+            ("env", JsonValue.Object(("PATH_EXTRA", JsonValue.String(bound + ":/opt/lib")))))), null));
+        state.Apply();
+        Assert.Equal(AppState.PublishFolderCarriedError("tool", "local.command"), state.PublishError?.Message);
+        var before = File.ReadAllBytes(file);
+
+        var dialog = new PublishModel(state, state.ActiveCollection);
+        dialog.EnvRows.Single(r => r.Name == "PATH_EXTRA").Share = true;
+        Assert.Equal(["tool env.PATH_EXTRA.value True", "tool local.command True"],
+                     dialog.KeptPaths.Select(k => $"{k.Connector} {k.Field} {k.CanUseDirectoryToken}"));
+        Assert.False(dialog.CanPublish);
+        Assert.Equal(PublishModel.PublishFolderNote("tool", "env.PATH_EXTRA.value"), dialog.Publish());
+        Assert.Equal(before, File.ReadAllBytes(file));
+
+        foreach (var kept in dialog.KeptPaths)
+        {
+            Assert.Null(dialog.UseDirectoryToken(kept));
+        }
+        var token = Placeholder.DirectoryToken;
+        Assert.Equal(JsonValue.Object(
+            ("command", JsonValue.String($"{token}/bin/tool")),
+            ("env", JsonValue.Object(("PATH_EXTRA", JsonValue.String($"{token}:/opt/lib"))))),
+            state.Store.Collections[state.ActiveCollection].Mcps["tool"].Config);
+        // Claude still runs the folder, which the token stands for here.
+        Assert.Equal(JsonValue.Object(
+            ("command", JsonValue.String(bound + "/bin/tool")),
+            ("env", JsonValue.Object(("PATH_EXTRA", JsonValue.String(bound + ":/opt/lib"))))),
+            h.ClaudeServers()["tool"]);
+        Assert.Equal($"{token}:/opt/lib", dialog.EnvRows.Single(r => r.Name == "PATH_EXTRA").Value);
+        Assert.Empty(dialog.KeptPaths);
+        Assert.True(dialog.CanPublish);
+        Assert.Null(dialog.Publish());
+        Assert.Null(state.PublishError);
+        Assert.False(JsonText.FileContains(file, bound));
+        Assert.True(JsonText.FileContains(file, token));
+    }
+
+    /// <summary>The folder in the author's own hint is the dialog's to rewrite: the token goes into the hint.</summary>
+    [Fact]
+    public void UseDirectoryTokenRewritesAHintInTheSheet()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Null(state.Upsert("svc", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("svc")), ("env", JsonValue.Object(("TOKEN", JsonValue.String("sk-1")))))), null));
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var bound = state.CollectionsCache.Published[state.ActiveCollection].Folder;
+        var dialog = new PublishModel(state, state.ActiveCollection);
+        var row = dialog.EnvRows.Single(r => r.Connector == "svc" && r.Name == "TOKEN");
+        row.Hint = $"see {bound}/README";
+        var kept = dialog.KeptPaths[0];
+        Assert.Equal("svc env.TOKEN.hint True", $"{kept.Connector} {kept.Field} {kept.CanUseDirectoryToken}");
+        Assert.Null(dialog.UseDirectoryToken(kept));
+        Assert.Equal($"see {Placeholder.DirectoryToken}/README", row.Hint);
+        Assert.Empty(dialog.KeptPaths);
+        Assert.Null(dialog.Publish());
+    }
+
+    /// <summary>
+    /// The author moved the publish folder, then restored a backup taken before the move: the store
+    /// keeps its token, since the backup renders as the store does with the folder of the day, and the
+    /// earlier folder written out anywhere else is kept back as the current one is.
+    /// </summary>
+    [Fact]
+    public void AnEarlierPublishFolderIsTheCollectionsOwnToo()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var token = $"{Placeholder.DirectoryToken}/tools/srv.js";
+        Assert.Null(state.Upsert("x", new McpEntry(true, NodeWith(token)), null));
+        state.Apply();
+        Assert.Null(state.StartPublishing(state.ActiveCollection, PublishFolder(h, "pub1"), PublishIntent.None,
+                                          new HashSet<string>(StringComparer.Ordinal)));
+        var oldFolder = state.CollectionsCache.Published[state.ActiveCollection].Folder;
+        var backup = h.Dir.File("backup.json");
+        File.Copy(h.ClaudeConfigPath, backup);
+        var second = PublishFolder(h, "pub2");
+        Assert.Null(state.ChangePublishFolder(state.ActiveCollection, second));
+        var newFolder = state.CollectionsCache.Published[state.ActiveCollection].Folder;
+        Assert.Equal([oldFolder, newFolder], state.CollectionsCache.Published[state.ActiveCollection].PublishedFolders.Order(StringComparer.Ordinal));
+        var file = Path.Combine(second, Slug.Make(state.ActiveCollection) + ".json");
+
+        state.RestoreClaudeConfig(backup);
+        // The backup renders as the store does with the folder it had then.
+        Assert.Equal([token], ArgsOf(state.Store.Collections[state.ActiveCollection].Mcps["x"].Config));
+        Assert.Null(state.PublishError);
+        Assert.False(JsonText.FileContains(file, oldFolder));
+
+        Assert.Null(state.Upsert("old", new McpEntry(NodeWith("--root", oldFolder)), null));
+        Assert.Equal(AppState.PublishFolderCarriedError("old", "local.args[1]"), state.PublishError?.Message);
+        Assert.False(JsonText.FileContains(file, oldFolder));
+        var dialog = new PublishModel(state, state.ActiveCollection);
+        var kept = dialog.KeptPaths[0];
+        Assert.Equal($"local.args[1] {oldFolder} True", $"{kept.Field} {kept.Value} {kept.CanUseDirectoryToken}");
+        Assert.Null(dialog.UseDirectoryToken(kept));
+        Assert.Null(state.PublishError);
+        Assert.False(JsonText.FileContains(file, oldFolder));
+    }
+
+    /// <summary>The folder followed by a list separator is still the folder; followed by what continues a file name it is another name.</summary>
+    [Fact]
+    public void ThePublishFolderIsFoundBesideAnySeparator()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var bound = state.CollectionsCache.Published[state.ActiveCollection].Folder;
+        var file = Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
+        foreach (var written in new[] { $"{bound}:/opt/lib", $"{bound};/opt/lib", $"{bound},x", $"x {bound}" })
+        {
+            Assert.Null(state.Upsert("py", new McpEntry(JsonValue.Object(("command", JsonValue.String("python3")),
+                ("args", JsonValue.Array([JsonValue.String("--path"), JsonValue.String(written)])))), null));
+            Assert.Equal(AppState.PublishFolderCarriedError("py", "local.args[1]"), state.PublishError?.Message);
+            Assert.False(JsonText.FileContains(file, bound));
+            state.Remove("py");
+        }
+        foreach (var other in new[] { $"{bound}.bak", $"{bound}_old/x", $"{bound}é/x" })
+        {
+            Assert.Null(state.Upsert("py", new McpEntry(JsonValue.Object(("command", JsonValue.String("python3")),
+                ("args", JsonValue.Array([JsonValue.String("--path"), JsonValue.String(other)])))), null));
+            Assert.Null(state.PublishError);
+            state.Remove("py");
+        }
+    }
+
+    /// <summary>
+    /// Another collection's publish folder is a path this machine keeps back, not this one's own: the
+    /// token would stand for the wrong folder, so its answer is Release.
+    /// </summary>
+    [Fact]
+    public void AnotherCollectionsPublishFolderIsReleasedNotRewritten()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var team = state.ActiveCollection;
+        Assert.Null(state.StartPublishing(team, PublishFolder(h, "pubTeam"), PublishIntent.None));
+        var teamFolder = state.CollectionsCache.Published[team].Folder;
+        Assert.Null(state.CreateCollection("Clients"));
+        Assert.Null(state.Upsert("shared", new McpEntry(NodeWith(teamFolder + "/tools/x.js")), null, "Clients"));
+        var clients = PublishFolder(h, "pubClients");
+        Assert.Equal(AppState.KeptPathCarriedError("shared", "local.args[0]"),
+                     state.StartPublishing("Clients", clients, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
+        var dialog = new PublishModel(state, "Clients");
+        var kept = dialog.KeptPaths.Single(k => k.Connector == "shared");
+        Assert.False(kept.CanUseDirectoryToken);
+        dialog.ReleaseKeptPath(kept.Value);
+        Assert.Null(dialog.Publish());
+        // The author's explicit choice.
+        Assert.True(JsonText.FileContains(Path.Combine(clients, Slug.Make("Clients") + ".json"), teamFolder));
     }
 
     // MARK: import as copies

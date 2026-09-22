@@ -183,6 +183,12 @@ final class CollectionDocumentTests: XCTestCase {
         XCTAssertTrue(KeptValue.holds(#"{"dir":"C:\\Users\\d"}"#, #"C:\Users\d"#))
         XCTAssertFalse(KeptValue.holds("/Users/d/a-tools/x.js", "/Users/d/a"), "a sibling that begins with its name")
         XCTAssertFalse(KeptValue.holds("/home/Users/d/a", "/Users/d/a"), "a longer path that merely ends in it")
+        for separated in ["/Users/d/a:/opt/lib", "/Users/d/a;/opt/lib", "x,/Users/d/a", "(/Users/d/a)", "'/Users/d/a'", "/Users/d/a\\x"] {
+            XCTAssertTrue(KeptValue.holds(separated, "/Users/d/a"), separated)
+        }
+        for continued in ["/Users/d/a.bak", "/Users/d/a_old", "/Users/d/aé", "/Users/d/a2", "é/Users/d/a"] {
+            XCTAssertFalse(KeptValue.holds(continued, "/Users/d/a"), continued)
+        }
         XCTAssertTrue(KeptValue.holds(".", "."))
         XCTAssertFalse(KeptValue.holds("./start.sh", "."), "a relative value counts only as the whole string")
         XCTAssertFalse(KeptValue.holds("https://mcp.notion.com/mcp", "."))
@@ -212,6 +218,40 @@ final class CollectionDocumentTests: XCTestCase {
         ])
         XCTAssertEqual(document.findings(of: ["."]), [], "a short value is found only where a string is exactly it")
         XCTAssertEqual(document.findings(of: [""]), [])
+    }
+
+    func testReplacingWritesOverEveryOccurrenceAndOnlyThose() {
+        XCTAssertEqual(KeptValue.replacing("/share", in: "/share:/share-tools:/share", with: "${COLLECTION_DIR}"),
+                       "${COLLECTION_DIR}:/share-tools:${COLLECTION_DIR}")
+        XCTAssertEqual(KeptValue.replacing("/share", in: #"{"root":"\/share\/x"}"#, with: "${COLLECTION_DIR}"),
+                       #"{"root":"${COLLECTION_DIR}\/x"}"#, "an escaped path inside a JSON blob is replaced whole")
+        XCTAssertEqual(KeptValue.replacing(".", in: "./x", with: "T"), "./x", "a relative value only as the whole string")
+    }
+
+    func testUsingDirectoryTokenRewritesTheOnePlaceTheFieldNames() {
+        let config: JSONValue = .object([
+            "command": .string("/share/bin/tool"),
+            "args": .array([.int(1), .string("--root"), .string("/share")]),
+            "env": .object(["EXTRA": .string("/share:/opt")]),
+            "cwd": .string("/share"),
+            "nested": .object(["dirs": .array([.string("/share/a")])]),
+        ])
+        let token = Placeholder.directoryToken
+        func rewritten(_ field: String) -> JSONValue? { CollectionDocument.usingDirectoryToken(in: config, field: field, folder: "/share") }
+        XCTAssertEqual(rewritten("local.command"), config.replacing(at: JSONPointer(["command"]), with: .string("\(token)/bin/tool")))
+        XCTAssertEqual(rewritten("local.args[1]"), config.replacing(at: JSONPointer(["args", "2"]), with: .string(token)),
+                       "the document numbers only the string arguments")
+        XCTAssertEqual(rewritten("env.EXTRA.value"), config.replacing(at: JSONPointer(["env", "EXTRA"]), with: .string("\(token):/opt")))
+        XCTAssertEqual(rewritten("additional.cwd"), config.replacing(at: JSONPointer(["cwd"]), with: .string(token)))
+        XCTAssertEqual(rewritten("additional.nested.dirs[0]"),
+                       config.replacing(at: JSONPointer(["nested", "dirs", "0"]), with: .string("\(token)/a")))
+        XCTAssertNil(rewritten("local.args[0]"), "a place that does not hold the folder")
+        XCTAssertNil(rewritten("env.EXTRA.hint"), "a hint is the Publish sheet's own")
+
+        let remote = RemotePattern.encode(RemoteConfig(url: "https://mcp.example.com/", auth: .automatic,
+                                                       extraArgs: ["--config", "/share/r.json"], passthroughEnv: [:], package: "mcp-remote"))
+        let fixed = CollectionDocument.usingDirectoryToken(in: remote, field: "remote.extraArgs[1]", folder: "/share")
+        XCTAssertEqual(fixed.flatMap(RemotePattern.decode)?.extraArgs, ["--config", "\(token)/r.json"])
     }
 
     func testCopiesOfMarkedPathsAreListedWithTheirFields() {

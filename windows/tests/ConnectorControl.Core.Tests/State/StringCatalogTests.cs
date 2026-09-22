@@ -84,7 +84,7 @@ public class StringCatalogTests
         ["AppState.needsValueCaution"] = ["X"],
         ["AppState.keptPathCarriedError"] = ["X", "Y"],
         ["AppState.pathMarkMovedError"] = ["X"],
-        ["AppState.publishFolderCarriedError"] = ["X"],
+        ["AppState.publishFolderCarriedError"] = ["X", "Y"],
         ["AppState.publishSlugTakenError"] = ["X"],
         ["AppState.restoreCollectionGoneError"] = ["X"],
         ["AppState.sourceUnreadableError"] = ["X", "Y"],
@@ -129,6 +129,7 @@ public class StringCatalogTests
         ["PublishModel.footerLine"] = ["X", "Y"],
         ["PublishModel.title"] = ["X"],
         ["PublishModel.keptPathNote"] = ["X", "Y"],
+        ["PublishModel.publishFolderNote"] = ["X", "Y"],
         ["PublishModel.unresolvedMarkNote"] = ["X", "Y"],
         ["PublishModel.warningLine"] = ["X", "Y"],
         // The parameter here is a RemoteField, not free text, so the fixed argument is the
@@ -185,7 +186,7 @@ public class StringCatalogTests
         actual["AppState.ownCollectionError"] = AppState.OwnCollectionError;
         actual["AppState.keptPathCarriedError"] = AppState.KeptPathCarriedError("X", "Y");
         actual["AppState.pathMarkMovedError"] = AppState.PathMarkMovedError("X");
-        actual["AppState.publishFolderCarriedError"] = AppState.PublishFolderCarriedError("X");
+        actual["AppState.publishFolderCarriedError"] = AppState.PublishFolderCarriedError("X", "Y");
         actual["AppState.publishIntoStoreError"] = AppState.PublishIntoStoreError;
         actual["AppState.publishSlugTakenError"] = AppState.PublishSlugTakenError("X");
         actual["AppState.quitButton"] = AppState.QuitButton;
@@ -408,6 +409,8 @@ public class StringCatalogTests
         actual["PublishModel.title"] = PublishModel.Title("X");
         actual["PublishModel.keptPathNote"] = PublishModel.KeptPathNote("X", "Y");
         actual["PublishModel.releaseValueButton"] = PublishModel.ReleaseValueButton;
+        actual["PublishModel.publishFolderNote"] = PublishModel.PublishFolderNote("X", "Y");
+        actual["PublishModel.useDirectoryTokenButton"] = PublishModel.UseDirectoryTokenButton;
         actual["PublishModel.unresolvedMarkNote"] = PublishModel.UnresolvedMarkNote("X", "Y");
         actual["PublishModel.warningLine"] = PublishModel.WarningLine("X", "Y");
 

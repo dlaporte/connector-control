@@ -27,6 +27,8 @@ public sealed class PublishModel : ObservableObject
     public const string ForgetMarkButton = "Forget Mark";
     /// <summary>The button beside a kept path's note: let that path travel as written in this collection's document, which the preview above shows.</summary>
     public const string ReleaseValueButton = "Release";
+    /// <summary>The button beside a publish folder's note: write <c>${COLLECTION_DIR}</c> in that place of the connector, as the author's own edit.</summary>
+    public const string UseDirectoryTokenButton = "Use ${COLLECTION_DIR}";
 
     public static string Title(string collection) => $"Publish “{collection}”";
 
@@ -49,6 +51,9 @@ public sealed class PublishModel : ObservableObject
     public static string KeptPathNote(string connector, string field) =>
         $"“{connector}” carries a path this machine keeps back, in {field}. Tick it where it sits, or release it.";
 
+    public static string PublishFolderNote(string connector, string field) =>
+        $"“{connector}” carries this machine's publish folder as written, in {field}. Use ${{COLLECTION_DIR}} in its place.";
+
     /// <summary>
     /// A path mark that lost its argument: its text is held by no argument now. It waits for the
     /// author to tick the path where it now sits, which answers it, or to forget it.
@@ -59,8 +64,17 @@ public sealed class PublishModel : ObservableObject
     }
 
     /// <summary>A path this machine keeps back that the document would carry as written, and where.</summary>
-    /// <param name="Field">Its place in the connector's document form, as the preview shows it.</param>
-    public sealed record KeptPath(string Value, string Connector, string Field)
+    /// <param name="Field">
+    /// Its place in the connector's document form, as the preview shows it: <c>local.command</c>,
+    /// <c>local.args[1]</c>, <c>env.NAME.value</c>, <c>env.NAME.hint</c>, <c>needs.NAME.hint</c>,
+    /// <c>additional.cwd</c>, <c>remote.extraArgs[0]</c>.
+    /// </param>
+    /// <param name="CanUseDirectoryToken">
+    /// A folder of this collection's own that can be written as <c>${COLLECTION_DIR}</c> where it
+    /// sits: its answer is <see cref="UseDirectoryToken"/>. Anything else is answered by ticking it in
+    /// an argument row or by <see cref="ReleaseKeptPath"/>.
+    /// </param>
+    public sealed record KeptPath(string Value, string Connector, string Field, bool CanUseDirectoryToken = false)
     {
         public string Id => Connector + "\0" + Field + "\0" + Value;
     }
@@ -458,21 +472,23 @@ public sealed class PublishModel : ObservableObject
         {
             var intent = Intent;
             var held = Held(state, Collection, Connectors).ToDictionary(p => p.Key, p => p.Value.Config, StringComparer.Ordinal);
-            IEnumerable<KeptValueFinding> found = CollectionDocument.CopiesOfMarkedPaths(held, intent);
-            if (!found.Any())
+            var found = CollectionDocument.CopiesOfMarkedPaths(held, intent).Select(f => new KeptPath(f.Value, f.Connector, f.Field)).ToList();
+            if (found.Count == 0)
             {
                 try
                 {
                     var document = state.ExportDocument(Collection, intent, Connectors);
                     var (values, folders) = state.KeptBack(Collection, ReviewedValues, released);
-                    found = document.Findings(values).Concat(document.Findings(folders));
+                    found.AddRange(document.Findings(values).Select(f => new KeptPath(f.Value, f.Connector, f.Field)));
+                    found.AddRange(document.Findings(folders).Select(f => new KeptPath(
+                        f.Value, f.Connector, f.Field, CanWriteDirectoryToken(f.Connector, f.Field, f.Value))));
                 }
                 catch (Exception refused) when (refused is PathMarkMovedException or KeptPathCarriedException)
                 {
-                    found = [];
+                    found.Clear();
                 }
             }
-            return found.Select(f => new KeptPath(f.Value, f.Connector, f.Field)).DistinctBy(kept => kept.Id).ToList();
+            return found.DistinctBy(kept => kept.Id).ToList();
         }
     }
 
@@ -490,6 +506,104 @@ public sealed class PublishModel : ObservableObject
             row.Marked = false;
         }
         RaiseMarkGates();
+    }
+
+    /// <summary>
+    /// Writes <c>${COLLECTION_DIR}</c> where <paramref name="kept"/>, a folder of this collection's
+    /// own, sits: in the dialog's own hint for a hint, and otherwise in the connector itself, saved as
+    /// an editor save is and applied to Claude's config when the collection is the active one. The
+    /// author's own edit, in view of the preview. null on success, else the message.
+    /// </summary>
+    public string? UseDirectoryToken(KeptPath kept)
+    {
+        if (!kept.CanUseDirectoryToken)
+        {
+            return null;
+        }
+        var token = Placeholder.DirectoryToken;
+        if (HintName(kept.Field, "env") is { } variable)
+        {
+            foreach (var row in EnvRows.Where(r => r.Connector == kept.Connector && r.Name == variable))
+            {
+                row.Hint = KeptValue.Replacing(kept.Value, row.Hint, token);
+            }
+            return null;
+        }
+        if (HintName(kept.Field, "needs") is { } need)
+        {
+            foreach (var row in PathRows.Where(r => r.Connector == kept.Connector && PlaceholderName(r.Name) == need))
+            {
+                row.Hint = KeptValue.Replacing(kept.Value, row.Hint, token);
+            }
+            return null;
+        }
+        if (state.Store.Collections.GetValueOrDefault(Collection)?.Mcps.GetValueOrDefault(kept.Connector) is not { } entry
+            || CollectionDocument.UsingDirectoryToken(entry.Config, kept.Field, kept.Value) is not { } config)
+        {
+            return null;
+        }
+        if (state.Upsert(kept.Connector, entry with { Config = config }, kept.Connector, Collection) is { } error)
+        {
+            return error;
+        }
+        if (Collection == state.ActiveCollection)
+        {
+            state.Apply();
+        }
+        RefreshRows(kept.Connector);
+        RaiseMarkGates();
+        Raise(nameof(Preview));
+        Raise(nameof(Intent));
+        return null;
+    }
+
+    private bool CanWriteDirectoryToken(string connector, string field, string folder)
+    {
+        if (HintName(field, "env") is { } variable)
+        {
+            return EnvRows.Any(r => r.Connector == connector && r.Name == variable);
+        }
+        if (HintName(field, "needs") is { } need)
+        {
+            return PathRows.Any(r => r.Connector == connector && PlaceholderName(r.Name) == need);
+        }
+        return state.Store.Collections.GetValueOrDefault(Collection)?.Mcps.GetValueOrDefault(connector) is { } entry
+            && CollectionDocument.UsingDirectoryToken(entry.Config, field, folder) is not null;
+    }
+
+    /// <summary>The name in <c>env.NAME.hint</c> or <c>needs.NAME.hint</c>, the hints the dialog itself holds.</summary>
+    private static string? HintName(string field, string section)
+    {
+        var prefix = section + ".";
+        const string suffix = ".hint";
+        return field.StartsWith(prefix, StringComparison.Ordinal) && field.EndsWith(suffix, StringComparison.Ordinal)
+               && field.Length > prefix.Length + suffix.Length
+            ? field[prefix.Length..^suffix.Length]
+            : null;
+    }
+
+    /// <summary>
+    /// The rows of <paramref name="connector"/> after its config changed under the dialog: an
+    /// environment row shows the value it now holds, and an argument row that no longer reads as it
+    /// did goes, since what it showed is not in the connector any more.
+    /// </summary>
+    private void RefreshRows(string connector)
+    {
+        if (state.Store.Collections.GetValueOrDefault(Collection)?.Mcps.GetValueOrDefault(connector) is not { } entry)
+        {
+            return;
+        }
+        var variables = Env(entry.Config);
+        var env = EnvRows.Select(row => row.Connector == connector && variables.TryGetValue(row.Name, out var value) && value != row.Value
+            ? new EnvRow(row.Connector, row.Name, value, row.Share, row.Hint)
+            : row).ToList();
+        var arguments = Arguments(entry.Config);
+        var now = arguments.Select((argument, index) => (Pointer: new JsonPointer(
+                ["args", index.ToString(System.Globalization.CultureInfo.InvariantCulture)]), Argument: argument))
+            .ToDictionary(p => p.Pointer, p => p.Argument);
+        var paths = PathRows.Where(row => row.Connector != connector
+            || (now.TryGetValue(row.Pointer, out var argument) && argument == row.Value)).ToList();
+        ReplaceRows(env, paths);
     }
 
     private void RaiseMarkGates()
@@ -630,7 +744,9 @@ public sealed class PublishModel : ObservableObject
             {
                 return UnresolvedMarkNote(lost.Connector, lost.Name);
             }
-            return KeptPaths.FirstOrDefault() is { } kept ? KeptPathNote(kept.Connector, kept.Field) : null;
+            return KeptPaths.FirstOrDefault() is { } kept
+                ? kept.CanUseDirectoryToken ? PublishFolderNote(kept.Connector, kept.Field) : KeptPathNote(kept.Connector, kept.Field)
+                : null;
         }
     }
 

@@ -420,7 +420,7 @@ final class PublishModelTests: XCTestCase {
         let before = try Data(contentsOf: file)
         let sheet = PublishModel(state: state, collection: state.activeCollection)
         XCTAssertEqual(sheet.unresolvedMarks, [])
-        XCTAssertEqual(sheet.keptPaths, [PublishModel.KeptPath(value: keptPath, connector: "ledger", field: "additional.cwd")])
+        XCTAssertEqual(sheet.keptPaths, [PublishModel.KeptPath(value: keptPath, connector: "ledger", field: "additional.cwd", canUseDirectoryToken: false)])
         XCTAssertFalse(sheet.canPublish)
         XCTAssertFalse(sheet.canExport)
         XCTAssertEqual(sheet.publish(), PublishModel.keptPathNote("ledger", "additional.cwd"))

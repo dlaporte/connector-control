@@ -30,6 +30,9 @@ public final class PublishModel: ObservableObject {
     /// The button beside a kept path's note: let that path travel as written in this collection's
     /// document, which the preview above shows.
     public static let releaseValueButton = "Release"
+    /// The button beside a publish folder's note: write `${COLLECTION_DIR}` in that place of the
+    /// connector, as the author's own edit.
+    public static let useDirectoryTokenButton = "Use ${COLLECTION_DIR}"
 
     public static func title(_ collection: String) -> String { "Publish “\(collection)”" }
 
@@ -48,6 +51,8 @@ public final class PublishModel: ObservableObject {
 
     public static func keptPathNote(_ connector: String, _ field: String) -> String { "“\(connector)” carries a path this machine keeps back, in \(field). Tick it where it sits, or release it." }
 
+    public static func publishFolderNote(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine's publish folder as written, in \(field). Use ${COLLECTION_DIR} in its place." }
+
     /// A path mark that lost its argument: its text is held by no argument now. It waits for the
     /// author to tick the path where it now sits, which answers it, or to forget it.
     public struct UnresolvedMark: Identifiable, Equatable {
@@ -63,8 +68,14 @@ public final class PublishModel: ObservableObject {
         public var id: String { connector + "\u{0}" + field + "\u{0}" + value }
         public let value: String
         public let connector: String
-        /// Its place in the connector's document form, as the preview shows it.
+        /// Its place in the connector's document form, as the preview shows it: `local.command`,
+        /// `local.args[1]`, `env.NAME.value`, `env.NAME.hint`, `needs.NAME.hint`, `additional.cwd`,
+        /// `remote.extraArgs[0]`.
         public let field: String
+        /// A folder of this collection's own that can be written as `${COLLECTION_DIR}` where it
+        /// sits: its answer is `useDirectoryToken`. Anything else is answered by ticking it in
+        /// an argument row or by `releaseKeptPath`.
+        public let canUseDirectoryToken: Bool
     }
 
     /// One environment variable of one connector. Stripped by default: its name and hint travel,
@@ -295,13 +306,81 @@ public final class PublishModel: ObservableObject {
     public var keptPaths: [KeptPath] {
         let held = PublishModel.held(in: state, collection, only: connectors).mapValues(\.config)
         var found = CollectionDocument.copiesOfMarkedPaths(in: held, intent: intent)
+            .map { KeptPath(value: $0.value, connector: $0.connector, field: $0.field, canUseDirectoryToken: false) }
         if found.isEmpty, let document = try? state.exportDocument(for: collection, intent: intent, only: connectors) {
             let kept = state.keptBack(for: collection, reviewed: reviewedValues, released: released)
-            found = document.findings(of: kept.values) + document.findings(of: kept.folders)
+            found = document.findings(of: kept.values)
+                .map { KeptPath(value: $0.value, connector: $0.connector, field: $0.field, canUseDirectoryToken: false) }
+                + document.findings(of: kept.folders).map {
+                    KeptPath(value: $0.value, connector: $0.connector, field: $0.field,
+                             canUseDirectoryToken: canWriteDirectoryToken(connector: $0.connector, field: $0.field, folder: $0.value))
+                }
         }
         var seen: Set<String> = []
-        return found.map { KeptPath(value: $0.value, connector: $0.connector, field: $0.field) }
-            .filter { seen.insert($0.id).inserted }
+        return found.filter { seen.insert($0.id).inserted }
+    }
+
+    /// Writes `${COLLECTION_DIR}` where `kept`, a folder of this collection's own, sits: in the
+    /// sheet's own hint for a hint, and otherwise in the connector itself, saved as an editor
+    /// save is and applied to Claude's config when the collection is the active one. The author's
+    /// own edit, in view of the preview. nil on success, else the message.
+    public func useDirectoryToken(_ kept: KeptPath) -> String? {
+        guard kept.canUseDirectoryToken else { return nil }
+        let token = Placeholder.directoryToken
+        if let name = PublishModel.hintName(kept.field, "env") {
+            for index in envRows.indices where envRows[index].connector == kept.connector && envRows[index].name == name {
+                envRows[index].hint = KeptValue.replacing(kept.value, in: envRows[index].hint, with: token)
+            }
+            return nil
+        }
+        if let name = PublishModel.hintName(kept.field, "needs") {
+            for index in pathRows.indices where pathRows[index].connector == kept.connector
+                && PublishModel.placeholderName(pathRows[index].name) == name {
+                pathRows[index].hint = KeptValue.replacing(kept.value, in: pathRows[index].hint, with: token)
+            }
+            return nil
+        }
+        guard var entry = state.store.collections[collection]?.mcps[kept.connector],
+              let config = CollectionDocument.usingDirectoryToken(in: entry.config, field: kept.field, folder: kept.value)
+        else { return nil }
+        entry.config = config
+        if let error = state.upsert(name: kept.connector, entry: entry, renamedFrom: kept.connector, in: collection) { return error }
+        if collection == state.activeCollection { state.apply() }
+        refreshRows(of: kept.connector)
+        return nil
+    }
+
+    private func canWriteDirectoryToken(connector: String, field: String, folder: String) -> Bool {
+        if let name = PublishModel.hintName(field, "env") {
+            return envRows.contains { $0.connector == connector && $0.name == name }
+        }
+        if let name = PublishModel.hintName(field, "needs") {
+            return pathRows.contains { $0.connector == connector && PublishModel.placeholderName($0.name) == name }
+        }
+        guard let config = state.store.collections[collection]?.mcps[connector]?.config else { return false }
+        return CollectionDocument.usingDirectoryToken(in: config, field: field, folder: folder) != nil
+    }
+
+    /// The name in `env.NAME.hint` or `needs.NAME.hint`, the hints the sheet itself holds.
+    private static func hintName(_ field: String, _ section: String) -> String? {
+        let prefix = section + ".", suffix = ".hint"
+        guard field.hasPrefix(prefix), field.hasSuffix(suffix), field.count > prefix.count + suffix.count else { return nil }
+        return String(field.dropFirst(prefix.count).dropLast(suffix.count))
+    }
+
+    /// The rows of `connector` after its config changed under the sheet: an environment row shows
+    /// the value it now holds, and an argument row that no longer reads as it did goes, since what
+    /// it showed is not in the connector any more.
+    private func refreshRows(of connector: String) {
+        guard let config = state.store.collections[collection]?.mcps[connector]?.config else { return }
+        let variables = PublishModel.env(of: config)
+        envRows = envRows.map { row in
+            guard row.connector == connector, let value = variables[row.name], value != row.value else { return row }
+            return EnvRow(connector: row.connector, name: row.name, value: value, share: row.share, hint: row.hint)
+        }
+        let arguments = PublishModel.arguments(of: config)
+        let now = Dictionary(uniqueKeysWithValues: arguments.enumerated().map { (JSONPointer(["args", String($0.offset)]), $0.element) })
+        pathRows = pathRows.filter { $0.connector != connector || now[$0.pointer] == $0.value }
     }
 
     /// Lets one kept path travel as written in this collection's document, by the author's
@@ -394,7 +473,10 @@ public final class PublishModel: ObservableObject {
     /// The first thing still waiting for the author, as the note the sheet shows for it.
     private var firstUnanswered: String? {
         if let lost = unresolvedMarks.first { return PublishModel.unresolvedMarkNote(lost.connector, lost.name) }
-        if let kept = keptPaths.first { return PublishModel.keptPathNote(kept.connector, kept.field) }
+        if let kept = keptPaths.first {
+            return kept.canUseDirectoryToken ? PublishModel.publishFolderNote(kept.connector, kept.field)
+                : PublishModel.keptPathNote(kept.connector, kept.field)
+        }
         return nil
     }
 

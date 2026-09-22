@@ -20,11 +20,13 @@ public enum PublishIntentError: Error, Equatable {
     /// The argument it stood for may be anywhere, so no document is written rather than one that
     /// might carry that path as written.
     case pathMarkMoved(connector: String)
-    /// This connector carries, as written, the folder this machine publishes the collection into.
-    /// It is the author's own folder, and a subscriber's copy stands for it with the token.
-    case publishFolderCarried(connector: String)
+    /// This connector carries, as written in `field`, a folder this machine publishes the
+    /// collection into, now or before. It is the author's own folder, and a subscriber's copy
+    /// stands for it with the token.
+    case publishFolderCarried(connector: String, field: String)
     /// This connector carries, as written in `field`, a path this machine keeps back: a copy of a
-    /// path marked in it, or a path on one of this machine's lists of marked paths.
+    /// path marked in it, a path on one of this machine's lists of marked paths, or a folder this
+    /// machine binds another collection to.
     case keptPathCarried(connector: String, field: String)
 }
 
@@ -41,33 +43,45 @@ public struct KeptValueFinding: Equatable, Sendable {
     }
 }
 
-/// How a path kept back is recognised in a string.
+/// How a path kept back is recognised in a string, and written over.
+///
+/// Both platforms walk the same UTF-16 code units, so an occurrence is found at the same place on
+/// each.
 ///
 /// Mirror: `KeptValue` in windows/src/ConnectorControl.Core/CollectionDocument.cs
 public enum KeptValue {
     /// Whether `text` holds `value` as written. Any value counts as the whole string. An absolute
-    /// or home path also counts where it stands as a path of its own inside a longer string:
-    /// after the start, a space, a quote, `=`, `:` or `,`, and before the end, a separator, a
-    /// space, a quote, `:` or `,` — so "--root=/share/x" holds "/share" and "/share-tools" does not.
-    /// A short relative value such as "." counts only as the whole string, or it would be found in
-    /// every connector. The value also counts as JSON spells it, as it reads inside a JSON blob
-    /// carried as a single argument. Both sides are compared in NFC, so an accented path matches
-    /// in either normalization on both platforms.
+    /// or home path also counts inside a longer string wherever it stands as a path of its own:
+    /// neither the character before it nor the one after continues a file name
+    /// (`continuesAName`). So "--root=/share/x", "/share:/opt/lib" and "/share;x" hold "/share",
+    /// and "/share-tools", "/share.bak" and "/home/share" do not. A relative value such as "."
+    /// counts only as the whole string, or it would be found in every connector. The value also
+    /// counts as JSON spells it, as it reads inside a JSON blob carried as a single argument. Both
+    /// sides are compared in NFC, so an accented path matches in either normalization.
     public static func holds(_ text: String, _ value: String) -> Bool {
         let text = nfc(text), value = nfc(value)
         guard !value.isEmpty else { return false }
         if text == value { return true }
         guard isAbsolute(value) else { return false }
+        let units = Array(text.utf16)
+        return writtenForms(value).contains { !occurrences(of: Array($0.utf16), in: units).isEmpty }
+    }
+
+    /// `text` with every occurrence `holds` finds of `value` written as `replacement` instead, the
+    /// JSON spellings first so an escaped path inside a JSON blob is replaced whole. The text comes
+    /// back in NFC.
+    public static func replacing(_ value: String, in text: String, with replacement: String) -> String {
+        let text = nfc(text), value = nfc(value)
+        guard !value.isEmpty else { return text }
+        if text == value { return replacement }
+        guard isAbsolute(value) else { return text }
+        var units = Array(text.utf16)
         for form in writtenForms(value) {
-            var rest = text[...]
-            while let range = rest.range(of: form, options: .literal) {
-                let before = range.lowerBound == text.startIndex ? nil : text[text.index(before: range.lowerBound)]
-                let after = range.upperBound == text.endIndex ? nil : text[range.upperBound]
-                if before.map(openers.contains) ?? true, after.map(closers.contains) ?? true { return true }
-                rest = text[text.index(after: range.lowerBound)...]
+            for range in occurrences(of: Array(form.utf16), in: units).reversed() {
+                units.replaceSubrange(range, with: Array(replacement.utf16))
             }
         }
-        return false
+        return String(decoding: units, as: UTF16.self)
     }
 
     /// `text` in Unicode NFC, the form every kept-value comparison is made in.
@@ -75,21 +89,52 @@ public enum KeptValue {
 
     /// An absolute or home path: `/…`, `~…`, a UNC `\\…` path, or a drive letter with `:\` or `:/`.
     static func isAbsolute(_ value: String) -> Bool {
-        if value.hasPrefix("/") || value.hasPrefix("~") || value.hasPrefix("\\\\") { return true }
-        let scalars = Array(value.unicodeScalars)
-        return scalars.count >= 3 && CharacterSet.letters.contains(scalars[0]) && scalars[1] == ":"
-            && (scalars[2] == "\\" || scalars[2] == "/")
+        let units = Array(value.utf16)
+        guard let first = units.first else { return false }
+        if first == slash || first == 0x7E || (units.count >= 2 && first == backslash && units[1] == backslash) { return true }
+        return units.count >= 3 && isASCIILetter(first) && units[1] == 0x3A && (units[2] == backslash || units[2] == slash)
     }
 
-    private static let openers: Set<Character> = [" ", "\"", "=", ":", ","]
-    private static let closers: Set<Character> = ["/", "\\", " ", "\"", ":", ","]
+    /// An ASCII letter or digit, `.`, `_`, `-`, or any character outside ASCII: one that continues
+    /// a file name, so a path beside it is part of a longer name rather than a path of its own.
+    static func continuesAName(_ unit: UInt16) -> Bool {
+        unit > 0x7F || isASCIILetter(unit) || (0x30...0x39).contains(unit) || unit == 0x2E || unit == 0x5F || unit == 0x2D
+    }
 
-    /// `value` as written, and as a JSON string would spell it: backslashes and quotes escaped,
-    /// with and without the slash escaped too.
+    private static let slash: UInt16 = 0x2F
+    private static let backslash: UInt16 = 0x5C
+
+    private static func isASCIILetter(_ unit: UInt16) -> Bool { (0x41...0x5A).contains(unit) || (0x61...0x7A).contains(unit) }
+
+    /// Where `needle` stands in `haystack` as a path of its own, left to right and not overlapping.
+    private static func occurrences(of needle: [UInt16], in haystack: [UInt16]) -> [Range<Int>] {
+        guard !needle.isEmpty, needle.count <= haystack.count else { return [] }
+        var found: [Range<Int>] = []
+        var start = 0
+        while start + needle.count <= haystack.count {
+            let end = start + needle.count
+            if haystack[start..<end].elementsEqual(needle),
+               start == 0 || !continuesAName(haystack[start - 1]),
+               end == haystack.count || !continuesAName(haystack[end]) {
+                found.append(start..<end)
+                start = end
+            } else {
+                start += 1
+            }
+        }
+        return found
+    }
+
+    /// `value` as a JSON string spells it — backslashes and quotes escaped, with and without the
+    /// slash escaped too — and as written, longest first, each once.
     static func writtenForms(_ value: String) -> [String] {
         let escaped = value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        return Array(Set([value, value.replacingOccurrences(of: "/", with: "\\/"),
-                          escaped, escaped.replacingOccurrences(of: "/", with: "\\/")]))
+        var forms: [String] = []
+        for form in [escaped.replacingOccurrences(of: "/", with: "\\/"), escaped,
+                     value.replacingOccurrences(of: "/", with: "\\/"), value] where !forms.contains(form) {
+            forms.append(form)
+        }
+        return forms.sorted { $0.utf16.count != $1.utf16.count ? $0.utf16.count > $1.utf16.count : $0.ordinallyPrecedes($1) }
     }
 }
 
@@ -563,26 +608,121 @@ public struct CollectionDocument: Equatable, Sendable {
     /// so both platforms walk alike. Keys count only below `env`, `needs` and `additional`, the
     /// objects whose names the author chose; the rest are the format's own.
     static func places(in json: JSONValue) -> [(field: String, text: String)] {
-        var out: [(field: String, text: String)] = []
-        func walk(_ value: JSONValue, _ field: String, namesCount: Bool) {
+        walk(json).map { ($0.field, $0.text) }
+    }
+
+    private enum Step: Equatable {
+        case key(String)
+        case index(Int)
+    }
+
+    private struct Place {
+        let field: String
+        let text: String
+        let path: [Step]
+        /// The text is a key's own name, not a value under it.
+        let isName: Bool
+    }
+
+    private static func walk(_ json: JSONValue) -> [Place] {
+        var out: [Place] = []
+        func visit(_ value: JSONValue, _ field: String, _ path: [Step], namesCount: Bool) {
             switch value {
             case .string(let text):
-                out.append((field, text))
+                out.append(Place(field: field, text: text, path: path, isName: false))
             case .array(let items):
-                for (index, item) in items.enumerated() { walk(item, field + "[\(index)]", namesCount: false) }
+                for (index, item) in items.enumerated() {
+                    visit(item, field + "[\(index)]", path + [.index(index)], namesCount: false)
+                }
             case .object(let object):
                 for key in object.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
                     guard let child = object[key] else { continue }
-                    let path = field.isEmpty ? key : field + "." + key
-                    if namesCount { out.append((path, key)) }
-                    walk(child, path, namesCount: field.isEmpty && ["env", "needs", "additional"].contains(key))
+                    let name = field.isEmpty ? key : field + "." + key
+                    if namesCount { out.append(Place(field: name, text: key, path: path + [.key(key)], isName: true)) }
+                    visit(child, name, path + [.key(key)], namesCount: field.isEmpty && ["env", "needs", "additional"].contains(key))
                 }
             default:
                 break
             }
         }
-        walk(json, "", namesCount: false)
+        visit(json, "", [], namesCount: false)
         return out
+    }
+
+    /// `config`, a connector as the store holds it, with `folder` written as `${COLLECTION_DIR}`
+    /// in the place `field` names in the connector's document form (`findings(of:)`), or nil when
+    /// the stored config has no such place holding the folder: a hint, which is the Publish sheet's
+    /// own, or a field the rewrite cannot reach. A remote connector's `remote.url`,
+    /// `remote.package` and `remote.extraArgs[N]` are rewritten in every argument that reads the
+    /// same, since each importer builds that command line again from the document.
+    public static func usingDirectoryToken(in config: JSONValue, field: String, folder: String) -> JSONValue? {
+        guard case .object(let object) = config else { return nil }
+        var targets: [(path: [Step], isName: Bool)] = []
+        func consider(_ candidate: String, _ text: String, _ path: [Step], isName: Bool = false) {
+            if candidate == field, KeptValue.holds(text, folder) { targets.append((path, isName)) }
+        }
+        // The additional fields sit at the top of the stored config, under their own names.
+        for place in walk(.object(["additional": .object(FormMapper.analyze(config).model.additional)])) {
+            consider(place.field, place.text, Array(place.path.dropFirst()), isName: place.isName)
+        }
+        if case .object(let env)? = object["env"] {
+            for key in env.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+                consider("env.\(key)", key, [.key("env"), .key(key)], isName: true)
+                if case .string(let text)? = env[key] { consider("env.\(key).value", text, [.key("env"), .key(key)]) }
+            }
+        }
+        var line: [(text: String, path: [Step])] = []
+        if case .string(let command)? = object["command"] { line.append((command, [.key("command")])) }
+        if case .array(let items)? = object["args"] {
+            for (index, item) in items.enumerated() {
+                if case .string(let text) = item { line.append((text, [.key("args"), .index(index)])) }
+            }
+        }
+        if let remote = RemotePattern.decode(config) {
+            let fields = [("remote.url", remote.url), ("remote.package", remote.package)]
+                + remote.extraArgs.enumerated().map { ("remote.extraArgs[\($0.offset)]", $0.element) }
+            for (candidate, text) in fields where candidate == field {
+                for part in line where part.text == text { consider(candidate, part.text, part.path) }
+            }
+        } else {
+            for part in line where part.path == [.key("command")] { consider("local.command", part.text, part.path) }
+            // The document numbers only the arguments that are strings, as the form does.
+            for (number, part) in line.filter({ $0.path.first == .key("args") }).enumerated() {
+                consider("local.args[\(number)]", part.text, part.path)
+            }
+        }
+        guard !targets.isEmpty else { return nil }
+        let token = Placeholder.directoryToken
+        let rewritten = targets.reduce(config) { json, target in
+            rewriting(json, at: target.path[...], isName: target.isName) { KeptValue.replacing(folder, in: $0, with: token) }
+        }
+        return rewritten == config ? nil : rewritten
+    }
+
+    private static func rewriting(_ json: JSONValue, at path: ArraySlice<Step>, isName: Bool,
+                                  _ transform: (String) -> String) -> JSONValue {
+        guard let step = path.first else {
+            if case .string(let text) = json { return .string(transform(text)) }
+            return json
+        }
+        switch (step, json) {
+        case (.key(let key), .object(var object)):
+            guard let child = object[key] else { return json }
+            if isName, path.count == 1 {
+                let renamed = transform(key)
+                guard renamed != key, object[renamed] == nil else { return json }
+                object.removeValue(forKey: key)
+                object[renamed] = child
+            } else {
+                object[key] = rewriting(child, at: path.dropFirst(), isName: isName, transform)
+            }
+            return .object(object)
+        case (.index(let index), .array(var items)) where items.indices.contains(index):
+            items[index] = rewriting(items[index], at: path.dropFirst(), isName: isName, transform)
+            return .array(items)
+        default:
+            return json
+        }
     }
 
     /// "args[N] looks like a credential" / "env.NAME looks like a credential" lines for the

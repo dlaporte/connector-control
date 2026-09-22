@@ -132,7 +132,8 @@ public struct ConfigService: Sendable {
     /// The backup's content is validated BEFORE the live file is touched.
     /// Returns the restored file's servers so the caller can sync its
     /// reconciliation baseline to them.
-    /// `publishFolder` is the folder this machine publishes the active collection into; a
+    /// `publishFolder` is the folder this machine publishes the active collection into, and
+    /// `earlierFolders` the ones it published into before; a
     /// connector whose store copy renders exactly as the snapshot keeps the store copy
     /// (`Reconciler.adoptSnapshot`).
     ///
@@ -144,6 +145,7 @@ public struct ConfigService: Sendable {
     public func restoreClaudeConfig(from backup: URL,
                                     mergedWith store: MasterStore,
                                     publishFolder: String? = nil,
+                                    earlierFolders: [String] = [],
                                     backedUpFrom collection: String? = nil,
                                     activating: Bool = false) throws
         -> [String: JSONValue] {
@@ -165,7 +167,8 @@ public struct ConfigService: Sendable {
         recordBackup(try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config"), from: collection)
         try AtomicFile.write(data, to: paths.claudeConfigURL, staging: paths.stagingDirURL)
         let servers = (root["mcpServers"] as? [String: Any] ?? [:]).mapValues(JSONValue.init(any:))
-        let outcome = Reconciler.adoptSnapshot(store: store, servers: servers, publishFolder: publishFolder)
+        let outcome = Reconciler.adoptSnapshot(store: store, servers: servers, publishFolder: publishFolder,
+                                               earlierFolders: earlierFolders)
         // A backup restored into a collection other than the active one makes that collection
         // active, so Claude's file and the store agree on where its connectors live — even when
         // the adoption itself changed nothing.

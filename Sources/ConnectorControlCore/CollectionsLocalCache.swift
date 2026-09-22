@@ -50,12 +50,17 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         /// and then Publish in the sheet after reading the preview, although this machine keeps them
         /// back elsewhere: on another collection's list, or as a folder it binds.
         public var releasedValues: Set<String>
+        /// Every folder this binding has published into, the current one included. A connector
+        /// can bring an earlier one back as written — a backup taken before the folder moved — and
+        /// the author's old folder is no more a subscriber's than the current one.
+        public var publishedFolders: Set<String>
         public init(folder: String, lastWrittenHash: String?, markedValues: Set<String> = [],
-                    releasedValues: Set<String> = []) {
+                    releasedValues: Set<String> = [], publishedFolders: Set<String> = []) {
             self.folder = folder
             self.lastWrittenHash = lastWrittenHash
             self.markedValues = markedValues
             self.releasedValues = releasedValues
+            self.publishedFolders = publishedFolders
         }
     }
 
@@ -152,6 +157,9 @@ extension CollectionsLocalCache.PublishBinding {
         if !releasedValues.isEmpty {
             object["releasedValues"] = .array(releasedValues.sorted { $0.ordinallyPrecedes($1) }.map(JSONValue.string))
         }
+        if !publishedFolders.isEmpty {
+            object["publishedFolders"] = .array(publishedFolders.sorted { $0.ordinallyPrecedes($1) }.map(JSONValue.string))
+        }
         return .object(object)
     }
 
@@ -163,6 +171,9 @@ extension CollectionsLocalCache.PublishBinding {
             // Absent in a cache written before the list was kept: nothing marked yet, which the
             // next write fills in.
             markedValues: try CollectionsFile.stringSet(object["markedValues"], "\(what) markedValues"),
-            releasedValues: try CollectionsFile.stringSet(object["releasedValues"], "\(what) releasedValues"))
+            releasedValues: try CollectionsFile.stringSet(object["releasedValues"], "\(what) releasedValues"),
+            // Absent in a cache written before it was kept: the current folder, which every check
+            // adds anyway, is all that is known.
+            publishedFolders: try CollectionsFile.stringSet(object["publishedFolders"], "\(what) publishedFolders"))
     }
 }

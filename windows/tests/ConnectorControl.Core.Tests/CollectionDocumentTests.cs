@@ -280,6 +280,14 @@ public class CollectionDocumentTests
         Assert.True(KeptValue.Holds("""{"dir":"C:\\Users\\d"}""", @"C:\Users\d"));
         Assert.False(KeptValue.Holds("/Users/d/a-tools/x.js", "/Users/d/a"));   // a sibling that begins with its name
         Assert.False(KeptValue.Holds("/home/Users/d/a", "/Users/d/a"));   // a longer path that merely ends in it
+        foreach (var separated in new[] { "/Users/d/a:/opt/lib", "/Users/d/a;/opt/lib", "x,/Users/d/a", "(/Users/d/a)", "'/Users/d/a'", @"/Users/d/a\x" })
+        {
+            Assert.True(KeptValue.Holds(separated, "/Users/d/a"), separated);
+        }
+        foreach (var continued in new[] { "/Users/d/a.bak", "/Users/d/a_old", "/Users/d/a\u00E9", "/Users/d/a2", "\u00E9/Users/d/a" })
+        {
+            Assert.False(KeptValue.Holds(continued, "/Users/d/a"), continued);
+        }
         Assert.True(KeptValue.Holds(".", "."));
         Assert.False(KeptValue.Holds("./start.sh", "."));   // a relative value counts only as the whole string
         Assert.False(KeptValue.Holds("https://mcp.notion.com/mcp", "."));
@@ -320,6 +328,45 @@ public class CollectionDocumentTests
             document.Findings(["/Users/d/a"]).Select(f => $"{f.Connector} {f.Field}"));
         Assert.Empty(document.Findings(["."]));   // a short value is found only where a string is exactly it
         Assert.Empty(document.Findings([""]));
+    }
+
+    [Fact]
+    public void ReplacingWritesOverEveryOccurrenceAndOnlyThose()
+    {
+        Assert.Equal("${COLLECTION_DIR}:/share-tools:${COLLECTION_DIR}",
+                     KeptValue.Replacing("/share", "/share:/share-tools:/share", "${COLLECTION_DIR}"));
+        // An escaped path inside a JSON blob is replaced whole.
+        Assert.Equal("""{"root":"${COLLECTION_DIR}\/x"}""",
+                     KeptValue.Replacing("/share", """{"root":"\/share\/x"}""", "${COLLECTION_DIR}"));
+        // A relative value only as the whole string.
+        Assert.Equal("./x", KeptValue.Replacing(".", "./x", "T"));
+    }
+
+    [Fact]
+    public void UsingDirectoryTokenRewritesTheOnePlaceTheFieldNames()
+    {
+        var config = JsonValue.Object(
+            ("command", JsonValue.String("/share/bin/tool")),
+            ("args", JsonValue.Array([JsonValue.Int(1), JsonValue.String("--root"), JsonValue.String("/share")])),
+            ("env", JsonValue.Object(("EXTRA", JsonValue.String("/share:/opt")))),
+            ("cwd", JsonValue.String("/share")),
+            ("nested", JsonValue.Object(("dirs", JsonValue.Array([JsonValue.String("/share/a")])))));
+        var token = Placeholder.DirectoryToken;
+        JsonValue? Rewritten(string field) => CollectionDocument.UsingDirectoryToken(config, field, "/share");
+        JsonValue At(JsonValue json, string[] pointer, string text) => json.Replacing(new JsonPointer(pointer), JsonValue.String(text))!;
+        Assert.Equal(At(config, ["command"], $"{token}/bin/tool"), Rewritten("local.command"));
+        // The document numbers only the string arguments.
+        Assert.Equal(At(config, ["args", "2"], token), Rewritten("local.args[1]"));
+        Assert.Equal(At(config, ["env", "EXTRA"], $"{token}:/opt"), Rewritten("env.EXTRA.value"));
+        Assert.Equal(At(config, ["cwd"], token), Rewritten("additional.cwd"));
+        Assert.Equal(At(config, ["nested", "dirs", "0"], $"{token}/a"), Rewritten("additional.nested.dirs[0]"));
+        Assert.Null(Rewritten("local.args[0]"));   // a place that does not hold the folder
+        Assert.Null(Rewritten("env.EXTRA.hint"));  // a hint is the Publish dialog's own
+
+        var remote = RemotePattern.Encode(new RemoteConfig("https://mcp.example.com/", RemoteAuth.Auto,
+            RemoteLaunchStyle.Npx, extraArgs: ["--config", "/share/r.json"], package: "mcp-remote"));
+        var fixedUp = CollectionDocument.UsingDirectoryToken(remote, "remote.extraArgs[1]", "/share");
+        Assert.Equal(["--config", $"{token}/r.json"], RemotePattern.Decode(fixedUp!)!.ExtraArgs);
     }
 
     [Fact]

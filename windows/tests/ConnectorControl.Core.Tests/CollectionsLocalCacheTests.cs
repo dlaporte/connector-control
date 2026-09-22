@@ -82,7 +82,7 @@ public sealed class CollectionsLocalCacheTests : IDisposable
     {
         var cache = new CollectionsLocalCache([], new Dictionary<string, CollectionsLocalCache.PublishBinding>
         {
-            ["Consulting"] = new("/Users/d/Acme/mcp", null, ["/a"], ["/b"]),
+            ["Consulting"] = new("/Users/d/Acme/mcp", null, ["/a"], ["/b"], ["/Users/d/old", "/Users/d/Acme/mcp"]),
         }, "Consulting");
         Assert.Equal(cache, CollectionsLocalCache.Decode(cache.Encode()));
         // Which collection Claude's file holds is not a binding to prune.
@@ -90,6 +90,7 @@ public sealed class CollectionsLocalCacheTests : IDisposable
         var older = CollectionsLocalCache.Decode(Sample.Encode());
         Assert.Null(older.LastAppliedCollection);
         Assert.Empty(older.Published["Consulting"].ReleasedValues);
+        Assert.Empty(older.Published["Consulting"].PublishedFolders);
         Assert.NotEqual(cache, cache with { LastAppliedCollection = "Other" });
     }
 
