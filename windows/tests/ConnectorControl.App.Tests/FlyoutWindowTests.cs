@@ -306,6 +306,9 @@ public class FlyoutWindowTests
             Assert.Equal(FlyoutModel.SourceTooltipFormat(source), AutomationProperties.GetName(chain));
             Assert.Null(MenuChain(collections[1]));
             Assert.Null(MenuDot(collections[0]));   // nothing waiting
+            // The chain inside the header is out of a screen reader's reach; the item says it.
+            Assert.Equal(FlyoutModel.SourceTooltipFormat(source), AutomationProperties.GetHelpText(collections[0]));
+            Assert.Equal(string.Empty, AutomationProperties.GetHelpText(collections[1]));
             // A header built from elements announces nothing of its own; each row is named with
             // the model's title instead.
             Assert.Equal(model.CollectionItems.Select(FlyoutModel.MenuTitle).ToArray(),
@@ -450,6 +453,65 @@ public class FlyoutWindowTests
             Assert.NotNull(failure);
             Assert.Equal(failure.Message, told);
             Assert.Equal(Visibility.Visible, window.CollectionBannerStrip.Visibility);
+        }));
+    }
+
+    [Fact]
+    public void ChoosingTheActiveCollectionAgainChangesNothing()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Work"));   // Default + Work, with Work active
+        WpfApp.Invoke(() => Showing(h, state, (window, model, _) =>
+        {
+            state.LastError = "left from before";
+            var collections = window.BuildCollectionMenu().Items.OfType<MenuItem>()
+                .Take(model.CollectionItems.Count).ToList();
+
+            // A switch saves and applies, and a good apply clears the error banner. Choosing the
+            // collection already in front of the user runs neither.
+            collections.Single(i => MenuName(i) == "Work").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.Equal("Work", state.ActiveCollection);
+            Assert.Equal("left from before", state.LastError);
+
+            collections.Single(i => MenuName(i) == "Default").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.Equal("Default", state.ActiveCollection);
+            Assert.Null(state.LastError);   // the same banner a real switch does clear
+        }));
+    }
+
+    [Fact]
+    public void TheLocateBannerBindsTheDocumentYouChoose()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        SubscribeToDataTeam(h, state);
+        // This machine forgets where the document is — the state a second machine is in when the
+        // collection arrives through the synced master list. The file sits outside the store's
+        // folder, so nothing binds it again on its own.
+        File.Delete(state.Service.Paths.CollectionsCachePath);
+        state.Reload();
+        Assert.IsType<CollectionBanner.Locate>(state.CollectionBanner);
+
+        WpfApp.Invoke(() => Showing(h, state, (window, _, recorder) =>
+        {
+            Assert.Equal(Visibility.Visible, window.CollectionBannerStrip.Visibility);
+            Assert.Equal(FlyoutModel.LocateButton(Path.GetFileName(DataTeamPath(h))), window.CollectionBannerButton.Content);
+            Assert.Equal(Visibility.Collapsed, window.CollectionBannerSecondary.Visibility);
+
+            // Cancelling the picker changes nothing and says nothing.
+            Click(window.CollectionBannerButton);
+            Layout(window);
+            Assert.Empty(recorder.Informed);
+            Assert.Null(state.SourceBinding("Data team")?.Path);
+            Assert.Equal(Visibility.Visible, window.CollectionBannerStrip.Visibility);
+
+            recorder.Document = DataTeamPath(h);
+            Click(window.CollectionBannerButton);
+            Layout(window);
+            Assert.Empty(recorder.Informed);
+            Assert.NotNull(state.SourceBinding("Data team")?.Path);
+            Assert.Equal(Visibility.Collapsed, window.CollectionBannerStrip.Visibility);
         }));
     }
 

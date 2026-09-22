@@ -222,7 +222,18 @@ public partial class FlyoutWindow : Window
             // is given the model's title — the one the Mac draws, where the pending update is
             // words — and a row reads the same whether it is seen or heard.
             AutomationProperties.SetName(entry, FlyoutModel.MenuTitle(item));
-            entry.Click += (_, _) => model.SwitchCollection(name);
+            // The chain's tooltip is out of a screen reader's reach inside the header, so the
+            // item carries where the document is as its help text.
+            if (FlyoutModel.MenuTooltip(item) is { } source)
+            {
+                AutomationProperties.SetHelpText(entry, source);
+            }
+            // Choosing the collection already in front of the user is not a change: switching to
+            // it would save and apply it again for nothing, and clear an error banner on the way.
+            if (!item.IsActive)
+            {
+                entry.Click += (_, _) => model.SwitchCollection(name);
+            }
             menu.Items.Add(entry);
         }
         menu.Items.Add(new Separator());

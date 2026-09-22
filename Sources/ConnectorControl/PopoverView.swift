@@ -89,9 +89,16 @@ struct PopoverView: View {
             HStack(spacing: 4) {
                 Text(model.activeCollection)
                 if model.activeCollectionIsSynced {
-                    Image(systemName: "link")
+                    let chain = Image(systemName: "link")
                         .imageScale(.small)
                         .help(model.sourceTooltip ?? "")
+                    // A glyph on its own reads as nothing; it speaks its tooltip when the model
+                    // has a source to name, and keeps SF Symbols' own label when it has none.
+                    if let source = model.sourceTooltip {
+                        chain.accessibilityLabel(source)
+                    } else {
+                        chain
+                    }
                 }
                 if model.activeHasPendingUpdate { pendingDot }
                 Text(PopoverView.disclosureMark)
@@ -202,8 +209,6 @@ struct PopoverView: View {
         alert.runModal()
     }
 
-    /// The Collections window, which takes no arguments: whatever the popover wants in front of
-    /// it is set as a request first, because the window reads that as it appears.
     /// A menu row's check. Choosing an unchecked row makes that collection the active one;
     /// choosing the checked row asks to turn it off, which means nothing for a collection, so it
     /// is left alone. The check is read back from the model rather than kept here.
@@ -211,6 +216,8 @@ struct PopoverView: View {
         Binding(get: { item.isActive }, set: { on in if on { model.switchCollection(item.name) } })
     }
 
+    /// The Collections window, which takes no arguments: whatever the popover wants in front of
+    /// it is set as a request first, because the window reads that as it appears.
     private func openCollections(_ request: () -> Void = {}) {
         request()
         openWindow(id: CollectionsWindowView.windowID)
