@@ -88,6 +88,18 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
         /// <summary>A copy taken from another collection, which has gone its own way since.</summary>
         public sealed record Imported(string From, string Date) : HeaderState;
+
+        /// <summary>
+        /// Which state this is, as three bools. XAML cannot pattern match, and a string in a
+        /// converter parameter collapses a header on a typo with nothing to catch it; the auth
+        /// kinds carry the same trio one screen below for the same reason. The Mac needs none of
+        /// these — SwiftUI switches on the enum itself.
+        /// </summary>
+        public bool IsSynced => this is Synced;
+
+        public bool IsPublished => this is Published;
+
+        public bool IsImported => this is Imported;
     }
 
     /// <summary>The picker's order, as an array so <see cref="AuthKindIndex"/> can search it without allocating.</summary>
@@ -131,6 +143,12 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// <summary>`jsonText` recovered once per edit, in its setter below; ValidateJson and ComputeRequiredTool read this instead of recovering it again.</summary>
     private PasteResult? recoveredJson;
     private string? jsonError;
+    /// <summary>
+    /// What the connector was asking this machine for when the window opened; see
+    /// <see cref="AsksFor"/> for why it is fixed rather than re-read.
+    /// </summary>
+    private readonly HashSet<EnvRow> askedEnvRows;
+    private readonly HashSet<ArgRow> askedArgs;
     private string? validationError;
     private Tool? requiredTool;
     private bool suppressToolEvaluation;
@@ -158,6 +176,11 @@ public sealed class EditorModel : ObservableObject, IDisposable
         Load(config);
         // On open, a cached status shows its note at once; an
         // unknown one is probed now. Later changes go through EvaluateRequiredTool.
+        askedEnvRows = EnvRows.Where(r => Placeholder.ContainsMarker(r.Value)).ToHashSet();
+        askedArgs = Args.Where(r => Placeholder.ContainsMarker(r.Value)).ToHashSet();
+        AsksForBearerToken = Placeholder.ContainsMarker(bearerToken);
+        AsksForHeaderValue = Placeholder.ContainsMarker(headerValue);
+        AsksForClientSecret = Placeholder.ContainsMarker(oauthClientSecret);
         state.PropertyChanged += OnStateChanged;
         Args.CollectionChanged += OnArgsChanged;
         requiredTool = ComputeRequiredTool();
@@ -421,7 +444,6 @@ public sealed class EditorModel : ObservableObject, IDisposable
             if (Set(ref jsonError, value))
             {
                 Raise(nameof(HasJsonError));
-                Raise(nameof(JsonStatusText));
                 Raise(nameof(CanSave));
                 // The paste tip offers what a JSON view with an error in it cannot do.
                 Raise(nameof(ShowJsonTip));
@@ -430,8 +452,6 @@ public sealed class EditorModel : ObservableObject, IDisposable
     }
 
     public bool HasJsonError => jsonError is not null;
-
-    public string JsonStatusText => jsonError ?? JsonTip;
 
     public string? ValidationError
     {
@@ -600,6 +620,95 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public bool ClientSecretIsPlaceholder => Placeholder.ContainsMarker(oauthClientSecret);
 
+    /// <summary>
+    /// Whether this row was asking for a value when the window opened, which is what unlocks it
+    /// in a read-only form. Stays true after the value is filled in, unlike
+    /// <see cref="IsPlaceholder"/>: a field being typed into must not turn into a locked one
+    /// between two keystrokes. Keyed by the row object, so inserting a row above it changes
+    /// nothing — by the row object here, where the Mac's rows are structs and carry a UUID for
+    /// the same purpose. The Mac also takes an id rather than the row, as <see cref="IsPlaceholder"/>
+    /// explains.
+    /// </summary>
+    public bool AsksFor(EnvRow row) => askedEnvRows.Contains(row);
+
+    /// <summary>
+    /// The same question for an argument. Takes an index because that is what a view has, and
+    /// resolves it through the row's identity so a row inserted above does not move the answer.
+    /// </summary>
+    public bool AsksForArg(int index) =>
+        index >= 0 && index < Args.Count && askedArgs.Contains(Args[index]);
+
+    public bool AsksForBearerToken { get; private set; }
+
+    public bool AsksForHeaderValue { get; private set; }
+
+    public bool AsksForClientSecret { get; private set; }
+
+    // MARK: published hints
+
+    /// <summary>
+    /// The author's hints for the values publishing strips, by environment variable name. Empty
+    /// unless this machine is the one publishing the collection: another machine's record says
+    /// what it strips, not what this editor is looking at.
+    /// </summary>
+    private IReadOnlyDictionary<string, string> PublishedEnvHints
+    {
+        get
+        {
+            if (!state.CollectionsCache.Published.ContainsKey(CollectionName))
+            {
+                return new Dictionary<string, string>(StringComparer.Ordinal);
+            }
+            return state.CollectionsFile.Collections.GetValueOrDefault(CollectionName)?.Publish?.Intent
+                       .Hints.GetValueOrDefault(Target.Name)
+                   ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// The author's hint beside a value publishing strips. Distinct from
+    /// <see cref="PlaceholderHint"/>, which reads the synced sidecar's needs and is therefore
+    /// always null in the published state.
+    /// </summary>
+    public string? PublishedHint(EnvRow row) => PublishedEnvHints.GetValueOrDefault(row.Name);
+
+    /// <summary>An argument's hint, which the record keys by where the marker sits rather than by name.</summary>
+    public string? PublishedHintForArg(int index)
+    {
+        if (!state.CollectionsCache.Published.ContainsKey(CollectionName) || index < 0 || index >= Args.Count)
+        {
+            return null;
+        }
+        var marks = state.CollectionsFile.Collections.GetValueOrDefault(CollectionName)?.Publish?.Intent
+            .PathMarks.GetValueOrDefault(Target.Name);
+        var pointer = new JsonPointer(["args", index.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
+        return marks?.GetValueOrDefault(pointer)?.Hint;
+    }
+
+    /// <summary>
+    /// Whether this connector has any author's hint to show at all, so the view can leave the
+    /// column out rather than reserve space for nothing.
+    /// </summary>
+    public bool HasPublishedHints
+    {
+        get
+        {
+            if (!state.CollectionsCache.Published.ContainsKey(CollectionName))
+            {
+                return false;
+            }
+            if (PublishedEnvHints.Count > 0)
+            {
+                return true;
+            }
+            var marks = state.CollectionsFile.Collections.GetValueOrDefault(CollectionName)?.Publish?.Intent
+                .PathMarks.GetValueOrDefault(Target.Name);
+            return marks is not null && marks.Values.Any(m => m.Hint is not null);
+        }
+    }
+
+    // MARK: live placeholder flags
+
     public string? BearerTokenHint => Hint(bearerToken);
 
     public string? HeaderValueHint => Hint(headerValue);
@@ -660,6 +769,24 @@ public sealed class EditorModel : ObservableObject, IDisposable
         {
             Raise(nameof(ToolNote));
             Raise(nameof(HasToolNote));
+        }
+        // Everything the collection decides: its kind, the grey line above the fields, what the
+        // footer offers, and whether the author left a hint beside a stripped value. The window
+        // used to re-seat its DataContext to pick these up, which regenerated every row and took
+        // the caret with it. The Mac needs none of this: its whole object republishes.
+        if (Affects(e, nameof(AppState.CollectionsFile)) || Affects(e, nameof(AppState.CollectionsCache))
+            || Affects(e, nameof(AppState.Store)))
+        {
+            Raise(nameof(IsReadOnly));
+            Raise(nameof(Header));
+            Raise(nameof(HeaderNote));
+            Raise(nameof(HasHeaderNote));
+            Raise(nameof(CanRemove));
+            Raise(nameof(CanSave));
+            Raise(nameof(ShowJsonTip));
+            Raise(nameof(ShowPropagate));
+            Raise(nameof(PropagateMessage));
+            Raise(nameof(HasPublishedHints));
         }
     }
 

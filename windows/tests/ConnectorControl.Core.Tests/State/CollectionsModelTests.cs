@@ -563,4 +563,15 @@ public class CollectionsModelTests
         // The document lands in the folder just chosen.
         Assert.True(System.IO.File.Exists(Path.Combine(second, "default.json")));
     }
+    [Fact]
+    public void TheWindowsGlyphsAndActionsCarryTheirOwnWords()
+    {
+        Assert.Equal("Edit", CollectionsModel.EditTooltip);
+        Assert.Equal("Make Active", CollectionsModel.MakeActiveAction);
+        Assert.Equal("Read-only: synced from the collection's author", CollectionsModel.LockedGlyphTooltip);
+        // One sentence about one fact: the chain says the same here as on the flyout's chip.
+        Assert.Equal(FlyoutModel.SourceTooltipFormat("/Acme/mcp/team.json"),
+                     CollectionsModel.SyncedGlyphTooltip("/Acme/mcp/team.json"));
+        Assert.Equal("Synced from /Acme/mcp/team.json", CollectionsModel.SyncedGlyphTooltip("/Acme/mcp/team.json"));
+    }
 }

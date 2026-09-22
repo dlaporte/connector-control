@@ -324,4 +324,43 @@ public class PublishModelTests
         Assert.True(model.CanPublish);
         Assert.Contains(nameof(PublishModel.CanPublish), raised);
     }
+    [Fact]
+    public void AnExportCarriesOnlyTheTickedConnectors()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        Assert.Null(state.Upsert("other", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("uvx")),
+            ("env", JsonValue.Object(("OTHER_KEY", JsonValue.String("sk-other-secret")))))), null));
+        var collection = state.ActiveCollection;
+        var held = state.Store.Collections[collection].Mcps.Keys.Order(StringComparer.Ordinal).ToList();
+        Assert.Contains("c", held);
+        Assert.Contains("other", held);
+
+        // The whole collection, as publishing always takes it.
+        var whole = new PublishModel(state, collection);
+        Assert.Null(whole.Connectors);
+        Assert.Superset(new HashSet<string>(["c", "other"], StringComparer.Ordinal),
+                        whole.EnvRows.Select(r => r.Connector).ToHashSet(StringComparer.Ordinal));
+        Assert.Contains(whole.PathRows, r => r.Connector == "c");
+
+        // One ticked name: the rows, the preview and the document all stop at it.
+        var subset = new PublishModel(state, collection, ["other"]);
+        Assert.Equal(["other"], subset.EnvRows.Select(r => r.Connector));
+        Assert.Equal(["OTHER_KEY"], subset.EnvRows.Select(r => r.Name));
+        // c's path argument is not this export's business.
+        Assert.Empty(subset.PathRows);
+        Assert.False(subset.HasPathRows);
+        Assert.DoesNotContain("\"c\"", subset.Preview, StringComparison.Ordinal);
+        Assert.Contains("other", subset.Preview, StringComparison.Ordinal);
+        // The ticked connector's value is not credential-shaped.
+        Assert.Empty(subset.Warnings);
+
+        var path = h.Dir.File("one.json");
+        Assert.Null(subset.Export(path));
+        var document = CollectionDocument.Decode(File.ReadAllBytes(path));
+        Assert.Equal(["other"], document.Connectors.Keys.Order(StringComparer.Ordinal));
+        // Exporting a subset takes nothing out of the collection.
+        Assert.Equal(held, state.Store.Collections[collection].Mcps.Keys.Order(StringComparer.Ordinal));
+    }
 }

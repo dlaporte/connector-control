@@ -102,7 +102,9 @@ final class StringCatalogTests: XCTestCase {
         "EditorModel.removeMessage": ["X"],
         "EditorModel.removedOutsideMessage": ["X"],
         "ImportModel.addModeTitle": ["X"],
+        "ImportModel.collisionPickerLabel": ["X"],
         "ImportModel.importButton": ["3"],
+        "ImportModel.includeLabel": ["X"],
         "ImportModel.skippedBadge": ["X"],
         "ImportModel.sourceLine": ["X", "Y", "3"],
         "MasterStore.duplicateCollectionNameError": ["X"],
@@ -208,11 +210,14 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.activeSuffix"] = CollectionsModel.activeSuffix
         actual["CollectionsModel.deleteAction"] = CollectionsModel.deleteAction
         actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.deletePublishedFileQuestion("X")
+        actual["CollectionsModel.editTooltip"] = CollectionsModel.editTooltip
         actual["CollectionsModel.exportButton"] = CollectionsModel.exportButton(3)
         actual["CollectionsModel.importButton"] = CollectionsModel.importButton
         actual["CollectionsModel.keepFileButton"] = CollectionsModel.keepFileButton
         actual["CollectionsModel.localDetail"] = CollectionsModel.localDetail(3)
         actual["CollectionsModel.localType"] = CollectionsModel.localType("X")
+        actual["CollectionsModel.lockedGlyphTooltip"] = CollectionsModel.lockedGlyphTooltip
+        actual["CollectionsModel.makeActiveAction"] = CollectionsModel.makeActiveAction
         actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.makeLocalCopyButton
         actual["CollectionsModel.newButton"] = CollectionsModel.newButton
         actual["CollectionsModel.publishButton"] = CollectionsModel.publishButton
@@ -288,7 +293,9 @@ final class StringCatalogTests: XCTestCase {
         actual["ImportModel.addModeTitle"] = ImportModel.addModeTitle("X")
         actual["ImportModel.addTitle"] = ImportModel.addTitle
         actual["ImportModel.cancelButton"] = ImportModel.cancelButton
+        actual["ImportModel.collisionPickerLabel"] = ImportModel.collisionPickerLabel("X")
         actual["ImportModel.importButton"] = ImportModel.importButton(3)
+        actual["ImportModel.includeLabel"] = ImportModel.includeLabel("X")
         actual["ImportModel.keepBothTitle"] = ImportModel.keepBothTitle
         actual["ImportModel.newBadge"] = ImportModel.newBadge
         actual["ImportModel.presentBadge"] = ImportModel.presentBadge
@@ -299,6 +306,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ImportModel.sourceLine"] = ImportModel.sourceLine("X", "Y", 3)
         actual["ImportModel.syncModeDetail"] = ImportModel.syncModeDetail
         actual["ImportModel.syncModeTitle"] = ImportModel.syncModeTitle
+        actual["ImportModel.syncNameLabel"] = ImportModel.syncNameLabel
         actual["ImportModel.title"] = ImportModel.title
         actual["ImportModel.unknownAuthor"] = ImportModel.unknownAuthor
 
@@ -376,7 +384,9 @@ final class StringCatalogTests: XCTestCase {
 
         actual["ReviewModel.addedLabel"] = ReviewModel.addedLabel
         actual["ReviewModel.applyButton"] = ReviewModel.applyButton
+        actual["ReviewModel.cancelButton"] = ReviewModel.cancelButton
         actual["ReviewModel.changedLabel"] = ReviewModel.changedLabel
+        actual["ReviewModel.refreshButton"] = ReviewModel.refreshButton
         actual["ReviewModel.removedLabel"] = ReviewModel.removedLabel
         actual["ReviewModel.sourceMovedMessage"] = ReviewModel.sourceMovedMessage
         actual["ReviewModel.title"] = ReviewModel.title("X")

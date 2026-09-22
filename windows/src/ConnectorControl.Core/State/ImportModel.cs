@@ -27,6 +27,12 @@ public sealed class ImportModel : ObservableObject
     /// <summary>Stands in for the document's author when it travelled without one.</summary>
     public const string UnknownAuthor = "unknown author";
     public const string CancelButton = "Cancel";
+    /// <summary>
+    /// A screen reader's name for the name field in sync mode, which carries no label of its
+    /// own. The mockup draws "Name:" beside it; this is the longer form a reader needs without
+    /// the sentence above the field for context.
+    /// </summary>
+    public const string SyncNameLabel = "Collection name";
 
     public static string AddModeTitle(string collection) => $"Add to a collection: {collection}";
 
@@ -34,6 +40,15 @@ public sealed class ImportModel : ObservableObject
         $"“{document}” by {author} · {connectors} connectors";
 
     public static string SkippedBadge(string reason) => $"skipped: {reason}";
+
+    /// <summary>A screen reader's name for the bare tick beside a connector.</summary>
+    public static string IncludeLabel(string connector) => $"Include {connector}";
+
+    /// <summary>
+    /// A screen reader's name for a collision's choice picker. Without one it reads out the
+    /// badge beside it, which says the row is skipped — the opposite of what the picker is for.
+    /// </summary>
+    public static string CollisionPickerLabel(string connector) => $"What to do with {connector}";
 
     public static string ImportButton(int count) =>
         "Import " + count.ToString(CultureInfo.InvariantCulture);
@@ -154,6 +169,9 @@ public sealed class ImportModel : ObservableObject
     /// </summary>
     public string? LoadError { get; }
 
+    /// <summary>The Mac binds the optional above directly; XAML needs a bool for the body's visibility.</summary>
+    public bool HasLoadError => LoadError is not null;
+
     /// <summary>The Mac calls this <c>mode</c>; here the nested enum already owns that name.</summary>
     public Mode ImportMode { get => mode; set => Set(ref mode, value); }
 
@@ -190,8 +208,13 @@ public sealed class ImportModel : ObservableObject
     /// What the Import button counts: the rows that are ticked in add mode, and everything this
     /// platform can carry in sync mode, where the whole document comes across or none of it.
     /// </summary>
+    /// <summary>
+    /// A ticked row set to Skip lands nothing, so the button must not promise it:
+    /// <see cref="Perform"/> sends Skip for exactly these, and a count that disagreed would say
+    /// "Import 3" over two connectors arriving.
+    /// </summary>
     public int ImportCount => ImportMode == Mode.AddToCollection
-        ? Rows.Count(row => row.Include && row.ExcludedReason is null)
+        ? Rows.Count(row => row.Include && row.ExcludedReason is null && row.Choice != ImportChoice.Skip)
         : Rows.Count(row => row.ExcludedReason is null);
 
     public bool CanImport

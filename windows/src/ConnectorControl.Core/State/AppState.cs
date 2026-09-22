@@ -1954,11 +1954,24 @@ public sealed class AppState : ObservableObject, IDisposable
     /// publish intent. The origin is the one publishing fixed, so an export of a published
     /// collection is the same document the folder holds.
     /// </summary>
-    public CollectionDocument ExportDocument(string collection, PublishIntent intent)
+    /// <summary>
+    /// <paramref name="only"/> names the connectors to carry, for the Export dialog's ticked
+    /// subset; null is the whole collection, which is what publishing always writes. Rendered
+    /// from the subset rather than filtered afterwards, so nothing in the document describes a
+    /// connector that is not in it.
+    /// </summary>
+    public CollectionDocument ExportDocument(string collection, PublishIntent intent,
+                                             IReadOnlyList<string>? only = null)
     {
         var connectors = Store.Collections.TryGetValue(collection, out var held)
             ? held.Mcps.ToDictionary(pair => pair.Key, pair => pair.Value.Config, StringComparer.Ordinal)
             : new Dictionary<string, JsonValue>(StringComparer.Ordinal);
+        if (only is not null)
+        {
+            var keep = only.ToHashSet(StringComparer.Ordinal);
+            connectors = connectors.Where(pair => keep.Contains(pair.Key))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        }
         return CollectionDocument.Export(
             collection,
             // No author setting exists yet; the field travels as absent rather than guessed at.
@@ -1970,11 +1983,12 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>Export: the same document written once, wherever the user chose. null on success.</summary>
-    public string? WriteExport(string collection, PublishIntent intent, string path)
+    public string? WriteExport(string collection, PublishIntent intent, string path,
+                               IReadOnlyList<string>? only = null)
     {
         try
         {
-            AtomicFile.Write(ExportDocument(collection, intent).Serialize(), path);
+            AtomicFile.Write(ExportDocument(collection, intent, only).Serialize(), path);
             return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)

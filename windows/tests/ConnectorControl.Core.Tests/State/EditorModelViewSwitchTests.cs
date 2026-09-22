@@ -60,7 +60,8 @@ public class EditorModelViewSwitchTests
         Assert.Equal(EditView.Json, editor.View);
         Assert.Equal("{\n  \"args\" : [\n    \"/c\",\n    \"npx\",\n    \"-y\",\n    \"mcp-remote\",\n    \"" + Url + "\"\n  ],\n  \"command\" : \"cmd\"\n}", editor.JsonText);
         Assert.Null(editor.JsonError);
-        Assert.Equal(EditorModel.JsonTip, editor.JsonStatusText);
+        // No error, so the pane offers the paste tip.
+        Assert.True(editor.ShowJsonTip);
 
         editor.JsonText = "{\"command\": \"node\", \"args\": [\"x.js\"], \"env\": {\"K\": \"v\"}}";
         editor.RequestView(EditView.Form);
@@ -171,7 +172,8 @@ public class EditorModelViewSwitchTests
         editor.RequestView(EditView.Json);
         editor.JsonText = "{\"command\": ";
         Assert.Equal("Not valid JSON — check for a stray brace, missing comma, or unquoted value.", editor.JsonError);
-        Assert.Equal(editor.JsonError, editor.JsonStatusText);
+        // The error takes the tip's place.
+        Assert.False(editor.ShowJsonTip);
         Assert.True(editor.HasJsonError);
         Assert.False(editor.CanSave);
         editor.JsonText = "{\"command\": \"node\"}";

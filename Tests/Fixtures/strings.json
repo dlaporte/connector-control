@@ -113,6 +113,7 @@
   "CollectionsModel.deletePublishedFileQuestion": {
     "format": "Also remove {0} from the folder?"
   },
+  "CollectionsModel.editTooltip": "Edit",
   "CollectionsModel.exportButton": {
     "format": "Export {0}…"
   },
@@ -124,6 +125,8 @@
   "CollectionsModel.localType": {
     "format": "local · {0}"
   },
+  "CollectionsModel.lockedGlyphTooltip": "Read-only: synced from the collection's author",
+  "CollectionsModel.makeActiveAction": "Make Active",
   "CollectionsModel.makeLocalCopyButton": "Make Local Copy…",
   "CollectionsModel.newButton": "New…",
   "CollectionsModel.publishButton": "Publish…",
@@ -251,8 +254,14 @@
   },
   "ImportModel.addTitle": "Add",
   "ImportModel.cancelButton": "Cancel",
+  "ImportModel.collisionPickerLabel": {
+    "format": "What to do with {0}"
+  },
   "ImportModel.importButton": {
     "format": "Import {0}"
+  },
+  "ImportModel.includeLabel": {
+    "format": "Include {0}"
   },
   "ImportModel.keepBothTitle": "Keep both",
   "ImportModel.newBadge": "new · arrives off",
@@ -268,6 +277,7 @@
   },
   "ImportModel.syncModeDetail": "Read-only except your secrets and switches. Changes at the source arrive for review.",
   "ImportModel.syncModeTitle": "Keep as its own collection, in sync with this file",
+  "ImportModel.syncNameLabel": "Collection name",
   "ImportModel.title": "Import connectors",
   "ImportModel.unknownAuthor": "unknown author",
   "MasterStore.deleteLastCollectionError": "Can’t delete the last collection.",
@@ -354,7 +364,9 @@
   "RestoreModel.restoreTitle": "Restore…",
   "ReviewModel.addedLabel": "Added",
   "ReviewModel.applyButton": "Apply",
+  "ReviewModel.cancelButton": "Cancel",
   "ReviewModel.changedLabel": "Changed",
+  "ReviewModel.refreshButton": "Refresh",
   "ReviewModel.removedLabel": "Removed",
   "ReviewModel.sourceMovedMessage": "The file changed while this was open. Review it again.",
   "ReviewModel.title": {

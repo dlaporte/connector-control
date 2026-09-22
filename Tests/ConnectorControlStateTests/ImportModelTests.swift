@@ -218,4 +218,36 @@ final class ImportModelTests: XCTestCase {
         XCTAssertNil(model.perform())
         XCTAssertEqual(state.connectorCaution("pair", in: "Default"), pair.needsCaution)
     }
+    func testATickedRowSetToSkipIsNotCounted() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("shared/data-team.json")
+        try write(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(state.upsert(name: "github", entry: MCPEntry(config: AppStateHarness.remote("https://x/")),
+                                  renamedFrom: nil))
+
+        let model = ImportModel(state: state, path: url.path)
+        XCTAssertEqual(model.importCount, 3, "the collision starts unticked")
+
+        // Ticked and set to Skip: the button must not promise what `perform` will not land.
+        model.rows[1].include = true
+        model.rows[1].choice = .skip
+        XCTAssertEqual(model.importCount, 3)
+        model.rows[1].choice = .replace
+        XCTAssertEqual(model.importCount, 4)
+
+        // Every row skipped is nothing to import at all.
+        for index in model.rows.indices { model.rows[index].choice = .skip }
+        XCTAssertEqual(model.importCount, 0)
+        XCTAssertFalse(model.canImport)
+        // Sync mode takes the whole document, so a per-row choice says nothing about it.
+        model.mode = .keepInSync
+        XCTAssertEqual(model.importCount, 4)
+    }
+
+    func testTheAccessibilityLabelsNameTheirControls() {
+        XCTAssertEqual(ImportModel.includeLabel("github"), "Include github")
+        XCTAssertEqual(ImportModel.syncNameLabel, "Collection name")
+        XCTAssertEqual(ImportModel.collisionPickerLabel("github"), "What to do with github")
+    }
 }

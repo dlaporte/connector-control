@@ -1339,21 +1339,32 @@ public final class AppState: ObservableObject {
     /// The document this collection travels as: every connector it holds, rendered through the
     /// publish intent. The origin is the one publishing fixed, so an export of a published
     /// collection is the same document the folder holds.
-    public func exportDocument(for collection: String, intent: PublishIntent) -> CollectionDocument {
-        CollectionDocument.export(
+    /// `only` names the connectors to carry, for the Export sheet's ticked subset; nil is the
+    /// whole collection, which is what publishing always writes. Rendered from the subset rather
+    /// than filtered afterwards, so nothing in the document describes a connector that is not in
+    /// it.
+    public func exportDocument(for collection: String, intent: PublishIntent,
+                               only: [String]? = nil) -> CollectionDocument {
+        var connectors = (store.collections[collection]?.mcps ?? [:]).mapValues(\.config)
+        if let only {
+            let keep = Set(only)
+            connectors = connectors.filter { keep.contains($0.key) }
+        }
+        return CollectionDocument.export(
             name: collection,
             // No author setting exists yet; the field travels as absent rather than guessed at.
             author: nil,
             origin: collectionsFile.collections[collection]?.publish?.origin,
             exported: IsoTimestamp.string(from: host.now()),
-            connectors: (store.collections[collection]?.mcps ?? [:]).mapValues(\.config),
+            connectors: connectors,
             intent: intent)
     }
 
     /// Export: the same document written once, wherever the user chose. nil on success.
-    public func writeExport(for collection: String, intent: PublishIntent, to path: String) -> String? {
+    public func writeExport(for collection: String, intent: PublishIntent, to path: String,
+                            only: [String]? = nil) -> String? {
         do {
-            try AtomicFile.write(exportDocument(for: collection, intent: intent).serialized(),
+            try AtomicFile.write(exportDocument(for: collection, intent: intent, only: only).serialized(),
                                  to: URL(fileURLWithPath: path), staging: service.paths.stagingDirURL)
             return nil
         } catch {

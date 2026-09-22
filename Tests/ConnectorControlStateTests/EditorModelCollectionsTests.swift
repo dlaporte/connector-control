@@ -409,4 +409,93 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertNil(EditTarget.newRemote().collection)
         XCTAssertEqual(EditTarget.newRemote(in: "Team").collection, "Team")
     }
+    // MARK: - The open-time snapshot
+
+    func testWhatAFieldWasAskingForIsFixedWhenTheWindowOpens() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        try subscribeToDataTeam(rig)
+
+        let dbt = rig.editor("dbt", in: "Data team")
+        let token = try envRow(dbt, "DBT_TOKEN")
+        XCTAssertTrue(dbt.asksFor(envRow: token.id))
+        XCTAssertTrue(dbt.isPlaceholder(envRow: token.id))
+        // Filling it answers the question; it does not hand the field back to the lock.
+        let index = try XCTUnwrap(dbt.envRows.firstIndex { $0.id == token.id })
+        dbt.envRows[index].value = "secret_abc"
+        XCTAssertFalse(dbt.isPlaceholder(envRow: token.id))
+        XCTAssertTrue(dbt.asksFor(envRow: token.id), "the field being typed into stays the live one")
+        // A row that was not asking never becomes live, whatever is typed into it.
+        let region = try envRow(dbt, "DBT_REGION")
+        XCTAssertFalse(dbt.asksFor(envRow: region.id))
+
+        let ledger = rig.editor("ledger", in: "Data team")
+        XCTAssertEqual(ledger.argsWithPlaceholders, [0])
+        XCTAssertTrue(ledger.asksFor(arg: 0))
+        ledger.args[0].value = "/Users/d/ledger/dist/index.js"
+        XCTAssertEqual(ledger.argsWithPlaceholders, [])
+        XCTAssertTrue(ledger.asksFor(arg: 0))
+        XCTAssertFalse(ledger.asksFor(arg: 7), "an index past the end asks for nothing")
+        // Keyed by the row, not the position: a row inserted above carries the answer with it.
+        ledger.args.insert(ArgRow(value: "--quiet"), at: 0)
+        XCTAssertFalse(ledger.asksFor(arg: 0))
+        XCTAssertTrue(ledger.asksFor(arg: 1))
+
+        let notion = rig.editor("notion", in: "Data team")
+        XCTAssertTrue(notion.asksForBearerToken)
+        notion.bearerToken = "secret_abc"
+        XCTAssertFalse(notion.bearerTokenIsPlaceholder, "the ring and the hint follow the text")
+        XCTAssertTrue(notion.asksForBearerToken, "the lock does not")
+        XCTAssertFalse(notion.asksForHeaderValue)
+        XCTAssertFalse(notion.asksForClientSecret)
+    }
+
+    // MARK: - Published hints
+
+    func testAPublishedConnectorCarriesTheAuthorsHintForEachStrippedValue() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let state = rig.state
+        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.upsert(name: "svc", entry: MCPEntry(config: .object([
+            "command": .string("node"),
+            "args": .array([.string("/Users/d/server.js")]),
+            "env": .object(["TOKEN": .string("sk-live"), "REGION": .string("us")]),
+        ])), renamedFrom: nil, in: "Team"))
+        let folder = rig.h.dir.file("share")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let intent = PublishIntent(
+            shareValues: ["svc": ["REGION"]],
+            pathMarks: ["svc": [JSONPointer(["args", "0"]): .init(name: "server_path", hint: "your clone, then dist/index.js")]],
+            hints: ["svc": ["TOKEN": "acme.example ▸ API tokens"]])
+        XCTAssertNil(state.startPublishing("Team", to: folder.path, intent: intent))
+
+        let editor = rig.editor("svc", in: "Team")
+        XCTAssertTrue(editor.hasPublishedHints)
+        let token = try envRow(editor, "TOKEN")
+        XCTAssertEqual(editor.publishedHint(envRow: token.id), "acme.example ▸ API tokens")
+        // A shared value is not stripped, so the author owes no explanation for it.
+        let region = try envRow(editor, "REGION")
+        XCTAssertNil(editor.publishedHint(envRow: region.id))
+        XCTAssertEqual(editor.publishedHint(arg: 0), "your clone, then dist/index.js")
+        XCTAssertNil(editor.publishedHint(arg: 7))
+        // A different question from the synced sidecar's needs, which say nothing here.
+        XCTAssertNil(editor.placeholderHint(envRow: token.id))
+
+        // A local collection nobody publishes has none of this to say.
+        let plain = rig.editor("scoutbook", in: "Default")
+        XCTAssertFalse(plain.hasPublishedHints)
+        XCTAssertNil(plain.publishedHint(arg: 0))
+
+        // The record without this machine's binding is another machine's publish, and the hints
+        // are that machine's business, not this editor's.
+        try CollectionsLocalCache(synced: [:], published: [:])
+            .save(to: state.service.paths.collectionsCacheURL, staging: nil)
+        state.reload()
+        let elsewhere = rig.editor("svc", in: "Team")
+        XCTAssertTrue(state.isPublished("Team"), "the sidecar still carries the record")
+        XCTAssertFalse(elsewhere.hasPublishedHints)
+        XCTAssertNil(elsewhere.publishedHint(envRow: try envRow(elsewhere, "TOKEN").id))
+        XCTAssertNil(elsewhere.publishedHint(arg: 0))
+    }
 }

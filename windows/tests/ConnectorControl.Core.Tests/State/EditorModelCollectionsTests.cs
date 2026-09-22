@@ -536,4 +536,143 @@ public class EditorModelCollectionsTests
         Assert.True(editor.ShowJsonTip);
         Assert.Contains(nameof(EditorModel.ShowJsonTip), raised);
     }
+    // MARK: the open-time snapshot
+
+    [Fact]
+    public void WhatAFieldWasAskingForIsFixedWhenTheWindowOpens()
+    {
+        using var rig = new EditorRig();
+        SubscribeToDataTeam(rig);
+
+        using var dbt = rig.Editor("dbt", "Data team");
+        var token = EnvRow(dbt, "DBT_TOKEN");
+        Assert.True(dbt.AsksFor(token));
+        Assert.True(dbt.IsPlaceholder(token));
+        // Filling it answers the question; it does not hand the field back to the lock.
+        token.Value = "secret_abc";
+        Assert.False(dbt.IsPlaceholder(token));
+        Assert.True(dbt.AsksFor(token), "the field being typed into stays the live one");
+        // A row that was not asking never becomes live, whatever is typed into it.
+        Assert.False(dbt.AsksFor(EnvRow(dbt, "DBT_REGION")));
+
+        using var ledger = rig.Editor("ledger", "Data team");
+        Assert.Equal([0], ledger.ArgsWithPlaceholders);
+        Assert.True(ledger.AsksForArg(0));
+        ledger.Args[0].Value = "/Users/d/ledger/dist/index.js";
+        Assert.Empty(ledger.ArgsWithPlaceholders);
+        Assert.True(ledger.AsksForArg(0));
+        // An index past the end asks for nothing.
+        Assert.False(ledger.AsksForArg(7));
+        // Keyed by the row, not the position: a row inserted above carries the answer with it.
+        ledger.Args.Insert(0, new ArgRow("--quiet"));
+        Assert.False(ledger.AsksForArg(0));
+        Assert.True(ledger.AsksForArg(1));
+
+        using var notion = rig.Editor("notion", "Data team");
+        Assert.True(notion.AsksForBearerToken);
+        notion.BearerToken = "secret_abc";
+        // The ring and the hint follow the text; the lock does not.
+        Assert.False(notion.BearerTokenIsPlaceholder);
+        Assert.True(notion.AsksForBearerToken);
+        Assert.False(notion.AsksForHeaderValue);
+        Assert.False(notion.AsksForClientSecret);
+    }
+
+    // MARK: published hints
+
+    [Fact]
+    public void APublishedConnectorCarriesTheAuthorsHintForEachStrippedValue()
+    {
+        using var rig = new EditorRig();
+        var state = rig.State;
+        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.Upsert("svc", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String("/Users/d/server.js")])),
+            ("env", JsonValue.Object(("TOKEN", JsonValue.String("sk-live")), ("REGION", JsonValue.String("us")))))),
+            null, "Team"));
+        var folder = rig.H.Dir.File("share");
+        Directory.CreateDirectory(folder);
+        var pointer = new JsonPointer(["args", "0"]);
+        var intent = new PublishIntent(
+            [new("svc", new HashSet<string>(["REGION"], StringComparer.Ordinal))],
+            [new("svc", new Dictionary<JsonPointer, PublishIntent.PathMark>
+            {
+                [pointer] = new("server_path", "your clone, then dist/index.js"),
+            })],
+            [new("svc", new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["TOKEN"] = "acme.example ▸ API tokens",
+            })]);
+        Assert.Null(state.StartPublishing("Team", folder, intent));
+
+        using var editor = rig.Editor("svc", "Team");
+        Assert.True(editor.HasPublishedHints);
+        var token = EnvRow(editor, "TOKEN");
+        Assert.Equal("acme.example ▸ API tokens", editor.PublishedHint(token));
+        // A shared value is not stripped, so the author owes no explanation for it.
+        Assert.Null(editor.PublishedHint(EnvRow(editor, "REGION")));
+        Assert.Equal("your clone, then dist/index.js", editor.PublishedHintForArg(0));
+        Assert.Null(editor.PublishedHintForArg(7));
+        // A different question from the synced sidecar's needs, which say nothing here.
+        Assert.Null(editor.PlaceholderHint(token));
+
+        // A local collection nobody publishes has none of this to say.
+        using var plain = rig.Editor("scoutbook", "Default");
+        Assert.False(plain.HasPublishedHints);
+        Assert.Null(plain.PublishedHintForArg(0));
+
+        // The record without this machine's binding is another machine's publish, and the hints
+        // are that machine's business, not this editor's.
+        new CollectionsLocalCache([], []).Save(state.Service.Paths.CollectionsCachePath);
+        state.Reload();
+        using var elsewhere = rig.Editor("svc", "Team");
+        Assert.True(state.IsPublished("Team"), "the sidecar still carries the record");
+        Assert.False(elsewhere.HasPublishedHints);
+        Assert.Null(elsewhere.PublishedHint(EnvRow(elsewhere, "TOKEN")));
+        Assert.Null(elsewhere.PublishedHintForArg(0));
+    }
+
+    /// <summary>
+    /// The Mac has no mirror of these two: SwiftUI switches on the HeaderState enum itself, and
+    /// its whole model object republishes on any AppState change.
+    /// </summary>
+    [Fact]
+    public void EachHeaderStateSaysWhichOneItIs()
+    {
+        Assert.True(new EditorModel.HeaderState.Synced("Team").IsSynced);
+        Assert.True(new EditorModel.HeaderState.Published("/share").IsPublished);
+        Assert.True(new EditorModel.HeaderState.Imported("Team", "2026-09-21").IsImported);
+        var none = new EditorModel.HeaderState.None();
+        Assert.False(none.IsSynced);
+        Assert.False(none.IsPublished);
+        Assert.False(none.IsImported);
+        // Exactly one at a time, so a view can bind three visibilities and get one header.
+        var synced = new EditorModel.HeaderState.Synced("Team");
+        Assert.False(synced.IsPublished);
+        Assert.False(synced.IsImported);
+    }
+
+    [Fact]
+    public void TheCollectionsOwnAnswersFollowAppStateWithoutReseatingTheView()
+    {
+        using var rig = new EditorRig();
+        SubscribeToDataTeam(rig);
+        using var dbt = rig.Editor("dbt", "Data team");
+        Assert.True(dbt.IsReadOnly);
+        var raised = new List<string>();
+        dbt.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");
+
+        // Detaching the collection unlocks the form; the window used to re-seat its DataContext
+        // to notice, which regenerated every row and took the caret with it.
+        rig.State.StopSyncing("Data team");
+        Assert.False(dbt.IsReadOnly);
+        Assert.Contains(nameof(EditorModel.IsReadOnly), raised);
+        Assert.Contains(nameof(EditorModel.Header), raised);
+        Assert.Contains(nameof(EditorModel.HeaderNote), raised);
+        Assert.Contains(nameof(EditorModel.HasHeaderNote), raised);
+        Assert.Contains(nameof(EditorModel.CanRemove), raised);
+        Assert.Contains(nameof(EditorModel.ShowJsonTip), raised);
+        Assert.Contains(nameof(EditorModel.HasPublishedHints), raised);
+    }
 }

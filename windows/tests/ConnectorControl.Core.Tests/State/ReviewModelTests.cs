@@ -161,4 +161,11 @@ public class ReviewModelTests
         Assert.Equal(ReviewModel.RemovedLabel, ReviewModel.KindLabel(ReviewModel.Kind.Removed));
         Assert.Equal(ReviewModel.ChangedLabel, ReviewModel.KindLabel(ReviewModel.Kind.Changed));
     }
+    [Fact]
+    public void TheSheetOwnsItsFooterButtons()
+    {
+        Assert.Equal("Cancel", ReviewModel.CancelButton);
+        Assert.Equal("Refresh", ReviewModel.RefreshButton);
+        Assert.Equal("Apply", ReviewModel.ApplyButton);
+    }
 }

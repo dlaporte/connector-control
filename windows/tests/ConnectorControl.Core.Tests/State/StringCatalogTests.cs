@@ -110,7 +110,9 @@ public class StringCatalogTests
         ["EditorModel.removedOutsideMessage"] = ["X"],
         ["FlyoutModel.settingsNotSavedCaution"] = ["X"],
         ["ImportModel.addModeTitle"] = ["X"],
+        ["ImportModel.collisionPickerLabel"] = ["X"],
         ["ImportModel.importButton"] = ["3"],
+        ["ImportModel.includeLabel"] = ["X"],
         ["ImportModel.skippedBadge"] = ["X"],
         ["ImportModel.sourceLine"] = ["X", "Y", "3"],
         ["MasterStore.duplicateCollectionNameError"] = ["X"],
@@ -219,11 +221,14 @@ public class StringCatalogTests
         actual["CollectionsModel.activeSuffix"] = CollectionsModel.ActiveSuffix;
         actual["CollectionsModel.deleteAction"] = CollectionsModel.DeleteAction;
         actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.DeletePublishedFileQuestion("X");
+        actual["CollectionsModel.editTooltip"] = CollectionsModel.EditTooltip;
         actual["CollectionsModel.exportButton"] = CollectionsModel.ExportButton(3);
         actual["CollectionsModel.importButton"] = CollectionsModel.ImportButton;
         actual["CollectionsModel.keepFileButton"] = CollectionsModel.KeepFileButton;
         actual["CollectionsModel.localDetail"] = CollectionsModel.LocalDetail(3);
         actual["CollectionsModel.localType"] = CollectionsModel.LocalType("X");
+        actual["CollectionsModel.lockedGlyphTooltip"] = CollectionsModel.LockedGlyphTooltip;
+        actual["CollectionsModel.makeActiveAction"] = CollectionsModel.MakeActiveAction;
         actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.MakeLocalCopyButton;
         actual["CollectionsModel.newButton"] = CollectionsModel.NewButton;
         actual["CollectionsModel.publishButton"] = CollectionsModel.PublishButton;
@@ -320,7 +325,9 @@ public class StringCatalogTests
         actual["ImportModel.addModeTitle"] = ImportModel.AddModeTitle("X");
         actual["ImportModel.addTitle"] = ImportModel.AddTitle;
         actual["ImportModel.cancelButton"] = ImportModel.CancelButton;
+        actual["ImportModel.collisionPickerLabel"] = ImportModel.CollisionPickerLabel("X");
         actual["ImportModel.importButton"] = ImportModel.ImportButton(3);
+        actual["ImportModel.includeLabel"] = ImportModel.IncludeLabel("X");
         actual["ImportModel.keepBothTitle"] = ImportModel.KeepBothTitle;
         actual["ImportModel.newBadge"] = ImportModel.NewBadge;
         actual["ImportModel.presentBadge"] = ImportModel.PresentBadge;
@@ -331,6 +338,7 @@ public class StringCatalogTests
         actual["ImportModel.sourceLine"] = ImportModel.SourceLine("X", "Y", 3);
         actual["ImportModel.syncModeDetail"] = ImportModel.SyncModeDetail;
         actual["ImportModel.syncModeTitle"] = ImportModel.SyncModeTitle;
+        actual["ImportModel.syncNameLabel"] = ImportModel.SyncNameLabel;
         actual["ImportModel.title"] = ImportModel.Title;
         actual["ImportModel.unknownAuthor"] = ImportModel.UnknownAuthor;
 
@@ -414,7 +422,9 @@ public class StringCatalogTests
 
         actual["ReviewModel.addedLabel"] = ReviewModel.AddedLabel;
         actual["ReviewModel.applyButton"] = ReviewModel.ApplyButton;
+        actual["ReviewModel.cancelButton"] = ReviewModel.CancelButton;
         actual["ReviewModel.changedLabel"] = ReviewModel.ChangedLabel;
+        actual["ReviewModel.refreshButton"] = ReviewModel.RefreshButton;
         actual["ReviewModel.removedLabel"] = ReviewModel.RemovedLabel;
         actual["ReviewModel.sourceMovedMessage"] = ReviewModel.SourceMovedMessage;
         actual["ReviewModel.title"] = ReviewModel.Title("X");

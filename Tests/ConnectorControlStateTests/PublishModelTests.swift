@@ -246,4 +246,38 @@ final class PublishModelTests: XCTestCase {
         // The document an export writes carries that same origin, so both sheets show one thing.
         XCTAssertEqual(state.exportDocument(for: collection, intent: .none).origin, origin)
     }
+    func testAnExportCarriesOnlyTheTickedConnectors() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        XCTAssertNil(state.upsert(name: "other", entry: MCPEntry(config: .object([
+            "command": .string("uvx"),
+            "env": .object(["OTHER_KEY": .string("sk-other-secret")]),
+        ])), renamedFrom: nil))
+        let collection = state.activeCollection
+        let held = try XCTUnwrap(state.store.collections[collection]?.mcps.keys).sorted()
+        XCTAssertTrue(held.contains("c") && held.contains("other"))
+
+        // The whole collection, as publishing always takes it.
+        let whole = PublishModel(state: state, collection: collection)
+        XCTAssertNil(whole.connectors)
+        XCTAssertTrue(Set(whole.envRows.map(\.connector)).isSuperset(of: ["c", "other"]))
+        XCTAssertTrue(whole.pathRows.contains { $0.connector == "c" })
+
+        // One ticked name: the rows, the preview and the document all stop at it.
+        let subset = PublishModel(state: state, collection: collection, connectors: ["other"])
+        XCTAssertEqual(subset.envRows.map(\.connector), ["other"])
+        XCTAssertEqual(subset.envRows.map(\.name), ["OTHER_KEY"])
+        XCTAssertEqual(subset.pathRows, [], "c's path argument is not this export's business")
+        XCTAssertFalse(subset.hasPathRows)
+        XCTAssertFalse(subset.preview.contains("\"c\""))
+        XCTAssertTrue(subset.preview.contains("other"))
+        XCTAssertEqual(subset.warnings, [], "the ticked connector's value is not credential-shaped")
+
+        let out = h.dir.file("one.json")
+        XCTAssertNil(subset.export(to: out.path))
+        let document = try CollectionDocument.decode(try Data(contentsOf: out))
+        XCTAssertEqual(document.connectors.keys.sorted(), ["other"])
+        XCTAssertEqual(state.store.collections[collection]?.mcps.keys.sorted(), held,
+                       "exporting a subset takes nothing out of the collection")
+    }
 }

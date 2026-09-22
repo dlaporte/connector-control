@@ -93,22 +93,21 @@ public sealed class PublishModel : ObservableObject
     private readonly AppState state;
     private string? folder;
 
-    public PublishModel(AppState state, string collection)
+    public PublishModel(AppState state, string collection, IReadOnlyList<string>? connectors = null)
     {
         this.state = state;
         Collection = collection;
+        Connectors = connectors;
         // A collection that already publishes reopens showing what it publishes: the folder it
         // writes to and every tick the record remembers.
         var intent = state.CollectionsFile.Collections.GetValueOrDefault(collection)?.Publish?.Intent ?? PublishIntent.None;
         folder = state.CollectionsCache.Published.GetValueOrDefault(collection)?.Folder;
         var env = new List<EnvRow>();
         var paths = new List<PathRow>();
-        var connectors = state.Store.Collections.TryGetValue(collection, out var held)
-            ? held.Mcps
-            : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
-        foreach (var name in connectors.Keys.Order(StringComparer.Ordinal))
+        var seeded = Held(state, collection, connectors);
+        foreach (var name in seeded.Keys.Order(StringComparer.Ordinal))
         {
-            var config = connectors[name].Config;
+            var config = seeded[name].Config;
             IReadOnlySet<string> shared = intent.ShareValues.TryGetValue(name, out var s)
                 ? s
                 : new HashSet<string>(StringComparer.Ordinal);
@@ -140,6 +139,30 @@ public sealed class PublishModel : ObservableObject
     }
 
     public string Collection { get; }
+
+    /// <summary>
+    /// The connectors this dialog speaks for: the Export dialog's ticked subset, or null for the
+    /// whole collection. Publishing always writes the whole collection, so a model built with a
+    /// subset is an export's — <see cref="Publish"/> on one would record an intent that speaks
+    /// for only part of what the document carries.
+    /// </summary>
+    public IReadOnlyList<string>? Connectors { get; }
+
+    /// <summary>The connectors a dialog over <paramref name="collection"/> speaks for, which is every one of them unless an export ticked a subset.</summary>
+    private static IReadOnlyDictionary<string, McpEntry> Held(
+        AppState state, string collection, IReadOnlyList<string>? only)
+    {
+        var all = state.Store.Collections.TryGetValue(collection, out var held)
+            ? held.Mcps
+            : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
+        if (only is null)
+        {
+            return all;
+        }
+        var keep = only.ToHashSet(StringComparer.Ordinal);
+        return all.Where(pair => keep.Contains(pair.Key))
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+    }
 
     /// <summary>Where the document is written, null until the user chooses. Settable: the sheet's Choose Folder… is the only thing that fills it.</summary>
     public string? Folder
@@ -312,7 +335,7 @@ public sealed class PublishModel : ObservableObject
     }
 
     /// <summary>The document itself, as the editor would show it. Every byte that leaves this machine is in here.</summary>
-    public string Preview => state.ExportDocument(Collection, Intent).Encode().EditorText();
+    public string Preview => state.ExportDocument(Collection, Intent, Connectors).Encode().EditorText();
 
     /// <summary>
     /// What the exporter cannot know is a secret: a value that looks like a credential and is
@@ -323,16 +346,14 @@ public sealed class PublishModel : ObservableObject
         get
         {
             var intent = Intent;
-            var connectors = state.Store.Collections.TryGetValue(Collection, out var held)
-                ? held.Mcps
-                : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
+            var held = Held(state, Collection, Connectors);
             var warnings = new List<string>();
-            foreach (var name in connectors.Keys.Order(StringComparer.Ordinal))
+            foreach (var name in held.Keys.Order(StringComparer.Ordinal))
             {
                 IReadOnlySet<string> shared = intent.ShareValues.TryGetValue(name, out var s)
                     ? s
                     : new HashSet<string>(StringComparer.Ordinal);
-                warnings.AddRange(CollectionDocument.CredentialWarnings(connectors[name].Config, shared)
+                warnings.AddRange(CollectionDocument.CredentialWarnings(held[name].Config, shared)
                     .Select(warning => WarningLine(name, warning)));
             }
             return warnings;
@@ -364,7 +385,7 @@ public sealed class PublishModel : ObservableObject
     }
 
     /// <summary>The same document, written once, binding nothing. null on success.</summary>
-    public string? Export(string path) => state.WriteExport(Collection, Intent, path);
+    public string? Export(string path) => state.WriteExport(Collection, Intent, path, Connectors);
 
     // MARK: rows
 

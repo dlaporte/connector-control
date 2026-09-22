@@ -92,6 +92,18 @@ public final class EditorModel: ObservableObject {
     /// must not wipe what they typed. An unchanged JSON round trip (open
     /// JSON, switch straight back) leaves it set.
     private var isUntouchedTemplate: Bool
+    /// What the connector was asking this machine for when the window opened. Fixed here rather
+    /// than re-read, because this is what decides whether a field is locked: a field being typed
+    /// into must not turn into a locked one between two keystrokes, which is what the live
+    /// `isPlaceholder…` flags would do. Those stay, for the caution ring and the hint beneath.
+    ///
+    /// Keyed by row identity, not position, so inserting a row above a marker leaves the answer
+    /// on the row that was asking.
+    private var askedEnvRows: Set<UUID> = []
+    private var askedArgs: Set<UUID> = []
+    private var askedBearerToken = false
+    private var askedHeaderValue = false
+    private var askedClientSecret = false
     /// The other local collections that held a byte-identical copy of this connector when the
     /// window opened. Fixed there rather than re-derived: the checkbox names them, and the save
     /// that follows must write to the collections the user was shown, not to whatever matches
@@ -172,6 +184,11 @@ public final class EditorModel: ObservableObject {
         jsonText = config.editorText()
         recoveredJSON = PasteRecovery.recover(jsonText)
         load(config)
+        askedEnvRows = Set(envRows.filter { Placeholder.containsMarker($0.value) }.map(\.id))
+        askedArgs = Set(args.filter { Placeholder.containsMarker($0.value) }.map(\.id))
+        askedBearerToken = Placeholder.containsMarker(bearerToken)
+        askedHeaderValue = Placeholder.containsMarker(headerValue)
+        askedClientSecret = Placeholder.containsMarker(oauthClientSecret)
         // On open, a cached status shows its note at once; an unknown one is
         // probed now. Later changes go through evaluateRequiredTool. The relay
         // makes the view re-read toolNote.
@@ -212,7 +229,6 @@ public final class EditorModel: ObservableObject {
 
     public var hasJSONError: Bool { jsonError != nil }
 
-    public var jsonStatusText: String { jsonError ?? EditorModel.jsonTip }
 
     public var lossWarningMessage: String {
         EditorModel.lossWarningPrefix + (lossWarning ?? []).joined(separator: "\n")
@@ -342,6 +358,56 @@ public final class EditorModel: ObservableObject {
     public var headerValueIsPlaceholder: Bool { Placeholder.containsMarker(headerValue) }
 
     public var clientSecretIsPlaceholder: Bool { Placeholder.containsMarker(oauthClientSecret) }
+
+    /// Whether this row was asking for a value when the window opened, which is what unlocks it
+    /// in a read-only form. Stays true after the value is filled in, unlike `isPlaceholder`.
+    public func asksFor(envRow id: UUID) -> Bool { askedEnvRows.contains(id) }
+
+    /// The same question for an argument. Takes an index because that is what a view has, and
+    /// resolves it through the row's identity so a row inserted above does not move the answer.
+    public func asksFor(arg index: Int) -> Bool {
+        args.indices.contains(index) && askedArgs.contains(args[index].id)
+    }
+
+    public var asksForBearerToken: Bool { askedBearerToken }
+
+    public var asksForHeaderValue: Bool { askedHeaderValue }
+
+    public var asksForClientSecret: Bool { askedClientSecret }
+
+    // MARK: - Published hints
+
+    /// The author's hints for the values publishing strips, by environment variable name. Empty
+    /// unless this machine is the one publishing the collection: another machine's record says
+    /// what it strips, not what this editor is looking at.
+    private var publishedEnvHints: [String: String] {
+        guard state.collectionsCache.published[collectionName] != nil else { return [:] }
+        return state.collectionsFile.collections[collectionName]?.publish?.intent.hints[target.name] ?? [:]
+    }
+
+    /// The author's hint beside a value publishing strips. Distinct from `placeholderHint`, which
+    /// reads the synced sidecar's needs and is therefore always nil in the published state.
+    public func publishedHint(envRow id: UUID) -> String? {
+        envRows.first { $0.id == id }.flatMap { publishedEnvHints[$0.name] }
+    }
+
+    /// An argument's hint, which the record keys by where the marker sits rather than by name.
+    public func publishedHint(arg index: Int) -> String? {
+        guard state.collectionsCache.published[collectionName] != nil, args.indices.contains(index) else { return nil }
+        let marks = state.collectionsFile.collections[collectionName]?.publish?.intent.pathMarks[target.name] ?? [:]
+        return marks[JSONPointer(["args", String(index)])]?.hint
+    }
+
+    /// Whether this connector has any author's hint to show at all, so the view can leave the
+    /// column out rather than reserve space for nothing.
+    public var hasPublishedHints: Bool {
+        guard state.collectionsCache.published[collectionName] != nil else { return false }
+        if !publishedEnvHints.isEmpty { return true }
+        let marks = state.collectionsFile.collections[collectionName]?.publish?.intent.pathMarks[target.name] ?? [:]
+        return marks.values.contains { $0.hint != nil }
+    }
+
+    // MARK: - Live placeholder flags
 
     public var bearerTokenHint: String? { hint(in: bearerToken) }
 

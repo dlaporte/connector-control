@@ -128,4 +128,9 @@ final class ReviewModelTests: XCTestCase {
         XCTAssertEqual(ReviewModel.kindLabel(.removed), ReviewModel.removedLabel)
         XCTAssertEqual(ReviewModel.kindLabel(.changed), ReviewModel.changedLabel)
     }
+    func testTheSheetOwnsItsFooterButtons() {
+        XCTAssertEqual(ReviewModel.cancelButton, "Cancel")
+        XCTAssertEqual(ReviewModel.refreshButton, "Refresh")
+        XCTAssertEqual(ReviewModel.applyButton, "Apply")
+    }
 }

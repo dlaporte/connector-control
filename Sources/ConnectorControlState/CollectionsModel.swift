@@ -32,8 +32,21 @@ public final class CollectionsModel: ObservableObject {
     public static let removeFileButton = "Remove"
     public static let keepFileButton = "Keep"
     public static let remoteType = "remote"
+    /// The row's pencil, which names no connector: the row it sits on is the answer. The
+    /// popover's `ConnectorRow.editTooltip` spells the name out, because that menu has no rows.
+    public static let editTooltip = "Edit"
+    /// The sidebar's double-click, and the same action in its context menu.
+    public static let makeActiveAction = "Make Active"
+    /// The lock at the head of a synced collection's row.
+    public static let lockedGlyphTooltip = "Read-only: synced from the collection's author"
 
     public static func exportButton(_ count: Int) -> String { "Export \(count)…" }
+
+    /// The sidebar's chain glyph. The same sentence the popover's chip shows about the same
+    /// fact, so it borrows that wording rather than keeping a second copy of it.
+    public static func syncedGlyphTooltip(_ source: String) -> String {
+        PopoverModel.sourceTooltipFormat(source)
+    }
 
     public static func localType(_ command: String) -> String { "local · \(command)" }
 

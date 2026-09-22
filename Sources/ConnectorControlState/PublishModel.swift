@@ -84,6 +84,11 @@ public final class PublishModel: ObservableObject {
     }
 
     public let collection: String
+    /// The connectors this sheet speaks for: the Export sheet's ticked subset, or nil for the
+    /// whole collection. Publishing always writes the whole collection, so a model built with a
+    /// subset is an export's — `publish()` on one would record an intent that speaks for only
+    /// part of what the document carries.
+    public let connectors: [String]?
     /// Where the document is written, nil until the user chooses. Settable: the sheet's Choose
     /// Folder… is the only thing that fills it.
     @Published public var folder: String?
@@ -92,18 +97,19 @@ public final class PublishModel: ObservableObject {
 
     private let state: AppState
 
-    public init(state: AppState, collection: String) {
+    public init(state: AppState, collection: String, connectors: [String]? = nil) {
         self.state = state
         self.collection = collection
+        self.connectors = connectors
         // A collection that already publishes reopens showing what it publishes: the folder it
         // writes to and every tick the record remembers.
         let intent = state.collectionsFile.collections[collection]?.publish?.intent ?? .none
         folder = state.collectionsCache.published[collection]?.folder
         var env: [EnvRow] = []
         var paths: [PathRow] = []
-        let connectors = state.store.collections[collection]?.mcps ?? [:]
-        for name in connectors.keys.sorted() {
-            guard let config = connectors[name]?.config else { continue }
+        let held = PublishModel.held(in: state, collection, only: connectors)
+        for name in held.keys.sorted() {
+            guard let config = held[name]?.config else { continue }
             let shared = intent.shareValues[name] ?? []
             let hints = intent.hints[name] ?? [:]
             let variables = PublishModel.env(of: config)
@@ -191,15 +197,27 @@ public final class PublishModel: ObservableObject {
 
     /// The document itself, as the editor would show it. Every byte that leaves this machine is
     /// in here.
-    public var preview: String { state.exportDocument(for: collection, intent: intent).encode().editorText() }
+    public var preview: String {
+        state.exportDocument(for: collection, intent: intent, only: connectors).encode().editorText()
+    }
+
+    /// The connectors a sheet over `collection` speaks for, which is every one of them unless an
+    /// export ticked a subset.
+    private static func held(in state: AppState, _ collection: String,
+                             only: [String]?) -> [String: MCPEntry] {
+        let all = state.store.collections[collection]?.mcps ?? [:]
+        guard let only else { return all }
+        let keep = Set(only)
+        return all.filter { keep.contains($0.key) }
+    }
 
     /// What the exporter cannot know is a secret: a value that looks like a credential and is
     /// about to travel. Never an edit — the author decides.
     public var warnings: [String] {
         let intent = self.intent
-        let connectors = state.store.collections[collection]?.mcps ?? [:]
-        return connectors.keys.sorted().flatMap { name -> [String] in
-            guard let config = connectors[name]?.config else { return [] }
+        let held = PublishModel.held(in: state, collection, only: connectors)
+        return held.keys.sorted().flatMap { name -> [String] in
+            guard let config = held[name]?.config else { return [] }
             return CollectionDocument.credentialWarnings(config, sharedEnv: intent.shareValues[name] ?? [])
                 .map { PublishModel.warningLine(name, $0) }
         }
@@ -222,7 +240,7 @@ public final class PublishModel: ObservableObject {
 
     /// The same document, written once, binding nothing. nil on success.
     public func export(to path: String) -> String? {
-        state.writeExport(for: collection, intent: intent, to: path)
+        state.writeExport(for: collection, intent: intent, to: path, only: connectors)
     }
 
     // MARK: - Rows

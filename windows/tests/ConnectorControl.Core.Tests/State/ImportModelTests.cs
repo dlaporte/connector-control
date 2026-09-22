@@ -259,4 +259,58 @@ public class ImportModelTests
         Assert.Null(model.Perform());
         Assert.Equal(pair.NeedsCaution, state.ConnectorCaution("pair", "Default"));
     }
+    [Fact]
+    public void ATickedRowSetToSkipIsNotCounted()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
+        Write(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Upsert("github", new McpEntry(AppStateHarness.Remote("https://x/")), null));
+
+        var model = new ImportModel(state, path);
+        Assert.Equal(3, model.ImportCount);   // the collision starts unticked
+
+        // Ticked and set to Skip: the button must not promise what Perform will not land.
+        model.Rows[1].Include = true;
+        model.Rows[1].Choice = ImportChoice.Skip;
+        Assert.Equal(3, model.ImportCount);
+        model.Rows[1].Choice = ImportChoice.Replace;
+        Assert.Equal(4, model.ImportCount);
+
+        // Every row skipped is nothing to import at all.
+        foreach (var row in model.Rows)
+        {
+            row.Choice = ImportChoice.Skip;
+        }
+        Assert.Equal(0, model.ImportCount);
+        Assert.False(model.CanImport);
+        // Sync mode takes the whole document, so a per-row choice says nothing about it.
+        model.ImportMode = ImportModel.Mode.KeepInSync;
+        Assert.Equal(4, model.ImportCount);
+    }
+
+    [Fact]
+    public void ADocumentThatCannotBeReadSaysSoAsABool()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var good = Path.Combine(h.Dir.File("shared"), "data-team.json");
+        Write(CollectionDocumentSamples.DataTeam, good);
+        Assert.False(new ImportModel(state, good).HasLoadError);
+
+        var half = h.Dir.File("half.json");
+        File.WriteAllText(half, "{half");
+        var malformed = new ImportModel(state, half);
+        Assert.True(malformed.HasLoadError);
+        Assert.NotNull(malformed.LoadError);
+    }
+
+    [Fact]
+    public void TheAccessibilityLabelsNameTheirControls()
+    {
+        Assert.Equal("Include github", ImportModel.IncludeLabel("github"));
+        Assert.Equal("Collection name", ImportModel.SyncNameLabel);
+        Assert.Equal("What to do with github", ImportModel.CollisionPickerLabel("github"));
+    }
 }

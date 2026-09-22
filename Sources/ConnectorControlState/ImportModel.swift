@@ -24,6 +24,10 @@ public final class ImportModel: ObservableObject {
     /// Stands in for the document's `author` when it travelled without one.
     public static let unknownAuthor = "unknown author"
     public static let cancelButton = "Cancel"
+    /// A screen reader's name for the name field in sync mode, which carries no label of its
+    /// own. The mockup draws "Name:" beside it; this is the longer form a reader needs without
+    /// the sentence above the field for context.
+    public static let syncNameLabel = "Collection name"
 
     public static func addModeTitle(_ collection: String) -> String { "Add to a collection: \(collection)" }
 
@@ -32,6 +36,13 @@ public final class ImportModel: ObservableObject {
     }
 
     public static func skippedBadge(_ reason: String) -> String { "skipped: \(reason)" }
+
+    /// A screen reader's name for the bare tick beside a connector.
+    public static func includeLabel(_ connector: String) -> String { "Include \(connector)" }
+
+    /// A screen reader's name for a collision's choice picker. Without one it reads out the
+    /// badge beside it, which says the row is skipped — the opposite of what the picker is for.
+    public static func collisionPickerLabel(_ connector: String) -> String { "What to do with \(connector)" }
 
     public static func importButton(_ count: Int) -> String { "Import \(count)" }
 
@@ -101,7 +112,9 @@ public final class ImportModel: ObservableObject {
     /// The document's own name, or the file's when it could not be read.
     public private(set) var documentName: String
     public private(set) var author: String?
-    /// Why this document cannot be imported at all, nil when it read. The sheet shows it in
+    /// Why this document cannot be imported at all, nil when it read. The Windows mirror also
+    /// carries `HasLoadError`: XAML cannot bind a body's visibility to "this optional is not
+    /// nil", where SwiftUI binds the optional itself. The sheet shows it in
     /// place of the rows and Import stays out of reach.
     public private(set) var loadError: String?
 
@@ -158,7 +171,11 @@ public final class ImportModel: ObservableObject {
     /// platform can carry in sync mode, where the whole document comes across or none of it.
     public var importCount: Int {
         switch mode {
-        case .addToCollection: return rows.filter { $0.include && $0.excludedReason == nil }.count
+        // A ticked row set to Skip lands nothing, so the button must not promise it: `perform`
+        // sends `.skip` for exactly these, and a count that disagreed would say "Import 3" over
+        // two connectors arriving.
+        case .addToCollection:
+            return rows.filter { $0.include && $0.excludedReason == nil && $0.choice != .skip }.count
         case .keepInSync: return rows.filter { $0.excludedReason == nil }.count
         }
     }

@@ -542,4 +542,14 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: second.appendingPathComponent("default.json").path),
                       "the document lands in the folder just chosen")
     }
+    func testTheWindowsGlyphsAndActionsCarryTheirOwnWords() {
+        XCTAssertEqual(CollectionsModel.editTooltip, "Edit")
+        XCTAssertEqual(CollectionsModel.makeActiveAction, "Make Active")
+        XCTAssertEqual(CollectionsModel.lockedGlyphTooltip, "Read-only: synced from the collection's author")
+        // One sentence about one fact: the chain says the same here as on the popover's chip.
+        XCTAssertEqual(CollectionsModel.syncedGlyphTooltip("/Acme/mcp/team.json"),
+                       PopoverModel.sourceTooltipFormat("/Acme/mcp/team.json"))
+        XCTAssertEqual(CollectionsModel.syncedGlyphTooltip("/Acme/mcp/team.json"),
+                       "Synced from /Acme/mcp/team.json")
+    }
 }

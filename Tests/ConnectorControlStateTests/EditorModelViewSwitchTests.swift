@@ -62,7 +62,7 @@ final class EditorModelViewSwitchTests: XCTestCase {
         XCTAssertEqual(editor.jsonText,
                        "{\n  \"args\" : [\n    \"-y\",\n    \"mcp-remote\",\n    \"" + url + "\"\n  ],\n  \"command\" : \"npx\"\n}")
         XCTAssertNil(editor.jsonError)
-        XCTAssertEqual(editor.jsonStatusText, EditorModel.jsonTip)
+        XCTAssertTrue(editor.showJSONTip, "no error, so the pane offers the paste tip")
 
         editor.jsonText = "{\"command\": \"node\", \"args\": [\"x.js\"], \"env\": {\"K\": \"v\"}}"
         editor.requestView(.form)
@@ -173,7 +173,7 @@ final class EditorModelViewSwitchTests: XCTestCase {
         editor.requestView(.json)
         editor.jsonText = "{\"command\": "
         XCTAssertEqual(editor.jsonError, "Not valid JSON — check for a stray brace, missing comma, or unquoted value.")
-        XCTAssertEqual(editor.jsonStatusText, editor.jsonError)
+        XCTAssertFalse(editor.showJSONTip, "the error takes the tip's place")
         XCTAssertTrue(editor.hasJSONError)
         XCTAssertFalse(editor.canSave)
         editor.jsonText = "{\"command\": \"node\"}"
