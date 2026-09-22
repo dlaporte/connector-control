@@ -428,7 +428,6 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>The names the export sheet writes, in the order the rows show them.</summary>
     public IReadOnlyList<string> ExportIntentForChecked() => CheckedNames;
 
-
     // MARK: collection actions
 
     public void Create()

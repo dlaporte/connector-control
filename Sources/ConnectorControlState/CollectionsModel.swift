@@ -379,7 +379,6 @@ public final class CollectionsModel: ObservableObject {
     /// The names the export sheet writes, in the order the rows show them.
     public func exportIntentForChecked() -> [String] { checkedNames }
 
-
     // MARK: - Collection actions
 
     public func create() {
