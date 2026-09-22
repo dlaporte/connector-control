@@ -817,12 +817,9 @@ public final class AppState: ObservableObject {
     /// is worth saying anything about.
     public func connectorCaution(_ connector: String, in collection: String) -> String? {
         guard let config = store.collections[collection]?.mcps[connector]?.config else { return nil }
-        let unfilled = Placeholder.markers(in: config).flatMap(\.names)
+        let unfilled = Placeholder.unfilledNames(in: config)
         if !unfilled.isEmpty {
-            // Ordered by first appearance and de-duplicated across leaves, so the sentence is
-            // stable between two reads of the same config.
-            var seen: Set<String> = []
-            return AppState.needsValueCaution(unfilled.filter { seen.insert($0).inserted }.joined(separator: ", "))
+            return AppState.needsValueCaution(unfilled.joined(separator: ", "))
         }
         if let authored = pendingRendered[collection]?.rendered.connectors[connector]?.authoredOn,
            authored != CollectionPlatform.current {

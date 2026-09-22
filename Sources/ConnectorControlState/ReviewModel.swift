@@ -19,6 +19,19 @@ public final class ReviewModel: ObservableObject {
 
     public enum Kind: Equatable, Sendable { case added, removed, changed }
 
+    /// The kinds in the order the list groups them, which is the order `rows` are built in and
+    /// the order the summary sentence reads. The view binds this rather than listing the cases.
+    public static let kinds: [Kind] = [.added, .removed, .changed]
+
+    /// One group's heading. Total over the enum, so the grouped list needs no switch of its own.
+    public static func kindLabel(_ kind: Kind) -> String {
+        switch kind {
+        case .added: return addedLabel
+        case .removed: return removedLabel
+        case .changed: return changedLabel
+        }
+    }
+
     /// One connector's before and after, as the editor would show them. A missing side is the
     /// side that does not exist: nothing before an addition, nothing after a removal.
     public struct Row: Identifiable, Equatable {
@@ -66,18 +79,21 @@ public final class ReviewModel: ObservableObject {
         rebuild()
     }
 
-    /// True when the update landed. A sheet whose update has already been applied elsewhere
-    /// reports success too: there is nothing left to do and nothing went wrong. A document that
-    /// changed while the sheet was open is refused instead — applying it would land connectors
-    /// nobody read, which is the one thing the review gate exists to prevent.
-    public func apply() -> Bool {
+    /// nil when the update landed and the sheet can close, else the message to show with the
+    /// sheet still open — the same way the Import sheet's `perform()` answers. A sheet whose
+    /// update has already been applied elsewhere reports success too: there is nothing left to
+    /// do and nothing went wrong. A document that changed while the sheet was open is refused
+    /// instead, because applying it would land connectors nobody read, which is the one thing
+    /// the review gate exists to prevent; `sourceMoved` stays set so the sheet can offer to
+    /// review it again.
+    public func apply() -> String? {
         guard state.pendingSourceHash(for: collection) == sourceHash else {
             sourceMoved = true
-            return false
+            return ReviewModel.sourceMovedMessage
         }
         let error = state.applyPendingUpdate(for: collection)
         rebuild()
-        return error == nil
+        return error
     }
 
     /// Added first, then removed, then changed, each alphabetical — the order the summary

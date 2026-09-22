@@ -193,6 +193,10 @@ public sealed class PublishModel : ObservableObject
         {
             row.PropertyChanged += OnRowChanged;
         }
+        Raise(nameof(EnvRows));
+        Raise(nameof(PathRows));
+        Raise(nameof(HasEnvRows));
+        Raise(nameof(HasPathRows));
     }
 
     /// <summary>Everything below the rows is derived from them, and nothing above is.</summary>

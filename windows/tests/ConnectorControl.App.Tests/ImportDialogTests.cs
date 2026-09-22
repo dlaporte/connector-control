@@ -43,6 +43,9 @@ public class ImportDialogTests
         tick.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, tick));
     }
 
+    private static void Click(ButtonBase button) =>
+        button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+
     /// <summary>
     /// Two remote connectors, one with a header name carrying the &amp; the Windows cmd /c
     /// launcher cannot hand to cmd.exe.
@@ -64,6 +67,8 @@ public class ImportDialogTests
         using var state = h.Create();
         var path = h.Dir.File("data-team.json");
         Write(CollectionDocumentSamples.DataTeam, path);
+        // One of the document's four connectors is already in the target, under the same name.
+        Assert.Null(state.Upsert("github", new McpEntry(true, AppStateHarness.Remote("https://x/")), null));
         WpfApp.Invoke(() =>
         {
             var model = new ImportModel(state, path);
@@ -77,9 +82,15 @@ public class ImportDialogTests
             Assert.Equal(Visibility.Visible, window.CopiesBody.Visibility);
             Assert.Equal(Visibility.Collapsed, window.SyncBody.Visibility);
             Assert.Equal("Default", window.TargetBox.SelectedItem);
-            // Nothing in this collection answers to any of the four names, so all four are ticked.
-            Assert.Equal(ImportModel.ImportButton(4), window.ImportButton.Content);
+            // What is already there is not imported by default, so three of the four are ticked.
+            Assert.Equal(ImportModel.ImportButton(3), window.ImportButton.Content);
             Assert.True(window.ImportButton.IsEnabled);
+
+            // Ticking the collision in counts it too.
+            var github = model.Rows.Single(r => r.Name == "github");
+            ClickTick(RowElements.Find<CheckBox>(window.RowList, github, "IncludeTick"), true);
+            Layout(window);
+            Assert.Equal(ImportModel.ImportButton(4), window.ImportButton.Content);
 
             // A connector whose author left values to fill in carries the caution its own row in
             // the collection would; one with nothing to fill in carries no glyph at all.
@@ -88,7 +99,7 @@ public class ImportDialogTests
             Assert.Equal(dbt.NeedsCaution, glyph.ToolTip);
             Assert.Equal(Visibility.Visible, glyph.Visibility);
             Assert.Equal(Visibility.Collapsed,
-                RowElements.Find<TextBlock>(window.RowList, model.Rows.Single(r => r.Name == "github"), "NeedsGlyph").Visibility);
+                RowElements.Find<TextBlock>(window.RowList, github, "NeedsGlyph").Visibility);
 
             // Unticking a row takes it out of the count.
             ClickTick(RowElements.Find<CheckBox>(window.RowList, dbt, "IncludeTick"), false);
@@ -124,6 +135,63 @@ public class ImportDialogTests
     }
 
     [Fact]
+    public void ACollisionChoiceReachesTheRowAndImportCloses()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        Write(CollectionDocumentSamples.DataTeam, path);
+        // One of the document's four connectors is already in the target, under the same name.
+        Assert.Null(state.Upsert("github", new McpEntry(true, AppStateHarness.Remote("https://x/")), null));
+        WpfApp.Invoke(() =>
+        {
+            var model = new ImportModel(state, path);
+            var window = Shown(model);
+            var github = model.Rows.Single(r => r.Name == "github");
+            var badge = RowElements.Find<TextBlock>(window.RowList, github, "BadgeText");
+            var panel = RowElements.Find<ContentControl>(window.RowList, github, "ChoicePanel");
+
+            // A collision that is not coming across says so instead of offering the choice, and
+            // holds no picker at all until it is.
+            Assert.Equal(ImportModel.PresentBadge, badge.Text);
+            Assert.Equal(Visibility.Visible, badge.Visibility);
+            Assert.Null(panel.ContentTemplate);
+
+            // Ticking it in trades the badge for how the collision resolves.
+            ClickTick(RowElements.Find<CheckBox>(window.RowList, github, "IncludeTick"), true);
+            Layout(window);
+            Assert.Equal(Visibility.Collapsed, badge.Visibility);
+            Assert.NotNull(panel.ContentTemplate);
+            var choiceBox = RowElements.Find<ComboBox>(window.RowList, github, "ChoiceBox");
+            var replaceNote = RowElements.Find<TextBlock>(window.RowList, github, "ReplaceNote");
+            Assert.Equal(ImportModel.CollisionChoices, choiceBox.Items.Cast<ImportChoice>());
+            Assert.Equal(ImportModel.CollisionChoices.Select(ImportModel.ChoiceTitle),
+                choiceBox.Items.Cast<ImportChoice>().Select(ImportModel.ChoiceTitle));
+            Assert.Equal(ImportChoice.Replace, choiceBox.SelectedItem);
+            Assert.Equal(ImportModel.ReplaceKeepsValues, replaceNote.Text);
+            Assert.Equal(Visibility.Visible, replaceNote.Visibility);
+
+            // Only Replace keeps what the user filled in, so only Replace says so — and the
+            // choice reaches the row it was made on.
+            choiceBox.SelectedItem = ImportChoice.KeepBoth;
+            Layout(window);
+            Assert.Equal(ImportChoice.KeepBoth, github.Choice);
+            Assert.Equal(Visibility.Collapsed, replaceNote.Visibility);
+
+            Assert.False(window.Accepted);
+            Click(window.ImportButton);
+
+            // Keep both landed beside the connector that was there, which is what the picker said.
+            Assert.True(window.Accepted);
+            Assert.False(window.IsVisible);
+            Assert.Equal(Visibility.Collapsed, window.FailureText.Visibility);
+            var mcps = state.Store.Collections["Default"].Mcps;
+            Assert.True(mcps.ContainsKey("github 2"));
+            Assert.Equal(AppStateHarness.Remote("https://x/"), mcps["github"].Config);
+        });
+    }
+
+    [Fact]
     public void ANewerDocumentShowsTheLoadError()
     {
         using var h = new AppStateHarness();
@@ -144,11 +212,13 @@ public class ImportDialogTests
             // Nothing to choose between, and nothing to press but Cancel.
             Assert.Equal(Visibility.Collapsed, window.Body.Visibility);
             Assert.Equal(Visibility.Collapsed, window.ImportButton.Visibility);
-            Assert.Equal(Visibility.Visible, window.CancelButton.Visibility);
             Assert.True(window.CancelButton.IsCancel);
             // The file still says which document the sheet is about.
             Assert.Contains("future.json", model.SourceSentence, StringComparison.Ordinal);
+            // A sheet that cannot import has accepted nothing, whichever way it is closed.
+            Assert.False(window.Accepted);
             window.Close();
+            Assert.False(window.Accepted);
         });
     }
 
@@ -166,24 +236,30 @@ public class ImportDialogTests
             var bad = model.Rows.Single(r => r.Name == "bad");
             var good = model.Rows.Single(r => r.Name == "good");
 
-            var skipped = RowElements.Find<TextBlock>(window.RowList, bad, "SkippedText");
+            var skipped = RowElements.Find<TextBlock>(window.RowList, bad, "BadgeText");
             Assert.Equal(ImportModel.SkippedBadge(bad.ExcludedReason!), skipped.Text);
             Assert.Equal(Visibility.Visible, skipped.Visibility);
             // A connector this platform has no way to run cannot be imported at all.
             var tick = RowElements.Find<CheckBox>(window.RowList, bad, "IncludeTick");
             Assert.False(tick.IsEnabled);
             Assert.False(tick.IsChecked);
-            Assert.Equal(Visibility.Collapsed,
-                RowElements.Find<TextBlock>(window.RowList, bad, "NewText").Visibility);
+            // The reason is the row's whole point, so the line that truncates it holds it all.
+            Assert.Equal(skipped.Text, skipped.ToolTip);
 
             // The one that can come across says it is new here, and is the only one in the count.
-            Assert.Equal(Visibility.Collapsed,
-                RowElements.Find<TextBlock>(window.RowList, good, "SkippedText").Visibility);
-            var badge = RowElements.Find<TextBlock>(window.RowList, good, "NewText");
+            var badge = RowElements.Find<TextBlock>(window.RowList, good, "BadgeText");
             Assert.Equal(ImportModel.NewBadge, badge.Text);
             Assert.Equal(Visibility.Visible, badge.Visibility);
             Assert.True(RowElements.Find<CheckBox>(window.RowList, good, "IncludeTick").IsEnabled);
             Assert.Equal(ImportModel.ImportButton(1), window.ImportButton.Content);
+
+            // Neither row is a collision, so neither holds a picker at all: an element inside a
+            // template is created even while it is collapsed, and these rows' choice is one the
+            // picker does not offer.
+            foreach (var row in model.Rows)
+            {
+                Assert.Null(RowElements.Find<ContentControl>(window.RowList, row, "ChoicePanel").ContentTemplate);
+            }
             window.Close();
         });
     }

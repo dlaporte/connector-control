@@ -48,12 +48,12 @@ final class ReviewModelTests: XCTestCase {
         XCTAssertEqual(dbt.after, state.pendingDocument(for: "Data team")?.connectors["dbt"]?.config.editorText())
         XCTAssertEqual(dbt.after?.contains("@dbt/mcp@2"), true)
 
-        XCTAssertTrue(model.apply())
+        XCTAssertNil(model.apply())
         XCTAssertTrue(state.pendingUpdates.isEmpty)
         XCTAssertTrue(model.rows.isEmpty)
         XCTAssertEqual(model.summary, "")
         XCTAssertNil(state.store.collections["Data team"]?.mcps["github"])
-        XCTAssertTrue(model.apply(), "a second Apply has nothing left to do and nothing to report")
+        XCTAssertNil(model.apply(), "a second Apply has nothing left to do and nothing to report")
     }
 
     func testAnAddedConnectorHasNoBeforeSide() throws {
@@ -74,7 +74,7 @@ final class ReviewModelTests: XCTestCase {
         XCTAssertEqual(model.rows.first?.kind, .added)
         XCTAssertNil(model.rows.first?.before)
         XCTAssertEqual(model.rows.first?.after, state.pendingDocument(for: "Data team")?.connectors["jira"]?.config.editorText())
-        XCTAssertTrue(model.apply())
+        XCTAssertNil(model.apply())
         XCTAssertEqual(state.store.collections["Data team"]?.mcps["jira"]?.enabled, false, "an added connector arrives off")
     }
 
@@ -95,7 +95,7 @@ final class ReviewModelTests: XCTestCase {
         try TempDir.bumpModificationDate(of: url)
         XCTAssertTrue(h.ui.pumpUntil({ state.pendingUpdates["Data team"]?.removed == ["github", "notion"] }, timeout: 8))
 
-        XCTAssertFalse(model.apply(), "the rows on screen are not what would land")
+        XCTAssertEqual(model.apply(), ReviewModel.sourceMovedMessage, "the rows on screen are not what would land")
         XCTAssertTrue(model.sourceMoved)
         XCTAssertNotNil(state.pendingUpdates["Data team"], "nothing was applied")
         XCTAssertNotNil(state.store.collections["Data team"]?.mcps["notion"])
@@ -103,7 +103,7 @@ final class ReviewModelTests: XCTestCase {
         model.refresh()
         XCTAssertFalse(model.sourceMoved)
         XCTAssertEqual(model.rows.map(\.name), ["github", "notion", "dbt"])
-        XCTAssertTrue(model.apply())
+        XCTAssertNil(model.apply())
         XCTAssertTrue(state.pendingUpdates.isEmpty)
         XCTAssertEqual(state.store.collections["Data team"]?.mcps["dbt"]?.config.value(at: JSONPointer(["args", "1"])),
                        .string("@dbt/mcp@3"))
@@ -119,6 +119,13 @@ final class ReviewModelTests: XCTestCase {
         let model = ReviewModel(state: state, collection: "Data team")
         XCTAssertTrue(model.rows.isEmpty)
         XCTAssertEqual(model.summary, "")
-        XCTAssertTrue(model.apply())
+        XCTAssertNil(model.apply())
+    }
+    func testTheKindsGroupTheListInTheOrderTheSummaryReads() {
+        XCTAssertEqual(ReviewModel.kinds, [.added, .removed, .changed])
+        XCTAssertEqual(ReviewModel.kinds.map(ReviewModel.kindLabel), ["Added", "Removed", "Changed"])
+        XCTAssertEqual(ReviewModel.kindLabel(.added), ReviewModel.addedLabel)
+        XCTAssertEqual(ReviewModel.kindLabel(.removed), ReviewModel.removedLabel)
+        XCTAssertEqual(ReviewModel.kindLabel(.changed), ReviewModel.changedLabel)
     }
 }

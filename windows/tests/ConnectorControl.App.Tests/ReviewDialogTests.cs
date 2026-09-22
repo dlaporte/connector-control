@@ -141,7 +141,7 @@ public class ReviewDialogTests
             Assert.Equal(Visibility.Collapsed, window.MovedPanel.Visibility);
 
             Click(window.ApplyButton);
-            Assert.True(window.Applied);
+            Assert.True(window.Accepted);
             Assert.False(window.IsVisible);
             Assert.Empty(state.PendingUpdates);
             Assert.False(state.Store.Collections["Data team"].Mcps.ContainsKey("github"));
@@ -170,7 +170,7 @@ public class ReviewDialogTests
             Layout(window);
 
             // What is listed is no longer what would land, so nothing landed.
-            Assert.False(window.Applied);
+            Assert.False(window.Accepted);
             Assert.True(window.IsVisible);
             Assert.Equal(Visibility.Visible, window.MovedPanel.Visibility);
             Assert.Equal(ReviewModel.SourceMovedMessage, window.MovedText.Text);
@@ -188,7 +188,7 @@ public class ReviewDialogTests
             Assert.Equal(["dbt"], Names(groups[1]));
 
             Click(window.ApplyButton);
-            Assert.True(window.Applied);
+            Assert.True(window.Accepted);
             Assert.False(window.IsVisible);
             Assert.Empty(state.PendingUpdates);
         });

@@ -94,6 +94,8 @@ public class ImportModelTests
         Assert.Equal(RemotePattern.CmdUnsafeReason(RemoteField.HeaderName), bad.ExcludedReason);
         Assert.Equal("skipped: " + RemotePattern.CmdUnsafeReason(RemoteField.HeaderName),
             ImportModel.SkippedBadge(bad.ExcludedReason!));
+        // The row carries that text itself, so the template needs no converter over the factory.
+        Assert.Equal(ImportModel.SkippedBadge(bad.ExcludedReason!), bad.Badge);
         Assert.False(bad.Include);
         Assert.Null(model.Rows[1].ExcludedReason);
         Assert.True(model.Rows[1].Include);
@@ -203,5 +205,58 @@ public class ImportModelTests
         // The same connector, once imported, says exactly the same thing in the window.
         Assert.Null(model.Perform());
         Assert.Equal(dbt.NeedsCaution, state.ConnectorCaution("dbt", "Default"));
+    }
+    [Fact]
+    public void EachRowCarriesItsOwnBadge()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        Write(CollectionDocumentSamples.DataTeam, path);
+        // One of the document's four connectors is already in the target, under the same name.
+        Assert.Null(state.Upsert("github", new McpEntry(AppStateHarness.Remote("https://x/")), null));
+
+        var model = new ImportModel(state, path);
+        Assert.Equal(["dbt", "github", "ledger", "notion"], model.Rows.Select(r => r.Name));
+        Assert.Equal(
+            [ImportModel.NewBadge, ImportModel.PresentBadge, ImportModel.NewBadge, ImportModel.NewBadge],
+            model.Rows.Select(r => r.Badge));
+        // The badge is what the row is, not what the user has since ticked.
+        model.Rows[1].Include = true;
+        model.Rows[1].Choice = ImportChoice.Replace;
+        Assert.Equal(ImportModel.PresentBadge, model.Rows[1].Badge);
+    }
+    /// <summary>
+    /// Two needs in one connector, one in an argument and one in an environment value, so first
+    /// appearance and alphabetical order disagree: object keys are walked sorted, and Args comes
+    /// before Env, while the names sort the other way.
+    /// </summary>
+    private static CollectionDocument TwoNeedsDocument() => new(
+        "Two", "Acme", "o-two", "2026-09-21T14:02:11Z",
+        new Dictionary<string, CollectionDocument.Connector>
+        {
+            ["pair"] = new(
+                new CollectionDocument.Launcher.Local("node", ["${CC_NEEDS:zulu}"], CollectionPlatform.Mac),
+                env: [new("ALPHA", new CollectionDocument.EnvValue.Hint("the alpha hint"))],
+                needs: [new("zulu", "the zulu hint")]),
+        });
+
+    [Fact]
+    public void ARowsNeedsFollowTheConfigRatherThanTheAlphabet()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("two.json");
+        Write(TwoNeedsDocument(), path);
+        var model = new ImportModel(state, path);
+
+        var pair = model.Rows.Single(r => r.Name == "pair");
+        // First appearance in the config, not sorted.
+        Assert.Equal(["zulu", "ALPHA"], pair.Needs);
+        Assert.Equal(AppState.NeedsValueCaution("zulu, ALPHA"), pair.NeedsCaution);
+
+        // Once imported, the connector's own caution is the very same sentence.
+        Assert.Null(model.Perform());
+        Assert.Equal(pair.NeedsCaution, state.ConnectorCaution("pair", "Default"));
     }
 }

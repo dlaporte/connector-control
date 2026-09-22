@@ -166,12 +166,12 @@ struct ImportSheetView: View {
         }
     }
 
-    /// What would happen to this connector: the reason it cannot come across, the collision it
-    /// would cause, or the one line that says it is new here.
+    /// What would happen to this connector: how the collision it would cause resolves, or — for
+    /// every other row, and for a collision that is not coming across — the row's own badge.
+    /// Unticking a collision and choosing Skip in the picker mean the same thing, so a row that
+    /// is not coming across says so instead of offering the choice.
     @ViewBuilder private func badge(for row: Binding<ImportModel.Row>) -> some View {
-        if let reason = row.wrappedValue.excludedReason {
-            caption(ImportModel.skippedBadge(reason))
-        } else if row.wrappedValue.present, row.wrappedValue.include {
+        if row.wrappedValue.present, row.wrappedValue.include {
             HStack(spacing: 6) {
                 Picker("", selection: row.choice) {
                     ForEach(ImportModel.collisionChoices, id: \.self) { choice in
@@ -181,17 +181,18 @@ struct ImportSheetView: View {
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .fixedSize()
-                .accessibilityLabel(row.wrappedValue.name)
+                // Not the row's name: the tick beside it already answers to that, and a screen
+                // reader would announce the two controls identically.
+                .accessibilityLabel(ImportModel.presentBadge)
                 if row.wrappedValue.choice == .replace {
                     caption(ImportModel.replaceKeepsValues)
                 }
             }
-        } else if row.wrappedValue.present {
-            // Unticking a collision and choosing Skip in the picker mean the same thing, so the
-            // row that is not coming across says so instead of offering the choice.
-            caption(ImportModel.presentBadge)
         } else {
-            caption(ImportModel.newBadge)
+            // The badge is a row's whole point and the skipped reason is the longest of them, so
+            // the one line that shows it carries the full sentence as its tooltip.
+            caption(row.wrappedValue.badge)
+                .help(row.wrappedValue.badge)
         }
     }
 

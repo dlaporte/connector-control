@@ -170,4 +170,52 @@ final class ImportModelTests: XCTestCase {
         XCTAssertNil(model.perform())
         XCTAssertEqual(state.connectorCaution("dbt", in: "Default"), dbt.needsCaution)
     }
+    func testEachRowCarriesItsOwnBadge() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("data-team.json")
+        try write(CollectionDocumentSamples.dataTeam, at: url)
+        // One of the document's four connectors is already in the target, under the same name.
+        XCTAssertNil(state.upsert(name: "github", entry: MCPEntry(config: AppStateHarness.remote("https://x/")),
+                                  renamedFrom: nil))
+
+        let model = ImportModel(state: state, path: url.path)
+        XCTAssertEqual(model.rows.map(\.name), ["dbt", "github", "ledger", "notion"])
+        XCTAssertEqual(model.rows.map(\.badge),
+                       [ImportModel.newBadge, ImportModel.presentBadge, ImportModel.newBadge, ImportModel.newBadge])
+        // The badge is what the row is, not what the user has since ticked.
+        model.rows[1].include = true
+        model.rows[1].choice = .replace
+        XCTAssertEqual(model.rows[1].badge, ImportModel.presentBadge)
+        // The third form is the excluded one, which only the other platform's launcher rules produce;
+        // its mirror asserts it against a row this Mac cannot make.
+    }
+    /// Two needs in one connector, one in an argument and one in an environment value, so first
+    /// appearance and alphabetical order disagree: object keys are walked sorted, and `args`
+    /// comes before `env`, while the names sort the other way.
+    private var twoNeedsDocument: CollectionDocument {
+        CollectionDocument(
+            name: "Two", author: "Acme", origin: "o-two", exported: "2026-09-21T14:02:11Z",
+            connectors: [
+                "pair": .init(launcher: .local(.init(command: "node", args: ["${CC_NEEDS:zulu}"], platform: .mac)),
+                              env: ["ALPHA": .hint("the alpha hint")],
+                              needs: ["zulu": "the zulu hint"]),
+            ])
+    }
+
+    func testARowsNeedsFollowTheConfigRatherThanTheAlphabet() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("two.json")
+        try write(twoNeedsDocument, at: url)
+        let model = ImportModel(state: state, path: url.path)
+
+        let pair = try XCTUnwrap(model.rows.first { $0.name == "pair" })
+        XCTAssertEqual(pair.needs, ["zulu", "ALPHA"], "first appearance in the config, not sorted")
+        XCTAssertEqual(pair.needsCaution, AppState.needsValueCaution("zulu, ALPHA"))
+
+        // Once imported, the connector's own caution is the very same sentence.
+        XCTAssertNil(model.perform())
+        XCTAssertEqual(state.connectorCaution("pair", in: "Default"), pair.needsCaution)
+    }
 }

@@ -40,6 +40,13 @@ public final class ImportModel: ObservableObject {
     /// binds this list rather than deciding for itself which cases a collision has.
     public static let collisionChoices: [ImportChoice] = [.replace, .keepBoth, .skip]
 
+    /// A row's badge, in precedence order: a connector this platform cannot run says so first,
+    /// then one the target already holds, then a new arrival.
+    private static func badge(excludedReason: String?, present: Bool) -> String {
+        if let excludedReason { return skippedBadge(excludedReason) }
+        return present ? presentBadge : newBadge
+    }
+
     /// One choice's picker label. Total over the enum, so a row's picker needs no logic of its
     /// own; `add` is the answer for a name nothing here already holds.
     public static func choiceTitle(_ choice: ImportChoice) -> String {
@@ -71,9 +78,13 @@ public final class ImportModel: ObservableObject {
         /// a second wording of it. Filled by the model, as `CollectionsModel.Row.caution` is,
         /// because the sentence belongs to AppState and a row is not on its actor.
         public let needsCaution: String?
+        /// What the row says about itself beside its name: nothing this platform can run, a name
+        /// the target already holds, or a new arrival. Built where the row is, so the view binds
+        /// one string instead of choosing between a constant and a factory.
+        public let badge: String
 
         public init(name: String, include: Bool, present: Bool, choice: ImportChoice,
-                    excludedReason: String?, needs: [String], needsCaution: String?) {
+                    excludedReason: String?, needs: [String], needsCaution: String?, badge: String) {
             self.id = name
             self.name = name
             self.include = include
@@ -82,6 +93,7 @@ public final class ImportModel: ObservableObject {
             self.excludedReason = excludedReason
             self.needs = needs
             self.needsCaution = needsCaution
+            self.badge = badge
         }
     }
 
@@ -192,13 +204,15 @@ public final class ImportModel: ObservableObject {
         rows = Set(rendered.connectors.keys).union(rendered.excluded.keys).sorted().map { name in
             let reason = rendered.excluded[name]
             let present = held[name] != nil
-            // Sorted, unlike the config-marker caller's first-appearance order: these come from
-            // the document's `needs` map, which has no order of its own.
-            let needs = rendered.connectors[name]?.needs.keys.sorted() ?? []
+            // First appearance in the config the import would write, not the `needs` map's own
+            // order: the map is unordered, and reading the markers is what makes this row's
+            // sentence the one the connector will carry once it has landed.
+            let needs = rendered.connectors[name].map { Placeholder.unfilledNames(in: $0.config) } ?? []
             return Row(name: name, include: reason == nil && !present, present: present,
                        choice: present ? .replace : .add, excludedReason: reason, needs: needs,
                        needsCaution: needs.isEmpty
-                           ? nil : AppState.needsValueCaution(needs.joined(separator: ", ")))
+                           ? nil : AppState.needsValueCaution(needs.joined(separator: ", ")),
+                       badge: ImportModel.badge(excludedReason: reason, present: present))
         }
     }
 

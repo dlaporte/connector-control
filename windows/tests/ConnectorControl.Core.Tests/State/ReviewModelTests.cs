@@ -62,12 +62,13 @@ public class ReviewModelTests
         Assert.Equal(state.PendingDocument("Data team")!.Connectors["dbt"].Config.EditorText(), dbt.After);
         Assert.Contains("@dbt/mcp@2", dbt.After!, StringComparison.Ordinal);
 
-        Assert.True(model.Apply());
+        Assert.Null(model.Apply());
         Assert.Empty(state.PendingUpdates);
         Assert.Empty(model.Rows);
         Assert.Equal(string.Empty, model.Summary);
         Assert.False(state.Store.Collections["Data team"].Mcps.ContainsKey("github"));
-        Assert.True(model.Apply(), "a second Apply has nothing left to do and nothing to report");
+        // A second Apply has nothing left to do and nothing to report.
+        Assert.Null(model.Apply());
     }
 
     [Fact]
@@ -93,7 +94,7 @@ public class ReviewModelTests
         Assert.Equal(ReviewModel.Kind.Added, model.Rows[0].Kind);
         Assert.Null(model.Rows[0].Before);
         Assert.Equal(state.PendingDocument("Data team")!.Connectors["jira"].Config.EditorText(), model.Rows[0].After);
-        Assert.True(model.Apply());
+        Assert.Null(model.Apply());
         Assert.False(state.Store.Collections["Data team"].Mcps["jira"].Enabled, "an added connector arrives off");
     }
 
@@ -122,7 +123,8 @@ public class ReviewModelTests
         Assert.True(h.Ui.PumpUntil(
             () => state.PendingUpdates.TryGetValue("Data team", out var d) && d.Removed.SequenceEqual(["github", "notion"]), Wait));
 
-        Assert.False(model.Apply(), "the rows on screen are not what would land");
+        // The rows on screen are not what would land.
+        Assert.Equal(ReviewModel.SourceMovedMessage, model.Apply());
         Assert.True(model.SourceMoved);
         Assert.True(state.PendingUpdates.ContainsKey("Data team"));   // nothing was applied
         Assert.True(state.Store.Collections["Data team"].Mcps.ContainsKey("notion"));
@@ -130,7 +132,7 @@ public class ReviewModelTests
         model.Refresh();
         Assert.False(model.SourceMoved);
         Assert.Equal(["github", "notion", "dbt"], model.Rows.Select(r => r.Name));
-        Assert.True(model.Apply());
+        Assert.Null(model.Apply());
         Assert.Empty(state.PendingUpdates);
         Assert.Equal(JsonValue.String("@dbt/mcp@3"),
             state.Store.Collections["Data team"].Mcps["dbt"].Config.ValueAt(JsonPointer.Parse("/args/1")!));
@@ -148,6 +150,15 @@ public class ReviewModelTests
         var model = new ReviewModel(state, "Data team");
         Assert.Empty(model.Rows);
         Assert.Equal(string.Empty, model.Summary);
-        Assert.True(model.Apply());
+        Assert.Null(model.Apply());
+    }
+    [Fact]
+    public void TheKindsGroupTheListInTheOrderTheSummaryReads()
+    {
+        Assert.Equal([ReviewModel.Kind.Added, ReviewModel.Kind.Removed, ReviewModel.Kind.Changed], ReviewModel.Kinds);
+        Assert.Equal(["Added", "Removed", "Changed"], ReviewModel.Kinds.Select(ReviewModel.KindLabel));
+        Assert.Equal(ReviewModel.AddedLabel, ReviewModel.KindLabel(ReviewModel.Kind.Added));
+        Assert.Equal(ReviewModel.RemovedLabel, ReviewModel.KindLabel(ReviewModel.Kind.Removed));
+        Assert.Equal(ReviewModel.ChangedLabel, ReviewModel.KindLabel(ReviewModel.Kind.Changed));
     }
 }

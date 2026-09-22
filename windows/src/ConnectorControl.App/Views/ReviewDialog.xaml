@@ -60,15 +60,24 @@
 
     <!-- The document changed while the sheet was open, so what is listed is no longer what would
          land. Refresh rebuilds the rows from the file as it is now. -->
-    <StackPanel x:Name="MovedPanel" Orientation="Horizontal" Margin="0,12,0,0"
-                Visibility="{Binding SourceMoved, Converter={StaticResource Vis}}">
+    <!-- Its own columns, so the sentence wraps in the space left over rather than running under
+         the button that answers it. -->
+    <Grid x:Name="MovedPanel" Margin="0,12,0,0"
+          Visibility="{Binding SourceMoved, Converter={StaticResource Vis}}">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
       <TextBlock FontFamily="{StaticResource IconFont}" Style="{StaticResource CautionText}"
                  Text="{x:Static state:FlyoutModel.ToolWarningGlyph}" VerticalAlignment="Center" Margin="0,0,6,0" />
-      <TextBlock x:Name="MovedText" Text="{x:Static state:ReviewModel.SourceMovedMessage}"
+      <TextBlock x:Name="MovedText" Grid.Column="1" Text="{x:Static state:ReviewModel.SourceMovedMessage}"
                  Style="{StaticResource CautionText}" VerticalAlignment="Center" />
-      <Button x:Name="RefreshButton" Content="{x:Static state:CollectionsModel.RefreshButton}"
+      <Button x:Name="RefreshButton" Grid.Column="2" Content="{x:Static state:CollectionsModel.RefreshButton}"
               MinWidth="80" Margin="10,0,0,0" Click="OnRefresh" />
-    </StackPanel>
+    </Grid>
+
+    <TextBlock x:Name="FailureText" Style="{StaticResource ErrorText}" Margin="0,8,0,0" Visibility="Collapsed" />
 
     <StackPanel Style="{StaticResource DialogButtons}" Margin="0,16,0,0">
       <Button Content="{x:Static state:ImportModel.CancelButton}" MinWidth="80" IsCancel="True" />

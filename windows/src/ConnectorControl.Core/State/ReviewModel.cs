@@ -25,6 +25,21 @@ public sealed class ReviewModel : ObservableObject
     }
 
     /// <summary>
+    /// The kinds in the order the list groups them, which is the order the rows are built in and
+    /// the order the summary sentence reads. The view binds this rather than listing the cases.
+    /// </summary>
+    public static readonly IReadOnlyList<Kind> Kinds = [Kind.Added, Kind.Removed, Kind.Changed];
+
+    /// <summary>One group's heading. Total over the enum, so the grouped list needs no switch of its own.</summary>
+    public static string KindLabel(Kind kind) => kind switch
+    {
+        Kind.Added => AddedLabel,
+        Kind.Removed => RemovedLabel,
+        Kind.Changed => ChangedLabel,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+    };
+
+    /// <summary>
     /// One connector's before and after, as the editor would show them. A missing side is the
     /// side that does not exist: nothing before an addition, nothing after a removal.
     /// </summary>
@@ -74,22 +89,25 @@ public sealed class ReviewModel : ObservableObject
     }
 
     /// <summary>
-    /// True when the update landed. A sheet whose update has already been applied elsewhere
-    /// reports success too: there is nothing left to do and nothing went wrong. A document that
-    /// changed while the sheet was open is refused instead — applying it would land connectors
-    /// nobody read, which is the one thing the review gate exists to prevent.
+    /// Null when the update landed and the dialog can close, else the message to show with the
+    /// dialog still open — the same way the Import dialog's <c>Perform()</c> answers. A sheet
+    /// whose update has already been applied elsewhere reports success too: there is nothing
+    /// left to do and nothing went wrong. A document that changed while the dialog was open is
+    /// refused instead, because applying it would land connectors nobody read, which is the one
+    /// thing the review gate exists to prevent; <see cref="SourceMoved"/> stays set so the
+    /// dialog can offer to review it again.
     /// </summary>
-    public bool Apply()
+    public string? Apply()
     {
         if (state.PendingSourceHash(Collection) != sourceHash)
         {
             SourceMoved = true;
-            return false;
+            return SourceMovedMessage;
         }
         var error = state.ApplyPendingUpdate(Collection);
         Rebuild();
         RaiseAll();
-        return error is null;
+        return error;
     }
 
     /// <summary>Added first, then removed, then changed, each alphabetical — the order the summary sentence reads in, so the list under it is in the same order.</summary>

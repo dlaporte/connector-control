@@ -53,6 +53,14 @@ public static class Placeholder
             .Where(m => m.Names.Count > 0)
             .ToList();
 
+    /// <summary>
+    /// Every marker name the config still asks for, ordered by first appearance and
+    /// de-duplicated across leaves, so a sentence built from them is stable between two reads of
+    /// the same config and the same wherever it is built.
+    /// </summary>
+    public static IReadOnlyList<string> UnfilledNamesIn(JsonValue config) =>
+        MarkersIn(config).SelectMany(m => m.Names).Distinct(StringComparer.Ordinal).ToList();
+
     public static bool UsesDirectoryToken(JsonValue config) =>
         config.StringLeaves().Any(leaf => leaf.Value.Contains(DirectoryToken, StringComparison.Ordinal));
 

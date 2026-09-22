@@ -22,11 +22,6 @@ public partial class ImportDialog : DialogWindow
         Model = model;
         DataContext = model;
         Title = ImportModel.Title;
-        // Read once: whether the document could be read is settled before the sheet opens.
-        var readable = model.LoadError is null;
-        LoadErrorText.Visibility = readable ? Visibility.Collapsed : Visibility.Visible;
-        Body.Visibility = readable ? Visibility.Visible : Visibility.Collapsed;
-        ImportButton.Visibility = readable ? Visibility.Visible : Visibility.Collapsed;
         onModelChanged = (_, _) => Refresh();
         Model.PropertyChanged += onModelChanged;
         Closed += (_, _) => Model.PropertyChanged -= onModelChanged;
@@ -35,27 +30,32 @@ public partial class ImportDialog : DialogWindow
 
     public ImportModel Model { get; }
 
+    /// <summary>
+    /// True once the import has landed. The sheet reports through this rather than DialogResult,
+    /// whose setter throws on a window presented with Show() — which is how a test drives one.
+    /// PublishDialog and ReviewDialog answer the same way, under the same name.
+    /// </summary>
+    public bool Accepted { get; private set; }
+
     public static bool Show(Window? owner, ImportModel model)
     {
         var dialog = new ImportDialog(model);
-        return Present(dialog, owner, () => dialog.DialogResult == true);
+        return Present(dialog, owner, () => dialog.Accepted);
     }
 
     /// <summary>
-    /// The three things that follow the mode, the target and the ticks. The count and the mode's
-    /// own sentence are formatted strings rather than properties, and a row's tick is a plain
-    /// property that notifies nobody — the Mac's SwiftUI re-reads the whole sheet for free, and
-    /// here the sheet re-reads what changed with it.
+    /// The two formatted strings and the one derived flag nothing notifies: the count beside Import
+    /// and the mode's own sentence are built from a value rather than being properties, and a row's
+    /// tick is a plain property that notifies nobody. Everything that is a property of the model is
+    /// bound instead. The Mac's SwiftUI re-reads the whole sheet for free; here the sheet re-reads
+    /// what changed with it.
     /// </summary>
     private void Refresh()
     {
-        var copies = Model.ImportMode == ImportModel.Mode.AddToCollection;
         CopiesMode.Content = ImportModel.AddModeTitle(Model.TargetCollection);
         // The radio's sentence is what names the target, so it is the picker's label too.
         AutomationProperties.SetName(TargetBox, ImportModel.AddModeTitle(Model.TargetCollection));
         ImportButton.Content = ImportModel.ImportButton(Model.ImportCount);
-        CopiesBody.Visibility = copies ? Visibility.Visible : Visibility.Collapsed;
-        SyncBody.Visibility = copies ? Visibility.Collapsed : Visibility.Visible;
         ImportButton.GetBindingExpression(IsEnabledProperty)?.UpdateTarget();
     }
 
@@ -63,13 +63,16 @@ public partial class ImportDialog : DialogWindow
 
     private void OnImport(object sender, RoutedEventArgs e)
     {
+        // The model answers with the reason it could not land, or null. A failure stays on the
+        // sheet the user is looking at; the model publishes no property for it, so neither does
+        // this line's visibility.
         var failure = Model.Perform();
         FailureText.Text = failure ?? string.Empty;
         FailureText.Visibility = failure is null ? Visibility.Collapsed : Visibility.Visible;
         if (failure is null)
         {
-            // Set only for a sheet shown with ShowDialog, which is the only way it is presented.
-            DialogResult = true;
+            Accepted = true;
+            Close();
         }
     }
 }
@@ -89,6 +92,24 @@ public sealed class ImportChoiceTitleConverter : IValueConverter
 }
 
 /// <summary>
+/// The sheet's two halves: what shows while the document read, and — with <c>error</c> as the
+/// parameter — the one line that shows when it did not. A one-sided model flag, the shape
+/// <c>FlyoutModel.HasCollectionBanner</c> has, would let the shared Vis converter do this instead.
+/// </summary>
+public sealed class ImportLoadedConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var loaded = value is null;
+        var wantsTheError = string.Equals(parameter as string, "error", StringComparison.Ordinal);
+        return loaded != wantsTheError ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        Binding.DoNothing;
+}
+
+/// <summary>
 /// Whether a row can be ticked at all: a connector this platform has no way to run carries the
 /// reason it cannot, and there is nothing about it left to decide.
 /// </summary>
@@ -100,16 +121,3 @@ public sealed class ImportCanIncludeConverter : IValueConverter
         Binding.DoNothing;
 }
 
-/// <summary>
-/// A row's badge for the reason this platform cannot run its connector, from
-/// <see cref="ImportModel.SkippedBadge"/>. The row carries the reason; the sentence around it is
-/// the model's, so the badge is composed here rather than written out in the template.
-/// </summary>
-public sealed class ImportSkippedBadgeConverter : IValueConverter
-{
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is string reason ? ImportModel.SkippedBadge(reason) : string.Empty;
-
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        Binding.DoNothing;
-}

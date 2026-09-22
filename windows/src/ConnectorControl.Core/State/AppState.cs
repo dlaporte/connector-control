@@ -1218,9 +1218,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return null;
         }
-        // Ordered by first appearance and de-duplicated across leaves, so the sentence is stable
-        // between two reads of the same config.
-        var unfilled = Placeholder.MarkersIn(entry.Config).SelectMany(m => m.Names).Distinct(StringComparer.Ordinal).ToList();
+        var unfilled = Placeholder.UnfilledNamesIn(entry.Config);
         if (unfilled.Count > 0)
         {
             return NeedsValueCaution(string.Join(", ", unfilled));

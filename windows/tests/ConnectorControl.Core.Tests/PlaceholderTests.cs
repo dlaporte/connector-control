@@ -32,6 +32,20 @@ public class PlaceholderTests
         Assert.Equal([["server_path"], ["token"]], found.Select(m => m.Names.ToArray()).ToArray());
     }
 
+    /// <summary>
+    /// Flattened in the order the leaves are walked, so a sentence built from these names reads
+    /// the same wherever it is built and however often a name appears.
+    /// </summary>
+    [Fact]
+    public void UnfilledNamesFlattenTheMarkersInFirstAppearanceOrder()
+    {
+        var config = JsonValue.Object(
+            ("args", JsonValue.Array([JsonValue.String("${CC_NEEDS:zulu}"), JsonValue.String("${CC_NEEDS:zulu} ${CC_NEEDS:alpha}")])),
+            ("env", JsonValue.Object(("A", JsonValue.String("${CC_NEEDS:alpha}")), ("B", JsonValue.String("plain")))));
+        Assert.Equal(["zulu", "alpha"], Placeholder.UnfilledNamesIn(config));
+        Assert.Empty(Placeholder.UnfilledNamesIn(JsonValue.Object(("a", JsonValue.String("none")))));
+    }
+
     [Fact]
     public void ExpandsTheDirectoryTokenInEveryStringLeaf()
     {

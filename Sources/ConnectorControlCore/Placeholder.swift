@@ -40,6 +40,14 @@ public enum Placeholder {
         }
     }
 
+    /// Every marker name the config still asks for, ordered by first appearance and
+    /// de-duplicated across leaves, so a sentence built from them is stable between two reads of
+    /// the same config and the same wherever it is built.
+    public static func unfilledNames(in config: JSONValue) -> [String] {
+        var seen: Set<String> = []
+        return markers(in: config).flatMap(\.names).filter { seen.insert($0).inserted }
+    }
+
     public static func usesDirectoryToken(_ config: JSONValue) -> Bool {
         config.stringLeaves.contains { $0.value.contains(directoryToken) }
     }

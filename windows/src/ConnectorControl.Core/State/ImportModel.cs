@@ -48,6 +48,13 @@ public sealed class ImportModel : ObservableObject
         [ImportChoice.Replace, ImportChoice.KeepBoth, ImportChoice.Skip];
 
     /// <summary>
+    /// A row's badge, in precedence order: a connector this platform cannot run says so first,
+    /// then one the target already holds, then a new arrival.
+    /// </summary>
+    private static string Badge(string? excludedReason, bool present) =>
+        excludedReason is not null ? SkippedBadge(excludedReason) : present ? PresentBadge : NewBadge;
+
+    /// <summary>
     /// One choice's picker label. Total over the enum, so a row's picker needs no logic of its
     /// own; Add is the answer for a name nothing here already holds.
     /// </summary>
@@ -74,7 +81,8 @@ public sealed class ImportModel : ObservableObject
     /// bindings, where the Mac mutates a struct through its index.
     /// </summary>
     public sealed class Row(string name, bool include, bool present, ImportChoice choice,
-                            string? excludedReason, IReadOnlyList<string> needs, string? needsCaution)
+                            string? excludedReason, IReadOnlyList<string> needs, string? needsCaution,
+                            string badge)
     {
         public string Id { get; } = name;
         public string Name { get; } = name;
@@ -90,6 +98,13 @@ public sealed class ImportModel : ObservableObject
         /// second wording of it. Filled by the model, as <c>CollectionsModel.Row.Caution</c> is.
         /// </summary>
         public string? NeedsCaution { get; } = needsCaution;
+
+        /// <summary>
+        /// What the row says about itself beside its name: nothing this platform can run, a name
+        /// the target already holds, or a new arrival. Built where the row is, so the template
+        /// binds one string instead of needing a converter over the skipped-badge factory.
+        /// </summary>
+        public string Badge { get; } = badge;
     }
 
     private readonly AppState state;
@@ -239,14 +254,16 @@ public sealed class ImportModel : ObservableObject
         {
             var reason = rendered.Excluded.GetValueOrDefault(name);
             var present = held.ContainsKey(name);
-            // Sorted, unlike the config-marker caller's first-appearance order: these come from
-            // the document's Needs map, which has no order of its own.
+            // First appearance in the config the import would write, not the Needs map's own
+            // order: the map is unordered, and reading the markers is what makes this row's
+            // sentence the one the connector will carry once it has landed.
             IReadOnlyList<string> needs = rendered.Connectors.TryGetValue(name, out var connector)
-                ? connector.Needs.Keys.Order(StringComparer.Ordinal).ToList()
+                ? Placeholder.UnfilledNamesIn(connector.Config)
                 : [];
             return new Row(name, reason is null && !present, present,
                            present ? ImportChoice.Replace : ImportChoice.Add, reason, needs,
-                           needs.Count == 0 ? null : AppState.NeedsValueCaution(string.Join(", ", needs)));
+                           needs.Count == 0 ? null : AppState.NeedsValueCaution(string.Join(", ", needs)),
+                           Badge(reason, present));
         }).ToList();
     }
 

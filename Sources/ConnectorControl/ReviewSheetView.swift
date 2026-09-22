@@ -8,8 +8,9 @@ struct ReviewSheetView: View {
     @ObservedObject var model: ReviewModel
     let onDone: () -> Void
 
-    /// The order the rows already arrive in, which is the order the summary sentence reads in.
-    private static let kinds: [ReviewModel.Kind] = [.added, .removed, .changed]
+    /// What apply() answered. The model hands the message back rather than publishing a state for
+    /// it, so the sheet holds it for as long as it is on screen.
+    @State private var failure: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -21,15 +22,23 @@ struct ReviewSheetView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    ForEach(ReviewSheetView.kinds, id: \.self) { kind in
+                    ForEach(presentKinds, id: \.self) { kind in
                         group(kind)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(height: 320)
+            // A cap, not a height: a one-connector update is a short sheet, as it is on Windows.
+            .frame(maxHeight: 320)
 
             if model.sourceMoved { moved }
+
+            if let failure {
+                Text(failure)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Divider()
             footer
@@ -42,28 +51,21 @@ struct ReviewSheetView: View {
 
     // MARK: changes
 
-    /// The rows of one kind under their heading, or nothing at all when this update has none.
-    private func group(_ kind: ReviewModel.Kind) -> some View {
-        let rows = model.rows.filter { $0.kind == kind }
-        return VStack(alignment: .leading, spacing: 8) {
-            if !rows.isEmpty {
-                Text(ReviewSheetView.label(for: kind))
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                ForEach(rows) { row in
-                    change(row)
-                }
-            }
-        }
+    /// The kinds this update actually has, in the model's order. Filtered before the list rather
+    /// than inside each group, so a kind with nothing in it takes no heading and no spacing.
+    private var presentKinds: [ReviewModel.Kind] {
+        ReviewModel.kinds.filter { kind in model.rows.contains { $0.kind == kind } }
     }
 
-    /// The three headings, in the model's words. ReviewModel carries one static per kind rather
-    /// than a mapping, so the sheet is where the pairing lives.
-    private static func label(for kind: ReviewModel.Kind) -> String {
-        switch kind {
-        case .added: return ReviewModel.addedLabel
-        case .removed: return ReviewModel.removedLabel
-        case .changed: return ReviewModel.changedLabel
+    /// The rows of one kind under their heading.
+    private func group(_ kind: ReviewModel.Kind) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(ReviewModel.kindLabel(kind))
+                .font(.subheadline)
+                .fontWeight(.semibold)
+            ForEach(model.rows.filter { $0.kind == kind }) { row in
+                change(row)
+            }
         }
     }
 
@@ -81,7 +83,9 @@ struct ReviewSheetView: View {
     /// before an addition, nothing after a removal — still holds its column, so the side that
     /// does stays where the eye left it on the row above.
     private func side(_ text: String?) -> some View {
-        ScrollView(.horizontal) {
+        // Both directions: a connector's config runs past seven caption lines as readily as it
+        // runs past the column's width, and this is the surface whose whole purpose is reading it.
+        ScrollView([.horizontal, .vertical]) {
             Text(text ?? "")
                 .font(.system(.caption, design: .monospaced))
                 .textSelection(.enabled)
@@ -107,7 +111,10 @@ struct ReviewSheetView: View {
                 .foregroundStyle(.orange)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
-            Button(CollectionsModel.refreshButton) { model.refresh() }
+            Button(CollectionsModel.refreshButton) {
+                model.refresh()
+                failure = nil
+            }
         }
     }
 
@@ -123,8 +130,10 @@ struct ReviewSheetView: View {
     }
 
     private func apply() {
-        // The one thing that refuses is a document that changed under the sheet, and the caution
-        // line above the footer is what says so.
-        if model.apply() { onDone() }
+        let message = model.apply()
+        // A document that changed under the sheet already has the caution line above the footer,
+        // carrying this very sentence and the Refresh button that answers it; it is not said twice.
+        failure = model.sourceMoved ? nil : message
+        if message == nil { onDone() }
     }
 }

@@ -32,16 +32,15 @@ public partial class ReviewDialog : DialogWindow
     public ReviewModel Model { get; }
 
     /// <summary>
-    /// True once the update has landed. The sheet reports through this rather than DialogResult
-    /// because Apply closes it from code, and DialogResult can only be set on a window that was
-    /// shown as a dialog — which is how it ships, but not how a test can drive it.
+    /// True once the update has landed. The sheet reports through this rather than DialogResult,
+    /// which can only be set on a window shown as a dialog — NamePromptDialog answers the same way.
     /// </summary>
-    public bool Applied { get; private set; }
+    public bool Accepted { get; private set; }
 
     public static bool Show(Window? owner, ReviewModel model)
     {
         var dialog = new ReviewDialog(model);
-        return Present(dialog, owner, () => dialog.Applied);
+        return Present(dialog, owner, () => dialog.Accepted);
     }
 
     /// <summary>
@@ -55,38 +54,46 @@ public partial class ReviewDialog : DialogWindow
         ChangeList.ItemsSource = grouped.View;
     }
 
-    private void OnRefresh(object sender, RoutedEventArgs e) => Model.Refresh();
+    private void OnRefresh(object sender, RoutedEventArgs e)
+    {
+        Model.Refresh();
+        ShowFailure(null);
+    }
 
     private void OnApply(object sender, RoutedEventArgs e)
     {
-        // The one thing that refuses is a document that changed under the sheet, and the caution
-        // line above the footer is what says so.
-        if (!Model.Apply())
+        var failure = Model.Apply();
+        // A document that changed under the sheet already has the caution line above the footer,
+        // carrying this very sentence and the Refresh button that answers it; it is not said twice.
+        ShowFailure(Model.SourceMoved ? null : failure);
+        if (failure is null)
         {
-            return;
+            Accepted = true;
+            Close();
         }
-        Applied = true;
-        Close();
+    }
+
+    /// <summary>
+    /// What Apply answered. The model publishes no property for it — it hands the message back, as
+    /// the Import sheet's Perform does — so neither does this line's visibility.
+    /// </summary>
+    private void ShowFailure(string? failure)
+    {
+        FailureText.Text = failure ?? string.Empty;
+        FailureText.Visibility = failure is null ? Visibility.Collapsed : Visibility.Visible;
     }
 }
 
 /// <summary>
-/// A group heading: which of the three kinds the rows under it are. ReviewModel carries one label
-/// per kind rather than a mapping, so the pairing lives here, beside the list that needs it.
+/// A group heading: which of the three kinds the rows under it are. The grouped view's key is the
+/// kind itself, and <see cref="ReviewModel.KindLabel"/> is a method rather than a property, which
+/// is the whole of what this converter is for.
 /// </summary>
 public sealed class ReviewKindLabelConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is ReviewModel.Kind kind ? Label(kind) : string.Empty;
+        value is ReviewModel.Kind kind ? ReviewModel.KindLabel(kind) : string.Empty;
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         Binding.DoNothing;
-
-    private static string Label(ReviewModel.Kind kind) => kind switch
-    {
-        ReviewModel.Kind.Added => ReviewModel.AddedLabel,
-        ReviewModel.Kind.Removed => ReviewModel.RemovedLabel,
-        ReviewModel.Kind.Changed => ReviewModel.ChangedLabel,
-        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
-    };
 }

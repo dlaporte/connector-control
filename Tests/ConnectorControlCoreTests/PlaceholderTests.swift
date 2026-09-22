@@ -24,6 +24,17 @@ final class PlaceholderTests: XCTestCase {
         XCTAssertEqual(found.map { $0.pointer.description }, ["/args/0", "/env/AUTH_HEADER"])
         XCTAssertEqual(found.map { $0.names }, [["server_path"], ["token"]])
     }
+
+    /// Flattened in the order the leaves are walked, so a sentence built from these names reads
+    /// the same wherever it is built and however often a name appears.
+    func testUnfilledNamesFlattenTheMarkersInFirstAppearanceOrder() {
+        let config: JSONValue = .object([
+            "args": .array([.string("${CC_NEEDS:zulu}"), .string("${CC_NEEDS:zulu} ${CC_NEEDS:alpha}")]),
+            "env": .object(["A": .string("${CC_NEEDS:alpha}"), "B": .string("plain")]),
+        ])
+        XCTAssertEqual(Placeholder.unfilledNames(in: config), ["zulu", "alpha"])
+        XCTAssertEqual(Placeholder.unfilledNames(in: .object(["a": .string("none")])), [])
+    }
     func testExpandsTheDirectoryTokenInEveryStringLeaf() {
         let config: JSONValue = .object([
             "command": .string("node"),
