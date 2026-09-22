@@ -4,9 +4,8 @@ import UniformTypeIdentifiers
 import ConnectorControlState
 
 struct PopoverView: View {
-    /// The chip's disclosure mark. A mark rather than wording, and the one piece of the chip
-    /// `PopoverModel.collectionChipText` cannot hand over on its own: the chain and the dot go
-    /// between the name and this, so the two halves of that string are needed apart.
+    /// The chip's disclosure mark, drawn after the chain and the dot. A mark rather than wording,
+    /// like the chain and the dot themselves: `.borderlessButton` menus draw no chevron of their own.
     private static let disclosureMark = "▾"
 
     @StateObject private var model: PopoverModel
@@ -88,7 +87,7 @@ struct PopoverView: View {
             collectionMenu
         } label: {
             HStack(spacing: 4) {
-                Text(activeCollectionName)
+                Text(model.activeCollection)
                 if model.activeCollectionIsSynced {
                     Image(systemName: "link")
                         .imageScale(.small)
@@ -105,32 +104,28 @@ struct PopoverView: View {
         .padding(.top, 1)
     }
 
-    /// The active collection's name. The model's chip text bakes the disclosure mark into the
-    /// same string, and the chain and the dot belong between the two, so the name is read off
-    /// the menu item that carries the check instead.
-    private var activeCollectionName: String {
-        model.collectionItems.first(where: \.isActive)?.name ?? ""
-    }
-
     /// An update is waiting at the source of the collection this sits beside.
     private var pendingDot: some View {
         Circle().fill(.orange).frame(width: 6, height: 6)
+            .help(PopoverModel.pendingSpokenLabel)
+            .accessibilityLabel(PopoverModel.pendingSpokenLabel)
     }
 
     /// The collections to switch between, then the two document commands, then the window that
     /// owns everything else — creating, renaming and deleting included.
     @ViewBuilder private var collectionMenu: some View {
         ForEach(model.collectionItems) { item in
-            Button {
-                model.switchCollection(item.name)
-            } label: {
-                HStack(spacing: 4) {
-                    if item.isActive { Image(systemName: "checkmark") }
-                    Text(item.name)
-                    if item.isSynced { Image(systemName: "link") }
-                    if item.hasPendingUpdate { pendingDot }
+            // A macOS menu row is one title and one image. The check is the item's state rather
+            // than an image — which is what a Toggle in a menu becomes — so the image is free for
+            // the chain, and a pending update is words in the model's title instead of a dot.
+            Toggle(isOn: activeBinding(item)) {
+                if item.isSynced {
+                    Label(PopoverModel.menuTitle(for: item), systemImage: "link")
+                } else {
+                    Text(PopoverModel.menuTitle(for: item))
                 }
             }
+            .help(PopoverModel.menuTooltip(for: item) ?? "")
         }
         Divider()
         Button(PopoverModel.importTitle) { openCollections { model.requestImport() } }
@@ -157,7 +152,7 @@ struct PopoverView: View {
     /// publish offers two of them.
     private func collectionBanner(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(text, systemImage: PopoverModel.toolWarningGlyph)
+            Label(text, systemImage: PopoverModel.cautionGlyph)
                 .font(.caption)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
@@ -209,6 +204,13 @@ struct PopoverView: View {
 
     /// The Collections window, which takes no arguments: whatever the popover wants in front of
     /// it is set as a request first, because the window reads that as it appears.
+    /// A menu row's check. Choosing an unchecked row makes that collection the active one;
+    /// choosing the checked row asks to turn it off, which means nothing for a collection, so it
+    /// is left alone. The check is read back from the model rather than kept here.
+    private func activeBinding(_ item: CollectionMenuItem) -> Binding<Bool> {
+        Binding(get: { item.isActive }, set: { on in if on { model.switchCollection(item.name) } })
+    }
+
     private func openCollections(_ request: () -> Void = {}) {
         request()
         openWindow(id: CollectionsWindowView.windowID)

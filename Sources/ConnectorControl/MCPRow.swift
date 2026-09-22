@@ -25,8 +25,8 @@ struct MCPRow: View {
                     .imageScale(.small)
                     .foregroundStyle(.secondary)
                     .opacity(MCPRow.lockOpacity)
-                    .help(CollectionsModel.lockedGlyphTooltip)
-                    .accessibilityLabel(CollectionsModel.lockedGlyphTooltip)
+                    .help(row.lockTooltip)
+                    .accessibilityLabel(row.lockTooltip)
             }
             Text(row.name).fontWeight(.medium)
                 .lineLimit(1)

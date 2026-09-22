@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
@@ -10,6 +11,9 @@ using ConnectorControl.App.Views;
 using ConnectorControl.Core;
 using ConnectorControl.Core.State;
 using ConnectorControl.Core.Tests.TestSupport;
+// Named rather than imported: System.Windows.Shapes.Path would collide with System.IO.Path,
+// which this file uses to build the sample document's path.
+using Ellipse = System.Windows.Shapes.Ellipse;
 
 namespace ConnectorControl.App.Tests;
 
@@ -123,8 +127,13 @@ public class FlyoutWindowTests
     private static string MenuName(MenuItem item) =>
         ((StackPanel)item.Header).Children.OfType<TextBlock>().First().Text;
 
-    /// <summary>How many marks — chain, dot — trail that name.</summary>
-    private static int MenuMarks(MenuItem item) => ((StackPanel)item.Header).Children.Count - 1;
+    /// <summary>The chain after a collection's name in the menu, or null for a local collection.</summary>
+    private static TextBlock? MenuChain(MenuItem item) =>
+        ((StackPanel)item.Header).Children.OfType<TextBlock>().Skip(1).SingleOrDefault();
+
+    /// <summary>The amber dot after a collection's name, or null when nothing is waiting.</summary>
+    private static Ellipse? MenuDot(MenuItem item) =>
+        ((StackPanel)item.Header).Children.OfType<Ellipse>().SingleOrDefault();
 
     /// <summary>The menu's commands: everything after the one item per collection.</summary>
     private static string[] MenuCommands(ContextMenu menu, FlyoutModel model) =>
@@ -260,11 +269,12 @@ public class FlyoutWindowTests
             Assert.Equal("Data team", window.CollectionChipName.Text);
             Assert.Equal(Visibility.Visible, window.CollectionChipChain.Visibility);
             // The chain says where the document is, which is the one thing the chip cannot show.
-            // The bound path is the one the state recorded, not the one this test wrote: a temp
+            // The path is the one the state recorded, not the one this test wrote: a temp
             // directory can reach the same file under more than one spelling.
-            var source = state.SourceBinding("Data team")?.Path;
+            var source = state.SourceLocation("Data team");
             Assert.NotNull(source);
             Assert.Equal(FlyoutModel.SourceTooltipFormat(source), window.CollectionChipChain.ToolTip);
+            Assert.Equal(FlyoutModel.SourceTooltipFormat(source), AutomationProperties.GetName(window.CollectionChipChain));
             Assert.Equal(Visibility.Collapsed, window.CollectionChipDot.Visibility);   // nothing waiting yet
 
             state.SwitchCollection("Default");
@@ -286,8 +296,20 @@ public class FlyoutWindowTests
             Assert.Equal(2, menu.Items.OfType<Separator>().Count());
             var collections = menu.Items.OfType<MenuItem>().Take(model.CollectionItems.Count).ToList();
             Assert.Equal(["Data team", "Default"], collections.Select(MenuName).ToArray());
-            Assert.Equal(1, MenuMarks(collections[0]));   // the chain
-            Assert.Equal(0, MenuMarks(collections[1]));
+            // Every synced row names its source, not only the active one the chip speaks for:
+            // Default is active here and Data team is not.
+            var chain = MenuChain(collections[0]);
+            Assert.NotNull(chain);
+            var source = state.SourceLocation("Data team");
+            Assert.NotNull(source);
+            Assert.Equal(FlyoutModel.SourceTooltipFormat(source), chain.ToolTip);
+            Assert.Equal(FlyoutModel.SourceTooltipFormat(source), AutomationProperties.GetName(chain));
+            Assert.Null(MenuChain(collections[1]));
+            Assert.Null(MenuDot(collections[0]));   // nothing waiting
+            // A header built from elements announces nothing of its own; each row is named with
+            // the model's title instead.
+            Assert.Equal(model.CollectionItems.Select(FlyoutModel.MenuTitle).ToArray(),
+                collections.Select(i => AutomationProperties.GetName(i)).ToArray());
 
             // A synced collection is the author's document already; this machine does not offer
             // to pass a second copy of it on.
@@ -315,9 +337,11 @@ public class FlyoutWindowTests
         {
             Assert.False(window.AddButton.IsEnabled);
             Assert.Equal(FlyoutModel.AddDisabledTooltip, window.AddButton.ToolTip);
-            var glyph = RowLock(window, model.Rows[0]);
+            var row = model.Rows[0];
+            var glyph = RowLock(window, row);
             Assert.Equal(Visibility.Visible, glyph.Visibility);
-            Assert.Equal(CollectionsModel.LockedGlyphTooltip, glyph.ToolTip);
+            Assert.Equal(row.LockTooltip, glyph.ToolTip);
+            Assert.Equal(row.LockTooltip, AutomationProperties.GetName(glyph));
         }, rows: true));
     }
 
@@ -343,6 +367,16 @@ public class FlyoutWindowTests
             // One answer, so no second button; the chip repeats the news beside the name.
             Assert.Equal(Visibility.Collapsed, window.CollectionBannerSecondary.Visibility);
             Assert.Equal(Visibility.Visible, window.CollectionChipDot.Visibility);
+            Assert.Equal(FlyoutModel.PendingSpokenLabel, AutomationProperties.GetName(window.CollectionChipDot));
+
+            // So does the menu: a dot that speaks, and a row whose name carries the same words.
+            var row = window.BuildCollectionMenu().Items.OfType<MenuItem>().First();
+            Assert.Equal("Data team", MenuName(row));
+            Assert.Equal("Data team" + FlyoutModel.PendingMenuMark, AutomationProperties.GetName(row));
+            var dot = MenuDot(row);
+            Assert.NotNull(dot);
+            Assert.Equal(FlyoutModel.PendingSpokenLabel, dot.ToolTip);
+            Assert.Equal(FlyoutModel.PendingSpokenLabel, AutomationProperties.GetName(dot));
         }));
     }
 

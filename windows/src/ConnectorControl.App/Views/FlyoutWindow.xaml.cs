@@ -32,7 +32,6 @@ public partial class FlyoutWindow : Window
 
     private readonly FlyoutModel model;
     private readonly WindowRegistry windows;
-    private readonly PropertyChangedEventHandler onModelChanged;
     private ContextMenu? openMenu;
 
     public FlyoutWindow(FlyoutModel model, WindowRegistry windows)
@@ -41,12 +40,8 @@ public partial class FlyoutWindow : Window
         this.model = model;
         this.windows = windows;
         DataContext = model;
-        onModelChanged = (_, _) => Refresh();
-        model.PropertyChanged += onModelChanged;
-        Closed += (_, _) => model.PropertyChanged -= onModelChanged;
         Deactivated += (_, _) => HandleDeactivated();
         PreviewKeyDown += OnPreviewKeyDown;
-        Refresh();
     }
 
     /// <summary>
@@ -208,14 +203,6 @@ public partial class FlyoutWindow : Window
     private void OnCollectionChip(object sender, RoutedEventArgs e) => OpenCollectionMenu();
 
     /// <summary>
-    /// The one caption set from a value rather than bound: the chip's name. The model publishes
-    /// its chip text with the disclosure mark already inside it, and the chain and the dot belong
-    /// between the two, so the name is read off the menu item that carries the check instead.
-    /// </summary>
-    private void Refresh() =>
-        CollectionChipName.Text = model.CollectionItems.FirstOrDefault(i => i.IsActive)?.Name ?? string.Empty;
-
-    /// <summary>
     /// The collection chip menu: the collections to switch between with a check on the active
     /// one, then the two document commands, then the window that owns everything else — creating,
     /// renaming and deleting included. Built without being shown, so a test can read it.
@@ -231,6 +218,10 @@ public partial class FlyoutWindow : Window
             // Clicking toggles the mark before Click runs, which is harmless — the menu closes and
             // the next open rebuilds every item from CollectionItems.
             var entry = new MenuItem { Header = MenuHeader(item), IsCheckable = true, IsChecked = item.IsActive };
+            // A header built from elements gives the item no name of its own to announce, so it
+            // is given the model's title — the one the Mac draws, where the pending update is
+            // words — and a row reads the same whether it is seen or heard.
+            AutomationProperties.SetName(entry, FlyoutModel.MenuTitle(item));
             entry.Click += (_, _) => model.SwitchCollection(name);
             menu.Items.Add(entry);
         }
@@ -290,16 +281,13 @@ public partial class FlyoutWindow : Window
                 Margin = new Thickness(6, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            // Where the document sits is known only for the collection the model is showing, so
-            // that row's chain says what the chip's says and the others stay quiet, exactly as
-            // the chip does when the model has no source to name.
-            Speak(chain, item.IsActive ? model.SourceTooltip : null);
+            Speak(chain, FlyoutModel.MenuTooltip(item));
             header.Children.Add(chain);
         }
         if (item.HasPendingUpdate)
         {
             var dot = new Ellipse { Style = (Style)FindResource("PendingDot"), Margin = new Thickness(6, 0, 0, 0) };
-            Speak(dot, CollectionsModel.UpdateAvailableStatus);
+            Speak(dot, FlyoutModel.PendingSpokenLabel);
             header.Children.Add(dot);
         }
         return header;

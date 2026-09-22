@@ -44,11 +44,14 @@
                  a document's, the amber dot when that document has news waiting. -->
             <Button x:Name="CollectionChip" Style="{StaticResource LinkButton}" FontSize="11" FontWeight="SemiBold" Padding="0,1,0,0" Click="OnCollectionChip">
               <StackPanel Orientation="Horizontal">
-                <TextBlock x:Name="CollectionChipName" VerticalAlignment="Center" />
+                <TextBlock x:Name="CollectionChipName" Text="{Binding ActiveCollection}" VerticalAlignment="Center" />
                 <TextBlock x:Name="CollectionChipChain" Text="{StaticResource ChainGlyph}" FontFamily="{StaticResource IconFont}"
-                           ToolTip="{Binding SourceTooltip}" Margin="4,0,0,0" VerticalAlignment="Center"
+                           ToolTip="{Binding SourceTooltip}" AutomationProperties.Name="{Binding SourceTooltip}"
+                           Margin="4,0,0,0" VerticalAlignment="Center"
                            Visibility="{Binding ActiveCollectionIsSynced, Converter={StaticResource Vis}}" />
                 <Ellipse x:Name="CollectionChipDot" Style="{StaticResource PendingDot}" Margin="4,0,0,0"
+                         ToolTip="{x:Static state:FlyoutModel.PendingSpokenLabel}"
+                         AutomationProperties.Name="{x:Static state:FlyoutModel.PendingSpokenLabel}"
                          Visibility="{Binding ActiveHasPendingUpdate, Converter={StaticResource Vis}}" />
                 <!-- U+25BE, the disclosure mark: this button's style draws no chevron of its own. -->
                 <TextBlock Text="&#x25BE;" Margin="4,0,0,0" VerticalAlignment="Center" />
@@ -89,7 +92,7 @@
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" />
           </Grid.ColumnDefinitions>
-          <TextBlock Text="{x:Static state:FlyoutModel.ToolWarningGlyph}" FontFamily="{StaticResource IconFont}"
+          <TextBlock Text="{x:Static state:FlyoutModel.CautionGlyph}" FontFamily="{StaticResource IconFont}"
                      Foreground="{DynamicResource SystemFillColorCautionBrush}" Margin="0,2,6,0" VerticalAlignment="Top" />
           <StackPanel Grid.Column="1">
             <TextBlock x:Name="CollectionBannerMessage" Text="{Binding CollectionBannerText}" Style="{StaticResource CautionText}" />
@@ -126,8 +129,8 @@
                     <TextBlock x:Name="RowLockGlyph" Grid.Column="1"
                                Text="{StaticResource LockGlyph}" FontFamily="{StaticResource IconFont}" FontSize="11"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" Opacity="0.55"
-                               ToolTip="{x:Static state:CollectionsModel.LockedGlyphTooltip}"
-                               AutomationProperties.Name="{x:Static state:CollectionsModel.LockedGlyphTooltip}"
+                               ToolTip="{Binding LockTooltip}"
+                               AutomationProperties.Name="{Binding LockTooltip}"
                                Visibility="{Binding IsLocked, Converter={StaticResource Vis}}"
                                VerticalAlignment="Center" Margin="10,0,0,0" />
                     <TextBlock Grid.Column="2" Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="10,0" />
