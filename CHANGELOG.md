@@ -1,17 +1,29 @@
 # Changelog
 
 Release notes for Connector Control on macOS and Windows. The section
-matching the tagged version becomes the GitHub release notes and the text
-both apps show in their update dialogs — the release build fails if the
-section is missing. The top section also names the version a Windows
-preview build is cut from (a preview is versioned as that number followed
-by -preview.N, and the preview build fails if that version has already
-been released), so open the next version's section as soon as the previous
-one ships. A freshly opened section starts with four sub-headings, in this
-order: `### macOS`, `### Windows`, `### Both platforms`, `### Release
-pipeline`; leave a sub-heading's bullets empty rather than removing the
-sub-heading, and drop any sub-heading that never got a bullet once the
-section is about to ship.
+matching the tagged version becomes the GitHub release notes and the
+text both apps show in their update dialogs — the release build fails if
+the section is missing. The top section also names the version a preview
+build is cut from (a preview is versioned as that number followed by
+-preview.N, and the preview build fails if that version has already been
+released), so open the next version's section as soon as the previous
+one ships. A freshly opened section starts with four sub-headings, in
+this order: `### macOS`, `### Windows`, `### Both platforms`, `###
+Release pipeline`; leave a sub-heading's bullets empty rather than
+removing the sub-heading, and drop any sub-heading that never got a
+bullet once the section is about to ship.
+
+## v1.4.0
+
+### macOS
+
+### Windows
+
+### Both platforms
+
+### Release pipeline
+
+- Preview builds now ship both apps: a `preview-<n>` tag, or Actions ▸ Preview ▸ Run workflow, publishes a signed, notarized Mac DMG beside the signed Windows installers as one GitHub prerelease versioned `1.4.0-preview.<n>`. Stable users see nothing: a prerelease is never `releases/latest`, so the Mac update feed is untouched. A Windows preview install updates itself to later previews and to the final release; a Mac preview is offered the final release when it ships.
 
 ## v1.3.3
 

@@ -1,0 +1,339 @@
+# Preview builds: one GitHub PRERELEASE carrying the Mac DMG (Developer ID signed, notarized)
+# and the Velopack packages for win-x64 and win-arm64, versioned <next>-preview.<n>, where <next>
+# is the top "## vX.Y.Z" heading of CHANGELOG.md and <n> names the preview.
+#
+# TRIGGERS — two tag shapes and a manual dispatch:
+#
+#   preview-<n>        tag push:  real preview:  prepare -> test -> build both -> publish
+#   preview-dry-<n>    tag push:  dry run:       the same, with publish skipped
+#   workflow_dispatch  number=<n>, dry_run (default true): the same two, from the Actions tab,
+#                      with no tag to push or clean up
+#
+# A tag push runs the workflow file AS IT EXISTS AT THE TAGGED COMMIT, so a preview can be cut
+# from any branch and a change to this workflow can be proved from a branch with a
+# preview-dry-<n> tag before it reaches master. A dispatch runs the file from the ref you choose,
+# but the dispatch menu only lists workflow files that exist on the default branch — which is why
+# both shapes are kept.
+#
+# Both build version <next>-preview.<n>; pick <n> with `git tag -l 'preview-*'`. Neither tag
+# shape matches release.yml's 'v[0-9]+.[0-9]+.[0-9]+' trigger, so no tag here can ever start a
+# release; mac-ci.yml and windows-ci.yml trigger on branch pushes only, so one preview tag starts
+# exactly one workflow run.
+#
+# A prerelease is never releases/latest, so the Mac app's Sparkle appcast at
+# releases/latest/download/appcast.xml is untouched — no appcast is built here at all. A Mac
+# preview keeps the stable feed: build-app.sh gives <next>-preview.<n> the build number just
+# below <next>'s, so it is never offered an older stable version and is offered v<next> when
+# that ships (between previews, Mac testers download again). A Windows preview install
+# (prerelease version) follows prereleases and the final release (VelopackUpdater).
+#
+# The mac job reads the Apple certificate and notarization account from the "signing" GitHub
+# Environment, whose deployment branch policy must therefore allow the ref a preview is cut
+# from: the tag pattern preview-* and any branch previews are dispatched from, beside master
+# and v*. The Windows build — test, package (win-x64, win-arm64), smoke — is
+# .github/workflows/windows-build.yml, the same file release.yml calls; its own gate job proves
+# all six Azure Artifact Signing secrets are there before the signed packaging jobs start, so a
+# preview is signed exactly like a release. Nothing here is ever unsigned.
+#   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SIGNING_ENDPOINT,
+#   AZURE_SIGNING_ACCOUNT, AZURE_SIGNING_PROFILE — documented once, with windows-build.yml's gate.
+name: Preview
+
+on:
+  push:
+    tags:
+      - 'preview-*'
+  workflow_dispatch:
+    inputs:
+      number:
+        description: 'Preview number <n>: builds <next>-preview.<n> and, unless this is a dry run, publishes it as preview-<n>.'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run: build, sign and smoke-test both apps, publish nothing.'
+        required: false
+        default: true
+        type: boolean
+
+# Read-only by default; only the publish job raises this to contents: write.
+permissions:
+  contents: read
+
+concurrency:
+  group: preview
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    name: Version and notes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.derive.outputs.tag }}
+      version: ${{ steps.derive.outputs.version }}
+      next: ${{ steps.derive.outputs.next }}
+      number: ${{ steps.derive.outputs.number }}
+      dry: ${{ steps.derive.outputs.dry }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      # origin/master is the fallback compare base for the release notes. Create the
+      # remote-tracking ref explicitly rather than relying on what a tag checkout fetched.
+      - name: Fetch master
+        run: git fetch --no-tags origin master:refs/remotes/origin/master
+
+      - name: Derive version
+        id: derive
+        env:
+          INPUT_NUMBER: ${{ inputs.number }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          # Three sources, one result: a dispatch takes <n> and dry_run from its inputs;
+          # preview-dry-<n> is a dry run (publish skipped); preview-<n> is a real preview. All
+          # three build <next>-preview.<n> under the tag preview-<n>.
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            N="$INPUT_NUMBER"; DRY="$INPUT_DRY_RUN"; TAG="preview-$N"
+            # GitHub ignores `gh release create --target` when the tag already exists, so a
+            # reused number would publish THIS run's installers under an OLD tag's commit.
+            if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+              echo "::error::tag $TAG already exists; pick an unused preview number (git tag -l 'preview-*')."
+              exit 1
+            fi
+          else
+            case "$GITHUB_REF_NAME" in
+              preview-dry-*) N="${GITHUB_REF_NAME#preview-dry-}"; DRY=true ;;
+              preview-*)     N="${GITHUB_REF_NAME#preview-}";     DRY=false ;;
+              *) echo "::error::Tag '$GITHUB_REF_NAME' is neither preview-<n> nor preview-dry-<n>."; exit 1 ;;
+            esac
+            TAG="$GITHUB_REF_NAME"
+          fi
+          case "$N" in ''|*[!0-9]*) echo "::error::preview number must be digits; got '$N'"; exit 1;; esac
+          # The next version is the top "## vX.Y.Z" heading of CHANGELOG.md.
+          NEXT=$(sed -n 's/^## v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$/\1/p' CHANGELOG.md | head -1)
+          if [ -z "$NEXT" ]; then
+            echo "::error::CHANGELOG.md has no '## vX.Y.Z' heading."
+            exit 1
+          fi
+          if gh release view "v$NEXT" >/dev/null 2>&1; then
+            echo "::error::CHANGELOG.md's top heading v$NEXT is already released; add the next version's section at the top first."
+            exit 1
+          fi
+          {
+            echo "tag=$TAG"
+            echo "version=$NEXT-preview.$N"
+            echo "next=$NEXT"
+            echo "number=$N"
+            echo "dry=$DRY"
+          } >> "$GITHUB_OUTPUT"
+          echo "$GITHUB_EVENT_NAME -> $TAG: $NEXT-preview.$N (dry_run=$DRY)"
+
+      - name: Write release notes
+        env:
+          TAG: ${{ steps.derive.outputs.tag }}
+          VERSION: ${{ steps.derive.outputs.version }}
+          NEXT: ${{ steps.derive.outputs.next }}
+          NUMBER: ${{ steps.derive.outputs.number }}
+        run: |
+          ./scripts/release/preview-notes.sh "$TAG" "$VERSION" "$NEXT" "$NUMBER" > notes.md
+          cat notes.md
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: notes
+          path: notes.md
+          if-no-files-found: error
+
+  mac-test:
+    name: macOS build and test
+    needs: prepare
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Same gate as mac-ci.yml and release.yml (scripts/test-mac.sh): no test may skip or fail
+      # before any signing or notarization minutes are spent.
+      - name: Test
+        run: ./scripts/test-mac.sh
+
+  mac:
+    name: macOS build, sign, notarize
+    needs: [prepare, mac-test]
+    runs-on: macos-15
+    # The Apple certificate is read here and nowhere else; it lives in the "signing"
+    # Environment (required reviewers, deployment branch policy), exactly as in release.yml.
+    environment: signing
+    # `notarytool submit --wait` blocks on Apple's service twice (app, then DMG). 12-20 min is
+    # normal; 60 is a hang, not a queue.
+    timeout-minutes: 60
+    env:
+      # Interpolated once here rather than inside run: blocks (injection hygiene).
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Import signing certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: ./scripts/mac/import-signing-cert.sh
+
+      - name: Build and sign
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/build.keychain-db"
+          # BUILD_NUMBER deliberately not set: build-app.sh derives it from the version, and for
+          # a -preview.<n> version picks the number just below <next>'s, so Sparkle never offers
+          # this build an older stable release and does offer <next> once it ships.
+          VERSION="$VERSION" \
+            UNIVERSAL=1 SIGNING_IDENTITY="$APPLE_SIGNING_IDENTITY" \
+            ./scripts/build-app.sh
+
+      - name: Notarize and staple the app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          ./scripts/mac/notarize.sh "build/Connector Control.app"
+          spctl --assess --type execute --verbose=2 "build/Connector Control.app"
+
+      - name: Package and notarize DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          ./scripts/make-dmg.sh "ConnectorControl_${VERSION}.dmg"
+          # Sign and notarize the DMG too, so Gatekeeper trusts the download end-to-end
+          # (hdiutil does not sign what it creates).
+          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" \
+            "ConnectorControl_${VERSION}.dmg"
+          ./scripts/mac/notarize.sh "ConnectorControl_${VERSION}.dmg"
+
+      # The publish job posts this; nothing is uploaded to GitHub from here.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mac-dmg
+          path: ConnectorControl_*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+      # The signing identity must not outlive the job, whether it passed or failed.
+      - name: Remove the signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/build.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/certificate.p12"
+
+  windows:
+    name: Windows
+    needs: prepare
+    # test -> package (win-x64, win-arm64) -> smoke, the same file release.yml calls.
+    uses: ./.github/workflows/windows-build.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      require-signing: true
+    # Only the six Windows signing secrets, by name. A preview tag can be pushed from any
+    # branch (see the header), so the workflow file that runs is whatever that branch holds;
+    # `secrets: inherit` would hand it every repository secret.
+    secrets:
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+      AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+      AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+
+  publish:
+    name: Publish prerelease
+    needs: [prepare, mac, windows]
+    # The only job that writes anything. A dry run — a preview-dry-<n> tag or a dispatch with
+    # dry_run — skips it entirely, so it creates no release and uploads no assets.
+    if: needs.prepare.outputs.dry != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: notes
+          path: notes
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: mac-dmg
+          path: mac
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: velopack-win-x64
+          path: artifacts/win-x64
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: velopack-win-arm64
+          path: artifacts/win-arm64
+
+      # --target pins the tag to the commit being built: on a tag push the tag already exists
+      # and gh ignores it; on a dispatch it stops gh from creating the tag on the default branch
+      # instead of the ref that was dispatched. --prerelease is the whole point: a prerelease is
+      # never releases/latest, so the Mac appcast at releases/latest/download/appcast.xml keeps
+      # resolving to the last stable release. --latest is NEVER passed here, in any form. The
+      # DMG is attached at creation so the prerelease is never visible without its Mac download.
+      - name: Create the prerelease, with the DMG attached
+        run: |
+          ./scripts/release/ensure-release.sh "$TAG" --prerelease \
+            --title "Connector Control $VERSION (preview)" \
+            --notes notes/notes.md --target "$GITHUB_SHA" \
+            "mac/ConnectorControl_$VERSION.dmg"
+
+      # gh, not vpk, uploads everything; a re-run skips a RID whose assets are all published
+      # (and refuses to complete a half-published one) — the reasons are in the script, which
+      # release.yml calls too.
+      - name: Upload the Windows assets
+        run: ./scripts/release/upload-release-assets.sh "$TAG" "$VERSION" artifacts
+
+      - name: Verify the release
+        run: |
+          ./scripts/release/verify-release.sh "$TAG" --prerelease \
+            "ConnectorControl_$VERSION.dmg" \
+            ConnectorControl-win-x64-Setup.exe ConnectorControl-win-arm64-Setup.exe \
+            "ConnectorControl-$VERSION-win-x64-full.nupkg" "ConnectorControl-$VERSION-win-arm64-full.nupkg" \
+            releases.win-x64.json releases.win-arm64.json
+
+          # `gh release view --json isLatest` does not exist (gh 2.99.0: "Unknown JSON field"),
+          # and "Latest" is a repository-level pointer anyway. This endpoint IS what the Mac
+          # appcast URL resolves through, so asking it is the real check.
+          LATEST=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          [ "$LATEST" != "$TAG" ] || { echo "::error::$TAG became releases/latest — the Mac appcast would break"; exit 1; }
+          case "$LATEST" in
+            v[0-9]*) echo "releases/latest is still $LATEST (a stable release)" ;;
+            *) echo "::error::releases/latest is '$LATEST', which is not a stable v* release"; exit 1 ;;
+          esac
+          {
+            echo "## Preview $TAG ($VERSION)"
+            echo
+            echo "- Release: $REPO_URL/releases/tag/$TAG"
+            echo "- releases/latest unchanged: $LATEST"
+          } >> "$GITHUB_STEP_SUMMARY"

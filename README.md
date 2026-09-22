@@ -272,12 +272,18 @@ universal Mac build, Developer ID signing with hardened runtime, Apple
 notarization of both the app and the DMG, stapling, and the Sparkle
 appcast; and the Windows installers for x64 and Arm64, code-signed with
 Azure Artifact Signing and checked by a silent install on a Windows runner.
-Windows preview builds for testers (GitHub prereleases, which never touch
-the Mac update feed) come from
-[`windows-preview.yml`](.github/workflows/windows-preview.yml), started
-either by a `windows-preview-<n>` tag or by hand from the Actions tab
-(Run workflow, with the preview number; a dry run by default). All three
-Windows workflows share one build definition,
+
+**Preview builds** (both apps): push a `preview-<n>` tag, or run Actions ▸ Preview ▸
+Run workflow with a number (a dry run by default). A preview builds `<next>-preview.<n>`,
+where `<next>` is the top `## vX.Y.Z` heading of CHANGELOG.md, signs and notarizes the
+Mac app and signs the Windows installers exactly like a release, and publishes them as
+one GitHub prerelease. Stable users are unaffected: a prerelease is never
+`releases/latest`, so the Mac update feed does not change, and a Windows preview install
+follows previews only. A `preview-dry-<n>` tag builds everything and publishes nothing.
+The Mac job runs in the `signing` environment, whose deployment branch policy must allow
+`preview-*` tags and any branch previews are cut from.
+
+The release, preview and Windows CI workflows all call one Windows build definition,
 [`windows-build.yml`](.github/workflows/windows-build.yml), and every
 workflow's own YAML and shell/PowerShell scripts are linted by
 [`infra-ci.yml`](.github/workflows/infra-ci.yml).
@@ -294,10 +300,10 @@ workflow's own YAML and shell/PowerShell scripts are linted by
 | `scripts/mac/notarize.sh` | Submits a binary or app bundle for Apple notarization and staples the ticket. | `release.yml` |
 | `scripts/mac/make-appcast.sh` | Builds and EdDSA-signs the Sparkle appcast for one release. | `release.yml` |
 | `scripts/release/changelog-section.sh` | Prints one version's CHANGELOG.md section. | `release.yml` |
-| `scripts/release/preview-notes.sh` | Prints the release notes for a Windows preview build. | `windows-preview.yml` |
-| `scripts/release/ensure-release.sh` | Creates a GitHub release, or reuses one a previous run already created. | `release.yml`, `windows-preview.yml` |
-| `scripts/release/upload-release-assets.sh` | Uploads one build's Velopack assets to an existing release. | `release.yml`, `windows-preview.yml` |
-| `scripts/release/verify-release.sh` | Verifies a release's draft/prerelease flags and asset set. | `release.yml`, `windows-preview.yml` |
+| `scripts/release/preview-notes.sh` | Prints the release notes for a joint preview build. | `preview.yml` |
+| `scripts/release/ensure-release.sh` | Creates a GitHub release, or reuses one a previous run already created. | `release.yml`, `preview.yml` |
+| `scripts/release/upload-release-assets.sh` | Uploads one build's Velopack assets to an existing release. | `release.yml`, `preview.yml` |
+| `scripts/release/verify-release.sh` | Verifies a release's draft/prerelease flags and asset set. | `release.yml`, `preview.yml` |
 | `windows/scripts/package.ps1` | Publishes and Velopack-packs one Windows runtime. | `windows-build.yml` |
 | `windows/scripts/smoke-test.ps1` | Installs a packed `Setup.exe` and proves the app starts, stays up, and (with `-SignatureOnly`) is signed. | `windows-build.yml` |
 | `windows/tools/probe-claude.ps1` | Manual diagnostic for how Claude Desktop installs and is found on a PC. | run by hand, on Windows |

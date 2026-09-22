@@ -21,11 +21,18 @@ SIGNING_IDENTITY="${SIGNING_IDENTITY:--}"
 # (e.g. re-tagging v1.2.2 after v1.3.0 shipped would auto-"update" users
 # backward). major*10000 + minor*100 + patch is monotonic across versions
 # and, at >=10000, safely above the run numbers releases <=1.2.2 shipped
-# with. A -suffix (1.3.0-beta1) is ignored for the numeric derivation.
+# with. A preview of X.Y.Z (X.Y.Z-preview.N) gets the number just below the
+# release's, with N as a second component: 1.4.0-preview.3 is 10399.3, so
+# Sparkle ranks it above every earlier release, below 1.4.0 (which it is
+# then offered when that ships), and previews in order among themselves.
+# Any other -suffix (1.3.0-beta1) is ignored for the numeric derivation.
 if [ -z "${BUILD_NUMBER:-}" ]; then
     BASE="${VERSION%%-*}"
     IFS=. read -r MAJ MIN PAT <<< "$BASE"
     BUILD_NUMBER=$(( ${MAJ:-0} * 10000 + ${MIN:-0} * 100 + ${PAT:-0} ))
+    case "$VERSION" in
+        *-preview.*) BUILD_NUMBER="$(( BUILD_NUMBER - 1 )).${VERSION##*-preview.}" ;;
+    esac
 fi
 
 if [ "${UNIVERSAL:-0}" = "1" ]; then
