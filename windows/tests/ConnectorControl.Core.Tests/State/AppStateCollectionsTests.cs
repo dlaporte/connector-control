@@ -1232,6 +1232,14 @@ public class AppStateCollectionsTests
     private static void RewriteLedger(AppState state, params string[] args) =>
         Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(args)), "ledger"));
 
+    /// <summary>
+    /// Whether any string value in the JSON document at <paramref name="file"/> contains
+    /// <paramref name="text"/>. Decoded rather than searched as text: the serializer writes "/"
+    /// as "\/", so a path searched for in the raw text is never found, whatever the document carries.
+    /// </summary>
+    private static bool DocumentCarries(string file, string text) =>
+        JsonValue.Parse(File.ReadAllBytes(file)).StringLeaves().Any(leaf => leaf.Value.Contains(text, StringComparison.Ordinal));
+
     private static IReadOnlyList<string> LedgerArgs(string file) =>
         Assert.IsType<CollectionDocument.Launcher.Local>(
             CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors["ledger"].Launcher).Args;
@@ -1248,7 +1256,7 @@ public class AppStateCollectionsTests
         Assert.Null(state.PublishError);
         // The placeholder stays on the path, and the flag that took its place travels as written.
         Assert.Equal(["--quiet", "${CC_NEEDS:server_path}"], LedgerArgs(file));
-        Assert.DoesNotContain(MarkedPath, File.ReadAllText(file), StringComparison.Ordinal);
+        Assert.False(DocumentCarries(file, MarkedPath));
     }
 
     [Fact]
@@ -1284,7 +1292,7 @@ public class AppStateCollectionsTests
         Assert.Null(dialog.Publish());
         Assert.Null(state.PublishError);
         Assert.Equal(["--quiet", "${CC_NEEDS:server_path}"], LedgerArgs(file));
-        Assert.DoesNotContain(edited, File.ReadAllText(file), StringComparison.Ordinal);
+        Assert.False(DocumentCarries(file, edited));
         var marks = state.CollectionsFile.Collections[state.ActiveCollection].Publish!.Intent.PathMarks["ledger"];
         Assert.Equal(new PublishIntent.PathMark("server_path", null, edited), marks[ArgPointer(1)]);
         Assert.Single(marks);
@@ -1351,10 +1359,10 @@ public class AppStateCollectionsTests
         Assert.Null(state.ConnectorCaution("x", state.ActiveCollection));
         // The store keeps the token.
         Assert.Equal([token], ArgsOf(state.Store.Collections[state.ActiveCollection].Mcps["x"].Config));
-        var bytes = File.ReadAllText(Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json"));
+        var document = Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
         // Each subscriber resolves it against their own copy, and the author's folder never travels.
-        Assert.Contains(Placeholder.DirectoryToken, bytes, StringComparison.Ordinal);
-        Assert.DoesNotContain(published, bytes, StringComparison.Ordinal);
+        Assert.True(DocumentCarries(document, token));
+        Assert.False(DocumentCarries(document, published));
         state.Reload();
         // What was written is what a reload renders, so nothing is regenerated.
         Assert.Equal([published + "/tools/srv.js"], ArgsOf(h.ClaudeServers()["x"]));

@@ -827,6 +827,14 @@ public class EditorModelCollectionsTests
         }
     }
 
+    /// <summary>
+    /// Whether any string value in the JSON document at <paramref name="file"/> contains
+    /// <paramref name="text"/>. Decoded rather than searched as text: the serializer writes "/"
+    /// as "\/", so a path searched for in the raw text is never found, whatever the document carries.
+    /// </summary>
+    private static bool Carries(string file, string text) =>
+        JsonValue.Parse(File.ReadAllBytes(file)).StringLeaves().Any(leaf => leaf.Value.Contains(text, StringComparison.Ordinal));
+
     private static IReadOnlyList<string> PublishedArgs(string file, string connector = "svc") =>
         Assert.IsType<CollectionDocument.Launcher.Local>(
             CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors[connector].Launcher).Args;
@@ -861,7 +869,7 @@ public class EditorModelCollectionsTests
         AssertMarks(MarkAt(1, ServerPath), Marks(rig));   // reordered
         Assert.Equal(["--quiet", "${CC_NEEDS:server_path}"], PublishedArgs(file));
         Assert.Null(rig.State.PublishError);
-        Assert.DoesNotContain(ServerPath, File.ReadAllText(file), StringComparison.Ordinal);
+        Assert.False(Carries(file, ServerPath));
     }
 
     [Fact]
@@ -877,7 +885,7 @@ public class EditorModelCollectionsTests
         AssertMarks(MarkAt(0, corrected), Marks(rig));
         Assert.Equal(["${CC_NEEDS:server_path}"], PublishedArgs(file));
         Assert.Null(rig.State.PublishError);
-        Assert.DoesNotContain(corrected, File.ReadAllText(file), StringComparison.Ordinal);
+        Assert.False(Carries(file, corrected));
     }
 
     [Fact]

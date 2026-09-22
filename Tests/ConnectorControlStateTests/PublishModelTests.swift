@@ -147,6 +147,149 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(marked.intent, flag)
     }
 
+    // MARK: - A mark that lost its argument
+
+    private func node(_ args: [String]) -> JSONValue {
+        .object(["command": .string("node"), "args": .array(args.map(JSONValue.string))])
+    }
+
+    private func documentArgs(_ connector: String, in data: Data) throws -> [String] {
+        let document = try CollectionDocument.decode(data)
+        guard case .local(let local)? = document.connectors[connector]?.launcher else {
+            throw AppStateHarness.HarnessError()
+        }
+        return local.args
+    }
+
+    /// "c" published through the sheet with its path marked "srv", then that path edited outside
+    /// the editor, so the record's mark has lost its argument. Returns the document's path.
+    private func publishThenLoseTheMark(_ h: AppStateHarness, _ state: AppState) throws -> URL {
+        let first = PublishModel(state: state, collection: state.activeCollection)
+        first.folder = try publishFolder(h).path
+        first.pathRows[0].marked = true
+        first.pathRows[0].name = "srv"
+        XCTAssertNil(first.publish())
+        XCTAssertNil(state.upsert(name: "c", entry: MCPEntry(config: node(["/Users/d/y.js", "--quiet"])), renamedFrom: "c"))
+        XCTAssertEqual(state.publishError?.message, AppState.pathMarkMovedError("c"))
+        return try publishFolder(h).appendingPathComponent(first.fileName)
+    }
+
+    func testAReopenedSheetKeepsALostMarkAndWritesNothingUntilItIsAnswered() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let file = try publishThenLoseTheMark(h, state)
+        let before = try Data(contentsOf: file)
+
+        let sheet = PublishModel(state: state, collection: state.activeCollection)
+        XCTAssertEqual(sheet.unresolvedMarks, ["c"])
+        XCTAssertEqual(sheet.pathRows.first { $0.connector == "c" }?.marked, false, "the path it lost is not where it was")
+        XCTAssertNotNil(sheet.folder)
+        XCTAssertFalse(sheet.canPublish, "a folder is on record, and still nothing can be published")
+        XCTAssertFalse(sheet.canExport)
+
+        let out = h.dir.file("away/copy.json")
+        XCTAssertEqual(sheet.export(to: out.path), PublishModel.unresolvedMarkNote("c"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: out.path))
+        XCTAssertEqual(sheet.publish(), PublishModel.unresolvedMarkNote("c"))
+        XCTAssertEqual(try Data(contentsOf: file), before)
+        XCTAssertEqual(state.collectionsFile.collections[state.activeCollection]?.publish?.intent.pathMarks["c"]?.values.first?.value,
+                       "/Users/d/x.js", "the record is left as it was")
+    }
+
+    func testTickingThePathWhereItNowSitsAnswersTheLostMark() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let file = try publishThenLoseTheMark(h, state)
+        let sheet = PublishModel(state: state, collection: state.activeCollection)
+        let row = try XCTUnwrap(sheet.pathRows.firstIndex { $0.connector == "c" && $0.value == "/Users/d/y.js" })
+
+        sheet.pathRows[row].marked = true
+        XCTAssertEqual(sheet.unresolvedMarks, [])
+        XCTAssertTrue(sheet.canPublish)
+        XCTAssertTrue(sheet.canExport)
+        sheet.pathRows[row].name = "  "
+        XCTAssertEqual(sheet.unresolvedMarks, ["c"], "a tick with no name to carry would publish the path, so it answers nothing")
+        sheet.pathRows[row].marked = false
+        sheet.pathRows[row].name = "srv"
+        XCTAssertEqual(sheet.unresolvedMarks, ["c"], "unticking puts it back")
+
+        sheet.pathRows[row].marked = true
+        XCTAssertNil(sheet.publish())
+        XCTAssertNil(state.publishError)
+        XCTAssertEqual(try documentArgs("c", in: Data(contentsOf: file)), ["${CC_NEEDS:srv}", "--quiet"])
+        XCTAssertEqual(state.collectionsFile.collections[state.activeCollection]?.publish?.intent.pathMarks["c"],
+                       [JSONPointer(["args", "0"]): .init(name: "srv", hint: nil, value: "/Users/d/y.js")],
+                       "the tick replaced the lost mark, pointer and value both")
+    }
+
+    func testARowTickedOnOpenAnswersNoOtherLostMark() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        XCTAssertNil(state.upsert(name: "two", entry: MCPEntry(config: node(["/Users/d/one.js", "/Users/d/two.js"])),
+                                  renamedFrom: nil))
+        let first = PublishModel(state: state, collection: state.activeCollection)
+        first.folder = try publishFolder(h).path
+        for index in first.pathRows.indices where first.pathRows[index].connector == "two" { first.pathRows[index].marked = true }
+        XCTAssertNil(first.publish())
+        XCTAssertNil(state.upsert(name: "two", entry: MCPEntry(config: node(["/Users/d/one.js", "/Users/d/2.js"])),
+                                  renamedFrom: "two"))
+
+        let sheet = PublishModel(state: state, collection: state.activeCollection)
+        XCTAssertEqual(sheet.pathRows.filter { $0.connector == "two" && $0.marked }.map(\.value), ["/Users/d/one.js"])
+        XCTAssertEqual(sheet.unresolvedMarks, ["two"], "the tick on one.js was already on record, so it stands in for nothing")
+        let moved = try XCTUnwrap(sheet.pathRows.firstIndex { $0.value == "/Users/d/2.js" })
+        sheet.pathRows[moved].marked = true
+        XCTAssertEqual(sheet.unresolvedMarks, [])
+    }
+
+    func testForgettingALostMarkSendsThePathAsThePreviewShows() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let file = try publishThenLoseTheMark(h, state)
+        let sheet = PublishModel(state: state, collection: state.activeCollection)
+        XCTAssertEqual(try documentArgs("c", in: Data(sheet.preview.utf8)), ["/Users/d/y.js", "--quiet"],
+                       "the preview shows what forgetting the mark would send")
+
+        sheet.forgetUnresolvedMark("c")
+        XCTAssertEqual(sheet.unresolvedMarks, [])
+        XCTAssertTrue(sheet.canPublish)
+        XCTAssertTrue(sheet.canExport)
+        XCTAssertNil(sheet.publish())
+        XCTAssertNil(state.publishError)
+        XCTAssertEqual(try documentArgs("c", in: Data(contentsOf: file)), ["/Users/d/y.js", "--quiet"],
+                       "the author's explicit choice: the path travels as written")
+        XCTAssertNil(state.collectionsFile.collections[state.activeCollection]?.publish?.intent.pathMarks["c"])
+    }
+
+    func testAMarkWhoseConnectorIsGoneWaitsToBeForgotten() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let first = PublishModel(state: state, collection: state.activeCollection)
+        first.folder = try publishFolder(h).path
+        first.pathRows[0].marked = true
+        XCTAssertNil(first.publish())
+        let file = try publishFolder(h).appendingPathComponent(first.fileName)
+
+        // Renamed by an older app on another machine: the master list arrives, the record does not follow.
+        var store = try h.storeOnDisk()
+        let entry = try XCTUnwrap(store.collections[store.activeCollection]?.mcps.removeValue(forKey: "c"))
+        store.collections[store.activeCollection]?.mcps["d"] = entry
+        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        state.reload(trigger: .externalStoreAdoption)
+
+        let sheet = PublishModel(state: state, collection: state.activeCollection)
+        XCTAssertEqual(sheet.unresolvedMarks, ["c"])
+        let row = try XCTUnwrap(sheet.pathRows.firstIndex { $0.connector == "d" })
+        sheet.pathRows[row].marked = true
+        XCTAssertEqual(sheet.unresolvedMarks, ["c"], "a tick in another connector answers nothing about this one")
+        XCTAssertFalse(sheet.canPublish)
+        sheet.forgetUnresolvedMark("c")
+        XCTAssertTrue(sheet.canPublish)
+        XCTAssertNil(sheet.publish())
+        XCTAssertNil(state.publishError)
+        XCTAssertEqual(try documentArgs("d", in: Data(contentsOf: file)), ["${CC_NEEDS:path}", "--quiet"])
+    }
+
     func testExportWritesTheSameDocumentOnce() throws {
         let (h, state) = try started()
         defer { h.dispose() }

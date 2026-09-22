@@ -24,6 +24,9 @@ public final class PublishModel: ObservableObject {
     public static let chooseFolderButton = "Choose Folder…"
     /// What a screen reader says for the bare tick beside a path row, which has no visible label.
     public static let markPathLabel = "Mark as a path this machine supplies"
+    /// The button beside an unresolved mark's note: drop the mark and let the path travel as the
+    /// preview shows it.
+    public static let forgetMarkButton = "Forget Mark"
 
     public static func title(_ collection: String) -> String { "Publish “\(collection)”" }
 
@@ -37,6 +40,8 @@ public final class PublishModel: ObservableObject {
     public static func warningLine(_ connector: String, _ warning: String) -> String { "\(connector): \(warning)" }
 
     public static func footerLine(_ fileName: String, _ originShort: String) -> String { "\(fileName) · \(originShort)" }
+
+    public static func unresolvedMarkNote(_ connector: String) -> String { "A path marked in “\(connector)” has moved. Tick it where it now sits, or forget the mark." }
 
     /// One environment variable of one connector. Stripped by default: its name and hint travel,
     /// its value does not. A struct the sheet edits through its index, as every other row here
@@ -96,6 +101,14 @@ public final class PublishModel: ObservableObject {
     @Published public var pathRows: [PathRow]
 
     private let state: AppState
+    /// Connectors whose recorded path mark found no argument when the sheet opened, and those the
+    /// collection no longer holds that still carry one. Kept rather than dropped: the rows alone
+    /// show such a path unticked, and publishing or exporting what they say would send it as
+    /// written. Each waits for the author to tick the path where it now sits, or to forget it.
+    @Published private var lostMarks: Set<String>
+    /// The path rows ticked when the sheet opened. Those are marks already on record, so only a
+    /// tick made since can stand in for a lost one.
+    private let tickedAtOpen: Set<String>
 
     public init(state: AppState, collection: String, connectors: [String]? = nil) {
         self.state = state
@@ -107,6 +120,7 @@ public final class PublishModel: ObservableObject {
         folder = state.collectionsCache.published[collection]?.folder
         var env: [EnvRow] = []
         var paths: [PathRow] = []
+        var lost: Set<String> = []
         let held = PublishModel.held(in: state, collection, only: connectors)
         for name in held.keys.sorted() {
             guard let config = held[name]?.config else { continue }
@@ -124,7 +138,9 @@ public final class PublishModel: ObservableObject {
             // its argument ticks nothing, which is the sheet asking for it to be marked again. A
             // marked argument keeps its row even once it stops looking like a path (the file
             // it named is gone), or publishing from the sheet would quietly unmark it.
-            let placed = PublishIntent.placePathMarks(intent.pathMarks[name] ?? [:], in: arguments).placed
+            let placement = PublishIntent.placePathMarks(intent.pathMarks[name] ?? [:], in: arguments)
+            let placed = placement.placed
+            if !placement.unresolved.isEmpty { lost.insert(name) }
             for (index, argument) in arguments.enumerated()
             where PublishModel.looksLikeAPath(argument) || placed[index] != nil {
                 found += 1
@@ -136,8 +152,17 @@ public final class PublishModel: ObservableObject {
                                      hint: mark?.hint ?? ""))
             }
         }
+        // A mark for a connector the collection no longer holds was made on one renamed or
+        // removed where the record could not follow, and the exporter refuses it whatever the
+        // subset. No row can be ticked for it, so it waits to be forgotten.
+        let all = state.store.collections[collection]?.mcps ?? [:]
+        for (name, marks) in intent.pathMarks where all[name] == nil && marks.values.contains(where: { $0.value != nil }) {
+            lost.insert(name)
+        }
         envRows = env
         pathRows = paths
+        lostMarks = lost
+        tickedAtOpen = Set(paths.filter(\.marked).map(\.id))
     }
 
     public var title: String { PublishModel.title(collection) }
@@ -174,12 +199,38 @@ public final class PublishModel: ObservableObject {
         return origin.isEmpty ? fileName : PublishModel.footerLine(fileName, origin)
     }
 
-    public var canPublish: Bool { !(folder ?? "").isEmpty }
+    /// Nothing is published while a mark is unresolved: the rows would send its path as written.
+    public var canPublish: Bool { !(folder ?? "").isEmpty && unresolvedMarks.isEmpty }
+
+    /// Nothing is exported while a mark is unresolved, for the same reason.
+    public var canExport: Bool { unresolvedMarks.isEmpty }
+
+    /// The connectors whose path mark was lost and is still unanswered, sorted. One leaves the
+    /// list when a path row of it is ticked that was not ticked on open, with a name the
+    /// placeholder can carry — the new tick replaces the lost mark — or when the mark is
+    /// forgotten. Unticking that row puts it back.
+    public var unresolvedMarks: [String] {
+        lostMarks.filter { connector in
+            !pathRows.contains { row in
+                row.connector == connector && row.marked && !tickedAtOpen.contains(row.id)
+                    && !PublishModel.placeholderName(row.name).isEmpty
+            }
+        }.sorted()
+    }
+
+    /// Drops a lost mark by the author's explicit choice: the path then travels as the preview
+    /// shows it, as written unless a row of it is ticked.
+    public func forgetUnresolvedMark(_ connector: String) {
+        lostMarks.remove(connector)
+    }
 
     /// What the rows say, in the form the exporter reads. A marked row whose name is not a legal
     /// placeholder name is sanitized rather than dropped: the author ticked that row to keep a
     /// path on this machine out of the document, and silently publishing it because of how they
     /// spelled the name would be the one failure here nobody would notice.
+    ///
+    /// A lost mark is not in it: the preview shows what forgetting one would send, and nothing
+    /// that records or writes this intent runs while one is unresolved.
     public var intent: PublishIntent {
         var shareValues: [String: Set<String>] = [:]
         var hints: [String: [String: String]] = [:]
@@ -239,8 +290,10 @@ public final class PublishModel: ObservableObject {
 
     /// Publish, or re-publish with what the sheet now says. A folder that is not the one on
     /// record starts publishing again there, which is how the failed-write banner's Choose
-    /// Folder… moves a collection. nil on success.
+    /// Folder… moves a collection. nil on success. Refused with the note while a mark is
+    /// unresolved, behind the disabled button: what the rows say would send its path as written.
     public func publish() -> String? {
+        if let lost = unresolvedMarks.first { return PublishModel.unresolvedMarkNote(lost) }
         guard let chosen = folder?.trimmingCharacters(in: .whitespaces), !chosen.isEmpty else { return nil }
         guard state.isPublished(collection), state.collectionsCache.published[collection]?.folder == chosen else {
             return state.startPublishing(collection, to: chosen, intent: intent)
@@ -252,9 +305,11 @@ public final class PublishModel: ObservableObject {
         return state.republish(collection)
     }
 
-    /// The same document, written once, binding nothing. nil on success.
+    /// The same document, written once, binding nothing. nil on success. Refused with the note
+    /// while a mark is unresolved, as `publish()` is.
     public func export(to path: String) -> String? {
-        state.writeExport(for: collection, intent: intent, to: path, only: connectors)
+        if let lost = unresolvedMarks.first { return PublishModel.unresolvedMarkNote(lost) }
+        return state.writeExport(for: collection, intent: intent, to: path, only: connectors)
     }
 
     // MARK: - Rows

@@ -198,7 +198,7 @@ final class AppStateCollectionsTests: XCTestCase {
                  cache: CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")], published: [:]))
         state.pendingUpdates = ["Team": CollectionDiff(added: ["jira"], removed: [], changed: [])]
         state.sourceErrors = ["Team": "unreadable"]
-        state.publishError = (collection: "Team", message: "no room")
+        state.publishError = CollectionPublishError(collection: "Team", message: "no room")
 
         XCTAssertNil(state.renameCollection("Team", to: "Data"))
         XCTAssertNil(state.collectionsFile.collections["Team"])
@@ -383,7 +383,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.collectionBanner, .updateAvailable(collection: "Team", summary: teamDiff.summary()))
 
         // A failed publish outranks everything, for any collection.
-        state.publishError = (collection: "Default", message: "the folder is read-only")
+        state.publishError = CollectionPublishError(collection: "Default", message: "the folder is read-only")
         XCTAssertEqual(state.collectionBanner, .publishFailed(collection: "Default", message: "the folder is read-only"))
         state.publishError = nil
         XCTAssertEqual(state.collectionBanner, .updateAvailable(collection: "Team", summary: teamDiff.summary()))
@@ -1064,6 +1064,21 @@ final class AppStateCollectionsTests: XCTestCase {
         ])), renamedFrom: "ledger"))
     }
 
+    /// Whether any string value in the JSON document at `file` contains `text`. Decoded rather
+    /// than searched as bytes: the serializer writes "/" as "\/", so a path searched for in the
+    /// raw text is never found, whatever the document carries.
+    private func documentCarries(_ file: URL, _ text: String) throws -> Bool {
+        func strings(_ value: JSONValue) -> [String] {
+            switch value {
+            case .string(let s): return [s]
+            case .array(let items): return items.flatMap(strings)
+            case .object(let object): return object.values.flatMap(strings)
+            default: return []
+            }
+        }
+        return strings(try JSONValue.parse(Data(contentsOf: file))).contains { $0.contains(text) }
+    }
+
     private func ledgerArgs(in file: URL) throws -> [String] {
         let document = try CollectionDocument.decode(try Data(contentsOf: file))
         guard case .local(let local)? = document.connectors["ledger"]?.launcher else { throw AppStateHarness.HarnessError() }
@@ -1080,7 +1095,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.publishError)
         XCTAssertEqual(try ledgerArgs(in: file), ["--quiet", "${CC_NEEDS:server_path}"],
                        "the placeholder stays on the path, and the flag that took its place travels as written")
-        XCTAssertFalse(try XCTUnwrap(String(data: Data(contentsOf: file), encoding: .utf8)).contains(markedPath))
+        XCTAssertFalse(try documentCarries(file, markedPath))
     }
 
     func testAMarkThatLostItsPathFailsClosedUntilItIsMarkedAgain() throws {
@@ -1115,7 +1130,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(sheet.publish())
         XCTAssertNil(state.publishError)
         XCTAssertEqual(try ledgerArgs(in: file), ["--quiet", "${CC_NEEDS:server_path}"])
-        XCTAssertFalse(try XCTUnwrap(String(data: Data(contentsOf: file), encoding: .utf8)).contains(edited))
+        XCTAssertFalse(try documentCarries(file, edited))
         XCTAssertEqual(state.collectionsFile.collections[state.activeCollection]?.publish?.intent.pathMarks["ledger"],
                        [JSONPointer(["args", "1"]): .init(name: "server_path", hint: nil, value: edited)])
     }
@@ -1177,10 +1192,9 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.connectorCaution("x", in: state.activeCollection))
         XCTAssertEqual(args(of: try XCTUnwrap(state.store.collections[state.activeCollection]?.mcps["x"]?.config)), [token],
                        "the store keeps the token")
-        let bytes = try XCTUnwrap(String(data: try Data(contentsOf: folder.appendingPathComponent(
-            Slug.make(state.activeCollection) + ".json")), encoding: .utf8))
-        XCTAssertTrue(bytes.contains(Placeholder.directoryToken), "each subscriber resolves it against their own copy")
-        XCTAssertFalse(bytes.contains(published), "the author's folder never travels")
+        let document = folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json")
+        XCTAssertTrue(try documentCarries(document, token), "each subscriber resolves it against their own copy")
+        XCTAssertFalse(try documentCarries(document, published), "the author's folder never travels")
         state.reload()
         XCTAssertEqual(args(of: try XCTUnwrap(h.claudeServers()["x"])), [published + "/tools/srv.js"],
                        "what was written is what a reload renders, so nothing is regenerated")

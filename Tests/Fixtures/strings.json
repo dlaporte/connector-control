@@ -337,6 +337,7 @@
   "PublishModel.footerLine": {
     "format": "{0} · {1}"
   },
+  "PublishModel.forgetMarkButton": "Forget Mark",
   "PublishModel.hintPlaceholder": "hint for recipients",
   "PublishModel.markPathLabel": "Mark as a path this machine supplies",
   "PublishModel.pathNamePlaceholder": "placeholder name",
@@ -346,6 +347,9 @@
   "PublishModel.shareValueLabel": "share value",
   "PublishModel.title": {
     "format": "Publish “{0}”"
+  },
+  "PublishModel.unresolvedMarkNote": {
+    "format": "A path marked in “{0}” has moved. Tick it where it now sits, or forget the mark."
   },
   "PublishModel.warningLine": {
     "format": "{0}: {1}"

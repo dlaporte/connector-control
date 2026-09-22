@@ -175,6 +175,196 @@ public class PublishModelTests
         Assert.Equal(flag, marked.Intent);
     }
 
+    // MARK: a mark that lost its argument
+
+    private static JsonValue Node(params string[] args) => JsonValue.Object(
+        ("command", JsonValue.String("node")),
+        ("args", JsonValue.Array(args.Select(JsonValue.String))));
+
+    private static IReadOnlyList<string> DocumentArgs(string connector, byte[] data) =>
+        Assert.IsType<CollectionDocument.Launcher.Local>(CollectionDocument.Decode(data).Connectors[connector].Launcher).Args;
+
+    private static IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark>? RecordedMarks(AppState state, string connector) =>
+        state.CollectionsFile.Collections.GetValueOrDefault(state.ActiveCollection)?.Publish?.Intent.PathMarks
+            .GetValueOrDefault(connector);
+
+    /// <summary>
+    /// "c" published through the dialog with its path marked "srv", then that path edited outside
+    /// the editor, so the record's mark has lost its argument. Returns the document's path.
+    /// </summary>
+    private static string PublishThenLoseTheMark(AppStateHarness h, AppState state)
+    {
+        var first = new PublishModel(state, state.ActiveCollection) { Folder = PublishFolder(h) };
+        first.PathRows[0].Marked = true;
+        first.PathRows[0].Name = "srv";
+        Assert.Null(first.Publish());
+        Assert.Null(state.Upsert("c", new McpEntry(Node("/Users/d/y.js", "--quiet")), "c"));
+        Assert.Equal(AppState.PathMarkMovedError("c"), state.PublishError?.Message);
+        return Path.Combine(PublishFolder(h), first.FileName);
+    }
+
+    [Fact]
+    public void AReopenedSheetKeepsALostMarkAndWritesNothingUntilItIsAnswered()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var file = PublishThenLoseTheMark(h, state);
+        var before = File.ReadAllBytes(file);
+
+        var sheet = new PublishModel(state, state.ActiveCollection);
+        Assert.Equal(["c"], sheet.UnresolvedMarks);
+        // The path it lost is not where it was.
+        Assert.False(sheet.PathRows.First(r => r.Connector == "c").Marked);
+        Assert.NotNull(sheet.Folder);
+        // A folder is on record, and still nothing can be published.
+        Assert.False(sheet.CanPublish);
+        Assert.False(sheet.CanExport);
+
+        var output = h.Dir.File(Path.Combine("away", "copy.json"));
+        Assert.Equal(PublishModel.UnresolvedMarkNote("c"), sheet.Export(output));
+        Assert.False(File.Exists(output));
+        Assert.Equal(PublishModel.UnresolvedMarkNote("c"), sheet.Publish());
+        Assert.Equal(before, File.ReadAllBytes(file));
+        // The record is left as it was.
+        Assert.Equal("/Users/d/x.js", Assert.Single(RecordedMarks(state, "c")!).Value.Value);
+    }
+
+    [Fact]
+    public void TickingThePathWhereItNowSitsAnswersTheLostMark()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var file = PublishThenLoseTheMark(h, state);
+        var sheet = new PublishModel(state, state.ActiveCollection);
+        var row = sheet.PathRows.Single(r => r.Connector == "c" && r.Value == "/Users/d/y.js");
+
+        row.Marked = true;
+        Assert.Empty(sheet.UnresolvedMarks);
+        Assert.True(sheet.CanPublish);
+        Assert.True(sheet.CanExport);
+        // A tick with no name to carry would publish the path, so it answers nothing.
+        row.Name = "  ";
+        Assert.Equal(["c"], sheet.UnresolvedMarks);
+        // Unticking puts it back.
+        row.Marked = false;
+        row.Name = "srv";
+        Assert.Equal(["c"], sheet.UnresolvedMarks);
+
+        row.Marked = true;
+        Assert.Null(sheet.Publish());
+        Assert.Null(state.PublishError);
+        Assert.Equal(["${CC_NEEDS:srv}", "--quiet"], DocumentArgs("c", File.ReadAllBytes(file)));
+        // The tick replaced the lost mark, pointer and value both.
+        var mark = Assert.Single(RecordedMarks(state, "c")!);
+        Assert.Equal(new JsonPointer(["args", "0"]), mark.Key);
+        Assert.Equal(new PublishIntent.PathMark("srv", null, "/Users/d/y.js"), mark.Value);
+    }
+
+    [Fact]
+    public void ARowTickedOnOpenAnswersNoOtherLostMark()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        Assert.Null(state.Upsert("two", new McpEntry(Node("/Users/d/one.js", "/Users/d/two.js")), null));
+        var first = new PublishModel(state, state.ActiveCollection) { Folder = PublishFolder(h) };
+        foreach (var row in first.PathRows.Where(r => r.Connector == "two"))
+        {
+            row.Marked = true;
+        }
+        Assert.Null(first.Publish());
+        Assert.Null(state.Upsert("two", new McpEntry(Node("/Users/d/one.js", "/Users/d/2.js")), "two"));
+
+        var sheet = new PublishModel(state, state.ActiveCollection);
+        Assert.Equal(["/Users/d/one.js"], sheet.PathRows.Where(r => r.Connector == "two" && r.Marked).Select(r => r.Value));
+        // The tick on one.js was already on record, so it stands in for nothing.
+        Assert.Equal(["two"], sheet.UnresolvedMarks);
+        sheet.PathRows.Single(r => r.Value == "/Users/d/2.js").Marked = true;
+        Assert.Empty(sheet.UnresolvedMarks);
+    }
+
+    [Fact]
+    public void ForgettingALostMarkSendsThePathAsThePreviewShows()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var file = PublishThenLoseTheMark(h, state);
+        var sheet = new PublishModel(state, state.ActiveCollection);
+        // The preview shows what forgetting the mark would send.
+        Assert.Equal(["/Users/d/y.js", "--quiet"], DocumentArgs("c", System.Text.Encoding.UTF8.GetBytes(sheet.Preview)));
+
+        sheet.ForgetUnresolvedMark("c");
+        Assert.Empty(sheet.UnresolvedMarks);
+        Assert.True(sheet.CanPublish);
+        Assert.True(sheet.CanExport);
+        Assert.Null(sheet.Publish());
+        Assert.Null(state.PublishError);
+        // The author's explicit choice: the path travels as written.
+        Assert.Equal(["/Users/d/y.js", "--quiet"], DocumentArgs("c", File.ReadAllBytes(file)));
+        Assert.Null(RecordedMarks(state, "c"));
+    }
+
+    [Fact]
+    public void AMarkWhoseConnectorIsGoneWaitsToBeForgotten()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var first = new PublishModel(state, state.ActiveCollection) { Folder = PublishFolder(h) };
+        first.PathRows[0].Marked = true;
+        Assert.Null(first.Publish());
+        var file = Path.Combine(PublishFolder(h), first.FileName);
+
+        // Renamed by an older app on another machine: the master list arrives, the record does not follow.
+        var store = h.StoreOnDisk();
+        var mcps = store.Collections[store.ActiveCollection].Mcps;
+        mcps["d"] = mcps["c"];
+        mcps.Remove("c");
+        MasterStoreIO.Save(store, h.MasterStorePath);
+        state.Reload(ReloadTrigger.ExternalStoreAdoption);
+
+        var sheet = new PublishModel(state, state.ActiveCollection);
+        Assert.Equal(["c"], sheet.UnresolvedMarks);
+        sheet.PathRows.First(r => r.Connector == "d").Marked = true;
+        // A tick in another connector answers nothing about this one.
+        Assert.Equal(["c"], sheet.UnresolvedMarks);
+        Assert.False(sheet.CanPublish);
+        sheet.ForgetUnresolvedMark("c");
+        Assert.True(sheet.CanPublish);
+        Assert.Null(sheet.Publish());
+        Assert.Null(state.PublishError);
+        Assert.Equal(["${CC_NEEDS:path}", "--quiet"], DocumentArgs("d", File.ReadAllBytes(file)));
+    }
+
+    /// <summary>
+    /// C#-only, for the reason <see cref="EditingARowRaisesWhatIsDerivedFromItWithoutAViewCall"/>
+    /// gives: the dialog enables its buttons and shows the note from these raises alone.
+    /// </summary>
+    [Fact]
+    public void AnsweringALostMarkRaisesTheGatesWithoutAViewCall()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        PublishThenLoseTheMark(h, state);
+        var sheet = new PublishModel(state, state.ActiveCollection);
+        var raised = new List<string>();
+        sheet.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");
+
+        sheet.PathRows.Single(r => r.Connector == "c").Marked = true;
+        Assert.Contains(nameof(PublishModel.UnresolvedMarks), raised);
+        Assert.Contains(nameof(PublishModel.CanPublish), raised);
+        Assert.Contains(nameof(PublishModel.CanExport), raised);
+
+        sheet.PathRows.Single(r => r.Connector == "c").Marked = false;
+        raised.Clear();
+        sheet.ForgetUnresolvedMark("c");
+        Assert.Contains(nameof(PublishModel.UnresolvedMarks), raised);
+        Assert.Contains(nameof(PublishModel.CanPublish), raised);
+        Assert.Contains(nameof(PublishModel.CanExport), raised);
+        // Forgetting what is already forgotten says nothing.
+        raised.Clear();
+        sheet.ForgetUnresolvedMark("c");
+        Assert.Empty(raised);
+    }
+
     [Fact]
     public void ExportWritesTheSameDocumentOnce()
     {

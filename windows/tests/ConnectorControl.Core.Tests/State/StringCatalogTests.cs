@@ -125,6 +125,7 @@ public class StringCatalogTests
         ["PublishModel.folderLine"] = ["X"],
         ["PublishModel.footerLine"] = ["X", "Y"],
         ["PublishModel.title"] = ["X"],
+        ["PublishModel.unresolvedMarkNote"] = ["X"],
         ["PublishModel.warningLine"] = ["X", "Y"],
         // The parameter here is a RemoteField, not free text, so the fixed argument is the
         // label one of them renders as rather than the usual "X".
@@ -388,6 +389,7 @@ public class StringCatalogTests
         actual["PublishModel.exportTitle"] = PublishModel.ExportTitle("X");
         actual["PublishModel.folderLine"] = PublishModel.FolderLine("X");
         actual["PublishModel.footerLine"] = PublishModel.FooterLine("X", "Y");
+        actual["PublishModel.forgetMarkButton"] = PublishModel.ForgetMarkButton;
         actual["PublishModel.hintPlaceholder"] = PublishModel.HintPlaceholder;
         actual["PublishModel.markPathLabel"] = PublishModel.MarkPathLabel;
         actual["PublishModel.pathNamePlaceholder"] = PublishModel.PathNamePlaceholder;
@@ -396,6 +398,7 @@ public class StringCatalogTests
         actual["PublishModel.publishButton"] = PublishModel.PublishButton;
         actual["PublishModel.shareValueLabel"] = PublishModel.ShareValueLabel;
         actual["PublishModel.title"] = PublishModel.Title("X");
+        actual["PublishModel.unresolvedMarkNote"] = PublishModel.UnresolvedMarkNote("X");
         actual["PublishModel.warningLine"] = PublishModel.WarningLine("X", "Y");
 
         // MARK: RemoteAuthKind

@@ -23,6 +23,8 @@ public sealed class PublishModel : ObservableObject
     public const string ChooseFolderButton = "Choose Folder…";
     /// <summary>What a screen reader says for the bare tick beside a path row, which has no visible label.</summary>
     public const string MarkPathLabel = "Mark as a path this machine supplies";
+    /// <summary>The button beside an unresolved mark's note: drop the mark and let the path travel as the preview shows it.</summary>
+    public const string ForgetMarkButton = "Forget Mark";
 
     public static string Title(string collection) => $"Publish “{collection}”";
 
@@ -38,6 +40,9 @@ public sealed class PublishModel : ObservableObject
     public static string WarningLine(string connector, string warning) => $"{connector}: {warning}";
 
     public static string FooterLine(string fileName, string originShort) => $"{fileName} · {originShort}";
+
+    public static string UnresolvedMarkNote(string connector) =>
+        $"A path marked in “{connector}” has moved. Tick it where it now sits, or forget the mark.";
 
     /// <summary>
     /// One environment variable of one connector. Stripped by default: its name and hint travel,
@@ -92,6 +97,15 @@ public sealed class PublishModel : ObservableObject
 
     private readonly AppState state;
     private string? folder;
+    /// <summary>
+    /// Connectors whose recorded path mark found no argument when the dialog opened, and those the
+    /// collection no longer holds that still carry one. Kept rather than dropped: the rows alone
+    /// show such a path unticked, and publishing or exporting what they say would send it as
+    /// written. Each waits for the author to tick the path where it now sits, or to forget it.
+    /// </summary>
+    private readonly HashSet<string> lostMarks = new(StringComparer.Ordinal);
+    /// <summary>The path rows ticked when the dialog opened. Those are marks already on record, so only a tick made since can stand in for a lost one.</summary>
+    private readonly HashSet<string> tickedAtOpen = new(StringComparer.Ordinal);
 
     public PublishModel(AppState state, string collection, IReadOnlyList<string>? connectors = null)
     {
@@ -127,9 +141,14 @@ public sealed class PublishModel : ObservableObject
             // argument ticks nothing, which is the dialog asking for it to be marked again. A
             // marked argument keeps its row even once it stops looking like a path (the file it
             // named is gone), or publishing from the dialog would quietly unmark it.
-            var placed = PublishIntent.PlacePathMarks(
+            var placement = PublishIntent.PlacePathMarks(
                 intent.PathMarks.TryGetValue(name, out var marks) ? marks : new Dictionary<JsonPointer, PublishIntent.PathMark>(),
-                arguments).Placed;
+                arguments);
+            var placed = placement.Placed;
+            if (placement.Unresolved.Count > 0)
+            {
+                lostMarks.Add(name);
+            }
             for (var index = 0; index < arguments.Count; index++)
             {
                 var mark = placed.GetValueOrDefault(index);
@@ -143,6 +162,18 @@ public sealed class PublishModel : ObservableObject
                                       mark?.Name ?? DefaultPathName(found), mark?.Hint ?? string.Empty));
             }
         }
+        // A mark for a connector the collection no longer holds was made on one renamed or removed
+        // where the record could not follow, and the exporter refuses it whatever the subset. No
+        // row can be ticked for it, so it waits to be forgotten.
+        var all = state.Store.Collections.GetValueOrDefault(collection)?.Mcps;
+        foreach (var (name, marks) in intent.PathMarks)
+        {
+            if ((all is null || !all.ContainsKey(name)) && marks.Values.Any(mark => mark.Value is not null))
+            {
+                lostMarks.Add(name);
+            }
+        }
+        tickedAtOpen.UnionWith(paths.Where(row => row.Marked).Select(row => row.Id));
         ReplaceRows(env, paths);
     }
 
@@ -236,6 +267,11 @@ public sealed class PublishModel : ObservableObject
         Raise(nameof(Intent));
         Raise(nameof(Preview));
         Raise(nameof(Warnings));
+        // A tick, or the name beside it, is what answers a lost mark.
+        if (sender is PathRow)
+        {
+            RaiseMarkGates();
+        }
     }
 
     /// <summary>The Mac calls this <c>title</c>; here the static factory already owns that name.</summary>
@@ -279,13 +315,53 @@ public sealed class PublishModel : ObservableObject
         }
     }
 
-    public bool CanPublish => !string.IsNullOrEmpty(Folder);
+    /// <summary>Nothing is published while a mark is unresolved: the rows would send its path as written.</summary>
+    public bool CanPublish => !string.IsNullOrEmpty(Folder) && UnresolvedMarks.Count == 0;
+
+    /// <summary>Nothing is exported while a mark is unresolved, for the same reason.</summary>
+    public bool CanExport => UnresolvedMarks.Count == 0;
+
+    /// <summary>
+    /// The connectors whose path mark was lost and is still unanswered, sorted. One leaves the list
+    /// when a path row of it is ticked that was not ticked on open, with a name the placeholder
+    /// can carry — the new tick replaces the lost mark — or when the mark is forgotten. Unticking
+    /// that row puts it back.
+    /// </summary>
+    public IReadOnlyList<string> UnresolvedMarks => lostMarks
+        .Where(connector => !PathRows.Any(row => row.Connector == connector && row.Marked
+                                                 && !tickedAtOpen.Contains(row.Id)
+                                                 && PlaceholderName(row.Name).Length > 0))
+        .Order(StringComparer.Ordinal)
+        .ToList();
+
+    /// <summary>
+    /// Drops a lost mark by the author's explicit choice: the path then travels as the preview
+    /// shows it, as written unless a row of it is ticked.
+    /// </summary>
+    public void ForgetUnresolvedMark(string connector)
+    {
+        if (lostMarks.Remove(connector))
+        {
+            RaiseMarkGates();
+        }
+    }
+
+    private void RaiseMarkGates()
+    {
+        Raise(nameof(UnresolvedMarks));
+        Raise(nameof(CanPublish));
+        Raise(nameof(CanExport));
+    }
 
     /// <summary>
     /// What the rows say, in the form the exporter reads. A marked row whose name is not a legal
     /// placeholder name is sanitized rather than dropped: the author ticked that row to keep a
     /// path on this machine out of the document, and silently publishing it because of how they
     /// spelled the name would be the one failure here nobody would notice.
+    /// <para>
+    /// A lost mark is not in it: the preview shows what forgetting one would send, and nothing that
+    /// records or writes this intent runs while one is unresolved.
+    /// </para>
     /// </summary>
     public PublishIntent Intent
     {
@@ -394,6 +470,11 @@ public sealed class PublishModel : ObservableObject
     /// </summary>
     public string? Publish()
     {
+        // Behind the disabled button: what the rows say would send a lost mark's path as written.
+        if (UnresolvedMarks.Count > 0)
+        {
+            return UnresolvedMarkNote(UnresolvedMarks[0]);
+        }
         var chosen = Folder?.TrimSpaces() ?? string.Empty;
         if (chosen.Length == 0)
         {
@@ -411,8 +492,13 @@ public sealed class PublishModel : ObservableObject
         return state.Republish(Collection);
     }
 
-    /// <summary>The same document, written once, binding nothing. null on success.</summary>
-    public string? Export(string path) => state.WriteExport(Collection, Intent, path, Connectors);
+    /// <summary>
+    /// The same document, written once, binding nothing. null on success. Refused with the note
+    /// while a mark is unresolved, as <see cref="Publish"/> is.
+    /// </summary>
+    public string? Export(string path) => UnresolvedMarks.Count > 0
+        ? UnresolvedMarkNote(UnresolvedMarks[0])
+        : state.WriteExport(Collection, Intent, path, Connectors);
 
     // MARK: rows
 

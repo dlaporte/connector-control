@@ -117,6 +117,7 @@ final class StringCatalogTests: XCTestCase {
         "PublishModel.folderLine": ["X"],
         "PublishModel.footerLine": ["X", "Y"],
         "PublishModel.title": ["X"],
+        "PublishModel.unresolvedMarkNote": ["X"],
         "PublishModel.warningLine": ["X", "Y"],
         "RestoreModel.confirmMessage": ["X"],
         "ReviewModel.title": ["X"],
@@ -356,6 +357,7 @@ final class StringCatalogTests: XCTestCase {
         actual["PublishModel.exportTitle"] = PublishModel.exportTitle("X")
         actual["PublishModel.folderLine"] = PublishModel.folderLine("X")
         actual["PublishModel.footerLine"] = PublishModel.footerLine("X", "Y")
+        actual["PublishModel.forgetMarkButton"] = PublishModel.forgetMarkButton
         actual["PublishModel.hintPlaceholder"] = PublishModel.hintPlaceholder
         actual["PublishModel.markPathLabel"] = PublishModel.markPathLabel
         actual["PublishModel.pathNamePlaceholder"] = PublishModel.pathNamePlaceholder
@@ -364,6 +366,7 @@ final class StringCatalogTests: XCTestCase {
         actual["PublishModel.publishButton"] = PublishModel.publishButton
         actual["PublishModel.shareValueLabel"] = PublishModel.shareValueLabel
         actual["PublishModel.title"] = PublishModel.title("X")
+        actual["PublishModel.unresolvedMarkNote"] = PublishModel.unresolvedMarkNote("X")
         actual["PublishModel.warningLine"] = PublishModel.warningLine("X", "Y")
 
         // MARK: RemoteAuthKind

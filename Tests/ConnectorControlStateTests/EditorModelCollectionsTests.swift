@@ -629,8 +629,19 @@ final class EditorModelCollectionsTests: XCTestCase {
         return local.args
     }
 
+    /// Whether any string value in the JSON document at `file` contains `text`. Decoded rather
+    /// than searched as bytes: the serializer writes "/" as "\/", so a path searched for in the
+    /// raw text is never found, whatever the document carries.
     private func carries(_ file: URL, _ text: String) throws -> Bool {
-        try XCTUnwrap(String(data: try Data(contentsOf: file), encoding: .utf8)).contains(text)
+        func strings(_ value: JSONValue) -> [String] {
+            switch value {
+            case .string(let s): return [s]
+            case .array(let items): return items.flatMap(strings)
+            case .object(let object): return object.values.flatMap(strings)
+            default: return []
+            }
+        }
+        return strings(try JSONValue.parse(Data(contentsOf: file))).contains { $0.contains(text) }
     }
 
     func testSavingMovesAPathMarkWithItsRow() throws {
