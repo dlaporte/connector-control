@@ -1048,12 +1048,20 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// when this window opened. Each twin keeps its own on/off state, which is this machine's
     /// business and not part of "this change"; a name already taken in one of them leaves that
     /// collection alone rather than failing a save that has already landed.
+    /// <para>
+    /// The checkbox promised these collections held an identical copy, and that was measured when
+    /// the window opened. A twin that has moved since — a second editor window on it saved first,
+    /// or an external edit reconciled in — is no longer the connector the user agreed to change,
+    /// so it is skipped in silence. The same care the primary save takes over its own snapshot.
+    /// </para>
     /// </summary>
     private void PropagateSavedConfig(JsonValue config, string saved)
     {
         foreach (var other in PropagateTargets)
         {
-            if (state.Store.Collections.TryGetValue(other, out var held) && held.Mcps.TryGetValue(Target.Name, out var twin))
+            if (state.Store.Collections.TryGetValue(other, out var held)
+                && held.Mcps.TryGetValue(Target.Name, out var twin)
+                && twin.Config == Target.Entry.Config)
             {
                 state.Upsert(saved, new McpEntry(twin.Enabled, config, view), Target.Name, other);
             }

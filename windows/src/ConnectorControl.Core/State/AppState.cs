@@ -814,21 +814,25 @@ public sealed class AppState : ObservableObject, IDisposable
     /// </summary>
     public string? Upsert(string name, McpEntry entry, string? renamedFrom, string? collection = null)
     {
-        var mcps = McpsIn(collection);
+        var target = collection ?? ActiveCollection;
         var trimmed = name.TrimSpaces();
         if (trimmed.Length == 0)
         {
             return NameEmptyError;
         }
-        if (trimmed != renamedFrom && mcps.ContainsKey(trimmed))
+        // Read-only until both guards pass: a rejected save must leave no trace, and creating the
+        // collection up front would leave an empty one behind. Swift's optional chain does the
+        // same by construction.
+        var existing = Store.Collections.GetValueOrDefault(target)?.Mcps;
+        if (trimmed != renamedFrom && existing is not null && existing.ContainsKey(trimmed))
         {
             return DuplicateNameError(trimmed);
         }
         if (renamedFrom is { } old && old != trimmed)
         {
-            mcps.Remove(old);
+            existing?.Remove(old);
         }
-        mcps[trimmed] = entry;
+        McpsIn(target)[trimmed] = entry;
         PersistStore();
         RaiseAll();
         return null;
@@ -837,7 +841,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>Removes and persists; the caller applies (both happen in one turn).</summary>
     public void Remove(string name, string? collection = null)
     {
-        McpsIn(collection).Remove(name);
+        // A collection that isn't there has nothing to remove — and must not be brought into
+        // being by the attempt, which is what Swift's optional chain gives for free.
+        if (Store.Collections.TryGetValue(collection ?? ActiveCollection, out var held))
+        {
+            held.Mcps.Remove(name);
+        }
         PersistStore();
         RaiseAll();
     }
@@ -845,7 +854,8 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// A named collection's connectors, ready to be written to. Store.Mcps is deliberately
     /// side-effect free, so the one place that may create a missing collection is here — the
-    /// same thing Swift's <c>store.collections[target, default: Collection()]</c> does.
+    /// same thing Swift's <c>store.collections[target, default: Collection()]</c> does. Called
+    /// only once a write is certain, so nothing that fails leaves an empty collection behind.
     /// </summary>
     private Dictionary<string, McpEntry> McpsIn(string? collection)
     {

@@ -271,6 +271,8 @@ public final class EditorModel: ObservableObject {
         }
     }
 
+    public var hasHeaderNote: Bool { headerNote != nil }
+
     /// The paste tip offers something a read-only JSON view cannot do.
     public var showJSONTip: Bool { !isReadOnly && jsonError == nil }
 
@@ -306,16 +308,20 @@ public final class EditorModel: ObservableObject {
     /// The hint for the first marker still standing in `text`, if the document supplied one. A
     /// filled field carries no marker, so it asks for nothing and says nothing.
     private func hint(in text: String) -> String? {
+        let needs = collectionNeeds
         for marker in Placeholder.names(in: text) {
-            if let hint = collectionNeeds[marker]?.hint { return hint }
+            if let hint = needs[marker]?.hint { return hint }
         }
         return nil
     }
 
+    /// EditorModel.cs takes the row itself: its EnvRow is an ObservableObject the view holds on
+    /// to, while this one is a struct in an array, so the live value has to be looked up by id.
     public func isPlaceholder(envRow id: UUID) -> Bool {
         envRows.first { $0.id == id }.map { Placeholder.containsMarker($0.value) } ?? false
     }
 
+    /// Takes an id rather than the row, for the reason `isPlaceholder(envRow:)` gives.
     public func placeholderHint(envRow id: UUID) -> String? {
         envRows.first { $0.id == id }.flatMap { hint(in: $0.value) }
     }
@@ -325,6 +331,8 @@ public final class EditorModel: ObservableObject {
         Set(args.indices.filter { Placeholder.containsMarker(args[$0].value) })
     }
 
+    /// EditorModel.cs calls this `PlaceholderHintForArg`: C# has no argument labels to tell it
+    /// apart from the env-row overload.
     public func placeholderHint(arg index: Int) -> String? {
         args.indices.contains(index) ? hint(in: args[index].value) : nil
     }
@@ -713,9 +721,15 @@ public final class EditorModel: ObservableObject {
     /// copy when this window opened. Each twin keeps its own on/off state, which is this
     /// machine's business and not part of "this change"; a name already taken in one of them
     /// leaves that collection alone rather than failing a save that has already landed.
+    ///
+    /// The checkbox promised these collections held an identical copy, and that was measured when
+    /// the window opened. A twin that has moved since — a second editor window on it saved first,
+    /// or an external edit reconciled in — is no longer the connector the user agreed to change,
+    /// so it is skipped in silence. The same care the primary save takes over its own snapshot.
     private func propagateSavedConfig(_ config: JSONValue, as saved: String) {
         for other in propagateTargets {
-            guard let twin = state.store.collections[other]?.mcps[target.name] else { continue }
+            guard let twin = state.store.collections[other]?.mcps[target.name],
+                  twin.config == target.entry.config else { continue }
             _ = state.upsert(name: saved,
                              entry: MCPEntry(enabled: twin.enabled, config: config, lastEditView: view),
                              renamedFrom: target.name, in: other)

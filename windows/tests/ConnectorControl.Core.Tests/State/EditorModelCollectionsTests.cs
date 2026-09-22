@@ -325,6 +325,103 @@ public class EditorModelCollectionsTests
     }
 
     [Fact]
+    public void PropagateSkipsATwinThatMovedWhileTheWindowWasOpen()
+    {
+        using var rig = new EditorRig();
+        var state = rig.State;
+        Assert.Null(state.CreateCollection("Backup"));
+        state.SwitchCollection("Default");
+
+        using var editor = rig.Editor("scoutbook", "Default");
+        Assert.Equal(["Backup"], editor.PropagateTargets);
+        // A second window on the twin saved first — the checkbox's promise no longer holds for it.
+        var moved = new McpEntry(AppStateHarness.Remote("https://scoutbook.example.com/mcp/other"));
+        Assert.Null(state.Upsert("scoutbook", moved, "scoutbook", "Backup"));
+
+        editor.Propagate = true;
+        editor.RemoteUrl = "https://scoutbook.example.com/mcp/v2";
+        Assert.True(editor.Save());
+
+        // A twin that is no longer identical keeps what it says.
+        Assert.Equal(moved.Config, state.Store.Collections["Backup"].Mcps["scoutbook"].Config);
+        // The save itself still lands.
+        Assert.Contains("/mcp/v2", state.Store.Collections["Default"].Mcps["scoutbook"].Config.EditorText(),
+                        StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PropagatingIntoTheActiveCollectionReachesClaudeOnce()
+    {
+        using var rig = new EditorRig();
+        var state = rig.State;
+        // Edit the inactive side and propagate inward: the twin Claude runs is the one that moves.
+        Assert.Null(state.CreateCollection("Spare"));
+        state.SwitchCollection("Default");
+        var appliedBefore = rig.H.Settings.LastApplyDate;
+
+        using var editor = rig.Editor("scoutbook", "Spare");
+        Assert.Equal(["Default"], editor.PropagateTargets);
+        editor.Propagate = true;
+        editor.RemoteUrl = "https://scoutbook.example.com/mcp/v2";
+        rig.H.Now = rig.H.Now.AddMinutes(1);
+        Assert.True(editor.Save());
+
+        var updated = state.Store.Collections["Default"].Mcps["scoutbook"].Config;
+        Assert.Contains("/mcp/v2", updated.EditorText(), StringComparison.Ordinal);
+        // Claude follows the active collection.
+        Assert.Equal(updated, rig.H.ClaudeServers()["scoutbook"]);
+        // The save applied.
+        Assert.NotEqual(appliedBefore, rig.H.Settings.LastApplyDate);
+        Assert.Equal(rig.H.Now, rig.H.Settings.LastApplyDate);
+        // One apply, and it came after every write: an apply that ran before the propagated
+        // collection was written would leave the store dirty behind it.
+        Assert.False(state.IsDirty);
+        Assert.Equal(updated, state.Store.Collections["Spare"].Mcps["scoutbook"].Config);
+    }
+
+    [Fact]
+    public void PropagateCarriesARenameToTheTwin()
+    {
+        using var rig = new EditorRig();
+        var state = rig.State;
+        Assert.Null(state.CreateCollection("Backup"));
+        state.SwitchCollection("Default");
+
+        using var editor = rig.Editor("scoutbook", "Default");
+        editor.Propagate = true;
+        editor.Name = "scouts";
+        Assert.True(editor.Save());
+
+        Assert.False(state.Store.Collections["Backup"].Mcps.ContainsKey("scoutbook"));
+        Assert.True(state.Store.Collections["Backup"].Mcps.ContainsKey("scouts"));
+        Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("scoutbook"));
+        Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("scouts"));
+    }
+
+    [Fact]
+    public void PropagateLeavesACollectionWhoseNewNameIsTakenAlone()
+    {
+        using var rig = new EditorRig();
+        var state = rig.State;
+        Assert.Null(state.CreateCollection("Backup"));
+        state.SwitchCollection("Default");
+        // "Backup" already has something called "scouts", so the rename cannot land there.
+        var occupant = new McpEntry(AppStateHarness.Remote("https://scouts.example/mcp"));
+        Assert.Null(state.Upsert("scouts", occupant, null, "Backup"));
+
+        using var editor = rig.Editor("scoutbook", "Default");
+        editor.Propagate = true;
+        editor.Name = "scouts";
+        // The save the user asked for still lands.
+        Assert.True(editor.Save());
+
+        // The name was taken, so that collection is left as it was.
+        Assert.Equal(occupant.Config, state.Store.Collections["Backup"].Mcps["scouts"].Config);
+        Assert.True(state.Store.Collections["Backup"].Mcps.ContainsKey("scoutbook"));
+        Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("scouts"));
+    }
+
+    [Fact]
     public void PropagateIsOfferedOnlyForIdenticalLocalTwins()
     {
         using var rig = new EditorRig();

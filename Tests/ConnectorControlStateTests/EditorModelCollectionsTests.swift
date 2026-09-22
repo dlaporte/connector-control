@@ -280,6 +280,95 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertEqual(state.store.collections["Backup"]?.mcps["scoutbook"]?.config, twin)
     }
 
+    func testPropagateSkipsATwinThatMovedWhileTheWindowWasOpen() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let state = rig.state
+        XCTAssertNil(state.createCollection(named: "Backup"))
+        state.switchCollection(to: "Default")
+
+        let editor = rig.editor("scoutbook", in: "Default")
+        XCTAssertEqual(editor.propagateTargets, ["Backup"])
+        // A second window on the twin saved first — the checkbox's promise no longer holds for it.
+        let moved = MCPEntry(config: AppStateHarness.remote("https://scoutbook.example.com/mcp/other"))
+        XCTAssertNil(state.upsert(name: "scoutbook", entry: moved, renamedFrom: "scoutbook", in: "Backup"))
+
+        editor.propagate = true
+        editor.remoteURL = "https://scoutbook.example.com/mcp/v2"
+        XCTAssertTrue(editor.save())
+
+        XCTAssertEqual(state.store.collections["Backup"]?.mcps["scoutbook"]?.config, moved.config,
+                       "a twin that is no longer identical keeps what it says")
+        XCTAssertTrue(try XCTUnwrap(state.store.collections["Default"]?.mcps["scoutbook"]?.config)
+            .editorText().contains("/mcp/v2"), "the save itself still lands")
+    }
+
+    func testPropagatingIntoTheActiveCollectionReachesClaudeOnce() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let state = rig.state
+        // Edit the inactive side and propagate inward: the twin Claude runs is the one that moves.
+        XCTAssertNil(state.createCollection(named: "Spare"))
+        state.switchCollection(to: "Default")
+        let appliedBefore = rig.h.settings.lastApplyDate
+
+        let editor = rig.editor("scoutbook", in: "Spare")
+        XCTAssertEqual(editor.propagateTargets, ["Default"])
+        editor.propagate = true
+        editor.remoteURL = "https://scoutbook.example.com/mcp/v2"
+        rig.h.now = rig.h.now.addingTimeInterval(60)
+        XCTAssertTrue(editor.save())
+
+        let updated = try XCTUnwrap(state.store.collections["Default"]?.mcps["scoutbook"]?.config)
+        XCTAssertTrue(updated.editorText().contains("/mcp/v2"))
+        XCTAssertEqual(try rig.h.claudeServers()["scoutbook"], updated, "Claude follows the active collection")
+        XCTAssertNotEqual(rig.h.settings.lastApplyDate, appliedBefore, "the save applied")
+        XCTAssertEqual(rig.h.settings.lastApplyDate, rig.h.now)
+        // One apply, and it came after every write: an apply that ran before the propagated
+        // collection was written would leave the store dirty behind it.
+        XCTAssertFalse(state.isDirty)
+        XCTAssertEqual(state.store.collections["Spare"]?.mcps["scoutbook"]?.config, updated)
+    }
+
+    func testPropagateCarriesARenameToTheTwin() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let state = rig.state
+        XCTAssertNil(state.createCollection(named: "Backup"))
+        state.switchCollection(to: "Default")
+
+        let editor = rig.editor("scoutbook", in: "Default")
+        editor.propagate = true
+        editor.name = "scouts"
+        XCTAssertTrue(editor.save())
+
+        XCTAssertNil(state.store.collections["Backup"]?.mcps["scoutbook"])
+        XCTAssertNotNil(state.store.collections["Backup"]?.mcps["scouts"])
+        XCTAssertNil(state.store.collections["Default"]?.mcps["scoutbook"])
+        XCTAssertNotNil(state.store.collections["Default"]?.mcps["scouts"])
+    }
+
+    func testPropagateLeavesACollectionWhoseNewNameIsTakenAlone() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let state = rig.state
+        XCTAssertNil(state.createCollection(named: "Backup"))
+        state.switchCollection(to: "Default")
+        // "Backup" already has something called "scouts", so the rename cannot land there.
+        let occupant = MCPEntry(config: AppStateHarness.remote("https://scouts.example/mcp"))
+        XCTAssertNil(state.upsert(name: "scouts", entry: occupant, renamedFrom: nil, in: "Backup"))
+
+        let editor = rig.editor("scoutbook", in: "Default")
+        editor.propagate = true
+        editor.name = "scouts"
+        XCTAssertTrue(editor.save(), "the save the user asked for still lands")
+
+        XCTAssertEqual(state.store.collections["Backup"]?.mcps["scouts"]?.config, occupant.config,
+                       "the name was taken, so that collection is left as it was")
+        XCTAssertNotNil(state.store.collections["Backup"]?.mcps["scoutbook"])
+        XCTAssertNotNil(state.store.collections["Default"]?.mcps["scouts"])
+    }
+
     func testPropagateIsOfferedOnlyForIdenticalLocalTwins() throws {
         let rig = EditorRig()
         defer { rig.dispose() }
