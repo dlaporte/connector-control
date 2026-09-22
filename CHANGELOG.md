@@ -26,6 +26,9 @@ bullet once the section is about to ship.
   to cmd.exe unescaped. The Import sheet lists such a connector as skipped and names the
   field, and it stays out of the import and of later updates. A Mac writes bare `npx`,
   so the same document imports whole there.
+- A connector launched through the command shell that uses `${COLLECTION_DIR}` is
+  cautioned when the folder that token stands for holds `& | < > ^ "` or a space, as an
+  ordinary Windows folder name may: cmd.exe would read those as commands.
 
 ### Both platforms
 
@@ -70,9 +73,10 @@ bullet once the section is about to ship.
 - A publish that fails says so on the collection banner, with Choose Folder… and Stop
   Publishing, and pressing Publish again retries the write at once. A path marked for
   others to supply survives added, removed or reordered arguments, an in-place
-  correction and a connector rename; if the app can no longer place it, publishing stops
-  rather than send the path as written, the document already in the folder is left as it
-  was, and the banner asks you to open Publish… and mark it again.
+  correction and a connector rename; if the app can no longer place it, or the document
+  would carry a kept-back path or the publish folder in another connector, publishing
+  stops rather than write it, the document already in the folder is left as it was, and
+  the banner names the connector to open Publish… for.
 - The Collections window lists every collection beside its connectors, marking the
   active one and the synced ones, with a detail line saying where the selected one
   publishes to or syncs from. Import…, Subscribe…, Export…, Publish…, Refresh, Make
@@ -87,7 +91,12 @@ bullet once the section is about to ship.
 - Saving a connector that another local collection holds an identical copy of offers, in
   one checkbox, to apply the same change there too.
 - Restoring a backup of Claude's configuration puts it back into the collection it was
-  taken from, and makes that collection active.
+  taken from, and makes that collection active. A backup from an earlier version carries
+  no record, and goes into the active collection.
+- Connectors found in Claude's configuration at launch are taken into the store only
+  while the active collection is the one that file was written from, so a relaunch after
+  another machine switched collections no longer pours one collection's connectors into
+  another. Profiles have had that flaw since 1.1.
 - In a synced collection, a local server authored on the other platform is marked on its
   row; remote connectors cross either way.
 - A folder the app watches — Claude's config folder, the master list's, or a synced
