@@ -48,41 +48,49 @@ public class CollectionsWindowTests
     /// <see cref="EditorWindowTests"/>'s own helper shows and hides rather than staying up.
     /// <paramref name="select"/> is applied before the layout pass that generates the rows, so
     /// the body reads the collection it asked for rather than the active one.
+    ///
+    /// The window and everything that drives it live inside <c>WpfApp.Invoke</c>: a Window
+    /// constructed anywhere but the one STA thread WpfApp owns throws before it has a chance to
+    /// be wrong about anything else. The body runs there too, because it reads that window's
+    /// bindings, ticks its rows and raises the request its handler answers on that thread.
     /// </summary>
     private static void Showing(AppStateHarness h, AppState state, Action<CollectionsWindow, Recorder> body,
         string? select = null)
     {
         var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
-        var registry = new WindowRegistry(state, services, updates, h.Dialogs);
-        var window = new CollectionsWindow(state, registry, h.Dialogs) { ShowActivated = false };
-        var recorder = new Recorder();
-        window.Surfaces = recorder.Presenters;
-        var closed = false;
-        window.Closed += (_, _) => closed = true;
-        try
+        WpfApp.Invoke(() =>
         {
-            if (select is not null)
+            var registry = new WindowRegistry(state, services, updates, h.Dialogs);
+            var window = new CollectionsWindow(state, registry, h.Dialogs) { ShowActivated = false };
+            var recorder = new Recorder();
+            window.Surfaces = recorder.Presenters;
+            var closed = false;
+            window.Closed += (_, _) => closed = true;
+            try
             {
-                window.Model.Selected = select;
+                if (select is not null)
+                {
+                    window.Model.Selected = select;
+                }
+                // Bindings settle first, while nothing of ours is on screen, because that is the
+                // step that pumps. Between Show and Hide there is no pump at all: UpdateLayout
+                // runs the real layout pass — the one that generates the rows — synchronously.
+                Layout(window);
+                window.Show();
+                window.UpdateLayout();
+                window.Hide();
+                Layout(window);
+                body(window, recorder);
             }
-            // Bindings settle first, while nothing of ours is on screen, because that is the step
-            // that pumps. Between Show and Hide there is no pump at all: UpdateLayout runs the
-            // real layout pass — the one that generates the rows — synchronously.
-            Layout(window);
-            window.Show();
-            window.UpdateLayout();
-            window.Hide();
-            Layout(window);
-            body(window, recorder);
-        }
-        finally
-        {
-            if (!closed)
+            finally
             {
-                window.Close();
+                if (!closed)
+                {
+                    window.Close();
+                }
             }
-        }
+        });
     }
 
     /// <summary>
