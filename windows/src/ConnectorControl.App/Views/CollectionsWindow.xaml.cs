@@ -37,6 +37,8 @@ public partial class CollectionsWindow : Window
     /// the stack ran out.
     /// </summary>
     private bool writingSelection;
+    /// <summary>One resync per burst of raises: a single action can raise several times.</summary>
+    private bool selectionResyncQueued;
 
     public CollectionsWindow(AppState state, WindowRegistry windows, IDialogs dialogs)
     {
@@ -116,7 +118,33 @@ public partial class CollectionsWindow : Window
     /// and the ticks it counts are a plain field of a row that notifies nobody. Everything else
     /// on this window is a binding the model raises.
     /// </summary>
-    private void Refresh() => ExportButton.Content = CollectionsModel.ExportButton(Model.CheckedNames.Count);
+    private void Refresh()
+    {
+        ExportButton.Content = CollectionsModel.ExportButton(Model.CheckedNames.Count);
+        if (!selectionResyncQueued)
+        {
+            selectionResyncQueued = true;
+            Dispatcher.BeginInvoke(DispatcherPriority.DataBind, new Action(ResyncSelection));
+        }
+    }
+
+    /// <summary>
+    /// Puts the model's selection back on the sidebar once a raise has been delivered to
+    /// everything listening. A raise that replaces the items with records no longer equal to the
+    /// selected one — making a collection active flips IsActive on all of them — clears the
+    /// list's own selection, and whether the one-way binding has re-pushed by then depends on the
+    /// order the notification reaches its listeners in. After it, the order no longer matters.
+    /// <c>SetCurrentValue</c> keeps the binding, and the SelectionChanged it causes writes
+    /// nothing, because the name it carries is already the model's.
+    /// </summary>
+    private void ResyncSelection()
+    {
+        selectionResyncQueued = false;
+        if (!closed && !Equals(Sidebar.SelectedValue, Model.Selected))
+        {
+            Sidebar.SetCurrentValue(Selector.SelectedValueProperty, Model.Selected);
+        }
+    }
 
     // MARK: toolbar
 

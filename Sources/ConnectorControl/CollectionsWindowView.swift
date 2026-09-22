@@ -29,6 +29,11 @@ struct CollectionsWindowView: View {
     /// A sheet asked for while another is still on screen. Dismissing one is animated, and the
     /// replacement can only go up once that has finished — which is what `onDismiss` reports.
     @State private var pendingSheet: Sheet?
+    /// Whether the window is on screen. The request is taken a turn after it is noticed, and the
+    /// window can close in that turn: a request taken then would be lost to a window nobody sees,
+    /// and an import would put a file panel up with no window behind it. The Windows mirror
+    /// guards the same moment with its `closed` flag.
+    @State private var appeared = false
     /// The model's last refusal, kept here because only the view knows when it has been read:
     /// `lastError` is cleared by the next action that succeeds, never by an OK button.
     @State private var shownError: String?
@@ -86,7 +91,11 @@ struct CollectionsWindowView: View {
         // one that read the request only on appear would strand every later one. Both go through
         // the next turn of the main queue, so the panel or sheet a request opens appears over a
         // window that is already on screen and frontmost rather than inside its first layout.
-        .onAppear { scheduleRequest() }
+        .onAppear {
+            appeared = true
+            scheduleRequest()
+        }
+        .onDisappear { appeared = false }
         .onChange(of: state.collectionsWindowRequest) { _, _ in scheduleRequest() }
     }
 
@@ -360,6 +369,8 @@ struct CollectionsWindowView: View {
 
     /// What the popover asked for, taken so no other window can act on it twice.
     private func consumeRequest() {
+        // Left in AppState for whichever window opens next.
+        guard appeared else { return }
         switch state.takeCollectionsWindowRequest() {
         case .importFile:
             openDocument(keepInSync: false)

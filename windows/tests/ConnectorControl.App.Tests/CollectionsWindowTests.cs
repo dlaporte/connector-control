@@ -219,10 +219,12 @@ public class CollectionsWindowTests
             window.Sidebar.SelectionChanged += (_, _) => selections++;
 
             // A user picking a row reaches the model — the markup binds one way now, so this is
-            // the handler's doing — and the raise it causes stops there.
-            window.Sidebar.SelectedValue = "Data team";
+            // the handler's doing — and the raise it causes stops there. Picked by index, the way
+            // a click picks: assigning SelectedValue would replace the very binding under test.
+            window.Sidebar.SelectedIndex = window.Model.Items.ToList().FindIndex(i => i.Name == "Data team");
             Layout(window);
             Assert.Equal("Data team", window.Model.Selected);
+            Assert.Equal("Data team", window.Sidebar.SelectedValue);
             Assert.InRange(raises, 1, 5);
             Assert.InRange(selections, 1, 4);
 
@@ -234,23 +236,27 @@ public class CollectionsWindowTests
             Layout(window);
             Assert.Equal("Data team", state.ActiveCollection);
             Assert.Equal("Data team", window.Model.Selected);
+            // …and the sidebar still highlights it, although every item it held was replaced.
+            Assert.Equal("Data team", window.Sidebar.SelectedValue);
             Assert.InRange(raises, 1, 30);
             Assert.InRange(selections, 0, 6);
         });
     }
 
+    /// <summary>
+    /// The command's own two halves, with the collection handed over directly: CanExecute greys
+    /// Make Active out for the collection that is already active, and the handler activates
+    /// whichever collection it is given. What the real menu hands it is
+    /// <see cref="TheSidebarMenuCarriesTheCollectionItWasRaisedOver"/>'s question.
+    /// </summary>
     [Fact]
-    public void MakeActiveCarriesTheCollectionItsMenuWasRaisedOver()
+    public void MakeActiveIsGreyedForTheActiveCollectionAndActivatesTheOneItIsGiven()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
         SubscribeToDataTeam(h, state);
         Showing(h, state, (window, _) =>
         {
-            // One ContextMenu instance is shared by every container the item container style
-            // makes, and WPF drops its inheritance context as soon as a second one claims it, so
-            // the command's parameter is the only thing that can say which row was clicked.
-            // Nothing here reads a DataContext.
             Assert.Equal("Default", state.ActiveCollection);
             var synced = window.Model.Items[0];
             var active = window.Model.Items[1];
@@ -265,8 +271,7 @@ public class CollectionsWindowTests
             CollectionsWindow.MakeActiveCommand.Execute(synced, window);
             Assert.Equal("Data team", state.ActiveCollection);
 
-            // Then the second collection, through that same shared menu: it lands on itself and
-            // not on the row that claimed the menu last.
+            // Then back to the other one: the handler follows its parameter both ways.
             var second = window.Model.Items[1];
             Assert.Equal("Default", second.Name);
             Assert.True(CollectionsWindow.MakeActiveCommand.CanExecute(second, window));
