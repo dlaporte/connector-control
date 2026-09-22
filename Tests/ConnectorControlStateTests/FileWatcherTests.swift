@@ -217,6 +217,41 @@ final class FileWatcherTests: XCTestCase {
         XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 3 }, timeout: wait), "the re-armed watcher still reports changes")
     }
 
+    /// A directory replaced wholesale: a sync client swapping a folder in, or a
+    /// delete and recreate that the watcher never sees as a gap. `RENAME_SWAP`
+    /// makes the replacement atomic, which is the only way a test can produce
+    /// it — delete-then-recreate leaves a window in which the watcher may
+    /// instead see the path missing and take its deleted-directory branch. Here
+    /// the path never stops existing, so the one thing that changed is which
+    /// directory it resolves to, and the descriptor the watcher holds is
+    /// orphaned: nothing happening under the path can reach it again.
+    ///
+    /// The replacement is empty, so the write at the end CREATES the watched
+    /// file. Only the directory source can see a create — the file source has
+    /// no descriptor to arm on a file that does not exist yet — which is what
+    /// makes that assertion fail for a watcher still on the old directory.
+    func testAReplacedDirectoryIsFollowedOnTheNextStart() throws {
+        let r = Rig()
+        defer { r.dispose() }
+        try Data("a".utf8).write(to: r.file)
+        let watcher = r.make()
+        watcher.start()
+
+        let replacement = TempDir(prefix: "watch-replacement")
+        defer { replacement.dispose() }
+        XCTAssertEqual(renamex_np(replacement.url.path, r.dir.url.path, UInt32(RENAME_SWAP)), 0,
+                       "the atomic swap has to succeed for the rest of this test to mean anything")
+        _ = r.ui.pumpUntil({ false }, timeout: settle)   // let the swap's own callback land
+        let beforeTheWrite = r.hits
+
+        XCTAssertFalse(watcher.isArmed, "the descriptor is no longer the directory at the path")
+        watcher.start()   // AppState re-arms on every reload: this is where recovery happens
+        XCTAssertTrue(watcher.isArmed)
+        try TempDir.touch(r.file, "bb")
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits > beforeTheWrite }, timeout: wait),
+                      "the watcher follows the path, not the descriptor it happened to open")
+    }
+
     func testStaysUnarmedUntilTheParentDirectoryExists() throws {
         let r = Rig()
         defer { r.dispose() }

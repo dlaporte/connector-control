@@ -15,6 +15,9 @@ public final class FileWatcher: @unchecked Sendable {
     private let marshal: @Sendable (@escaping MainActorAction) -> Void
     private let queue = DispatchQueue(label: "com.dlaporte.connector-control.filewatcher")
     private var dirSource: DispatchSourceFileSystemObject?
+    /// The descriptor `dirSource` watches, kept so its identity can be compared
+    /// with whatever the path resolves to now.
+    private var dirFD: Int32 = -1
     private var fileSource: DispatchSourceFileSystemObject?
     private var lastModified: Date?
     private var generation = 0
@@ -34,24 +37,35 @@ public final class FileWatcher: @unchecked Sendable {
         fileSource?.cancel()
     }
 
-    /// True while the parent-directory source is live.
-    public var isArmed: Bool { queue.sync { dirSource != nil } }
+    /// True while the parent-directory source is live AND still watching the
+    /// directory the path resolves to. A directory replaced wholesale — deleted
+    /// and recreated, or swapped in by a sync client — leaves the descriptor on
+    /// an orphaned inode where nothing under the path can fire again, and
+    /// calling that armed would make the caller's re-arm a no-op forever.
+    /// A parent that is simply missing stays armed until the event handler sees
+    /// it and disarms deliberately, which is a different case with its own
+    /// callback.
+    public var isArmed: Bool { queue.sync { dirSource != nil && !directoryWasReplaced() } }
 
-    /// Arms the watcher. A no-op while armed. Returns without arming when the
-    /// parent directory cannot be opened; the caller retries on its next reload.
+    /// Arms the watcher. A no-op while armed on the directory the path resolves
+    /// to; when that directory has been replaced, the stale descriptor is
+    /// swapped for one on the new directory, which is how a watcher recovers
+    /// from a folder a sync client replaced wholesale. Returns without arming
+    /// when the parent directory cannot be opened; the caller retries on its
+    /// next reload.
     public func start() {
         queue.sync {
-            guard dirSource == nil else { return }
-            lastModified = modificationDate()
-            let dirFD = open(url.deletingLastPathComponent().path, O_EVTONLY)
-            guard dirFD >= 0 else { return }
-            let source = DispatchSource.makeFileSystemObjectSource(
-                fileDescriptor: dirFD, eventMask: [.write, .rename, .delete], queue: queue)
-            source.setEventHandler { [weak self] in self?.checkForChange() }
-            source.setCancelHandler { close(dirFD) }
-            source.resume()
-            dirSource = source
-            generation += 1
+            let cold = dirSource == nil
+            guard cold || directoryWasReplaced() else { return }
+            // A replacement keeps the last-seen modification date, so the first
+            // comparison against the new directory's file reports the
+            // difference instead of silently baselining it away.
+            if cold { lastModified = modificationDate() }
+            guard armDirSource() else { return }
+            // Only a cold start is a new generation. A replacement stops
+            // nothing, and a callback already posted describes a change the
+            // caller still has to see.
+            if cold { generation += 1 }
             armFileSource()
         }
     }
@@ -60,6 +74,7 @@ public final class FileWatcher: @unchecked Sendable {
         queue.sync {
             dirSource?.cancel()
             dirSource = nil
+            dirFD = -1
             fileSource?.cancel()
             fileSource = nil
             generation += 1
@@ -67,6 +82,38 @@ public final class FileWatcher: @unchecked Sendable {
     }
 
     // MARK: on `queue`
+
+    /// Opens the parent directory and arms the source on it, replacing whatever
+    /// source is there. False when the directory cannot be opened.
+    private func armDirSource() -> Bool {
+        dirSource?.cancel()
+        dirSource = nil
+        dirFD = -1
+        let fd = open(url.deletingLastPathComponent().path, O_EVTONLY)
+        guard fd >= 0 else { return false }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd, eventMask: [.write, .rename, .delete], queue: queue)
+        source.setEventHandler { [weak self] in self?.checkForChange() }
+        source.setCancelHandler { close(fd) }
+        source.resume()
+        dirSource = source
+        dirFD = fd
+        return true
+    }
+
+    /// Whether the directory the path resolves to now is a different one from
+    /// the descriptor's. Device plus inode is the fingerprint: a directory
+    /// recreated at the same path is a new inode, and events for it never reach
+    /// a descriptor still holding the old one. A path that resolves to nothing
+    /// is not a replacement — that is the deleted-directory case.
+    private func directoryWasReplaced() -> Bool {
+        guard dirFD >= 0 else { return false }
+        var held = stat()
+        var atPath = stat()
+        guard fstat(dirFD, &held) == 0,
+              stat(url.deletingLastPathComponent().path, &atPath) == 0 else { return false }
+        return held.st_dev != atPath.st_dev || held.st_ino != atPath.st_ino
+    }
 
     /// The file source must be re-armed whenever the file is atomically
     /// replaced, because the old descriptor then points at the orphaned inode.
@@ -94,6 +141,7 @@ public final class FileWatcher: @unchecked Sendable {
             // runs because this is the deliberate disarm, not a stale one.
             dirSource?.cancel()
             dirSource = nil
+            dirFD = -1
             fileSource?.cancel()
             fileSource = nil
             generation += 1
