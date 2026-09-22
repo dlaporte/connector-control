@@ -21,13 +21,20 @@ public struct CollectionsLocalCache: Equatable, Sendable {
     /// that collection's connectors, so it is the only one a launch may ingest them into; nil
     /// until the first apply that records it.
     public var lastAppliedCollection: String?
+    /// The connector names that apply wrote into Claude's file. They are what
+    /// `lastAppliedCollection` rendered, so they still say which entries are its own once the
+    /// collection itself is gone — deleted here, or on another machine, which leaves nothing
+    /// else behind. nil until the first apply that records them.
+    public var lastAppliedNames: Set<String>?
 
     public init(synced: [String: SyncedBinding], published: [String: PublishBinding],
-                kept: [String: KeptRecord] = [:], lastAppliedCollection: String? = nil) {
+                kept: [String: KeptRecord] = [:], lastAppliedCollection: String? = nil,
+                lastAppliedNames: Set<String>? = nil) {
         self.synced = synced
         self.published = published
         self.kept = kept
         self.lastAppliedCollection = lastAppliedCollection
+        self.lastAppliedNames = lastAppliedNames
     }
 
     /// The lists a stopped publish left behind, as `PublishBinding` holds them while it publishes.
@@ -35,14 +42,36 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         public var markedValues: Set<String>
         public var releasedValues: Set<String>
         public var publishedFolders: Set<String>
+        /// The origin the collection this record belongs to published under, while that collection
+        /// is still the one bearing the name. A collection made with a deleted one's name is a
+        /// different collection and clears it: the folders the old one left are another
+        /// collection's to it, released rather than written over. Absent too in a record written
+        /// before origins were kept, which is read the same way.
+        public var origin: String?
         public init(markedValues: Set<String> = [], releasedValues: Set<String> = [],
-                    publishedFolders: Set<String> = []) {
+                    publishedFolders: Set<String> = [], origin: String? = nil) {
             self.markedValues = markedValues
             self.releasedValues = releasedValues
             self.publishedFolders = publishedFolders
+            self.origin = origin
         }
 
+        /// An origin alone says nothing about what must not travel, so a record holding only one
+        /// is no record at all.
         public var isEmpty: Bool { markedValues.isEmpty && releasedValues.isEmpty && publishedFolders.isEmpty }
+
+        /// What a publish binding leaves behind when it goes, merged with anything already
+        /// remembered under that name. The binding goes three ways — Stop Publishing, a delete
+        /// made here, and a load finding the collection deleted or unpublished on another machine
+        /// — and all three leave the same memory of what must not travel.
+        public static func remembering(_ binding: PublishBinding, after earlier: KeptRecord?) -> KeptRecord {
+            KeptRecord(
+                markedValues: binding.markedValues.union(earlier?.markedValues ?? []),
+                releasedValues: binding.releasedValues.union(earlier?.releasedValues ?? []),
+                publishedFolders: binding.publishedFolders.union([binding.folder])
+                    .union(earlier?.publishedFolders ?? []),
+                origin: binding.origin ?? earlier?.origin)
+        }
     }
 
     public struct SyncedBinding: Equatable, Sendable {
@@ -75,13 +104,19 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         /// can bring an earlier one back as written — a backup taken before the folder moved — and
         /// the author's old folder is no more a subscriber's than the current one.
         public var publishedFolders: Set<String>
+        /// The origin the collection publishes under, so what this binding leaves behind still
+        /// says whose folders they were once the sidecar entry that named it is gone. Absent in a
+        /// binding written before it was kept.
+        public var origin: String?
         public init(folder: String, lastWrittenHash: String?, markedValues: Set<String> = [],
-                    releasedValues: Set<String> = [], publishedFolders: Set<String> = []) {
+                    releasedValues: Set<String> = [], publishedFolders: Set<String> = [],
+                    origin: String? = nil) {
             self.folder = folder
             self.lastWrittenHash = lastWrittenHash
             self.markedValues = markedValues
             self.releasedValues = releasedValues
             self.publishedFolders = publishedFolders
+            self.origin = origin
         }
     }
 
@@ -96,6 +131,9 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         let remembered = kept.filter { !$0.value.isEmpty }
         if !remembered.isEmpty { root["kept"] = .object(remembered.mapValues { $0.encode() }) }
         if let lastAppliedCollection { root["lastAppliedCollection"] = .string(lastAppliedCollection) }
+        if let lastAppliedNames {
+            root["lastAppliedNames"] = .array(lastAppliedNames.sorted { $0.ordinallyPrecedes($1) }.map(JSONValue.string))
+        }
         return .object(root)
     }
 
@@ -119,10 +157,17 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         for (name, value) in try CollectionsFile.objectValue(root["kept"], "kept") {
             kept[name] = try KeptRecord.decode(value, what: "kept \"\(name)\"")
         }
+        // Absent, rather than empty, in a cache written before they were recorded: an apply that
+        // rendered nothing records an empty list, which is not the same thing.
+        var lastAppliedNames: Set<String>?
+        if root["lastAppliedNames"] != nil {
+            lastAppliedNames = try CollectionsFile.stringSet(root["lastAppliedNames"], "lastAppliedNames")
+        }
         return CollectionsLocalCache(
             synced: synced, published: published, kept: kept,
             // Absent in a cache written before it was recorded: the next apply records it.
-            lastAppliedCollection: try CollectionsFile.optionalString(root["lastAppliedCollection"], "lastAppliedCollection"))
+            lastAppliedCollection: try CollectionsFile.optionalString(root["lastAppliedCollection"], "lastAppliedCollection"),
+            lastAppliedNames: lastAppliedNames)
     }
 
     // MARK: Disk
@@ -144,12 +189,25 @@ public struct CollectionsLocalCache: Equatable, Sendable {
     /// is not synced any more, and a publish folder for one that is not published any more.
     /// What a stopped publish left behind is not a binding the sidecar vouches for, and is kept
     /// whatever it says: it is this machine's memory of what must not travel.
+    ///
+    /// A publish binding dropped here is a collection deleted, or stopped, on another machine,
+    /// which is how a collection disappears from a store that syncs. It leaves what stopping it
+    /// here leaves: the paths it kept back, the paths the author released and the folders it
+    /// published into. Nothing else on this machine remembers them — there is no record to union,
+    /// and the sidecar entry that carried its marks went with it.
     public func reconciled(with file: CollectionsFile) -> CollectionsLocalCache {
-        CollectionsLocalCache(
+        let vouched = published.filter { file.collections[$0.key]?.publish != nil }
+        var remembered = kept
+        for (name, binding) in published where vouched[name] == nil {
+            let record = KeptRecord.remembering(binding, after: kept[name])
+            if !record.isEmpty { remembered[name] = record }
+        }
+        return CollectionsLocalCache(
             synced: synced.filter { file.kind(of: $0.key) == .synced },
-            published: published.filter { file.collections[$0.key]?.publish != nil },
-            kept: kept,
-            lastAppliedCollection: lastAppliedCollection)
+            published: vouched,
+            kept: remembered,
+            lastAppliedCollection: lastAppliedCollection,
+            lastAppliedNames: lastAppliedNames)
     }
 }
 
@@ -190,6 +248,7 @@ extension CollectionsLocalCache.PublishBinding {
         if !publishedFolders.isEmpty {
             object["publishedFolders"] = .array(publishedFolders.sorted { $0.ordinallyPrecedes($1) }.map(JSONValue.string))
         }
+        if let origin { object["origin"] = .string(origin) }
         return .object(object)
     }
 
@@ -206,7 +265,9 @@ extension CollectionsLocalCache.PublishBinding {
             // The folder a binding names is one it publishes into, whether or not the list says so:
             // a binding written before the list was kept knows that much about itself.
             publishedFolders: try CollectionsFile.stringSet(object["publishedFolders"], "\(what) publishedFolders")
-                .union([folder]))
+                .union([folder]),
+            // Absent in a binding written before the origin was kept: the next publish fills it in.
+            origin: try CollectionsFile.optionalString(object["origin"], "\(what) origin"))
     }
 }
 
@@ -217,6 +278,7 @@ extension CollectionsLocalCache.KeptRecord {
                               ("publishedFolders", publishedFolders)] where !values.isEmpty {
             object[key] = .array(values.sorted { $0.ordinallyPrecedes($1) }.map(JSONValue.string))
         }
+        if let origin { object["origin"] = .string(origin) }
         return .object(object)
     }
 
@@ -225,6 +287,7 @@ extension CollectionsLocalCache.KeptRecord {
         return CollectionsLocalCache.KeptRecord(
             markedValues: try CollectionsFile.stringSet(object["markedValues"], "\(what) markedValues"),
             releasedValues: try CollectionsFile.stringSet(object["releasedValues"], "\(what) releasedValues"),
-            publishedFolders: try CollectionsFile.stringSet(object["publishedFolders"], "\(what) publishedFolders"))
+            publishedFolders: try CollectionsFile.stringSet(object["publishedFolders"], "\(what) publishedFolders"),
+            origin: try CollectionsFile.optionalString(object["origin"], "\(what) origin"))
     }
 }

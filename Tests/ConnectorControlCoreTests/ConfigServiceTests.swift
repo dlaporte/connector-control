@@ -48,10 +48,16 @@ final class ConfigServiceTests: XCTestCase {
                         "a name no collection renders is genuinely new and comes in")
         XCTAssertNil(loaded.store.collections["Team"]?.mcps["installer"], "and only into the active one")
 
+        // A record naming a collection this store does not have — deleted here, or on another
+        // machine — has no render to compare against, so the names that apply wrote stand in for it.
         try FileManager.default.removeItem(at: paths.masterStoreURL)
+        XCTAssertEqual(Set(try service.loadAndReconcile(lastAppliedCollection: "Gone",
+                                                        lastAppliedNames: ["scoutbook", "aws-mcp"]).store.mcps.keys),
+                       ["service-now", "installer"],
+                       "what the collection that is gone rendered is left where it is, and the rest comes in")
         XCTAssertEqual(Set(try service.loadAndReconcile(lastAppliedCollection: "Gone").store.mcps.keys),
                        ["scoutbook", "aws-mcp", "service-now", "installer"],
-                       "a record naming a collection this store does not have renders nothing to leave alone")
+                       "without those names nothing tells the two apart, and the file comes in whole")
     }
 
     func testEachBackupRecordsTheCollectionItWasAppliedFrom() throws {

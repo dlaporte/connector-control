@@ -30,15 +30,17 @@ public sealed class ConfigService
     /// must not be overwritten by this machine's state.
     ///
     /// <paramref name="lastAppliedCollection"/> is the collection Claude's file was last written from
-    /// on this machine. Once the active collection has changed elsewhere, the names that collection
-    /// renders are left where they are rather than poured into the active one; everything else the
-    /// file holds is still taken in (<see cref="Ingestible"/>). The caller then applies the active
-    /// collection over the file.
+    /// on this machine, and <paramref name="lastAppliedNames"/> the connector names that apply wrote.
+    /// Once the active collection has changed elsewhere, the names that collection renders are left
+    /// where they are rather than poured into the active one; everything else the file holds is
+    /// still taken in (<see cref="Ingestible"/>). The caller then applies the active collection over
+    /// the file.
     /// </remarks>
     public LoadResult LoadAndReconcile(
         IReadOnlyDictionary<string, JsonValue>? baseline = null,
         bool storeAuthoritative = false,
-        string? lastAppliedCollection = null)
+        string? lastAppliedCollection = null,
+        IReadOnlySet<string>? lastAppliedNames = null)
     {
         var notes = new List<string>();
         var (store, corruptPath) = MasterStoreIO.Load(Paths.MasterStorePath);
@@ -84,7 +86,8 @@ public sealed class ConfigService
             effectiveBaseline = baseline;
         }
         var outcome = Reconciler.Reconcile(
-            store, Ingestible(servers, lastAppliedCollection, corruptPath is not null, store), effectiveBaseline);
+            store, Ingestible(servers, lastAppliedCollection, lastAppliedNames, corruptPath is not null, store),
+            effectiveBaseline);
         if (outcome.StoreChanged || corruptPath is not null)
         {
             SaveStore(outcome.Store);
@@ -103,13 +106,18 @@ public sealed class ConfigService
     /// is about to apply, whichever that is.
     /// </para>
     /// <para>
-    /// A record naming a collection the store no longer has renders nothing to leave alone, so all of
-    /// it comes in: what that collection kept back is remembered whether it was stopped or deleted,
-    /// and nothing a hand added is dropped to keep it out.
+    /// A record naming a collection the store no longer has — deleted here, or on another machine,
+    /// which is how a collection disappears from a store that syncs — has no render to compare
+    /// against. The names the last apply wrote are that render, so those are left alone and
+    /// everything else comes in: a connector an installer or a hand edit added survives, and a
+    /// deleted collection's own connectors are not poured into the active one. Without those names —
+    /// a cache written before they were kept — nothing here tells the two apart, and the file comes
+    /// in whole, as it did before they were recorded.
     /// </para>
     /// </summary>
     internal static IReadOnlyDictionary<string, JsonValue> Ingestible(
-        IReadOnlyDictionary<string, JsonValue> servers, string? lastApplied, bool corrupt, MasterStore store)
+        IReadOnlyDictionary<string, JsonValue> servers, string? lastApplied, IReadOnlySet<string>? lastAppliedNames,
+        bool corrupt, MasterStore store)
     {
         if (corrupt || lastApplied is null || string.Equals(lastApplied, store.ActiveCollection, StringComparison.Ordinal))
         {
@@ -117,7 +125,9 @@ public sealed class ConfigService
         }
         if (!store.Collections.TryGetValue(lastApplied, out var collection))
         {
-            return servers;
+            return lastAppliedNames is null
+                ? servers
+                : servers.Where(p => !lastAppliedNames.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
         }
         var rendered = collection.Mcps.Where(p => p.Value.Enabled).Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
         return servers.Where(p => !rendered.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);

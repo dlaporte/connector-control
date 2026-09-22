@@ -115,6 +115,61 @@ public sealed class CollectionsLocalCacheTests : IDisposable
         Assert.Equal(["/Users/d/Acme/mcp"], CollectionsLocalCache.Decode(older).Published["Consulting"].PublishedFolders);
     }
 
+    /// <summary>
+    /// A publish binding the sidecar no longer vouches for is a collection deleted, or stopped, on
+    /// another machine. What it kept back outlives it, exactly as Stop Publishing here leaves it.
+    /// </summary>
+    [Fact]
+    public void ReconcileKeepsWhatADroppedPublishBindingKeptBack()
+    {
+        var cache = new CollectionsLocalCache(
+            [],
+            new Dictionary<string, CollectionsLocalCache.PublishBinding>
+            {
+                ["Consulting"] = new("/Users/d/new", null, ["/a"], ["/b"], ["/Users/d/old"], "0c9b7d1e"),
+            },
+            new Dictionary<string, CollectionsLocalCache.KeptRecord>
+            {
+                ["Consulting"] = new(["/earlier"]),
+            });
+        var pruned = cache.Reconciled(new CollectionsFile([]));
+        Assert.Empty(pruned.Published);   // the sidecar no longer vouches for it
+        // The binding's lists, its folder among them, merged with what was already remembered.
+        Assert.Equal(new CollectionsLocalCache.KeptRecord(["/a", "/earlier"], ["/b"], ["/Users/d/old", "/Users/d/new"], "0c9b7d1e"),
+                     pruned.Kept["Consulting"]);
+        // And folding it again changes nothing.
+        Assert.Equal(pruned, pruned.Reconciled(new CollectionsFile([])));
+    }
+
+    /// <summary>
+    /// The origin a binding publishes under, and the names the last apply wrote, round-trip; a cache
+    /// written before either was kept has neither, and an apply that rendered nothing records an
+    /// empty list, which is not the same as no record at all.
+    /// </summary>
+    [Fact]
+    public void TheOriginAndTheNamesTheLastApplyWroteRoundTrip()
+    {
+        var cache = new CollectionsLocalCache(
+            [],
+            new Dictionary<string, CollectionsLocalCache.PublishBinding>
+            {
+                ["Consulting"] = new("/Users/d/Acme/mcp", null, null, null, ["/Users/d/Acme/mcp"], "0c9b7d1e"),
+            },
+            new Dictionary<string, CollectionsLocalCache.KeptRecord>
+            {
+                ["Gone"] = new(null, null, ["/Users/d/old"], "5f2a"),
+            },
+            "Consulting",
+            ["ledger", "scoutbook"]);
+        Assert.Equal(cache, CollectionsLocalCache.Decode(cache.Encode()));
+        var older = CollectionsLocalCache.Decode(Sample.Encode());
+        Assert.Null(older.LastAppliedNames);   // a cache written before they were recorded names nothing
+        Assert.Null(older.Published["Consulting"].Origin);
+        // An apply that rendered nothing is a record of nothing, not the absence of one.
+        var empty = cache with { LastAppliedNames = new HashSet<string>(StringComparer.Ordinal) };
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlySet<string>>(CollectionsLocalCache.Decode(empty.Encode()).LastAppliedNames));
+    }
+
     [Fact]
     public void AnUnknownVersionDecodesAsMalformed()
     {

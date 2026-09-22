@@ -445,7 +445,7 @@ public final class AppState: ObservableObject {
                                                       earlierFolders: earlier,
                                                       backedUpFrom: collectionsCache.lastAppliedCollection,
                                                       activating: target.activeCollection != store.activeCollection)
-        recordApplied(collection)
+        recordApplied(collection, names: Set(servers.keys))
         appliedServers = servers
         hasLoadedOnce = true
         settings.lastApplyDate = host.now()
@@ -507,10 +507,12 @@ public final class AppState: ObservableObject {
                 try service.saveStore(store)
             }
 
+            let applied = lastApplied
             let result = try service.loadAndReconcile(
                 baseline: hasLoadedOnce ? appliedServers : nil,
                 storeAuthoritative: trigger != .routine,
-                lastAppliedCollection: lastAppliedCollection)
+                lastAppliedCollection: applied.collection,
+                lastAppliedNames: applied.names)
             store = result.store
             loadCollections()
             var claudeConfigChangedExternally = false
@@ -549,10 +551,10 @@ public final class AppState: ObservableObject {
                 // Notify a failure only on the transition into it — retry
                 // reloads (every popover open) must not re-post it.
                 regenerationFailed = applyRetryNeeded && !alreadyFailing
-            } else if result.claudeServers != nil {
+            } else if let servers = result.claudeServers {
                 // Claude's file already holds exactly what the active collection renders, so it
                 // holds that collection — which a first launch, with no apply yet, needs recorded.
-                recordApplied(activeCollection)
+                recordApplied(activeCollection, names: Set(servers.keys))
             }
 
             // Fire notifications AFTER all state above has been assigned, never
@@ -602,7 +604,7 @@ public final class AppState: ObservableObject {
         do {
             let servers = expandedServers
             try service.apply(servers: servers, backedUpFrom: collectionsCache.lastAppliedCollection)
-            recordApplied(activeCollection)
+            recordApplied(activeCollection, names: Set(servers.keys))
             appliedServers = servers
             settings.lastApplyDate = host.now()
             refreshRestartState()
@@ -616,20 +618,24 @@ public final class AppState: ObservableObject {
         }
     }
 
-    /// The collection Claude's file was last written from, for the launch ingest: in memory once the
-    /// collections files are loaded, and read from this machine's cache before then — at launch the
-    /// store loads first.
-    private var lastAppliedCollection: String? {
-        hasLoadedCollectionsOnce
-            ? collectionsCache.lastAppliedCollection
-            : CollectionsLocalCache.load(from: service.paths.collectionsCacheURL).lastAppliedCollection
+    /// What Claude's file was last written from, for the launch ingest: the collection and the
+    /// connector names that apply wrote. In memory once the collections files are loaded, and read
+    /// from this machine's cache before then — at launch the store loads first.
+    private var lastApplied: (collection: String?, names: Set<String>?) {
+        let cache = hasLoadedCollectionsOnce
+            ? collectionsCache
+            : CollectionsLocalCache.load(from: service.paths.collectionsCacheURL)
+        return (cache.lastAppliedCollection, cache.lastAppliedNames)
     }
 
-    /// Records that Claude's file now holds `collection`, in this machine's cache, through the same
-    /// gate as every other cache save. A save that fails leaves the record in memory for the next.
-    private func recordApplied(_ collection: String) {
-        guard collectionsCache.lastAppliedCollection != collection else { return }
+    /// Records what Claude's file now holds — `collection`, and the names written into it — in this
+    /// machine's cache, through the same gate as every other cache save. A save that fails leaves
+    /// the record in memory for the next.
+    private func recordApplied(_ collection: String, names: Set<String>) {
+        guard collectionsCache.lastAppliedCollection != collection
+                || collectionsCache.lastAppliedNames != names else { return }
         collectionsCache.lastAppliedCollection = collection
+        collectionsCache.lastAppliedNames = names
         guard collectionsLoaded else { return }
         try? collectionsCache.save(to: service.paths.collectionsCacheURL, staging: service.paths.stagingDirURL)
     }
@@ -827,6 +833,12 @@ public final class AppState: ObservableObject {
     /// New Collection has always done. nil on success, else the message to show.
     public func createCollection(named name: String) -> String? {
         if let error = store.addCollection(named: name, copyingCurrent: true) { return error }
+        // A collection made with a deleted one's name is a different collection, and will publish
+        // under an origin of its own. What the old one kept back still holds — its paths are the
+        // author's, wherever they turn up — but its folders are another collection's to this one:
+        // releasable, and named as that collection's, rather than folders ${COLLECTION_DIR} stands
+        // for here.
+        collectionsCache.kept[name.trimmingCharacters(in: .whitespaces)]?.origin = nil
         persistStore()
         performApply()
         return nil
@@ -1429,7 +1441,10 @@ public final class AppState: ObservableObject {
                                               adding: releasedValues, marked: reviewedValues ?? marked),
             // The folder it left stays this machine's own: a backup or a connector can bring it back.
             publishedFolders: (previous?.publishedFolders ?? remembered?.publishedFolders ?? [])
-                .union(previous.map { [$0.folder] } ?? []).union([url.path]))
+                .union(previous.map { [$0.folder] } ?? []).union([url.path]),
+            // Carried so what this binding leaves behind still says which collection's folders
+            // they were, after the sidecar entry that names the origin has gone.
+            origin: origin)
         // persistStore ends in publishIfChanged, which is what writes the document.
         persistStore()
         // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
@@ -1642,9 +1657,17 @@ public final class AppState: ObservableObject {
         }
         // What a stopped publish left behind keeps its say, so publishing the collection again —
         // or another collection carrying one of its paths — is still refused.
+        let ownOrigin = collectionsFile.collections[collection]?.publish?.origin
         for (name, remembered) in collectionsCache.kept {
             values.formUnion(remembered.markedValues)
-            if name == collection { folders.formUnion(remembered.publishedFolders) }
+            // A record's folders are this collection's own — the ones ${COLLECTION_DIR} stands
+            // for, never released — only where the record is this collection's: it published
+            // under the origin this one publishes under now, or under none yet and the record is
+            // filed under this name. A collection made with a deleted one's name cleared that
+            // origin, so what the old one left is another collection's here, released rather than
+            // written over and named as that collection's in the sheet.
+            let own = remembered.origin.map { $0 == ownOrigin || (ownOrigin == nil && name == collection) } ?? false
+            if own { folders.formUnion(remembered.publishedFolders) }
             else { values.formUnion(remembered.publishedFolders) }
         }
         for (name, binding) in collectionsCache.synced where isSynced(name) {
@@ -1663,11 +1686,7 @@ public final class AppState: ObservableObject {
     /// here or from another folder, still refuses them.
     private func rememberWhatWasKeptBack(of collection: String) {
         guard let binding = collectionsCache.published.removeValue(forKey: collection) else { return }
-        let remembered = CollectionsLocalCache.KeptRecord(
-            markedValues: binding.markedValues.union(collectionsCache.kept[collection]?.markedValues ?? []),
-            releasedValues: binding.releasedValues.union(collectionsCache.kept[collection]?.releasedValues ?? []),
-            publishedFolders: binding.publishedFolders.union([binding.folder])
-                .union(collectionsCache.kept[collection]?.publishedFolders ?? []))
+        let remembered = CollectionsLocalCache.KeptRecord.remembering(binding, after: collectionsCache.kept[collection])
         if !remembered.isEmpty { collectionsCache.kept[collection] = remembered }
     }
 
@@ -1837,7 +1856,12 @@ public final class AppState: ObservableObject {
         var cache = CollectionsLocalCache.load(from: service.paths.collectionsCacheURL).reconciled(with: collectionsFile)
         // Only this machine writes its cache, so a record of the last apply made in memory is never
         // older than the file's — and it may be newer, when the save it waited for was held back.
-        if let applied = collectionsCache.lastAppliedCollection { cache.lastAppliedCollection = applied }
+        // The names that apply wrote are half of that record and travel with it: dropping them
+        // would leave a collection recorded with no account of what it rendered.
+        if let applied = collectionsCache.lastAppliedCollection {
+            cache.lastAppliedCollection = applied
+            cache.lastAppliedNames = collectionsCache.lastAppliedNames
+        }
         collectionsCache = cache
         collectionsLoaded = true
         hasLoadedCollectionsOnce = true

@@ -25,13 +25,15 @@ public struct ConfigService: Sendable {
     /// by this machine's state.
     ///
     /// `lastAppliedCollection` is the collection Claude's file was last written from on this
-    /// machine. Once the active collection has changed elsewhere, the names that collection
-    /// renders are left where they are rather than poured into the active one; everything else the
-    /// file holds is still taken in (`ingestible(_:lastApplied:corrupt:store:)`). The caller then
-    /// applies the active collection over the file.
+    /// machine, and `lastAppliedNames` the connector names that apply wrote. Once the active
+    /// collection has changed elsewhere, the names that collection renders are left where they
+    /// are rather than poured into the active one; everything else the file holds is still taken
+    /// in (`ingestible(_:lastApplied:lastAppliedNames:corrupt:store:)`). The caller then applies
+    /// the active collection over the file.
     public func loadAndReconcile(baseline: [String: JSONValue]? = nil,
                                  storeAuthoritative: Bool = false,
-                                 lastAppliedCollection: String? = nil) throws
+                                 lastAppliedCollection: String? = nil,
+                                 lastAppliedNames: Set<String>? = nil) throws
         -> (store: MasterStore, notes: [String],
             claudeServers: [String: JSONValue]?) {
         var notes: [String] = []
@@ -73,6 +75,7 @@ public struct ConfigService: Sendable {
         let outcome = Reconciler.reconcile(
             store: loaded.store,
             claudeServers: ConfigService.ingestible(servers, lastApplied: lastAppliedCollection,
+                                                    lastAppliedNames: lastAppliedNames,
                                                     corrupt: loaded.corruptFileURL != nil, store: loaded.store),
             baseline: effectiveBaseline)
         if outcome.storeChanged || loaded.corruptFileURL != nil {
@@ -96,13 +99,21 @@ public struct ConfigService: Sendable {
     /// is genuinely new — an installer's connector, a hand edit — and belongs to the collection the
     /// app is about to apply, whichever that is.
     ///
-    /// A record naming a collection the store no longer has renders nothing to leave alone, so all
-    /// of it comes in: what that collection kept back is remembered whether it was stopped or
-    /// deleted, and nothing a hand added is dropped to keep it out.
-    static func ingestible(_ servers: [String: JSONValue], lastApplied: String?, corrupt: Bool,
+    /// A record naming a collection the store no longer has — deleted here, or on another machine,
+    /// which is how a collection disappears from a store that syncs — has no render to compare
+    /// against. The names the last apply wrote are that render, so those are left alone and
+    /// everything else comes in: a connector an installer or a hand edit added survives, and a
+    /// deleted collection's own connectors are not poured into the active one. Without those names
+    /// — a cache written before they were kept — nothing here tells the two apart, and the file
+    /// comes in whole, as it did before they were recorded.
+    static func ingestible(_ servers: [String: JSONValue], lastApplied: String?,
+                           lastAppliedNames: Set<String>?, corrupt: Bool,
                            store: MasterStore) -> [String: JSONValue] {
         guard !corrupt, let lastApplied, lastApplied != store.activeCollection else { return servers }
-        guard let collection = store.collections[lastApplied] else { return servers }
+        guard let collection = store.collections[lastApplied] else {
+            guard let lastAppliedNames else { return servers }
+            return servers.filter { !lastAppliedNames.contains($0.key) }
+        }
         let rendered = Set(collection.mcps.filter { $0.value.enabled }.keys)
         return servers.filter { !rendered.contains($0.key) }
     }

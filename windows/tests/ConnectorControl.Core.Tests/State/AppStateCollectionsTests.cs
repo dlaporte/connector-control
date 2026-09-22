@@ -1917,6 +1917,88 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// A published collection deleted, or stopped, on the author's other machine arrives as a store
+    /// and a sidecar without it. Its binding goes with them, and what it kept back does not: the
+    /// load that drops the binding leaves the same record a delete made here leaves.
+    /// </summary>
+    [Fact]
+    public void APublishedCollectionDeletedOnAnotherMachineKeepsWhatItKeptBack()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var home = state.ActiveCollection;
+        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath)), null, "Team"));
+        Assert.Null(state.StartPublishing("Team", PublishFolder(h, "pubTeam"), new PublishIntent(
+            [],
+            [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark> { [ArgPointer(0)] = new("server_path", null, MarkedPath) })],
+            []), new HashSet<string>([MarkedPath], StringComparer.Ordinal)));
+        state.SwitchCollection(home);
+        var folder = PublishFolder(h, "pubHome");
+        Assert.Null(state.StartPublishing(home, folder, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
+        var document = Path.Combine(folder, Slug.Make(home) + ".json");
+        Assert.Contains(MarkedPath, state.KeptBack(home).Values);   // the mark is known before the delete
+
+        // The other machine deletes Team: the master list and the sidecar arrive without it.
+        var store = h.StoreOnDisk();
+        store.Collections.Remove("Team");
+        store.ActiveCollection = home;
+        MasterStoreIO.Save(store, h.MasterStorePath);
+        new CollectionsFile(state.CollectionsFile.Collections.Where(p => p.Key != "Team")
+            .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal))
+            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        state.Reload();
+        // The sidecar no longer vouches for the binding, and what it kept back stayed.
+        Assert.False(state.CollectionsCache.Published.ContainsKey("Team"));
+        Assert.Equal([MarkedPath], state.CollectionsCache.Kept["Team"].MarkedValues);
+
+        var before = File.ReadAllBytes(document);
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath)), null, home));
+        Assert.Equal(AppState.KeptPathCarriedError("ledger", FieldName.Argument(1)), state.PublishError?.Message);
+        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+        Assert.Equal(before, File.ReadAllBytes(document));
+        Assert.False(JsonText.FileContains(document, MarkedPath));
+    }
+
+    /// <summary>
+    /// A collection made with a deleted one's name is a different collection, and will publish under
+    /// an origin of its own. The paths the old one kept back are still the author's, and still
+    /// refused; its folders are another collection's here, released rather than written over, since
+    /// ${COLLECTION_DIR} in this collection's document would stand for somewhere else.
+    /// </summary>
+    [Fact]
+    public void ACollectionMadeWithADeletedOnesNameDoesNotInheritItsFolders()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var home = state.ActiveCollection;
+        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath)), null, "Team"));
+        Assert.Null(state.StartPublishing("Team", PublishFolder(h, "pubTeam"), new PublishIntent(
+            [],
+            [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark> { [ArgPointer(0)] = new("server_path", null, MarkedPath) })],
+            []), new HashSet<string>([MarkedPath], StringComparer.Ordinal)));
+        var bound = state.CollectionsCache.Published["Team"].Folder;
+        // The binding carries the origin it publishes under, and every write keeps it.
+        Assert.Equal(state.CollectionsFile.Collections["Team"].Publish?.Origin, state.CollectionsCache.Published["Team"].Origin);
+        state.SwitchCollection(home);
+
+        // Stopped, the collection is the same one: the folder it published into is still its own,
+        // and ${COLLECTION_DIR} is the answer to a connector that carries it.
+        state.StopPublishing("Team", deleteFile: false);
+        Assert.Contains(bound, state.KeptBack("Team").Folders);
+
+        Assert.Null(state.DeleteCollection("Team"));
+        Assert.Null(state.CreateCollection("Team"));   // the way back the refused restore names
+        var kept = state.KeptBack("Team");
+        // A different collection: never released is not the rule for it, and it is still a folder
+        // this machine binds, so it is releasable.
+        Assert.DoesNotContain(bound, kept.Folders);
+        Assert.Contains(bound, kept.Values);
+        Assert.Contains(MarkedPath, kept.Values);   // and the path the old one marked is still the author's
+    }
+
+    /// <summary>
     /// A collection the author publishes from their other machine marks its paths in the sidecar,
     /// which syncs with the master list. Those marks are this machine's to keep back too, so a copy of
     /// that connector reaching a collection published here is refused, with no binding involved.
@@ -1991,12 +2073,12 @@ public class AppStateCollectionsTests
 
     /// <summary>
     /// The collection Claude's file was last applied from has been deleted meanwhile, here or on the
-    /// other machine. It renders nothing to leave alone, so the whole file comes in and the connector
-    /// an installer wrote into it is kept. What that collection held back is remembered whether it
-    /// was stopped or deleted, so nothing has to be dropped to keep a path out.
+    /// other machine. It renders nothing to leave alone, so the names the last apply wrote stand in
+    /// for its render: those stay where they are and everything else comes in, which keeps the
+    /// connector an installer wrote into the file.
     /// </summary>
     [Fact]
-    public void ALaunchIngestTakesInEverythingWhenTheCollectionItAppliedIsGone()
+    public void ALaunchIngestKeepsWhatIsNewWhenTheCollectionItAppliedIsGone()
     {
         using var h = new AppStateHarness();
         string home;
@@ -2025,6 +2107,90 @@ public class AppStateCollectionsTests
         // The hand-added connector came in, and Claude still runs it.
         Assert.True(relaunched.Store.Collections[home].Mcps.ContainsKey("installer"));
         Assert.True(h.ClaudeServers().ContainsKey("installer"));
+    }
+
+    /// <summary>
+    /// The same launch for a user who publishes nothing: what the collection that is gone rendered is
+    /// not poured into the active one, which is the whole reason the names are recorded.
+    /// </summary>
+    [Fact]
+    public void ALaunchIngestLeavesTheDeletedCollectionsOwnConnectorsAlone()
+    {
+        using var h = new AppStateHarness();
+        string home;
+        List<string> before;
+        using (var first = h.Create())
+        {
+            home = first.ActiveCollection;
+            Assert.Null(first.CreateCollection("Team"));   // Team is active, so Claude's file holds Team
+            Assert.Null(first.Upsert("t1", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("t1")))), null, "Team"));
+            first.Apply();   // Claude's file now holds t1, and the record says Team wrote it
+            Assert.True(h.ClaudeServers().ContainsKey("t1"));
+            before = first.Store.Collections[home].Mcps.Keys.Order(StringComparer.Ordinal).ToList();
+        }
+        // The other machine deletes Team. Claude's file still holds what Team rendered, and one
+        // connector an installer wrote beside it while the app was off.
+        var store = h.StoreOnDisk();
+        store.Collections.Remove("Team");
+        store.ActiveCollection = home;
+        MasterStoreIO.Save(store, h.MasterStorePath);
+        var servers = new Dictionary<string, JsonValue>(h.ClaudeServers(), StringComparer.Ordinal)
+        {
+            ["installer"] = NodeWith("/opt/installer/srv.js"),
+        };
+        h.WriteClaudeServers(servers.Select(p => (p.Key, p.Value)).ToArray());
+
+        using var relaunched = h.Create();
+        // Team's own connectors stayed out, and the new one came in.
+        Assert.Equal(before.Append("installer").Order(StringComparer.Ordinal),
+                     relaunched.Store.Collections[home].Mcps.Keys.Order(StringComparer.Ordinal));
+        Assert.False(relaunched.Store.Collections[home].Mcps.ContainsKey("t1"));
+    }
+
+    /// <summary>
+    /// The same launch where this machine publishes: the collection that is gone was published from
+    /// the author's other machine with a path marked, so its connector reaching the collection
+    /// published here would send that path as written. It is not taken in, and nothing is written.
+    /// </summary>
+    [Fact]
+    public void ALaunchIngestDoesNotPublishADeletedCollectionsMarkedPath()
+    {
+        using var h = new AppStateHarness();
+        string document;
+        using (var first = h.Create())
+        {
+            Assert.Null(first.CreateCollection("Team"));   // Team is active, so Claude's file holds Team
+            Assert.Null(first.Upsert("ledger", new McpEntry(true, NodeWith(MarkedPath)), null, "Team"));
+            first.Apply();
+            // Team is published from the author's other machine: the sidecar carries the mark and its value.
+            var all = first.CollectionsFile.Collections.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+            all["Team"] = new CollectionsFile.Entry(CollectionKind.Local, publish: new CollectionsFile.PublishRecord(
+                "team", "team-origin", new PublishIntent([],
+                    [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark> { [ArgPointer(0)] = new("server_path", null, MarkedPath) })],
+                    [])));
+            new CollectionsFile(all).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+            first.Reload();
+            var folder = PublishFolder(h, "pubDefault");
+            Assert.Null(first.StartPublishing("Default", folder, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
+            document = Path.Combine(folder, Slug.Make("Default") + ".json");
+        }
+
+        // The other machine deletes Team while this one is off, so nothing here records its marks any
+        // more: the store, the sidecar and the binding all arrive without it.
+        var store = h.StoreOnDisk();
+        store.Collections.Remove("Team");
+        store.ActiveCollection = "Default";
+        MasterStoreIO.Save(store, h.MasterStorePath);
+        var file = CollectionsFile.Load(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        new CollectionsFile(file.Collections.Where(p => p.Key != "Team")
+            .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal))
+            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+
+        using var relaunched = h.Create();
+        // The deleted collection's own connector is not poured into the collection this machine publishes.
+        Assert.False(relaunched.Store.Collections["Default"].Mcps.ContainsKey("ledger"));
+        Assert.Null(relaunched.PublishError);
+        Assert.False(JsonText.FileContains(document, MarkedPath));
     }
 
     /// <summary>A copy of the marked path in an <c>additional</c> field is kept back, and the refusal says where it sits rather than that the mark moved.</summary>

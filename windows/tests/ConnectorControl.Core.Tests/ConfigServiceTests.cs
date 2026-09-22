@@ -52,8 +52,14 @@ public class ConfigServiceTests : IDisposable
         Assert.True(loaded.Store.Collections[loaded.Store.ActiveCollection].Mcps.ContainsKey("installer"));
         Assert.False(loaded.Store.Collections["Team"].Mcps.ContainsKey("installer"));
 
+        // A record naming a collection this store does not have — deleted here, or on another
+        // machine — has no render to compare against, so the names that apply wrote stand in for it.
         File.Delete(paths.MasterStorePath);
-        // A record naming a collection this store does not have renders nothing to leave alone.
+        // What the collection that is gone rendered is left where it is, and the rest comes in.
+        Assert.Equal(Set(["service-now", "installer"]),
+                     Set(service.LoadAndReconcile(lastAppliedCollection: "Gone",
+                             lastAppliedNames: Set(["scoutbook", "aws-mcp"])).Store.Mcps.Keys));
+        // Without those names nothing tells the two apart, and the file comes in whole.
         Assert.Equal(Set(["scoutbook", "aws-mcp", "service-now", "installer"]),
                      Set(service.LoadAndReconcile(lastAppliedCollection: "Gone").Store.Mcps.Keys));
     }

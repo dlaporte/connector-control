@@ -570,7 +570,7 @@ public sealed class AppState : ObservableObject, IDisposable
         var servers = Service.RestoreClaudeConfig(backupPath, target, binding?.Folder, earlier,
             backedUpFrom: CollectionsCache.LastAppliedCollection,
             activating: !string.Equals(collection, Store.ActiveCollection, StringComparison.Ordinal));
-        RecordApplied(collection);
+        RecordApplied(collection, servers.Keys);
         AppliedServers = servers;
         hasLoadedOnce = true;
         settings.LastApplyDate = host.Now();
@@ -609,10 +609,12 @@ public sealed class AppState : ObservableObject, IDisposable
                 Service.SaveStore(Store);
             }
 
+            var applied = LastApplied;
             var result = Service.LoadAndReconcile(
                 baseline: hasLoadedOnce ? AppliedServers : null,
                 storeAuthoritative: trigger != ReloadTrigger.Routine,
-                lastAppliedCollection: LastAppliedCollection);
+                lastAppliedCollection: applied.Collection,
+                lastAppliedNames: applied.Names);
             Store = result.Store;
             LoadCollections();
             var claudeConfigChangedExternally = false;
@@ -662,11 +664,11 @@ public sealed class AppState : ObservableObject, IDisposable
                 // Notify a failure only on the transition into it — retry reloads (every flyout open) must not re-post it.
                 regenerationFailed = ApplyRetryNeeded && !alreadyFailing;
             }
-            else if (result.ClaudeServers is not null)
+            else if (result.ClaudeServers is { } held)
             {
                 // Claude's file already holds exactly what the active collection renders, so it holds
                 // that collection — which a first launch, with no apply yet, needs recorded.
-                RecordApplied(ActiveCollection);
+                RecordApplied(ActiveCollection, held.Keys);
             }
 
             // Fire notifications AFTER all state above has been assigned, never on first load or for
@@ -749,7 +751,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             var enabled = ExpandedServers;
             Service.Apply(enabled, CollectionsCache.LastAppliedCollection);
-            RecordApplied(ActiveCollection);
+            RecordApplied(ActiveCollection, enabled.Keys);
             AppliedServers = enabled;
             settings.LastApplyDate = host.Now();   // ISettings setters never throw, so this cannot turn a good apply into a failed one
             RefreshRestartState();
@@ -766,26 +768,35 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// The collection Claude's file was last written from, for the launch ingest: in memory once the
-    /// collections files are loaded, and read from this machine's cache before then — at launch the
-    /// store loads first.
+    /// What Claude's file was last written from, for the launch ingest: the collection and the
+    /// connector names that apply wrote. In memory once the collections files are loaded, and read
+    /// from this machine's cache before then — at launch the store loads first.
     /// </summary>
-    private string? LastAppliedCollection => hasLoadedCollectionsOnce
-        ? CollectionsCache.LastAppliedCollection
-        : CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath).LastAppliedCollection;
+    private (string? Collection, IReadOnlySet<string>? Names) LastApplied
+    {
+        get
+        {
+            var cache = hasLoadedCollectionsOnce
+                ? CollectionsCache
+                : CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath);
+            return (cache.LastAppliedCollection, cache.LastAppliedNames);
+        }
+    }
 
     /// <summary>
-    /// Records that Claude's file now holds <paramref name="collection"/>, in this machine's cache,
-    /// through the same gate as every other cache save. A save that fails leaves the record in
-    /// memory for the next.
+    /// Records what Claude's file now holds — <paramref name="collection"/>, and the names written
+    /// into it — in this machine's cache, through the same gate as every other cache save. A save
+    /// that fails leaves the record in memory for the next.
     /// </summary>
-    private void RecordApplied(string collection)
+    private void RecordApplied(string collection, IEnumerable<string> names)
     {
-        if (string.Equals(CollectionsCache.LastAppliedCollection, collection, StringComparison.Ordinal))
+        var written = new HashSet<string>(names, StringComparer.Ordinal);
+        if (string.Equals(CollectionsCache.LastAppliedCollection, collection, StringComparison.Ordinal)
+            && CollectionsCache.LastAppliedNames is { } before && before.SetEquals(written))
         {
             return;
         }
-        CollectionsCache = CollectionsCache with { LastAppliedCollection = collection };
+        CollectionsCache = CollectionsCache with { LastAppliedCollection = collection, LastAppliedNames = written };
         if (!collectionsLoaded)
         {
             return;
@@ -1174,6 +1185,15 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return error;
         }
+        // A collection made with a deleted one's name is a different collection, and will publish
+        // under an origin of its own. What the old one kept back still holds — its paths are the
+        // author's, wherever they turn up — but its folders are another collection's to this one:
+        // releasable, and named as that collection's, rather than folders ${COLLECTION_DIR} stands
+        // for here.
+        if (CollectionsCache.Kept.GetValueOrDefault(name.TrimSpaces()) is { } inherited)
+        {
+            SetKeptRecord(name.TrimSpaces(), inherited with { Origin = null });
+        }
         PersistStore();
         PerformApply();
         RaiseAll();
@@ -1200,7 +1220,8 @@ public sealed class AppState : ObservableObject, IDisposable
             CollectionsCache = new CollectionsLocalCache(
                 Moved(CollectionsCache.Synced, name, trimmed), Moved(CollectionsCache.Published, name, trimmed),
                 Moved(CollectionsCache.Kept, name, trimmed),
-                CollectionsCache.LastAppliedCollection == name ? trimmed : CollectionsCache.LastAppliedCollection);
+                CollectionsCache.LastAppliedCollection == name ? trimmed : CollectionsCache.LastAppliedCollection,
+                CollectionsCache.LastAppliedNames);
             try
             {
                 BackupCollections.Rename(name, trimmed, Service.Paths.BackupsDir);
@@ -1250,7 +1271,7 @@ public sealed class AppState : ObservableObject, IDisposable
         CollectionsFile = new CollectionsFile(Without(CollectionsFile.Collections, name));
         CollectionsCache = new CollectionsLocalCache(
             Without(CollectionsCache.Synced, name), CollectionsCache.Published, CollectionsCache.Kept,
-            CollectionsCache.LastAppliedCollection);
+            CollectionsCache.LastAppliedCollection, CollectionsCache.LastAppliedNames);
         // Deleting a collection is not the author's word that the paths it kept back may travel: the
         // connector that carried one is still in another collection, or comes back by an import, a
         // copy or an ingest. What Stop Publishing remembers, this remembers too.
@@ -1311,7 +1332,8 @@ public sealed class AppState : ObservableObject, IDisposable
             binding is null ? Without(CollectionsCache.Synced, collection) : With(CollectionsCache.Synced, collection, binding),
             CollectionsCache.Published,
             CollectionsCache.Kept,
-            CollectionsCache.LastAppliedCollection);
+            CollectionsCache.LastAppliedCollection,
+            CollectionsCache.LastAppliedNames);
 
     private void SetPublishBinding(string collection, CollectionsLocalCache.PublishBinding? binding) =>
         CollectionsCache = new CollectionsLocalCache(
@@ -1320,7 +1342,8 @@ public sealed class AppState : ObservableObject, IDisposable
                 ? Without(CollectionsCache.Published, collection)
                 : With(CollectionsCache.Published, collection, binding),
             CollectionsCache.Kept,
-            CollectionsCache.LastAppliedCollection);
+            CollectionsCache.LastAppliedCollection,
+            CollectionsCache.LastAppliedNames);
 
     /// <summary>
     /// Takes the binding away and keeps what it knew about paths that must not travel: the marked
@@ -1333,12 +1356,8 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return;
         }
-        var before = CollectionsCache.Kept.GetValueOrDefault(collection)
-            ?? new CollectionsLocalCache.KeptRecord();
-        var remembered = new CollectionsLocalCache.KeptRecord(
-            binding.MarkedValues.Concat(before.MarkedValues),
-            binding.ReleasedValues.Concat(before.ReleasedValues),
-            binding.PublishedFolders.Append(binding.Folder).Concat(before.PublishedFolders));
+        var remembered = CollectionsLocalCache.KeptRecord.Remembering(
+            binding, CollectionsCache.Kept.GetValueOrDefault(collection));
         SetPublishBinding(collection, null);
         SetKeptRecord(collection, remembered.IsEmpty ? null : remembered);
     }
@@ -1351,7 +1370,8 @@ public sealed class AppState : ObservableObject, IDisposable
             record is null
                 ? Without(CollectionsCache.Kept, collection)
                 : With(CollectionsCache.Kept, collection, record),
-            CollectionsCache.LastAppliedCollection);
+            CollectionsCache.LastAppliedCollection,
+            CollectionsCache.LastAppliedNames);
 
     private static Dictionary<string, TValue> With<TValue>(IReadOnlyDictionary<string, TValue> source, string name, TValue value)
     {
@@ -2120,7 +2140,10 @@ public sealed class AppState : ObservableObject, IDisposable
             Released(previous?.ReleasedValues ?? remembered?.ReleasedValues, releasedValues, reviewedValues ?? marked),
             // The folder it left stays this machine's own: a backup or a connector can bring it back.
             (previous?.PublishedFolders ?? remembered?.PublishedFolders ?? new HashSet<string>(StringComparer.Ordinal))
-                .Concat(previous is null ? [] : [previous.Folder]).Append(full)));
+                .Concat(previous is null ? [] : [previous.Folder]).Append(full),
+            // Carried so what this binding leaves behind still says which collection's folders they
+            // were, after the sidecar entry that names the origin has gone.
+            origin));
         // PersistStore ends in PublishIfChanged, which is what writes the document.
         PersistStore();
         // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
@@ -2180,7 +2203,7 @@ public sealed class AppState : ObservableObject, IDisposable
         var changed = reviewedValues is not null && binding is not null
             ? new CollectionsLocalCache.PublishBinding(binding.Folder, binding.LastWrittenHash, reviewedValues,
                                                        Released(binding.ReleasedValues, releasedValues, reviewedValues),
-                                                       binding.PublishedFolders)
+                                                       binding.PublishedFolders, binding.Origin)
             : binding;
         var listsChanged = !Equals(changed, binding);
         if (record.Intent.Equals(intent) && !listsChanged)
@@ -2391,7 +2414,7 @@ public sealed class AppState : ObservableObject, IDisposable
                     binding.Folder, hash, binding.MarkedValues.Concat(placed),
                     // A path written as a placeholder is kept back again, so it is released no longer.
                     binding.ReleasedValues.Where(value => !placed.Contains(value)),
-                    binding.PublishedFolders));
+                    binding.PublishedFolders, binding.Origin));
                 cacheChanged = true;
                 if (PublishError?.Collection == collection)
                 {
@@ -2542,8 +2565,10 @@ public sealed class AppState : ObservableObject, IDisposable
         var cache = CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath).Reconciled(CollectionsFile);
         // Only this machine writes its cache, so a record of the last apply made in memory is never
         // older than the file's — and it may be newer, when the save it waited for was held back.
+        // The names that apply wrote are half of that record and travel with it: dropping them would
+        // leave a collection recorded with no account of what it rendered.
         CollectionsCache = CollectionsCache.LastAppliedCollection is { } applied
-            ? cache with { LastAppliedCollection = applied }
+            ? cache with { LastAppliedCollection = applied, LastAppliedNames = CollectionsCache.LastAppliedNames }
             : cache;
         collectionsLoaded = true;
         hasLoadedCollectionsOnce = true;
@@ -2595,7 +2620,8 @@ public sealed class AppState : ObservableObject, IDisposable
             return;
         }
         CollectionsCache = new CollectionsLocalCache(synced, CollectionsCache.Published, CollectionsCache.Kept,
-                                                     CollectionsCache.LastAppliedCollection);
+                                                     CollectionsCache.LastAppliedCollection,
+                                                     CollectionsCache.LastAppliedNames);
         try
         {
             CollectionsCache.Save(Service.Paths.CollectionsCachePath);
@@ -2708,10 +2734,20 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         // What a stopped publish left behind keeps its say, so publishing the collection again — or
         // another collection carrying one of its paths — is still refused.
+        var ownOrigin = CollectionsFile.Collections.GetValueOrDefault(collection)?.Publish?.Origin;
         foreach (var (name, remembered) in CollectionsCache.Kept)
         {
             values.UnionWith(remembered.MarkedValues);
-            if (name == collection)
+            // A record's folders are this collection's own — the ones ${COLLECTION_DIR} stands for,
+            // never released — only where the record is this collection's: it published under the
+            // origin this one publishes under now, or under none yet and the record is filed under
+            // this name. A collection made with a deleted one's name cleared that origin, so what
+            // the old one left is another collection's here, released rather than written over and
+            // named as that collection's in the dialog.
+            var own = remembered.Origin is { } recorded
+                && (string.Equals(recorded, ownOrigin, StringComparison.Ordinal)
+                    || (ownOrigin is null && name == collection));
+            if (own)
             {
                 folders.UnionWith(remembered.PublishedFolders);
             }

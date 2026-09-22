@@ -89,6 +89,42 @@ final class CollectionsLocalCacheTests: XCTestCase {
                        ["/Users/d/Acme/mcp"], "a binding knows it publishes into the folder it names")
     }
 
+    /// A publish binding the sidecar no longer vouches for is a collection deleted, or stopped, on
+    /// another machine. What it kept back outlives it, exactly as Stop Publishing here leaves it.
+    func testReconcileKeepsWhatADroppedPublishBindingKeptBack() {
+        let cache = CollectionsLocalCache(synced: [:], published: [
+            "Consulting": .init(folder: "/Users/d/new", lastWrittenHash: nil, markedValues: ["/a"],
+                                releasedValues: ["/b"], publishedFolders: ["/Users/d/old"], origin: "0c9b7d1e"),
+        ], kept: ["Consulting": .init(markedValues: ["/earlier"])])
+        let pruned = cache.reconciled(with: CollectionsFile(collections: [:]))
+        XCTAssertTrue(pruned.published.isEmpty, "the sidecar no longer vouches for it")
+        XCTAssertEqual(pruned.kept["Consulting"],
+                       .init(markedValues: ["/a", "/earlier"], releasedValues: ["/b"],
+                             publishedFolders: ["/Users/d/old", "/Users/d/new"], origin: "0c9b7d1e"),
+                       "the binding's lists, its folder among them, merged with what was already remembered")
+        XCTAssertEqual(pruned.reconciled(with: CollectionsFile(collections: [:])), pruned, "and folding it again changes nothing")
+    }
+
+    /// The origin a binding publishes under, and the names the last apply wrote, round-trip; a
+    /// cache written before either was kept has neither, and an apply that rendered nothing
+    /// records an empty list, which is not the same as no record at all.
+    func testTheOriginAndTheNamesTheLastApplyWroteRoundTrip() throws {
+        let cache = CollectionsLocalCache(
+            synced: [:],
+            published: ["Consulting": .init(folder: "/Users/d/Acme/mcp", lastWrittenHash: nil,
+                                            publishedFolders: ["/Users/d/Acme/mcp"], origin: "0c9b7d1e")],
+            kept: ["Gone": .init(publishedFolders: ["/Users/d/old"], origin: "5f2a")],
+            lastAppliedCollection: "Consulting", lastAppliedNames: ["ledger", "scoutbook"])
+        XCTAssertEqual(try CollectionsLocalCache.decode(cache.encode()), cache)
+        let older = try CollectionsLocalCache.decode(Self.sample.encode())
+        XCTAssertNil(older.lastAppliedNames, "a cache written before they were recorded names nothing")
+        XCTAssertNil(older.published["Consulting"]?.origin)
+        var empty = cache
+        empty.lastAppliedNames = []
+        XCTAssertEqual(try CollectionsLocalCache.decode(empty.encode()).lastAppliedNames, [],
+                       "an apply that rendered nothing is a record of nothing, not the absence of one")
+    }
+
     func testAnUnknownVersionDecodesAsMalformed() {
         XCTAssertThrowsError(try CollectionsLocalCache.decode(.object(["version": .int(9), "synced": .object([:]), "published": .object([:])])))
     }

@@ -1540,10 +1540,10 @@ final class AppStateCollectionsTests: XCTestCase {
     }
 
     /// The collection Claude's file was last applied from has been deleted meanwhile, here or on
-    /// the other machine. It renders nothing to leave alone, so the whole file comes in and the
-    /// connector an installer wrote into it is kept. What that collection held back is remembered
-    /// whether it was stopped or deleted, so nothing has to be dropped to keep a path out.
-    func testALaunchIngestTakesInEverythingWhenTheCollectionItAppliedIsGone() throws {
+    /// the other machine. It renders nothing to leave alone, so the names the last apply wrote
+    /// stand in for its render: those stay where they are and everything else comes in, which
+    /// keeps the connector an installer wrote into the file.
+    func testALaunchIngestKeepsWhatIsNewWhenTheCollectionItAppliedIsGone() throws {
         let h = AppStateHarness()
         defer { h.dispose() }
         let first = h.create()
@@ -1569,6 +1569,81 @@ final class AppStateCollectionsTests: XCTestCase {
         defer { relaunched.dispose() }
         XCTAssertNotNil(relaunched.store.collections[home]?.mcps["installer"], "the hand-added connector came in")
         XCTAssertNotNil(try h.claudeServers()["installer"], "and Claude still runs it")
+    }
+
+    /// The same launch for a user who publishes nothing: what the collection that is gone rendered
+    /// is not poured into the active one, which is the whole reason the names are recorded.
+    func testALaunchIngestLeavesTheDeletedCollectionsOwnConnectorsAlone() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let first = h.create()
+        let home = first.activeCollection
+        XCTAssertNil(first.createCollection(named: "Team"))   // Team is active, so Claude's file holds Team
+        XCTAssertNil(first.upsert(name: "t1", entry: MCPEntry(enabled: true, config: .object(["command": .string("t1")])),
+                                  renamedFrom: nil, in: "Team"))
+        first.apply()   // Claude's file now holds t1, and the record says Team wrote it
+        XCTAssertNotNil(try h.claudeServers()["t1"])
+        let before = try XCTUnwrap(first.store.collections[home]?.mcps.keys).sorted()
+        first.dispose()
+        // The other machine deletes Team. Claude's file still holds what Team rendered, and one
+        // connector an installer wrote beside it while the app was off.
+        var store = try h.storeOnDisk()
+        store.collections.removeValue(forKey: "Team")
+        store.activeCollection = home
+        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        var servers = try h.claudeServers()
+        servers["installer"] = .object(["command": .string("node"), "args": .array([.string("/opt/installer/srv.js")])])
+        try h.writeClaudeServers(servers.map { ($0.key, $0.value) })
+
+        let relaunched = h.create()
+        defer { relaunched.dispose() }
+        XCTAssertEqual(try XCTUnwrap(relaunched.store.collections[home]?.mcps.keys).sorted(),
+                       (before + ["installer"]).sorted(),
+                       "Team's own connectors stayed out, and the new one came in")
+        XCTAssertNil(relaunched.store.collections[home]?.mcps["t1"])
+    }
+
+    /// The same launch where this machine publishes: the collection that is gone was published from
+    /// the author's other machine with a path marked, so its connector reaching the collection
+    /// published here would send that path as written. It is not taken in, and nothing is written.
+    func testALaunchIngestDoesNotPublishADeletedCollectionsMarkedPath() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let first = h.create()
+        XCTAssertNil(first.createCollection(named: "Team"))   // Team is active, so Claude's file holds Team
+        XCTAssertNil(first.upsert(name: "ledger", entry: MCPEntry(enabled: true, config: .object([
+            "command": .string("node"), "args": .array([.string(markedPath)]),
+        ])), renamedFrom: nil, in: "Team"))
+        first.apply()
+        // Team is published from the author's other machine: the sidecar carries the mark and its value.
+        var file = first.collectionsFile
+        file.collections["Team"] = CollectionsFile.Entry(kind: .local, publish: CollectionsFile.PublishRecord(
+            slug: "team", origin: "team-origin", intent: PublishIntent(
+                shareValues: [:], pathMarks: ["ledger": [JSONPointer(["args", "0"]):
+                    .init(name: "server_path", hint: nil, value: markedPath)]], hints: [:])))
+        try file.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        first.reload()
+        let folder = try publishFolder(h, "pubDefault")
+        XCTAssertNil(first.startPublishing("Default", to: folder.path, intent: .none, reviewedValues: []))
+        let document = folder.appendingPathComponent(Slug.make("Default") + ".json")
+        first.dispose()
+
+        // The other machine deletes Team while this one is off, so nothing here records its marks
+        // any more: the store, the sidecar and the binding all arrive without it.
+        var store = try h.storeOnDisk()
+        store.collections.removeValue(forKey: "Team")
+        store.activeCollection = "Default"
+        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        var after = CollectionsFile.load(from: h.storeDir.appendingPathComponent(CollectionsFile.fileName))
+        after.collections.removeValue(forKey: "Team")
+        try after.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+
+        let relaunched = h.create()
+        defer { relaunched.dispose() }
+        XCTAssertNil(relaunched.store.collections["Default"]?.mcps["ledger"],
+                     "the deleted collection's own connector is not poured into the collection this machine publishes")
+        XCTAssertNil(relaunched.publishError)
+        XCTAssertFalse(try jsonFile(document, contains: markedPath))
     }
 
     /// Renaming a collection carries what names it outside the store: the record of what Claude's
@@ -1699,6 +1774,84 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.publishError?.kind, .blockedForReview)
         XCTAssertEqual(try Data(contentsOf: document), before, "the document in the folder is left as it was")
         XCTAssertFalse(try jsonFile(document, contains: markedPath))
+    }
+
+    /// A published collection deleted, or stopped, on the author's other machine arrives as a
+    /// store and a sidecar without it. Its binding goes with them, and what it kept back does not:
+    /// the load that drops the binding leaves the same record a delete made here leaves.
+    func testAPublishedCollectionDeletedOnAnotherMachineKeepsWhatItKeptBack() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let home = state.activeCollection
+        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string(markedPath)]),
+        ])), renamedFrom: nil, in: "Team"))
+        let teamFolder = try publishFolder(h, "pubTeam")
+        XCTAssertNil(state.startPublishing("Team", to: teamFolder.path, intent: PublishIntent(
+            shareValues: [:], pathMarks: ["ledger": [JSONPointer(["args", "0"]):
+                .init(name: "server_path", hint: nil, value: markedPath)]], hints: [:]), reviewedValues: [markedPath]))
+        state.switchCollection(to: home)
+        let folder = try publishFolder(h, "pubHome")
+        XCTAssertNil(state.startPublishing(home, to: folder.path, intent: .none, reviewedValues: []))
+        let document = folder.appendingPathComponent(Slug.make(home) + ".json")
+        XCTAssertTrue(state.keptBack(for: home).values.contains(markedPath), "the mark is known before the delete")
+
+        // The other machine deletes Team: the master list and the sidecar arrive without it.
+        var store = try h.storeOnDisk()
+        store.collections.removeValue(forKey: "Team")
+        store.activeCollection = home
+        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        var file = state.collectionsFile
+        file.collections.removeValue(forKey: "Team")
+        try file.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        state.reload()
+        XCTAssertNil(state.collectionsCache.published["Team"], "the sidecar no longer vouches for the binding")
+        XCTAssertEqual(state.collectionsCache.kept["Team"]?.markedValues, [markedPath], "and what it kept back stayed")
+
+        let before = try Data(contentsOf: document)
+        XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string(markedPath)]),
+        ])), renamedFrom: nil, in: home))
+        XCTAssertEqual(state.publishError?.message, AppState.keptPathCarriedError("ledger", FieldName.argument(1)))
+        XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+        XCTAssertEqual(try Data(contentsOf: document), before)
+        XCTAssertFalse(try jsonFile(document, contains: markedPath))
+    }
+
+    /// A collection made with a deleted one's name is a different collection, and will publish
+    /// under an origin of its own. The paths the old one kept back are still the author's, and
+    /// still refused; its folders are another collection's here, released rather than written over,
+    /// since ${COLLECTION_DIR} in this collection's document would stand for somewhere else.
+    func testACollectionMadeWithADeletedOnesNameDoesNotInheritItsFolders() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let home = state.activeCollection
+        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string(markedPath)]),
+        ])), renamedFrom: nil, in: "Team"))
+        let teamFolder = try publishFolder(h, "pubTeam")
+        XCTAssertNil(state.startPublishing("Team", to: teamFolder.path, intent: PublishIntent(
+            shareValues: [:], pathMarks: ["ledger": [JSONPointer(["args", "0"]):
+                .init(name: "server_path", hint: nil, value: markedPath)]], hints: [:]), reviewedValues: [markedPath]))
+        let bound = try XCTUnwrap(state.collectionsCache.published["Team"]?.folder)
+        XCTAssertEqual(state.collectionsCache.published["Team"]?.origin,
+                       state.collectionsFile.collections["Team"]?.publish?.origin,
+                       "the binding carries the origin it publishes under, and every write keeps it")
+        state.switchCollection(to: home)
+
+        // Stopped, the collection is the same one: the folder it published into is still its own,
+        // and ${COLLECTION_DIR} is the answer to a connector that carries it.
+        state.stopPublishing("Team", deleteFile: false)
+        XCTAssertTrue(state.keptBack(for: "Team").folders.contains(bound))
+
+        XCTAssertNil(state.deleteCollection(named: "Team"))
+        XCTAssertNil(state.createCollection(named: "Team"))   // the way back the refused restore names
+        let kept = state.keptBack(for: "Team")
+        XCTAssertFalse(kept.folders.contains(bound), "a different collection: never released is not the rule for it")
+        XCTAssertTrue(kept.values.contains(bound), "it is still a folder this machine binds, and it is releasable")
+        XCTAssertTrue(kept.values.contains(markedPath), "and the path the old one marked is still the author's")
     }
 
     /// A collection the author publishes from their other machine marks its paths in the sidecar,

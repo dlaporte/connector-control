@@ -31,11 +31,20 @@ public sealed record CollectionsLocalCache
     /// </summary>
     public string? LastAppliedCollection { get; init; }
 
+    /// <summary>
+    /// The connector names that apply wrote into Claude's file. They are what
+    /// <see cref="LastAppliedCollection"/> rendered, so they still say which entries are its own
+    /// once the collection itself is gone — deleted here, or on another machine, which leaves
+    /// nothing else behind. null until the first apply that records them.
+    /// </summary>
+    public IReadOnlySet<string>? LastAppliedNames { get; init; }
+
     public CollectionsLocalCache(
         IEnumerable<KeyValuePair<string, SyncedBinding>> synced,
         IEnumerable<KeyValuePair<string, PublishBinding>> published,
         IEnumerable<KeyValuePair<string, KeptRecord>>? kept = null,
-        string? lastAppliedCollection = null)
+        string? lastAppliedCollection = null,
+        IEnumerable<string>? lastAppliedNames = null)
     {
         Synced = new Dictionary<string, SyncedBinding>(synced, StringComparer.Ordinal);
         Published = new Dictionary<string, PublishBinding>(published, StringComparer.Ordinal);
@@ -43,6 +52,7 @@ public sealed record CollectionsLocalCache
             ? new Dictionary<string, KeptRecord>(StringComparer.Ordinal)
             : new Dictionary<string, KeptRecord>(kept, StringComparer.Ordinal);
         LastAppliedCollection = lastAppliedCollection;
+        LastAppliedNames = lastAppliedNames is null ? null : new HashSet<string>(lastAppliedNames, StringComparer.Ordinal);
     }
 
     /// <summary>The lists a stopped publish left behind, as <see cref="PublishBinding"/> holds them while it publishes.</summary>
@@ -52,19 +62,44 @@ public sealed record CollectionsLocalCache
         public IReadOnlySet<string> ReleasedValues { get; }
         public IReadOnlySet<string> PublishedFolders { get; }
 
+        /// <summary>
+        /// The origin the collection this record belongs to published under, while that collection
+        /// is still the one bearing the name. A collection made with a deleted one's name is a
+        /// different collection and clears it: the folders the old one left are another
+        /// collection's to it, released rather than written over. Absent too in a record written
+        /// before origins were kept, which is read the same way.
+        /// </summary>
+        public string? Origin { get; init; }
+
         public KeptRecord(IEnumerable<string>? markedValues = null, IEnumerable<string>? releasedValues = null,
-                          IEnumerable<string>? publishedFolders = null)
+                          IEnumerable<string>? publishedFolders = null, string? origin = null)
         {
             MarkedValues = new HashSet<string>(markedValues ?? [], StringComparer.Ordinal);
             ReleasedValues = new HashSet<string>(releasedValues ?? [], StringComparer.Ordinal);
             PublishedFolders = new HashSet<string>(publishedFolders ?? [], StringComparer.Ordinal);
+            Origin = origin;
         }
 
+        /// <summary>An origin alone says nothing about what must not travel, so a record holding only one is no record at all.</summary>
         public bool IsEmpty => MarkedValues.Count == 0 && ReleasedValues.Count == 0 && PublishedFolders.Count == 0;
+
+        /// <summary>
+        /// What a publish binding leaves behind when it goes, merged with anything already
+        /// remembered under that name. The binding goes three ways — Stop Publishing, a delete made
+        /// here, and a load finding the collection deleted or unpublished on another machine — and
+        /// all three leave the same memory of what must not travel.
+        /// </summary>
+        public static KeptRecord Remembering(PublishBinding binding, KeptRecord? earlier) => new(
+            binding.MarkedValues.Concat(earlier?.MarkedValues ?? Enumerable.Empty<string>()),
+            binding.ReleasedValues.Concat(earlier?.ReleasedValues ?? Enumerable.Empty<string>()),
+            binding.PublishedFolders.Append(binding.Folder)
+                .Concat(earlier?.PublishedFolders ?? Enumerable.Empty<string>()),
+            binding.Origin ?? earlier?.Origin);
 
         public bool Equals(KeptRecord? other) =>
             other is not null && MarkedValues.SetEquals(other.MarkedValues)
-            && ReleasedValues.SetEquals(other.ReleasedValues) && PublishedFolders.SetEquals(other.PublishedFolders);
+            && ReleasedValues.SetEquals(other.ReleasedValues) && PublishedFolders.SetEquals(other.PublishedFolders)
+            && string.Equals(Origin, other.Origin, StringComparison.Ordinal);
 
         public override int GetHashCode()
         {
@@ -77,6 +112,7 @@ public sealed record CollectionsLocalCache
                     hash.Add(value, StringComparer.Ordinal);
                 }
             }
+            hash.Add(Origin ?? string.Empty, StringComparer.Ordinal);
             return hash.ToHashCode();
         }
 
@@ -91,6 +127,10 @@ public sealed record CollectionsLocalCache
                     props[key] = JsonValue.Array(values.Order(StringComparer.Ordinal).Select(JsonValue.String));
                 }
             }
+            if (Origin is not null)
+            {
+                props["origin"] = JsonValue.String(Origin);
+            }
             return JsonValue.Object(props);
         }
 
@@ -103,7 +143,8 @@ public sealed record CollectionsLocalCache
             return new KeptRecord(
                 CollectionsFile.StringSet(json["markedValues"], $"{what} markedValues"),
                 CollectionsFile.StringSet(json["releasedValues"], $"{what} releasedValues"),
-                CollectionsFile.StringSet(json["publishedFolders"], $"{what} publishedFolders"));
+                CollectionsFile.StringSet(json["publishedFolders"], $"{what} publishedFolders"),
+                CollectionsFile.OptionalString(json["origin"], $"{what} origin"));
         }
     }
 
@@ -112,13 +153,17 @@ public sealed record CollectionsLocalCache
         && DictionaryEquality.Equal(Synced, other.Synced)
         && DictionaryEquality.Equal(Published, other.Published)
         && DictionaryEquality.Equal(Kept, other.Kept)
-        && string.Equals(LastAppliedCollection, other.LastAppliedCollection, StringComparison.Ordinal);
+        && string.Equals(LastAppliedCollection, other.LastAppliedCollection, StringComparison.Ordinal)
+        && (LastAppliedNames is null
+            ? other.LastAppliedNames is null
+            : other.LastAppliedNames is not null && LastAppliedNames.SetEquals(other.LastAppliedNames));
 
     public override int GetHashCode() => HashCode.Combine(
         DictionaryEquality.Hash(Synced),
         DictionaryEquality.Hash(Published),
         DictionaryEquality.Hash(Kept),
-        LastAppliedCollection is null ? 0 : LastAppliedCollection.GetHashCode(StringComparison.Ordinal));
+        LastAppliedCollection is null ? 0 : LastAppliedCollection.GetHashCode(StringComparison.Ordinal),
+        LastAppliedNames is null ? 0 : LastAppliedNames.Count);
 
     public sealed record SyncedBinding
     {
@@ -214,8 +259,16 @@ public sealed record CollectionsLocalCache
         /// </summary>
         public IReadOnlySet<string> PublishedFolders { get; }
 
+        /// <summary>
+        /// The origin the collection publishes under, so what this binding leaves behind still says
+        /// whose folders they were once the sidecar entry that named it is gone. Absent in a binding
+        /// written before it was kept.
+        /// </summary>
+        public string? Origin { get; init; }
+
         public PublishBinding(string folder, string? lastWrittenHash, IEnumerable<string>? markedValues = null,
-                              IEnumerable<string>? releasedValues = null, IEnumerable<string>? publishedFolders = null)
+                              IEnumerable<string>? releasedValues = null, IEnumerable<string>? publishedFolders = null,
+                              string? origin = null)
         {
             Folder = folder;
             LastWrittenHash = lastWrittenHash;
@@ -228,6 +281,7 @@ public sealed record CollectionsLocalCache
             PublishedFolders = publishedFolders is null
                 ? new HashSet<string>(StringComparer.Ordinal)
                 : new HashSet<string>(publishedFolders, StringComparer.Ordinal);
+            Origin = origin;
         }
 
         public bool Equals(PublishBinding? other) =>
@@ -236,7 +290,8 @@ public sealed record CollectionsLocalCache
             && string.Equals(LastWrittenHash, other.LastWrittenHash, StringComparison.Ordinal)
             && MarkedValues.SetEquals(other.MarkedValues)
             && ReleasedValues.SetEquals(other.ReleasedValues)
-            && PublishedFolders.SetEquals(other.PublishedFolders);
+            && PublishedFolders.SetEquals(other.PublishedFolders)
+            && string.Equals(Origin, other.Origin, StringComparison.Ordinal);
 
         public override int GetHashCode()
         {
@@ -257,6 +312,7 @@ public sealed record CollectionsLocalCache
             {
                 hash.Add(value, StringComparer.Ordinal);
             }
+            hash.Add(Origin ?? string.Empty, StringComparer.Ordinal);
             return hash.ToHashCode();
         }
 
@@ -283,6 +339,10 @@ public sealed record CollectionsLocalCache
             {
                 props["publishedFolders"] = JsonValue.Array(PublishedFolders.Order(StringComparer.Ordinal).Select(JsonValue.String));
             }
+            if (Origin is not null)
+            {
+                props["origin"] = JsonValue.String(Origin);
+            }
             return JsonValue.Object(props);
         }
 
@@ -302,7 +362,9 @@ public sealed record CollectionsLocalCache
                 CollectionsFile.StringSet(json["releasedValues"], $"{what} releasedValues"),
                 // The folder a binding names is one it publishes into, whether or not the list says
                 // so: a binding written before the list was kept knows that much about itself.
-                CollectionsFile.StringSet(json["publishedFolders"], $"{what} publishedFolders").Append(folder));
+                CollectionsFile.StringSet(json["publishedFolders"], $"{what} publishedFolders").Append(folder),
+                // Absent in a binding written before the origin was kept: the next publish fills it in.
+                CollectionsFile.OptionalString(json["origin"], $"{what} origin"));
         }
     }
 
@@ -324,6 +386,10 @@ public sealed record CollectionsLocalCache
         if (LastAppliedCollection is not null)
         {
             root["lastAppliedCollection"] = JsonValue.String(LastAppliedCollection);
+        }
+        if (LastAppliedNames is not null)
+        {
+            root["lastAppliedNames"] = JsonValue.Array(LastAppliedNames.Order(StringComparer.Ordinal).Select(JsonValue.String));
         }
         return JsonValue.Object(root);
     }
@@ -362,7 +428,12 @@ public sealed record CollectionsLocalCache
         return new CollectionsLocalCache(
             synced, published, kept,
             // Absent in a cache written before it was recorded: the next apply records it.
-            CollectionsFile.OptionalString(json["lastAppliedCollection"], "lastAppliedCollection"));
+            CollectionsFile.OptionalString(json["lastAppliedCollection"], "lastAppliedCollection"),
+            // Absent, rather than empty, in a cache written before they were recorded: an apply that
+            // rendered nothing records an empty list, which is not the same thing.
+            json["lastAppliedNames"] is null
+                ? null
+                : CollectionsFile.StringSet(json["lastAppliedNames"], "lastAppliedNames"));
     }
 
     // MARK: Disk
@@ -388,9 +459,32 @@ public sealed record CollectionsLocalCache
     /// stopped publish left behind is not a binding the sidecar vouches for, and is kept whatever it
     /// says: it is this machine's memory of what must not travel.
     /// </summary>
-    public CollectionsLocalCache Reconciled(CollectionsFile file) => new(
-        Synced.Where(p => file.KindOf(p.Key) == CollectionKind.Synced),
-        Published.Where(p => file.Collections.TryGetValue(p.Key, out var entry) && entry.Publish is not null),
-        Kept,
-        LastAppliedCollection);
+    /// <remarks>
+    /// A publish binding dropped here is a collection deleted, or stopped, on another machine, which
+    /// is how a collection disappears from a store that syncs. It leaves what stopping it here
+    /// leaves: the paths it kept back, the paths the author released and the folders it published
+    /// into. Nothing else on this machine remembers them — there is no record to union, and the
+    /// sidecar entry that carried its marks went with it.
+    /// </remarks>
+    public CollectionsLocalCache Reconciled(CollectionsFile file)
+    {
+        var vouched = Published
+            .Where(p => file.Collections.TryGetValue(p.Key, out var entry) && entry.Publish is not null)
+            .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        var remembered = new Dictionary<string, KeptRecord>(Kept, StringComparer.Ordinal);
+        foreach (var (name, binding) in Published.Where(p => !vouched.ContainsKey(p.Key)))
+        {
+            var record = KeptRecord.Remembering(binding, Kept.GetValueOrDefault(name));
+            if (!record.IsEmpty)
+            {
+                remembered[name] = record;
+            }
+        }
+        return new CollectionsLocalCache(
+            Synced.Where(p => file.KindOf(p.Key) == CollectionKind.Synced),
+            vouched,
+            remembered,
+            LastAppliedCollection,
+            LastAppliedNames);
+    }
 }
