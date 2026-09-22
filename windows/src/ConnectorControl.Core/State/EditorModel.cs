@@ -526,8 +526,14 @@ public sealed class EditorModel : ObservableObject, IDisposable
         return null;
     }
 
+    /// <summary>
+    /// Takes the row itself where EditorModel.swift takes an id: this EnvRow is an ObservableObject
+    /// the view holds on to, so its live value is right here, while Swift's is a struct in an array
+    /// that has to be looked up by id.
+    /// </summary>
     public bool IsPlaceholder(EnvRow row) => Placeholder.ContainsMarker(row.Value);
 
+    /// <summary>The row's hint, live; see IsPlaceholder for why this side takes the row.</summary>
     public string? PlaceholderHint(EnvRow row) => Hint(row.Value);
 
     /// <summary>Argument indexes still carrying a marker: locked in a synced collection, but live.</summary>
