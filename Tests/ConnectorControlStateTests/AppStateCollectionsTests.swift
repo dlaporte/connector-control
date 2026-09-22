@@ -1946,6 +1946,74 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNotEqual(try Data(contentsOf: document), before, "and the save reached the folder")
     }
 
+    /// A folder this machine published a collection into is its own to keep back for as long as
+    /// the folder exists, whichever collection bears the name now. The record a deleted collection
+    /// left belongs to none, so a new collection of its name publishing elsewhere leaves it where
+    /// it is: the old folder is refused as a kept path, not taken as the new collection's own and
+    /// not dropped with the record.
+    func testADepartedCollectionsFolderIsStillKeptBackOnceItsNamePublishesAgain() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishThenDeleteTeam(h, state)
+        XCTAssertNil(state.createCollection(named: "Team"))
+        let second = try publishFolder(h, "pubTeam2")
+        XCTAssertNil(state.startPublishing("Team", to: second.path, intent: .none, reviewedValues: []))
+        let record = try XCTUnwrap(state.collectionsCache.kept["Team"], "the old Team's record outlives the new one's publish")
+        XCTAssertEqual(record.publishedFolders, [folder.path])
+        XCTAssertNil(record.origin, "and belongs to no collection")
+        let kept = state.keptBack(for: "Team")
+        XCTAssertTrue(kept.values.contains(folder.path), "a path this machine keeps back")
+        XCTAssertFalse(kept.folders.contains(folder.path), "not a folder of the new Team's own")
+
+        // The old folder comes back in a connector: an ingest, a restore or a hand edit. Before
+        // this round the record went with the first publish, folders and all, and the folder
+        // travelled with no banner.
+        XCTAssertNil(state.upsert(name: "tool", entry: MCPEntry(config: .object([
+            "command": .string(folder.path + "/bin/tool"),
+        ])), renamedFrom: nil, in: "Team"))
+        XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+        XCTAssertFalse(try jsonFile(second.appendingPathComponent(Slug.make("Team") + ".json"), contains: folder.path))
+    }
+
+    /// The release the sheet offers for a departed collection's folder holds through the new
+    /// collection's own Stop and publish. Stopping merges the record it left into the new
+    /// collection's, and the departed folder must not come out the other side as the new
+    /// collection's own: it stays apart, still refused, still releasable, and released it travels.
+    func testADepartedCollectionsFolderStaysReleasableAfterTheNameStopsAndPublishesAgain() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishThenDeleteTeam(h, state)
+        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.startPublishing("Team", to: try publishFolder(h, "pubTeam2").path, intent: .none, reviewedValues: []))
+        state.stopPublishing("Team", deleteFile: false)
+        let third = try publishFolder(h, "pubTeam3")
+        XCTAssertNil(state.startPublishing("Team", to: third.path, intent: .none, reviewedValues: []))
+        XCTAssertEqual(state.collectionsCache.kept["Team"]?.departedFolders, [folder.path],
+                       "the record left behind holds the old Team's folder apart from the new one's")
+        XCTAssertFalse(state.collectionsCache.published["Team"]?.publishedFolders.contains(folder.path) ?? true,
+                       "and the binding did not take it")
+        let kept = state.keptBack(for: "Team")
+        XCTAssertTrue(kept.values.contains(folder.path))
+        XCTAssertFalse(kept.folders.contains(folder.path))
+
+        XCTAssertNil(state.upsert(name: "tool", entry: MCPEntry(config: .object([
+            "command": .string(folder.path + "/bin/tool"),
+        ])), renamedFrom: nil, in: "Team"))
+        XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+        let sheet = PublishModel(state: state, collection: "Team")
+        let entry = try XCTUnwrap(sheet.keptPaths.first { $0.value == folder.path })
+        XCTAssertEqual(entry.kind, .path, "the old Team's folder, still releasable")
+        XCTAssertNil(sheet.releaseKeptPath(folder.path))
+        XCTAssertTrue(sheet.canPublish)
+        XCTAssertNil(sheet.publish())
+        let document = third.appendingPathComponent(Slug.make("Team") + ".json")
+        XCTAssertTrue(try jsonFile(document, contains: folder.path), "released, it travels as written")
+        XCTAssertNil(state.upsert(name: "other", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string("/tmp/other.js")]),
+        ])), renamedFrom: nil, in: "Team"))
+        XCTAssertNil(state.publishError, "and a later save is an ordinary one")
+    }
+
     /// A collection the author publishes from their other machine marks its paths in the sidecar,
     /// which syncs with the master list. Those marks are this machine's to keep back too, so a copy
     /// of that connector reaching a collection published here is refused, with no binding involved.

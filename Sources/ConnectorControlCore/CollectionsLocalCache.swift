@@ -14,8 +14,9 @@ public struct CollectionsLocalCache: Equatable, Sendable {
     public var published: [String: PublishBinding]
     /// What a collection's publish binding left behind when publishing stopped: this machine's
     /// memory of the paths it kept back and the folders it published into, kept so a collection
-    /// published again still refuses them. A binding and a record never both hold a collection —
-    /// starting again takes the record back into the binding.
+    /// published again still refuses them. Starting again takes the record back into the binding
+    /// where it is that collection's own; what a collection that has since left the store left
+    /// under the name stays beside the binding, since its folders are not the new one's to take.
     public var kept: [String: KeptRecord]
     /// The collection Claude's config was last written from on this machine. Claude's file holds
     /// that collection's connectors, so it is the only one a launch may ingest them into; nil
@@ -37,11 +38,19 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         self.lastAppliedNames = lastAppliedNames
     }
 
-    /// The lists a stopped publish left behind, as `PublishBinding` holds them while it publishes.
+    /// The lists a stopped publish left behind, as `PublishBinding` holds them while it publishes,
+    /// and the one no binding holds: the folders of the collections that bore the name before.
     public struct KeptRecord: Equatable, Sendable {
         public var markedValues: Set<String>
         public var releasedValues: Set<String>
         public var publishedFolders: Set<String>
+        /// The folders that collections which once bore this name, and have since left the store,
+        /// published into. They are this machine's paths to keep back — refused as a releasable
+        /// kept path, named in the sheet as that collection's folder — and never any collection's
+        /// own, so `${COLLECTION_DIR}` never stands for them and no publish consumes them. Kept
+        /// apart from `publishedFolders` because a Stop would otherwise fold them into the next
+        /// collection's own, and withdraw the release the sheet offered for them.
+        public var departedFolders: Set<String>
         /// The origin the collection this record belongs to published under, while that collection
         /// is still the one bearing the name. A collection made with a deleted one's name is a
         /// different collection and clears it: the folders the old one left are another
@@ -49,27 +58,40 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         /// before origins were kept, which is read the same way.
         public var origin: String?
         public init(markedValues: Set<String> = [], releasedValues: Set<String> = [],
-                    publishedFolders: Set<String> = [], origin: String? = nil) {
+                    publishedFolders: Set<String> = [], departedFolders: Set<String> = [],
+                    origin: String? = nil) {
             self.markedValues = markedValues
             self.releasedValues = releasedValues
             self.publishedFolders = publishedFolders
+            self.departedFolders = departedFolders
             self.origin = origin
         }
 
         /// An origin alone says nothing about what must not travel, so a record holding only one
         /// is no record at all.
-        public var isEmpty: Bool { markedValues.isEmpty && releasedValues.isEmpty && publishedFolders.isEmpty }
+        public var isEmpty: Bool {
+            markedValues.isEmpty && releasedValues.isEmpty && publishedFolders.isEmpty && departedFolders.isEmpty
+        }
 
         /// What a publish binding leaves behind when it goes, merged with anything already
         /// remembered under that name. The binding goes three ways — Stop Publishing, a delete
         /// made here, and a load finding the collection deleted or unpublished on another machine
         /// — and all three leave the same memory of what must not travel.
+        ///
+        /// The earlier record's folders merge into the binding's own only where the two published
+        /// under one origin, none on either side counting as one — a binding and a record written
+        /// before origins were kept are read as one collection's. Otherwise the record is another
+        /// collection's, one that bore the name and left, and its folders go to `departedFolders`
+        /// with whatever it already held there: the next publish must not take them as its own.
         public static func remembering(_ binding: PublishBinding, after earlier: KeptRecord?) -> KeptRecord {
-            KeptRecord(
+            let own = earlier?.origin == binding.origin
+            let earlierFolders = earlier?.publishedFolders ?? []
+            return KeptRecord(
                 markedValues: binding.markedValues.union(earlier?.markedValues ?? []),
                 releasedValues: binding.releasedValues.union(earlier?.releasedValues ?? []),
                 publishedFolders: binding.publishedFolders.union([binding.folder])
-                    .union(earlier?.publishedFolders ?? []),
+                    .union(own ? earlierFolders : []),
+                departedFolders: (earlier?.departedFolders ?? []).union(own ? [] : earlierFolders),
                 origin: binding.origin ?? earlier?.origin)
         }
     }
@@ -275,7 +297,8 @@ extension CollectionsLocalCache.KeptRecord {
     func encode() -> JSONValue {
         var object: [String: JSONValue] = [:]
         for (key, values) in [("markedValues", markedValues), ("releasedValues", releasedValues),
-                              ("publishedFolders", publishedFolders)] where !values.isEmpty {
+                              ("publishedFolders", publishedFolders), ("departedFolders", departedFolders)]
+        where !values.isEmpty {
             object[key] = .array(values.sorted { $0.ordinallyPrecedes($1) }.map(JSONValue.string))
         }
         if let origin { object["origin"] = .string(origin) }
@@ -288,6 +311,8 @@ extension CollectionsLocalCache.KeptRecord {
             markedValues: try CollectionsFile.stringSet(object["markedValues"], "\(what) markedValues"),
             releasedValues: try CollectionsFile.stringSet(object["releasedValues"], "\(what) releasedValues"),
             publishedFolders: try CollectionsFile.stringSet(object["publishedFolders"], "\(what) publishedFolders"),
+            // Absent in a record written before they were kept apart: nothing departed yet.
+            departedFolders: try CollectionsFile.stringSet(object["departedFolders"], "\(what) departedFolders"),
             origin: try CollectionsFile.optionalString(object["origin"], "\(what) origin"))
     }
 }

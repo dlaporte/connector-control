@@ -2153,10 +2153,18 @@ public sealed class AppState : ObservableObject, IDisposable
             new CollectionsFile.PublishRecord(slug, origin, intent), entry.Provenance));
         var previous = CollectionsCache.Published.GetValueOrDefault(collection);
         // Publishing again takes back what stopping left behind: the lists are this machine's memory
-        // of what must not travel, and they outlive the binding.
+        // of what must not travel, and they outlive the binding. The folders, though, are this
+        // collection's to take back only where the record is its own — entry.Publish is the origin
+        // it published under before this call, and a record whose collection has gone belongs to
+        // none. A re-used name inherits its paths, but the folders stay in the record, kept back as
+        // another collection's: taking them would withdraw a release the dialog offered and refuse
+        // every save after it with no answer left, and dropping them would let a folder this
+        // machine published into travel the moment a connector brings it back. An own record is
+        // spent, except for the departed folders it already held, which stay behind under the new
+        // origin so the next Stop merges them as departed rather than as its own.
         var remembered = CollectionsCache.Kept.GetValueOrDefault(collection);
+        var own = IsOwn(remembered, collection, collection, previousOrigin);
         var marked = previous?.MarkedValues ?? remembered?.MarkedValues;
-        SetKeptRecord(collection, null);
         SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(
             full,
             // A new folder has nothing in it this app wrote, so the next write is unconditional.
@@ -2164,17 +2172,19 @@ public sealed class AppState : ObservableObject, IDisposable
             reviewedValues ?? marked,
             Released(previous?.ReleasedValues ?? remembered?.ReleasedValues, releasedValues, reviewedValues ?? marked),
             // The folder it left stays this machine's own: a backup or a connector can bring it back.
-            // Only a record this collection left, though — entry.Publish is the origin it published
-            // under before this call, and one whose collection has gone took its folders with it.
-            // Taking them anyway would withdraw a release the dialog offered for a re-used name, and
-            // refuse every save after it with no answer left.
             (previous?.PublishedFolders
-                ?? (IsOwn(remembered, collection, collection, previousOrigin) ? remembered?.PublishedFolders : null)
+                ?? (own ? remembered?.PublishedFolders : null)
                 ?? new HashSet<string>(StringComparer.Ordinal))
                 .Concat(previous is null ? [] : [previous.Folder]).Append(full),
             // Carried so what this binding leaves behind still says which collection's folders they
             // were, after the sidecar entry that names the origin has gone.
             origin));
+        if (own)
+        {
+            var departed = remembered?.DepartedFolders ?? new HashSet<string>(StringComparer.Ordinal);
+            SetKeptRecord(collection, departed.Count == 0
+                ? null : new CollectionsLocalCache.KeptRecord(null, null, null, departed, origin));
+        }
         // PersistStore ends in PublishIfChanged, which is what writes the document.
         PersistStore();
         // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
@@ -2727,10 +2737,10 @@ public sealed class AppState : ObservableObject, IDisposable
     /// the collection's own: every folder this machine has published it into, which
     /// <c>${COLLECTION_DIR}</c> stands for, and none of them is ever released. <c>Values</c> are
     /// everything else, less the paths the author released for this collection — every path on any of its lists of marked paths, and every other folder
-    /// it binds: another collection's publish folders and each synced collection's located folder.
-    /// The lists are not the collection's own alone: Claude's file carries whichever collection was
-    /// last applied, and a connector reaches another collection by a copy, an ingest or a restore
-    /// with its paths intact.
+    /// it binds: another collection's publish folders, the folders of collections that have since
+    /// left the store, and each synced collection's located folder. The lists are not the
+    /// collection's own alone: Claude's file carries whichever collection was last applied, and a
+    /// connector reaches another collection by a copy, an ingest or a restore with its paths intact.
     /// </summary>
     /// <param name="reviewed">From the Publish dialog, what the author has ticked there, added to the lists.</param>
     /// <param name="released">What they let go there, added to the collection's own released paths. A path that is ticked is not released.</param>
@@ -2770,6 +2780,9 @@ public sealed class AppState : ObservableObject, IDisposable
         foreach (var (name, remembered) in CollectionsCache.Kept)
         {
             values.UnionWith(remembered.MarkedValues);
+            // The folders of the collections that bore a record's name and left are no collection's
+            // own here, whatever the record's origin says about the rest of it.
+            values.UnionWith(remembered.DepartedFolders);
             // A record's folders are this collection's own — the ones ${COLLECTION_DIR} stands for,
             // never released — only where the record is this collection's. Anywhere else they are a
             // path it keeps back, released rather than written over and named as that collection's
@@ -2801,8 +2814,9 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>
     /// The collection this machine binds <paramref name="folder"/> to: the one it publishes there,
-    /// now or before, or the synced one whose document sits in it. Named in the dialog's note, so the
-    /// author releasing another collection's folder reads whose it is first.
+    /// now or before, the name a collection that published there bore before it left, or the synced
+    /// one whose document sits in it. Named in the dialog's note, so the author releasing another
+    /// collection's folder reads whose it is first.
     /// </summary>
     internal string? CollectionBound(string folder)
     {
@@ -2817,7 +2831,10 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         foreach (var name in CollectionsCache.Kept.Keys.Order(StringComparer.Ordinal))
         {
-            if (CollectionsCache.Kept[name].PublishedFolders.Any(bound => KeptValue.Nfc(bound) == wanted))
+            var remembered = CollectionsCache.Kept[name];
+            // A departed collection's folder is still named for the collection it was filed under:
+            // the name is what the author knows it by.
+            if (remembered.PublishedFolders.Concat(remembered.DepartedFolders).Any(bound => KeptValue.Nfc(bound) == wanted))
             {
                 return name;
             }

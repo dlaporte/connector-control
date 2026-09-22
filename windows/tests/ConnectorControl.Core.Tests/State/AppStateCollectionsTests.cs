@@ -2104,6 +2104,80 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// A folder this machine published a collection into is its own to keep back for as long as the
+    /// folder exists, whichever collection bears the name now. The record a deleted collection left
+    /// belongs to none, so a new collection of its name publishing elsewhere leaves it where it is:
+    /// the old folder is refused as a kept path, not taken as the new collection's own and not
+    /// dropped with the record.
+    /// </summary>
+    [Fact]
+    public void ADepartedCollectionsFolderIsStillKeptBackOnceItsNamePublishesAgain()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishThenDeleteTeam(h, state);
+        Assert.Null(state.CreateCollection("Team"));
+        var second = PublishFolder(h, "pubTeam2");
+        Assert.Null(state.StartPublishing("Team", second, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
+        // The old Team's record outlives the new one's publish, and belongs to no collection.
+        var record = state.CollectionsCache.Kept["Team"];
+        Assert.Equal([folder], record.PublishedFolders);
+        Assert.Null(record.Origin);
+        var kept = state.KeptBack("Team");
+        Assert.Contains(folder, kept.Values);          // a path this machine keeps back
+        Assert.DoesNotContain(folder, kept.Folders);   // not a folder of the new Team's own
+
+        // The old folder comes back in a connector: an ingest, a restore or a hand edit. Before this
+        // round the record went with the first publish, folders and all, and the folder travelled
+        // with no banner.
+        Assert.Null(state.Upsert("tool", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String(folder + "/bin/tool")))), null, "Team"));
+        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+        Assert.False(JsonText.FileContains(Path.Combine(second, Slug.Make("Team") + ".json"), folder));
+    }
+
+    /// <summary>
+    /// The release the dialog offers for a departed collection's folder holds through the new
+    /// collection's own Stop and publish. Stopping merges the record it left into the new
+    /// collection's, and the departed folder must not come out the other side as the new
+    /// collection's own: it stays apart, still refused, still releasable, and released it travels.
+    /// </summary>
+    [Fact]
+    public void ADepartedCollectionsFolderStaysReleasableAfterTheNameStopsAndPublishesAgain()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishThenDeleteTeam(h, state);
+        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.StartPublishing("Team", PublishFolder(h, "pubTeam2"), PublishIntent.None,
+            new HashSet<string>(StringComparer.Ordinal)));
+        state.StopPublishing("Team", deleteFile: false);
+        var third = PublishFolder(h, "pubTeam3");
+        Assert.Null(state.StartPublishing("Team", third, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
+        // The record left behind holds the old Team's folder apart from the new one's, and the
+        // binding did not take it.
+        Assert.Equal([folder], state.CollectionsCache.Kept["Team"].DepartedFolders);
+        Assert.DoesNotContain(folder, state.CollectionsCache.Published["Team"].PublishedFolders);
+        var kept = state.KeptBack("Team");
+        Assert.Contains(folder, kept.Values);
+        Assert.DoesNotContain(folder, kept.Folders);
+
+        Assert.Null(state.Upsert("tool", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String(folder + "/bin/tool")))), null, "Team"));
+        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+        var dialog = new PublishModel(state, "Team");
+        var entry = dialog.KeptPaths.Single(k => k.Value == folder);
+        Assert.Equal(PublishModel.KeptPathKind.Path, entry.Kind);   // the old Team's folder, still releasable
+        Assert.Null(dialog.ReleaseKeptPath(folder));
+        Assert.True(dialog.CanPublish);
+        Assert.Null(dialog.Publish());
+        var document = Path.Combine(third, Slug.Make("Team") + ".json");
+        Assert.True(JsonText.FileContains(document, folder));       // released, it travels as written
+        Assert.Null(state.Upsert("other", new McpEntry(NodeWith("/tmp/other.js")), null, "Team"));
+        Assert.Null(state.PublishError);                            // and a later save is an ordinary one
+    }
+
+    /// <summary>
     /// A collection the author publishes from their other machine marks its paths in the sidecar,
     /// which syncs with the master list. Those marks are this machine's to keep back too, so a copy of
     /// that connector reaching a collection published here is refused, with no binding involved.

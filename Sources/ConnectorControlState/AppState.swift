@@ -1424,8 +1424,17 @@ public final class AppState: ObservableObject {
         collectionsFile.collections[collection] = entry
         let previous = collectionsCache.published[collection]
         // Publishing again takes back what stopping left behind: the lists are this machine's
-        // memory of what must not travel, and they outlive the binding.
-        let remembered = collectionsCache.kept.removeValue(forKey: collection)
+        // memory of what must not travel, and they outlive the binding. The folders, though, are
+        // this collection's to take back only where the record is its own — `record` is the
+        // origin it published under before this call, and a record whose collection has gone
+        // belongs to none. A re-used name inherits its paths, but the folders stay in the record,
+        // kept back as another collection's: taking them would withdraw a release the sheet
+        // offered and refuse every save after it with no answer left, and dropping them would let
+        // a folder this machine published into travel the moment a connector brings it back. An
+        // own record is spent, except for the departed folders it already held, which stay behind
+        // under the new origin so the next Stop merges them as departed rather than as its own.
+        let remembered = collectionsCache.kept[collection]
+        let own = AppState.isOwn(remembered, filedUnder: collection, of: collection, publishing: record?.origin)
         let marked = previous?.markedValues ?? remembered?.markedValues ?? []
         collectionsCache.published[collection] = CollectionsLocalCache.PublishBinding(
             folder: url.path,
@@ -1435,18 +1444,17 @@ public final class AppState: ObservableObject {
             releasedValues: AppState.released(previous?.releasedValues ?? remembered?.releasedValues ?? [],
                                               adding: releasedValues, marked: reviewedValues ?? marked),
             // The folder it left stays this machine's own: a backup or a connector can bring it
-            // back. Only a record this collection left, though — `record` is the origin it
-            // published under before this call, and one whose collection has gone took its
-            // folders with it. Taking them anyway would withdraw a release the sheet offered for
-            // a re-used name, and refuse every save after it with no answer left.
-            publishedFolders: (previous?.publishedFolders
-                               ?? (AppState.isOwn(remembered, filedUnder: collection, of: collection,
-                                                  publishing: record?.origin) ? remembered?.publishedFolders : nil)
-                               ?? [])
+            // back.
+            publishedFolders: (previous?.publishedFolders ?? (own ? remembered?.publishedFolders : nil) ?? [])
                 .union(previous.map { [$0.folder] } ?? []).union([url.path]),
             // Carried so what this binding leaves behind still says which collection's folders
             // they were, after the sidecar entry that names the origin has gone.
             origin: origin)
+        if own {
+            let departed = remembered?.departedFolders ?? []
+            collectionsCache.kept[collection] = departed.isEmpty
+                ? nil : CollectionsLocalCache.KeptRecord(departedFolders: departed, origin: origin)
+        }
         // persistStore ends in publishIfChanged, which is what writes the document.
         persistStore()
         // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
@@ -1632,10 +1640,10 @@ public final class AppState: ObservableObject {
     /// and none of them is ever released. `values` are everything else, less the paths the author
     /// released for this collection —
     /// every path on any of its lists of marked paths, and every other folder it binds: another
-    /// collection's publish folders and each synced collection's located folder. The lists are not
-    /// the collection's own alone: Claude's file carries whichever collection was last applied,
-    /// and a connector reaches another collection by a copy, an ingest or a restore with its paths
-    /// intact.
+    /// collection's publish folders, the folders of collections that have since left the store,
+    /// and each synced collection's located folder. The lists are not the collection's own alone:
+    /// Claude's file carries whichever collection was last applied, and a connector reaches
+    /// another collection by a copy, an ingest or a restore with its paths intact.
     ///
     /// `reviewed`, from the Publish sheet, is what the author has ticked there, added to the lists;
     /// `released` is what they let go there, added to the collection's own released paths. A path
@@ -1662,6 +1670,9 @@ public final class AppState: ObservableObject {
         let ownOrigin = collectionsFile.collections[collection]?.publish?.origin
         for (name, remembered) in collectionsCache.kept {
             values.formUnion(remembered.markedValues)
+            // The folders of the collections that bore a record's name and left are no
+            // collection's own here, whatever the record's origin says about the rest of it.
+            values.formUnion(remembered.departedFolders)
             // A record's folders are this collection's own — the ones ${COLLECTION_DIR} stands
             // for, never released — only where the record is this collection's. Anywhere else
             // they are a path it keeps back, released rather than written over and named as that
@@ -1717,17 +1728,22 @@ public final class AppState: ObservableObject {
     }
 
     /// The collection this machine binds `folder` to: the one it publishes there, now or before,
-    /// or the synced one whose document sits in it. Named in the sheet's note, so the author
-    /// releasing another collection's folder reads whose it is first.
+    /// the name a collection that published there bore before it left, or the synced one whose
+    /// document sits in it. Named in the sheet's note, so the author releasing another
+    /// collection's folder reads whose it is first.
     func collectionBound(to folder: String) -> String? {
         let wanted = KeptValue.nfc(folder)
         for name in collectionsCache.published.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
             guard let binding = collectionsCache.published[name] else { continue }
             if binding.publishedFolders.union([binding.folder]).contains(where: { KeptValue.nfc($0) == wanted }) { return name }
         }
-        for name in collectionsCache.kept.keys.sorted(by: { $0.ordinallyPrecedes($1) })
-        where collectionsCache.kept[name]?.publishedFolders.contains(where: { KeptValue.nfc($0) == wanted }) ?? false {
-            return name
+        for name in collectionsCache.kept.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+            guard let remembered = collectionsCache.kept[name] else { continue }
+            // A departed collection's folder is still named for the collection it was filed
+            // under: the name is what the author knows it by.
+            if remembered.publishedFolders.union(remembered.departedFolders).contains(where: { KeptValue.nfc($0) == wanted }) {
+                return name
+            }
         }
         for name in collectionsCache.synced.keys.sorted(by: { $0.ordinallyPrecedes($1) }) where isSynced(name) {
             guard let path = collectionsCache.synced[name]?.path else { continue }

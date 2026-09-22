@@ -125,6 +125,56 @@ final class CollectionsLocalCacheTests: XCTestCase {
                        "an apply that rendered nothing is a record of nothing, not the absence of one")
     }
 
+    /// The folders of the collections that bore a record's name and left round-trip beside its
+    /// own, and are enough on their own for the record to be written; a record written before they
+    /// were kept apart reads with none.
+    func testDepartedFoldersRoundTripAndAreEmptyInAnOlderCache() throws {
+        let cache = CollectionsLocalCache(synced: [:], published: [:],
+                                          kept: ["Team": .init(departedFolders: ["/Users/d/old"], origin: "5f2a")])
+        XCTAssertEqual(try CollectionsLocalCache.decode(cache.encode()).kept["Team"], cache.kept["Team"],
+                       "a record holding only what departed collections left has something to say")
+        XCTAssertEqual(cache.encode().value(at: JSONPointer(["kept", "Team", "departedFolders"])),
+                       .array([.string("/Users/d/old")]))
+        let older = try JSONValue.parse(Data("""
+            {"version": 1, "synced": {}, "published": {}, "kept": {"Team": {"publishedFolders": ["/Users/d/old"]}}}
+            """.utf8))
+        XCTAssertEqual(try CollectionsLocalCache.decode(older).kept["Team"]?.departedFolders, [])
+    }
+
+    /// An earlier record's folders are the binding's own only where the two published under one
+    /// origin. A record of another origin, or of none — a collection that left the store — belongs
+    /// to another collection, and its folders are kept apart as departed so the next publish does
+    /// not take them as its own.
+    func testRememberingKeepsAnotherCollectionsFoldersApartFromTheBindingsOwn() {
+        let binding = CollectionsLocalCache.PublishBinding(folder: "/Users/d/new", lastWrittenHash: nil,
+                                                           publishedFolders: ["/Users/d/new"], origin: "0c9b7d1e")
+        let departed = CollectionsLocalCache.KeptRecord(publishedFolders: ["/Users/d/old"], departedFolders: ["/Users/d/older"])
+        XCTAssertEqual(CollectionsLocalCache.KeptRecord.remembering(binding, after: departed),
+                       .init(publishedFolders: ["/Users/d/new"], departedFolders: ["/Users/d/old", "/Users/d/older"],
+                             origin: "0c9b7d1e"),
+                       "a record with no origin belongs to no collection here")
+        let another = CollectionsLocalCache.KeptRecord(publishedFolders: ["/Users/d/old"], origin: "5f2a")
+        XCTAssertEqual(CollectionsLocalCache.KeptRecord.remembering(binding, after: another),
+                       .init(publishedFolders: ["/Users/d/new"], departedFolders: ["/Users/d/old"], origin: "0c9b7d1e"),
+                       "and one of another origin belongs to another collection")
+    }
+
+    /// A record of the binding's own origin is the same collection's, stopped before: its folders
+    /// merge into the binding's own, and what it held as departed stays departed. A binding and a
+    /// record written before origins were kept, with none on either side, are read the same way.
+    func testRememberingMergesTheFoldersOfARecordOfTheSameOrigin() {
+        let binding = CollectionsLocalCache.PublishBinding(folder: "/Users/d/new", lastWrittenHash: nil,
+                                                           publishedFolders: ["/Users/d/new"], origin: "0c9b7d1e")
+        let own = CollectionsLocalCache.KeptRecord(publishedFolders: ["/Users/d/old"], departedFolders: ["/Users/d/older"],
+                                                   origin: "0c9b7d1e")
+        XCTAssertEqual(CollectionsLocalCache.KeptRecord.remembering(binding, after: own),
+                       .init(publishedFolders: ["/Users/d/old", "/Users/d/new"], departedFolders: ["/Users/d/older"],
+                             origin: "0c9b7d1e"))
+        let legacy = CollectionsLocalCache.PublishBinding(folder: "/Users/d/new", lastWrittenHash: nil)
+        XCTAssertEqual(CollectionsLocalCache.KeptRecord.remembering(legacy, after: .init(publishedFolders: ["/Users/d/old"])),
+                       .init(publishedFolders: ["/Users/d/old", "/Users/d/new"]))
+    }
+
     func testAnUnknownVersionDecodesAsMalformed() {
         XCTAssertThrowsError(try CollectionsLocalCache.decode(.object(["version": .int(9), "synced": .object([:]), "published": .object([:])])))
     }

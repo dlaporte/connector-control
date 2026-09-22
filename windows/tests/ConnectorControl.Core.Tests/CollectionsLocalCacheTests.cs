@@ -99,8 +99,8 @@ public sealed class CollectionsLocalCacheTests : IDisposable
     {
         var cache = new CollectionsLocalCache([], [], new Dictionary<string, CollectionsLocalCache.KeptRecord>
         {
-            ["Consulting"] = new(["/a"], ["/b"], ["/Users/d/old"]),
-            ["Empty"] = new(),
+            ["Consulting"] = new(["/a"], ["/b"], ["/Users/d/old"], null),
+            ["Empty"] = new(null, null, null, null),
         });
         var decoded = CollectionsLocalCache.Decode(cache.Encode());
         Assert.Equal(cache.Kept["Consulting"], decoded.Kept["Consulting"]);
@@ -130,12 +130,12 @@ public sealed class CollectionsLocalCacheTests : IDisposable
             },
             new Dictionary<string, CollectionsLocalCache.KeptRecord>
             {
-                ["Consulting"] = new(["/earlier"]),
+                ["Consulting"] = new(["/earlier"], null, null, null),
             });
         var pruned = cache.Reconciled(new CollectionsFile([]));
         Assert.Empty(pruned.Published);   // the sidecar no longer vouches for it
         // The binding's lists, its folder among them, merged with what was already remembered.
-        Assert.Equal(new CollectionsLocalCache.KeptRecord(["/a", "/earlier"], ["/b"], ["/Users/d/old", "/Users/d/new"], "0c9b7d1e"),
+        Assert.Equal(new CollectionsLocalCache.KeptRecord(["/a", "/earlier"], ["/b"], ["/Users/d/old", "/Users/d/new"], null, "0c9b7d1e"),
                      pruned.Kept["Consulting"]);
         // And folding it again changes nothing.
         Assert.Equal(pruned, pruned.Reconciled(new CollectionsFile([])));
@@ -157,7 +157,7 @@ public sealed class CollectionsLocalCacheTests : IDisposable
             },
             new Dictionary<string, CollectionsLocalCache.KeptRecord>
             {
-                ["Gone"] = new(null, null, ["/Users/d/old"], "5f2a"),
+                ["Gone"] = new(null, null, ["/Users/d/old"], null, "5f2a"),
             },
             "Consulting",
             ["ledger", "scoutbook"]);
@@ -168,6 +168,65 @@ public sealed class CollectionsLocalCacheTests : IDisposable
         // An apply that rendered nothing is a record of nothing, not the absence of one.
         var empty = cache with { LastAppliedNames = new HashSet<string>(StringComparer.Ordinal) };
         Assert.Empty(Assert.IsAssignableFrom<IReadOnlySet<string>>(CollectionsLocalCache.Decode(empty.Encode()).LastAppliedNames));
+    }
+
+    /// <summary>
+    /// The folders of the collections that bore a record's name and left round-trip beside its
+    /// own, and are enough on their own for the record to be written; a record written before they
+    /// were kept apart reads with none.
+    /// </summary>
+    [Fact]
+    public void DepartedFoldersRoundTripAndAreEmptyInAnOlderCache()
+    {
+        var cache = new CollectionsLocalCache([], [], new Dictionary<string, CollectionsLocalCache.KeptRecord>
+        {
+            ["Team"] = new(null, null, null, ["/Users/d/old"], "5f2a"),
+        });
+        // A record holding only what departed collections left has something to say.
+        Assert.Equal(cache.Kept["Team"], CollectionsLocalCache.Decode(cache.Encode()).Kept["Team"]);
+        Assert.Equal(JsonValue.Array([JsonValue.String("/Users/d/old")]),
+                     cache.Encode().ValueAt(new JsonPointer(["kept", "Team", "departedFolders"])));
+        var older = JsonValue.Parse("""
+            {"version": 1, "synced": {}, "published": {}, "kept": {"Team": {"publishedFolders": ["/Users/d/old"]}}}
+            """);
+        Assert.Empty(CollectionsLocalCache.Decode(older).Kept["Team"].DepartedFolders);
+    }
+
+    /// <summary>
+    /// An earlier record's folders are the binding's own only where the two published under one
+    /// origin. A record of another origin, or of none — a collection that left the store — belongs
+    /// to another collection, and its folders are kept apart as departed so the next publish does
+    /// not take them as its own.
+    /// </summary>
+    [Fact]
+    public void RememberingKeepsAnotherCollectionsFoldersApartFromTheBindingsOwn()
+    {
+        var binding = new CollectionsLocalCache.PublishBinding("/Users/d/new", null, null, null, ["/Users/d/new"], "0c9b7d1e");
+        var departed = new CollectionsLocalCache.KeptRecord(null, null, ["/Users/d/old"], ["/Users/d/older"]);
+        // A record with no origin belongs to no collection here.
+        Assert.Equal(new CollectionsLocalCache.KeptRecord(null, null, ["/Users/d/new"], ["/Users/d/old", "/Users/d/older"], "0c9b7d1e"),
+                     CollectionsLocalCache.KeptRecord.Remembering(binding, departed));
+        var another = new CollectionsLocalCache.KeptRecord(null, null, ["/Users/d/old"], null, "5f2a");
+        // And one of another origin belongs to another collection.
+        Assert.Equal(new CollectionsLocalCache.KeptRecord(null, null, ["/Users/d/new"], ["/Users/d/old"], "0c9b7d1e"),
+                     CollectionsLocalCache.KeptRecord.Remembering(binding, another));
+    }
+
+    /// <summary>
+    /// A record of the binding's own origin is the same collection's, stopped before: its folders
+    /// merge into the binding's own, and what it held as departed stays departed. A binding and a
+    /// record written before origins were kept, with none on either side, are read the same way.
+    /// </summary>
+    [Fact]
+    public void RememberingMergesTheFoldersOfARecordOfTheSameOrigin()
+    {
+        var binding = new CollectionsLocalCache.PublishBinding("/Users/d/new", null, null, null, ["/Users/d/new"], "0c9b7d1e");
+        var own = new CollectionsLocalCache.KeptRecord(null, null, ["/Users/d/old"], ["/Users/d/older"], "0c9b7d1e");
+        Assert.Equal(new CollectionsLocalCache.KeptRecord(null, null, ["/Users/d/old", "/Users/d/new"], ["/Users/d/older"], "0c9b7d1e"),
+                     CollectionsLocalCache.KeptRecord.Remembering(binding, own));
+        var legacy = new CollectionsLocalCache.PublishBinding("/Users/d/new", null);
+        Assert.Equal(new CollectionsLocalCache.KeptRecord(null, null, ["/Users/d/old", "/Users/d/new"], null),
+                     CollectionsLocalCache.KeptRecord.Remembering(legacy, new(null, null, ["/Users/d/old"], null)));
     }
 
     [Fact]
