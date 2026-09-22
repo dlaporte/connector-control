@@ -67,7 +67,16 @@ echo
 # A preview can be cut before CHANGELOG.md grows its "## v$NEXT" section, so tolerate
 # changelog-section.sh's exit 1 for a section that doesn't exist yet rather than failing the
 # preview over it; --quiet keeps that from rendering as a GitHub error annotation.
-scripts/release/changelog-section.sh --quiet "v$NEXT" || true
+#
+# A sub-heading with no bullets yet stays in CHANGELOG.md until the version ships, but a
+# tester reading these notes should not meet an empty heading, so drop those here.
+scripts/release/changelog-section.sh --quiet "v$NEXT" \
+  | awk '
+      /^### / { if (heading != "" && body != "") printf "%s", held; heading = $0; held = $0 ORS; body = ""; next }
+      heading != "" { held = held $0 ORS; if ($0 ~ /[^[:space:]]/) body = body $0; next }
+      { print }
+      END { if (heading != "" && body != "") printf "%s", held }
+  ' || true
 echo
 echo "### Commits since $BASE_LABEL"
 echo
