@@ -103,8 +103,9 @@ public sealed class ConfigService
     /// is about to apply, whichever that is.
     /// </para>
     /// <para>
-    /// A record naming a collection the store no longer has leaves everything alone: its connectors
-    /// are no collection's to take in, and nothing here keeps their marked paths back.
+    /// A record naming a collection the store no longer has renders nothing to leave alone, so all of
+    /// it comes in: what that collection kept back is remembered whether it was stopped or deleted,
+    /// and nothing a hand added is dropped to keep it out.
     /// </para>
     /// </summary>
     internal static IReadOnlyDictionary<string, JsonValue> Ingestible(
@@ -116,7 +117,7 @@ public sealed class ConfigService
         }
         if (!store.Collections.TryGetValue(lastApplied, out var collection))
         {
-            return new Dictionary<string, JsonValue>(StringComparer.Ordinal);
+            return servers;
         }
         var rendered = collection.Mcps.Where(p => p.Value.Enabled).Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
         return servers.Where(p => !rendered.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);

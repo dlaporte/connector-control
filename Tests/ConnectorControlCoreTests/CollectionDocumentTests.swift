@@ -154,12 +154,13 @@ final class CollectionDocumentTests: XCTestCase {
 
     func testExportRefusesAnUnmarkedCopyOfAMarkedPath() throws {
         let intent = PublishIntent(shareValues: ["ledger": ["LEDGER"]], pathMarks: ["ledger": [arg(0): mark("/Users/d/ledger.js")]], hints: [:])
+        // The field is named as the editor shows it, since each of these opens in the local form.
         let copies: [(field: String, config: JSONValue)] = [
-            ("local.args[1]", .object(["command": .string("node"),
-                                       "args": .array([.string("/Users/d/ledger.js"), .string("/Users/d/ledger.js")])])),
-            ("local.command", .object(["command": .string("/Users/d/ledger.js"), "args": .array([.string("/Users/d/ledger.js")])])),
-            ("env.LEDGER.value", .object(["command": .string("node"), "args": .array([.string("/Users/d/ledger.js")]),
-                                          "env": .object(["LEDGER": .string("/Users/d/ledger.js")])])),
+            (FieldName.argument(2), .object(["command": .string("node"),
+                                             "args": .array([.string("/Users/d/ledger.js"), .string("/Users/d/ledger.js")])])),
+            (FieldName.command, .object(["command": .string("/Users/d/ledger.js"), "args": .array([.string("/Users/d/ledger.js")])])),
+            (FieldName.envValue("LEDGER"), .object(["command": .string("node"), "args": .array([.string("/Users/d/ledger.js")]),
+                                                    "env": .object(["LEDGER": .string("/Users/d/ledger.js")])])),
         ]
         for copy in copies {
             XCTAssertThrowsError(try CollectionDocument.export(name: "x", author: nil, origin: nil, exported: "2026-09-21T15:00:00Z",

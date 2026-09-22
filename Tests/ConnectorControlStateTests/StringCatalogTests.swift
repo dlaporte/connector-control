@@ -105,6 +105,10 @@ final class StringCatalogTests: XCTestCase {
         "EditorModel.publishedNote": ["X"],
         "EditorModel.removeMessage": ["X"],
         "EditorModel.removedOutsideMessage": ["X"],
+        "FieldName.argument": ["1"],
+        "FieldName.document": ["X"],
+        "FieldName.envValue": ["X"],
+        "FieldName.hint": ["X"],
         "ImportModel.addModeTitle": ["X"],
         "ImportModel.collisionPickerLabel": ["X"],
         "ImportModel.importButton": ["3"],
@@ -299,6 +303,14 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.urlHint"] = EditorModel.urlHint
         actual["EditorModel.whatCanIChange"] = EditorModel.whatCanIChange
         actual["EditorModel.whatCanIChangeAnswer"] = EditorModel.whatCanIChangeAnswer
+
+        // MARK: FieldName
+
+        actual["FieldName.argument"] = FieldName.argument(1)
+        actual["FieldName.command"] = FieldName.command
+        actual["FieldName.document"] = FieldName.document("X")
+        actual["FieldName.envValue"] = FieldName.envValue("X")
+        actual["FieldName.hint"] = FieldName.hint("X")
 
         // MARK: ImportModel
 

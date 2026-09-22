@@ -281,7 +281,7 @@ final class PublishModelTests: XCTestCase {
         sidecar.collections[state.activeCollection]?.publish = record
         try sidecar.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
         state.reload()
-        XCTAssertEqual(state.publishError?.message, AppState.keptPathCarriedError("c", "local.args[0]"))
+        XCTAssertEqual(state.publishError?.message, AppState.keptPathCarriedError("c", FieldName.argument(1)))
 
         let sheet = PublishModel(state: state, collection: state.activeCollection)
         let row = try XCTUnwrap(sheet.pathRows.first { $0.connector == "c" })
@@ -409,7 +409,7 @@ final class PublishModelTests: XCTestCase {
             "command": .string("node"), "args": .array([.string("--serve")]), "cwd": .string(keptPath)])
         try MasterStoreIO.save(store, to: h.masterStoreURL)
         state.reload(trigger: .externalStoreAdoption)
-        XCTAssertEqual(state.publishError?.message, AppState.keptPathCarriedError("ledger", "additional.cwd"))
+        XCTAssertEqual(state.publishError?.message, AppState.keptPathCarriedError("ledger", FieldName.document("additional.cwd")))
         return folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json")
     }
 
@@ -423,9 +423,9 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(sheet.keptPaths, [PublishModel.KeptPath(value: keptPath, connector: "ledger", field: "additional.cwd", kind: .path)])
         XCTAssertFalse(sheet.canPublish)
         XCTAssertFalse(sheet.canExport)
-        XCTAssertEqual(sheet.publish(), PublishModel.keptPathNote("ledger", "additional.cwd"))
+        XCTAssertEqual(sheet.publish(), PublishModel.keptPathNote("ledger", FieldName.document("additional.cwd")))
         let out = h.dir.file("away/copy.json")
-        XCTAssertEqual(sheet.export(to: out.path), PublishModel.keptPathNote("ledger", "additional.cwd"))
+        XCTAssertEqual(sheet.export(to: out.path), PublishModel.keptPathNote("ledger", FieldName.document("additional.cwd")))
         XCTAssertFalse(FileManager.default.fileExists(atPath: out.path))
         XCTAssertEqual(try Data(contentsOf: file), before)
         XCTAssertEqual(state.collectionsCache.published[state.activeCollection]?.markedValues, [keptPath], "nothing released it")
@@ -455,7 +455,7 @@ final class PublishModelTests: XCTestCase {
         sheet.pathRows[0].hint = "like mine, \(keptPath)"
         XCTAssertEqual(sheet.keptPaths.map { "\($0.connector) \($0.field)" }, ["ledger needs.server_path.hint"])
         XCTAssertFalse(sheet.canPublish)
-        XCTAssertEqual(sheet.publish(), PublishModel.keptPathNote("ledger", "needs.server_path.hint"))
+        XCTAssertEqual(sheet.publish(), PublishModel.keptPathNote("ledger", FieldName.hint("server_path")))
         XCTAssertFalse(FileManager.default.fileExists(atPath: try publishFolder(h).appendingPathComponent(sheet.fileName).path))
         sheet.pathRows[0].hint = "your ledger clone"
         XCTAssertTrue(sheet.canPublish)

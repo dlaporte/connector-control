@@ -381,7 +381,7 @@ public class PublishDialogTests
 
                 var kept = Assert.Single(model.KeptPaths);
                 Assert.Equal(("tool", "local.command", PublishModel.KeptPathKind.Folder), (kept.Connector, kept.Field, kept.Kind));
-                Assert.Equal(PublishModel.PublishFolderNote("tool", "local.command"),
+                Assert.Equal(PublishModel.PublishFolderNote("tool", FieldName.Command),
                     RowElements.Find<TextBlock>(window.KeptList, kept, "KeptNoteText").Text);
                 // One answer only: released, the folder would travel as written.
                 var use = RowElements.Find<Button>(window.KeptList, kept, "UseDirectoryToken");

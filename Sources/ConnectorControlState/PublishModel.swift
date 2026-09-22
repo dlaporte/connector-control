@@ -346,16 +346,18 @@ public final class PublishModel: ObservableObject {
     /// another collection's folder, whose folder it is. The view shows this rather than composing
     /// it, so a new kind of entry cannot reach the sheet with the wrong sentence.
     public func note(for kept: KeptPath) -> String {
+        let field = state.fieldName(of: KeptValueFinding(connector: kept.connector, field: kept.field, value: kept.value),
+                                    in: collection)
         switch kept.kind {
         case .folder:
             return canWriteDirectoryToken(connector: kept.connector, field: kept.field, folder: kept.value)
-                ? PublishModel.publishFolderNote(kept.connector, kept.field)
-                : PublishModel.publishFolderEditNote(kept.connector, kept.field)
+                ? PublishModel.publishFolderNote(kept.connector, field)
+                : PublishModel.publishFolderEditNote(kept.connector, field)
         case .path:
             if let owner = state.collectionBound(to: kept.value) {
-                return PublishModel.otherFolderNote(kept.connector, kept.field, owner)
+                return PublishModel.otherFolderNote(kept.connector, field, owner)
             }
-            return PublishModel.keptPathNote(kept.connector, kept.field)
+            return PublishModel.keptPathNote(kept.connector, field)
         }
     }
 

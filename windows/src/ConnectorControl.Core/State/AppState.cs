@@ -1249,8 +1249,12 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         CollectionsFile = new CollectionsFile(Without(CollectionsFile.Collections, name));
         CollectionsCache = new CollectionsLocalCache(
-            Without(CollectionsCache.Synced, name), Without(CollectionsCache.Published, name), CollectionsCache.Kept,
+            Without(CollectionsCache.Synced, name), CollectionsCache.Published, CollectionsCache.Kept,
             CollectionsCache.LastAppliedCollection);
+        // Deleting a collection is not the author's word that the paths it kept back may travel: the
+        // connector that carried one is still in another collection, or comes back by an import, a
+        // copy or an ingest. What Stop Publishing remembers, this remembers too.
+        RememberWhatWasKeptBack(name);
         PendingUpdates = Without(PendingUpdates, name);
         SourceErrors = Without(SourceErrors, name);
         ForgetSource(name);
@@ -1317,6 +1321,27 @@ public sealed class AppState : ObservableObject, IDisposable
                 : With(CollectionsCache.Published, collection, binding),
             CollectionsCache.Kept,
             CollectionsCache.LastAppliedCollection);
+
+    /// <summary>
+    /// Takes the binding away and keeps what it knew about paths that must not travel: the marked
+    /// paths, the released ones and every folder it published into. A collection published again,
+    /// here or from another folder, still refuses them.
+    /// </summary>
+    private void RememberWhatWasKeptBack(string collection)
+    {
+        if (CollectionsCache.Published.GetValueOrDefault(collection) is not { } binding)
+        {
+            return;
+        }
+        var before = CollectionsCache.Kept.GetValueOrDefault(collection)
+            ?? new CollectionsLocalCache.KeptRecord();
+        var remembered = new CollectionsLocalCache.KeptRecord(
+            binding.MarkedValues.Concat(before.MarkedValues),
+            binding.ReleasedValues.Concat(before.ReleasedValues),
+            binding.PublishedFolders.Append(binding.Folder).Concat(before.PublishedFolders));
+        SetPublishBinding(collection, null);
+        SetKeptRecord(collection, remembered.IsEmpty ? null : remembered);
+    }
 
     /// <summary>What a stopped publish left behind, set or dropped for one collection.</summary>
     private void SetKeptRecord(string collection, CollectionsLocalCache.KeptRecord? record) =>
@@ -2190,15 +2215,7 @@ public sealed class AppState : ObservableObject, IDisposable
         // An entry with nothing left to say is no entry at all, which is how the sidecar writes it
         // and how the next load reads it back.
         SetSidecarEntry(collection, stripped.Equals(CollectionsFile.Entry.Local) ? null : stripped);
-        // The binding goes; what it knew about paths that must not travel does not. A collection
-        // published again, here or from another folder, still refuses them.
-        if (CollectionsCache.Published.GetValueOrDefault(collection) is { } binding)
-        {
-            var remembered = new CollectionsLocalCache.KeptRecord(
-                binding.MarkedValues, binding.ReleasedValues, binding.PublishedFolders.Append(binding.Folder));
-            SetKeptRecord(collection, remembered.IsEmpty ? null : remembered);
-        }
-        SetPublishBinding(collection, null);
+        RememberWhatWasKeptBack(collection);
         if (PublishError?.Collection == collection)
         {
             PublishError = null;
@@ -2630,13 +2647,22 @@ public sealed class AppState : ObservableObject, IDisposable
         var (values, folders) = KeptBack(collection, reviewed, released);
         if (document.Findings(values).FirstOrDefault() is { } value)
         {
-            throw new KeptPathCarriedException(value.Connector, value.Field);
+            throw new KeptPathCarriedException(value.Connector, FieldNameOf(value, collection));
         }
         if (document.Findings(folders).FirstOrDefault() is { } folder)
         {
-            throw new PublishFolderCarriedException(folder.Connector, folder.Field);
+            throw new PublishFolderCarriedException(folder.Connector, FieldNameOf(folder, collection));
         }
     }
+
+    /// <summary>
+    /// What a finding's field is called to the author: the editor's own words where the connector
+    /// opens in the local form (<see cref="FieldName"/>), the document's name otherwise.
+    /// </summary>
+    internal string FieldNameOf(KeptValueFinding found, string collection) =>
+        Store.Collections.GetValueOrDefault(collection)?.Mcps.GetValueOrDefault(found.Connector) is { } entry
+            ? FieldName.Of(found.Field, entry.Config, found.Value)
+            : FieldName.Document(found.Field);
 
     /// <summary>
     /// What this machine keeps back from <paramref name="collection"/>'s document. <c>Folders</c> are
@@ -2666,6 +2692,18 @@ public sealed class AppState : ObservableObject, IDisposable
             else
             {
                 values.UnionWith(bound);
+            }
+        }
+        // Every mark in the sidecar's publish records, whichever machine made it: the sidecar travels
+        // with the master list, so a collection the author publishes from another machine of their own
+        // marks its paths here too. A colleague's collection is another matter — this machine never
+        // sees their sidecar — and their document reaches it as placeholders anyway.
+        foreach (var entry in CollectionsFile.Collections.Values)
+        {
+            if (entry.Publish is { } record)
+            {
+                values.UnionWith(record.Intent.PathMarks.Values
+                    .SelectMany(marks => marks.Values).Select(mark => mark.Value).OfType<string>());
             }
         }
         // What a stopped publish left behind keeps its say, so publishing the collection again — or

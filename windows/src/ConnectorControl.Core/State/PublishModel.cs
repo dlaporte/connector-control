@@ -542,15 +542,16 @@ public sealed class PublishModel : ObservableObject
     /// </summary>
     public string Note(KeptPath kept)
     {
+        var field = state.FieldNameOf(new KeptValueFinding(kept.Connector, kept.Field, kept.Value), Collection);
         if (kept.Kind == KeptPathKind.Folder)
         {
             return CanWriteDirectoryToken(kept.Connector, kept.Field, kept.Value)
-                ? PublishFolderNote(kept.Connector, kept.Field)
-                : PublishFolderEditNote(kept.Connector, kept.Field);
+                ? PublishFolderNote(kept.Connector, field)
+                : PublishFolderEditNote(kept.Connector, field);
         }
         return state.CollectionBound(kept.Value) is { } owner
-            ? OtherFolderNote(kept.Connector, kept.Field, owner)
-            : KeptPathNote(kept.Connector, kept.Field);
+            ? OtherFolderNote(kept.Connector, field, owner)
+            : KeptPathNote(kept.Connector, field);
     }
 
     /// <summary>

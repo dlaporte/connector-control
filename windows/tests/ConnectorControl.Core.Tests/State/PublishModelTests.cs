@@ -328,7 +328,7 @@ public class PublishModelTests
                 entry.Provenance))
             : p)).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
         state.Reload();
-        Assert.Equal(AppState.KeptPathCarriedError("c", "local.args[0]"), state.PublishError?.Message);
+        Assert.Equal(AppState.KeptPathCarriedError("c", FieldName.Argument(1)), state.PublishError?.Message);
 
         var sheet = new PublishModel(state, state.ActiveCollection);
         // The record no longer marks it, but this machine has sent it as a placeholder.
@@ -518,7 +518,7 @@ public class PublishModelTests
         };
         MasterStoreIO.Save(store, h.MasterStorePath);
         state.Reload(ReloadTrigger.ExternalStoreAdoption);
-        Assert.Equal(AppState.KeptPathCarriedError("ledger", "additional.cwd"), state.PublishError?.Message);
+        Assert.Equal(AppState.KeptPathCarriedError("ledger", FieldName.Document("additional.cwd")), state.PublishError?.Message);
         return Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
     }
 
@@ -534,9 +534,9 @@ public class PublishModelTests
         Assert.Equal([new PublishModel.KeptPath(KeptPathValue, "ledger", "additional.cwd")], sheet.KeptPaths);
         Assert.False(sheet.CanPublish);
         Assert.False(sheet.CanExport);
-        Assert.Equal(PublishModel.KeptPathNote("ledger", "additional.cwd"), sheet.Publish());
+        Assert.Equal(PublishModel.KeptPathNote("ledger", FieldName.Document("additional.cwd")), sheet.Publish());
         var output = h.Dir.File(Path.Combine("away", "copy.json"));
-        Assert.Equal(PublishModel.KeptPathNote("ledger", "additional.cwd"), sheet.Export(output));
+        Assert.Equal(PublishModel.KeptPathNote("ledger", FieldName.Document("additional.cwd")), sheet.Export(output));
         Assert.False(File.Exists(output));
         Assert.Equal(before, File.ReadAllBytes(file));
         // Nothing released it.
@@ -569,7 +569,7 @@ public class PublishModelTests
         sheet.PathRows[0].Hint = $"like mine, {KeptPathValue}";
         Assert.Equal(["ledger needs.server_path.hint"], sheet.KeptPaths.Select(k => $"{k.Connector} {k.Field}"));
         Assert.False(sheet.CanPublish);
-        Assert.Equal(PublishModel.KeptPathNote("ledger", "needs.server_path.hint"), sheet.Publish());
+        Assert.Equal(PublishModel.KeptPathNote("ledger", FieldName.Hint("server_path")), sheet.Publish());
         Assert.False(File.Exists(Path.Combine(PublishFolder(h), sheet.FileName)));
         sheet.PathRows[0].Hint = "your ledger clone";
         Assert.True(sheet.CanPublish);

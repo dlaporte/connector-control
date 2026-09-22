@@ -943,7 +943,7 @@ public class EditorModelCollectionsTests
             editor.Args.Add(new ArgRow(ServerPath));
             Assert.True(editor.Save());
         }
-        Assert.Equal(AppState.KeptPathCarriedError("svc", "local.args[2]"), rig.State.PublishError?.Message);
+        Assert.Equal(AppState.KeptPathCarriedError("svc", FieldName.Argument(3)), rig.State.PublishError?.Message);
         // The copy is not sent as written.
         Assert.Equal(before, File.ReadAllBytes(file));
 

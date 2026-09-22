@@ -256,6 +256,19 @@
   "EditorModel.urlHint": "Enter a valid http(s) URL, e.g. https://example.com/mcp",
   "EditorModel.whatCanIChange": "What can I change?",
   "EditorModel.whatCanIChangeAnswer": "Fill in the highlighted values and switch it on or off. Everything else follows the source; make a local copy to change it.",
+  "FieldName.argument": {
+    "format": "argument {0}"
+  },
+  "FieldName.command": "the command",
+  "FieldName.document": {
+    "format": "the document's {0}"
+  },
+  "FieldName.envValue": {
+    "format": "the value of {0}"
+  },
+  "FieldName.hint": {
+    "format": "the hint for {0}"
+  },
   "FirstRunTip.body": {
     "win": "Connector Control lives in the system tray. Drag its icon out of the overflow (^) to keep it visible."
   },

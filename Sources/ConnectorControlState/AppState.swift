@@ -874,7 +874,10 @@ public final class AppState: ObservableObject {
         if let error = store.deleteCollection(named: name) { return error }
         collectionsFile.collections.removeValue(forKey: name)
         collectionsCache.synced.removeValue(forKey: name)
-        collectionsCache.published.removeValue(forKey: name)
+        // Deleting a collection is not the author's word that the paths it kept back may travel:
+        // the connector that carried one is still in another collection, or comes back by an
+        // import, a copy or an ingest. What Stop Publishing remembers, this remembers too.
+        rememberWhatWasKeptBack(of: name)
         pendingUpdates.removeValue(forKey: name)
         sourceErrors.removeValue(forKey: name)
         forgetSource(name)
@@ -1490,14 +1493,7 @@ public final class AppState: ObservableObject {
         } else {
             collectionsFile.collections[collection] = entry
         }
-        // The binding goes; what it knew about paths that must not travel does not. A collection
-        // published again, here or from another folder, still refuses them.
-        if let binding = collectionsCache.published.removeValue(forKey: collection) {
-            let remembered = CollectionsLocalCache.KeptRecord(
-                markedValues: binding.markedValues, releasedValues: binding.releasedValues,
-                publishedFolders: binding.publishedFolders.union([binding.folder]))
-            if !remembered.isEmpty { collectionsCache.kept[collection] = remembered }
-        }
+        rememberWhatWasKeptBack(of: collection)
         if publishError?.collection == collection { publishError = nil }
         persistStore()
         // ${COLLECTION_DIR} has no folder here any more: Claude gets the token as written, and
@@ -1598,11 +1594,20 @@ public final class AppState: ObservableObject {
                              reviewed: Set<String>? = nil, released: Set<String> = []) throws {
         let kept = keptBack(for: collection, reviewed: reviewed, released: released)
         if let found = document.findings(of: kept.values).first {
-            throw PublishIntentError.keptPathCarried(connector: found.connector, field: found.field)
+            throw PublishIntentError.keptPathCarried(connector: found.connector, field: fieldName(of: found, in: collection))
         }
         if let found = document.findings(of: kept.folders).first {
-            throw PublishIntentError.publishFolderCarried(connector: found.connector, field: found.field)
+            throw PublishIntentError.publishFolderCarried(connector: found.connector, field: fieldName(of: found, in: collection))
         }
+    }
+
+    /// What a finding's field is called to the author: the editor's own words where the connector
+    /// opens in the local form (`FieldName`), the document's name otherwise.
+    func fieldName(of found: KeptValueFinding, in collection: String) -> String {
+        guard let config = store.collections[collection]?.mcps[found.connector]?.config else {
+            return FieldName.document(found.field)
+        }
+        return FieldName.of(found.field, in: config, holding: found.value)
     }
 
     /// What this machine keeps back from `collection`'s document. `folders` are the collection's
@@ -1627,6 +1632,14 @@ public final class AppState: ObservableObject {
             let bound = binding.publishedFolders.union([binding.folder])
             if name == collection { folders.formUnion(bound) } else { values.formUnion(bound) }
         }
+        // Every mark in the sidecar's publish records, whichever machine made it: the sidecar
+        // travels with the master list, so a collection the author publishes from another machine
+        // of their own marks its paths here too. A colleague's collection is another matter — this
+        // machine never sees their sidecar — and their document reaches it as placeholders anyway.
+        for entry in collectionsFile.collections.values {
+            guard let record = entry.publish else { continue }
+            values.formUnion(record.intent.pathMarks.values.flatMap { $0.values.compactMap(\.value) })
+        }
         // What a stopped publish left behind keeps its say, so publishing the collection again —
         // or another collection carrying one of its paths — is still refused.
         for (name, remembered) in collectionsCache.kept {
@@ -1643,6 +1656,19 @@ public final class AppState: ObservableObject {
         // The collection's own folders are never let go: the token stands for them, and writing it
         // in their place is the one answer.
         return (values.subtracting(folders).subtracting(letGo), folders)
+    }
+
+    /// Takes the binding away and keeps what it knew about paths that must not travel: the marked
+    /// paths, the released ones and every folder it published into. A collection published again,
+    /// here or from another folder, still refuses them.
+    private func rememberWhatWasKeptBack(of collection: String) {
+        guard let binding = collectionsCache.published.removeValue(forKey: collection) else { return }
+        let remembered = CollectionsLocalCache.KeptRecord(
+            markedValues: binding.markedValues.union(collectionsCache.kept[collection]?.markedValues ?? []),
+            releasedValues: binding.releasedValues.union(collectionsCache.kept[collection]?.releasedValues ?? []),
+            publishedFolders: binding.publishedFolders.union([binding.folder])
+                .union(collectionsCache.kept[collection]?.publishedFolders ?? []))
+        if !remembered.isEmpty { collectionsCache.kept[collection] = remembered }
     }
 
     /// The collection this machine binds `folder` to: the one it publishes there, now or before,

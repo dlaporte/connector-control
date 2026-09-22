@@ -49,8 +49,9 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertNil(loaded.store.collections["Team"]?.mcps["installer"], "and only into the active one")
 
         try FileManager.default.removeItem(at: paths.masterStoreURL)
-        XCTAssertEqual(try service.loadAndReconcile(lastAppliedCollection: "Gone").store.mcps, [:],
-                       "a record naming a collection this store does not have takes nothing in")
+        XCTAssertEqual(Set(try service.loadAndReconcile(lastAppliedCollection: "Gone").store.mcps.keys),
+                       ["scoutbook", "aws-mcp", "service-now", "installer"],
+                       "a record naming a collection this store does not have renders nothing to leave alone")
     }
 
     func testEachBackupRecordsTheCollectionItWasAppliedFrom() throws {

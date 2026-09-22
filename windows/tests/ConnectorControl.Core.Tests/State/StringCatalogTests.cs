@@ -113,6 +113,10 @@ public class StringCatalogTests
         ["EditorModel.removeMessage"] = ["X"],
         ["EditorModel.removedOutsideMessage"] = ["X"],
         ["FlyoutModel.settingsNotSavedCaution"] = ["X"],
+        ["FieldName.argument"] = ["1"],
+        ["FieldName.document"] = ["X"],
+        ["FieldName.envValue"] = ["X"],
+        ["FieldName.hint"] = ["X"],
         ["ImportModel.addModeTitle"] = ["X"],
         ["ImportModel.collisionPickerLabel"] = ["X"],
         ["ImportModel.importButton"] = ["3"],
@@ -326,6 +330,14 @@ public class StringCatalogTests
         actual["EditorModel.urlHint"] = EditorModel.UrlHint;
         actual["EditorModel.whatCanIChange"] = EditorModel.WhatCanIChange;
         actual["EditorModel.whatCanIChangeAnswer"] = EditorModel.WhatCanIChangeAnswer;
+
+        // MARK: FieldName
+
+        actual["FieldName.argument"] = FieldName.Argument(1);
+        actual["FieldName.command"] = FieldName.Command;
+        actual["FieldName.document"] = FieldName.Document("X");
+        actual["FieldName.envValue"] = FieldName.EnvValue("X");
+        actual["FieldName.hint"] = FieldName.Hint("X");
 
         // MARK: FirstRunTip / FlyoutModel
 

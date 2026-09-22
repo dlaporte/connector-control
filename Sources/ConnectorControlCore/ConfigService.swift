@@ -96,12 +96,13 @@ public struct ConfigService: Sendable {
     /// is genuinely new — an installer's connector, a hand edit — and belongs to the collection the
     /// app is about to apply, whichever that is.
     ///
-    /// A record naming a collection the store no longer has leaves everything alone: its
-    /// connectors are no collection's to take in, and nothing here keeps their marked paths back.
+    /// A record naming a collection the store no longer has renders nothing to leave alone, so all
+    /// of it comes in: what that collection kept back is remembered whether it was stopped or
+    /// deleted, and nothing a hand added is dropped to keep it out.
     static func ingestible(_ servers: [String: JSONValue], lastApplied: String?, corrupt: Bool,
                            store: MasterStore) -> [String: JSONValue] {
         guard !corrupt, let lastApplied, lastApplied != store.activeCollection else { return servers }
-        guard let collection = store.collections[lastApplied] else { return [:] }
+        guard let collection = store.collections[lastApplied] else { return servers }
         let rendered = Set(collection.mcps.filter { $0.value.enabled }.keys)
         return servers.filter { !rendered.contains($0.key) }
     }

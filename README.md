@@ -331,10 +331,11 @@ machines that follow it, including the one that publishes it.
 - Restoring a backup of Claude's configuration puts it back into the
   collection it was taken from and makes that collection active. A backup
   whose collection is gone is refused: "This backup was taken from
-  “<name>”, which no longer exists. Nothing was restored." Only this
-  version records the collection, so a backup from an earlier one — which
-  is every backup you already have, and the first-run original — goes into
-  the active collection instead.
+  “<name>”, which no longer exists. Nothing was restored. Create a
+  collection named “<name>” again, and this backup goes back into it." Only
+  this version records the collection, so a backup from an earlier one —
+  which is every backup you already have, and the first-run original —
+  goes into the active collection instead.
 - An export of part of a published collection still carries that
   collection's identity, so your own app refuses to subscribe to it, as it
   refuses the published document itself.

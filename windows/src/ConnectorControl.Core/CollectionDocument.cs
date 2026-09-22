@@ -1045,7 +1045,7 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                 }
                 if (Copies(model, placement.Placed, shared) is [var copy, ..])
                 {
-                    throw new KeptPathCarriedException(connectorName, copy.Field);
+                    throw new KeptPathCarriedException(connectorName, FieldName.Of(copy.Field, config, copy.Text));
                 }
                 foreach (var (i, mark) in placement.Placed.OrderBy(p => p.Key))
                 {

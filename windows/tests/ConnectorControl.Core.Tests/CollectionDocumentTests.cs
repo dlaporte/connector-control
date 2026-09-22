@@ -243,13 +243,14 @@ public class CollectionDocumentTests
             [new("ledger", new HashSet<string>(["LEDGER"], StringComparer.Ordinal))],
             [new("ledger", Marks((0, Mark("/Users/d/ledger.js"))))],
             []);
+        // The field is named as the editor shows it, since each of these opens in the local form.
         var copies = new Dictionary<string, JsonValue>
         {
-            ["local.args[1]"] = Local("/Users/d/ledger.js", "/Users/d/ledger.js"),
-            ["local.command"] = JsonValue.Object(
+            [FieldName.Argument(2)] = Local("/Users/d/ledger.js", "/Users/d/ledger.js"),
+            [FieldName.Command] = JsonValue.Object(
                 ("command", JsonValue.String("/Users/d/ledger.js")),
                 ("args", JsonValue.Array([JsonValue.String("/Users/d/ledger.js")]))),
-            ["env.LEDGER.value"] = JsonValue.Object(
+            [FieldName.EnvValue("LEDGER")] = JsonValue.Object(
                 ("command", JsonValue.String("node")),
                 ("args", JsonValue.Array([JsonValue.String("/Users/d/ledger.js")])),
                 ("env", JsonValue.Object(("LEDGER", JsonValue.String("/Users/d/ledger.js"))))),

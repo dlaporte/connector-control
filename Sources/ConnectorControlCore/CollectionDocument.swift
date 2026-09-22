@@ -536,7 +536,8 @@ public struct CollectionDocument: Equatable, Sendable {
                 let placement = PublishIntent.placePathMarks(marks, in: model.args)
                 guard placement.unresolved.isEmpty else { throw PublishIntentError.pathMarkMoved(connector: connectorName) }
                 if let copy = CollectionDocument.copies(in: model, placed: placement.placed, shared: shared).first {
-                    throw PublishIntentError.keptPathCarried(connector: connectorName, field: copy.field)
+                    throw PublishIntentError.keptPathCarried(
+                        connector: connectorName, field: FieldName.of(copy.field, in: config, holding: copy.text))
                 }
                 for i in placement.placed.keys.sorted() {
                     guard let mark = placement.placed[i] else { continue }
