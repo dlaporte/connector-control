@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using ConnectorControl.Core.State;
@@ -18,13 +17,13 @@ public enum PublishDialogMode
 }
 
 /// <summary>
-/// The Publish sheet and, with one flag flipped, the Export sheet: layout, bindings, the two
-/// native pickers, and the refresh a row edit needs. Every rule and string is PublishModel's.
+/// The Publish sheet and, with one flag flipped, the Export sheet: layout, bindings and the two
+/// native pickers. Every rule and string is PublishModel's, and so is every refresh — a tick or a
+/// keystroke reaches the preview because the row it changed raises it, not because this window
+/// nudges a binding.
 /// </summary>
 public partial class PublishDialog : DialogWindow
 {
-    private readonly PropertyChangedEventHandler onModelChanged;
-
     public PublishDialog(PublishModel model, PublishDialogMode mode)
     {
         InitializeComponent();
@@ -33,21 +32,13 @@ public partial class PublishDialog : DialogWindow
         DataContext = model;
         Title = mode == PublishDialogMode.Publish
             ? model.SheetTitle
-            // Exporting borrows the menu item's own wording, which names the collection it writes.
-            : FlyoutModel.ExportTitleFor(model.Collection);
+            : PublishModel.ExportTitle(model.Collection);
         TitleText.Text = Title;
         FolderRow.Visibility = mode == PublishDialogMode.Publish ? Visibility.Visible : Visibility.Collapsed;
         PublishButton.Visibility = mode == PublishDialogMode.Publish ? Visibility.Visible : Visibility.Collapsed;
         ExportButton.Visibility = mode == PublishDialogMode.Export ? Visibility.Visible : Visibility.Collapsed;
         PublishButton.IsDefault = mode == PublishDialogMode.Publish;
         ExportButton.IsDefault = mode == PublishDialogMode.Export;
-        // The row lists are fixed for the life of the sheet, so a section with nothing in it is
-        // decided once here rather than bound to a count.
-        EnvSection.Visibility = model.EnvRows.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-        PathsSection.Visibility = model.PathRows.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-        onModelChanged = (_, _) => Refresh();
-        Model.PropertyChanged += onModelChanged;
-        Closed += (_, _) => Model.PropertyChanged -= onModelChanged;
     }
 
     public PublishModel Model { get; }
@@ -65,31 +56,6 @@ public partial class PublishDialog : DialogWindow
     {
         var dialog = new PublishDialog(model, mode);
         return Present(dialog, owner, () => dialog.Accepted);
-    }
-
-    /// <summary>
-    /// What the preview, the warnings and the Publish button say is derived from the rows and the
-    /// folder, and a row is a plain object that notifies nobody when a tick or a hint changes —
-    /// the Mac's SwiftUI re-reads the whole sheet for free, and here the sheet asks each of those
-    /// bindings to re-read. The document is a few kilobytes; rendering it per edit is what the Mac
-    /// does per keystroke too.
-    /// </summary>
-    private void Refresh()
-    {
-        PreviewBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
-        WarningList.GetBindingExpression(ItemsControl.ItemsSourceProperty)?.UpdateTarget();
-        PublishButton.GetBindingExpression(IsEnabledProperty)?.UpdateTarget();
-        FooterText.GetBindingExpression(TextBlock.TextProperty)?.UpdateTarget();
-    }
-
-    private void OnRowTicked(object sender, RoutedEventArgs e) => Refresh();
-
-    private void OnRowTyped(object sender, TextChangedEventArgs e)
-    {
-        // TextChanged and the binding's own source update both answer the same keystroke; pushing
-        // the value first is what makes the preview below agree with the field above it.
-        ((TextBox)sender).GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
-        Refresh();
     }
 
     private void OnChooseFolder(object sender, RoutedEventArgs e)
@@ -124,7 +90,12 @@ public partial class PublishDialog : DialogWindow
         {
             Accepted = true;
             Close();
+            return;
         }
+        // A first publish mints the collection's origin even when the write it then attempts
+        // fails, and the footer is the one line that shows it. It derives from no row, so nothing
+        // raises it; the sheet the user is left looking at asks for it once, here.
+        FooterText.GetBindingExpression(TextBlock.TextProperty)?.UpdateTarget();
     }
 
     private void ShowFailure(string? failure)

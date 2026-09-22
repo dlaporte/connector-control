@@ -31,13 +31,13 @@ struct PublishSheetView: View {
                 folderRow
             }
 
-            if !model.envRows.isEmpty || !model.pathRows.isEmpty {
+            if model.hasEnvRows || model.hasPathRows {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
-                        if !model.envRows.isEmpty {
+                        if model.hasEnvRows {
                             section(PublishModel.envSectionTitle) { envRows }
                         }
-                        if !model.pathRows.isEmpty {
+                        if model.hasPathRows {
                             section(PublishModel.pathsSectionTitle) { pathRows }
                         }
                     }
@@ -86,7 +86,7 @@ struct PublishSheetView: View {
     /// Publishing names the collection it binds; exporting borrows the menu item's own wording,
     /// which names the collection it writes once.
     private var title: String {
-        mode == .publish ? model.title : PopoverModel.exportTitleFor(model.collection)
+        mode == .publish ? model.title : PublishModel.exportTitle(model.collection)
     }
 
     // MARK: folder
@@ -100,7 +100,7 @@ struct PublishSheetView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
-                Button(PopoverModel.chooseFolderButton) { chooseFolder() }
+                Button(PublishModel.chooseFolderButton) { chooseFolder() }
             }
             Text(model.folderLine)
                 .font(.caption)
@@ -128,6 +128,14 @@ struct PublishSheetView: View {
                     .foregroundStyle(.secondary)
                 Text(row.name)
                     .font(.system(.callout, design: .monospaced))
+                // The value the tick would publish, so the decision is made with it in view.
+                // The model keeps it whole and leaves the eliding here: one line, middle-truncated,
+                // because a credential is long and the name beside it must stay readable.
+                Text(row.value)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 Spacer()
                 Toggle(PublishModel.shareValueLabel, isOn: $row.share)
                     .toggleStyle(.checkbox)
@@ -150,11 +158,13 @@ struct PublishSheetView: View {
         ForEach($model.pathRows) { $row in
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
-                    // The tick carries no label of its own: the row it is on says what marking it
+                    // The tick carries no visible label: the row it is on says what marking it
                     // would replace, and the name and hint fields appear under it once it is on.
+                    // VoiceOver gets the sentence the label would have been.
                     Toggle("", isOn: $row.marked)
                         .toggleStyle(.checkbox)
                         .labelsHidden()
+                        .accessibilityLabel(PublishModel.markPathLabel)
                     Text(row.connector)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -215,7 +225,7 @@ struct PublishSheetView: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer()
-            Button(ImportModel.cancelButton) { onDone() }
+            Button(PublishModel.cancelButton) { onDone() }
             if mode == .publish {
                 Button(PublishModel.publishButton) { publish() }
                     .keyboardShortcut(.defaultAction)

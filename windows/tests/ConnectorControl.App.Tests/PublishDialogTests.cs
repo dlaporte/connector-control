@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
 using ConnectorControl.Core;
@@ -35,15 +34,10 @@ public class PublishDialogTests
     }
 
     /// <summary>
-    /// A click, in the two halves WPF splits it into: the state the tick lands in, and the Click
-    /// the sheet listens to. Setting IsChecked on its own leaves the preview below stale, which is
-    /// the one thing about this sheet a test must not hide.
+    /// A tick, moved through the control the way a click moves it. Nothing else is needed: the
+    /// two-way binding writes the row, and the row's own notification is what reaches the preview.
     /// </summary>
-    private static void ClickTick(CheckBox tick, bool on)
-    {
-        tick.IsChecked = on;
-        tick.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, tick));
-    }
+    private static void ClickTick(CheckBox tick, bool on) => tick.IsChecked = on;
 
     /// <summary>A row list generates no containers until the window has had a real layout pass.</summary>
     private static PublishDialog Shown(PublishModel model)
@@ -73,6 +67,8 @@ public class PublishDialogTests
             Assert.False(tick.IsChecked);
             Assert.Equal(PublishModel.HintPlaceholder, hint.Tag);
             Assert.Equal(Visibility.Visible, hint.Visibility);
+            // The tick is a decision about this value, so the row shows it.
+            Assert.Equal("sk-live-secret", RowElements.Find<TextBlock>(window.EnvList, row, "ValueText").Text);
 
             hint.Text = "the ledger dashboard ▸ API tokens";
             Assert.Equal("the ledger dashboard ▸ API tokens", row.Hint);
@@ -193,7 +189,7 @@ public class PublishDialogTests
             // folder row and nothing to wait for.
             var export = new PublishDialog(new PublishModel(state, state.ActiveCollection), PublishDialogMode.Export);
             Layout(export);
-            Assert.Equal(FlyoutModel.ExportTitleFor(state.ActiveCollection), export.Title);
+            Assert.Equal(PublishModel.ExportTitle(state.ActiveCollection), export.Title);
             Assert.Equal(export.Title, export.TitleText.Text);
             Assert.Equal(Visibility.Collapsed, export.FolderRow.Visibility);
             Assert.Equal(Visibility.Collapsed, export.PublishButton.Visibility);

@@ -15,7 +15,7 @@
       <StackPanel Orientation="Horizontal">
         <TextBlock x:Name="FolderText" Text="{Binding Folder}" FontFamily="{StaticResource MonoFont}" FontSize="12"
                    MaxWidth="420" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,8,0" />
-        <Button x:Name="ChooseFolderButton" Content="{x:Static state:FlyoutModel.ChooseFolderButton}" MinWidth="120" Click="OnChooseFolder" />
+        <Button x:Name="ChooseFolderButton" Content="{x:Static state:PublishModel.ChooseFolderButton}" MinWidth="120" Click="OnChooseFolder" />
       </StackPanel>
       <TextBlock Text="{Binding FolderSentence}" Style="{StaticResource CaptionText}" Margin="0,6,0,0" />
     </StackPanel>
@@ -23,7 +23,7 @@
     <ScrollViewer MaxHeight="210" VerticalScrollBarVisibility="Auto">
       <StackPanel>
         <!-- Environment values: a tick per variable, and a hint for every one that stays here. -->
-        <StackPanel x:Name="EnvSection">
+        <StackPanel x:Name="EnvSection" Visibility="{Binding HasEnvRows, Converter={StaticResource Vis}}">
           <TextBlock Text="{x:Static state:PublishModel.EnvSectionTitle}" Style="{StaticResource SectionTitle}" />
           <ItemsControl x:Name="EnvList" ItemsSource="{Binding EnvRows}" Margin="0,0,0,10">
             <ItemsControl.ItemTemplate>
@@ -31,17 +31,24 @@
                 <Grid Margin="0,0,0,6">
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="210" />
                   </Grid.ColumnDefinitions>
                   <TextBlock Text="{Binding Connector}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" />
                   <TextBlock Grid.Column="1" Text="{Binding Name}" FontFamily="{StaticResource MonoFont}" FontSize="12"
-                             TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="10,0" />
-                  <CheckBox x:Name="ShareTick" Grid.Column="2" Content="{x:Static state:PublishModel.ShareValueLabel}" FontSize="12"
-                            IsChecked="{Binding Share, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,10,0" Click="OnRowTicked" />
-                  <TextBox x:Name="HintBox" Grid.Column="3" Text="{Binding Hint, UpdateSourceTrigger=PropertyChanged}" FontSize="12"
-                           Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.HintPlaceholder}" TextChanged="OnRowTyped" />
+                             VerticalAlignment="Center" Margin="10,0" />
+                  <!-- The value the tick would publish, so the decision is made with it in view. The
+                       model keeps it whole and leaves the eliding here: a credential is long and the
+                       name beside it must stay readable. -->
+                  <TextBlock x:Name="ValueText" Grid.Column="2" Text="{Binding Value}" Style="{StaticResource CaptionText}"
+                             FontFamily="{StaticResource MonoFont}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                             VerticalAlignment="Center" Margin="0,0,10,0" />
+                  <CheckBox x:Name="ShareTick" Grid.Column="3" Content="{x:Static state:PublishModel.ShareValueLabel}" FontSize="12"
+                            IsChecked="{Binding Share, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                  <TextBox x:Name="HintBox" Grid.Column="4" Text="{Binding Hint, UpdateSourceTrigger=PropertyChanged}" FontSize="12"
+                           Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.HintPlaceholder}" />
                 </Grid>
                 <DataTemplate.Triggers>
                   <!-- A shared value needs no hint: its own value is what travels. The condition is
@@ -59,7 +66,7 @@
 
         <!-- Machine-specific paths: a tick, and under it the placeholder name and hint every
              recipient fills in for themselves. -->
-        <StackPanel x:Name="PathsSection">
+        <StackPanel x:Name="PathsSection" Visibility="{Binding HasPathRows, Converter={StaticResource Vis}}">
           <TextBlock Text="{x:Static state:PublishModel.PathsSectionTitle}" Style="{StaticResource SectionTitle}" />
           <ItemsControl x:Name="PathList" ItemsSource="{Binding PathRows}">
             <ItemsControl.ItemTemplate>
@@ -72,8 +79,10 @@
                       <ColumnDefinition Width="Auto" />
                       <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <!-- The tick carries no label: the row it sits on says what marking it replaces. -->
-                    <CheckBox x:Name="MarkTick" IsChecked="{Binding Marked, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,8,0" Click="OnRowTicked" />
+                    <!-- The tick carries no visible label: the row it sits on says what marking it
+                         replaces. Narrator gets the sentence the label would have been. -->
+                    <CheckBox x:Name="MarkTick" IsChecked="{Binding Marked, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,8,0"
+                              AutomationProperties.Name="{x:Static state:PublishModel.MarkPathLabel}" />
                     <TextBlock Grid.Column="1" Text="{Binding Connector}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="2" Text="{Binding Pointer}" Style="{StaticResource CaptionText}" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center" Margin="8,0" />
                     <TextBlock Grid.Column="3" Text="{Binding Value}" FontFamily="{StaticResource MonoFont}" FontSize="12"
@@ -82,9 +91,9 @@
                   <StackPanel x:Name="MarkedFields" Orientation="Horizontal" Margin="28,6,0,0"
                               Visibility="{Binding IsChecked, ElementName=MarkTick, Converter={StaticResource Vis}}">
                     <TextBox x:Name="PathNameBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="150" FontSize="12"
-                             Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.PathNamePlaceholder}" TextChanged="OnRowTyped" />
+                             Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.PathNamePlaceholder}" />
                     <TextBox x:Name="PathHintBox" Text="{Binding Hint, UpdateSourceTrigger=PropertyChanged}" Width="210" FontSize="12" Margin="8,0,0,0"
-                             Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.HintPlaceholder}" TextChanged="OnRowTyped" />
+                             Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.HintPlaceholder}" />
                   </StackPanel>
                 </StackPanel>
               </DataTemplate>
@@ -126,7 +135,7 @@
                  FontFamily="{StaticResource MonoFont}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                  HorizontalAlignment="Left" VerticalAlignment="Center" Margin="0,0,12,0" />
       <StackPanel Grid.Column="1" Style="{StaticResource DialogButtons}">
-        <Button Content="{x:Static state:ImportModel.CancelButton}" MinWidth="80" IsCancel="True" />
+        <Button Content="{x:Static state:PublishModel.CancelButton}" MinWidth="80" IsCancel="True" />
         <Button x:Name="PublishButton" Content="{x:Static state:PublishModel.PublishButton}" MinWidth="90" Margin="8,0,0,0"
                 IsEnabled="{Binding CanPublish}" Style="{DynamicResource AccentButtonStyle}" Click="OnPublish" />
         <Button x:Name="ExportButton" Content="{x:Static state:PublishModel.ExportButton}" MinWidth="90" Margin="8,0,0,0"
