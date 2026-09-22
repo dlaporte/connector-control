@@ -48,10 +48,15 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public static string ExportButton(int count) => $"Export {count}…";
 
     /// <summary>
-    /// The sidebar's chain glyph. The same sentence the flyout's chip shows about the same fact,
-    /// so it borrows that wording rather than keeping a second copy of it.
+    /// The sidebar's chain glyph, or null when there is no chain to explain: a local collection
+    /// has no source, and a synced one whose file is still to be found has no path to name. The
+    /// sentence is the flyout chip's, borrowed rather than copied — one fact, one wording.
+    ///
+    /// Takes the item rather than the path so that "which items have a tooltip" stays here; a
+    /// converter over an optional path would be the same rule, kept somewhere worse.
     /// </summary>
-    public static string SyncedGlyphTooltip(string source) => FlyoutModel.SourceTooltipFormat(source);
+    public static string? SyncedGlyphTooltip(Item item) =>
+        item.Source is { } source ? FlyoutModel.SourceTooltipFormat(source) : null;
 
     public static string LocalType(string command) => $"local · {command}";
 
@@ -69,8 +74,15 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// One collection in the left pane. A published collection carries no mark of its own there —
     /// IsPublished is what the detail line says, not a sidebar glyph.
     /// </summary>
+    /// <param name="Source">
+    /// Where a synced collection's document is, as far as this machine knows: the path it is
+    /// bound to, or the name the sidecar recorded while the file is still to be found. Null for
+    /// a local collection, which has no source, and for a synced one the sidecar never named.
+    /// The same two steps <c>FlyoutModel.SourceTooltip</c> takes, so the sidebar's chain and the
+    /// chip cannot name the same collection differently.
+    /// </param>
     public sealed record Item(string Name, CollectionKind Kind, bool IsActive, bool IsPublished,
-        bool HasPendingUpdate, bool IsLocated)
+        bool HasPendingUpdate, bool IsLocated, string? Source = null)
     {
         public string Id => Name;
     }
@@ -162,9 +174,21 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             var active = state.ActiveCollection;
             return state.CollectionNames
                 .Select(name => new Item(name, state.KindOf(name), name == active, state.IsPublished(name),
-                    state.PendingUpdates.ContainsKey(name), state.IsLocated(name)))
+                    state.PendingUpdates.ContainsKey(name), state.IsLocated(name), SourceOf(name)))
                 .ToList();
         }
+    }
+
+    /// <summary>Only a synced collection has a document to point at; see <c>Item.Source</c> for the two steps.</summary>
+    private string? SourceOf(string collection)
+    {
+        if (!state.IsSynced(collection))
+        {
+            return null;
+        }
+        var found = state.SourceBinding(collection)?.Path
+            ?? (state.CollectionsFile.Collections.TryGetValue(collection, out var entry) ? entry.FileName : null);
+        return string.IsNullOrEmpty(found) ? null : found;
     }
 
     public IReadOnlyList<Row> Rows
@@ -404,11 +428,6 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>The names the export sheet writes, in the order the rows show them.</summary>
     public IReadOnlyList<string> ExportIntentForChecked() => CheckedNames;
 
-    /// <summary>
-    /// What the save dialog opens with. The same name a published document would take, so an
-    /// export and a publish of one collection cannot be told apart by their file names.
-    /// </summary>
-    public string SuggestedExportFileName => Slug.Make(SelectedCollection) + "." + CollectionDocument.FileExtension;
 
     // MARK: collection actions
 

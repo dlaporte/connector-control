@@ -30,9 +30,12 @@ struct ConnectorControlApp: App {
         }
         .windowResizability(.contentMinSize)
 
-        // One window, no value: which collection it shows is its own selection, and what the
-        // popover wants of it travels through AppState.
-        WindowGroup(CollectionsModel.windowTitle, id: CollectionsWindowView.windowID) {
+        // A Window, not a WindowGroup: openWindow(id:) on a group opens a second copy, and two
+        // Collections windows would hold two models racing to consume one request. One unique
+        // window, re-activated when it is already open, is what the Windows registry keeps too.
+        // Which collection it shows is its own selection; what the popover wants of it travels
+        // through AppState.
+        Window(CollectionsModel.windowTitle, id: CollectionsWindowView.windowID) {
             CollectionsWindowView(state: state, dialogs: services.dialogs)
         }
         .defaultSize(width: 760, height: 520)

@@ -3,11 +3,14 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:core="clr-namespace:ConnectorControl.Core;assembly=ConnectorControl.Core"
         xmlns:state="clr-namespace:ConnectorControl.Core.State;assembly=ConnectorControl.Core"
+        xmlns:views="clr-namespace:ConnectorControl.App.Views"
         Title="{x:Static state:CollectionsModel.WindowTitle}"
         Width="760" Height="520" MinWidth="720" MinHeight="480"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ApplicationBackgroundBrush}">
   <Window.Resources>
+    <!-- The chain's tooltip, which the model answers from the item itself. -->
+    <views:CollectionSourceTooltipConverter x:Key="SourceTooltip" />
     <Style x:Key="ToolbarButton" TargetType="Button">
       <Setter Property="Padding" Value="10,4" />
       <Setter Property="Margin" Value="0,0,6,0" />
@@ -52,9 +55,12 @@
       </Style.Triggers>
     </Style>
     <!-- The lock leading a read-only row, dimmed so it reads as a mark rather than a control. A
-         private-use glyph reads as nothing, so the row's name is what a screen reader says. -->
+         private-use glyph reads as nothing, so the model's sentence is what a screen reader says
+         and what the pointer uncovers. -->
     <Style x:Key="RowLock" TargetType="TextBlock">
       <Setter Property="Text" Value="{StaticResource LockGlyph}" />
+      <Setter Property="ToolTip" Value="{x:Static state:CollectionsModel.LockedGlyphTooltip}" />
+      <Setter Property="AutomationProperties.Name" Value="{x:Static state:CollectionsModel.LockedGlyphTooltip}" />
       <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
       <Setter Property="FontSize" Value="11" />
       <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -89,8 +95,14 @@
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
 
-    <!-- Toolbar: what can be done to collections in general on the left, a new one on the right. -->
+    <!-- Toolbar: what can be done to collections in general on the left, a new one on the right.
+         Two columns, so the six on the left run out of room before they reach New… — at a large
+         text scale one cell would let them overrun it. -->
     <Grid Margin="0,0,0,8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
       <StackPanel Orientation="Horizontal">
         <Button x:Name="ImportButton" Style="{StaticResource ToolbarButton}"
                 Content="{x:Static state:CollectionsModel.ImportButton}" Click="OnImport" />
@@ -108,22 +120,47 @@
                 Content="{x:Static state:CollectionsModel.MakeLocalCopyButton}"
                 IsEnabled="{Binding CanMakeLocalCopy}" Click="OnMakeLocalCopy" />
       </StackPanel>
-      <Button x:Name="NewButton" Style="{StaticResource ToolbarButton}" HorizontalAlignment="Right" Margin="6,0,0,0"
-              Content="{x:Static state:CollectionsModel.NewButton}" Click="OnNew" />
+      <Button x:Name="NewButton" Grid.Column="1" Style="{StaticResource ToolbarButton}" Margin="6,0,0,0"
+              AutomationProperties.Name="{x:Static state:CollectionsModel.NewButton}" Click="OnNew">
+        <!-- The plus is the mockup's; the words are the model's. -->
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="12"
+                     VerticalAlignment="Center" Margin="0,0,6,0" />
+          <TextBlock Text="{x:Static state:CollectionsModel.NewButton}" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
     </Grid>
 
     <!-- Two panes: the collections, and the selected one. -->
     <Grid Grid.Row="1">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="200" />
-        <ColumnDefinition Width="*" />
+        <!-- Resizable, as the Mac's split view is: a long collection name is otherwise elided
+             here for good. -->
+        <ColumnDefinition x:Name="SidebarColumn" Width="200" MinWidth="140" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" MinWidth="380" />
       </Grid.ColumnDefinitions>
 
       <!-- Selecting a collection only shows it. Making it the active one is a double-click, which
            is what this window has to offer: every labelled route to it is a flyout menu item. -->
       <ListBox x:Name="Sidebar" ItemsSource="{Binding Items}"
-               SelectedValuePath="Name" SelectedValue="{Binding Selected}"
-               MouseDoubleClick="OnActivate">
+               SelectedValuePath="Name" SelectedValue="{Binding Selected}">
+        <!-- Both on the container rather than inside the template: a context menu raised from the
+             keyboard is looked for on the focused ListBoxItem, not on what it holds, and a
+             double-click on the list itself would answer for the empty space under the items. -->
+        <ListBox.ItemContainerStyle>
+          <Style TargetType="ListBoxItem">
+            <EventSetter Event="MouseDoubleClick" Handler="OnActivate" />
+            <Setter Property="ContextMenu">
+              <Setter.Value>
+                <ContextMenu>
+                  <MenuItem x:Name="MakeActiveItem" Header="{x:Static state:CollectionsModel.MakeActiveAction}"
+                            Click="OnMakeActive" />
+                </ContextMenu>
+              </Setter.Value>
+            </Setter>
+          </Style>
+        </ListBox.ItemContainerStyle>
         <ListBox.ItemTemplate>
           <DataTemplate>
             <Grid>
@@ -133,7 +170,9 @@
                 <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
               <TextBlock x:Name="SidebarNameText" Style="{StaticResource SidebarName}" Text="{Binding Name}" />
-              <TextBlock Grid.Column="1" x:Name="SidebarChainGlyph" Style="{StaticResource SidebarChain}" />
+              <TextBlock Grid.Column="1" x:Name="SidebarChainGlyph" Style="{StaticResource SidebarChain}"
+                         ToolTip="{Binding Converter={StaticResource SourceTooltip}}"
+                         AutomationProperties.Name="{Binding Converter={StaticResource SourceTooltip}}" />
               <Ellipse Grid.Column="2" x:Name="SidebarPendingDot" Style="{StaticResource PendingDot}" Margin="6,0,0,0"
                        Visibility="{Binding HasPendingUpdate, Converter={StaticResource Vis}}" />
             </Grid>
@@ -141,7 +180,10 @@
         </ListBox.ItemTemplate>
       </ListBox>
 
-      <Grid Grid.Column="1" Margin="10,0,0,0">
+      <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                    Background="Transparent" />
+
+      <Grid Grid.Column="2" Margin="5,0,0,0">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
@@ -211,7 +253,8 @@
                                 IsChecked="{Binding Enabled, Mode=OneWay}" Click="OnRowSwitched"
                                 VerticalAlignment="Center" />
                   <Button x:Name="RowEdit" Grid.Column="5" Style="{StaticResource IconButton}" Content="&#xE70F;"
-                          AutomationProperties.Name="{Binding Name}" Click="OnEdit" />
+                          ToolTip="{x:Static state:CollectionsModel.EditTooltip}"
+                          AutomationProperties.Name="{x:Static state:CollectionsModel.EditTooltip}" Click="OnEdit" />
                 </Grid>
               </DataTemplate>
             </ItemsControl.ItemTemplate>

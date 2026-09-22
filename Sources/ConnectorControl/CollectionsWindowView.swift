@@ -79,11 +79,12 @@ struct CollectionsWindowView: View {
         .toolbar { toolbar }
         .sheet(item: $sheet) { present($0) }
         .alert(Text(shownError ?? ""), isPresented: errorShowing) { }
-        .onChange(of: model.lastError) { _, error in shownError = error }
-        // On appear and on every change, because WindowGroup keeps this window and brings it
-        // forward: one that read the request only on appear would strand every later one.
-        .onAppear { consumeRequest() }
-        .onChange(of: state.collectionsWindowRequest) { _, _ in consumeRequest() }
+        // On appear and on every change, because the window stays open and is brought forward:
+        // one that read the request only on appear would strand every later one. Both go through
+        // the next turn of the main queue, so the panel or sheet a request opens appears over a
+        // window that is already on screen and frontmost rather than inside its first layout.
+        .onAppear { scheduleRequest() }
+        .onChange(of: state.collectionsWindowRequest) { _, _ in scheduleRequest() }
     }
 
     // MARK: - Sidebar
@@ -98,22 +99,33 @@ struct CollectionsWindowView: View {
                     // A collection whose document this machine has never found is still usable,
                     // and still shows its connectors; the dimmed name says it is not in step.
                     .foregroundStyle(item.isLocated ? .primary : .secondary)
+                // The marks sit at the trailing edge, where the mockup and the Windows sidebar
+                // put them, rather than trailing the name at whatever width it happens to be.
+                Spacer(minLength: 6)
                 if item.kind == .synced {
                     Image(systemName: "link")
                         .imageScale(.small)
                         .foregroundStyle(.secondary)
+                        .help(CollectionsModel.syncedGlyphTooltip(item) ?? "")
+                        .accessibilityLabel(CollectionsModel.syncedGlyphTooltip(item) ?? "")
                 }
                 if item.hasPendingUpdate {
                     Circle()
                         .fill(.orange)
                         .frame(width: 6, height: 6)
                 }
-                Spacer(minLength: 0)
             }
-            // Selecting a collection only shows it. Making it the active one is a double-click,
-            // which is what the window has to offer: every labelled route to it — the chip menu's
-            // items — belongs to the popover, and this window owns no wording of its own.
-            .onTapGesture(count: 2) { model.switchTo(item.name) }
+            // The row answers across its whole width, not only over its text.
+            .contentShape(Rectangle())
+            // Selecting a collection only shows it; making it the active one is a second action.
+            // The double-click is the quick one — simultaneous, so it does not swallow the single
+            // click that selects — and the context menu is the labelled route that a keyboard
+            // reaches and a screen reader reads out.
+            .simultaneousGesture(TapGesture(count: 2).onEnded { act { model.switchTo(item.name) } })
+            .contextMenu {
+                Button(CollectionsModel.makeActiveAction) { act { model.switchTo(item.name) } }
+                    .disabled(item.isActive)
+            }
         }
         .navigationSplitViewColumnWidth(min: 160, ideal: CollectionsWindowView.sidebarWidth)
     }
@@ -170,6 +182,8 @@ struct CollectionsWindowView: View {
                             .imageScale(.small)
                             .foregroundStyle(.secondary)
                             .opacity(CollectionsWindowView.lockOpacity)
+                            .help(CollectionsModel.lockedGlyphTooltip)
+                            .accessibilityLabel(CollectionsModel.lockedGlyphTooltip)
                     } else {
                         Toggle("", isOn: checkedBinding(row))
                             .toggleStyle(.checkbox)
@@ -209,7 +223,8 @@ struct CollectionsWindowView: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.accessoryBar)
-                .accessibilityLabel(row.name)
+                .help(CollectionsModel.editTooltip)
+                .accessibilityLabel(CollectionsModel.editTooltip)
             }
             .padding(.vertical, 2)
         }
@@ -222,20 +237,20 @@ struct CollectionsWindowView: View {
     /// is here only while its flag says the collection can take it.
     private var actionLinks: some View {
         HStack(spacing: 14) {
-            Button(CollectionsModel.renameAction) { model.rename() }
-            Button(CollectionsModel.deleteAction) { model.delete() }
+            Button(CollectionsModel.renameAction) { act { model.rename() } }
+            Button(CollectionsModel.deleteAction) { act { model.delete() } }
                 .disabled(!model.canDelete)
             // Two independent flags, not two halves of one: a collection whose document another
             // machine publishes can be published from this one as well, and both links belong to
             // it — the toolbar's Publish… follows the same flag.
             if model.canPublish {
-                Button(CollectionsModel.publishButton) { sheet = .publish(publishModel()) }
+                Button(CollectionsModel.publishButton) { show(.publish(publishModel())) }
             }
             if model.canStopPublishing {
-                Button(CollectionsModel.stopPublishingAction) { model.stopPublishing() }
+                Button(CollectionsModel.stopPublishingAction) { act { model.stopPublishing() } }
             }
             if model.canStopSyncing {
-                Button(CollectionsModel.stopSyncingAction) { model.stopSyncing() }
+                Button(CollectionsModel.stopSyncingAction) { act { model.stopSyncing() } }
             }
             Spacer(minLength: 0)
         }
@@ -249,17 +264,25 @@ struct CollectionsWindowView: View {
         ToolbarItemGroup {
             Button(CollectionsModel.importButton) { openDocument(keepInSync: false) }
             Button(CollectionsModel.subscribeButton) { openDocument(keepInSync: true) }
-            Button(CollectionsModel.exportButton(model.checkedNames.count)) { sheet = .export(publishModel()) }
+            Button(CollectionsModel.exportButton(model.checkedNames.count)) { show(.export(exportModel())) }
                 .disabled(!model.canExport)
-            Button(CollectionsModel.publishButton) { sheet = .publish(publishModel()) }
+            Button(CollectionsModel.publishButton) { show(.publish(publishModel())) }
                 .disabled(!model.canPublish)
-            Button(CollectionsModel.refreshButton) { model.refresh() }
+            Button(CollectionsModel.refreshButton) { act { model.refresh() } }
                 .disabled(!model.canRefresh)
-            Button(CollectionsModel.makeLocalCopyButton) { model.makeLocalCopy() }
+            Button(CollectionsModel.makeLocalCopyButton) { act { model.makeLocalCopy() } }
                 .disabled(!model.canMakeLocalCopy)
         }
         ToolbarItem(placement: .primaryAction) {
-            Button(CollectionsModel.newButton) { model.create() }
+            // The plus is the mockup's; the words are the model's.
+            Button {
+                act { model.create() }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "plus")
+                    Text(CollectionsModel.newButton)
+                }
+            }
         }
     }
 
@@ -290,7 +313,31 @@ struct CollectionsWindowView: View {
         PublishModel(state: state, collection: model.selected ?? "")
     }
 
+    /// The Export sheet writes only what is ticked, which is what the count beside the button
+    /// says and what `canExport` waits for. The Publish sheet above takes no subset: publishing
+    /// binds the whole collection.
+    private func exportModel() -> PublishModel {
+        PublishModel(state: state, collection: model.selected ?? "",
+                     connectors: model.exportIntentForChecked())
+    }
+
     // MARK: - Requests
+
+    /// The next turn of the main queue, so a request that arrives with the window — `onAppear`
+    /// runs inside its first layout — does not put a modal panel in front of a window that is
+    /// not on screen yet.
+    private func scheduleRequest() {
+        Task { @MainActor in consumeRequest() }
+    }
+
+    /// Puts a sheet up, replacing whatever is already there. SwiftUI will not swap one item for
+    /// another in a single turn: the open sheet has to be dismissed first, and the new one
+    /// presented once that has taken effect.
+    private func show(_ next: Sheet) {
+        guard sheet != nil else { sheet = next; return }
+        sheet = nil
+        Task { @MainActor in sheet = next }
+    }
 
     /// What the popover asked for, taken so no other window can act on it twice.
     private func consumeRequest() {
@@ -301,10 +348,12 @@ struct CollectionsWindowView: View {
             // The menu item names the collection that is active now, not whichever one this
             // window last had selected.
             model.selected = state.activeCollection
-            sheet = .export(publishModel())
+            // The menu item offers the whole of the active collection, and a selection that has
+            // just moved carries no ticks: an empty subset would write an empty document.
+            show(.export(PublishModel(state: state, collection: state.activeCollection)))
         case .review(let collection):
             model.selected = collection
-            sheet = .review(ReviewModel(state: state, collection: collection))
+            show(.review(ReviewModel(state: state, collection: collection)))
         case nil:
             break
         }
@@ -316,7 +365,7 @@ struct CollectionsWindowView: View {
     private func runBannerAction() {
         if model.bannerAction() {
             if let collection = model.selected {
-                sheet = .review(ReviewModel(state: state, collection: collection))
+                show(.review(ReviewModel(state: state, collection: collection)))
             }
             return
         }
@@ -336,7 +385,7 @@ struct CollectionsWindowView: View {
     /// sheet's question rather than the picker's.
     private func openDocument(keepInSync: Bool) {
         guard let path = chooseDocument() else { return }
-        sheet = .importFile(importModel(path: path, keepInSync: keepInSync))
+        show(.importFile(importModel(path: path, keepInSync: keepInSync)))
     }
 
     private func chooseDocument() -> String? {
@@ -367,7 +416,15 @@ struct CollectionsWindowView: View {
     }
 
     private func enabledBinding(_ row: CollectionsModel.Row) -> Binding<Bool> {
-        Binding(get: { row.enabled }, set: { model.setEnabled(row.name, $0) })
+        Binding(get: { row.enabled }, set: { on in act { model.setEnabled(row.name, on) } })
+    }
+
+    /// One collection action and the refusal it may leave behind, read straight after the call
+    /// rather than watched: `lastError` set twice to the same sentence is not a change, and a
+    /// second identical refusal has to be shown too. The Windows mirror's `Act` does the same.
+    private func act(_ action: () -> Void) {
+        action()
+        shownError = model.lastError
     }
 
     /// The alert's own switch. Dismissing it drops the copy this view holds; the model's

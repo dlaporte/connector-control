@@ -436,22 +436,6 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.items.first { $0.isActive }?.name, "Spare Parts")
     }
 
-    // MARK: - Export
-
-    func testTheSuggestedExportFileNameSlugsTheSelectedCollection() throws {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Acme Data Team!"))
-        state.switchCollection(to: "Default")
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-
-        XCTAssertEqual(model.suggestedExportFileName, "default.json")
-        model.selected = "Acme Data Team!"
-        XCTAssertEqual(model.suggestedExportFileName, "acme-data-team.json",
-                       "the same name the published document would take")
-    }
-
     // MARK: - Banner strip
 
     /// Default, active and published into a real folder; Team, synced with its file still to be
@@ -546,10 +530,40 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(CollectionsModel.editTooltip, "Edit")
         XCTAssertEqual(CollectionsModel.makeActiveAction, "Make Active")
         XCTAssertEqual(CollectionsModel.lockedGlyphTooltip, "Read-only: synced from the collection's author")
+    }
+
+    func testTheSidebarChainNamesTheDocumentThisMachineReads() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        state.switchCollection(to: "Default")
+        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]),
+                 cache: CollectionsLocalCache(synced: ["Team": bound("/Acme/mcp/team.json")], published: [:]))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+
+        let team = try XCTUnwrap(model.items.first { $0.name == "Team" })
+        XCTAssertEqual(team.source, "/Acme/mcp/team.json")
         // One sentence about one fact: the chain says the same here as on the popover's chip.
-        XCTAssertEqual(CollectionsModel.syncedGlyphTooltip("/Acme/mcp/team.json"),
+        XCTAssertEqual(CollectionsModel.syncedGlyphTooltip(team), "Synced from /Acme/mcp/team.json")
+        XCTAssertEqual(CollectionsModel.syncedGlyphTooltip(team),
                        PopoverModel.sourceTooltipFormat("/Acme/mcp/team.json"))
-        XCTAssertEqual(CollectionsModel.syncedGlyphTooltip("/Acme/mcp/team.json"),
-                       "Synced from /Acme/mcp/team.json")
+
+        // A local collection has no source, so no chain and nothing to say about one.
+        let local = try XCTUnwrap(model.items.first { $0.name == "Default" })
+        XCTAssertNil(local.source)
+        XCTAssertNil(CollectionsModel.syncedGlyphTooltip(local))
+
+        // Synced but never found: the sidecar's file name is what the chain can still name, the
+        // same fallback the popover's chip takes, so the two never disagree about one collection.
+        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        let unlocated = try XCTUnwrap(model.items.first { $0.name == "Team" })
+        XCTAssertFalse(unlocated.isLocated)
+        XCTAssertEqual(unlocated.source, "team.json")
+        XCTAssertEqual(CollectionsModel.syncedGlyphTooltip(unlocated), "Synced from team.json")
+        state.switchCollection(to: "Team")
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+        XCTAssertEqual(CollectionsModel.syncedGlyphTooltip(unlocated), popover.sourceTooltip)
     }
 }

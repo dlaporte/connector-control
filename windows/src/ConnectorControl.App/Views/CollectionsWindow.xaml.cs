@@ -1,7 +1,11 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
+using System.Windows.Input;
+using System.Windows.Threading;
 using ConnectorControl.Core.State;
 using Microsoft.Win32;
 
@@ -38,11 +42,11 @@ public partial class CollectionsWindow : Window
         {
             if (ObservableObject.Affects(e, nameof(AppState.CollectionsWindowRequest)))
             {
-                Consume();
+                ScheduleConsume();
             }
         };
         state.PropertyChanged += onStateChanged;
-        Loaded += (_, _) => Consume();
+        Loaded += (_, _) => ScheduleConsume();
         Closed += (_, _) =>
         {
             state.PropertyChanged -= onStateChanged;
@@ -95,9 +99,26 @@ public partial class CollectionsWindow : Window
 
     private void OnSubscribe(object sender, RoutedEventArgs e) => Import(keepInSync: true);
 
-    private void OnExport(object sender, RoutedEventArgs e) => Publish(PublishDialogMode.Export);
+    /// <summary>
+    /// Export writes only the ticked connectors — what the count beside the button says, and what
+    /// <see cref="CollectionsModel.CanExport"/> waits for.
+    /// </summary>
+    private void OnExport(object sender, RoutedEventArgs e)
+    {
+        if (Model.Selected is { } collection)
+        {
+            PresentPublish(new PublishModel(state, collection, Model.ExportIntentForChecked()), PublishDialogMode.Export);
+        }
+    }
 
-    private void OnPublish(object sender, RoutedEventArgs e) => Publish(PublishDialogMode.Publish);
+    /// <summary>Publishing binds the whole collection, so this one takes no subset.</summary>
+    private void OnPublish(object sender, RoutedEventArgs e)
+    {
+        if (Model.Selected is { } collection)
+        {
+            PresentPublish(new PublishModel(state, collection), PublishDialogMode.Publish);
+        }
+    }
 
     private void OnRefresh(object sender, RoutedEventArgs e) => Act(Model.Refresh);
 
@@ -118,11 +139,23 @@ public partial class CollectionsWindow : Window
     // MARK: panes
 
     /// <summary>Double-clicking a collection makes it the active one; the click before it selected it.</summary>
-    private void OnActivate(object sender, RoutedEventArgs e)
+    private void OnActivate(object sender, MouseButtonEventArgs e)
     {
-        if (Sidebar.SelectedValue is string name)
+        if (sender is FrameworkElement { DataContext: CollectionsModel.Item item })
         {
-            Act(() => Model.SwitchTo(name));
+            Act(() => Model.SwitchTo(item.Name));
+        }
+    }
+
+    /// <summary>
+    /// The same action, labelled: the context menu is what a keyboard and a screen reader reach,
+    /// and it acts on the collection it was raised over — which a right-click does not select.
+    /// </summary>
+    private void OnMakeActive(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: CollectionsModel.Item item })
+        {
+            Act(() => Model.SwitchTo(item.Name));
         }
     }
 
@@ -186,6 +219,14 @@ public partial class CollectionsWindow : Window
 
     // MARK: requests
 
+    /// <summary>
+    /// Below layout and render, because both paths into it run at the wrong moment for a modal:
+    /// <c>Loaded</c> fires inside <see cref="Window.Show"/>, before the registry has brought the
+    /// window forward, and a change notification arrives wherever the setter was called. A
+    /// picker opened from either would stand in front of a window that is not on screen yet.
+    /// </summary>
+    private void ScheduleConsume() => Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(Consume));
+
     /// <summary>What the flyout asked for, taken so nothing can act on it twice.</summary>
     private void Consume()
     {
@@ -201,9 +242,11 @@ public partial class CollectionsWindow : Window
                 break;
             case CollectionsWindowRequest.ExportActive:
                 // The menu item names the collection that is active now, not whichever one this
-                // window last had selected.
+                // window last had selected — and it offers the whole of it, because a selection
+                // that has just moved carries no ticks and an empty subset writes an empty
+                // document.
                 Model.Selected = state.ActiveCollection;
-                Publish(PublishDialogMode.Export);
+                PresentPublish(new PublishModel(state, state.ActiveCollection), PublishDialogMode.Export);
                 break;
             case CollectionsWindowRequest.Review review:
                 Review(review.Collection);
@@ -233,13 +276,8 @@ public partial class CollectionsWindow : Window
         Surfaces.ShowImport(this, model);
     }
 
-    private void Publish(PublishDialogMode mode)
-    {
-        if (Model.Selected is { } collection)
-        {
-            Surfaces.ShowPublish(this, new PublishModel(state, collection), mode);
-        }
-    }
+    private void PresentPublish(PublishModel model, PublishDialogMode mode) =>
+        Surfaces.ShowPublish(this, model, mode);
 
     private void Review(string collection)
     {
@@ -280,4 +318,18 @@ public partial class CollectionsWindow : Window
             dialogs.Inform(failure, null);
         }
     }
+}
+
+/// <summary>
+/// One sidebar collection's chain tooltip. The rule and the wording are both
+/// <see cref="CollectionsModel.SyncedGlyphTooltip"/>'s, which answers null where there is no
+/// chain to explain; this exists only because XAML cannot call a method.
+/// </summary>
+public sealed class CollectionSourceTooltipConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is CollectionsModel.Item item ? CollectionsModel.SyncedGlyphTooltip(item) : null;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        Binding.DoNothing;
 }

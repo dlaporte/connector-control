@@ -42,10 +42,15 @@ public final class CollectionsModel: ObservableObject {
 
     public static func exportButton(_ count: Int) -> String { "Export \(count)…" }
 
-    /// The sidebar's chain glyph. The same sentence the popover's chip shows about the same
-    /// fact, so it borrows that wording rather than keeping a second copy of it.
-    public static func syncedGlyphTooltip(_ source: String) -> String {
-        PopoverModel.sourceTooltipFormat(source)
+    /// The sidebar's chain glyph, or nil when there is no chain to explain: a local collection
+    /// has no source, and a synced one whose file is still to be found has no path to name. The
+    /// sentence is the popover chip's, borrowed rather than copied — one fact, one wording.
+    ///
+    /// Takes the item rather than the path so that "which items have a tooltip" stays here; a
+    /// view mapping over an optional path would be the same rule, kept somewhere worse.
+    public static func syncedGlyphTooltip(_ item: Item) -> String? {
+        guard let source = item.source else { return nil }
+        return PopoverModel.sourceTooltipFormat(source)
     }
 
     public static func localType(_ command: String) -> String { "local · \(command)" }
@@ -70,9 +75,15 @@ public final class CollectionsModel: ObservableObject {
         public let isPublished: Bool
         public let hasPendingUpdate: Bool
         public let isLocated: Bool
+        /// Where a synced collection's document is, as far as this machine knows: the path it is
+        /// bound to, or the name the sidecar recorded while the file is still to be found. nil
+        /// for a local collection, which has no source, and for a synced one the sidecar never
+        /// named. The same two steps `PopoverModel.sourceTooltip` takes, so the sidebar's chain
+        /// and the chip cannot name the same collection differently.
+        public let source: String?
 
         public init(name: String, kind: CollectionKind, isActive: Bool, isPublished: Bool,
-                    hasPendingUpdate: Bool, isLocated: Bool) {
+                    hasPendingUpdate: Bool, isLocated: Bool, source: String? = nil) {
             self.id = name
             self.name = name
             self.kind = kind
@@ -80,6 +91,7 @@ public final class CollectionsModel: ObservableObject {
             self.isPublished = isPublished
             self.hasPendingUpdate = hasPendingUpdate
             self.isLocated = isLocated
+            self.source = source
         }
     }
 
@@ -180,8 +192,16 @@ public final class CollectionsModel: ObservableObject {
         return state.collectionNames.map { name in
             Item(name: name, kind: state.kind(of: name), isActive: name == active,
                  isPublished: state.isPublished(name), hasPendingUpdate: state.pendingUpdates[name] != nil,
-                 isLocated: state.isLocated(name))
+                 isLocated: state.isLocated(name), source: self.source(of: name))
         }
+    }
+
+    /// Only a synced collection has a document to point at; see `Item.source` for the two steps.
+    private func source(of collection: String) -> String? {
+        guard state.isSynced(collection) else { return nil }
+        guard let found = state.sourceBinding(of: collection)?.path
+            ?? state.collectionsFile.collections[collection]?.fileName, !found.isEmpty else { return nil }
+        return found
     }
 
     public var rows: [Row] {
@@ -359,11 +379,6 @@ public final class CollectionsModel: ObservableObject {
     /// The names the export sheet writes, in the order the rows show them.
     public func exportIntentForChecked() -> [String] { checkedNames }
 
-    /// What the save panel opens with. The same name a published document would take, so an
-    /// export and a publish of one collection cannot be told apart by their file names.
-    public var suggestedExportFileName: String {
-        Slug.make(selectedCollection) + "." + CollectionDocument.fileExtension
-    }
 
     // MARK: - Collection actions
 

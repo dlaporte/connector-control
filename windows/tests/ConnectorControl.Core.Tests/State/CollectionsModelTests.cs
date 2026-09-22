@@ -454,22 +454,6 @@ public class CollectionsModelTests
         Assert.Equal("Spare Parts", model.Items.Single(i => i.IsActive).Name);
     }
 
-    // MARK: export
-
-    [Fact]
-    public void TheSuggestedExportFileNameSlugsTheSelectedCollection()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        Assert.Null(state.CreateCollection("Acme Data Team!"));
-        state.SwitchCollection("Default");
-        using var model = new CollectionsModel(state, h.Dialogs);
-
-        Assert.Equal("default.json", model.SuggestedExportFileName);
-        model.Selected = "Acme Data Team!";
-        // The same name the published document would take.
-        Assert.Equal("acme-data-team.json", model.SuggestedExportFileName);
-    }
     // MARK: banner strip
 
     /// <summary>
@@ -569,9 +553,39 @@ public class CollectionsModelTests
         Assert.Equal("Edit", CollectionsModel.EditTooltip);
         Assert.Equal("Make Active", CollectionsModel.MakeActiveAction);
         Assert.Equal("Read-only: synced from the collection's author", CollectionsModel.LockedGlyphTooltip);
+    }
+
+    [Fact]
+    public void TheSidebarChainNamesTheDocumentThisMachineReads()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        state.SwitchCollection("Default");
+        Seed(h, state, File_(("Team", Synced("team.json"))), Cache([new("Team", Bound("/Acme/mcp/team.json"))]));
+        using var model = new CollectionsModel(state, h.Dialogs);
+
+        var team = model.Items.Single(i => i.Name == "Team");
+        Assert.Equal("/Acme/mcp/team.json", team.Source);
         // One sentence about one fact: the chain says the same here as on the flyout's chip.
+        Assert.Equal("Synced from /Acme/mcp/team.json", CollectionsModel.SyncedGlyphTooltip(team));
         Assert.Equal(FlyoutModel.SourceTooltipFormat("/Acme/mcp/team.json"),
-                     CollectionsModel.SyncedGlyphTooltip("/Acme/mcp/team.json"));
-        Assert.Equal("Synced from /Acme/mcp/team.json", CollectionsModel.SyncedGlyphTooltip("/Acme/mcp/team.json"));
+                     CollectionsModel.SyncedGlyphTooltip(team));
+
+        // A local collection has no source, so no chain and nothing to say about one.
+        var local = model.Items.Single(i => i.Name == "Default");
+        Assert.Null(local.Source);
+        Assert.Null(CollectionsModel.SyncedGlyphTooltip(local));
+
+        // Synced but never found: the sidecar's file name is what the chain can still name, the
+        // same fallback the flyout's chip takes, so the two never disagree about one collection.
+        Seed(h, state, File_(("Team", Synced("team.json"))));
+        var unlocated = model.Items.Single(i => i.Name == "Team");
+        Assert.False(unlocated.IsLocated);
+        Assert.Equal("team.json", unlocated.Source);
+        Assert.Equal("Synced from team.json", CollectionsModel.SyncedGlyphTooltip(unlocated));
+        state.SwitchCollection("Team");
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.Equal(flyout.SourceTooltip, CollectionsModel.SyncedGlyphTooltip(unlocated));
     }
 }
