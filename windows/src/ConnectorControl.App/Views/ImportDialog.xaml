@@ -7,7 +7,7 @@
   <Window.Resources>
     <views:ImportChoiceTitleConverter x:Key="ChoiceTitle" />
     <views:ImportCanIncludeConverter x:Key="CanInclude" />
-    <views:ImportLoadedConverter x:Key="Loaded" />
+    <views:ImportRowLabelConverter x:Key="RowLabel" />
 
     <!-- How a collision resolves. Its own template, applied only to a row that has one: a
          collapsed element inside a DataTemplate is still created and still binds, and a row with
@@ -16,7 +16,8 @@
       <StackPanel Orientation="Horizontal">
         <ComboBox x:Name="ChoiceBox" ItemsSource="{x:Static state:ImportModel.CollisionChoices}"
                   SelectedItem="{Binding Choice, Mode=TwoWay}" MinWidth="110" VerticalAlignment="Center"
-                  AutomationProperties.Name="{x:Static state:ImportModel.PresentBadge}">
+                  AutomationProperties.Name="{Binding Name, Converter={StaticResource RowLabel}, ConverterParameter=choice}"
+                  SelectionChanged="OnRowChose">
           <ComboBox.ItemTemplate>
             <DataTemplate>
               <TextBlock Text="{Binding Converter={StaticResource ChoiceTitle}}" />
@@ -52,10 +53,19 @@
     <!-- A document this app cannot read offers nothing to choose between: the modes, the rows and
          Import all go, and Cancel is the only way out. -->
     <TextBlock x:Name="LoadErrorText" Text="{Binding LoadError}" Style="{StaticResource ErrorText}" Margin="0,12,0,0"
-               Visibility="{Binding LoadError, Converter={StaticResource Loaded}, ConverterParameter=error}" />
+               Visibility="{Binding HasLoadError, Converter={StaticResource Vis}}" />
 
-    <StackPanel x:Name="Body" Margin="0,12,0,0"
-                Visibility="{Binding LoadError, Converter={StaticResource Loaded}}">
+    <StackPanel x:Name="Body" Margin="0,12,0,0">
+      <StackPanel.Style>
+        <Style TargetType="StackPanel">
+          <Setter Property="Visibility" Value="Collapsed" />
+          <Style.Triggers>
+            <DataTrigger Binding="{Binding HasLoadError}" Value="False">
+              <Setter Property="Visibility" Value="Visible" />
+            </DataTrigger>
+          </Style.Triggers>
+        </Style>
+      </StackPanel.Style>
       <!-- Copies into a collection the user owns: which one, and what would happen to each connector. -->
       <Border>
         <Border.Style>
@@ -108,7 +118,7 @@
                            a local style on a CheckBox would replace the theme's own. -->
                       <CheckBox x:Name="IncludeTick" IsChecked="{Binding Include, Mode=TwoWay}" VerticalAlignment="Center"
                                 IsEnabled="{Binding ExcludedReason, Converter={StaticResource CanInclude}}"
-                                AutomationProperties.Name="{Binding Name}" Click="OnRowTicked" />
+                                AutomationProperties.Name="{Binding Name, Converter={StaticResource RowLabel}}" Click="OnRowTicked" />
                       <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" Margin="8,0,0,0" />
                       <!-- Caution glyph: its own Auto column, so the badge column keeps the rest. -->
                       <TextBlock x:Name="NeedsGlyph" Grid.Column="2"
@@ -215,7 +225,7 @@
             </StackPanel.Style>
             <TextBox x:Name="SyncNameBox" Text="{Binding SyncName, UpdateSourceTrigger=PropertyChanged}"
                      MinWidth="240" HorizontalAlignment="Left"
-                     AutomationProperties.Name="{x:Static state:ImportModel.SyncModeTitle}" />
+                     AutomationProperties.Name="{x:Static state:ImportModel.SyncNameLabel}" />
           </StackPanel>
           <TextBlock Text="{x:Static state:ImportModel.SyncModeDetail}" Style="{StaticResource CaptionText}" Margin="20,8,0,0" />
         </StackPanel>
@@ -226,8 +236,11 @@
 
     <StackPanel Style="{StaticResource DialogButtons}" Margin="0,16,0,0">
       <Button x:Name="CancelButton" Content="{x:Static state:ImportModel.CancelButton}" MinWidth="80" IsCancel="True" />
+      <!-- Import belongs to the body it acts on, and comes and goes with it. Bound to the body
+           rather than to the flag a second time, because the accent style leaves no room for a
+           local style of its own to carry the trigger. -->
       <Button x:Name="ImportButton" MinWidth="90" Margin="8,0,0,0" IsDefault="True"
-              IsEnabled="{Binding CanImport}" Visibility="{Binding LoadError, Converter={StaticResource Loaded}}"
+              IsEnabled="{Binding CanImport}" Visibility="{Binding Visibility, ElementName=Body}"
               Style="{DynamicResource AccentButtonStyle}" Click="OnImport" />
     </StackPanel>
   </StackPanel>

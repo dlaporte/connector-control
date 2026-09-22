@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Controls;
 using System.Windows.Data;
 using ConnectorControl.Core.State;
 
@@ -61,6 +62,12 @@ public partial class ImportDialog : DialogWindow
 
     private void OnRowTicked(object sender, RoutedEventArgs e) => Refresh();
 
+    /// <summary>
+    /// Skip in the picker and an unticked row mean the same thing to the count, so a choice moves
+    /// it exactly as a tick does; the row it was made on notifies nobody either way.
+    /// </summary>
+    private void OnRowChose(object sender, SelectionChangedEventArgs e) => Refresh();
+
     private void OnImport(object sender, RoutedEventArgs e)
     {
         // The model answers with the reason it could not land, or null. A failure stays on the
@@ -92,17 +99,22 @@ public sealed class ImportChoiceTitleConverter : IValueConverter
 }
 
 /// <summary>
-/// The sheet's two halves: what shows while the document read, and — with <c>error</c> as the
-/// parameter — the one line that shows when it did not. A one-sided model flag, the shape
-/// <c>FlyoutModel.HasCollectionBanner</c> has, would let the shared Vis converter do this instead.
+/// A row control's accessibility name, from the connector it acts on: the tick's
+/// <see cref="ImportModel.IncludeLabel"/>, or — with <c>choice</c> as the parameter — the collision
+/// picker's <see cref="ImportModel.CollisionPickerLabel"/>. Both are factories over the row's own
+/// name, which a DataTemplate cannot call.
 /// </summary>
-public sealed class ImportLoadedConverter : IValueConverter
+public sealed class ImportRowLabelConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        var loaded = value is null;
-        var wantsTheError = string.Equals(parameter as string, "error", StringComparison.Ordinal);
-        return loaded != wantsTheError ? Visibility.Visible : Visibility.Collapsed;
+        if (value is not string connector)
+        {
+            return string.Empty;
+        }
+        return string.Equals(parameter as string, "choice", StringComparison.Ordinal)
+            ? ImportModel.CollisionPickerLabel(connector)
+            : ImportModel.IncludeLabel(connector);
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>

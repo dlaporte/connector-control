@@ -132,7 +132,7 @@ struct ImportSheetView: View {
                 TextField("", text: $model.syncName)
                     .textFieldStyle(.roundedBorder)
                     .labelsHidden()
-                    .accessibilityLabel(ImportModel.syncModeTitle)
+                    .accessibilityLabel(ImportModel.syncNameLabel)
             }
             Text(ImportModel.syncModeDetail)
                 .font(.caption)
@@ -151,7 +151,7 @@ struct ImportSheetView: View {
                     .labelsHidden()
                     // A connector this platform has no way to run cannot be imported at all.
                     .disabled(row.excludedReason != nil)
-                    .accessibilityLabel(row.name)
+                    .accessibilityLabel(ImportModel.includeLabel(row.name))
                 Text(row.name).lineLimit(1)
                 if let caution = row.needsCaution {
                     Image(systemName: PopoverModel.toolWarningGlyph)
@@ -183,7 +183,7 @@ struct ImportSheetView: View {
                 .fixedSize()
                 // Not the row's name: the tick beside it already answers to that, and a screen
                 // reader would announce the two controls identically.
-                .accessibilityLabel(ImportModel.presentBadge)
+                .accessibilityLabel(ImportModel.collisionPickerLabel(row.wrappedValue.name))
                 if row.wrappedValue.choice == .replace {
                     caption(ImportModel.replaceKeepsValues)
                 }

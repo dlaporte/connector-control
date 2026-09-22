@@ -111,7 +111,7 @@ struct ReviewSheetView: View {
                 .foregroundStyle(.orange)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
-            Button(CollectionsModel.refreshButton) {
+            Button(ReviewModel.refreshButton) {
                 model.refresh()
                 failure = nil
             }
@@ -123,7 +123,7 @@ struct ReviewSheetView: View {
     @ViewBuilder private var footer: some View {
         HStack {
             Spacer()
-            Button(ImportModel.cancelButton) { onDone() }
+            Button(ReviewModel.cancelButton) { onDone() }
             Button(ReviewModel.applyButton) { apply() }
                 .keyboardShortcut(.defaultAction)
         }

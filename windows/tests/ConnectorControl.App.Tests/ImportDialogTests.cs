@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using ConnectorControl.App.Tests.TestSupport;
@@ -158,16 +159,17 @@ public class ImportDialogTests
             Assert.Null(panel.ContentTemplate);
 
             // Ticking it in trades the badge for how the collision resolves.
-            ClickTick(RowElements.Find<CheckBox>(window.RowList, github, "IncludeTick"), true);
+            var tick = RowElements.Find<CheckBox>(window.RowList, github, "IncludeTick");
+            Assert.Equal(ImportModel.IncludeLabel("github"), AutomationProperties.GetName(tick));
+            ClickTick(tick, true);
             Layout(window);
             Assert.Equal(Visibility.Collapsed, badge.Visibility);
             Assert.NotNull(panel.ContentTemplate);
             var choiceBox = RowElements.Find<ComboBox>(window.RowList, github, "ChoiceBox");
             var replaceNote = RowElements.Find<TextBlock>(window.RowList, github, "ReplaceNote");
             Assert.Equal(ImportModel.CollisionChoices, choiceBox.Items.Cast<ImportChoice>());
-            Assert.Equal(ImportModel.CollisionChoices.Select(ImportModel.ChoiceTitle),
-                choiceBox.Items.Cast<ImportChoice>().Select(ImportModel.ChoiceTitle));
             Assert.Equal(ImportChoice.Replace, choiceBox.SelectedItem);
+            Assert.Equal(ImportModel.CollisionPickerLabel("github"), AutomationProperties.GetName(choiceBox));
             Assert.Equal(ImportModel.ReplaceKeepsValues, replaceNote.Text);
             Assert.Equal(Visibility.Visible, replaceNote.Visibility);
 
@@ -177,6 +179,14 @@ public class ImportDialogTests
             Layout(window);
             Assert.Equal(ImportChoice.KeepBoth, github.Choice);
             Assert.Equal(Visibility.Collapsed, replaceNote.Visibility);
+
+            // Skip here and an unticked row mean the same thing, so the count says the same thing.
+            choiceBox.SelectedItem = ImportChoice.Skip;
+            Layout(window);
+            Assert.Equal(ImportModel.ImportButton(3), window.ImportButton.Content);
+            choiceBox.SelectedItem = ImportChoice.KeepBoth;
+            Layout(window);
+            Assert.Equal(ImportModel.ImportButton(4), window.ImportButton.Content);
 
             Assert.False(window.Accepted);
             Click(window.ImportButton);
