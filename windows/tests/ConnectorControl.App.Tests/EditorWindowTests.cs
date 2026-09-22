@@ -414,19 +414,30 @@ public class EditorWindowTests
                 Assert.Equal(Visibility.Collapsed, RowElements.Find<TextBlock>(author.EnvList, token, "EnvPublishedHint").Visibility);
             }, rows: true);
 
-            // The editor model republishes on tool statuses alone, so the window itself has to
-            // watch AppState: a collection that stops syncing under an open editor repaints it.
+            // A collection that stops syncing under an open editor repaints it, without the
+            // window watching AppState itself: the model raises what the collection decides.
             Editing(state, In(state, "Data team", "dbt"), open =>
             {
                 Assert.Equal(Visibility.Visible, open.SyncedHeader.Visibility);
                 Assert.False(open.NameBox.IsEnabled);
+
+                // A value the user fills in while the form is still the author's.
+                var token = open.Model.EnvRows.Single(r => r.Name == "DBT_TOKEN");
+                Assert.Equal(Visibility.Visible, RowElements.Find<TextBox>(open.EnvList, token, "EnvPlaceholder").Visibility);
+                token.Value = "dbt_pat_123";
+                Layout(open);
 
                 state.StopSyncing("Data team");
                 Layout(open);
                 Assert.False(open.Model.IsReadOnly);
                 Assert.Equal(Visibility.Collapsed, open.SyncedHeader.Visibility);
                 Assert.True(open.NameBox.IsEnabled);
-            });
+                // The model retook its snapshot, so the filled value is an ordinary secret again
+                // and goes back behind the mask rather than staying in the clear.
+                Assert.False(open.Model.AsksFor(token));
+                Assert.Equal(Visibility.Collapsed, RowElements.Find<TextBox>(open.EnvList, token, "EnvPlaceholder").Visibility);
+                Assert.Equal(Visibility.Visible, RowElements.Find<ContentControl>(open.EnvList, token, "EnvValue").Visibility);
+            }, rows: true);
         });
     }
 
