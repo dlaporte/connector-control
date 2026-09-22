@@ -329,7 +329,8 @@ public class PublishDialogTests
                 var kept = Assert.Single(model.KeptPaths);
                 Assert.Equal(PublishModel.UnresolvedMarkNote("c", "srv"),
                     RowElements.Find<TextBlock>(window.UnresolvedList, lost, "MarkNoteText").Text);
-                Assert.Equal(PublishModel.KeptPathNote("ledger", kept.Field),
+                // The note names the field the way the editor shows it, which the model decides.
+                Assert.Equal(model.Note(kept),
                     RowElements.Find<TextBlock>(window.KeptList, kept, "KeptNoteText").Text);
                 Assert.Equal(PublishModel.ForgetMarkButton, RowElements.Find<Button>(window.UnresolvedList, lost, "ForgetMark").Content);
                 Assert.Equal(PublishModel.ReleaseValueButton, RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue").Content);
@@ -430,7 +431,9 @@ public class PublishDialogTests
                 // but the note says the connector's editor is where to write it.
                 var kept = Assert.Single(model.KeptPaths);
                 Assert.Equal(("svc", "remote.auth.clientId", PublishModel.KeptPathKind.Folder), (kept.Connector, kept.Field, kept.Kind));
-                var note = PublishModel.PublishFolderEditNote("svc", "remote.auth.clientId");
+                // The entry keeps the document's field; the note names it as the editor shows it.
+                var note = model.Note(kept);
+                Assert.Equal(PublishModel.PublishFolderEditNote("svc", FieldName.Argument(5)), note);
                 Assert.Equal(note, RowElements.Find<TextBlock>(window.KeptList, kept, "KeptNoteText").Text);
                 var use = RowElements.Find<Button>(window.KeptList, kept, "UseDirectoryToken");
                 Assert.Equal(Visibility.Visible, use.Visibility);
