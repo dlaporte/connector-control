@@ -49,12 +49,13 @@ bullet once the section is about to ship.
 - A placeholder is a value a document asks each machine for; a connector waiting on one
   says "needs your value" or "needs your path", with the author's hint.
   `${COLLECTION_DIR}` is the document's folder: where a synced collection found it, or
-  the publish folder on the publishing machine. In a collection that is not published
-  yet, a caution says it has no folder.
+  the publish folder on the publishing machine. In a local collection this machine does
+  not publish, the connector's row says it has no folder.
 - Publish… writes a local collection's document to a folder in a repository or synced
   drive and rewrites it whenever what the collection runs changes; turning a connector
-  on or off never republishes. Deleting a published collection, or Stop Publishing in
-  the Collections window, asks whether to remove the document too; Keep is the default.
+  on or off never republishes. Reopening Publish… changes what a published collection
+  shares. Deleting a published collection, or Stop Publishing in the Collections window,
+  asks whether to remove the document too; Keep is the default.
 - The Publish sheet lists every environment value, which travels as a hint unless you
   tick share value, and every argument that looks like a path on this machine, which
   travels as written unless you tick it to become a placeholder. The token, header value
@@ -63,9 +64,10 @@ bullet once the section is about to ship.
   shared value that looks like a credential.
 - A publish that fails says so on the collection banner, with Choose Folder… and Stop
   Publishing, and pressing Publish again retries the write at once. A path marked for
-  others to supply follows its argument when you add, remove or reorder arguments; if it
-  cannot be followed, publishing stops and the banner asks you to mark it again, so a
-  marked path never goes out as written.
+  others to supply stays marked when you add, remove or reorder arguments, correct it in
+  place, or rename the connector. If the app cannot follow it, publishing and Export…
+  stop, the document in the folder stays as it was, and the banner asks you to mark it
+  again in Publish…, so a marked path never goes out as written.
 - The Collections window lists every collection beside its connectors, marking the
   active one and the synced ones, with a detail line saying where the selected one
   publishes to or syncs from. Import…, Subscribe…, Export…, Publish…, Refresh, Make
