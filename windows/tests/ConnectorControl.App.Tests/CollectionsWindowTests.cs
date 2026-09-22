@@ -200,10 +200,12 @@ public class CollectionsWindowTests
 
     /// <summary>
     /// The loop that overflowed the test process's stack: the sidebar's selection, bound two way,
-    /// and the model's Selected setter, which raises on every write, feeding each other through
-    /// the rebuilt Items list every raise hands the sidebar. Bounded counts rather than a
-    /// timeout — the unguarded loop never returned, so without the guard this test does not fail,
-    /// it takes the process down.
+    /// and the model's Selected setter feeding each other through the Items list every raise
+    /// handed the sidebar. What that loop multiplied was raises of <c>Selected</c> with nothing
+    /// behind them and replacements of <c>Items</c>, so those are what is counted — by name, so the
+    /// bounds do not move with how many other properties one change announces. Bounded counts
+    /// rather than a timeout: the unguarded loop never returned, so without the guard this test
+    /// does not fail, it takes the process down.
     /// </summary>
     [Fact]
     public void TheSidebarSelectionAndARebuildDoNotFeedEachOther()
@@ -213,24 +215,45 @@ public class CollectionsWindowTests
         SubscribeToDataTeam(h, state);
         Showing(h, state, (window, _) =>
         {
-            var raises = 0;
+            var selectedRaises = 0;
+            var itemsRaises = 0;
+            var stateRaises = 0;
             var selections = 0;
-            window.Model.PropertyChanged += (_, _) => raises++;
+            window.Model.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(CollectionsModel.Selected))
+                {
+                    selectedRaises++;
+                }
+                if (e.PropertyName == nameof(CollectionsModel.Items))
+                {
+                    itemsRaises++;
+                }
+            };
+            state.PropertyChanged += (_, _) => stateRaises++;
             window.Sidebar.SelectionChanged += (_, _) => selections++;
 
             // A user picking a row reaches the model — the markup binds one way now, so this is
             // the handler's doing — and the raise it causes stops there. Picked by index, the way
             // a click picks: assigning SelectedValue would replace the very binding under test.
+            // Exactly one Selected raise, and the collections list is left exactly as it was.
             window.Sidebar.SelectedIndex = window.Model.Items.ToList().FindIndex(i => i.Name == "Data team");
             Layout(window);
             Assert.Equal("Data team", window.Model.Selected);
             Assert.Equal("Data team", window.Sidebar.SelectedValue);
-            Assert.InRange(raises, 1, 5);
+            Assert.Equal(1, selectedRaises);
+            Assert.Equal(0, itemsRaises);
             Assert.InRange(selections, 1, 4);
 
             // Making that collection active rewrites every item, because IsActive moves: the
             // rebuild the two-way binding used to answer with a write of its own, and so on.
-            raises = 0;
+            // Items is replaced once, for that one change. Every Selected raise answers a change
+            // AppState announced — the model re-announces the collection on show after each —
+            // and the sidebar adds none of its own: however many notifications one switch makes,
+            // a loop is a Selected raise with no state change behind it.
+            selectedRaises = 0;
+            itemsRaises = 0;
+            stateRaises = 0;
             selections = 0;
             CollectionsWindow.MakeActiveCommand.Execute(window.Model.Items.Single(i => i.Name == "Data team"), window);
             Layout(window);
@@ -238,7 +261,8 @@ public class CollectionsWindowTests
             Assert.Equal("Data team", window.Model.Selected);
             // …and the sidebar still highlights it, although every item it held was replaced.
             Assert.Equal("Data team", window.Sidebar.SelectedValue);
-            Assert.InRange(raises, 1, 30);
+            Assert.Equal(1, itemsRaises);
+            Assert.InRange(selectedRaises, 1, stateRaises);
             Assert.InRange(selections, 0, 6);
         });
     }
