@@ -30,6 +30,14 @@ struct ConnectorControlApp: App {
         }
         .windowResizability(.contentMinSize)
 
+        // One window, no value: which collection it shows is its own selection, and what the
+        // popover wants of it travels through AppState.
+        WindowGroup(CollectionsModel.windowTitle, id: CollectionsWindowView.windowID) {
+            CollectionsWindowView(state: state, dialogs: services.dialogs)
+        }
+        .defaultSize(width: 760, height: 520)
+        .windowResizability(.contentMinSize)
+
         Settings {
             SettingsView(state: state, settings: services.settings,
                          autostart: services.autostart, updater: services.updater)

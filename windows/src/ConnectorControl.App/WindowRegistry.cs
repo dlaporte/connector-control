@@ -8,7 +8,7 @@ namespace ConnectorControl.App;
 /// <summary>
 /// One editor window per target id (an existing connector's id is
 /// its name; a new one gets a fresh GUID each time), brought forward if
-/// already open; one Settings window.
+/// already open; one Settings window, and one Collections window.
 /// </summary>
 public sealed class WindowRegistry
 {
@@ -16,13 +16,23 @@ public sealed class WindowRegistry
     private readonly PlatformServices services;
     private readonly UpdateCoordinator updates;
     private readonly Dictionary<string, EditorWindow> editors = new(StringComparer.Ordinal);
+    private readonly IDialogs dialogs;
     private SettingsWindow? settings;
+    private CollectionsWindow? collections;
 
-    public WindowRegistry(AppState state, PlatformServices services, UpdateCoordinator updates)
+    /// <summary>
+    /// <paramref name="dialogs"/> is what the Collections window's model asks its questions
+    /// through — AppState keeps its own copy private. It defaults to a fresh ownerless instance,
+    /// which is the same thing App builds, so a caller with no dialogs of its own still gets the
+    /// real behaviour rather than a null.
+    /// </summary>
+    public WindowRegistry(AppState state, PlatformServices services, UpdateCoordinator updates,
+        IDialogs? dialogs = null)
     {
         this.state = state;
         this.services = services;
         this.updates = updates;
+        this.dialogs = dialogs ?? new WpfDialogs(() => null);
     }
 
     public void OpenEditor(EditTarget target)
@@ -48,6 +58,23 @@ public sealed class WindowRegistry
             settings.Show();
         }
         BringToFront(settings);
+    }
+
+    /// <summary>
+    /// One Collections window, re-activated rather than reopened. What the flyout wants of it —
+    /// a dialog in front of it the moment it appears — travels through
+    /// <see cref="AppState.CollectionsWindowRequest"/>, which the window reads on load and on
+    /// every change, so opening it takes no arguments.
+    /// </summary>
+    public void OpenCollections()
+    {
+        if (collections is null)
+        {
+            collections = new CollectionsWindow(state, this, dialogs);
+            collections.Closed += (_, _) => collections = null;
+            collections.Show();
+        }
+        BringToFront(collections);
     }
 
     /// <summary>The Mac's NSApp.activate(ignoringOtherApps:): a tray app has no foreground window to inherit activation from.</summary>

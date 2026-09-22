@@ -61,7 +61,7 @@ public partial class App : Application
         state.QuitRequested += () => Shutdown();
         updates = new UpdateCoordinator(services.Updater, services.Settings, services.Notifier, dialogs, host);
         updates.Start();   // only arms the delayed first check through host.Delay
-        var windows = new WindowRegistry(state, services, updates);
+        var windows = new WindowRegistry(state, services, updates, dialogs);
         flyoutModel = new FlyoutModel(state, services.Settings);
         flyout = new FlyoutWindow(flyoutModel, windows);
         tray = new TrayController(state, flyout, windows);
