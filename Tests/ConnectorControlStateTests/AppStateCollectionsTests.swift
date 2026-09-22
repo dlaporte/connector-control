@@ -1408,18 +1408,44 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertTrue(try jsonFile(document, contains: Placeholder.directoryToken))
         XCTAssertFalse(try jsonFile(document, contains: folder))
 
-        // Removed since the backup was taken, the connector comes back with the folder collapsed.
+        XCTAssertNil(state.publishError)
+
+        // Removed since the backup was taken, it comes back as the backup has it: there is no store
+        // copy to keep, and rewriting what came in could rewrite a genuine edit. The folder is then
+        // kept back from the document, for the author to answer in Publish….
+        let before = try Data(contentsOf: document)
         state.remove(name: "x")
+        XCTAssertNotEqual(try Data(contentsOf: document), before)
+        let withoutX = try Data(contentsOf: document)
         try state.restoreClaudeConfig(from: backup)
         XCTAssertEqual(args(of: try XCTUnwrap(state.store.collections[state.activeCollection]?.mcps["x"]?.config)),
-                       ["\(Placeholder.directoryToken)/tools/x.js"])
+                       [folder + "/tools/x.js"])
+        XCTAssertEqual(state.publishError?.message, AppState.publishFolderCarriedError("x"))
+        XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+        XCTAssertEqual(try Data(contentsOf: document), withoutX)
         XCTAssertFalse(try jsonFile(document, contains: folder))
-        XCTAssertNil(state.publishError)
+    }
+
+    /// Published from another machine: the record is in the sidecar, but this machine has no
+    /// binding and so no folder to recognise. What the backup holds is adopted as written.
+    func testARestoreKeepsNothingForACollectionPublishedFromAnotherMachine() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let tokened: JSONValue = .object(["command": .string("node"), "args": .array([.string("\(Placeholder.directoryToken)/tools/x.js")])])
+        XCTAssertNil(state.upsert(name: "x", entry: MCPEntry(enabled: true, config: tokened), renamedFrom: nil))
+        try seed(h, state, file: CollectionsFile(collections: [state.activeCollection: published(slug: "default")]))
+        XCTAssertTrue(state.isPublished(state.activeCollection))
+        let backup = h.dir.file("backup.json")
+        try Data(#"{"mcpServers": {"x": {"command": "node", "args": ["/Users/d/elsewhere/tools/x.js"]}}}"#.utf8).write(to: backup)
+        try state.restoreClaudeConfig(from: backup)
+        XCTAssertEqual(args(of: try XCTUnwrap(state.store.collections[state.activeCollection]?.mcps["x"]?.config)),
+                       ["/Users/d/elsewhere/tools/x.js"])
     }
 
     /// Removed on the other machine while this one was off: at launch Claude's config brings the
-    /// connector back with this machine's folder in it, which is written back as the token.
-    func testALaunchIngestTakesTheTokenBackForThePublishFolder() throws {
+    /// connector back with this machine's folder in it. The store has no copy to keep, so it
+    /// arrives as written, and the folder is kept back from the document.
+    func testALaunchIngestThatBringsThePublishFolderBackIsNotPublished() throws {
         let h = AppStateHarness()
         defer { h.dispose() }
         let first = h.create()
@@ -1429,12 +1455,15 @@ final class AppStateCollectionsTests: XCTestCase {
         store.collections[store.activeCollection]?.mcps.removeValue(forKey: "x")
         try MasterStoreIO.save(store, to: h.masterStoreURL)
 
+        let before = try Data(contentsOf: document)
         let relaunched = h.create()
         defer { relaunched.dispose() }
         XCTAssertEqual(args(of: try XCTUnwrap(relaunched.store.collections[relaunched.activeCollection]?.mcps["x"]?.config)),
-                       ["\(Placeholder.directoryToken)/tools/x.js"], "ingested with the token, not the folder")
+                       [folder + "/tools/x.js"], "ingested as Claude's file has it")
+        XCTAssertEqual(relaunched.publishError?.message, AppState.publishFolderCarriedError("x"))
+        XCTAssertEqual(relaunched.publishError?.kind, .blockedForReview)
+        XCTAssertEqual(try Data(contentsOf: document), before)
         XCTAssertFalse(try jsonFile(document, contains: folder))
-        XCTAssertNil(relaunched.publishError)
     }
 
     func testThisMachinesPublishFolderWrittenOutIsNotPublished() throws {

@@ -148,21 +148,18 @@ final class ReconcilerTests: XCTestCase {
     private let tokened = JSONValue.object(["command": .string("node"), "args": .array([.string("${COLLECTION_DIR}/x.js")])])
     private let expanded = JSONValue.object(["command": .string("node"), "args": .array([.string("/Users/d/share/x.js")])])
 
-    func testAnIngestedConfigTakesTheTokenBack() {
-        let outcome = Reconciler.reconcile(store: .empty, claudeServers: ["x": expanded], directory: "/Users/d/share")
-        XCTAssertEqual(outcome.store.mcps["x"]?.config, tokened)
-        XCTAssertEqual(Reconciler.reconcile(store: .empty, claudeServers: ["x": expanded]).store.mcps["x"]?.config, expanded,
-                       "with no folder for the collection, the config is taken as it stands")
-    }
-
-    func testARestoredSnapshotKeepsTheStoresTokenAndCollapsesTheRest() {
-        let s = store(["x": MCPEntry(enabled: true, config: tokened)])
-        let edited = JSONValue.object(["command": .string("node"), "args": .array([.string("/Users/d/share/y.js")])])
-        let outcome = Reconciler.adoptSnapshot(store: s, servers: ["x": expanded, "back": edited], directory: "/Users/d/share")
+    func testARestoredSnapshotKeepsTheStoresTokenOnlyWhereItRendersTheSame() {
+        let s = store(["x": MCPEntry(enabled: true, config: tokened), "edited": MCPEntry(enabled: true, config: tokened)])
+        let edit = JSONValue.object(["command": .string("node"), "args": .array([.string("/Users/d/share/y.js")])])
+        let outcome = Reconciler.adoptSnapshot(store: s, servers: ["x": expanded, "edited": edit, "back": expanded],
+                                               publishFolder: "/Users/d/share")
         XCTAssertEqual(outcome.store.mcps["x"]?.config, tokened, "the store's copy already renders as the snapshot does")
-        XCTAssertEqual(outcome.store.mcps["back"]?.config,
-                       .object(["command": .string("node"), "args": .array([.string("${COLLECTION_DIR}/y.js")])]))
-        XCTAssertFalse(Reconciler.adoptSnapshot(store: s, servers: ["x": expanded], directory: "/Users/d/share").storeChanged,
+        XCTAssertEqual(outcome.store.mcps["edited"]?.config, edit, "a genuine edit is adopted as written")
+        XCTAssertEqual(outcome.store.mcps["back"]?.config, expanded, "a name the store does not hold has nothing to keep")
+        XCTAssertFalse(Reconciler.adoptSnapshot(store: store(["x": MCPEntry(enabled: true, config: tokened)]),
+                                                servers: ["x": expanded], publishFolder: "/Users/d/share").storeChanged,
                        "restoring what the store already renders changes nothing")
+        XCTAssertEqual(Reconciler.adoptSnapshot(store: s, servers: ["x": expanded]).store.mcps["x"]?.config, expanded,
+                       "with no folder published from here, the snapshot is adopted as written")
     }
 }

@@ -542,9 +542,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// </summary>
     public void RestoreClaudeConfig(string backupPath)
     {
-        // Every apply backed Claude's file up with this machine's folder where the store holds
-        // ${COLLECTION_DIR}; the restore writes it back as the token.
-        var servers = Service.RestoreClaudeConfig(backupPath, Store, CollectionDirectory(Store.ActiveCollection));
+        // Every apply backed Claude's file up with this machine's publish folder where the store
+        // holds ${COLLECTION_DIR}: a connector that renders just as the backup does keeps its token.
+        // Only this machine's own binding counts; another machine's record has no folder here.
+        var active = Store.ActiveCollection;
+        var publishFolder = IsPublished(active) ? CollectionsCache.Published.GetValueOrDefault(active)?.Folder : null;
+        var servers = Service.RestoreClaudeConfig(backupPath, Store, publishFolder);
         AppliedServers = servers;
         hasLoadedOnce = true;
         settings.LastApplyDate = host.Now();
@@ -585,8 +588,7 @@ public sealed class AppState : ObservableObject, IDisposable
 
             var result = Service.LoadAndReconcile(
                 baseline: hasLoadedOnce ? AppliedServers : null,
-                storeAuthoritative: trigger != ReloadTrigger.Routine,
-                collectionDirectory: IngestDirectory);
+                storeAuthoritative: trigger != ReloadTrigger.Routine);
             Store = result.Store;
             LoadCollections();
             var claudeConfigChangedExternally = false;
@@ -2500,30 +2502,6 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             throw new PublishFolderCarriedException(holder);
         }
-    }
-
-    /// <summary>
-    /// The folder <c>${COLLECTION_DIR}</c> stands for in <paramref name="collection"/>, for what a
-    /// load ingests from Claude's file. At launch the collections files have not been read yet — the
-    /// store comes first — so they are read here, straight from disk; after that, from what is loaded.
-    /// </summary>
-    private string? IngestDirectory(string collection)
-    {
-        if (hasLoadedCollectionsOnce)
-        {
-            return CollectionDirectory(collection);
-        }
-        var file = CollectionsFile.Load(Service.Paths.CollectionsFilePath);
-        var cache = CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath);
-        if (file.KindOf(collection) == CollectionKind.Synced)
-        {
-            return cache.Synced.GetValueOrDefault(collection)?.Path is { } path
-                ? Path.GetDirectoryName(Path.GetFullPath(path)) ?? path
-                : null;
-        }
-        return file.Collections.GetValueOrDefault(collection)?.Publish is null
-            ? null
-            : cache.Published.GetValueOrDefault(collection)?.Folder;
     }
 
     /// <summary>friendly(): the malformed-config case gets the guided message; everything else its own text.</summary>

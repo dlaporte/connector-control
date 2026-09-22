@@ -417,10 +417,12 @@ public final class AppState: ObservableObject {
     /// baseline to the restored contents BEFORE reloading, so the app's own
     /// restore is not misread as an external change or a re-add.
     public func restoreClaudeConfig(from backup: URL) throws {
-        // Every apply backed Claude's file up with this machine's folder where the store holds
-        // ${COLLECTION_DIR}; the restore writes it back as the token.
-        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: store,
-                                                      collectionDirectory: collectionDirectory(of: store.activeCollection))
+        // Every apply backed Claude's file up with this machine's publish folder where the store
+        // holds ${COLLECTION_DIR}: a connector that renders just as the backup does keeps its
+        // token. Only this machine's own binding counts; another machine's record has no folder here.
+        let active = store.activeCollection
+        let publishFolder = isPublished(active) ? collectionsCache.published[active]?.folder : nil
+        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: store, publishFolder: publishFolder)
         appliedServers = servers
         hasLoadedOnce = true
         settings.lastApplyDate = host.now()
@@ -484,8 +486,7 @@ public final class AppState: ObservableObject {
 
             let result = try service.loadAndReconcile(
                 baseline: hasLoadedOnce ? appliedServers : nil,
-                storeAuthoritative: trigger != .routine,
-                collectionDirectory: { [self] in ingestDirectory(of: $0) })
+                storeAuthoritative: trigger != .routine)
             store = result.store
             loadCollections()
             var claudeConfigChangedExternally = false
@@ -1525,20 +1526,6 @@ public final class AppState: ObservableObject {
         if let folder = collectionsCache.published[collection]?.folder, let carrier = document.connectorCarrying(folder: folder) {
             throw PublishIntentError.publishFolderCarried(connector: carrier)
         }
-    }
-
-    /// The folder `${COLLECTION_DIR}` stands for in `collection`, for what a load ingests from
-    /// Claude's file. At launch the collections files have not been read yet — the store comes
-    /// first — so they are read here, straight from disk; after that, from what is loaded.
-    private func ingestDirectory(of collection: String) -> String? {
-        if hasLoadedCollectionsOnce { return collectionDirectory(of: collection) }
-        let file = CollectionsFile.load(from: service.paths.collectionsFileURL)
-        let cache = CollectionsLocalCache.load(from: service.paths.collectionsCacheURL)
-        if file.kind(of: collection) == .synced {
-            return cache.synced[collection]?.path.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }
-        }
-        guard file.collections[collection]?.publish != nil else { return nil }
-        return cache.published[collection]?.folder
     }
 
     /// Every collection this machine publishes, written when what it says has changed. Only the

@@ -11,19 +11,16 @@ public struct ReconcileOutcome {
 /// are all resolved by the caller regenerating the file from
 /// `store.enabledServers`.
 public enum Reconciler {
-    /// `directory` is the folder `${COLLECTION_DIR}` stands for in the active collection on this
-    /// machine, which Claude's file holds in the token's place. An ingested config has it written
-    /// back as the token, so a published collection never takes the author's own folder in.
     public static func reconcile(
         store: MasterStore, claudeServers: [String: JSONValue],
-        baseline: [String: JSONValue]? = nil, directory: String? = nil
+        baseline: [String: JSONValue]? = nil
     ) -> ReconcileOutcome {
         var result = store
         var changed = false
 
         for (name, config) in claudeServers where result.mcps[name] == nil {
             if isExternalAddition(name: name, config: config, baseline: baseline) {
-                result.mcps[name] = MCPEntry(enabled: true, config: collapsed(config, directory))
+                result.mcps[name] = MCPEntry(enabled: true, config: config)
                 changed = true
             }
             // else: the entry matches the baseline but is gone from the store —
@@ -52,12 +49,14 @@ public enum Reconciler {
     /// known entries absent from it are disabled, never deleted. The result
     /// renders exactly the snapshot, so no divergence survives the restore.
     ///
-    /// `directory`, as `reconcile` takes it: a config whose store copy already expands to what the
-    /// snapshot holds keeps the store copy, token and all, and any other has the folder written
-    /// back as the token. Every apply backs Claude's file up first, so a snapshot taken while a
-    /// collection publishes holds the author's folder, and adopting it as written would publish it.
+    /// `publishFolder` is the folder this machine publishes the active collection into, which
+    /// Claude's file holds where the store holds `${COLLECTION_DIR}`: every apply backs Claude's
+    /// file up first, so a snapshot taken while the collection publishes holds the author's own
+    /// folder. A connector whose store copy expands to exactly what the snapshot holds keeps the
+    /// store copy, token and all. Anything else is the snapshot's own, a genuine edit, and is
+    /// adopted as written; a publish that would carry the folder is refused further on.
     public static func adoptSnapshot(
-        store: MasterStore, servers: [String: JSONValue], directory: String? = nil
+        store: MasterStore, servers: [String: JSONValue], publishFolder: String? = nil
     ) -> ReconcileOutcome {
         var result = store
         for (name, entry) in result.mcps where entry.enabled && servers[name] == nil {
@@ -66,19 +65,13 @@ public enum Reconciler {
         for (name, config) in servers {
             let held = result.mcps[name]
             var entry = held ?? MCPEntry(enabled: true, config: config)
-            if let directory, let held, Placeholder.expandDirectoryToken(in: held.config, directory: directory) == config {
-                // The store's copy already renders as the snapshot does: it keeps its token.
-            } else {
-                entry.config = collapsed(config, directory)
-            }
+            let rendersAsSnapshot = publishFolder.map { folder in
+                held.map { Placeholder.expandDirectoryToken(in: $0.config, directory: folder) == config } ?? false
+            } ?? false
+            if !rendersAsSnapshot { entry.config = config }
             entry.enabled = true
             result.mcps[name] = entry
         }
         return ReconcileOutcome(store: result, storeChanged: result != store)
-    }
-
-    private static func collapsed(_ config: JSONValue, _ directory: String?) -> JSONValue {
-        guard let directory else { return config }
-        return Placeholder.collapseDirectory(in: config, directory: directory)
     }
 }

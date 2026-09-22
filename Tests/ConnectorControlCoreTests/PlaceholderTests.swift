@@ -1,5 +1,4 @@
 import XCTest
-import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
 /// Mirror: windows/tests/ConnectorControl.Core.Tests/PlaceholderTests.cs
@@ -47,24 +46,5 @@ final class PlaceholderTests: XCTestCase {
         XCTAssertEqual(expanded.value(at: JSONPointer(["args", "0"])), .string("/Users/d/Acme/mcp/../servers/x.js"))
         XCTAssertEqual(expanded.value(at: JSONPointer(["env", "ROOT"])), .string("/Users/d/Acme/mcp"))
         XCTAssertFalse(Placeholder.usesDirectoryToken(expanded))
-    }
-
-    func testCollapsesTheDirectoryOnlyWhereItStandsAsAFolder() {
-        let config: JSONValue = .object([
-            "command": .string("node"),
-            "args": .array([.string("/Users/d/share/tools/x.js"), .string("--root=/Users/d/share"),
-                            .string("/Users/d/share-tools/y.js"), .string("/home/Users/d/share/z.js")]),
-            "env": .object(["ROOT": .string("/Users/d/share")]),
-        ])
-        let collapsed = Placeholder.collapseDirectory(in: config, directory: "/Users/d/share")
-        XCTAssertEqual(args(of: collapsed), ["${COLLECTION_DIR}/tools/x.js", "--root=${COLLECTION_DIR}",
-                                             "/Users/d/share-tools/y.js", "/home/Users/d/share/z.js"],
-                       "a sibling that begins with the name, and a longer path that ends with it, are left alone")
-        XCTAssertEqual(collapsed.value(at: JSONPointer(["env", "ROOT"])), .string("${COLLECTION_DIR}"))
-        XCTAssertEqual(Placeholder.expandDirectoryToken(in: Placeholder.collapseDirectory(
-            in: .object(["args": .array([.string("/Users/d/share/tools/x.js")])]), directory: "/Users/d/share"),
-            directory: "/Users/d/share"), .object(["args": .array([.string("/Users/d/share/tools/x.js")])]),
-            "collapsing undoes what expanding did")
-        XCTAssertEqual(Placeholder.collapseDirectory(in: config, directory: ""), config)
     }
 }

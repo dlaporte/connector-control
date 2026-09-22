@@ -1647,20 +1647,48 @@ public class AppStateCollectionsTests
         Assert.True(JsonText.FileContains(document, Placeholder.DirectoryToken));
         Assert.False(JsonText.FileContains(document, folder));
 
-        // Removed since the backup was taken, the connector comes back with the folder collapsed.
-        state.Remove("x");
-        state.RestoreClaudeConfig(backup);
-        Assert.Equal([$"{Placeholder.DirectoryToken}/tools/x.js"], ArgsOf(state.Store.Collections[state.ActiveCollection].Mcps["x"].Config));
-        Assert.False(JsonText.FileContains(document, folder));
         Assert.Null(state.PublishError);
+
+        // Removed since the backup was taken, it comes back as the backup has it: there is no store
+        // copy to keep, and rewriting what came in could rewrite a genuine edit. The folder is then
+        // kept back from the document, for the author to answer in Publish….
+        var before = File.ReadAllBytes(document);
+        state.Remove("x");
+        Assert.NotEqual(before, File.ReadAllBytes(document));
+        var withoutX = File.ReadAllBytes(document);
+        state.RestoreClaudeConfig(backup);
+        Assert.Equal([folder + "/tools/x.js"], ArgsOf(state.Store.Collections[state.ActiveCollection].Mcps["x"].Config));
+        Assert.Equal(AppState.PublishFolderCarriedError("x"), state.PublishError?.Message);
+        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+        Assert.Equal(withoutX, File.ReadAllBytes(document));
+        Assert.False(JsonText.FileContains(document, folder));
+    }
+
+    /// <summary>
+    /// Published from another machine: the record is in the sidecar, but this machine has no binding
+    /// and so no folder to recognise. What the backup holds is adopted as written.
+    /// </summary>
+    [Fact]
+    public void ARestoreKeepsNothingForACollectionPublishedFromAnotherMachine()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.Upsert("x", new McpEntry(true, NodeWith($"{Placeholder.DirectoryToken}/tools/x.js")), null));
+        Seed(h, state, File_((state.ActiveCollection, Published("default"))));
+        Assert.True(state.IsPublished(state.ActiveCollection));
+        var backup = h.Dir.File("backup.json");
+        File.WriteAllText(backup, """{"mcpServers": {"x": {"command": "node", "args": ["/Users/d/elsewhere/tools/x.js"]}}}""");
+        state.RestoreClaudeConfig(backup);
+        Assert.Equal(["/Users/d/elsewhere/tools/x.js"], ArgsOf(state.Store.Collections[state.ActiveCollection].Mcps["x"].Config));
     }
 
     /// <summary>
     /// Removed on the other machine while this one was off: at launch Claude's config brings the
-    /// connector back with this machine's folder in it, which is written back as the token.
+    /// connector back with this machine's folder in it. The store has no copy to keep, so it arrives
+    /// as written, and the folder is kept back from the document.
     /// </summary>
     [Fact]
-    public void ALaunchIngestTakesTheTokenBackForThePublishFolder()
+    public void ALaunchIngestThatBringsThePublishFolderBackIsNotPublished()
     {
         using var h = new AppStateHarness();
         string document;
@@ -1673,12 +1701,14 @@ public class AppStateCollectionsTests
         store.Collections[store.ActiveCollection].Mcps.Remove("x");
         MasterStoreIO.Save(store, h.MasterStorePath);
 
+        var before = File.ReadAllBytes(document);
         using var relaunched = h.Create();
-        // Ingested with the token, not the folder.
-        Assert.Equal([$"{Placeholder.DirectoryToken}/tools/x.js"],
-            ArgsOf(relaunched.Store.Collections[relaunched.ActiveCollection].Mcps["x"].Config));
+        // Ingested as Claude's file has it.
+        Assert.Equal([folder + "/tools/x.js"], ArgsOf(relaunched.Store.Collections[relaunched.ActiveCollection].Mcps["x"].Config));
+        Assert.Equal(AppState.PublishFolderCarriedError("x"), relaunched.PublishError?.Message);
+        Assert.Equal(PublishErrorKind.BlockedForReview, relaunched.PublishError?.Kind);
+        Assert.Equal(before, File.ReadAllBytes(document));
         Assert.False(JsonText.FileContains(document, folder));
-        Assert.Null(relaunched.PublishError);
     }
 
     [Fact]

@@ -157,23 +157,19 @@ public class ReconcilerTests
     private static readonly JsonValue Expanded = NodeAt("/Users/d/share/x.js");
 
     [Fact]
-    public void AnIngestedConfigTakesTheTokenBack()
+    public void ARestoredSnapshotKeepsTheStoresTokenOnlyWhereItRendersTheSame()
     {
-        var outcome = Reconciler.Reconcile(MasterStore.Empty(), Servers(("x", Expanded)), directory: "/Users/d/share");
-        Assert.Equal(Tokened, outcome.Store.Mcps["x"].Config);
-        // With no folder for the collection, the config is taken as it stands.
-        Assert.Equal(Expanded, Reconciler.Reconcile(MasterStore.Empty(), Servers(("x", Expanded))).Store.Mcps["x"].Config);
-    }
-
-    [Fact]
-    public void ARestoredSnapshotKeepsTheStoresTokenAndCollapsesTheRest()
-    {
-        var s = Store(("x", new McpEntry(true, Tokened)));
-        var outcome = Reconciler.AdoptSnapshot(s, Servers(("x", Expanded), ("back", NodeAt("/Users/d/share/y.js"))), "/Users/d/share");
+        var s = Store(("x", new McpEntry(true, Tokened)), ("edited", new McpEntry(true, Tokened)));
+        var edit = NodeAt("/Users/d/share/y.js");
+        var outcome = Reconciler.AdoptSnapshot(s, Servers(("x", Expanded), ("edited", edit), ("back", Expanded)), "/Users/d/share");
         // The store's copy already renders as the snapshot does.
         Assert.Equal(Tokened, outcome.Store.Mcps["x"].Config);
-        Assert.Equal(NodeAt("${COLLECTION_DIR}/y.js"), outcome.Store.Mcps["back"].Config);
+        // A genuine edit is adopted as written, and a name the store does not hold has nothing to keep.
+        Assert.Equal(edit, outcome.Store.Mcps["edited"].Config);
+        Assert.Equal(Expanded, outcome.Store.Mcps["back"].Config);
         // Restoring what the store already renders changes nothing.
-        Assert.False(Reconciler.AdoptSnapshot(s, Servers(("x", Expanded)), "/Users/d/share").StoreChanged);
+        Assert.False(Reconciler.AdoptSnapshot(Store(("x", new McpEntry(true, Tokened))), Servers(("x", Expanded)), "/Users/d/share").StoreChanged);
+        // With no folder published from here, the snapshot is adopted as written.
+        Assert.Equal(Expanded, Reconciler.AdoptSnapshot(s, Servers(("x", Expanded))).Store.Mcps["x"].Config);
     }
 }
