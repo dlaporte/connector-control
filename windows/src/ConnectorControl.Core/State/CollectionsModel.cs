@@ -406,17 +406,13 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public bool CanExport => !state.IsSynced(SelectedCollection) && ActiveChecks.Count > 0;
 
     /// <summary>
-    /// Publishing a second time from the same machine is what the sheet's folder picker is for, so
-    /// the toolbar offers it only to a collection this machine does not already publish.
+    /// Any local collection, published or not. Reopening the dialog on a published one shows what
+    /// its record says — the folder, every shared value, every marked path — and pressing Publish
+    /// again updates the record and rewrites the document. That is the only way to change what is
+    /// shared or to mark a path again, so it stays offered beside Stop Publishing. A synced
+    /// collection has an author elsewhere and nothing here to publish.
     /// </summary>
-    public bool CanPublish
-    {
-        get
-        {
-            var collection = SelectedCollection;
-            return !state.IsSynced(collection) && !state.CollectionsCache.Published.ContainsKey(collection);
-        }
-    }
+    public bool CanPublish => !state.IsSynced(SelectedCollection);
 
     /// <summary>Refresh reads the bound document, so it needs one this machine can name.</summary>
     public bool CanRefresh => LocatedSource(SelectedCollection) is not null;

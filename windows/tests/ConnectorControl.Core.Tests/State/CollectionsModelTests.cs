@@ -184,14 +184,16 @@ public class CollectionsModelTests
 
         model.Selected = "Shared";
         Assert.False(model.CanExport);    // the ticks belonged to the collection that was showing
-        Assert.False(model.CanPublish);   // this machine already publishes it
+        // Published from here, and still offered: reopening the dialog shows the record and
+        // pressing Publish again updates what is shared, so both links stand side by side.
+        Assert.True(model.CanPublish);
         Assert.True(model.CanStopPublishing);
         Assert.False(model.CanRefresh);
         Assert.True(model.CanDelete);
 
         model.Selected = "Team";
         Assert.False(model.CanExport);
-        Assert.False(model.CanPublish);
+        Assert.False(model.CanPublish);   // a synced collection has an author elsewhere
         Assert.False(model.CanStopPublishing);
         Assert.True(model.CanRefresh);
         Assert.True(model.CanMakeLocalCopy);

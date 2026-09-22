@@ -342,12 +342,12 @@ public final class CollectionsModel: ObservableObject {
 
     public var canExport: Bool { !state.isSynced(selectedCollection) && !activeChecks.isEmpty }
 
-    /// Publishing a second time from the same machine is what the sheet's folder picker is for,
-    /// so the toolbar offers it only to a collection this machine does not already publish.
-    public var canPublish: Bool {
-        let collection = selectedCollection
-        return !state.isSynced(collection) && state.collectionsCache.published[collection] == nil
-    }
+    /// Any local collection, published or not. Reopening the sheet on a published one shows what
+    /// its record says — the folder, every shared value, every marked path — and pressing
+    /// Publish again updates the record and rewrites the document. That is the only way to
+    /// change what is shared or to mark a path again, so it stays offered beside Stop Publishing.
+    /// A synced collection has an author elsewhere and nothing here to publish.
+    public var canPublish: Bool { !state.isSynced(selectedCollection) }
 
     /// Refresh reads the bound document, so it needs one this machine can name.
     public var canRefresh: Bool { locatedSource(of: selectedCollection) != nil }

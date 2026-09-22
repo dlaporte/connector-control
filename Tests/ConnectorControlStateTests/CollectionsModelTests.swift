@@ -172,14 +172,16 @@ final class CollectionsModelTests: XCTestCase {
 
         model.selected = "Shared"
         XCTAssertFalse(model.canExport, "the ticks belonged to the collection that was showing")
-        XCTAssertFalse(model.canPublish, "this machine already publishes it")
+        // Published from here, and still offered: reopening the sheet shows the record and
+        // pressing Publish again updates what is shared, so both links stand side by side.
+        XCTAssertTrue(model.canPublish, "the only way to change what a published collection shares")
         XCTAssertTrue(model.canStopPublishing)
         XCTAssertFalse(model.canRefresh)
         XCTAssertTrue(model.canDelete)
 
         model.selected = "Team"
         XCTAssertFalse(model.canExport)
-        XCTAssertFalse(model.canPublish)
+        XCTAssertFalse(model.canPublish, "a synced collection has an author elsewhere")
         XCTAssertFalse(model.canStopPublishing)
         XCTAssertTrue(model.canRefresh)
         XCTAssertTrue(model.canMakeLocalCopy)
