@@ -235,6 +235,7 @@ public class StringCatalogTests
 
         actual["CollectionsModel.activePill"] = CollectionsModel.ActivePill;
         actual["CollectionsModel.activeSuffix"] = CollectionsModel.ActiveSuffix;
+        actual["CollectionsModel.addCollectionTooltip"] = CollectionsModel.AddCollectionTooltip;
         actual["CollectionsModel.addConnectorDisabledTooltip"] = CollectionsModel.AddConnectorDisabledTooltip;
         actual["CollectionsModel.addConnectorTooltip"] = CollectionsModel.AddConnectorTooltip;
         actual["CollectionsModel.connectorsHeader"] = CollectionsModel.ConnectorsHeader;

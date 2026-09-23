@@ -1009,6 +1009,11 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     // MARK: sidebar and connectors header
 
+    /// <summary>
+    /// The sidebar +'s tooltip and accessibility name: its glyph alone does not say that what it
+    /// adds is a collection.
+    /// </summary>
+    public const string AddCollectionTooltip = "Add Collection";
     public const string ImportSubtitle = "Adds copies you own";
     public const string SubscribeSubtitle = "Stays in sync, read-only";
     public const string ConnectorsHeader = "Connectors";
@@ -1023,10 +1028,9 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// The + button on the connector list header: an Add-Remote target in the collection the
-    /// window is showing, the same forced-remote flow the flyout's Add starts. The Mac's
-    /// <c>EditTarget.newRemote(in:)</c> takes no style; Windows always launches a new remote
-    /// connector through <c>cmd /c npx</c>, the same forced style <c>EditorWindow.NewRemoteStyle</c>
-    /// uses for the flyout's own Add.
+    /// window is showing. The Mac's <c>EditTarget.newRemote(in:)</c> takes no style; Windows
+    /// always launches a new remote connector through <c>cmd /c npx</c>, the same forced style
+    /// <c>EditorWindow.NewRemoteStyle</c> uses.
     /// </summary>
     public EditTarget NewConnectorTarget() => EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx, SelectedCollection);
 

@@ -123,7 +123,9 @@
       <!-- The section title and the plus whose menu makes a collection or brings one in. -->
       <DockPanel Margin="4,0,0,4">
         <Button x:Name="AddCollectionButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}"
-                Content="&#xE710;" Click="OnAddCollection" />
+                Content="&#xE710;" ToolTip="{x:Static state:CollectionsModel.AddCollectionTooltip}"
+                AutomationProperties.Name="{x:Static state:CollectionsModel.AddCollectionTooltip}"
+                Click="OnAddCollection" />
         <TextBlock Text="{x:Static state:CollectionsModel.WindowTitle}" Style="{StaticResource CaptionText}"
                    FontWeight="SemiBold" TextWrapping="NoWrap" VerticalAlignment="Center" />
       </DockPanel>

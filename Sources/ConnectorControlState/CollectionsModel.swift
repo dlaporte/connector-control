@@ -766,6 +766,9 @@ public final class CollectionsModel: ObservableObject {
 
     // MARK: - Sidebar and connectors header
 
+    /// The sidebar `+`'s tooltip and accessibility label: its glyph alone does not say that
+    /// what it adds is a collection.
+    public static let addCollectionTooltip = "Add Collection"
     public static let importSubtitle = "Adds copies you own"
     public static let subscribeSubtitle = "Stays in sync, read-only"
     public static let connectorsHeader = "Connectors"
@@ -781,7 +784,7 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// The `+` button on the connector list header: an Add-Remote target in the collection the
-    /// window is showing, the same forced-remote flow the popover's Add starts.
+    /// window is showing.
     public func newConnectorTarget() -> EditTarget { EditTarget.newRemote(in: selectedCollection) }
 
     // MARK: - Rows

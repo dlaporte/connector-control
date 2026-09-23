@@ -465,6 +465,18 @@ public class CollectionsWindowTests
     }
 
     [Fact]
+    public void TheSidebarPlusSaysWhatItAdds()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Showing(h, state, (window, _) =>
+        {
+            Assert.Equal(CollectionsModel.AddCollectionTooltip, window.AddCollectionButton.ToolTip);
+            Assert.Equal(CollectionsModel.AddCollectionTooltip, AutomationProperties.GetName(window.AddCollectionButton));
+        });
+    }
+
+    [Fact]
     public void TheSidebarPlusMakesACollectionOrBringsOneIn()
     {
         using var h = new AppStateHarness();

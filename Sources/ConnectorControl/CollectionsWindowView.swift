@@ -134,7 +134,8 @@ struct CollectionsWindowView: View {
 
     /// The section title and the `+` whose menu makes a collection or brings one in. Import and
     /// Subscribe carry their subtitles, because which of the two to use is the one question the
-    /// words alone do not answer.
+    /// words alone do not answer. A menu row draws its subtitle only from macOS 14.4, so each
+    /// also carries it as help.
     private var sidebarHeader: some View {
         HStack {
             Text(CollectionsModel.windowTitle)
@@ -148,16 +149,20 @@ struct CollectionsWindowView: View {
                     Text(CollectionsModel.importButton)
                     Text(CollectionsModel.importSubtitle)
                 }
+                .help(CollectionsModel.importSubtitle)
                 Button { openDocument(keepInSync: true) } label: {
                     Text(CollectionsModel.subscribeButton)
                     Text(CollectionsModel.subscribeSubtitle)
                 }
+                .help(CollectionsModel.subscribeSubtitle)
             } label: {
                 Image(systemName: "plus")
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
+            .help(CollectionsModel.addCollectionTooltip)
+            .accessibilityLabel(CollectionsModel.addCollectionTooltip)
         }
     }
 

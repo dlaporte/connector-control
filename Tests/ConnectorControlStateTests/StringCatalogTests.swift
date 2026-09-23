@@ -225,6 +225,7 @@ final class StringCatalogTests: XCTestCase {
 
         actual["CollectionsModel.activePill"] = CollectionsModel.activePill
         actual["CollectionsModel.activeSuffix"] = CollectionsModel.activeSuffix
+        actual["CollectionsModel.addCollectionTooltip"] = CollectionsModel.addCollectionTooltip
         actual["CollectionsModel.addConnectorDisabledTooltip"] = CollectionsModel.addConnectorDisabledTooltip
         actual["CollectionsModel.addConnectorTooltip"] = CollectionsModel.addConnectorTooltip
         actual["CollectionsModel.connectorsHeader"] = CollectionsModel.connectorsHeader
