@@ -17,7 +17,7 @@ config, the master list and collections.json — before writing to it, so a
 wiped or mangled config is always one click from restored.
 
 <p align="center">
-  <img src="docs/screenshots/mac-popover.png" width="344" alt="The Connector Control popover on macOS: a collection chip, a list of connectors with on/off toggles, and an edit pencil on every row.">
+  <img src="docs/screenshots/mac-popover.png" width="344" alt="The Connector Control popover on macOS: a collection chip and the active collection's connectors with on/off toggles.">
 </p>
 
 <p align="center"><sub>Pending: equivalent Windows tray-flyout screenshots.</sub></p>
@@ -65,16 +65,18 @@ The editor's two views of the same connector:
 ### Collections
 
 Collections are full, independent connector snapshots — each has its own
-complete list of connectors and enabled flags. A chip in the header of the
-popover (Mac) or flyout (Windows) — `<collection name> ▾` — shows the active
-collection and opens a menu to switch collections, to **Import…** or
-**Export “<name>”…** a collection document, and to open **Manage
-Collections…**. Switching applies immediately, same as any other change, and
-raises **Restart Required** just like a toggle would. A new collection
-starts as a copy of the active one's connectors.
+complete list of connectors and enabled flags. The popover (Mac) or flyout
+(Windows) runs the active one. A chip in its header — `<collection name> ▾`
+— shows which collection that is and opens a menu of every collection, a
+check on the active one, then **Manage Collections**. Choosing a collection
+switches to it, which applies immediately, same as any other change, and
+raises **Restart Required** just like a toggle would. The switches below the
+chip turn the active collection's connectors on and off. That is all the
+popover does: adding, editing, copying and sharing connectors happen in the
+Collections window.
 
 <p align="center">
-  <img src="docs/screenshots/mac-chip-menu.png" width="344" alt="The collection chip's menu on macOS: the collections to switch between, a check on the active one and a chain on a synced one, then Import…, Export…, and Manage Collections….">
+  <img src="docs/screenshots/mac-chip-menu.png" width="344" alt="The collection chip's menu on macOS: the collections to switch between, a check on the active one and a chain on a subscribed one, then Manage Collections.">
 </p>
 
 A collection is one of three kinds.
@@ -84,46 +86,97 @@ editable. Every profile from an earlier version is now a local collection
 with the same name and the same connectors. The last local collection can't
 be deleted, so there is always somewhere to add a connector.
 
-**Synced** collections are read-only mirrors of a collection document
-somebody else publishes. You fill in the values the author left for you and
-switch connectors on and off; nothing else can be edited, and nothing can be
-added — the header's **+** is disabled with the tooltip "Additions go in a
-local collection." A chain glyph follows the collection's name on the chip
-and in the Collections window, with the source file's path in its tooltip,
-and an amber dot joins it while an update is waiting to be reviewed. In the
-chip's menu on a Mac the chain is the row's icon and a waiting update reads
-"· update available" after the name, because a macOS menu row draws one
-title and one image; the Windows menu draws the chain and the dot. Every row
-of a synced collection carries a lock.
+**Subscribed** collections — "synced" in the window's detail line — are
+read-only mirrors of a collection document somebody else publishes. You fill
+in the values the author left for you and switch connectors on and off;
+nothing else can be edited, and nothing can be added — the Collections
+window's **+** beside **Connectors** is dimmed with the tooltip "Additions go
+in a local collection." A chain glyph follows the collection's name on the
+chip and in the Collections window's sidebar, with the source file's path in
+its tooltip, and an amber dot joins it while an update is waiting to be
+reviewed. In the chip's menu on a Mac the chain is the row's icon and a
+waiting update reads "· update available" after the name, because a macOS
+menu row draws one title and one image; the Windows menu draws the chain and
+the dot. Every row of a subscribed collection carries a lock.
 
 **Published** collections are local collections that also write their
-document to a folder whenever their content changes. Publishing is a fact
-about one machine rather than about the collection, so a published
-collection carries no glyph of its own. On the machine that publishes it,
-the Collections window's detail line says so, and so does the editor, in a
-line at the top: "Published to <folder> — saving updates the file your team
-reads. Secrets stay here."
+document to a folder whenever their content changes. They carry no glyph on
+the chip or in the sidebar; the Collections window's header marks them
+**Published**. Where the document goes is a fact about one machine, so only
+the machine that publishes it says so: the Collections window's detail line
+names the folder, and the editor has a line at the top: "Published to
+<folder> — saving updates the file your team reads. Secrets stay here."
 
-**Manage Collections…** opens the Collections window: the collections on the
-left, the selected one's connectors on the right, and a detail line over
-them that starts with the collection's name — "Personal · local · 5
-connectors · active", "Data team · synced from
-/Users/you/Acme/mcp/data-team.json · read-only · up to date", or
-"Consulting · local · 4 connectors · publishes to /Users/you/Acme/mcp from
-this Mac". The toolbar carries **Import…**, **Subscribe…**, **Export <n>…**
-for the rows you tick, **Publish…**, **Refresh**, **Make Local Copy…** and,
-at its right, **New…**. A button greys out while it does not apply: Export
-until you tick a row of a local collection, Publish… for a synced
-collection, Make Local Copy… unless a synced collection is selected, and
-Refresh unless a synced collection whose file has been found is selected.
-Under the rows sit the links that apply to the selected collection:
-**Rename…**, **Delete…**, **Publish…**, **Stop Publishing** and **Stop
-Syncing (keeps a local copy)**. A switch can
-be flipped in any collection from here — only the active collection reaches
-Claude, so a toggle elsewhere is saved and nothing is restarted.
+**Manage Collections** opens the Collections window. Every control in it
+sits on the thing it acts on.
+
+- **The sidebar** lists the collections under the heading **Collections**.
+  Its **+** (tooltip "Add Collection") offers **New Collection**, which
+  starts a collection as a copy of the active one's connectors and makes it
+  the active one, then **Import**, "Adds copies you own", and **Subscribe**,
+  "Stays in sync, read-only" (see Sharing a collection with a team).
+  Selecting a collection only shows it; double-click it, or choose **Make
+  Active** from its context menu, to switch to it.
+- **The header** carries the selected collection's name, its pills — a green
+  **Active** on the collection Claude is running, then **Published** or
+  **Subscribed**, never both — and a **⋯** (tooltip "More") holding
+  everything done to the collection itself. The menu lists only what
+  applies: **Make Active** first, on a collection that is not active;
+  **Rename**; **Duplicate**, or **Make Local Copy** on a subscribed
+  collection; **Start Publishing**, or once it publishes **Publishing
+  Settings** and **Stop Publishing**, with **Show Published File** on the
+  machine that writes the file; on a subscribed collection **Refresh** and
+  **Show Source File** once its file has been found, and **Stop Syncing**,
+  which asks first; **Export All**, dimmed on a subscribed collection; and
+  **Delete**, which asks first. Duplicate and Make Local Copy both copy the
+  whole collection into a new local one, every connector switched off and
+  marked with where it came from.
+- **The connector list** is headed **Connectors**, with the count and a
+  **+** (tooltip "Add Connector") that opens the editor on a new connector
+  in this collection. Each row has a tick — a lock on a subscribed
+  collection — then the connector's name, a caution glyph when something
+  needs your attention, what the connector runs, and a pencil (tooltip
+  "Edit") that opens its editor. Names line up in a column as wide as the
+  longest of them, up to a cap past which a long name is cut. There is no
+  switch here and no right-click menu: whether a connector is on is the
+  popover's business, so to switch a connector in another collection, make
+  that collection active first.
+- **The selection bar** along the bottom shows the detail line while
+  nothing is ticked — "local · 5 connectors · active", "synced from
+  /Users/you/Acme/mcp/data-team.json · read-only · up to date", or "local · 4
+  connectors · publishes to /Users/you/Acme/mcp from this Mac". Tick rows
+  and it reads "2 selected", with **Copy to**, **Export** and, apart at the
+  far end, **Remove**. The rows of a subscribed collection can't be ticked.
+
+The column after the name says what the connector runs: a remote
+connector's host, or a local one's program with its paths, URLs and package
+names — `npx …/server-filesystem ~/Documents`. It is built to leave secrets
+out. It shows the program's name, a URL as its scheme, host and port, a
+file path with your home folder shortened to `~`, and a package's name. It
+leaves out whatever follows a flag named like a secret (anything with token,
+key, secret, pass, pwd, pw, auth, credential or bearer in it), any
+`KEY=value` word, a URL's user name and password and its query string, long
+random-looking strings, and everything it does not recognise, flags
+included. It is a best-effort mask, not a guarantee: a secret shaped like a
+path or a package name, or one following a flag that is not named like a
+secret, still shows, as does one written into a real hostname, or a
+hyphenated word in the place where npx or uvx names the server it runs.
+Check the column before you share a screenshot of the window.
+
+**Copy to** lists every other collection — a subscribed one is listed but
+dimmed and marked "read-only", since its connectors are the author's — then
+**New Collection**, which asks for a name and makes an empty local
+collection to take the copies. Copies arrive switched off and record where
+they came from, so nothing Claude runs changes. When the destination already
+holds a name you ticked, the Copy sheet asks about each clash: **Replace**,
+**Keep both**, which lands the copy as `<name> 2` and is the default, or
+**Skip**; the rest are listed as "new · arrives off". **Export** opens the
+Export sheet on the ticked rows. **Remove** asks first — "Remove
+“<name>”?", or "Remove 3 connectors?" — adding "A copy remains in Backups.";
+removing from the active collection applies at once.
 
 <p align="center">
-  <img src="docs/screenshots/mac-collections-window.png" width="620" alt="The Collections window on macOS: collections in the left pane with a chain on the synced one, and the selected collection's connectors on the right with locks, a type column, toggles and edit pencils.">
+  <img src="docs/screenshots/mac-collections-window.png" width="620" alt="The Collections window on macOS: collections in the sidebar with a chain on the subscribed one; the selected collection's name with its pills and a more menu; its connectors with ticks, names, what each one runs and edit pencils; and the selection bar along the bottom.">
 </p>
 
 The master list file (mcps.json) is v2 (collection-aware); older v1 files,
@@ -145,8 +198,8 @@ carry the master list today.
 
 #### Publishing
 
-Select a local collection in the Collections window and choose **Publish…**.
-Point it at a folder in a repository or a synced drive — the master list's
+Select a local collection in the Collections window and choose **Start
+Publishing** from its **⋯**. Point it at a folder in a repository or a synced drive — the master list's
 own folder and the backups folder are refused — and the app writes
 `<collection-name>.json` there, the name lowercased with every run of other
 characters collapsed to a hyphen. The file name and the document's identity
@@ -170,8 +223,8 @@ The sheet decides what leaves the machine:
   Nothing is ever edited on your behalf; the preview is there so you see
   every byte before it leaves.
 
-Open **Publish…** again at any time to change what is shared or to re-mark a
-path: the sheet reopens on the folder and every tick the collection
+Once the collection publishes, the same menu's **Publishing Settings**
+changes what is shared or re-marks a path: the sheet reopens on the folder and every tick the collection
 publishes with, and pressing Publish there updates what is shared and
 rewrites the document.
 
@@ -207,21 +260,22 @@ machine that published it. **That machine has to be running for a change to
 reach the team**: an edit made on your other machine travels through the
 master list and is published the next time the publishing machine sees it. A
 write that fails puts "Couldn’t publish …" on the banner with **Choose
-Folder…** and **Stop Publishing** beside it. The Publish sheet stays open on
+Folder**, and in the popover **Stop Publishing** beside it (in the window,
+Stop Publishing is in the **⋯**). The Publish sheet stays open on
 a failure, and pressing Publish there, or in the sheet opened again later,
 retries at once; otherwise the next change retries the write.
 
 Export writes the same document once, wherever you choose, with the same
-preview and warnings. The chip menu's **Export “<name>”…** always writes the
-whole active collection; the Collections window's **Export <n>…** writes
-only the rows you tick. A synced collection is the author's document
-already, so it is never offered for export.
+preview and warnings. The **⋯** menu's **Export All** writes the whole
+selected collection; the selection bar's **Export** writes only the rows you
+tick. A subscribed collection is the author's document already, so Export
+All is dimmed on one and its rows can't be ticked.
 
 #### Subscribing
 
-**Subscribe…** picks a document and opens the Import sheet on **Keep as its
-own collection, in sync with this file**; **Import…** opens the same sheet on
-the other mode. Either way the sheet names the document and lists its
+**Subscribe**, under the sidebar's **+**, picks a document and opens the
+Import sheet on **Keep as its own collection, in sync with this file**;
+**Import** opens the same sheet on the other mode. Either way the sheet names the document and lists its
 connectors before anything happens. A subscribed collection arrives with
 every connector switched off and does not become the active one.
 
@@ -232,7 +286,7 @@ What is yours: the values the document asks this machine for, and which
 connectors are on.
 
 When the author changes the file the collection says so — "Data team changed
-at its source: adds jira; removes confluence." — with **Review & Apply…**.
+at its source: adds jira; removes confluence." — with **Review & Apply**.
 The review sheet groups what would land under **Added**, **Removed** and
 **Changed**, with the JSON either side of every change, and nothing lands
 until you press **Apply**. Added connectors arrive switched off, and your
@@ -246,14 +300,13 @@ Another machine picks the collection up from the master list, but where the
 document sits is a per-machine fact. If it lies inside the master-list
 folder the app finds it by itself; otherwise the collection shows "<name>'s
 file isn’t on this Mac yet." — "this PC" on Windows — with
-**Locate <file>…**.
+**Locate <file>**.
 
-To take part of a synced collection somewhere you can edit it, use **Make
-Local Copy…**: from the Collections window it copies the whole collection
-into a new local one, and from a connector's editor it copies that one
-connector into a local collection you pick. **Stop Syncing (keeps a local
-copy)** turns the collection itself into an ordinary local one, keeping
-every connector, every value you filled in and every switch. Deleting a
+To take a subscribed collection somewhere you can edit it, choose **Make
+Local Copy** from its **⋯**: it copies the whole collection into a new local
+one, every connector switched off. **Stop Syncing** turns the collection
+itself into an ordinary local one, keeping every connector, every value you
+filled in and every switch; it asks first, and says as much. Deleting a
 synced collection never touches the source file.
 
 #### Importing as copies
@@ -300,21 +353,21 @@ machines that follow it, including the one that publishes it.
   leftover file carries the identity the collection had before, and the app
   never writes over a document it cannot vouch for. Delete the file from the
   folder, then publish again.
-- A path you mark in **Publish…** is remembered together with the text it
+- A path you mark in the Publish sheet is remembered together with the text it
   had, so it stays a placeholder when you add, remove or reorder arguments
   around it, correct it in place in the editor's form, or rename the
   connector. If it changes somewhere the app cannot follow — the JSON view,
   a hand edit, or an older version of the app on any machine — and the app
   can no longer tell which argument it is, the app stops publishing that
   collection rather than send the path as written. The banner gives the
-  reason, "A path marked in “<connector>” has moved. Open Publish… to mark
-  it again." Publishing stops the same way, each with a banner of its own,
+  reason, "A path marked in “<connector>” has moved. Open Publishing
+  Settings to mark it again." Publishing stops the same way, each with a banner of its own,
   when the document would carry a path this machine keeps back, or this
   machine's publish folder, in some other connector. However it stops, the
   document already in the folder is left exactly as it was, and subscribers
   receive none of that collection's other changes until the entry is
   answered.
-- Reopen **Publish…** and the sheet lists every mark it could not place,
+- Reopen **Publishing Settings** and the sheet lists every mark it could not place,
   and every path this machine keeps back that turns up elsewhere in the
   document, each with its connector and the field it sits in. Publish and
   Export stay unavailable until every entry is answered, and each kind of
@@ -365,7 +418,7 @@ There is no dock icon; the app lives entirely in the menu bar. Enable
 **Launch at login** in Settings (⚙︎) if you want it always available. The
 app checks for new releases on its own and offers each one in an update
 window; Settings ▸ General ▸ Updates has a switch for installing them
-automatically instead, and a **Check for Updates…** button.
+automatically instead, and a **Check for Updates** button.
 
 #### Uninstalling
 
@@ -397,10 +450,10 @@ then **Run anyway**. The warning goes away as the signature earns reputation.
    takes the permanent snapshot of the original config.
 
 Left-click the tray icon for the connector list; right-click it for
-**Settings…** and **Quit**. Updates are offered, not installed silently: the
+**Open**, **Settings** and **Quit Connector Control**. Updates are offered, not installed silently: the
 app checks GitHub for new releases and shows **Install and Relaunch** when
 one is available (Settings ▸ General ▸ Updates has a switch to download and
-install them automatically, and a **Check for Updates…** button). Turn on
+install them automatically, and a **Check for Updates** button). Turn on
 **Launch at startup** there to have it always available.
 
 #### Uninstalling
@@ -529,7 +582,7 @@ changes live (the file is watched). Notes:
 - An app older than collections, sharing the same master list, has no idea a
   collection is synced and edits it as an ordinary one. This app then reads
   those edits as a pending update from the source, and applying reverts
-  them; use Make Local Copy… or Stop Syncing first if you want to keep them.
+  them; use Make Local Copy or Stop Syncing first if you want to keep them.
 - collections.json travels with mcps.json. The per-machine facts — where a
   source document sits, which folder a collection publishes to — live in a
   collections-local.json that stays out of the synced folder, as backups do.

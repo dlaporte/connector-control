@@ -34,31 +34,32 @@ bullet once the section is about to ship.
 
 - Profiles are now collections. Every profile you had is a collection with the same name
   and connectors, and the master list file is unchanged.
-- Export… writes a collection as a document, and Import… brings one in either as copies
-  into a collection of your own or as a synced collection that follows the file. The
-  Import sheet says what will happen to each connector before anything does.
+- Export writes a collection, or the connectors you tick, as a document. Import brings
+  one in as copies into a collection of your own, and Subscribe as a synced collection
+  that follows the file. The Import sheet says what will happen to each connector before
+  anything does.
 - An imported name that is already taken can replace the old connector, keeping the
   secrets and paths you filled in, land beside it as `<name> 2`, or be left out. Copies
   arrive switched off, and the editor names the collection each came from and the day it
   arrived.
 - A synced collection is read-only apart from your secrets, your paths and which
   connectors are on: its rows show a lock, the editor opens locked and says what you can
-  change, and Add Connector is disabled. Make Local Copy… takes the connectors you pick,
-  or the whole collection, into one of your own.
+  change, and Add Connector is disabled. Make Local Copy takes the whole collection into
+  one of your own.
 - A change at a synced collection's source arrives for review: Review & Apply shows the
   before and after of every connector, nothing lands until you apply it, and your filled
-  values survive. Refresh re-reads at once, Locate… finds the file on a new machine, and
-  Stop Syncing makes the collection yours.
+  values survive. Refresh re-reads at once, Locate finds the file on a new machine, and
+  Stop Syncing makes the collection yours, after asking.
 - A placeholder is a value a document asks each machine for; a connector waiting on one
   says "needs your value" or "needs your path", with the author's hint.
   `${COLLECTION_DIR}` is the document's folder: where a synced collection found it, or
   the publish folder on the publishing machine. In a local collection this machine does
   not publish, the connector's row says it has no folder.
-- Publish… writes a local collection's document to a folder in a repository or synced
-  drive and rewrites it whenever what the collection runs changes; turning a connector
-  on or off never republishes. Reopening Publish… changes what a published collection
-  shares. Deleting a published collection, or Stop Publishing in the Collections window,
-  asks whether to remove the document too; Keep is the default.
+- Start Publishing writes a local collection's document to a folder in a repository or
+  synced drive and rewrites it whenever what the collection runs changes; turning a
+  connector on or off never republishes. Publishing Settings changes what a published
+  collection shares. Deleting a published collection, or Stop Publishing in the
+  Collections window, asks whether to remove the document too; Keep is the default.
 - The Publish sheet lists every environment value, which travels as a hint unless you
   tick share value, and every argument that looks like a path on this machine, which
   travels as written unless you tick it to become a placeholder. The token, header value
@@ -70,24 +71,43 @@ bullet once the section is about to ship.
   field; Publish and Export wait until every one is ticked where it now sits, forgotten
   or released. The folder a collection publishes into never travels: Use
   `${COLLECTION_DIR}` answers it by rewriting the connector.
-- A publish that fails says so on the collection banner, with Choose Folder… and Stop
+- A publish that fails says so on the collection banner, with Choose Folder and Stop
   Publishing, and pressing Publish again retries the write at once. A path marked for
   others to supply survives added, removed or reordered arguments, an in-place
   correction and a connector rename; if the app can no longer place it, or the document
   would carry a kept-back path or the publish folder in another connector, publishing
   stops rather than write it, the document already in the folder is left as it was, and
-  the banner names the connector to open Publish… for.
-- The Collections window lists every collection beside its connectors, marking the
-  active one and the synced ones, with a detail line saying where the selected one
-  publishes to or syncs from. Import…, Subscribe…, Export…, Publish…, Refresh, Make
-  Local Copy… and New… sit in its toolbar, and Rename…, Delete…, Stop Publishing and
-  Stop Syncing under the rows. A switch flipped in a collection that is not active is
-  saved without restarting anything.
+  the banner names the connector to open Publishing Settings for.
+- The Collections window lists every collection beside its connectors, and every control
+  in it sits on what it acts on. The sidebar's + offers New Collection, Import ("Adds
+  copies you own") and Subscribe ("Stays in sync, read-only"). The header shows the
+  collection's name, an Active, Published or Subscribed pill where one applies, and a ⋯
+  menu listing only what applies to that collection: Make Active, Rename, Duplicate or
+  Make Local Copy, Start Publishing or Publishing Settings and Stop Publishing, Show
+  Published File or Show Source File, Refresh, Stop Syncing, Export All and Delete. The
+  connector list's + adds a connector, and each row's pencil opens its editor.
+- Each row says what its connector runs: a remote connector's host, or a local one's
+  program, paths, URLs and package names. The column leaves out the values of flags named
+  for secrets, `KEY=value` words, a URL's user and query, random-looking strings and
+  anything it does not recognise. It is a best-effort mask, not a guarantee.
+- Ticking rows turns the bar at the foot of the window into a selection bar. Copy to
+  copies the ticked connectors into another local collection, or into a new one it asks
+  you to name; a synced collection is listed but cannot take copies. The copies arrive
+  switched off and record where they came from, and a name the destination already holds
+  can replace the one there, land beside it as `<name> 2`, which is the default, or be
+  left out. Export writes the ticked connectors as a document.
+- Remove takes out any number of ticked connectors at once. It asks first, naming the
+  connector or the count, and says a copy remains in Backups; the connector editor no
+  longer has a Remove button.
+- Duplicate copies a whole local collection into a new one, every connector switched off
+  and marked with where it came from.
+- The popover (Mac) and flyout (Windows) now only run the active collection: they switch
+  collections and turn connectors on and off. Adding and editing connectors moved to the
+  Collections window, and the chip's menu lists the collections, then Manage Collections.
 - The collection chip carries a chain when the collection you are in comes from a shared
-  document, and an amber dot when that document has changes waiting. Its menu switches
-  collections, marks the synced ones the same way, and offers Import…, Export… and
-  Manage Collections…. A collection with news says so above the connector list, with the
-  button that answers it.
+  document, and an amber dot when that document has changes waiting; its menu marks the
+  synced collections the same way. A collection with news says so above the connector
+  list, with the button that answers it.
 - Saving a connector that another local collection holds an identical copy of offers, in
   one checkbox, to apply the same change there too.
 - Restoring a backup of Claude's configuration puts it back into the collection it was
