@@ -390,8 +390,8 @@ public final class CollectionsModel: ObservableObject {
     public var canExport: Bool { !state.isSynced(selectedCollection) && !activeChecks.isEmpty }
 
     /// Where the selection bar's Copy to can send the ticked rows: any local collection but the
-    /// one showing them, which is their source. A synced collection is excluded too, following
-    /// `EditSheetView.localCopyTargets` — it has no local write path of its own to copy into.
+    /// one showing them, which is their source. A synced collection is excluded too: its
+    /// connectors are the author's, and it has no local write path of its own to copy into.
     public var copyTargets: [String] { state.localCollectionNames.filter { $0 != selectedCollection } }
 
     /// Every collection but the selected one, in the sidebar's order, each marked whether it can

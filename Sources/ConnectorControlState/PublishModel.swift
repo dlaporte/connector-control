@@ -151,7 +151,7 @@ public final class PublishModel: ObservableObject {
     /// part of what the document carries.
     public let connectors: [String]?
     /// Where the document is written, nil until the user chooses. Settable: the sheet's Choose
-    /// Folder… is the only thing that fills it.
+    /// Folder is the only thing that fills it.
     @Published public var folder: String?
     @Published public var envRows: [EnvRow]
     @Published public var pathRows: [PathRow] {
@@ -554,7 +554,7 @@ public final class PublishModel: ObservableObject {
 
     /// Publish, or re-publish with what the sheet now says. A folder that is not the one on
     /// record starts publishing again there, which is how the failed-write banner's Choose
-    /// Folder… moves a collection. nil on success. Refused with the first note while a mark is
+    /// Folder moves a collection. nil on success. Refused with the first note while a mark is
     /// unresolved or a kept path unanswered, behind the disabled button: what the rows say would
     /// send the path as written. What the author released goes on record with the ticks.
     public func publish() -> String? {

@@ -10,7 +10,7 @@ public enum CollectionBanner: Equatable, Sendable {
     /// A synced collection's document has never been found on this machine.
     case locate(collection: String, fileName: String)
     /// The last attempt to write a published collection's document failed. Another folder is an
-    /// answer, which is why this banner offers Choose Folder….
+    /// answer, which is why this banner offers Choose Folder.
     case publishFailed(collection: String, message: String)
     /// Publishing refused to write, for the author to review — a marked path that has moved, say.
     /// Another folder answers nothing here: it would re-bind the collection, write nothing there

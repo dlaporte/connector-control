@@ -278,19 +278,19 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     };
 
     /// <summary>
-    /// The menu's Import…: the dialog belongs to the Collections window, so opening it is all
+    /// The menu's Import: the dialog belongs to the Collections window, so opening it is all
     /// the flyout does and this is what it finds waiting.
     /// </summary>
     public void RequestImport() => state.CollectionsWindowRequest = new CollectionsWindowRequest.ImportFile();
 
     /// <summary>
-    /// The menu's Export "&lt;active&gt;"…, which the Collections window shows for the collection
+    /// The menu's Export "&lt;active&gt;", which the Collections window shows for the collection
     /// that is active now rather than whichever one it last had selected.
     /// </summary>
     public void RequestExport() => state.CollectionsWindowRequest = new CollectionsWindowRequest.ExportActive();
 
     /// <summary>
-    /// The banner's Review &amp; Apply…, for the collection the banner names — which is not always
+    /// The banner's Review &amp; Apply, for the collection the banner names — which is not always
     /// the active one, so the name travels with the request.
     /// </summary>
     public void RequestReview()

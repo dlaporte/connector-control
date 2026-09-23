@@ -286,7 +286,7 @@ public sealed class PublishModel : ObservableObject
             .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
     }
 
-    /// <summary>Where the document is written, null until the user chooses. Settable: the sheet's Choose Folder… is the only thing that fills it.</summary>
+    /// <summary>Where the document is written, null until the user chooses. Settable: the sheet's Choose Folder is the only thing that fills it.</summary>
     public string? Folder
     {
         get => folder;
@@ -809,7 +809,7 @@ public sealed class PublishModel : ObservableObject
 
     /// <summary>
     /// Publish, or re-publish with what the sheet now says. A folder that is not the one on record
-    /// starts publishing again there, which is how the failed-write banner's Choose Folder… moves
+    /// starts publishing again there, which is how the failed-write banner's Choose Folder moves
     /// a collection. null on success. Refused with the first note while a mark is unresolved or a
     /// kept path unanswered, behind the disabled button: what the rows say would send the path as
     /// written. What the author released goes on record with the ticks.

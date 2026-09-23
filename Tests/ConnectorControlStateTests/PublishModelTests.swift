@@ -589,7 +589,7 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(PublishModel.cancelButton, "Cancel")
         XCTAssertEqual(PublishModel.chooseFolderButton, "Choose Folder")
         XCTAssertEqual(PublishModel.markPathLabel, "Mark as a path this machine supplies")
-        // The menu item that opens this sheet ends in an ellipsis; the sheet itself does not.
+        // The menu item that opens this sheet and the sheet's title now read the same.
         XCTAssertEqual(PublishModel.exportTitle("Data team"), "Export “Data team”")
         XCTAssertEqual(PopoverModel.exportTitleFor("Data team"), "Export “Data team”")
     }

@@ -530,7 +530,7 @@ public final class AppState: ObservableObject {
                 && !claudeConfigChangedExternally
             // Every note, not just the first: with a corrupt store AND a
             // malformed Claude config, the second one is the actionable one
-            // (Backups ▸ Restore… is the way out). The collections load runs above and adds
+            // (Backups ▸ Restore is the way out). The collections load runs above and adds
             // its own note here rather than setting lastError itself, which this line would
             // then overwrite.
             let notes = result.notes + [collectionsNote, collectionsNotSaved ? AppState.collectionsNotSavedNote : nil]
@@ -743,7 +743,8 @@ public final class AppState: ObservableObject {
         return nil
     }
 
-    /// Removes and persists; the caller applies (the editor's remove flow does both in one turn).
+    /// Removes and persists, and no more: a caller removing from the active collection applies
+    /// at the call site, as `CollectionsModel.removeChecked` does after `remove(names:in:)`.
     /// Whatever the publish record said about the connector goes with it: a connector added later
     /// under the same name was never ticked, and a mark left behind would refuse every publish
     /// as a path that had moved.
@@ -1427,14 +1428,14 @@ public final class AppState: ObservableObject {
     // MARK: - Publishing and export
 
     /// Starts publishing a local collection into `folder`, or re-points one that already
-    /// publishes (the failed-write banner's Choose Folder…). The slug and the origin are fixed
+    /// publishes (the failed-write banner's Choose Folder). The slug and the origin are fixed
     /// the first time and never re-derived, so renaming the collection cannot orphan the document
     /// the team already subscribed to. The document is written before this returns.
     /// nil on success, else the message to show.
     ///
     /// `reviewedValues` is what the author's Publish in the sheet says must never travel as
     /// written: it replaces this machine's list of marked paths (`PublishBinding.markedValues`).
-    /// nil — the banner's Choose Folder…, which nobody reviewed — keeps the list the collection
+    /// nil — the banner's Choose Folder, which nobody reviewed — keeps the list the collection
     /// already had. `releasedValues` are the paths the author released in the sheet, let travel
     /// in this collection's document although this machine keeps them back elsewhere.
     public func startPublishing(_ collection: String, to folder: String, intent: PublishIntent,
@@ -1512,7 +1513,7 @@ public final class AppState: ObservableObject {
     }
 
     /// Publishing again into a different folder, which is what the failed-write banner's Choose
-    /// Folder… does from the popover and from the Collections window alike. The recorded intent
+    /// Folder does from the popover and from the Collections window alike. The recorded intent
     /// travels unchanged: the sheet is where what the document says gets edited, not this.
     /// nil on success, else the message.
     ///

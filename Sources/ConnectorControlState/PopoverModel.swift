@@ -246,15 +246,15 @@ public final class PopoverModel: ObservableObject {
         }
     }
 
-    /// The menu's Import…: the picker and the sheet belong to the Collections window, so opening
+    /// The menu's Import: the picker and the sheet belong to the Collections window, so opening
     /// it is all the popover does and this is what it finds waiting.
     public func requestImport() { state.collectionsWindowRequest = .importFile }
 
-    /// The menu's Export “<active>”…, which the Collections window shows for the collection that
+    /// The menu's Export “<active>”, which the Collections window shows for the collection that
     /// is active now rather than whichever one it last had selected.
     public func requestExport() { state.collectionsWindowRequest = .exportActive }
 
-    /// The banner's Review & Apply…, for the collection the banner names — which is not always
+    /// The banner's Review & Apply, for the collection the banner names — which is not always
     /// the active one, so the name travels with the request.
     public func requestReview() {
         guard case .updateAvailable(let collection, _) = state.collectionBanner else { return }

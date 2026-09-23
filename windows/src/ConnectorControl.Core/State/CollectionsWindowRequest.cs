@@ -16,13 +16,13 @@ public abstract record CollectionsWindowRequest
     {
     }
 
-    /// <summary>Import…: the window runs the file picker and shows the Import dialog.</summary>
+    /// <summary>Import: the window runs the file picker and shows the Import dialog.</summary>
     public sealed record ImportFile : CollectionsWindowRequest;
 
-    /// <summary>Export "&lt;active&gt;"…: the window selects the active collection and shows the Export dialog.</summary>
+    /// <summary>Export "&lt;active&gt;": the window selects the active collection and shows the Export dialog.</summary>
     public sealed record ExportActive : CollectionsWindowRequest;
 
-    /// <summary>Review &amp; Apply…: the window selects this collection and shows the Review dialog.</summary>
+    /// <summary>Review &amp; Apply: the window selects this collection and shows the Review dialog.</summary>
     public sealed record Review(string Collection) : CollectionsWindowRequest;
 
     /// <summary>

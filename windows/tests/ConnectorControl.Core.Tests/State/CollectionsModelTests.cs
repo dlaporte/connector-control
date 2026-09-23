@@ -782,7 +782,7 @@ public class CollectionsModelTests
         state.PublishError = new CollectionPublishError("Shared", moved, PublishErrorKind.BlockedForReview);
         Assert.Equal(moved, model.BannerText);
         Assert.Equal(CollectionsModel.PublishSettingsButton, model.BannerButton);   // a blocked publish is always on a collection that already publishes
-        // False: true would put the Review dialog up. The view shows Publish for this kind.
+        // False: true would put the Review dialog up. The view shows Publishing Settings for this kind.
         Assert.False(model.BannerAction());
         // A folder is no answer to this.
         // Refused, and the refusal says why.

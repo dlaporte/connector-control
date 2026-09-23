@@ -46,7 +46,7 @@ public final class RestoreModel: ObservableObject {
         }
     }
 
-    /// The Restore… button. A fresh attempt starts with a clean sheet: the
+    /// The Restore button. A fresh attempt starts with a clean sheet: the
     /// previous attempt's error must not outlive a new selection or a cancelled
     /// confirmation. Then the confirmation sheet opens.
     public func requestRestore() {

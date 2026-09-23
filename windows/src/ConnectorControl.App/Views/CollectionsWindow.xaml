@@ -96,7 +96,7 @@
     </Grid.RowDefinitions>
 
     <!-- Toolbar: what can be done to collections in general on the left, a new one on the right.
-         Two columns, so the six on the left run out of room before they reach New… — at a large
+         Two columns, so the six on the left run out of room before they reach New Collection — at a large
          text scale one cell would let them overrun it. -->
     <Grid Margin="0,0,0,8">
       <Grid.ColumnDefinitions>

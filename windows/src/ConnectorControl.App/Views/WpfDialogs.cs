@@ -20,7 +20,7 @@ public sealed class WpfDialogs : IDialogs
     /// <summary>
     /// The window to centre on: the one that asked, or — for the tray-initiated
     /// instance that passes none — whichever of our windows is active, so
-    /// Settings ▸ Check for Updates… centres on Settings and not on the screen.
+    /// Settings ▸ Check for Updates centres on Settings and not on the screen.
     /// Null means there is nothing of ours on screen: centre and force to front.
     /// Never the flyout: it hides itself on Deactivated, which is exactly what
     /// showing a modal over it does, so Quit / Restart Required / the collection

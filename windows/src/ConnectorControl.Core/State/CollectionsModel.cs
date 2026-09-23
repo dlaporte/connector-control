@@ -459,8 +459,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// Where the selection bar's Copy to can send the ticked rows: any local collection but the
-    /// one showing them, which is their source. A synced collection is excluded too, following
-    /// <c>EditSheetView.LocalCopyTargets</c> — it has no local write path of its own to copy into.
+    /// one showing them, which is their source. A synced collection is excluded too: its
+    /// connectors are the author's, and it has no local write path of its own to copy into.
     /// </summary>
     public IReadOnlyList<string> CopyTargets =>
         state.LocalCollectionNames.Where(name => name != SelectedCollection).ToList();

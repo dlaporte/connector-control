@@ -5,10 +5,10 @@ namespace ConnectorControl.Core.State;
 /// <summary>
 /// Checks 10 s after launch and every 24 h; with autoUpdate on,
 /// download silently, stage for quit, and toast once per version; otherwise —
-/// and always for Check for Updates… — show the update dialog. A version the
+/// and always for Check for Updates — show the update dialog. A version the
 /// user declines from a background offer is not re-offered by later
 /// background checks (Sparkle's Skip This Version is the Mac counterpart);
-/// Check for Updates… always offers, even a version already declined. Manual
+/// Check for Updates always offers, even a version already declined. Manual
 /// checks report "up to date" and failures; background checks stay silent.
 /// </summary>
 public sealed class UpdateCoordinator : IDisposable
@@ -58,7 +58,7 @@ public sealed class UpdateCoordinator : IDisposable
 
     /// <summary>
     /// The version the user declined via a non-interactive offer, so the background check does not
-    /// re-offer it; Settings ▸ Check for Updates… always offers regardless. Backed by
+    /// re-offer it; Settings ▸ Check for Updates always offers regardless. Backed by
     /// <see cref="ISettings.DeclinedUpdateVersion"/> so a decline survives a relaunch.
     /// </summary>
     public string? DeclinedVersion => settings.DeclinedUpdateVersion;
@@ -83,14 +83,14 @@ public sealed class UpdateCoordinator : IDisposable
         host.Delay(Interval, Tick);
     }
 
-    /// <summary><paramref name="interactive"/>: Settings ▸ Check for Updates… (always shows a result); false for scheduled checks.</summary>
+    /// <summary><paramref name="interactive"/>: Settings ▸ Check for Updates (always shows a result); false for scheduled checks.</summary>
     public Task<UpdateOutcome> CheckAsync(bool interactive)
     {
         if (!updater.IsAvailable)
         {
             return Task.FromResult(UpdateOutcome.Unavailable);
         }
-        // A manual "Check for Updates…" can race the scheduled 24 h tick. Join whichever
+        // A manual "Check for Updates" can race the scheduled 24 h tick. Join whichever
         // check is already in flight instead of hitting the feed (and possibly the
         // download) a second time; both callers see the same outcome.
         if (inFlightCheck is { } running)
@@ -222,7 +222,7 @@ public sealed class UpdateCoordinator : IDisposable
             return UpdateOutcome.StagedForQuit;
         }
         // A background check does not re-offer a version the user already sent Later on;
-        // Settings ▸ Check for Updates… always offers, declined or not.
+        // Settings ▸ Check for Updates always offers, declined or not.
         if (!interactive && DeclinedVersion == update.Version)
         {
             return UpdateOutcome.Deferred;
@@ -275,7 +275,7 @@ public sealed class UpdateCoordinator : IDisposable
         return UpdateOutcome.Installing;
     }
 
-    /// <summary>A background check stays silent; only an interactive one (Check for Updates…) shows the result.</summary>
+    /// <summary>A background check stays silent; only an interactive one (Check for Updates) shows the result.</summary>
     private void InformIf(bool interactive, string message, string detail)
     {
         if (interactive)

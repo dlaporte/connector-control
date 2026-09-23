@@ -4,11 +4,11 @@
 ///
 /// Mirror: windows/src/ConnectorControl.Core/State/CollectionsWindowRequest.cs
 public enum CollectionsWindowRequest: Equatable, Sendable {
-    /// Import…: the window runs the file picker and shows the Import sheet.
+    /// Import: the window runs the file picker and shows the Import sheet.
     case importFile
-    /// Export “<active>”…: the window selects the active collection and shows the Export sheet.
+    /// Export “<active>”: the window selects the active collection and shows the Export sheet.
     case exportActive
-    /// Review & Apply…: the window selects this collection and shows the Review sheet.
+    /// Review & Apply: the window selects this collection and shows the Review sheet.
     case review(collection: String)
     /// A publish blocked for review: the window selects this collection and shows the Publish
     /// sheet, which is where a moved mark is placed again.

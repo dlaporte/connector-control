@@ -380,7 +380,7 @@ public partial class CollectionsWindow : Window
     // MARK: dialogs
 
     /// <summary>
-    /// Import… and Subscribe… are the same picker: one document, and what happens to it is the
+    /// Import and Subscribe are the same picker: one document, and what happens to it is the
     /// dialog's question rather than the picker's.
     /// </summary>
     private void Import(bool keepInSync)
@@ -390,7 +390,7 @@ public partial class CollectionsWindow : Window
             return;
         }
         var model = new ImportModel(state, path);
-        // Subscribe… is Import… with the second mode already chosen: the picker that opened it
+        // Subscribe is Import with the second mode already chosen: the picker that opened it
         // said which of the two the user asked for.
         if (keepInSync)
         {

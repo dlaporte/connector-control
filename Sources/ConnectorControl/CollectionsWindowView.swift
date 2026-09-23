@@ -7,7 +7,7 @@ import ConnectorControlState
 /// right, the toolbar and the action links that act on it, and the four sheets it puts in front of
 /// itself. Layout, bindings and the native panels only; every rule and string is CollectionsModel's.
 struct CollectionsWindowView: View {
-    /// The scene id, which the popover's Manage Collections… opens.
+    /// The scene id, which the popover's Manage Collections opens.
     static let windowID = "collections"
 
     /// The lock leading a synced row, dimmed so it reads as a mark rather than as a control.
@@ -323,7 +323,7 @@ struct CollectionsWindowView: View {
 
     private func importModel(path: String, keepInSync: Bool) -> ImportModel {
         let sheetModel = ImportModel(state: state, path: path)
-        // Subscribe… is Import… with the second mode already chosen: the panel that opened it
+        // Subscribe is Import with the second mode already chosen: the panel that opened it
         // said which of the two the user asked for.
         if keepInSync { sheetModel.mode = .keepInSync }
         return sheetModel
@@ -421,7 +421,7 @@ struct CollectionsWindowView: View {
 
     // MARK: - Panels
 
-    /// Import… and Subscribe… are the same panel: one document, and what happens to it is the
+    /// Import and Subscribe are the same panel: one document, and what happens to it is the
     /// sheet's question rather than the picker's.
     private func openDocument(keepInSync: Bool) {
         guard let path = chooseDocument() else { return }

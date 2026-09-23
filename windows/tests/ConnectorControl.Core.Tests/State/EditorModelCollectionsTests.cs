@@ -6,7 +6,7 @@ namespace ConnectorControl.Core.Tests.State;
 /// <summary>
 /// Tests/ConnectorControlStateTests/EditorModelCollectionsTests.swift. The editor once it knows
 /// which collection it is editing: the four header states, a synced connector's read-only form
-/// with its placeholders still live, Make Local Copy, and the propagate line.
+/// with its placeholders still live, and the propagate line.
 /// </summary>
 public class EditorModelCollectionsTests
 {

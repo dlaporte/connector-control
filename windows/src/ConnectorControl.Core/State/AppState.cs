@@ -632,7 +632,7 @@ public sealed class AppState : ObservableObject, IDisposable
                 && !DictionaryEquality.Equal(result.Store.Mcps, previousStoreMcps)
                 && !claudeConfigChangedExternally;
             // Every note, not just the first: with a corrupt store AND a malformed Claude config,
-            // the second one is the actionable one (Backups ▸ Restore… is the way out). The
+            // the second one is the actionable one (Backups ▸ Restore is the way out). The
             // collections load runs above and adds its own note here rather than setting
             // LastError itself, which this line would then overwrite.
             List<string> notes = [.. result.Notes];
@@ -2170,7 +2170,7 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>
     /// Starts publishing a local collection into <paramref name="folder"/>, or re-points one that
-    /// already publishes (the failed-write banner's Choose Folder…). The slug and the origin are
+    /// already publishes (the failed-write banner's Choose Folder). The slug and the origin are
     /// fixed the first time and never re-derived, so renaming the collection cannot orphan the
     /// document the team already subscribed to. The document is written before this returns.
     /// null on success, else the message to show.
@@ -2178,7 +2178,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <param name="reviewedValues">
     /// What the author's Publish in the dialog says must never travel as written: it replaces this
     /// machine's list of marked paths (<see cref="CollectionsLocalCache.PublishBinding.MarkedValues"/>).
-    /// Null — the banner's Choose Folder…, which nobody reviewed — keeps the list the collection
+    /// Null — the banner's Choose Folder, which nobody reviewed — keeps the list the collection
     /// already had.
     /// </param>
     /// <param name="releasedValues">
@@ -2274,7 +2274,7 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>
     /// Publishing again into a different folder, which is what the failed-write banner's Choose
-    /// Folder… does from the flyout and from the Collections window alike. The recorded intent
+    /// Folder does from the flyout and from the Collections window alike. The recorded intent
     /// travels unchanged: the dialog is where what the document says gets edited, not this.
     /// null on success, else the message.
     ///

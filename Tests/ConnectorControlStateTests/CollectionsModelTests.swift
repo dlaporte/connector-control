@@ -708,7 +708,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.bannerText, moved)
         XCTAssertEqual(model.bannerButton, CollectionsModel.publishSettingsButton,
                        "a blocked publish is always on a collection that already publishes")
-        // False: true would put the Review sheet up. The view shows Publish for this kind.
+        // False: true would put the Review sheet up. The view shows Publishing Settings for this kind.
         XCTAssertFalse(model.bannerAction())
         XCTAssertEqual(model.choosePublishFolder(h.dir.file("elsewhere").path), moved,
                        "a folder is no answer to this, and the refusal says why")
