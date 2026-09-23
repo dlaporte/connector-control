@@ -1,16 +1,15 @@
 import SwiftUI
 import ConnectorControlState
 
-/// Layout only — the row's facts arrive in a ConnectorRow and its two actions
-/// go back through the closures.
+/// Layout only — the row's facts arrive in a ConnectorRow and its one action
+/// goes back through the closure.
 struct MCPRow: View {
     /// The lock leading a synced collection's row, dimmed so it reads as a mark rather than as
-    /// a control — the switch and the pencil beside it are still live.
+    /// a control — the switch beside it is still live.
     private static let lockOpacity = 0.55
 
     let row: ConnectorRow
     var onToggle: (Bool) -> Void
-    var onEdit: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
@@ -41,15 +40,6 @@ struct MCPRow: View {
                     .accessibilityLabel(warning)
             }
             Spacer()
-            Button {
-                onEdit()
-            } label: {
-                Image(systemName: "pencil")
-                    .imageScale(.medium)
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.accessoryBar)
-            .help(row.editTooltip)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)

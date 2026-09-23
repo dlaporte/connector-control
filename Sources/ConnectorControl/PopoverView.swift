@@ -33,11 +33,6 @@ struct PopoverView: View {
         .onAppear { model.opened() }
     }
 
-    private func openEditor(_ target: EditTarget) {
-        openWindow(id: EditTarget.editorWindowID, value: target)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
     private var header: some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
@@ -47,16 +42,6 @@ struct PopoverView: View {
             }
             Spacer(minLength: 20)
             HStack(spacing: 0) {
-                Button {
-                    openEditor(.newRemote())
-                } label: {
-                    headerIcon("plus")
-                }
-                .buttonStyle(.accessoryBar)
-                // A synced collection's connectors are the author's; the tooltip is the model's
-                // to pick, because it says why the button is dead as often as what it does.
-                .disabled(!model.canAddConnector)
-                .help(model.addTooltipText)
                 Button {
                     NSApp.activate(ignoringOtherApps: true)
                     openSettings()
@@ -118,8 +103,8 @@ struct PopoverView: View {
             .accessibilityLabel(PopoverModel.pendingSpokenLabel)
     }
 
-    /// The collections to switch between, then the two document commands, then the window that
-    /// owns everything else — creating, renaming and deleting included.
+    /// The collections to switch between, then the window that owns everything else —
+    /// creating, renaming, deleting, and the document commands included.
     @ViewBuilder private var collectionMenu: some View {
         ForEach(model.collectionItems) { item in
             // A macOS menu row is one title and one image. The check is the item's state rather
@@ -133,13 +118,6 @@ struct PopoverView: View {
                 }
             }
             .help(PopoverModel.menuTooltip(for: item) ?? "")
-        }
-        Divider()
-        Button(PopoverModel.importTitle) { openCollections { model.requestImport() } }
-        // A synced collection is the author's document already; passing a second copy of it on
-        // is theirs to do, not this machine's.
-        if !model.activeCollectionIsSynced {
-            Button(model.exportTitle) { openCollections { model.requestExport() } }
         }
         Divider()
         Button(PopoverModel.manageTitle) { openCollections() }
@@ -261,13 +239,7 @@ struct PopoverView: View {
         ScrollView {
             VStack(spacing: 0) {
                 ForEach(model.rows) { row in
-                    MCPRow(row: row,
-                           onToggle: { model.setEnabled(row.name, $0) },
-                           onEdit: {
-                               if let entry = model.entryFor(row.name) {
-                                   openEditor(.existing(name: row.name, entry: entry))
-                               }
-                           })
+                    MCPRow(row: row, onToggle: { model.setEnabled(row.name, $0) })
                     Divider()
                 }
                 if model.isEmpty {
@@ -303,7 +275,7 @@ struct PopoverView: View {
 
     private func headerIcon(_ systemName: String) -> some View {
         // resizable + scaledToFit centers by geometric bounds; centering by
-        // font metrics leaves different glyphs (plus vs gear) at different
+        // font metrics leaves different glyphs (gear vs power) at different
         // heights because SF Symbols align on the text baseline.
         Image(systemName: systemName)
             .resizable()
