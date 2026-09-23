@@ -226,23 +226,32 @@ final class StringCatalogTests: XCTestCase {
 
         // MARK: CollectionsModel
 
+        actual["CollectionsModel.activePill"] = CollectionsModel.activePill
         actual["CollectionsModel.activeSuffix"] = CollectionsModel.activeSuffix
+        actual["CollectionsModel.addConnectorDisabledTooltip"] = CollectionsModel.addConnectorDisabledTooltip
+        actual["CollectionsModel.addConnectorTooltip"] = CollectionsModel.addConnectorTooltip
+        actual["CollectionsModel.connectorsHeader"] = CollectionsModel.connectorsHeader
         actual["CollectionsModel.copyToButton"] = CollectionsModel.copyToButton
         actual["CollectionsModel.deleteAction"] = CollectionsModel.deleteAction
         actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.deletePublishedFileQuestion("X")
+        actual["CollectionsModel.duplicateAction"] = CollectionsModel.duplicateAction
         actual["CollectionsModel.editTooltip"] = CollectionsModel.editTooltip
+        actual["CollectionsModel.exportAllAction"] = CollectionsModel.exportAllAction
         actual["CollectionsModel.exportButton"] = CollectionsModel.exportButton(3)
         actual["CollectionsModel.exportCheckedButton"] = CollectionsModel.exportCheckedButton
         actual["CollectionsModel.importButton"] = CollectionsModel.importButton
+        actual["CollectionsModel.importSubtitle"] = CollectionsModel.importSubtitle
         actual["CollectionsModel.keepFileButton"] = CollectionsModel.keepFileButton
         actual["CollectionsModel.localDetail"] = CollectionsModel.localDetail(3)
         actual["CollectionsModel.lockedGlyphTooltip"] = CollectionsModel.lockedGlyphTooltip
         actual["CollectionsModel.makeActiveAction"] = CollectionsModel.makeActiveAction
         actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.makeLocalCopyButton
+        actual["CollectionsModel.moreActionsLabel"] = CollectionsModel.moreActionsLabel
         actual["CollectionsModel.newButton"] = CollectionsModel.newButton
         actual["CollectionsModel.publishButton"] = CollectionsModel.publishButton
         actual["CollectionsModel.publishSettingsButton"] = CollectionsModel.publishSettingsButton
         actual["CollectionsModel.publishedDetail"] = CollectionsModel.publishedDetail("X")
+        actual["CollectionsModel.publishedPill"] = CollectionsModel.publishedPill
         actual["CollectionsModel.refreshButton"] = CollectionsModel.refreshButton
         actual["CollectionsModel.remoteType"] = CollectionsModel.remoteType
         actual["CollectionsModel.removeCheckedButton"] = CollectionsModel.removeCheckedButton
@@ -252,11 +261,14 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.removeFileButton"] = CollectionsModel.removeFileButton
         actual["CollectionsModel.renameAction"] = CollectionsModel.renameAction
         actual["CollectionsModel.selectedCount"] = CollectionsModel.selectedCount(3)
+        actual["CollectionsModel.showPublishedFileAction"] = CollectionsModel.showPublishedFileAction
+        actual["CollectionsModel.showSourceFileAction"] = CollectionsModel.showSourceFileAction
         actual["CollectionsModel.stopPublishingAction"] = CollectionsModel.stopPublishingAction
         actual["CollectionsModel.stopSyncingAction"] = CollectionsModel.stopSyncingAction
         actual["CollectionsModel.stopSyncingInformative"] = CollectionsModel.stopSyncingInformative
         actual["CollectionsModel.stopSyncingMessage"] = CollectionsModel.stopSyncingMessage("X")
         actual["CollectionsModel.subscribeButton"] = CollectionsModel.subscribeButton
+        actual["CollectionsModel.subscribedPill"] = CollectionsModel.subscribedPill
         actual["CollectionsModel.syncedDetail"] = CollectionsModel.syncedDetail("X", "Y")
         actual["CollectionsModel.unlocatedDetail"] = CollectionsModel.unlocatedDetail
         actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.updateAvailableStatus

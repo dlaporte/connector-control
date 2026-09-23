@@ -127,18 +127,25 @@
       "format": "{0} is not an app bundle this app can inspect."
     }
   },
+  "CollectionsModel.activePill": "Active",
   "CollectionsModel.activeSuffix": " · active",
+  "CollectionsModel.addConnectorDisabledTooltip": "Additions go in a local collection.",
+  "CollectionsModel.addConnectorTooltip": "Add Connector",
+  "CollectionsModel.connectorsHeader": "Connectors",
   "CollectionsModel.copyToButton": "Copy to",
   "CollectionsModel.deleteAction": "Delete",
   "CollectionsModel.deletePublishedFileQuestion": {
     "format": "Also remove {0} from the folder?"
   },
+  "CollectionsModel.duplicateAction": "Duplicate",
   "CollectionsModel.editTooltip": "Edit",
+  "CollectionsModel.exportAllAction": "Export All",
   "CollectionsModel.exportButton": {
     "format": "Export {0}"
   },
   "CollectionsModel.exportCheckedButton": "Export",
   "CollectionsModel.importButton": "Import",
+  "CollectionsModel.importSubtitle": "Adds copies you own",
   "CollectionsModel.keepFileButton": "Keep",
   "CollectionsModel.localDetail": {
     "format": "local · {0} connectors"
@@ -146,6 +153,7 @@
   "CollectionsModel.lockedGlyphTooltip": "Read-only: synced from the collection's author",
   "CollectionsModel.makeActiveAction": "Make Active",
   "CollectionsModel.makeLocalCopyButton": "Make Local Copy",
+  "CollectionsModel.moreActionsLabel": "More",
   "CollectionsModel.newButton": "New Collection",
   "CollectionsModel.publishButton": "Start Publishing",
   "CollectionsModel.publishSettingsButton": "Publishing Settings",
@@ -157,6 +165,7 @@
       "format": "publishes to {0} from this PC"
     }
   },
+  "CollectionsModel.publishedPill": "Published",
   "CollectionsModel.refreshButton": "Refresh",
   "CollectionsModel.remoteType": "remote",
   "CollectionsModel.removeCheckedButton": "Remove",
@@ -172,6 +181,8 @@
   "CollectionsModel.selectedCount": {
     "format": "{0} selected"
   },
+  "CollectionsModel.showPublishedFileAction": "Show Published File",
+  "CollectionsModel.showSourceFileAction": "Show Source File",
   "CollectionsModel.stopPublishingAction": "Stop Publishing",
   "CollectionsModel.stopSyncingAction": "Stop Syncing",
   "CollectionsModel.stopSyncingInformative": "The connectors stay as a local collection you can edit.",
@@ -179,6 +190,7 @@
     "format": "Stop Syncing “{0}”?"
   },
   "CollectionsModel.subscribeButton": "Subscribe",
+  "CollectionsModel.subscribedPill": "Subscribed",
   "CollectionsModel.syncedDetail": {
     "format": "synced from {0} · read-only · {1}"
   },

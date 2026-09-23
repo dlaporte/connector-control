@@ -238,23 +238,32 @@ public class StringCatalogTests
 
         // MARK: CollectionsModel
 
+        actual["CollectionsModel.activePill"] = CollectionsModel.ActivePill;
         actual["CollectionsModel.activeSuffix"] = CollectionsModel.ActiveSuffix;
+        actual["CollectionsModel.addConnectorDisabledTooltip"] = CollectionsModel.AddConnectorDisabledTooltip;
+        actual["CollectionsModel.addConnectorTooltip"] = CollectionsModel.AddConnectorTooltip;
+        actual["CollectionsModel.connectorsHeader"] = CollectionsModel.ConnectorsHeader;
         actual["CollectionsModel.copyToButton"] = CollectionsModel.CopyToButton;
         actual["CollectionsModel.deleteAction"] = CollectionsModel.DeleteAction;
         actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.DeletePublishedFileQuestion("X");
+        actual["CollectionsModel.duplicateAction"] = CollectionsModel.DuplicateAction;
         actual["CollectionsModel.editTooltip"] = CollectionsModel.EditTooltip;
+        actual["CollectionsModel.exportAllAction"] = CollectionsModel.ExportAllAction;
         actual["CollectionsModel.exportButton"] = CollectionsModel.ExportButton(3);
         actual["CollectionsModel.exportCheckedButton"] = CollectionsModel.ExportCheckedButton;
         actual["CollectionsModel.importButton"] = CollectionsModel.ImportButton;
+        actual["CollectionsModel.importSubtitle"] = CollectionsModel.ImportSubtitle;
         actual["CollectionsModel.keepFileButton"] = CollectionsModel.KeepFileButton;
         actual["CollectionsModel.localDetail"] = CollectionsModel.LocalDetail(3);
         actual["CollectionsModel.lockedGlyphTooltip"] = CollectionsModel.LockedGlyphTooltip;
         actual["CollectionsModel.makeActiveAction"] = CollectionsModel.MakeActiveAction;
         actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.MakeLocalCopyButton;
+        actual["CollectionsModel.moreActionsLabel"] = CollectionsModel.MoreActionsLabel;
         actual["CollectionsModel.newButton"] = CollectionsModel.NewButton;
         actual["CollectionsModel.publishButton"] = CollectionsModel.PublishButton;
         actual["CollectionsModel.publishSettingsButton"] = CollectionsModel.PublishSettingsButton;
         actual["CollectionsModel.publishedDetail"] = CollectionsModel.PublishedDetail("X");
+        actual["CollectionsModel.publishedPill"] = CollectionsModel.PublishedPill;
         actual["CollectionsModel.refreshButton"] = CollectionsModel.RefreshButton;
         actual["CollectionsModel.remoteType"] = CollectionsModel.RemoteType;
         actual["CollectionsModel.removeCheckedButton"] = CollectionsModel.RemoveCheckedButton;
@@ -264,11 +273,14 @@ public class StringCatalogTests
         actual["CollectionsModel.removeFileButton"] = CollectionsModel.RemoveFileButton;
         actual["CollectionsModel.renameAction"] = CollectionsModel.RenameAction;
         actual["CollectionsModel.selectedCount"] = CollectionsModel.SelectedCount(3);
+        actual["CollectionsModel.showPublishedFileAction"] = CollectionsModel.ShowPublishedFileAction;
+        actual["CollectionsModel.showSourceFileAction"] = CollectionsModel.ShowSourceFileAction;
         actual["CollectionsModel.stopPublishingAction"] = CollectionsModel.StopPublishingAction;
         actual["CollectionsModel.stopSyncingAction"] = CollectionsModel.StopSyncingAction;
         actual["CollectionsModel.stopSyncingInformative"] = CollectionsModel.StopSyncingInformative;
         actual["CollectionsModel.stopSyncingMessage"] = CollectionsModel.StopSyncingMessage("X");
         actual["CollectionsModel.subscribeButton"] = CollectionsModel.SubscribeButton;
+        actual["CollectionsModel.subscribedPill"] = CollectionsModel.SubscribedPill;
         actual["CollectionsModel.syncedDetail"] = CollectionsModel.SyncedDetail("X", "Y");
         actual["CollectionsModel.unlocatedDetail"] = CollectionsModel.UnlocatedDetail;
         actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.UpdateAvailableStatus;

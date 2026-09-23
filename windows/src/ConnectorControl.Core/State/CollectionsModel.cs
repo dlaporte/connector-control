@@ -246,6 +246,12 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         Raise(nameof(CanStopSyncing));
         Raise(nameof(CanStopPublishing));
         Raise(nameof(CanDelete));
+        Raise(nameof(Pills));
+        Raise(nameof(CollectionMenu));
+        Raise(nameof(PublishedFilePath));
+        Raise(nameof(SourceFilePath));
+        Raise(nameof(CanAddConnector));
+        Raise(nameof(AddConnectorTooltipText));
     }
 
     /// <summary>What a chosen name resolves to: itself while it is a collection, the active one otherwise.</summary>
@@ -811,6 +817,242 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// vanished from the collection is dropped instead of exported.
     /// </summary>
     public IReadOnlyList<string> CheckedNames => Rows.Where(r => r.Checked).Select(r => r.Name).ToList();
+
+    // MARK: header pills and menu
+
+    /// <summary>
+    /// Marks an exception to the ordinary local collection: Published and Subscribed are
+    /// mutually exclusive, since a subscribed collection has an author elsewhere and cannot also
+    /// publish. There is no member for the default — an ordinary local collection carries no pill.
+    /// </summary>
+    public enum Pill
+    {
+        Active,
+        Published,
+        Subscribed,
+    }
+
+    public const string ActivePill = "Active";
+    public const string PublishedPill = "Published";
+    public const string SubscribedPill = "Subscribed";
+
+    public static string Title(Pill pill) => pill switch
+    {
+        Pill.Active => ActivePill,
+        Pill.Published => PublishedPill,
+        Pill.Subscribed => SubscribedPill,
+        _ => throw new ArgumentOutOfRangeException(nameof(pill)),
+    };
+
+    /// <summary>
+    /// The selected collection's pills, in the header's order: active first, then the one
+    /// exception IsSynced and IsPublished cannot both name at once.
+    /// </summary>
+    public IReadOnlyList<Pill> Pills
+    {
+        get
+        {
+            var collection = SelectedCollection;
+            var marks = new List<Pill>();
+            if (collection == state.ActiveCollection)
+            {
+                marks.Add(Pill.Active);
+            }
+            if (state.IsSynced(collection))
+            {
+                marks.Add(Pill.Subscribed);
+            }
+            else if (state.IsPublished(collection))
+            {
+                marks.Add(Pill.Published);
+            }
+            return marks;
+        }
+    }
+
+    /// <summary>
+    /// The collection's ⋯ menu (spec §4), built here so both platforms show the same list from
+    /// the same flags the toolbar already reads. A record hierarchy, the same shape
+    /// <see cref="CollectionBanner"/> uses, because two members — <see cref="MenuEntry.ExportAll"/>
+    /// and <see cref="MenuEntry.Delete"/> — carry an <c>Enabled</c> flag the rest do not.
+    /// </summary>
+    public abstract record MenuEntry
+    {
+        private MenuEntry()
+        {
+        }
+
+        public sealed record MakeActive : MenuEntry;
+
+        public sealed record Rename : MenuEntry;
+
+        public sealed record Duplicate : MenuEntry;
+
+        public sealed record StartPublishing : MenuEntry;
+
+        public sealed record PublishingSettings : MenuEntry;
+
+        public sealed record StopPublishing : MenuEntry;
+
+        public sealed record ShowPublishedFile : MenuEntry;
+
+        public sealed record ExportAll(bool Enabled) : MenuEntry;
+
+        public sealed record MakeLocalCopy : MenuEntry;
+
+        public sealed record Refresh : MenuEntry;
+
+        public sealed record ShowSourceFile : MenuEntry;
+
+        public sealed record StopSyncing : MenuEntry;
+
+        public sealed record Delete(bool Enabled) : MenuEntry;
+
+        public sealed record Separator : MenuEntry;
+    }
+
+    public const string DuplicateAction = "Duplicate";
+    public const string ExportAllAction = "Export All";
+    public const string ShowPublishedFileAction = "Show Published File";
+    public const string ShowSourceFileAction = "Show Source File";
+
+    public static string Title(MenuEntry entry) => entry switch
+    {
+        MenuEntry.MakeActive => MakeActiveAction,
+        MenuEntry.Rename => RenameAction,
+        MenuEntry.Duplicate => DuplicateAction,
+        MenuEntry.StartPublishing => PublishButton,
+        MenuEntry.PublishingSettings => PublishSettingsButton,
+        MenuEntry.StopPublishing => StopPublishingAction,
+        MenuEntry.ShowPublishedFile => ShowPublishedFileAction,
+        MenuEntry.ExportAll => ExportAllAction,
+        MenuEntry.MakeLocalCopy => MakeLocalCopyButton,
+        MenuEntry.Refresh => RefreshButton,
+        MenuEntry.ShowSourceFile => ShowSourceFileAction,
+        MenuEntry.StopSyncing => StopSyncingAction,
+        MenuEntry.Delete => DeleteAction,
+        MenuEntry.Separator => "",
+        _ => throw new ArgumentOutOfRangeException(nameof(entry)),
+    };
+
+    /// <summary>
+    /// Lists what applies rather than dimming what does not, with one exception: ExportAll is
+    /// always present, greyed out on a synced collection, since exporting a read-only mirror is
+    /// refused for a reason worth stating rather than a button worth hiding.
+    /// </summary>
+    public IReadOnlyList<MenuEntry> CollectionMenu
+    {
+        get
+        {
+            var collection = SelectedCollection;
+            var synced = state.IsSynced(collection);
+            var entries = new List<MenuEntry>();
+            if (collection != state.ActiveCollection)
+            {
+                entries.Add(new MenuEntry.MakeActive());
+                entries.Add(new MenuEntry.Separator());
+            }
+            entries.Add(new MenuEntry.Rename());
+            entries.Add(synced ? new MenuEntry.MakeLocalCopy() : new MenuEntry.Duplicate());
+            entries.Add(new MenuEntry.Separator());
+            if (synced)
+            {
+                if (CanRefresh)
+                {
+                    entries.Add(new MenuEntry.Refresh());
+                }
+                if (SourceFilePath is not null)
+                {
+                    entries.Add(new MenuEntry.ShowSourceFile());
+                }
+                entries.Add(new MenuEntry.StopSyncing());
+            }
+            else
+            {
+                entries.Add(state.IsPublished(collection) ? new MenuEntry.PublishingSettings() : new MenuEntry.StartPublishing());
+                if (state.IsPublished(collection))
+                {
+                    entries.Add(new MenuEntry.StopPublishing());
+                }
+                if (PublishedFilePath is not null)
+                {
+                    entries.Add(new MenuEntry.ShowPublishedFile());
+                }
+            }
+            entries.Add(new MenuEntry.ExportAll(!synced));
+            entries.Add(new MenuEntry.Separator());
+            entries.Add(new MenuEntry.Delete(CanDelete));
+            return entries;
+        }
+    }
+
+    /// <summary>
+    /// Duplicate: the same copy semantics as every other copy in this window — disabled, with
+    /// provenance — but of the whole collection, and the selection stays where it was rather than
+    /// following the new one the way <see cref="MakeLocalCopy"/> and <see cref="Create"/> do.
+    /// </summary>
+    public bool Duplicate()
+    {
+        var collection = SelectedCollection;
+        if (dialogs.PromptForName(AppState.NewCollectionTitle, "") is not { } typed)
+        {
+            return false;
+        }
+        return Report(state.MakeLocalCopyOfCollection(collection, typed));
+    }
+
+    /// <summary>
+    /// This machine's published document for the selected collection: the folder it writes to,
+    /// plus the file name <see cref="PublishedFileName"/> already derives. Null for anything not
+    /// published from here, which is what the menu's ShowPublishedFile above tests for.
+    /// </summary>
+    public string? PublishedFilePath
+    {
+        get
+        {
+            var collection = SelectedCollection;
+            if (state.CollectionsCache.Published.TryGetValue(collection, out var binding)
+                && PublishedFileName(collection) is { } fileName)
+            {
+                return Path.Combine(binding.Folder, fileName);
+            }
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A located synced collection's document — <see cref="LocatedSource"/> again, named for the
+    /// menu's ShowSourceFile and the header's own use, both of which want the same null the
+    /// detail line already turns into "file not located on this machine".
+    /// </summary>
+    public string? SourceFilePath => LocatedSource(SelectedCollection);
+
+    // MARK: sidebar and connectors header
+
+    public const string ImportSubtitle = "Adds copies you own";
+    public const string SubscribeSubtitle = "Stays in sync, read-only";
+    public const string ConnectorsHeader = "Connectors";
+    public const string AddConnectorTooltip = "Add Connector";
+    /// <summary>
+    /// The same text <see cref="FlyoutModel.AddDisabledTooltip"/> carries: one sentence, said in
+    /// two places that both need it, rather than one model reaching into the other's strings.
+    /// </summary>
+    public const string AddConnectorDisabledTooltip = "Additions go in a local collection.";
+    /// <summary>The ⋯ button's own tooltip and accessibility label.</summary>
+    public const string MoreActionsLabel = "More";
+
+    public bool CanAddConnector => !state.IsSynced(SelectedCollection);
+
+    public string AddConnectorTooltipText => CanAddConnector ? AddConnectorTooltip : AddConnectorDisabledTooltip;
+
+    /// <summary>
+    /// The + button on the connector list header: an Add-Remote target in the collection the
+    /// window is showing, the same forced-remote flow the flyout's Add starts. The Mac's
+    /// <c>EditTarget.newRemote(in:)</c> takes no style; Windows always launches a new remote
+    /// connector through <c>cmd /c npx</c>, the same forced style <c>EditorWindow.NewRemoteStyle</c>
+    /// uses for the flyout's own Add.
+    /// </summary>
+    public EditTarget NewConnectorTarget() => EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx, SelectedCollection);
 
     // MARK: rows
 

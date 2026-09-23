@@ -659,6 +659,146 @@ public final class CollectionsModel: ObservableObject {
     /// vanished from the collection is dropped instead of exported.
     public var checkedNames: [String] { rows.filter(\.checked).map(\.name) }
 
+    // MARK: - Header pills and menu
+
+    /// Marks an exception to the ordinary local collection: `Published` and `Subscribed` are
+    /// mutually exclusive, since a subscribed collection has an author elsewhere and cannot also
+    /// publish. There is no case for the default — an ordinary local collection carries no pill.
+    public enum Pill: Equatable, Sendable {
+        case active, published, subscribed
+    }
+
+    public static let activePill = "Active"
+    public static let publishedPill = "Published"
+    public static let subscribedPill = "Subscribed"
+
+    public static func title(for pill: Pill) -> String {
+        switch pill {
+        case .active: return activePill
+        case .published: return publishedPill
+        case .subscribed: return subscribedPill
+        }
+    }
+
+    /// The selected collection's pills, in the header's order: active first, then the one
+    /// exception `isSynced` and `isPublished` cannot both name at once.
+    public var pills: [Pill] {
+        let collection = selectedCollection
+        var marks: [Pill] = []
+        if collection == state.activeCollection { marks.append(.active) }
+        if state.isSynced(collection) { marks.append(.subscribed) }
+        else if state.isPublished(collection) { marks.append(.published) }
+        return marks
+    }
+
+    /// The collection's `⋯` menu (spec §4), built here so both platforms show the same list from
+    /// the same flags the toolbar already reads.
+    public enum MenuEntry: Hashable, Sendable {
+        case makeActive, rename, duplicate, startPublishing, publishingSettings, stopPublishing,
+             showPublishedFile, exportAll(enabled: Bool), makeLocalCopy, refresh, showSourceFile,
+             stopSyncing, delete(enabled: Bool), separator
+    }
+
+    public static let duplicateAction = "Duplicate"
+    public static let exportAllAction = "Export All"
+    public static let showPublishedFileAction = "Show Published File"
+    public static let showSourceFileAction = "Show Source File"
+
+    public static func title(for entry: MenuEntry) -> String {
+        switch entry {
+        case .makeActive: return makeActiveAction
+        case .rename: return renameAction
+        case .duplicate: return duplicateAction
+        case .startPublishing: return publishButton
+        case .publishingSettings: return publishSettingsButton
+        case .stopPublishing: return stopPublishingAction
+        case .showPublishedFile: return showPublishedFileAction
+        case .exportAll: return exportAllAction
+        case .makeLocalCopy: return makeLocalCopyButton
+        case .refresh: return refreshButton
+        case .showSourceFile: return showSourceFileAction
+        case .stopSyncing: return stopSyncingAction
+        case .delete: return deleteAction
+        case .separator: return ""
+        }
+    }
+
+    /// Lists what applies rather than dimming what does not, with one exception: `exportAll` is
+    /// always present, greyed out on a synced collection, since exporting a read-only mirror is
+    /// refused for a reason worth stating rather than a button worth hiding.
+    public var collectionMenu: [MenuEntry] {
+        let collection = selectedCollection
+        let synced = state.isSynced(collection)
+        var entries: [MenuEntry] = []
+        if collection != state.activeCollection {
+            entries.append(.makeActive)
+            entries.append(.separator)
+        }
+        entries.append(.rename)
+        entries.append(synced ? .makeLocalCopy : .duplicate)
+        entries.append(.separator)
+        if synced {
+            if canRefresh { entries.append(.refresh) }
+            if sourceFilePath != nil { entries.append(.showSourceFile) }
+            entries.append(.stopSyncing)
+        } else {
+            entries.append(state.isPublished(collection) ? .publishingSettings : .startPublishing)
+            if state.isPublished(collection) { entries.append(.stopPublishing) }
+            if publishedFilePath != nil { entries.append(.showPublishedFile) }
+        }
+        entries.append(.exportAll(enabled: !synced))
+        entries.append(.separator)
+        entries.append(.delete(enabled: canDelete))
+        return entries
+    }
+
+    /// Duplicate: the same copy semantics as every other copy in this window — disabled, with
+    /// provenance — but of the whole collection, and the selection stays where it was rather than
+    /// following the new one the way `makeLocalCopy()` and `create()` do.
+    @discardableResult
+    public func duplicate() -> Bool {
+        let collection = selectedCollection
+        guard let typed = dialogs.promptForName(title: AppState.newCollectionTitle, initial: "") else { return false }
+        return report(state.makeLocalCopyOfCollection(collection, named: typed))
+    }
+
+    /// This machine's published document for the selected collection: the folder it writes to,
+    /// plus the file name `publishedFileName(of:)` already derives. nil for anything not
+    /// published from here, which is what the menu's `showPublishedFile` above tests for.
+    public var publishedFilePath: String? {
+        let collection = selectedCollection
+        guard let folder = state.collectionsCache.published[collection]?.folder,
+              let fileName = publishedFileName(of: collection) else { return nil }
+        return URL(fileURLWithPath: folder).appendingPathComponent(fileName).path
+    }
+
+    /// A located synced collection's document — `locatedSource(of:)` again, named for the menu's
+    /// `showSourceFile` and the header's own use, both of which want the same nil the detail line
+    /// already turns into "file not located on this machine".
+    public var sourceFilePath: String? { locatedSource(of: selectedCollection) }
+
+    // MARK: - Sidebar and connectors header
+
+    public static let importSubtitle = "Adds copies you own"
+    public static let subscribeSubtitle = "Stays in sync, read-only"
+    public static let connectorsHeader = "Connectors"
+    public static let addConnectorTooltip = "Add Connector"
+    /// The same text `PopoverModel.addDisabledTooltip` carries: one sentence, said in two places
+    /// that both need it, rather than one model reaching into the other's strings.
+    public static let addConnectorDisabledTooltip = "Additions go in a local collection."
+    /// The `⋯` button's own tooltip and accessibility label.
+    public static let moreActionsLabel = "More"
+
+    public var canAddConnector: Bool { !state.isSynced(selectedCollection) }
+
+    public var addConnectorTooltipText: String {
+        canAddConnector ? CollectionsModel.addConnectorTooltip : CollectionsModel.addConnectorDisabledTooltip
+    }
+
+    /// The `+` button on the connector list header: an Add-Remote target in the collection the
+    /// window is showing, the same forced-remote flow the popover's Add starts.
+    public func newConnectorTarget() -> EditTarget { EditTarget.newRemote(in: selectedCollection) }
+
     // MARK: - Rows
 
     /// A synced collection's rows cannot be exported, so they cannot be ticked either.

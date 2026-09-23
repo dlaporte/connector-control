@@ -1482,4 +1482,260 @@ public class CollectionsModelTests
         model.SetChecked("zeta", false);
         Assert.Empty(model.CheckedNamesClashing("Spare"));   // nothing ticked clashes
     }
+
+    // MARK: header pills and menu
+
+    [Fact]
+    public void PillsMarkActivePublishedAndSubscribedExceptions()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Shared"));
+        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateCollection("Plain"));
+        state.SwitchCollection("Default");
+        var file = File_(("Shared", Published("shared")), ("Team", Synced("team.json")));
+        var cache = Cache([new("Team", Bound("/shared/team.json"))],
+                          [new("Shared", new CollectionsLocalCache.PublishBinding("/tmp/share", null))]);
+        Seed(h, state, file, cache);
+
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Default";
+        Assert.Equal([CollectionsModel.Pill.Active], model.Pills);
+
+        model.Selected = "Shared";
+        Assert.Equal([CollectionsModel.Pill.Published], model.Pills);
+
+        state.SwitchCollection("Team");
+        model.Selected = "Team";
+        Assert.Equal([CollectionsModel.Pill.Active, CollectionsModel.Pill.Subscribed], model.Pills);
+
+        model.Selected = "Plain";
+        Assert.Empty(model.Pills);   // an ordinary local collection, not active, carries no pill
+    }
+
+    [Fact]
+    public void MenuAndPillTitlesNameTheirStrings()
+    {
+        Assert.Equal(CollectionsModel.ActivePill, CollectionsModel.Title(CollectionsModel.Pill.Active));
+        Assert.Equal(CollectionsModel.PublishedPill, CollectionsModel.Title(CollectionsModel.Pill.Published));
+        Assert.Equal(CollectionsModel.SubscribedPill, CollectionsModel.Title(CollectionsModel.Pill.Subscribed));
+
+        Assert.Equal(CollectionsModel.MakeActiveAction, CollectionsModel.Title(new CollectionsModel.MenuEntry.MakeActive()));
+        Assert.Equal(CollectionsModel.RenameAction, CollectionsModel.Title(new CollectionsModel.MenuEntry.Rename()));
+        Assert.Equal(CollectionsModel.DuplicateAction, CollectionsModel.Title(new CollectionsModel.MenuEntry.Duplicate()));
+        Assert.Equal(CollectionsModel.PublishButton, CollectionsModel.Title(new CollectionsModel.MenuEntry.StartPublishing()));
+        Assert.Equal(CollectionsModel.PublishSettingsButton, CollectionsModel.Title(new CollectionsModel.MenuEntry.PublishingSettings()));
+        Assert.Equal(CollectionsModel.StopPublishingAction, CollectionsModel.Title(new CollectionsModel.MenuEntry.StopPublishing()));
+        Assert.Equal(CollectionsModel.ShowPublishedFileAction, CollectionsModel.Title(new CollectionsModel.MenuEntry.ShowPublishedFile()));
+        Assert.Equal(CollectionsModel.ExportAllAction, CollectionsModel.Title(new CollectionsModel.MenuEntry.ExportAll(true)));
+        Assert.Equal(CollectionsModel.ExportAllAction, CollectionsModel.Title(new CollectionsModel.MenuEntry.ExportAll(false)));
+        Assert.Equal(CollectionsModel.MakeLocalCopyButton, CollectionsModel.Title(new CollectionsModel.MenuEntry.MakeLocalCopy()));
+        Assert.Equal(CollectionsModel.RefreshButton, CollectionsModel.Title(new CollectionsModel.MenuEntry.Refresh()));
+        Assert.Equal(CollectionsModel.ShowSourceFileAction, CollectionsModel.Title(new CollectionsModel.MenuEntry.ShowSourceFile()));
+        Assert.Equal(CollectionsModel.StopSyncingAction, CollectionsModel.Title(new CollectionsModel.MenuEntry.StopSyncing()));
+        Assert.Equal(CollectionsModel.DeleteAction, CollectionsModel.Title(new CollectionsModel.MenuEntry.Delete(true)));
+        Assert.Equal(CollectionsModel.DeleteAction, CollectionsModel.Title(new CollectionsModel.MenuEntry.Delete(false)));
+        Assert.Equal("", CollectionsModel.Title(new CollectionsModel.MenuEntry.Separator()));
+    }
+
+    [Fact]
+    public void CollectionMenuForLocalActiveUnpublished()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        // A second local collection, so the common case is not also the last-collection case.
+        Assert.Null(state.CreateCollection("Work"));
+        state.SwitchCollection("Default");
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Default";
+        Assert.Equal(
+            [
+                new CollectionsModel.MenuEntry.Rename(), new CollectionsModel.MenuEntry.Duplicate(), new CollectionsModel.MenuEntry.Separator(),
+                new CollectionsModel.MenuEntry.StartPublishing(), new CollectionsModel.MenuEntry.ExportAll(true), new CollectionsModel.MenuEntry.Separator(),
+                new CollectionsModel.MenuEntry.Delete(true),
+            ],
+            model.CollectionMenu);
+    }
+
+    [Fact]
+    public void CollectionMenuForLocalPublishedNotActive()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        var folder = h.Dir.File("share");
+        Directory.CreateDirectory(folder);
+        Assert.Null(state.CreateCollection("Shared"));
+        Assert.Null(state.StartPublishing("Shared", folder, PublishIntent.None));
+        state.SwitchCollection("Default");   // Shared stays, now not the active collection
+
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Shared";
+        Assert.Equal(
+            [
+                new CollectionsModel.MenuEntry.MakeActive(), new CollectionsModel.MenuEntry.Separator(),
+                new CollectionsModel.MenuEntry.Rename(), new CollectionsModel.MenuEntry.Duplicate(), new CollectionsModel.MenuEntry.Separator(),
+                new CollectionsModel.MenuEntry.PublishingSettings(), new CollectionsModel.MenuEntry.StopPublishing(),
+                new CollectionsModel.MenuEntry.ShowPublishedFile(), new CollectionsModel.MenuEntry.ExportAll(true), new CollectionsModel.MenuEntry.Separator(),
+                new CollectionsModel.MenuEntry.Delete(true),
+            ],
+            model.CollectionMenu);
+    }
+
+    [Fact]
+    public void CollectionMenuForSyncedNotActiveLocated()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        state.SwitchCollection("Default");
+        Seed(h, state, File_(("Team", Synced("team.json"))));
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Team";
+
+        // Located via a real file, the same flow the banner strip's Locate button drives.
+        var document = h.Dir.File("team.json");
+        System.IO.File.WriteAllBytes(document, CollectionDocumentSamples.DataTeam.Serialize());
+        Assert.Null(model.LocateSource(document));
+        Assert.True(state.IsLocated("Team"));
+
+        Assert.Equal(
+            [
+                new CollectionsModel.MenuEntry.MakeActive(), new CollectionsModel.MenuEntry.Separator(),
+                new CollectionsModel.MenuEntry.Rename(), new CollectionsModel.MenuEntry.MakeLocalCopy(), new CollectionsModel.MenuEntry.Separator(),
+                new CollectionsModel.MenuEntry.Refresh(), new CollectionsModel.MenuEntry.ShowSourceFile(), new CollectionsModel.MenuEntry.StopSyncing(),
+                new CollectionsModel.MenuEntry.ExportAll(false), new CollectionsModel.MenuEntry.Separator(),
+                new CollectionsModel.MenuEntry.Delete(true),
+            ],
+            model.CollectionMenu);
+    }
+
+    /// <summary>
+    /// A synced collection whose document has never been found on this machine: nothing to
+    /// refresh and nothing to reveal, so both menu rows drop out together.
+    /// </summary>
+    [Fact]
+    public void CollectionMenuOmitsRefreshAndShowSourceFileWhenNotLocated()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        state.SwitchCollection("Default");
+        Seed(h, state, File_(("Team", Synced("team.json"))));
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Team";
+
+        Assert.False(state.IsLocated("Team"));
+        Assert.Null(model.SourceFilePath);
+        Assert.False(model.CanRefresh);
+        Assert.DoesNotContain(model.CollectionMenu, e => e is CollectionsModel.MenuEntry.Refresh);
+        Assert.DoesNotContain(model.CollectionMenu, e => e is CollectionsModel.MenuEntry.ShowSourceFile);
+        Assert.Contains(model.CollectionMenu, e => e is CollectionsModel.MenuEntry.StopSyncing);   // still offered: nothing is lost by stopping
+    }
+
+    [Fact]
+    public void CollectionMenuDisablesDeleteForTheLastLocalCollection()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        using var model = new CollectionsModel(state, h.Dialogs);
+        // Only "Default" exists.
+        Assert.False(model.CanDelete);
+        Assert.Contains(model.CollectionMenu, e => e is CollectionsModel.MenuEntry.Delete { Enabled: false });
+    }
+
+    [Fact]
+    public void DuplicateCopiesConnectorsDisabledWithoutActivatingAndReportsAClash()
+    {
+        // Not seeded: CreateCollection copies whichever collection is active when it runs, and
+        // Default is still active at that point.
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Team"));
+        Assert.Null(state.Upsert("beta", Local("/bin/beta"), null, "Team"));
+        state.SwitchCollection("Default");
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Team";
+
+        // Cancelled: nothing changes.
+        h.Dialogs.NextPromptAnswer = null;
+        Assert.False(model.Duplicate());
+        Assert.Equal(["Default", "Team"], state.CollectionNames);
+
+        var before = h.ClaudeServers();
+        h.Dialogs.NextPromptAnswer = "  Team Copy  ";
+        Assert.True(model.Duplicate());
+        Assert.Equal(new FakeDialogs.PromptCall(AppState.NewCollectionTitle, ""), h.Dialogs.Prompts[^1]);
+        var copy = state.Store.Collections["Team Copy"];   // the store trimmed the name
+        Assert.Equal(["alpha", "beta"], copy.Mcps.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal([false, false], copy.Mcps.Values.Select(v => v.Enabled));   // every copy arrives disabled
+        Assert.Equal("Default", state.ActiveCollection);   // duplicate does not activate
+        Assert.True(DictionaryEquality.Equal(before, h.ClaudeServers()));   // nothing Claude runs has changed
+        Assert.Equal("Team", model.Selected);   // the selection stays where it was
+        Assert.Null(model.LastError);
+
+        // A name the store refuses is the model's error.
+        h.Dialogs.NextPromptAnswer = "Team Copy";
+        Assert.False(model.Duplicate());
+        Assert.NotNull(model.LastError);
+    }
+
+    [Fact]
+    public void PublishedFilePathAndSourceFilePathNameTheDocumentsThisMachineKnows()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Shared"));
+        Assert.Null(state.CreateCollection("Team"));
+        state.SwitchCollection("Default");
+        Seed(h, state, File_(("Team", Synced("team.json"))));
+
+        var folder = h.Dir.File("share");
+        Directory.CreateDirectory(folder);
+        Assert.Null(state.StartPublishing("Shared", folder, PublishIntent.None));
+
+        using var model = new CollectionsModel(state, h.Dialogs);
+
+        model.Selected = "Shared";
+        var published = model.PublishedFilePath;
+        Assert.NotNull(published);
+        Assert.EndsWith("shared." + CollectionDocument.FileExtension, published);
+
+        model.Selected = "Default";
+        Assert.Null(model.PublishedFilePath);   // not published from here
+
+        model.Selected = "Team";
+        Assert.Null(model.SourceFilePath);   // not located yet
+        var document = h.Dir.File("team.json");
+        System.IO.File.WriteAllBytes(document, CollectionDocumentSamples.DataTeam.Serialize());
+        Assert.Null(model.LocateSource(document));
+        Assert.Equal(state.SourceLocation("Team"), model.SourceFilePath);
+        Assert.Equal(document, model.SourceFilePath);
+    }
+
+    // MARK: sidebar and connectors header
+
+    [Fact]
+    public void AddConnectorAffordanceFollowsSyncAndTargetsTheSelectedCollection()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        state.SwitchCollection("Default");
+        Seed(h, state, File_(("Team", Synced("team.json"))));
+        using var model = new CollectionsModel(state, h.Dialogs);
+
+        model.Selected = "Default";
+        Assert.True(model.CanAddConnector);
+        Assert.Equal(CollectionsModel.AddConnectorTooltip, model.AddConnectorTooltipText);
+        var target = model.NewConnectorTarget();
+        Assert.Equal("Default", target.Collection);
+        Assert.True(target.IsNew);
+
+        model.Selected = "Team";
+        Assert.False(model.CanAddConnector);
+        Assert.Equal(CollectionsModel.AddConnectorDisabledTooltip, model.AddConnectorTooltipText);
+        Assert.Equal("Team", model.NewConnectorTarget().Collection);
+    }
 }

@@ -1303,4 +1303,238 @@ final class CollectionsModelTests: XCTestCase {
         model.setChecked("zeta", false)
         XCTAssertEqual(model.checkedNamesClashing(in: "Spare"), [], "nothing ticked clashes")
     }
+
+    // MARK: - Header pills and menu
+
+    func testPillsMarkActivePublishedAndSubscribedExceptions() throws {
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Shared"))
+        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createCollection(named: "Plain"))
+        state.switchCollection(to: "Default")
+        let file = CollectionsFile(collections: ["Shared": published(slug: "shared"), "Team": synced(fileName: "team.json")])
+        let cache = CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")],
+                                          published: ["Shared": .init(folder: "/tmp/share", lastWrittenHash: nil)])
+        try seed(h, state, file: file, cache: cache)
+
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Default"
+        XCTAssertEqual(model.pills, [.active])
+
+        model.selected = "Shared"
+        XCTAssertEqual(model.pills, [.published])
+
+        state.switchCollection(to: "Team")
+        model.selected = "Team"
+        XCTAssertEqual(model.pills, [.active, .subscribed])
+
+        model.selected = "Plain"
+        XCTAssertEqual(model.pills, [], "an ordinary local collection, not active, carries no pill")
+    }
+
+    func testMenuAndPillTitlesNameTheirStrings() {
+        XCTAssertEqual(CollectionsModel.title(for: .active), CollectionsModel.activePill)
+        XCTAssertEqual(CollectionsModel.title(for: .published), CollectionsModel.publishedPill)
+        XCTAssertEqual(CollectionsModel.title(for: .subscribed), CollectionsModel.subscribedPill)
+
+        XCTAssertEqual(CollectionsModel.title(for: .makeActive), CollectionsModel.makeActiveAction)
+        XCTAssertEqual(CollectionsModel.title(for: .rename), CollectionsModel.renameAction)
+        XCTAssertEqual(CollectionsModel.title(for: .duplicate), CollectionsModel.duplicateAction)
+        XCTAssertEqual(CollectionsModel.title(for: .startPublishing), CollectionsModel.publishButton)
+        XCTAssertEqual(CollectionsModel.title(for: .publishingSettings), CollectionsModel.publishSettingsButton)
+        XCTAssertEqual(CollectionsModel.title(for: .stopPublishing), CollectionsModel.stopPublishingAction)
+        XCTAssertEqual(CollectionsModel.title(for: .showPublishedFile), CollectionsModel.showPublishedFileAction)
+        XCTAssertEqual(CollectionsModel.title(for: .exportAll(enabled: true)), CollectionsModel.exportAllAction)
+        XCTAssertEqual(CollectionsModel.title(for: .exportAll(enabled: false)), CollectionsModel.exportAllAction)
+        XCTAssertEqual(CollectionsModel.title(for: .makeLocalCopy), CollectionsModel.makeLocalCopyButton)
+        XCTAssertEqual(CollectionsModel.title(for: .refresh), CollectionsModel.refreshButton)
+        XCTAssertEqual(CollectionsModel.title(for: .showSourceFile), CollectionsModel.showSourceFileAction)
+        XCTAssertEqual(CollectionsModel.title(for: .stopSyncing), CollectionsModel.stopSyncingAction)
+        XCTAssertEqual(CollectionsModel.title(for: .delete(enabled: true)), CollectionsModel.deleteAction)
+        XCTAssertEqual(CollectionsModel.title(for: .delete(enabled: false)), CollectionsModel.deleteAction)
+        XCTAssertEqual(CollectionsModel.title(for: .separator), "")
+    }
+
+    func testCollectionMenuForLocalActiveUnpublished() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        // A second local collection, so the common case is not also the last-collection case.
+        XCTAssertNil(state.createCollection(named: "Work"))
+        state.switchCollection(to: "Default")
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Default"
+        XCTAssertEqual(model.collectionMenu, [
+            .rename, .duplicate, .separator,
+            .startPublishing, .exportAll(enabled: true), .separator,
+            .delete(enabled: true),
+        ])
+    }
+
+    func testCollectionMenuForLocalPublishedNotActive() throws {
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        let folder = h.dir.file("share")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        XCTAssertNil(state.createCollection(named: "Shared"))
+        XCTAssertNil(state.startPublishing("Shared", to: folder.path, intent: .none))
+        state.switchCollection(to: "Default")   // Shared stays, now not the active collection
+
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Shared"
+        XCTAssertEqual(model.collectionMenu, [
+            .makeActive, .separator,
+            .rename, .duplicate, .separator,
+            .publishingSettings, .stopPublishing, .showPublishedFile, .exportAll(enabled: true), .separator,
+            .delete(enabled: true),
+        ])
+    }
+
+    func testCollectionMenuForSyncedNotActiveLocated() throws {
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        state.switchCollection(to: "Default")
+        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Team"
+
+        // Located via a real file, the same flow the banner strip's Locate button drives.
+        let document = h.dir.file("team.json")
+        try CollectionDocumentSamples.dataTeam.serialized().write(to: document)
+        XCTAssertNil(model.locateSource(document.path))
+        XCTAssertTrue(state.isLocated("Team"))
+
+        XCTAssertEqual(model.collectionMenu, [
+            .makeActive, .separator,
+            .rename, .makeLocalCopy, .separator,
+            .refresh, .showSourceFile, .stopSyncing, .exportAll(enabled: false), .separator,
+            .delete(enabled: true),
+        ])
+    }
+
+    /// A synced collection whose document has never been found on this machine: nothing to
+    /// refresh and nothing to reveal, so both menu rows drop out together.
+    func testCollectionMenuOmitsRefreshAndShowSourceFileWhenNotLocated() throws {
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        state.switchCollection(to: "Default")
+        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Team"
+
+        XCTAssertFalse(state.isLocated("Team"))
+        XCTAssertNil(model.sourceFilePath)
+        XCTAssertFalse(model.canRefresh)
+        XCTAssertFalse(model.collectionMenu.contains(.refresh))
+        XCTAssertFalse(model.collectionMenu.contains(.showSourceFile))
+        XCTAssertTrue(model.collectionMenu.contains(.stopSyncing), "still offered: nothing is lost by stopping")
+    }
+
+    func testCollectionMenuDisablesDeleteForTheLastLocalCollection() throws {
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        // Only "Default" exists.
+        XCTAssertFalse(model.canDelete)
+        XCTAssertTrue(model.collectionMenu.contains(.delete(enabled: false)))
+    }
+
+    func testDuplicateCopiesConnectorsDisabledWithoutActivatingAndReportsAClash() throws {
+        // Not seeded: createCollection(named:) copies whichever collection is active when it
+        // runs, and Default is still active at that point.
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Team"))
+        XCTAssertNil(state.upsert(name: "beta", entry: local("/bin/beta"), renamedFrom: nil, in: "Team"))
+        state.switchCollection(to: "Default")
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Team"
+
+        // Cancelled: nothing changes.
+        h.dialogs.nextPromptAnswer = nil
+        XCTAssertFalse(model.duplicate())
+        XCTAssertEqual(state.collectionNames, ["Default", "Team"])
+
+        let before = try h.claudeServers()
+        h.dialogs.nextPromptAnswer = "  Team Copy  "
+        XCTAssertTrue(model.duplicate())
+        XCTAssertEqual(h.dialogs.prompts.last, FakeDialogs.PromptCall(title: AppState.newCollectionTitle, initial: ""))
+        let copy = try XCTUnwrap(state.store.collections["Team Copy"], "the store trimmed the name")
+        XCTAssertEqual(copy.mcps.keys.sorted(), ["alpha", "beta"])
+        XCTAssertEqual(copy.mcps.values.map(\.enabled), [false, false], "every copy arrives disabled")
+        XCTAssertEqual(state.activeCollection, "Default", "duplicate does not activate")
+        XCTAssertEqual(try h.claudeServers(), before, "nothing Claude runs has changed")
+        XCTAssertEqual(model.selected, "Team", "the selection stays where it was")
+        XCTAssertNil(model.lastError)
+
+        // A name the store refuses is the model's error.
+        h.dialogs.nextPromptAnswer = "Team Copy"
+        XCTAssertFalse(model.duplicate())
+        XCTAssertNotNil(model.lastError)
+    }
+
+    func testPublishedFilePathAndSourceFilePathNameTheDocumentsThisMachineKnows() throws {
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Shared"))
+        XCTAssertNil(state.createCollection(named: "Team"))
+        state.switchCollection(to: "Default")
+        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+
+        let folder = h.dir.file("share")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        XCTAssertNil(state.startPublishing("Shared", to: folder.path, intent: .none))
+
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+
+        model.selected = "Shared"
+        let published = try XCTUnwrap(model.publishedFilePath)
+        XCTAssertTrue(published.hasSuffix("shared." + CollectionDocument.fileExtension), published)
+
+        model.selected = "Default"
+        XCTAssertNil(model.publishedFilePath, "not published from here")
+
+        model.selected = "Team"
+        XCTAssertNil(model.sourceFilePath, "not located yet")
+        let document = h.dir.file("team.json")
+        try CollectionDocumentSamples.dataTeam.serialized().write(to: document)
+        XCTAssertNil(model.locateSource(document.path))
+        XCTAssertEqual(model.sourceFilePath, state.sourceLocation(of: "Team"))
+        XCTAssertEqual(model.sourceFilePath, document.path)
+    }
+
+    // MARK: - Sidebar and connectors header
+
+    func testAddConnectorAffordanceFollowsSyncAndTargetsTheSelectedCollection() throws {
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        state.switchCollection(to: "Default")
+        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+
+        model.selected = "Default"
+        XCTAssertTrue(model.canAddConnector)
+        XCTAssertEqual(model.addConnectorTooltipText, CollectionsModel.addConnectorTooltip)
+        let target = model.newConnectorTarget()
+        XCTAssertEqual(target.collection, "Default")
+        XCTAssertTrue(target.isNew)
+
+        model.selected = "Team"
+        XCTAssertFalse(model.canAddConnector)
+        XCTAssertEqual(model.addConnectorTooltipText, CollectionsModel.addConnectorDisabledTooltip)
+        XCTAssertEqual(model.newConnectorTarget().collection, "Team")
+    }
 }
