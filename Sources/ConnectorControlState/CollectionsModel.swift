@@ -329,31 +329,57 @@ public final class CollectionsModel: ObservableObject {
     private static let packageRunners: Set<String> = ["npx", "uvx", "pipx", "bunx", "pnpx"]
 
     /// A launcher written as a whole command line — `npx -y server --token x` in one string —
-    /// split on whitespace: its first word is the launcher and the rest are arguments ahead of
-    /// `args`, each held to the same rule. A quoted phrase — a header value, some JSON — is left
-    /// out whole, from the word holding its opening `"` or `'` through the word holding the
-    /// closing one, or to the end when it is never closed: nothing in one is a thing to name.
+    /// split into arguments the way a shell passes them: its first argument is the launcher and
+    /// the rest are arguments ahead of `args`, each held to the same rule. A command that is a
+    /// path is never split, since a Windows path holds spaces, so it is the launcher whole.
     private static func splitCommandLine(_ text: String, _ args: [String]) -> (String, [String]) {
-        var words: [String] = []
-        var openQuote: Unicode.Scalar?
-        for word in text.split(whereSeparator: \.isWhitespace).map(String.init) {
-            let scalars = word.unicodeScalars
-            if let quote = openQuote {
-                if scalars.filter({ $0 == quote }).count % 2 == 1 { openQuote = nil }
-            } else if let quote = scalars.first(where: { $0 == "\"" || $0 == "'" }) {
-                if scalars.filter({ $0 == quote }).count % 2 == 1 { openQuote = quote }
-            } else {
-                words.append(word)
-            }
-        }
+        if isExplicitPath(text) { return (text, args) }
+        let words = shellWords(text)
         return (words.first ?? "", Array(words.dropFirst()) + args)
     }
 
-    /// The launcher, named the way it would be typed, or nil when it could be a secret.
+    /// `text` as a shell passes it: whitespace separates arguments, a `"…"` or `'…'` run belongs
+    /// to the argument it touches and loses its quotes, `\"` inside double quotes is a quote, and
+    /// a backslash anywhere else is itself, as a Windows path needs. An unterminated quote runs to
+    /// the end.
+    private static func shellWords(_ text: String) -> [String] {
+        var words: [String] = []
+        var word: String.UnicodeScalarView?
+        var quote: Unicode.Scalar?
+        var scalars = text.unicodeScalars.makeIterator()
+        var pending: Unicode.Scalar? = scalars.next()
+        while let scalar = pending {
+            pending = scalars.next()
+            if let open = quote {
+                if scalar == open {
+                    quote = nil
+                } else if open == "\"", scalar == "\\", pending == "\"" {
+                    word?.append("\"")
+                    pending = scalars.next()
+                } else {
+                    word?.append(scalar)
+                }
+            } else if scalar.properties.isWhitespace {
+                if let finished = word { words.append(String(finished)) }
+                word = nil
+            } else if scalar == "\"" || scalar == "'" {
+                quote = scalar
+                if word == nil { word = String.UnicodeScalarView() }
+            } else {
+                if word == nil { word = String.UnicodeScalarView() }
+                word?.append(scalar)
+            }
+        }
+        if let finished = word { words.append(String(finished)) }
+        return words
+    }
+
+    /// The launcher, named the way it would be typed, or nil when it could be a secret — or when
+    /// it holds whitespace, a path with arguments packed into its last component.
     private static func launcher(_ command: String) -> String? {
         let name = launcherName(command)
-        guard !name.isEmpty, !name.contains("="), !CredentialHeuristics.looksLikeCredential(name),
-              !looksLikeRandomToken(name) else { return nil }
+        guard !name.isEmpty, !name.contains(where: \.isWhitespace), !name.contains("="),
+              !CredentialHeuristics.looksLikeCredential(name), !looksLikeRandomToken(name) else { return nil }
         return name
     }
 

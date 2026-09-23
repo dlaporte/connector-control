@@ -250,13 +250,35 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertFalse(CollectionsModel.target(of: local("cmd", ["/c", quoted]).config, home: "/Users/x").contains("Bearer"))
     }
 
-    /// A quoted phrase in a one-string command line — a header value, some JSON — is left out
-    /// whole, its inner words included, and an unterminated quote runs to the end.
-    func testTargetLeavesOutAQuotedPhraseInACommandLine() {
+    /// A quoted argument in a one-string command line — a header value, some JSON — is one
+    /// argument, and one holding whitespace fails every shape the column shows; an unterminated
+    /// quote runs to the end as part of its word.
+    func testTargetLeavesOutAQuotedArgumentInACommandLine() {
         assertTarget(local("cmd", ["/c", #"tool --header "X-Key: abc.def extra""#]), is: "tool", hides: "abc.def")
         assertTarget(local("cmd", ["/c", #"npx -y @acme/server --config '{"k":"v.w"}'"#]), is: "npx …/server", hides: "v.w")
-        assertTarget(MCPEntry(config: .object(["command": .string(#"tool "abc.def"#)])), is: "tool", hides: "abc.def")
+        assertTarget(MCPEntry(config: .object(["command": .string(#"tool "abc.def extra"#)])), is: "tool", hides: "abc.def")
         assertTarget(MCPEntry(config: .object(["command": .string(#""hunter.2 x" srv.js"#)])), is: "srv.js", hides: "hunter")
+    }
+
+    /// A command line is tokenized the way a shell passes it, so a quoted or partly quoted flag
+    /// is still a flag, its value still drops, and only the first argument is the launcher.
+    func testTargetTokenizesACommandLineLikeAShell() {
+        assertTarget(MCPEntry(config: .object(["command": .string(#""C:\Program Files\Tool\tool.exe" --api-key hunter.2x"#)])),
+                     is: "tool", hides: "hunter.2x")
+        assertTarget(MCPEntry(config: .object(["command": .string(#"tool "--token" hunter.2x"#)])), is: "tool", hides: "hunter.2x")
+        assertTarget(MCPEntry(config: .object(["command": .string(#"tool --to"ken" hunter.2x"#)])), is: "tool", hides: "hunter.2x")
+        assertTarget(MCPEntry(config: .object(["command": .string(#"tool "a b" x.y"#)])), is: "tool x.y", hides: "a b")
+        // An escaped quote does not close the argument, so `c.d` stays inside it.
+        assertTarget(MCPEntry(config: .object(["command": .string(#"tool "a\"b c.d""#)])), is: "tool", hides: "c.d")
+    }
+
+    /// A command that is a path is never split, even with a space in it; one whose last component
+    /// holds a space had arguments packed into it, and names no launcher.
+    func testTargetNamesALauncherUnderProgramFiles() {
+        assertTarget(local(#"C:\Program Files\nodejs\node.exe"#, ["index.js"]), is: "node index.js", hides: "Program")
+        assertTarget(local(#""C:\Program Files\nodejs\node.exe""#, ["index.js"]), is: "node index.js", hides: "Program")
+        assertTarget(local(#"C:\Program Files\nodejs\npx.cmd"#, ["-y", "mcp-remote", "https://h.example/mcp"]), is: "h.example", hides: "npx")
+        assertTarget(local("/opt/bin/tool --password hunter.2x", ["srv.js"]), is: "srv.js", hides: "hunter.2x")
     }
 
     /// A password holding an unencoded `/`, `?` or `#` ends the authority early; what is left of

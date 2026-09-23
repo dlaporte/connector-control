@@ -272,16 +272,46 @@ public class CollectionsModelTests
     }
 
     /// <summary>
-    /// A quoted phrase in a one-string command line — a header value, some JSON — is left out
-    /// whole, its inner words included, and an unterminated quote runs to the end.
+    /// A quoted argument in a one-string command line — a header value, some JSON — is one
+    /// argument, and one holding whitespace fails every shape the column shows; an unterminated
+    /// quote runs to the end as part of its word.
     /// </summary>
     [Fact]
-    public void TargetLeavesOutAQuotedPhraseInACommandLine()
+    public void TargetLeavesOutAQuotedArgumentInACommandLine()
     {
         AssertTarget(Local("cmd", "/c", "tool --header \"X-Key: abc.def extra\""), "tool", "abc.def");
         AssertTarget(Local("cmd", "/c", "npx -y @acme/server --config '{\"k\":\"v.w\"}'"), "npx …/server", "v.w");
-        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("tool \"abc.def")))), "tool", "abc.def");
+        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("tool \"abc.def extra")))), "tool", "abc.def");
         AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("\"hunter.2 x\" srv.js")))), "srv.js", "hunter");
+    }
+
+    /// <summary>
+    /// A command line is tokenized the way a shell passes it, so a quoted or partly quoted flag
+    /// is still a flag, its value still drops, and only the first argument is the launcher.
+    /// </summary>
+    [Fact]
+    public void TargetTokenizesACommandLineLikeAShell()
+    {
+        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String(@"""C:\Program Files\Tool\tool.exe"" --api-key hunter.2x")))),
+            "tool", "hunter.2x");
+        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("tool \"--token\" hunter.2x")))), "tool", "hunter.2x");
+        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("tool --to\"ken\" hunter.2x")))), "tool", "hunter.2x");
+        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("tool \"a b\" x.y")))), "tool x.y", "a b");
+        // An escaped quote does not close the argument, so `c.d` stays inside it.
+        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String(@"tool ""a\""b c.d""")))), "tool", "c.d");
+    }
+
+    /// <summary>
+    /// A command that is a path is never split, even with a space in it; one whose last component
+    /// holds a space had arguments packed into it, and names no launcher.
+    /// </summary>
+    [Fact]
+    public void TargetNamesALauncherUnderProgramFiles()
+    {
+        AssertTarget(Local(@"C:\Program Files\nodejs\node.exe", "index.js"), "node index.js", "Program");
+        AssertTarget(Local(@"""C:\Program Files\nodejs\node.exe""", "index.js"), "node index.js", "Program");
+        AssertTarget(Local(@"C:\Program Files\nodejs\npx.cmd", "-y", "mcp-remote", "https://h.example/mcp"), "h.example", "npx");
+        AssertTarget(Local("/opt/bin/tool --password hunter.2x", "srv.js"), "srv.js", "hunter.2x");
     }
 
     /// <summary>

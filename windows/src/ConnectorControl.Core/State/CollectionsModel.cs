@@ -386,46 +386,85 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// A launcher written as a whole command line — <c>npx -y server --token x</c> in one string —
-    /// split on whitespace: its first word is the launcher and the rest are arguments ahead of
-    /// <paramref name="args"/>, each held to the same rule. A quoted phrase — a header value, some
-    /// JSON — is left out whole, from the word holding its opening <c>"</c> or <c>'</c> through the
-    /// word holding the closing one, or to the end when it is never closed: nothing in one is a
-    /// thing to name.
+    /// split into arguments the way a shell passes them: its first argument is the launcher and
+    /// the rest are arguments ahead of <paramref name="args"/>, each held to the same rule. A
+    /// command that is a path is never split, since a Windows path holds spaces, so it is the
+    /// launcher whole.
     /// </summary>
     private static (string, List<string>) SplitCommandLine(string text, IEnumerable<string> args)
     {
-        var words = new List<string>();
-        char? openQuote = null;
-        foreach (var word in text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        if (IsExplicitPath(text))
         {
-            if (openQuote is { } open)
-            {
-                if (word.Count(c => c == open) % 2 == 1)
-                {
-                    openQuote = null;
-                }
-            }
-            else if (word.FirstOrDefault(c => c is '"' or '\'') is var quote and not '\0')
-            {
-                if (word.Count(c => c == quote) % 2 == 1)
-                {
-                    openQuote = quote;
-                }
-            }
-            else
-            {
-                words.Add(word);
-            }
+            return (text, args.ToList());
         }
+        var words = ShellWords(text);
         return (words.Count > 0 ? words[0] : "", words.Skip(1).Concat(args).ToList());
     }
 
-    /// <summary>The launcher, named the way it would be typed, or null when it could be a secret.</summary>
+    /// <summary>
+    /// <paramref name="text"/> as a shell passes it: whitespace separates arguments, a <c>"…"</c>
+    /// or <c>'…'</c> run belongs to the argument it touches and loses its quotes, <c>\"</c> inside
+    /// double quotes is a quote, and a backslash anywhere else is itself, as a Windows path needs.
+    /// An unterminated quote runs to the end.
+    /// </summary>
+    private static List<string> ShellWords(string text)
+    {
+        var words = new List<string>();
+        System.Text.StringBuilder? word = null;
+        char? quote = null;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (quote is { } open)
+            {
+                if (c == open)
+                {
+                    quote = null;
+                }
+                else if (open == '"' && c == '\\' && i + 1 < text.Length && text[i + 1] == '"')
+                {
+                    word?.Append('"');
+                    i++;
+                }
+                else
+                {
+                    word?.Append(c);
+                }
+            }
+            else if (char.IsWhiteSpace(c))
+            {
+                if (word is not null)
+                {
+                    words.Add(word.ToString());
+                }
+                word = null;
+            }
+            else if (c is '"' or '\'')
+            {
+                quote = c;
+                word ??= new System.Text.StringBuilder();
+            }
+            else
+            {
+                (word ??= new System.Text.StringBuilder()).Append(c);
+            }
+        }
+        if (word is not null)
+        {
+            words.Add(word.ToString());
+        }
+        return words;
+    }
+
+    /// <summary>
+    /// The launcher, named the way it would be typed, or null when it could be a secret — or when
+    /// it holds whitespace, a path with arguments packed into its last component.
+    /// </summary>
     private static string? Launcher(string command)
     {
         var name = LauncherName(command);
-        return name.Length == 0 || name.Contains('=') || CredentialHeuristics.LooksLikeCredential(name)
-            || LooksLikeRandomToken(name) ? null : name;
+        return name.Length == 0 || name.Any(char.IsWhiteSpace) || name.Contains('=')
+            || CredentialHeuristics.LooksLikeCredential(name) || LooksLikeRandomToken(name) ? null : name;
     }
 
     /// <summary>
