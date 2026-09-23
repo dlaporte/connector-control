@@ -36,8 +36,7 @@ public final class CollectionsModel: ObservableObject {
     public static let removeFileButton = "Remove"
     public static let keepFileButton = "Keep"
     public static let remoteType = "remote"
-    /// The row's pencil, which names no connector: the row it sits on is the answer. The
-    /// popover's `ConnectorRow.editTooltip` spells the name out, because that menu has no rows.
+    /// The row's pencil, which names no connector: the row it sits on is the answer.
     public static let editTooltip = "Edit"
     /// The sidebar's double-click, and the same action in its context menu.
     public static let makeActiveAction = "Make Active"
@@ -46,16 +45,13 @@ public final class CollectionsModel: ObservableObject {
     /// actor, the same reason `AppState.chooseClaude` is spelled that way.
     nonisolated public static let lockedGlyphTooltip = "Read-only: synced from the collection's author"
 
-    public static func exportButton(_ count: Int) -> String { "Export \(count)" }
-
     // MARK: - Selection bar
 
     public static let copyToButton = "Copy to"
     public static let exportCheckedButton = "Export"
     public static let removeCheckedButton = "Remove"
 
-    /// The bar's own tally, e.g. "2 selected" — distinct from `exportButton`, which names what
-    /// its button does rather than what is ticked.
+    /// The bar's own tally, e.g. "2 selected".
     public static func selectedCount(_ n: Int) -> String { "\(n) selected" }
 
     /// Names the connector when there is exactly one ticked, and states the count otherwise: a
@@ -623,8 +619,6 @@ public final class CollectionsModel: ObservableObject {
         }
     }
 
-    public var canCopyChecked: Bool { !state.isSynced(selectedCollection) && !checkedNames.isEmpty }
-
     public var canRemoveChecked: Bool { !state.isSynced(selectedCollection) && !checkedNames.isEmpty }
 
     /// Any local collection, published or not. Reopening the sheet on a published one shows what
@@ -634,20 +628,8 @@ public final class CollectionsModel: ObservableObject {
     /// A synced collection has an author elsewhere and nothing here to publish.
     public var canPublish: Bool { !state.isSynced(selectedCollection) }
 
-    /// Start Publishing for a collection that does not publish yet, Publishing Settings for one
-    /// that does: the same sheet, but by then it changes what is shared rather than starting.
-    public var publishActionTitle: String {
-        state.isPublished(selectedCollection) ? CollectionsModel.publishSettingsButton : CollectionsModel.publishButton
-    }
-
     /// Refresh reads the bound document, so it needs one this machine can name.
     public var canRefresh: Bool { locatedSource(of: selectedCollection) != nil }
-
-    public var canMakeLocalCopy: Bool { state.isSynced(selectedCollection) }
-
-    public var canStopSyncing: Bool { state.isSynced(selectedCollection) }
-
-    public var canStopPublishing: Bool { state.isPublished(selectedCollection) }
 
     /// The last local collection stays, because only a local one takes a new connector, and the
     /// last collection of any kind stays, because the store always has an active one. A synced
@@ -788,8 +770,6 @@ public final class CollectionsModel: ObservableObject {
     public static let subscribeSubtitle = "Stays in sync, read-only"
     public static let connectorsHeader = "Connectors"
     public static let addConnectorTooltip = "Add Connector"
-    /// The same text `PopoverModel.addDisabledTooltip` carries: one sentence, said in two places
-    /// that both need it, rather than one model reaching into the other's strings.
     public static let addConnectorDisabledTooltip = "Additions go in a local collection."
     /// The `⋯` button's own tooltip and accessibility label.
     public static let moreActionsLabel = "More"

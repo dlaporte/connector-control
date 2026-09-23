@@ -32,10 +32,7 @@ public sealed class PublishModel : ObservableObject
 
     public static string Title(string collection) => $"Publish “{collection}”";
 
-    /// <summary>
-    /// The sheet's own title in export mode. No trailing ellipsis: the one on the menu item that
-    /// opens it (<see cref="FlyoutModel.ExportTitleFor"/>) says a sheet follows, and this is that sheet.
-    /// </summary>
+    /// <summary>The sheet's own title in export mode.</summary>
     public static string ExportTitle(string collection) => $"Export “{collection}”";
 
     /// <summary>"this PC" is the platform-forced half of this sentence; the Mac mirror says "this Mac".</summary>

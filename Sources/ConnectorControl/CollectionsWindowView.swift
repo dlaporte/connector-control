@@ -564,15 +564,6 @@ struct CollectionsWindowView: View {
         // Left in AppState for whichever window opens next.
         guard appeared else { return }
         switch state.takeCollectionsWindowRequest() {
-        case .importFile:
-            openDocument(keepInSync: false)
-        case .exportActive:
-            // The menu item names the collection that is active now, not whichever one this
-            // window last had selected.
-            model.selected = state.activeCollection
-            // The menu item offers the whole of the active collection, and a selection that has
-            // just moved carries no ticks: an empty subset would write an empty document.
-            show(.export(PublishModel(state: state, collection: state.activeCollection)))
         case .review(let collection):
             model.selected = collection
             show(.review(ReviewModel(state: state, collection: collection)))

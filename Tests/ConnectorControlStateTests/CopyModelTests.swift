@@ -44,10 +44,9 @@ final class CopyModelTests: XCTestCase {
         XCTAssertEqual(model.rows.map(\.clashes), [true, false, true])
         XCTAssertEqual(model.rows.map(\.choice), [.keepBoth, .keepBoth, .keepBoth], "keepBoth by default, clash or not")
         XCTAssertEqual(model.rows.map(\.badge), ["", ImportModel.newBadge, ""])
-        XCTAssertTrue(model.needsAnswers, "zeta and alpha clash")
     }
 
-    func testNeedsAnswersIsFalseWhenNothingTickedClashes() throws {
+    func testARowThatDoesNotClashIsBadgedNew() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.addEmptyCollection(named: "Spare"))
@@ -58,7 +57,6 @@ final class CopyModelTests: XCTestCase {
         collections.setChecked("alpha", true)
 
         let model = CopyModel(collections: collections, destination: "Spare")
-        XCTAssertFalse(model.needsAnswers)
         XCTAssertEqual(model.rows.map(\.badge), [ImportModel.newBadge])
     }
 

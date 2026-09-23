@@ -1,6 +1,6 @@
 namespace ConnectorControl.Core.State;
 
-/// <summary>A switch, the name, an advisory caution glyph, and a pencil button.</summary>
+/// <summary>A switch, the name, and an advisory caution glyph.</summary>
 public sealed class ConnectorRow : ObservableObject
 {
     private readonly AppState state;
@@ -19,8 +19,6 @@ public sealed class ConnectorRow : ObservableObject
 
     public string Name { get; }
 
-    public string EditTooltip => $"Edit “{Name}”";
-
     /// <summary>
     /// The lock's tooltip, the same sentence the Collections window's rows show for the same
     /// fact, borrowed rather than written twice.
@@ -38,7 +36,7 @@ public sealed class ConnectorRow : ObservableObject
 
     /// <summary>
     /// Leads the row with a lock: this connector belongs to the author of a synced collection's
-    /// document. The switch and the pencil stay live; everything else is read-only.
+    /// document. The switch stays live; everything else is read-only.
     /// </summary>
     public bool IsLocked => isLocked;
 

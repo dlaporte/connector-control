@@ -34,7 +34,6 @@
     "mac": "/Applications/Claude.app"
   },
   "AppState.deleteButton": "Delete",
-  "AppState.deleteCollectionInformative": "Its connector list is removed; backups keep prior states.",
   "AppState.deleteCollectionMessage": {
     "format": "Delete Collection “{0}”?"
   },
@@ -140,9 +139,6 @@
   "CollectionsModel.duplicateAction": "Duplicate",
   "CollectionsModel.editTooltip": "Edit",
   "CollectionsModel.exportAllAction": "Export All",
-  "CollectionsModel.exportButton": {
-    "format": "Export {0}"
-  },
   "CollectionsModel.exportCheckedButton": "Export",
   "CollectionsModel.importButton": "Import",
   "CollectionsModel.importSubtitle": "Adds copies you own",
@@ -210,9 +206,6 @@
     "format": "backup {0} has an invalid mcpServers section"
   },
   "ConfigService.malformedClaudeConfigNote": "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.",
-  "ConnectorRow.editTooltip": {
-    "format": "Edit “{0}”"
-  },
   "CopyModel.copyButton": "Copy",
   "CopyModel.title": {
     "format": "Copy to “{0}”"
@@ -349,14 +342,8 @@
   },
   "Notifications.restartToastButton": "Restart Claude",
   "Notifications.title": "Connector Control",
-  "PopoverModel.addDisabledTooltip": "Additions go in a local collection.",
-  "PopoverModel.addTooltip": "Add Connector",
   "PopoverModel.chooseFolderButton": "Choose Folder",
   "PopoverModel.emptyText": "No connectors configured yet.",
-  "PopoverModel.exportTitleFor": {
-    "format": "Export “{0}”"
-  },
-  "PopoverModel.importTitle": "Import",
   "PopoverModel.locateButton": {
     "format": "Locate {0}"
   },

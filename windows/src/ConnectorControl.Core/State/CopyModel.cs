@@ -62,12 +62,6 @@ public sealed class CopyModel : ObservableObject
     }
 
     /// <summary>
-    /// Whether any row still needs an answer — the same test that decides whether this sheet is
-    /// worth opening at all.
-    /// </summary>
-    public bool NeedsAnswers => Rows.Any(row => row.Clashes);
-
-    /// <summary>
     /// Hands every clashing row's choice to the copy engine and leaves a clean row to it: nothing
     /// is in its way, so MakeLocalCopy needs nothing said about it. true when the copies landed.
     /// </summary>

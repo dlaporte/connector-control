@@ -7,16 +7,13 @@ import ConnectorControlCore
 @MainActor
 public final class PopoverModel: ObservableObject {
     public static let title = "Connector Control"
-    public static let addTooltip = "Add Connector"
     public static let settingsTooltip = "Settings"
     public static let quitTooltip = "Quit Connector Control"
     public static let emptyText = "No connectors configured yet."
     public static let retryTitle = "Apply Failed — Retry"
     public static let restartTitle = "Restart Required"
-    public static let addDisabledTooltip = "Additions go in a local collection."
     public static let reviewAndApplyButton = "Review & Apply"
     public static let chooseFolderButton = "Choose Folder"
-    public static let importTitle = "Import"
     public static let manageTitle = "Manage Collections"
     /// SF Symbols: the retry footer, the restart footer, and the row caution glyph.
     public static let retryGlyph = "exclamationmark.arrow.circlepath"
@@ -48,11 +45,6 @@ public final class PopoverModel: ObservableObject {
         item.source.map(sourceTooltipFormat)
     }
 
-    /// Carries the C#-forced name on this side too, so the pair reads the same in both files: a
-    /// static and an instance member cannot share one name there, and one spelling of the
-    /// factory is easier to follow than two.
-    public static func exportTitleFor(_ active: String) -> String { "Export “\(active)”" }
-
     public static func locateButton(_ fileName: String) -> String { "Locate \(fileName)" }
 
     /// The chain glyph's tooltip. Named with the `Format` suffix because the Windows mirror
@@ -73,9 +65,6 @@ public final class PopoverModel: ObservableObject {
 
     /// The chip's text is the bare name; the ▾, the chain and the dot are the view's glyphs.
     public var activeCollection: String { state.activeCollection }
-
-    /// The menu's Export item, which names the collection it would write.
-    public var exportTitle: String { PopoverModel.exportTitleFor(state.activeCollection) }
 
     /// The chain beside the chip, and the lock on every row below it.
     public var activeCollectionIsSynced: Bool { state.activeCollectionIsSynced }
@@ -100,15 +89,6 @@ public final class PopoverModel: ObservableObject {
                                hasPendingUpdate: state.pendingUpdates[$0] != nil,
                                source: state.sourceLocation(of: $0))
         }
-    }
-
-    /// Nothing can be added to a synced collection: its content is the source file's.
-    public var canAddConnector: Bool { !state.activeCollectionIsSynced }
-
-    /// The Add button's tooltip, which says why it is disabled when it is. Picked here rather
-    /// than in the view, because XAML binds one tooltip and cannot choose between two statics.
-    public var addTooltipText: String {
-        canAddConnector ? PopoverModel.addTooltip : PopoverModel.addDisabledTooltip
     }
 
     // MARK: banner
@@ -246,14 +226,6 @@ public final class PopoverModel: ObservableObject {
         }
     }
 
-    /// The menu's Import: the picker and the sheet belong to the Collections window, so opening
-    /// it is all the popover does and this is what it finds waiting.
-    public func requestImport() { state.collectionsWindowRequest = .importFile }
-
-    /// The menu's Export “<active>”, which the Collections window shows for the collection that
-    /// is active now rather than whichever one it last had selected.
-    public func requestExport() { state.collectionsWindowRequest = .exportActive }
-
     /// The banner's Review & Apply, for the collection the banner names — which is not always
     /// the active one, so the name travels with the request.
     public func requestReview() {
@@ -271,9 +243,6 @@ public final class PopoverModel: ObservableObject {
             state.restartClaude()
         }
     }
-
-    /// The pencil button opens the editor only if the entry still exists in the store.
-    public func entryFor(_ name: String) -> MCPEntry? { state.store.mcps[name] }
 
     /// Stops listening to AppState. The app does not call this: the
     /// subscription holds `self` weakly and dies with the `@StateObject`, and

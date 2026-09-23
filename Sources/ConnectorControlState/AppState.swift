@@ -32,7 +32,6 @@ public final class AppState: ObservableObject {
     public static let restartButton = "Restart"
     public static let newCollectionTitle = "New Collection"
     public static let renameCollectionTitle = "Rename Collection"
-    public static let deleteCollectionInformative = "Its connector list is removed; backups keep prior states."
     public static let deleteButton = "Delete"
     public static let nameEmptyError = "Name must not be empty."
     public static let lastLocalCollectionError = "The last local collection can’t be deleted."

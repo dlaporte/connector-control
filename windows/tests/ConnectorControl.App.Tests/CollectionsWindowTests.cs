@@ -746,33 +746,29 @@ public class CollectionsWindowTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var document = SubscribeToDataTeam(h, state);
+        SubscribeToDataTeam(h, state);
         Showing(h, state, (window, recorder) =>
         {
             // The window is already open and showing another collection when the flyout asks for
-            // the active one's Export sheet — the case a window that only reads on load strands.
+            // the active one's Publish dialog — the case a window that only reads on load strands.
             Assert.Equal("Data team", window.Model.Selected);
             Assert.Null(window.LastRequest);
-            using var flyout = new FlyoutModel(state, h.Settings);
-            flyout.RequestExport();
+            state.CollectionsWindowRequest = new CollectionsWindowRequest.Publish(state.ActiveCollection);
             Pump(window);
 
-            Assert.IsType<CollectionsWindowRequest.ExportActive>(window.LastRequest);
+            Assert.Equal(new CollectionsWindowRequest.Publish(state.ActiveCollection), window.LastRequest);
             Assert.Null(state.CollectionsWindowRequest);   // taken, so nothing acts on it twice
             Assert.Equal(state.ActiveCollection, window.Model.Selected);
             var (model, mode) = Assert.Single(recorder.Publishes);
-            Assert.Equal(PublishDialogMode.Export, mode);
+            Assert.Equal(PublishDialogMode.Publish, mode);
             Assert.Equal(state.ActiveCollection, model.Collection);
-            // The menu item offers the whole collection: a selection that has just moved carries
-            // no ticks, and an empty subset would write an empty document.
-            Assert.Null(model.Connectors);
 
             // A second request, after the first was consumed, reaches the window just the same.
-            recorder.Document = document;
-            flyout.RequestImport();
+            state.CollectionsWindowRequest = new CollectionsWindowRequest.Review("Data team");
             Pump(window);
-            Assert.IsType<CollectionsWindowRequest.ImportFile>(window.LastRequest);
-            Assert.Equal(recorder.Document, Assert.Single(recorder.Imports).Path);
+            Assert.Equal(new CollectionsWindowRequest.Review("Data team"), window.LastRequest);
+            Assert.Equal("Data team", window.Model.Selected);
+            Assert.Equal("Data team", Assert.Single(recorder.Reviews).Collection);
         }, select: "Data team");
     }
 }

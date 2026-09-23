@@ -86,7 +86,6 @@ final class StringCatalogTests: XCTestCase {
         "ClaudeSignature.refusalMessage": ["X", "Y"],
         "ClaudeSignature.uninspectableMessage": ["X"],
         "CollectionsModel.deletePublishedFileQuestion": ["X"],
-        "CollectionsModel.exportButton": ["3"],
         "CollectionsModel.localDetail": ["3"],
         "CollectionsModel.publishedDetail": ["X"],
         "CollectionsModel.removeCheckedMessage.many": ["3"],
@@ -97,7 +96,6 @@ final class StringCatalogTests: XCTestCase {
         "ConfigService.corruptStoreNote": ["X"],
         "ConfigService.invalidBackupError": ["X", "Y"],
         "ConfigService.invalidBackupMcpServersError": ["X"],
-        "ConnectorRow.editTooltip": ["X"],
         "CopyModel.title": ["X"],
         "EditTarget.editTitle": ["X"],
         "EditorModel.additionalTitle": ["3", "a, b"],
@@ -120,7 +118,6 @@ final class StringCatalogTests: XCTestCase {
         "ImportModel.sourceLine": ["X", "Y", "3"],
         "MasterStore.duplicateCollectionNameError": ["X"],
         "MasterStore.unknownCollectionError": ["X"],
-        "PopoverModel.exportTitleFor": ["X"],
         "PopoverModel.locateButton": ["X"],
         "PopoverModel.sourceTooltipFormat": ["X"],
         "PublishModel.exportTitle": ["X"],
@@ -162,7 +159,6 @@ final class StringCatalogTests: XCTestCase {
             AppState.connectorListChangedBody(ServerDelta(), restartRequired: true)
         actual["AppState.defaultClaudeAppPath"] = AppState.defaultClaudeAppPath
         actual["AppState.deleteButton"] = AppState.deleteButton
-        actual["AppState.deleteCollectionInformative"] = AppState.deleteCollectionInformative
         actual["AppState.deleteCollectionMessage"] = AppState.deleteCollectionMessage("X")
         actual["AppState.duplicateNameError"] = AppState.duplicateNameError("X")
         actual["AppState.enabledSubtitle"] = AppState.enabledSubtitle(enabled: 3, total: 7)
@@ -238,7 +234,6 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.duplicateAction"] = CollectionsModel.duplicateAction
         actual["CollectionsModel.editTooltip"] = CollectionsModel.editTooltip
         actual["CollectionsModel.exportAllAction"] = CollectionsModel.exportAllAction
-        actual["CollectionsModel.exportButton"] = CollectionsModel.exportButton(3)
         actual["CollectionsModel.exportCheckedButton"] = CollectionsModel.exportCheckedButton
         actual["CollectionsModel.importButton"] = CollectionsModel.importButton
         actual["CollectionsModel.importSubtitle"] = CollectionsModel.importSubtitle
@@ -283,9 +278,8 @@ final class StringCatalogTests: XCTestCase {
         actual["CopyModel.copyButton"] = CopyModel.copyButton
         actual["CopyModel.title"] = CopyModel.title("X")
 
-        // MARK: ConnectorRow / Dialogs / AlertDialogs
+        // MARK: Dialogs / AlertDialogs
 
-        actual["ConnectorRow.editTooltip"] = ConnectorRow(name: "X", enabled: true, toolWarning: nil).editTooltip
         actual["Dialogs.cancelTitle"] = FakeDialogs.cancelTitle
         // AlertDialogs.swift lives in the ConnectorControl app target (AppKit),
         // which this test target cannot import; its OK button title is pinned
@@ -380,12 +374,8 @@ final class StringCatalogTests: XCTestCase {
 
         actual["Notifications.restartToastButton"] = Notifications.restartToastButton
         actual["Notifications.title"] = Notifications.title
-        actual["PopoverModel.addDisabledTooltip"] = PopoverModel.addDisabledTooltip
-        actual["PopoverModel.addTooltip"] = PopoverModel.addTooltip
         actual["PopoverModel.chooseFolderButton"] = PopoverModel.chooseFolderButton
         actual["PopoverModel.emptyText"] = PopoverModel.emptyText
-        actual["PopoverModel.exportTitleFor"] = PopoverModel.exportTitleFor("X")
-        actual["PopoverModel.importTitle"] = PopoverModel.importTitle
         actual["PopoverModel.locateButton"] = PopoverModel.locateButton("X")
         actual["PopoverModel.manageTitle"] = PopoverModel.manageTitle
         actual["PopoverModel.pendingMenuMark"] = PopoverModel.pendingMenuMark

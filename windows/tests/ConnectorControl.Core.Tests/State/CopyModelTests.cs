@@ -53,11 +53,10 @@ public class CopyModelTests
         Assert.Equal([ImportChoice.KeepBoth, ImportChoice.KeepBoth, ImportChoice.KeepBoth],
             model.Rows.Select(r => r.Choice));   // keepBoth by default, clash or not
         Assert.Equal(["", ImportModel.NewBadge, ""], model.Rows.Select(r => r.Badge));
-        Assert.True(model.NeedsAnswers);   // zeta and alpha clash
     }
 
     [Fact]
-    public void NeedsAnswersIsFalseWhenNothingTickedClashes()
+    public void ARowThatDoesNotClashIsBadgedNew()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -68,7 +67,6 @@ public class CopyModelTests
         collections.SetChecked("alpha", true);
 
         var model = new CopyModel(collections, "Spare");
-        Assert.False(model.NeedsAnswers);
         Assert.Equal([ImportModel.NewBadge], model.Rows.Select(r => r.Badge));
     }
 

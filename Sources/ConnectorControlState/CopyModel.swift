@@ -56,10 +56,6 @@ public final class CopyModel: ObservableObject {
         }
     }
 
-    /// Whether any row still needs an answer — the same test that decides whether this sheet is
-    /// worth opening at all.
-    public var needsAnswers: Bool { rows.contains { $0.clashes } }
-
     /// Hands every clashing row's choice to the copy engine and leaves a clean row to it: nothing
     /// is in its way, so `makeLocalCopy` needs nothing said about it. true when the copies landed.
     @discardableResult

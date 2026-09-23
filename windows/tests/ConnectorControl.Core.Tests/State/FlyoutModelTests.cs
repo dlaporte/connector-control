@@ -22,14 +22,13 @@ public class FlyoutModelTests
     }
 
     [Fact]
-    public void RowsAreSortedOrdinallyWithEditTooltips()
+    public void RowsAreSortedOrdinally()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
         state.Upsert("Zebra", new McpEntry(AppStateHarness.Remote("https://zebra.example/mcp")), null);
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal(["Zebra", "aws-mcp", "scoutbook", "service-now"], flyout.Rows.Select(r => r.Name).ToArray());   // uppercase first: ordinal
-        Assert.Equal("Edit “aws-mcp”", flyout.Rows[1].EditTooltip);
         Assert.All(flyout.Rows, r => Assert.True(r.Enabled));
     }
 
@@ -63,13 +62,12 @@ public class FlyoutModelTests
     }
 
     [Fact]
-    public void TheChipMenuHasNoHousekeepingItemsAndAddIsAllowedInALocalCollection()
+    public void TheChipMenuHasNoHousekeepingItems()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal([new CollectionMenuItem("Default", true)], flyout.CollectionItems);
-        Assert.True(flyout.CanAddConnector);
 
         Assert.Null(state.CreateCollection("Work"));
         // Switching only — New, Rename and Delete live in the window.
@@ -82,7 +80,7 @@ public class FlyoutModelTests
     }
 
     [Fact]
-    public void ASyncedCollectionIsMarkedInTheMenuAndClosedToAdditions()
+    public void ASyncedCollectionIsMarkedInTheMenu()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -99,10 +97,6 @@ public class FlyoutModelTests
             [new CollectionMenuItem("Default", false),
              new CollectionMenuItem("Team", true, IsSynced: true, HasPendingUpdate: true, Source: "team.json")],
             flyout.CollectionItems);
-        Assert.False(flyout.CanAddConnector);
-        Assert.Equal("Additions go in a local collection.", FlyoutModel.AddDisabledTooltip);
-        flyout.SwitchCollection("Default");
-        Assert.True(flyout.CanAddConnector);
     }
 
     [Fact]
@@ -204,16 +198,6 @@ public class FlyoutModelTests
         flyout.Opened();
         Assert.Equal(["aws-mcp", "scoutbook", "service-now"], AppStateHarness.Keys(h.ClaudeServers().Keys));
         Assert.Equal(AppState.ClaudeConfigRegeneratedBody, h.Notifier.Sent[0].Body);
-    }
-
-    [Fact]
-    public void EntryForReturnsTheLiveEntryOrNull()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        using var flyout = new FlyoutModel(state, h.Settings);
-        Assert.Equal(state.Store.Mcps["scoutbook"], flyout.EntryFor("scoutbook"));
-        Assert.Null(flyout.EntryFor("gone"));
     }
 
     [Fact]
@@ -321,18 +305,9 @@ public class FlyoutModelTests
     // MARK: collection menu titles, chip marks and locks
 
     [Fact]
-    public void TheMenuTitlesNameTheActiveCollection()
+    public void TheManageItemHasItsTitle()
     {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        using var flyout = new FlyoutModel(state, h.Settings);
-        Assert.Equal("Import", FlyoutModel.ImportTitle);
         Assert.Equal("Manage Collections", FlyoutModel.ManageTitle);
-        Assert.Equal("Export “Default”", flyout.ExportTitle);
-        Assert.Equal(FlyoutModel.AddTooltip, flyout.AddTooltipText);
-
-        Assert.Null(state.CreateCollection("Work"));
-        Assert.Equal("Export “Work”", flyout.ExportTitle);
     }
 
     [Fact]
@@ -346,7 +321,7 @@ public class FlyoutModelTests
         Assert.Null(state.Subscribe(document, null));
         using var flyout = new FlyoutModel(state, h.Settings);
 
-        // A local collection: no chain, no tooltip, no locks, and additions are allowed.
+        // A local collection: no chain, no tooltip, no locks.
         Assert.False(flyout.ActiveCollectionIsSynced);
         Assert.Null(flyout.SourceTooltip);
         Assert.False(flyout.ActiveHasPendingUpdate);
@@ -355,7 +330,6 @@ public class FlyoutModelTests
         state.SwitchCollection("Data team");
         Assert.True(flyout.ActiveCollectionIsSynced);
         Assert.Equal($"Synced from {document}", flyout.SourceTooltip);
-        Assert.Equal(FlyoutModel.AddDisabledTooltip, flyout.AddTooltipText);
         Assert.Equal(["dbt", "github", "ledger", "notion"], flyout.Rows.Select(r => r.Name).ToArray());
         // Every row of a synced collection is the author's.
         Assert.All(flyout.Rows, r => Assert.True(r.IsLocked));
@@ -463,15 +437,6 @@ public class FlyoutModelTests
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Null(state.TakeCollectionsWindowRequest());
 
-        flyout.RequestImport();
-        Assert.Equal(new CollectionsWindowRequest.ImportFile(), state.CollectionsWindowRequest);
-        Assert.Equal(new CollectionsWindowRequest.ImportFile(), state.TakeCollectionsWindowRequest());
-        Assert.Null(state.CollectionsWindowRequest);   // the window takes the request once
-        Assert.Null(state.TakeCollectionsWindowRequest());
-
-        flyout.RequestExport();
-        Assert.Equal(new CollectionsWindowRequest.ExportActive(), state.TakeCollectionsWindowRequest());
-
         // The review request comes from the banner, and the locate banner is not one.
         Assert.False(flyout.CollectionBannerAction());
         Assert.Null(state.CollectionsWindowRequest);
@@ -481,7 +446,10 @@ public class FlyoutModelTests
             ["Team"] = new CollectionDiff(["jira"], [], []),
         };
         Assert.True(flyout.CollectionBannerAction());
+        Assert.Equal(new CollectionsWindowRequest.Review("Team"), state.CollectionsWindowRequest);
         Assert.Equal(new CollectionsWindowRequest.Review("Team"), state.TakeCollectionsWindowRequest());
+        Assert.Null(state.CollectionsWindowRequest);   // the window takes the request once
+        Assert.Null(state.TakeCollectionsWindowRequest());
     }
     [Fact]
     public void OnlyTheFailedPublishBannerOffersStopPublishing()

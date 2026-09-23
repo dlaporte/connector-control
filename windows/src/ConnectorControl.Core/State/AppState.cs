@@ -23,7 +23,6 @@ public sealed class AppState : ObservableObject, IDisposable
     public const string RestartButton = "Restart";
     public const string NewCollectionTitle = "New Collection";
     public const string RenameCollectionTitle = "Rename Collection";
-    public const string DeleteCollectionInformative = "Its connector list is removed; backups keep prior states.";
     public const string DeleteButton = "Delete";
     /// <summary>Coined here, not taken from the Mac catalog: on macOS a relaunch cannot fail silently.</summary>
     public const string RelaunchFailedMessage = "Claude didn’t come back after the restart. Start Claude yourself, then try again.";

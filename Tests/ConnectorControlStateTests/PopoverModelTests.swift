@@ -22,14 +22,13 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertFalse(popover.isEmpty)
     }
 
-    func testRowsAreSortedOrdinallyWithEditTooltips() {
+    func testRowsAreSortedOrdinally() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.upsert(name: "Zebra", entry: MCPEntry(config: AppStateHarness.remote("https://zebra.example/mcp")), renamedFrom: nil))
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertEqual(popover.rows.map(\.name), ["Zebra", "aws-mcp", "scoutbook", "service-now"])   // uppercase first: ordinal
-        XCTAssertEqual(popover.rows[1].editTooltip, "Edit “aws-mcp”")
         XCTAssertTrue(popover.rows.allSatisfy(\.enabled))
     }
 
@@ -70,13 +69,12 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(repaints, before)
     }
 
-    func testTheChipMenuHasNoHousekeepingItemsAndAddIsAllowedInALocalCollection() {
+    func testTheChipMenuHasNoHousekeepingItems() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertEqual(popover.collectionItems, [CollectionMenuItem(name: "Default", isActive: true)])
-        XCTAssertTrue(popover.canAddConnector)
 
         XCTAssertNil(state.createCollection(named: "Work"))
         XCTAssertEqual(popover.collectionItems.map(\.name), ["Default", "Work"], "switching only — New, Rename and Delete live in the window")
@@ -88,7 +86,7 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(popover.activeCollection, "Default")
     }
 
-    func testASyncedCollectionIsMarkedInTheMenuAndClosedToAdditions() throws {
+    func testASyncedCollectionIsMarkedInTheMenu() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
@@ -100,10 +98,6 @@ final class PopoverModelTests: XCTestCase {
         state.pendingUpdates = ["Team": CollectionDiff(added: ["jira"], removed: [], changed: [])]
         XCTAssertEqual(popover.collectionItems.map(\.isSynced), [false, true])
         XCTAssertEqual(popover.collectionItems.map(\.hasPendingUpdate), [false, true])
-        XCTAssertFalse(popover.canAddConnector)
-        XCTAssertEqual(PopoverModel.addDisabledTooltip, "Additions go in a local collection.")
-        popover.switchCollection("Default")
-        XCTAssertTrue(popover.canAddConnector)
     }
 
     func testTheCollectionBannerCarriesItsTextAndButton() throws {
@@ -201,15 +195,6 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(h.notifier.sent[0].body, AppState.claudeConfigRegeneratedBody)
     }
 
-    func testEntryForReturnsTheLiveEntryOrNull() {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        let popover = PopoverModel(state: state)
-        defer { popover.dispose() }
-        XCTAssertEqual(popover.entryFor("scoutbook"), state.store.mcps["scoutbook"])
-        XCTAssertNil(popover.entryFor("gone"))
-    }
-
     func testRowsCarryTheToolWarningAndFollowLaterProbeResults() {
         let h = AppStateHarness()
         defer { h.dispose() }
@@ -297,18 +282,8 @@ final class PopoverModelTests: XCTestCase {
 
     // MARK: - Collection menu titles, chip marks and locks
 
-    func testTheMenuTitlesNameTheActiveCollection() throws {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        let popover = PopoverModel(state: state)
-        defer { popover.dispose() }
-        XCTAssertEqual(PopoverModel.importTitle, "Import")
+    func testTheManageItemHasItsTitle() {
         XCTAssertEqual(PopoverModel.manageTitle, "Manage Collections")
-        XCTAssertEqual(popover.exportTitle, "Export “Default”")
-        XCTAssertEqual(popover.addTooltipText, PopoverModel.addTooltip)
-
-        XCTAssertNil(state.createCollection(named: "Work"))
-        XCTAssertEqual(popover.exportTitle, "Export “Work”")
     }
 
     func testTheChipMarksAndLocksFollowTheActiveCollection() throws {
@@ -322,7 +297,7 @@ final class PopoverModelTests: XCTestCase {
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
 
-        // A local collection: no chain, no tooltip, no locks, and additions are allowed.
+        // A local collection: no chain, no tooltip, no locks.
         XCTAssertFalse(popover.activeCollectionIsSynced)
         XCTAssertNil(popover.sourceTooltip)
         XCTAssertFalse(popover.activeHasPendingUpdate)
@@ -331,7 +306,6 @@ final class PopoverModelTests: XCTestCase {
         state.switchCollection(to: "Data team")
         XCTAssertTrue(popover.activeCollectionIsSynced)
         XCTAssertEqual(popover.sourceTooltip, "Synced from \(document.path)")
-        XCTAssertEqual(popover.addTooltipText, PopoverModel.addDisabledTooltip)
         XCTAssertEqual(popover.rows.map(\.name), ["dbt", "github", "ledger", "notion"])
         XCTAssertTrue(popover.rows.allSatisfy(\.isLocked), "every row of a synced collection is the author's")
 
@@ -462,22 +436,16 @@ final class PopoverModelTests: XCTestCase {
         defer { popover.dispose() }
         XCTAssertNil(state.takeCollectionsWindowRequest())
 
-        popover.requestImport()
-        XCTAssertEqual(state.collectionsWindowRequest, .importFile)
-        XCTAssertEqual(state.takeCollectionsWindowRequest(), .importFile)
-        XCTAssertNil(state.collectionsWindowRequest, "the window takes the request once")
-        XCTAssertNil(state.takeCollectionsWindowRequest())
-
-        popover.requestExport()
-        XCTAssertEqual(state.takeCollectionsWindowRequest(), .exportActive)
-
         // The review request comes from the banner, and the locate banner is not one.
         XCTAssertFalse(popover.collectionBannerAction())
         XCTAssertNil(state.collectionsWindowRequest)
 
         state.pendingUpdates = ["Team": CollectionDiff(added: ["jira"], removed: [], changed: [])]
         XCTAssertTrue(popover.collectionBannerAction())
+        XCTAssertEqual(state.collectionsWindowRequest, .review(collection: "Team"))
         XCTAssertEqual(state.takeCollectionsWindowRequest(), .review(collection: "Team"))
+        XCTAssertNil(state.collectionsWindowRequest, "the window takes the request once")
+        XCTAssertNil(state.takeCollectionsWindowRequest())
     }
     func testAMenuRowSpellsOutWhatItsSingleImageCannotShow() throws {
         let (h, state) = AppStateHarness.started()

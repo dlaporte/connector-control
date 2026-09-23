@@ -92,7 +92,6 @@ public class StringCatalogTests
         ["ClaudePublisher.subjectNoOrganizationError"] = ["X", "Y"],
         ["ClaudeSignature.notFoundMessage"] = ["X"],
         ["CollectionsModel.deletePublishedFileQuestion"] = ["X"],
-        ["CollectionsModel.exportButton"] = ["3"],
         ["CollectionsModel.localDetail"] = ["3"],
         ["CollectionsModel.publishedDetail"] = ["X"],
         ["CollectionsModel.removeCheckedMessage.many"] = ["3"],
@@ -103,7 +102,6 @@ public class StringCatalogTests
         ["ConfigService.corruptStoreNote"] = ["X"],
         ["ConfigService.invalidBackupError"] = ["X", "Y"],
         ["ConfigService.invalidBackupMcpServersError"] = ["X"],
-        ["ConnectorRow.editTooltip"] = ["X"],
         ["CopyModel.title"] = ["X"],
         ["EditTarget.editTitle"] = ["X"],
         ["EditorModel.additionalTitle"] = ["3", "a, b"],
@@ -128,7 +126,6 @@ public class StringCatalogTests
         ["ImportModel.sourceLine"] = ["X", "Y", "3"],
         ["MasterStore.duplicateCollectionNameError"] = ["X"],
         ["MasterStore.unknownCollectionError"] = ["X"],
-        ["PopoverModel.exportTitleFor"] = ["X"],
         ["PopoverModel.locateButton"] = ["X"],
         ["PopoverModel.sourceTooltipFormat"] = ["X"],
         ["PublishModel.exportTitle"] = ["X"],
@@ -160,8 +157,6 @@ public class StringCatalogTests
         var root = JsonNode.Parse(json)!.AsObject();
 
         var actual = new Dictionary<string, string>(StringComparer.Ordinal);
-        using var harness = new AppStateHarness(seedClaudeConfig: false);
-        using var state = harness.Create();
 
         // MARK: AppState
 
@@ -180,7 +175,6 @@ public class StringCatalogTests
         actual["AppState.connectorListChangedBody.restart"] =
             AppState.ConnectorListChangedBody(new ServerDelta([], [], []), restartRequired: true);
         actual["AppState.deleteButton"] = AppState.DeleteButton;
-        actual["AppState.deleteCollectionInformative"] = AppState.DeleteCollectionInformative;
         actual["AppState.deleteCollectionMessage"] = AppState.DeleteCollectionMessage("X");
         actual["AppState.duplicateNameError"] = AppState.DuplicateNameError("X");
         actual["AppState.enabledSubtitle"] = AppState.EnabledSubtitle(3, 7);
@@ -250,7 +244,6 @@ public class StringCatalogTests
         actual["CollectionsModel.duplicateAction"] = CollectionsModel.DuplicateAction;
         actual["CollectionsModel.editTooltip"] = CollectionsModel.EditTooltip;
         actual["CollectionsModel.exportAllAction"] = CollectionsModel.ExportAllAction;
-        actual["CollectionsModel.exportButton"] = CollectionsModel.ExportButton(3);
         actual["CollectionsModel.exportCheckedButton"] = CollectionsModel.ExportCheckedButton;
         actual["CollectionsModel.importButton"] = CollectionsModel.ImportButton;
         actual["CollectionsModel.importSubtitle"] = CollectionsModel.ImportSubtitle;
@@ -307,10 +300,8 @@ public class StringCatalogTests
         actual["ConfigService.malformedClaudeConfigNote"] =
             "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.";
 
-        // MARK: ConnectorRow / Dialogs / AlertDialogs
+        // MARK: Dialogs / AlertDialogs
 
-        var row = new ConnectorRow(state, "X", true, null);
-        actual["ConnectorRow.editTooltip"] = row.EditTooltip;
         // IDialogs.Confirm's cancelTitle default parameter value — not a retrievable symbol.
         actual["Dialogs.cancelTitle"] = "Cancel";
         // WpfDialogs.cs / NamePromptDialog.xaml live in ConnectorControl.App, which this
@@ -413,12 +404,8 @@ public class StringCatalogTests
 
         actual["Notifications.restartToastButton"] = Notifications.RestartToastButton;
         actual["Notifications.title"] = Notifications.Title;
-        actual["PopoverModel.addDisabledTooltip"] = FlyoutModel.AddDisabledTooltip;
-        actual["PopoverModel.addTooltip"] = FlyoutModel.AddTooltip;
         actual["PopoverModel.chooseFolderButton"] = FlyoutModel.ChooseFolderButton;
         actual["PopoverModel.emptyText"] = FlyoutModel.EmptyText;
-        actual["PopoverModel.exportTitleFor"] = FlyoutModel.ExportTitleFor("X");
-        actual["PopoverModel.importTitle"] = FlyoutModel.ImportTitle;
         actual["PopoverModel.locateButton"] = FlyoutModel.LocateButton("X");
         actual["PopoverModel.manageTitle"] = FlyoutModel.ManageTitle;
         actual["PopoverModel.pendingMenuMark"] = FlyoutModel.PendingMenuMark;

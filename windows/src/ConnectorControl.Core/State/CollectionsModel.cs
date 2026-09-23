@@ -42,14 +42,12 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public const string RemoveFileButton = "Remove";
     public const string KeepFileButton = "Keep";
     public const string RemoteType = "remote";
-    /// <summary>The row's pencil, which names no connector: the row it sits on is the answer. The flyout's <c>ConnectorRow.EditTooltip</c> spells the name out, because that menu has no rows.</summary>
+    /// <summary>The row's pencil, which names no connector: the row it sits on is the answer.</summary>
     public const string EditTooltip = "Edit";
     /// <summary>The sidebar's double-click, and the same action in its context menu.</summary>
     public const string MakeActiveAction = "Make Active";
     /// <summary>The lock at the head of a synced collection's row.</summary>
     public const string LockedGlyphTooltip = "Read-only: synced from the collection's author";
-
-    public static string ExportButton(int count) => $"Export {count}";
 
     // MARK: selection bar
 
@@ -57,10 +55,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public const string ExportCheckedButton = "Export";
     public const string RemoveCheckedButton = "Remove";
 
-    /// <summary>
-    /// The bar's own tally, e.g. "2 selected" — distinct from <see cref="ExportButton"/>, which
-    /// names what its button does rather than what is ticked.
-    /// </summary>
+    /// <summary>The bar's own tally, e.g. "2 selected".</summary>
     public static string SelectedCount(int n) => $"{n} selected";
 
     /// <summary>
@@ -240,14 +235,9 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         Raise(nameof(CanExport));
         Raise(nameof(CopyTargets));
         Raise(nameof(CopyDestinations));
-        Raise(nameof(CanCopyChecked));
         Raise(nameof(CanRemoveChecked));
         Raise(nameof(CanPublish));
-        Raise(nameof(PublishActionTitle));
         Raise(nameof(CanRefresh));
-        Raise(nameof(CanMakeLocalCopy));
-        Raise(nameof(CanStopSyncing));
-        Raise(nameof(CanStopPublishing));
         Raise(nameof(CanDelete));
         Raise(nameof(Pills));
         Raise(nameof(CollectionMenu));
@@ -771,8 +761,6 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         }
     }
 
-    public bool CanCopyChecked => !state.IsSynced(SelectedCollection) && CheckedNames.Count > 0;
-
     public bool CanRemoveChecked => !state.IsSynced(SelectedCollection) && CheckedNames.Count > 0;
 
     /// <summary>
@@ -784,20 +772,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// </summary>
     public bool CanPublish => !state.IsSynced(SelectedCollection);
 
-    /// <summary>
-    /// Start Publishing for a collection that does not publish yet, Publishing Settings for one
-    /// that does: the same dialog, but by then it changes what is shared rather than starting.
-    /// </summary>
-    public string PublishActionTitle => state.IsPublished(SelectedCollection) ? PublishSettingsButton : PublishButton;
-
     /// <summary>Refresh reads the bound document, so it needs one this machine can name.</summary>
     public bool CanRefresh => LocatedSource(SelectedCollection) is not null;
-
-    public bool CanMakeLocalCopy => state.IsSynced(SelectedCollection);
-
-    public bool CanStopSyncing => state.IsSynced(SelectedCollection);
-
-    public bool CanStopPublishing => state.IsPublished(SelectedCollection);
 
     /// <summary>
     /// The last local collection stays, because only a local one takes a new connector, and the
@@ -1037,10 +1013,6 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public const string SubscribeSubtitle = "Stays in sync, read-only";
     public const string ConnectorsHeader = "Connectors";
     public const string AddConnectorTooltip = "Add Connector";
-    /// <summary>
-    /// The same text <see cref="FlyoutModel.AddDisabledTooltip"/> carries: one sentence, said in
-    /// two places that both need it, rather than one model reaching into the other's strings.
-    /// </summary>
     public const string AddConnectorDisabledTooltip = "Additions go in a local collection.";
     /// <summary>The ⋯ button's own tooltip and accessibility label.</summary>
     public const string MoreActionsLabel = "More";
@@ -1083,7 +1055,6 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         }
         RefreshRows();
         Raise(nameof(CanExport));
-        Raise(nameof(CanCopyChecked));
         Raise(nameof(CanRemoveChecked));
     }
 

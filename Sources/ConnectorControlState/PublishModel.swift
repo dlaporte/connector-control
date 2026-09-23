@@ -36,8 +36,7 @@ public final class PublishModel: ObservableObject {
 
     public static func title(_ collection: String) -> String { "Publish “\(collection)”" }
 
-    /// The sheet's own title in export mode. No trailing ellipsis: the one on the menu item that
-    /// opens it (`PopoverModel.exportTitleFor`) says a sheet follows, and this is that sheet.
+    /// The sheet's own title in export mode.
     public static func exportTitle(_ collection: String) -> String { "Export “\(collection)”" }
 
     /// "this Mac" is the platform-forced half of this sentence; the Windows mirror says "this PC".

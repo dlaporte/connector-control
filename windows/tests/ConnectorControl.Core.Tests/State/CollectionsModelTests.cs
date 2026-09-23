@@ -521,9 +521,6 @@ public class CollectionsModelTests
         Assert.True(model.CanExport);
         Assert.True(model.CanPublish);
         Assert.False(model.CanRefresh);
-        Assert.False(model.CanMakeLocalCopy);
-        Assert.False(model.CanStopSyncing);
-        Assert.False(model.CanStopPublishing);
         Assert.True(model.CanDelete);
 
         model.Selected = "Shared";
@@ -531,24 +528,19 @@ public class CollectionsModelTests
         // Published from here, and still offered: reopening the dialog shows the record and
         // pressing Publish again updates what is shared, so both links stand side by side.
         Assert.True(model.CanPublish);
-        Assert.True(model.CanStopPublishing);
         Assert.False(model.CanRefresh);
         Assert.True(model.CanDelete);
 
         model.Selected = "Team";
         Assert.False(model.CanExport);
         Assert.False(model.CanPublish);   // a synced collection has an author elsewhere
-        Assert.False(model.CanStopPublishing);
         Assert.True(model.CanRefresh);
-        Assert.True(model.CanMakeLocalCopy);
-        Assert.True(model.CanStopSyncing);
         // A synced collection goes without taking the last local one with it.
         Assert.True(model.CanDelete);
 
         // Nothing to refresh until the file is found on this machine.
         Seed(h, state, file, Cache(published: located.Published));
         Assert.False(model.CanRefresh);
-        Assert.True(model.CanMakeLocalCopy);
 
         // With the second local collection gone, the last one cannot be deleted.
         Assert.Null(state.DeleteCollection("Shared"));
@@ -568,25 +560,6 @@ public class CollectionsModelTests
     }
 
     // MARK: create, rename, delete
-
-    [Fact]
-    public void ThePublishActionIsNamedForWhetherTheCollectionAlreadyPublishes()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        Assert.Null(state.CreateCollection("Shared"));
-        state.SwitchCollection("Default");
-        Seed(h, state, File_(("Shared", Published("shared"))),
-             Cache(published: [new("Shared", new CollectionsLocalCache.PublishBinding("/tmp/share", null))]));
-        Assert.True(state.IsPublished("Shared"));
-        using var model = new CollectionsModel(state, h.Dialogs);
-
-        model.Selected = "Default";
-        Assert.Equal(CollectionsModel.PublishButton, model.PublishActionTitle);
-        model.Selected = "Shared";
-        // The dialog changes what is shared by then, rather than starting.
-        Assert.Equal(CollectionsModel.PublishSettingsButton, model.PublishActionTitle);
-    }
 
     [Fact]
     public void CreateRenameDeleteGoThroughTheDialogs()
@@ -710,7 +683,6 @@ public class CollectionsModelTests
         Assert.False(state.IsPublished("Consulting"));
         // Stop Publishing keeps the collection.
         Assert.Contains("Consulting", state.CollectionNames);
-        Assert.False(model.CanStopPublishing);
     }
 
     [Fact]
@@ -1182,9 +1154,9 @@ public class CollectionsModelTests
         Assert.Equal(model.CopyDestinations.Where(d => d.IsEnabled).Select(d => d.Name), model.CopyTargets);
     }
 
-    /// <summary>Both verbs need something ticked.</summary>
+    /// <summary>Remove needs something ticked.</summary>
     [Fact]
-    public void CopyAndRemovePredicatesFollowTheTicks()
+    public void TheRemovePredicateFollowsTheTicks()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -1192,22 +1164,20 @@ public class CollectionsModelTests
         using var model = new CollectionsModel(state, h.Dialogs);
 
         model.Selected = "Default";
-        Assert.False(model.CanCopyChecked);   // nothing ticked yet
-        Assert.False(model.CanRemoveChecked);
+        Assert.False(model.CanRemoveChecked);   // nothing ticked yet
         model.SetChecked("alpha", true);
-        Assert.True(model.CanCopyChecked);
         Assert.True(model.CanRemoveChecked);
     }
 
     /// <summary>
     /// The kind guard specifically, not just an empty tick set: Selected clears the ticks on
     /// every switch, so a leg that ticks a row and only then switches to the synced collection
-    /// would find both predicates false regardless of the IsSynced term — the empty tick set
+    /// would find the predicate false regardless of the IsSynced term — the empty tick set
     /// alone would explain it. Reload does not clear ticks, so ticking first and letting the
     /// *same* collection turn synced underneath is the one path that isolates the guard.
     /// </summary>
     [Fact]
-    public void CopyAndRemovePredicatesAreGatedBySyncSpecifically()
+    public void TheRemovePredicateIsGatedBySyncSpecifically()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -1216,14 +1186,12 @@ public class CollectionsModelTests
         using var model = new CollectionsModel(state, h.Dialogs);
         model.Selected = "Team";
         model.SetChecked("alpha", true);
-        Assert.True(model.CanCopyChecked);   // still local, and something is ticked
-        Assert.True(model.CanRemoveChecked);
+        Assert.True(model.CanRemoveChecked);   // still local, and something is ticked
 
         Seed(h, state, File_(("Team", Synced("team.json"))));
         Assert.True(state.IsSynced("Team"));
         Assert.Equal(["alpha"], model.CheckedNames);   // reload does not clear the ticks
-        Assert.False(model.CanCopyChecked);   // the guard, not an empty tick set, is what changed
-        Assert.False(model.CanRemoveChecked);
+        Assert.False(model.CanRemoveChecked);   // the guard, not an empty tick set, is what changed
     }
 
     /// <summary>

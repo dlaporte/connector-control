@@ -740,9 +740,7 @@ public class PublishModelTests
         Assert.Equal("Cancel", PublishModel.CancelButton);
         Assert.Equal("Choose Folder", PublishModel.ChooseFolderButton);
         Assert.Equal("Mark as a path this machine supplies", PublishModel.MarkPathLabel);
-        // The menu item that opens this sheet and the sheet's title now read the same.
         Assert.Equal("Export “Data team”", PublishModel.ExportTitle("Data team"));
-        Assert.Equal("Export “Data team”", FlyoutModel.ExportTitleFor("Data team"));
     }
 
     /// <summary>

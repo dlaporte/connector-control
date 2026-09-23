@@ -536,17 +536,6 @@ public partial class CollectionsWindow : Window
         LastRequest = request;
         switch (request)
         {
-            case CollectionsWindowRequest.ImportFile:
-                Import(keepInSync: false);
-                break;
-            case CollectionsWindowRequest.ExportActive:
-                // The menu item names the collection that is active now, not whichever one this
-                // window last had selected — and it offers the whole of it, because a selection
-                // that has just moved carries no ticks and an empty subset writes an empty
-                // document.
-                Model.Selected = state.ActiveCollection;
-                PresentPublish(new PublishModel(state, state.ActiveCollection), PublishDialogMode.Export);
-                break;
             case CollectionsWindowRequest.Review review:
                 Review(review.Collection);
                 break;

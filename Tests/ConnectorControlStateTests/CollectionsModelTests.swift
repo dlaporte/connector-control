@@ -440,9 +440,6 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertTrue(model.canExport)
         XCTAssertTrue(model.canPublish)
         XCTAssertFalse(model.canRefresh)
-        XCTAssertFalse(model.canMakeLocalCopy)
-        XCTAssertFalse(model.canStopSyncing)
-        XCTAssertFalse(model.canStopPublishing)
         XCTAssertTrue(model.canDelete)
 
         model.selected = "Shared"
@@ -450,23 +447,18 @@ final class CollectionsModelTests: XCTestCase {
         // Published from here, and still offered: reopening the sheet shows the record and
         // pressing Publish again updates what is shared, so both links stand side by side.
         XCTAssertTrue(model.canPublish, "the only way to change what a published collection shares")
-        XCTAssertTrue(model.canStopPublishing)
         XCTAssertFalse(model.canRefresh)
         XCTAssertTrue(model.canDelete)
 
         model.selected = "Team"
         XCTAssertFalse(model.canExport)
         XCTAssertFalse(model.canPublish, "a synced collection has an author elsewhere")
-        XCTAssertFalse(model.canStopPublishing)
         XCTAssertTrue(model.canRefresh)
-        XCTAssertTrue(model.canMakeLocalCopy)
-        XCTAssertTrue(model.canStopSyncing)
         XCTAssertTrue(model.canDelete, "a synced collection goes without taking the last local one with it")
 
         // Nothing to refresh until the file is found on this machine.
         try seed(h, state, file: file, cache: CollectionsLocalCache(synced: [:], published: located.published))
         XCTAssertFalse(model.canRefresh)
-        XCTAssertTrue(model.canMakeLocalCopy)
 
         // With the second local collection gone, the last one cannot be deleted.
         XCTAssertNil(state.deleteCollection(named: "Shared"))
@@ -486,24 +478,6 @@ final class CollectionsModelTests: XCTestCase {
     }
 
     // MARK: - Create, rename, delete
-
-    func testThePublishActionIsNamedForWhetherTheCollectionAlreadyPublishes() throws {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Shared"))
-        state.switchCollection(to: "Default")
-        try seed(h, state, file: CollectionsFile(collections: ["Shared": published(slug: "shared")]),
-                 cache: CollectionsLocalCache(synced: [:], published: ["Shared": .init(folder: "/tmp/share", lastWrittenHash: nil)]))
-        XCTAssertTrue(state.isPublished("Shared"))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-
-        model.selected = "Default"
-        XCTAssertEqual(model.publishActionTitle, CollectionsModel.publishButton)
-        model.selected = "Shared"
-        XCTAssertEqual(model.publishActionTitle, CollectionsModel.publishSettingsButton,
-                       "the sheet changes what is shared by then, rather than starting")
-    }
 
     func testCreateRenameDeleteGoThroughTheDialogs() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
@@ -623,7 +597,6 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: consultingFile.path))
         XCTAssertFalse(state.isPublished("Consulting"))
         XCTAssertTrue(state.collectionNames.contains("Consulting"), "Stop Publishing keeps the collection")
-        XCTAssertFalse(model.canStopPublishing)
     }
 
     func testAFailedPublishIsStoppedWithoutAskingAboutTheFile() throws {
@@ -1035,28 +1008,26 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.copyTargets, model.copyDestinations.filter(\.isEnabled).map(\.name))
     }
 
-    /// Both verbs need something ticked.
-    func testCopyAndRemovePredicatesFollowTheTicks() throws {
+    /// Remove needs something ticked.
+    func testTheRemovePredicateFollowsTheTicks() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
         let model = CollectionsModel(state: state, dialogs: h.dialogs)
 
         model.selected = "Default"
-        XCTAssertFalse(model.canCopyChecked, "nothing ticked yet")
-        XCTAssertFalse(model.canRemoveChecked)
+        XCTAssertFalse(model.canRemoveChecked, "nothing ticked yet")
         model.setChecked("alpha", true)
-        XCTAssertTrue(model.canCopyChecked)
         XCTAssertTrue(model.canRemoveChecked)
     }
 
     /// The kind guard specifically, not just an empty tick set: `selected` clears the ticks on
     /// every switch (`CollectionsModel.swift` around 204-205), so a leg that ticks a row and only
-    /// then switches to the synced collection would find both predicates false regardless of the
+    /// then switches to the synced collection would find the predicate false regardless of the
     /// `isSynced` term — the empty tick set alone would explain it. Reload does not clear ticks,
     /// so ticking first and letting the *same* collection turn synced underneath is the one path
     /// that isolates the guard.
-    func testCopyAndRemovePredicatesAreGatedBySyncSpecifically() throws {
+    func testTheRemovePredicateIsGatedBySyncSpecifically() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
@@ -1064,14 +1035,12 @@ final class CollectionsModelTests: XCTestCase {
         let model = CollectionsModel(state: state, dialogs: h.dialogs)
         model.selected = "Team"
         model.setChecked("alpha", true)
-        XCTAssertTrue(model.canCopyChecked, "still local, and something is ticked")
-        XCTAssertTrue(model.canRemoveChecked)
+        XCTAssertTrue(model.canRemoveChecked, "still local, and something is ticked")
 
         try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
         XCTAssertTrue(state.isSynced("Team"))
         XCTAssertEqual(model.checkedNames, ["alpha"], "reload does not clear the ticks")
-        XCTAssertFalse(model.canCopyChecked, "the guard, not an empty tick set, is what changed")
-        XCTAssertFalse(model.canRemoveChecked)
+        XCTAssertFalse(model.canRemoveChecked, "the guard, not an empty tick set, is what changed")
     }
 
     /// Removing the ticked rows asks first, names the connector when there is one and the count

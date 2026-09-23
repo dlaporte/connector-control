@@ -8,16 +8,13 @@ namespace ConnectorControl.Core.State;
 public sealed class FlyoutModel : ObservableObject, IDisposable
 {
     public const string Title = Product.Name;
-    public const string AddTooltip = "Add Connector";
     public const string SettingsTooltip = "Settings";
     public const string QuitTooltip = "Quit Connector Control";
     public const string EmptyText = "No connectors configured yet.";
     public const string RetryTitle = "Apply Failed — Retry";
     public const string RestartTitle = "Restart Required";
-    public const string AddDisabledTooltip = "Additions go in a local collection.";
     public const string ReviewAndApplyButton = "Review & Apply";
     public const string ChooseFolderButton = "Choose Folder";
-    public const string ImportTitle = "Import";
     public const string ManageTitle = "Manage Collections";
     /// <summary>Segoe Fluent Icons: Warning (exclamationmark.arrow.circlepath's nearest) and Refresh (arrow.clockwise).</summary>
     public const string RetryGlyph = "\ue7ba";
@@ -52,9 +49,6 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public static string LocateButton(string fileName) => $"Locate {fileName}";
 
-    /// <summary>A static and an instance member cannot share one name here; the Mac carries this same name rather than shadowing, so the pair reads the same in both files.</summary>
-    public static string ExportTitleFor(string active) => $"Export “{active}”";
-
     /// <summary>
     /// One row of the collections menu, as the Mac draws it: the chain is the row's single image
     /// there, so a collection with news says so in the title. Here for parity; the flyout keeps
@@ -70,7 +64,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public static string? MenuTooltip(CollectionMenuItem item) =>
         item.Source is { } source ? SourceTooltipFormat(source) : null;
 
-    /// <summary>The chain glyph's tooltip. The Mac carries the same <c>Format</c> suffix, for the reason <see cref="ExportTitleFor"/> is spelled that way.</summary>
+    /// <summary>The chain glyph's tooltip. Named with the <c>Format</c> suffix because this side cannot carry a static and an instance member (<see cref="SourceTooltip"/>) under one name.</summary>
     public static string SourceTooltipFormat(string source) => $"Synced from {source}";
 
     /// <summary>Property names Rebuild actually depends on — everything else AppState raises is noise for this view.</summary>
@@ -101,9 +95,6 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     /// <summary>The chip's text is the bare name; the ▾, the chain and the dot are the view's glyphs.</summary>
     public string ActiveCollection => state.ActiveCollection;
 
-    /// <summary>The menu's Export item, which names the collection it would write.</summary>
-    public string ExportTitle => ExportTitleFor(state.ActiveCollection);
-
     /// <summary>The chain beside the chip, and the lock on every row below it.</summary>
     public bool ActiveCollectionIsSynced => state.ActiveCollectionIsSynced;
 
@@ -124,15 +115,6 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
         state.SourceLocation(state.ActiveCollection) is { } source ? SourceTooltipFormat(source) : null;
 
     public IReadOnlyList<CollectionMenuItem> CollectionItems => collectionItems;
-
-    /// <summary>Nothing can be added to a synced collection: its content is the source file's.</summary>
-    public bool CanAddConnector => !state.ActiveCollectionIsSynced;
-
-    /// <summary>
-    /// The Add button's tooltip, which says why it is disabled when it is. Picked here rather
-    /// than in the view, because XAML binds one tooltip and cannot choose between two constants.
-    /// </summary>
-    public string AddTooltipText => CanAddConnector ? AddTooltip : AddDisabledTooltip;
 
     public string? ErrorMessage => state.LastError
         ?? (state.StoreNotPrivate ? StoreNotPrivateCaution : null)
@@ -278,18 +260,6 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     };
 
     /// <summary>
-    /// The menu's Import: the dialog belongs to the Collections window, so opening it is all
-    /// the flyout does and this is what it finds waiting.
-    /// </summary>
-    public void RequestImport() => state.CollectionsWindowRequest = new CollectionsWindowRequest.ImportFile();
-
-    /// <summary>
-    /// The menu's Export "&lt;active&gt;", which the Collections window shows for the collection
-    /// that is active now rather than whichever one it last had selected.
-    /// </summary>
-    public void RequestExport() => state.CollectionsWindowRequest = new CollectionsWindowRequest.ExportActive();
-
-    /// <summary>
     /// The banner's Review &amp; Apply, for the collection the banner names — which is not always
     /// the active one, so the name travels with the request.
     /// </summary>
@@ -315,9 +285,6 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
             _ = state.RestartClaudeAsync();
         }
     }
-
-    /// <summary>The pencil button opens the editor only if the entry still exists in the store.</summary>
-    public McpEntry? EntryFor(string name) => state.Store.Mcps.TryGetValue(name, out var entry) ? entry : null;
 
     private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
     {
