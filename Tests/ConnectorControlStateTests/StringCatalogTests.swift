@@ -98,6 +98,7 @@ final class StringCatalogTests: XCTestCase {
         "ConfigService.invalidBackupError": ["X", "Y"],
         "ConfigService.invalidBackupMcpServersError": ["X"],
         "ConnectorRow.editTooltip": ["X"],
+        "CopyModel.title": ["X"],
         "EditTarget.editTitle": ["X"],
         "EditorModel.additionalTitle": ["3", "a, b"],
         "EditorModel.changedOutsideMessage": ["X"],
@@ -252,6 +253,7 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.publishSettingsButton"] = CollectionsModel.publishSettingsButton
         actual["CollectionsModel.publishedDetail"] = CollectionsModel.publishedDetail("X")
         actual["CollectionsModel.publishedPill"] = CollectionsModel.publishedPill
+        actual["CollectionsModel.readOnlyNote"] = CollectionsModel.readOnlyNote
         actual["CollectionsModel.refreshButton"] = CollectionsModel.refreshButton
         actual["CollectionsModel.remoteType"] = CollectionsModel.remoteType
         actual["CollectionsModel.removeCheckedButton"] = CollectionsModel.removeCheckedButton
@@ -275,6 +277,11 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.updateAvailableStatus
         actual["CollectionsModel.upToDateStatus"] = CollectionsModel.upToDateStatus
         actual["CollectionsModel.windowTitle"] = CollectionsModel.windowTitle
+
+        // MARK: CopyModel
+
+        actual["CopyModel.copyButton"] = CopyModel.copyButton
+        actual["CopyModel.title"] = CopyModel.title("X")
 
         // MARK: ConnectorRow / Dialogs / AlertDialogs
 

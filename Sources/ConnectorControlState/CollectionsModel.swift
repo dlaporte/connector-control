@@ -135,6 +135,10 @@ public final class CollectionsModel: ObservableObject {
         }
     }
 
+    /// The menu's annotation beside a disabled destination — why a synced collection is listed
+    /// but cannot be chosen.
+    public static let readOnlyNote = "read-only"
+
     /// One connector of the selected collection. `checked` is the window's own state — an export
     /// tick, not anything the store holds — so it is the one field the model fills in itself.
     public struct Row: Identifiable, Equatable, Sendable {

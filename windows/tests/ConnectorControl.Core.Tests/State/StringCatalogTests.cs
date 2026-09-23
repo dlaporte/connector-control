@@ -104,6 +104,7 @@ public class StringCatalogTests
         ["ConfigService.invalidBackupError"] = ["X", "Y"],
         ["ConfigService.invalidBackupMcpServersError"] = ["X"],
         ["ConnectorRow.editTooltip"] = ["X"],
+        ["CopyModel.title"] = ["X"],
         ["EditTarget.editTitle"] = ["X"],
         ["EditorModel.additionalTitle"] = ["3", "a, b"],
         ["EditorModel.changedOutsideMessage"] = ["X"],
@@ -264,6 +265,7 @@ public class StringCatalogTests
         actual["CollectionsModel.publishSettingsButton"] = CollectionsModel.PublishSettingsButton;
         actual["CollectionsModel.publishedDetail"] = CollectionsModel.PublishedDetail("X");
         actual["CollectionsModel.publishedPill"] = CollectionsModel.PublishedPill;
+        actual["CollectionsModel.readOnlyNote"] = CollectionsModel.ReadOnlyNote;
         actual["CollectionsModel.refreshButton"] = CollectionsModel.RefreshButton;
         actual["CollectionsModel.remoteType"] = CollectionsModel.RemoteType;
         actual["CollectionsModel.removeCheckedButton"] = CollectionsModel.RemoveCheckedButton;
@@ -287,6 +289,11 @@ public class StringCatalogTests
         actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.UpdateAvailableStatus;
         actual["CollectionsModel.upToDateStatus"] = CollectionsModel.UpToDateStatus;
         actual["CollectionsModel.windowTitle"] = CollectionsModel.WindowTitle;
+
+        // MARK: CopyModel
+
+        actual["CopyModel.copyButton"] = CopyModel.CopyButton;
+        actual["CopyModel.title"] = CopyModel.Title("X");
 
         // MARK: ConfigService
         // Every one of these is an inline literal built inside a throw or a notes list,

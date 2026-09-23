@@ -166,6 +166,7 @@
     }
   },
   "CollectionsModel.publishedPill": "Published",
+  "CollectionsModel.readOnlyNote": "read-only",
   "CollectionsModel.refreshButton": "Refresh",
   "CollectionsModel.remoteType": "remote",
   "CollectionsModel.removeCheckedButton": "Remove",
@@ -211,6 +212,10 @@
   "ConfigService.malformedClaudeConfigNote": "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.",
   "ConnectorRow.editTooltip": {
     "format": "Edit “{0}”"
+  },
+  "CopyModel.copyButton": "Copy",
+  "CopyModel.title": {
+    "format": "Copy to “{0}”"
   },
   "Dialogs.cancelTitle": "Cancel",
   "EditTarget.addTitle": "Add Connector",

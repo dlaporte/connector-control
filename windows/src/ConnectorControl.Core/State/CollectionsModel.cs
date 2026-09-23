@@ -126,6 +126,9 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         public string Id => Name;
     }
 
+    /// <summary>The menu's annotation beside a disabled destination — why a synced collection is listed but cannot be chosen.</summary>
+    public const string ReadOnlyNote = "read-only";
+
     /// <summary>
     /// One connector of the selected collection. Checked is the window's own state — an export
     /// tick, not anything the store holds — so it is the one field the model fills in itself.
