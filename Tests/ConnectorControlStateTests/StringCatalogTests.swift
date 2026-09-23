@@ -239,7 +239,6 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.lockedGlyphTooltip"] = CollectionsModel.lockedGlyphTooltip
         actual["CollectionsModel.makeActiveAction"] = CollectionsModel.makeActiveAction
         actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.makeLocalCopyButton
-        actual["CollectionsModel.maskedValue"] = CollectionsModel.maskedValue
         actual["CollectionsModel.newButton"] = CollectionsModel.newButton
         actual["CollectionsModel.publishButton"] = CollectionsModel.publishButton
         actual["CollectionsModel.publishSettingsButton"] = CollectionsModel.publishSettingsButton

@@ -36,8 +36,6 @@ public final class CollectionsModel: ObservableObject {
     public static let removeFileButton = "Remove"
     public static let keepFileButton = "Keep"
     public static let remoteType = "remote"
-    /// What the target column shows in place of a value it will not: see `target(of:home:)`.
-    public static let maskedValue = "••••"
     /// The row's pencil, which names no connector: the row it sits on is the answer. The
     /// popover's `ConnectorRow.editTooltip` spells the name out, because that menu has no rows.
     public static let editTooltip = "Edit"
@@ -285,70 +283,98 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// What a row says the connector runs, never a secret: a remote connector's host; a local
-    /// one's launcher and arguments, shortened and masked. Public and pure so both platforms test
-    /// the same inputs. `home` is the user's home folder, abbreviated to "~".
+    /// one's launcher and arguments, shortened. Public and pure so both platforms test the same
+    /// inputs. `home` is the user's home folder, abbreviated to "~".
+    ///
+    /// An allowlist, not a mask: an argument is shown only when it is a URL, an explicit path or
+    /// a named artefact, and every other argument — a flag, a flag's value, `KEY=value`, a header,
+    /// a shell string, a bare word — is left out. A list of secret shapes to hide would leak
+    /// every shape it did not foresee. The one exception is backed by a name rather than a shape:
+    /// whatever follows a flag named for a secret is left out too, since a password can look
+    /// like a package.
     public static func target(of config: JSONValue, home: String = NSHomeDirectory()) -> String {
-        if let url = RemotePattern.detect(config) {
-            let host = authority(of: url)
-            return host.isEmpty ? remoteType : host
+        if let remote = RemotePattern.decode(config) {
+            return urlOrigin(remote.url).map(\.host) ?? remoteType
         }
         let model = FormMapper.analyze(config).model
-        var tokens = [launcherName(model.command)]
-        for (index, arg) in model.args.enumerated() {
-            if arg == "-y" || arg == "--yes" { continue }
-            let previous = index > 0 ? model.args[index - 1] : nil
-            tokens.append(shown(arg, after: previous, home: home))
+        let args = model.args.enumerated().compactMap { index, arg -> String? in
+            if index > 0, isSecretNamedFlag(model.args[index - 1]) { return nil }
+            return shown(arg, home: home)
         }
-        return tokens.filter { !$0.isEmpty }.joined(separator: " ")
+        let tokens = [launcher(model.command)].compactMap { $0 } + args
+        return tokens.joined(separator: " ")
     }
 
-    /// One argument as the target column shows it: the first of the masking rules that applies,
-    /// then the shortening ones, then the argument as written.
-    private static func shown(_ arg: String, after previous: String?, home: String) -> String {
-        if let previous, previous.hasPrefix("-"), !previous.contains("="), isSecretNamed(previous) {
-            return maskedValue
+    /// The launcher, named the way it would be typed, or nil when even its last word could be a
+    /// secret: a command that is a shell line rather than a program keeps only its last word.
+    private static func launcher(_ command: String) -> String? {
+        let name = launcherName(command)
+        let word = name.split(whereSeparator: \.isWhitespace).last.map(String.init) ?? ""
+        return [name, word].first { candidate in
+            !candidate.isEmpty && !candidate.contains(where: \.isWhitespace) && !candidate.contains("=")
+                && !CredentialHeuristics.looksLikeCredential(candidate)
         }
-        if arg.hasPrefix("-"), let equals = arg.firstIndex(of: "=") {
-            let name = String(arg[..<equals])
-            if isSecretNamed(name) || CredentialHeuristics.looksLikeCredential(String(arg[arg.index(after: equals)...])) {
-                return name + "=" + maskedValue
-            }
+    }
+
+    /// One argument as the target column shows it, or nil when it is none of the three shapes
+    /// known to be safe: a URL, as its scheme and host; an explicit path, with the home folder
+    /// abbreviated; or a named artefact — a package, image, script or module.
+    private static func shown(_ arg: String, home: String) -> String? {
+        if arg.contains("://") {
+            return urlOrigin(arg).map { "\($0.scheme)://\($0.host)" }
         }
-        if CredentialHeuristics.looksLikeCredential(arg) { return maskedValue }
-        if let scheme = arg.range(of: "://") {
-            let rest = arg[scheme.upperBound...]
-            let authorityEnd = rest.firstIndex(where: { "/?#".contains($0) }) ?? rest.endIndex
-            let pathEnd = rest[authorityEnd...].firstIndex(where: { "?#".contains($0) }) ?? rest.endIndex
-            return String(arg[..<scheme.upperBound]) + authority(of: arg) + String(rest[authorityEnd..<pathEnd])
+        guard !CredentialHeuristics.looksLikeCredential(arg) else { return nil }
+        if isExplicitPath(arg) {
+            guard !arg.contains("=") else { return nil }
+            let root = home.hasSuffix("/") || home.hasSuffix("\\") ? String(home.dropLast()) : home
+            // Case-insensitive, as both platforms' default file systems are.
+            guard !root.isEmpty, let prefix = arg.range(of: root, options: [.anchored, .caseInsensitive]) else { return arg }
+            let remainder = arg[prefix.upperBound...]
+            return remainder.isEmpty || remainder.hasPrefix("/") || remainder.hasPrefix("\\") ? "~" + remainder : arg
         }
+        guard arg.count <= 100, arg.first.map({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "@") }) == true,
+              arg.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "._@/-".contains($0)) }),
+              arg.contains(where: { "/.@-".contains($0) })
+        else { return nil }
         if arg.hasPrefix("@"), let slash = arg.firstIndex(of: "/"), slash > arg.index(after: arg.startIndex) {
             let name = arg[arg.index(after: slash)...]
             if !name.isEmpty, !name.contains("/") { return "…/" + name }
         }
-        let root = home.hasSuffix("/") || home.hasSuffix("\\") ? String(home.dropLast()) : home
-        if !root.isEmpty, arg.hasPrefix(root) {
-            let remainder = arg.dropFirst(root.count)
-            if remainder.isEmpty || remainder.hasPrefix("/") || remainder.hasPrefix("\\") { return "~" + remainder }
-        }
         return arg
     }
 
-    /// A flag whose name says its value is a secret, whatever its dashes and case.
-    private static func isSecretNamed(_ flag: String) -> Bool {
-        let name = flag.lowercased()
-        return ["token", "key", "secret", "password", "passwd", "pwd", "auth", "credential", "bearer"]
-            .contains { name.contains($0) }
+    /// A flag without an attached value whose name says the next argument is a secret, whatever
+    /// its dashes and case.
+    private static func isSecretNamedFlag(_ arg: String) -> Bool {
+        guard arg.hasPrefix("-"), !arg.contains("=") else { return false }
+        let name = arg.lowercased()
+        return ["token", "key", "secret", "pass", "pwd", "auth", "credential", "bearer"].contains { name.contains($0) }
     }
 
-    /// The host of the URL in `text`, and its port when one is written, without the userinfo
-    /// before it: taken from the text by hand rather than by a URL parser, because the two
-    /// platforms' parsers disagree about case, default ports and IPv6 brackets. Empty when there
-    /// is no host.
-    private static func authority(of text: String) -> String {
-        guard let scheme = text.range(of: "://") else { return "" }
-        let rest = text[scheme.upperBound...]
+    /// Starts with `/`, `~`, `./`, `../` or a drive root (`X:\` or `X:/`).
+    private static func isExplicitPath(_ arg: String) -> Bool {
+        if ["/", "~", "./", "../"].contains(where: { arg.hasPrefix($0) }) { return true }
+        let chars = Array(arg.prefix(3))
+        return chars.count == 3 && chars[0].isASCII && chars[0].isLetter && chars[1] == ":" && (chars[2] == "/" || chars[2] == "\\")
+    }
+
+    /// The scheme and the host of the URL in `text`, the host with its port when one is written
+    /// and without the userinfo before it; nil when the text before `://` is not a bare scheme or
+    /// the host holds anything a host cannot. Taken from the text by hand rather than by a URL
+    /// parser, because the two platforms' parsers disagree about case, default ports and IPv6
+    /// brackets.
+    private static func urlOrigin(_ text: String) -> (scheme: String, host: String)? {
+        guard let separator = text.range(of: "://") else { return nil }
+        let scheme = text[..<separator.lowerBound]
+        guard let first = scheme.first, first.isASCII, first.isLetter,
+              scheme.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "+.-".contains($0)) })
+        else { return nil }
+        let rest = text[separator.upperBound...]
         let authority = rest[..<(rest.firstIndex(where: { "/?#".contains($0) }) ?? rest.endIndex)]
-        return String(authority.lastIndex(of: "@").map { authority[authority.index(after: $0)...] } ?? authority)
+        let host = authority.lastIndex(of: "@").map { authority[authority.index(after: $0)...] } ?? authority
+        guard !host.isEmpty, host.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || ".-_:[]".contains($0)) })
+        else { return nil }
+        return (String(scheme), String(host))
     }
 
     /// The last component of a command, splitting on both separators rather than this platform's:

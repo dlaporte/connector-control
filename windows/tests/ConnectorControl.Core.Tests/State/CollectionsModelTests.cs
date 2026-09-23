@@ -166,6 +166,14 @@ public class CollectionsModelTests
 
     // MARK: target column
 
+    /// <summary>The target a local connector shows, which must not carry <paramref name="secret"/> whatever else it says.</summary>
+    private static void AssertTarget(McpEntry entry, string expected, string secret)
+    {
+        var target = CollectionsModel.TargetOf(entry.Config, "/Users/x");
+        Assert.DoesNotContain(secret, target);
+        Assert.Equal(expected, target);
+    }
+
     [Fact]
     public void TargetShowsARemoteConnectorsHostOnly()
     {
@@ -173,6 +181,11 @@ public class CollectionsModelTests
             CollectionsModel.TargetOf(AppStateHarness.Remote("https://u:p@api.githubcopilot.com/mcp?k=v"), "/Users/x"));
         Assert.Equal("localhost:8080", CollectionsModel.TargetOf(AppStateHarness.Remote("http://localhost:8080/mcp"), "/Users/x"));
     }
+
+    [Fact]
+    public void TargetShowsOnlyTheHostOfARemoteConnectorWithAHeader() =>
+        AssertTarget(Local("npx", "-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"),
+            "h.example", "abc");
 
     [Fact]
     public void TargetShortensAScopedPackageAndTheHomeFolder()
@@ -183,45 +196,88 @@ public class CollectionsModelTests
 
     /// <summary>
     /// A connector authored on Windows abbreviates its home folder the same way, whichever
-    /// separator follows it.
+    /// separator follows it and however its letters are cased.
     /// </summary>
     [Fact]
     public void TargetShortensAWindowsHomeFolder()
     {
-        Assert.Equal(@"node ~\srv\index.js …/pkg@1.2",
-            CollectionsModel.TargetOf(Local("node", @"C:\Users\x\srv\index.js", "@scope/pkg@1.2").Config, @"C:\Users\x"));
+        Assert.Equal(@"node ~\srv\index.js …/pkg@1.2 ~\a.js",
+            CollectionsModel.TargetOf(Local("node", @"C:\Users\x\srv\index.js", "@scope/pkg@1.2", @"c:\users\X\a.js").Config,
+                @"C:\Users\x"));
     }
 
     [Fact]
-    public void TargetMasksTheValueAfterASecretNamedFlag()
+    public void TargetShowsAUrlArgumentsSchemeAndHostOnly() =>
+        AssertTarget(Local("tool", "https://me:pw@h.example:8443/x?token=t#frag"), "tool https://h.example:8443", "pw");
+
+    [Fact]
+    public void TargetLeavesOutASlackWebhooksPath() =>
+        AssertTarget(Local("tool", "https://hooks.slack.com/services/T000/B000/XXXXsecret"), "tool https://hooks.slack.com", "XXXXsecret");
+
+    [Fact]
+    public void TargetLeavesOutFlagsAndTheirValues() =>
+        AssertTarget(Local("/usr/local/bin/tool", "--api-key", "abc", "--port", "80", "--token=abc"), "tool", "abc");
+
+    [Fact]
+    public void TargetLeavesOutAHeaderFlag() =>
+        AssertTarget(Local("tool", "-H", "X-Api-Key: abc", "https://h.example/x"), "tool https://h.example", "abc");
+
+    [Fact]
+    public void TargetLeavesOutAnEnvironmentAssignment() =>
+        AssertTarget(Local("docker", "run", "-i", "--rm", "-e", "GITHUB_TOKEN=abc", "ghcr.io/github/github-mcp-server"),
+            "docker ghcr.io/github/github-mcp-server", "abc");
+
+    [Fact]
+    public void TargetLeavesOutAShellString()
     {
-        Assert.Equal("tool --api-key •••• --port 80",
-            CollectionsModel.TargetOf(Local("/usr/local/bin/tool", "--api-key", "abc", "--port", "80").Config, "/Users/x"));
+        AssertTarget(Local("sh", "-c", "TOKEN=abc node srv.js"), "sh", "abc");
+        AssertTarget(Local("sh", "-c", "curl -H 'Authorization: Bearer abc' https://h.example/x"), "sh", "abc");
     }
 
     [Fact]
-    public void TargetMasksASecretNamedFlagWithAnEqualsValue()
-    {
-        Assert.Equal("tool --token=•••• --mode=fast",
-            CollectionsModel.TargetOf(Local("tool", "--token=abc", "--mode=fast").Config, "/Users/x"));
-    }
+    public void TargetLeavesOutAnAttachedShortFlagValue() => AssertTarget(Local("mysql-mcp", "-pSECRET"), "mysql-mcp", "SECRET");
 
     [Fact]
-    public void TargetMasksAnythingThatLooksLikeACredential()
-    {
-        Assert.Equal("tool •••• •••• --x=••••",
-            CollectionsModel.TargetOf(Local("tool", "ghp_abcdef", "sk-xyz", "--x=Bearer abc").Config, "/Users/x"));
-    }
+    public void TargetLeavesOutAShortPositionalSecret() => AssertTarget(Local("tool", "hunter2"), "tool", "hunter2");
 
     [Fact]
-    public void TargetStripsUserinfoAndQueryFromAUrlArgument()
+    public void TargetLeavesOutAnUnprefixedKey() => AssertTarget(Local("tool", "sk_live_abc123"), "tool", "sk_live");
+
+    [Fact]
+    public void TargetLeavesOutAConnectionString() => AssertTarget(Local("tool", "Server=h;Password=x"), "tool", "Password=x");
+
+    [Fact]
+    public void TargetLeavesOutInlineJson() => AssertTarget(Local("tool", "--config", """{"apiKey":"abc"}"""), "tool", "abc");
+
+    [Fact]
+    public void TargetLeavesOutAValueASecretNamedFlagIsSeparatedFrom() =>
+        AssertTarget(Local("tool", "--token", "--verbose", "abc"), "tool", "abc");
+
+    /// <summary>A secret shaped like a package still vanishes when a flag named for a secret precedes it.</summary>
+    [Fact]
+    public void TargetLeavesOutWhateverFollowsASecretNamedFlag() =>
+        AssertTarget(Local("tool", "--password", "s3cr3t-pass", "--pass", "./x.key", "index.js"), "tool index.js", "s3cr3t");
+
+    [Fact]
+    public void TargetLeavesOutAPathCarryingAnAssignment() => AssertTarget(Local("tool", "/usr/bin/env TOKEN=abc"), "tool", "abc");
+
+    [Fact]
+    public void TargetLeavesOutACredentialShapedArtefact() =>
+        AssertTarget(Local("tool", "sk-abc.def", "ghp_0123456789abcdef0123456789abcdef.js"), "tool", "abc");
+
+    /// <summary>
+    /// A command that is a shell line keeps its last word; one that could itself be a secret is
+    /// left out, and the arguments still show.
+    /// </summary>
+    [Fact]
+    public void TargetShowsOnlyALaunchersLastWordOrNothing()
     {
-        Assert.Equal("tool https://h.example/x",
-            CollectionsModel.TargetOf(Local("tool", "https://me:pw@h.example/x?token=t").Config, "/Users/x"));
+        AssertTarget(Local("TOKEN=abc node", "srv.js"), "node srv.js", "abc");
+        AssertTarget(Local("ghp_0123456789abcdef0123456789abcdef", "srv.js"), "srv.js", "ghp_");
     }
 
     /// <summary>
-    /// End to end through the rows: a connector carrying secrets three ways shows none of them.
+    /// End to end through the rows: a connector carrying secrets five ways shows none of them.
     /// (The harness's seeded fixture holds no secrets, so this plants its own.)
     /// </summary>
     [Fact]
@@ -229,15 +285,20 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        string[] secrets = ["ghp_0123456789abcdef0123456789abcdef", "s3cr3t-pass", "tok123"];
+        string[] secrets = ["ghp_0123456789abcdef0123456789abcdef", "s3cr3t-pass", "tok123", "hdrsecret", "kvsecret"];
         var entry = new McpEntry(JsonValue.Object(
             ("command", JsonValue.String("/opt/bin/tool")),
-            ("args", JsonValue.Array(new[] { "--password", secrets[1], $"--token={secrets[2]}", secrets[0] }.Select(JsonValue.String))),
+            ("args", JsonValue.Array(new[]
+            {
+                "--password", secrets[1], $"--token={secrets[2]}", secrets[0],
+                "--header", $"Authorization: Bearer {secrets[3]}", "-e", $"DB_PASSWORD={secrets[4]}",
+            }.Select(JsonValue.String))),
             ("env", JsonValue.Object(("API_KEY", JsonValue.String("envsecret"))))));
         Assert.Null(state.Upsert("leaky", entry, null, "Default"));
         using var model = new CollectionsModel(state, h.Dialogs);
         model.Selected = "Default";
         var target = Assert.Single(model.Rows, r => r.Name == "leaky").Target;
+        Assert.Equal("tool", target);
         foreach (var secret in secrets.Append("envsecret"))
         {
             Assert.DoesNotContain(secret, target);

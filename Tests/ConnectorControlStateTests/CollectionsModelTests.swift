@@ -154,10 +154,23 @@ final class CollectionsModelTests: XCTestCase {
 
     // MARK: - Target column
 
+    /// The target a local connector shows, which must not carry `secret` whatever else it says.
+    private func assertTarget(_ entry: MCPEntry, is expected: String, hides secret: String,
+                              file: StaticString = #filePath, line: UInt = #line) {
+        let target = CollectionsModel.target(of: entry.config, home: "/Users/x")
+        XCTAssertFalse(target.contains(secret), target, file: file, line: line)
+        XCTAssertEqual(target, expected, file: file, line: line)
+    }
+
     func testTargetShowsARemoteConnectorsHostOnly() {
         XCTAssertEqual(CollectionsModel.target(of: RemotePattern.make(url: "https://u:p@api.githubcopilot.com/mcp?k=v"), home: "/Users/x"),
                        "api.githubcopilot.com")
         XCTAssertEqual(CollectionsModel.target(of: RemotePattern.make(url: "http://localhost:8080/mcp"), home: "/Users/x"), "localhost:8080")
+    }
+
+    func testTargetShowsOnlyTheHostOfARemoteConnectorWithAHeader() {
+        assertTarget(local("npx", ["-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"]),
+                     is: "h.example", hides: "abc")
     }
 
     func testTargetShortensAScopedPackageAndTheHomeFolder() {
@@ -166,41 +179,93 @@ final class CollectionsModelTests: XCTestCase {
     }
 
     /// A connector authored on Windows abbreviates its home folder the same way, whichever
-    /// separator follows it.
+    /// separator follows it and however its letters are cased.
     func testTargetShortensAWindowsHomeFolder() {
-        XCTAssertEqual(CollectionsModel.target(of: local("node", [#"C:\Users\x\srv\index.js"#, "@scope/pkg@1.2"]).config, home: #"C:\Users\x"#),
-                       #"node ~\srv\index.js …/pkg@1.2"#)
+        XCTAssertEqual(CollectionsModel.target(of: local("node", [#"C:\Users\x\srv\index.js"#, "@scope/pkg@1.2", #"c:\users\X\a.js"#]).config,
+                                               home: #"C:\Users\x"#),
+                       #"node ~\srv\index.js …/pkg@1.2 ~\a.js"#)
     }
 
-    func testTargetMasksTheValueAfterASecretNamedFlag() {
-        XCTAssertEqual(CollectionsModel.target(of: local("/usr/local/bin/tool", ["--api-key", "abc", "--port", "80"]).config, home: "/Users/x"),
-                       "tool --api-key •••• --port 80")
+    func testTargetShowsAURLArgumentsSchemeAndHostOnly() {
+        assertTarget(local("tool", ["https://me:pw@h.example:8443/x?token=t#frag"]), is: "tool https://h.example:8443", hides: "pw")
     }
 
-    func testTargetMasksASecretNamedFlagWithAnEqualsValue() {
-        XCTAssertEqual(CollectionsModel.target(of: local("tool", ["--token=abc", "--mode=fast"]).config, home: "/Users/x"),
-                       "tool --token=•••• --mode=fast")
+    func testTargetLeavesOutASlackWebhooksPath() {
+        assertTarget(local("tool", ["https://hooks.slack.com/services/T000/B000/XXXXsecret"]), is: "tool https://hooks.slack.com", hides: "XXXXsecret")
     }
 
-    func testTargetMasksAnythingThatLooksLikeACredential() {
-        XCTAssertEqual(CollectionsModel.target(of: local("tool", ["ghp_abcdef", "sk-xyz", "--x=Bearer abc"]).config, home: "/Users/x"),
-                       "tool •••• •••• --x=••••")
+    func testTargetLeavesOutFlagsAndTheirValues() {
+        assertTarget(local("/usr/local/bin/tool", ["--api-key", "abc", "--port", "80", "--token=abc"]), is: "tool", hides: "abc")
     }
 
-    func testTargetStripsUserinfoAndQueryFromAURLArgument() {
-        XCTAssertEqual(CollectionsModel.target(of: local("tool", ["https://me:pw@h.example/x?token=t"]).config, home: "/Users/x"),
-                       "tool https://h.example/x")
+    func testTargetLeavesOutAHeaderFlag() {
+        assertTarget(local("tool", ["-H", "X-Api-Key: abc", "https://h.example/x"]), is: "tool https://h.example", hides: "abc")
     }
 
-    /// End to end through the rows: a connector carrying secrets three ways shows none of them.
+    func testTargetLeavesOutAnEnvironmentAssignment() {
+        assertTarget(local("docker", ["run", "-i", "--rm", "-e", "GITHUB_TOKEN=abc", "ghcr.io/github/github-mcp-server"]),
+                     is: "docker ghcr.io/github/github-mcp-server", hides: "abc")
+    }
+
+    func testTargetLeavesOutAShellString() {
+        assertTarget(local("sh", ["-c", "TOKEN=abc node srv.js"]), is: "sh", hides: "abc")
+        assertTarget(local("sh", ["-c", "curl -H 'Authorization: Bearer abc' https://h.example/x"]), is: "sh", hides: "abc")
+    }
+
+    func testTargetLeavesOutAnAttachedShortFlagValue() {
+        assertTarget(local("mysql-mcp", ["-pSECRET"]), is: "mysql-mcp", hides: "SECRET")
+    }
+
+    func testTargetLeavesOutAShortPositionalSecret() {
+        assertTarget(local("tool", ["hunter2"]), is: "tool", hides: "hunter2")
+    }
+
+    func testTargetLeavesOutAnUnprefixedKey() {
+        assertTarget(local("tool", ["sk_live_abc123"]), is: "tool", hides: "sk_live")
+    }
+
+    func testTargetLeavesOutAConnectionString() {
+        assertTarget(local("tool", ["Server=h;Password=x"]), is: "tool", hides: "Password=x")
+    }
+
+    func testTargetLeavesOutInlineJSON() {
+        assertTarget(local("tool", ["--config", #"{"apiKey":"abc"}"#]), is: "tool", hides: "abc")
+    }
+
+    func testTargetLeavesOutAValueASecretNamedFlagIsSeparatedFrom() {
+        assertTarget(local("tool", ["--token", "--verbose", "abc"]), is: "tool", hides: "abc")
+    }
+
+    /// A secret shaped like a package still vanishes when a flag named for a secret precedes it.
+    func testTargetLeavesOutWhateverFollowsASecretNamedFlag() {
+        assertTarget(local("tool", ["--password", "s3cr3t-pass", "--pass", "./x.key", "index.js"]), is: "tool index.js", hides: "s3cr3t")
+    }
+
+    func testTargetLeavesOutAPathCarryingAnAssignment() {
+        assertTarget(local("tool", ["/usr/bin/env TOKEN=abc"]), is: "tool", hides: "abc")
+    }
+
+    func testTargetLeavesOutACredentialShapedArtefact() {
+        assertTarget(local("tool", ["sk-abc.def", "ghp_0123456789abcdef0123456789abcdef.js"]), is: "tool", hides: "abc")
+    }
+
+    /// A command that is a shell line keeps its last word; one that could itself be a secret is
+    /// left out, and the arguments still show.
+    func testTargetShowsOnlyALaunchersLastWordOrNothing() {
+        assertTarget(local("TOKEN=abc node", ["srv.js"]), is: "node srv.js", hides: "abc")
+        assertTarget(local("ghp_0123456789abcdef0123456789abcdef", ["srv.js"]), is: "srv.js", hides: "ghp_")
+    }
+
+    /// End to end through the rows: a connector carrying secrets five ways shows none of them.
     /// (The harness's seeded fixture holds no secrets, so this plants its own.)
     func testNoRowTargetCarriesASecret() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let secrets = ["ghp_0123456789abcdef0123456789abcdef", "s3cr3t-pass", "tok123"]
+        let secrets = ["ghp_0123456789abcdef0123456789abcdef", "s3cr3t-pass", "tok123", "hdrsecret", "kvsecret"]
         let entry = MCPEntry(config: .object([
             "command": .string("/opt/bin/tool"),
-            "args": .array(["--password", secrets[1], "--token=\(secrets[2])", secrets[0]].map(JSONValue.string)),
+            "args": .array(["--password", secrets[1], "--token=\(secrets[2])", secrets[0],
+                            "--header", "Authorization: Bearer \(secrets[3])", "-e", "DB_PASSWORD=\(secrets[4])"].map(JSONValue.string)),
             "env": .object(["API_KEY": .string("envsecret")]),
         ]))
         XCTAssertNil(state.upsert(name: "leaky", entry: entry, renamedFrom: nil, in: "Default"))
@@ -208,6 +273,7 @@ final class CollectionsModelTests: XCTestCase {
         defer { model.dispose() }
         model.selected = "Default"
         let target = try XCTUnwrap(model.rows.first { $0.name == "leaky" }).target
+        XCTAssertEqual(target, "tool")
         for secret in secrets + ["envsecret"] { XCTAssertFalse(target.contains(secret), secret) }
     }
 

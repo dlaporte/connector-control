@@ -251,7 +251,6 @@ public class StringCatalogTests
         actual["CollectionsModel.lockedGlyphTooltip"] = CollectionsModel.LockedGlyphTooltip;
         actual["CollectionsModel.makeActiveAction"] = CollectionsModel.MakeActiveAction;
         actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.MakeLocalCopyButton;
-        actual["CollectionsModel.maskedValue"] = CollectionsModel.MaskedValue;
         actual["CollectionsModel.newButton"] = CollectionsModel.NewButton;
         actual["CollectionsModel.publishButton"] = CollectionsModel.PublishButton;
         actual["CollectionsModel.publishSettingsButton"] = CollectionsModel.PublishSettingsButton;

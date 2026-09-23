@@ -42,8 +42,6 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public const string RemoveFileButton = "Remove";
     public const string KeepFileButton = "Keep";
     public const string RemoteType = "remote";
-    /// <summary>What the target column shows in place of a value it will not: see <see cref="TargetOf"/>.</summary>
-    public const string MaskedValue = "••••";
     /// <summary>The row's pencil, which names no connector: the row it sits on is the answer. The flyout's <c>ConnectorRow.EditTooltip</c> spells the name out, because that menu has no rows.</summary>
     public const string EditTooltip = "Edit";
     /// <summary>The sidebar's double-click, and the same action in its context menu.</summary>
@@ -334,62 +332,78 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// What a row says the connector runs, never a secret: a remote connector's host; a local
-    /// one's launcher and arguments, shortened and masked. Public and pure so both platforms test
-    /// the same inputs. <paramref name="home"/> is the user's home folder, abbreviated to "~".
+    /// one's launcher and arguments, shortened. Public and pure so both platforms test the same
+    /// inputs. <paramref name="home"/> is the user's home folder, abbreviated to "~".
+    ///
+    /// An allowlist, not a mask: an argument is shown only when it is a URL, an explicit path or
+    /// a named artefact, and every other argument — a flag, a flag's value, <c>KEY=value</c>, a
+    /// header, a shell string, a bare word — is left out. A list of secret shapes to hide would
+    /// leak every shape it did not foresee. The one exception is backed by a name rather than a
+    /// shape: whatever follows a flag named for a secret is left out too, since a password can
+    /// look like a package.
     /// </summary>
     public static string TargetOf(JsonValue config, string? home = null)
     {
         home ??= Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        if (RemotePattern.Detect(config) is { } url)
+        if (RemotePattern.Decode(config) is { } remote)
         {
-            var host = Authority(url);
-            return host.Length == 0 ? RemoteType : host;
+            return UrlOrigin(remote.Url)?.Host ?? RemoteType;
         }
         var model = FormMapper.Analyze(config).Model;
-        var tokens = new List<string> { LauncherName(model.Command) };
-        for (var index = 0; index < model.Args.Count; index++)
-        {
-            var arg = model.Args[index];
-            if (arg is "-y" or "--yes")
-            {
-                continue;
-            }
-            var previous = index > 0 ? model.Args[index - 1] : null;
-            tokens.Add(Shown(arg, previous, home));
-        }
-        return string.Join(" ", tokens.Where(t => t.Length > 0));
+        var args = model.Args.Select((arg, index) =>
+            index > 0 && IsSecretNamedFlag(model.Args[index - 1]) ? null : Shown(arg, home));
+        var tokens = new[] { Launcher(model.Command) }.Concat(args);
+        return string.Join(" ", tokens.OfType<string>());
     }
 
     /// <summary>
-    /// One argument as the target column shows it: the first of the masking rules that applies,
-    /// then the shortening ones, then the argument as written.
+    /// The launcher, named the way it would be typed, or null when even its last word could be a
+    /// secret: a command that is a shell line rather than a program keeps only its last word.
     /// </summary>
-    private static string Shown(string arg, string? previous, string home)
+    private static string? Launcher(string command)
     {
-        if (previous is not null && previous.StartsWith('-') && !previous.Contains('=') && IsSecretNamed(previous))
+        var name = LauncherName(command);
+        var word = name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "";
+        return new[] { name, word }.FirstOrDefault(candidate =>
+            candidate.Length > 0 && !candidate.Any(char.IsWhiteSpace) && !candidate.Contains('=')
+            && !CredentialHeuristics.LooksLikeCredential(candidate));
+    }
+
+    /// <summary>
+    /// One argument as the target column shows it, or null when it is none of the three shapes
+    /// known to be safe: a URL, as its scheme and host; an explicit path, with the home folder
+    /// abbreviated; or a named artefact — a package, image, script or module.
+    /// </summary>
+    private static string? Shown(string arg, string home)
+    {
+        if (arg.Contains("://", StringComparison.Ordinal))
         {
-            return MaskedValue;
-        }
-        var equals = arg.IndexOf('=');
-        if (arg.StartsWith('-') && equals >= 0)
-        {
-            var name = arg[..equals];
-            if (IsSecretNamed(name) || CredentialHeuristics.LooksLikeCredential(arg[(equals + 1)..]))
-            {
-                return name + "=" + MaskedValue;
-            }
+            return UrlOrigin(arg) is { } origin ? $"{origin.Scheme}://{origin.Host}" : null;
         }
         if (CredentialHeuristics.LooksLikeCredential(arg))
         {
-            return MaskedValue;
+            return null;
         }
-        var scheme = arg.IndexOf("://", StringComparison.Ordinal);
-        if (scheme >= 0)
+        if (IsExplicitPath(arg))
         {
-            var rest = arg[(scheme + 3)..];
-            var authorityEnd = rest.IndexOfAny(['/', '?', '#']) is var a and >= 0 ? a : rest.Length;
-            var pathEnd = rest.IndexOfAny(['?', '#'], authorityEnd) is var p and >= 0 ? p : rest.Length;
-            return arg[..(scheme + 3)] + Authority(arg) + rest[authorityEnd..pathEnd];
+            if (arg.Contains('='))
+            {
+                return null;
+            }
+            var root = home.EndsWith('/') || home.EndsWith('\\') ? home[..^1] : home;
+            // Case-insensitive, as both platforms' default file systems are.
+            if (root.Length == 0 || !arg.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+            {
+                return arg;
+            }
+            var remainder = arg[root.Length..];
+            return remainder.Length == 0 || remainder.StartsWith('/') || remainder.StartsWith('\\') ? "~" + remainder : arg;
+        }
+        if (arg.Length is 0 or > 100 || !(char.IsAsciiLetterOrDigit(arg[0]) || arg[0] == '@')
+            || !arg.All(c => char.IsAsciiLetterOrDigit(c) || "._@/-".Contains(c))
+            || !arg.Any(c => "/.@-".Contains(c)))
+        {
+            return null;
         }
         var slash = arg.IndexOf('/');
         if (arg.StartsWith('@') && slash > 1)
@@ -400,43 +414,62 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
                 return "…/" + name;
             }
         }
-        var root = home.EndsWith('/') || home.EndsWith('\\') ? home[..^1] : home;
-        if (root.Length > 0 && arg.StartsWith(root, StringComparison.Ordinal))
-        {
-            var remainder = arg[root.Length..];
-            if (remainder.Length == 0 || remainder.StartsWith('/') || remainder.StartsWith('\\'))
-            {
-                return "~" + remainder;
-            }
-        }
         return arg;
     }
 
-    /// <summary>A flag whose name says its value is a secret, whatever its dashes and case.</summary>
-    private static bool IsSecretNamed(string flag)
+    /// <summary>
+    /// A flag without an attached value whose name says the next argument is a secret, whatever
+    /// its dashes and case.
+    /// </summary>
+    private static bool IsSecretNamedFlag(string arg)
     {
-        var name = flag.ToLowerInvariant();
-        return new[] { "token", "key", "secret", "password", "passwd", "pwd", "auth", "credential", "bearer" }
-            .Any(name.Contains);
+        if (!arg.StartsWith('-') || arg.Contains('='))
+        {
+            return false;
+        }
+        var name = arg.ToLowerInvariant();
+        return new[] { "token", "key", "secret", "pass", "pwd", "auth", "credential", "bearer" }.Any(name.Contains);
+    }
+
+    /// <summary>Starts with <c>/</c>, <c>~</c>, <c>./</c>, <c>../</c> or a drive root (<c>X:\</c> or <c>X:/</c>).</summary>
+    private static bool IsExplicitPath(string arg)
+    {
+        if (new[] { "/", "~", "./", "../" }.Any(p => arg.StartsWith(p, StringComparison.Ordinal)))
+        {
+            return true;
+        }
+        return arg.Length >= 3 && char.IsAsciiLetter(arg[0]) && arg[1] == ':' && (arg[2] == '/' || arg[2] == '\\');
     }
 
     /// <summary>
-    /// The host of the URL in <paramref name="text"/>, and its port when one is written, without
-    /// the userinfo before it: taken from the text by hand rather than by a URL parser, because
-    /// the two platforms' parsers disagree about case, default ports and IPv6 brackets. Empty when
-    /// there is no host.
+    /// The scheme and the host of the URL in <paramref name="text"/>, the host with its port when
+    /// one is written and without the userinfo before it; null when the text before <c>://</c> is
+    /// not a bare scheme or the host holds anything a host cannot. Taken from the text by hand
+    /// rather than by a URL parser, because the two platforms' parsers disagree about case,
+    /// default ports and IPv6 brackets.
     /// </summary>
-    private static string Authority(string text)
+    private static (string Scheme, string Host)? UrlOrigin(string text)
     {
-        var scheme = text.IndexOf("://", StringComparison.Ordinal);
-        if (scheme < 0)
+        var separator = text.IndexOf("://", StringComparison.Ordinal);
+        if (separator < 0)
         {
-            return "";
+            return null;
         }
-        var rest = text[(scheme + 3)..];
+        var scheme = text[..separator];
+        if (scheme.Length == 0 || !char.IsAsciiLetter(scheme[0])
+            || !scheme.All(c => char.IsAsciiLetterOrDigit(c) || "+.-".Contains(c)))
+        {
+            return null;
+        }
+        var rest = text[(separator + 3)..];
         var end = rest.IndexOfAny(['/', '?', '#']);
         var authority = end >= 0 ? rest[..end] : rest;
-        return authority[(authority.LastIndexOf('@') + 1)..];
+        var host = authority[(authority.LastIndexOf('@') + 1)..];
+        if (host.Length == 0 || !host.All(c => char.IsAsciiLetterOrDigit(c) || ".-_:[]".Contains(c)))
+        {
+            return null;
+        }
+        return (scheme, host);
     }
 
     /// <summary>
