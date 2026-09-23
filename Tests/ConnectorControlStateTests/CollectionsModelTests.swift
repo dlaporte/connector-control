@@ -300,6 +300,21 @@ final class CollectionsModelTests: XCTestCase {
         assertTarget(local("tool --token", ["abc.def"]), is: "tool", hides: "abc.def")
     }
 
+    /// A quote packed into a path command costs it its launcher, and a quoted or partly quoted
+    /// flag at its end is still a flag named for a secret.
+    func testTargetReadsAQuotedFlagPackedIntoAPathCommand() {
+        assertTarget(local(#"/opt/bin/tool "--password""#, ["hunter.2x"]), is: "", hides: "hunter.2x")
+        assertTarget(local(#"C:\x\tool.exe "--token" ab\cd.ef"#), is: "", hides: "cd.ef")
+        assertTarget(local(#"/opt/bin/tool --to"ken""#, ["hunter.2x"]), is: "", hides: "hunter.2x")
+    }
+
+    /// Each check that keeps a path command plain is load-bearing: a Windows switch and an
+    /// assignment packed in both cost it its launcher.
+    func testTargetNamesNoLauncherForAPathCommandWithASwitchOrAnAssignment() {
+        assertTarget(local(#"C:\x\tool.exe /key ab\cd.ef"#), is: "", hides: "cd.ef")
+        assertTarget(local("/opt/bin/tool key=ab/cd.ef"), is: "", hides: "cd.ef")
+    }
+
     /// A password holding an unencoded `/`, `?` or `#` ends the authority early; what is left of
     /// the userinfo is refused as a host rather than shown, and so is a scheme that is not one.
     func testTargetRefusesAURLWhoseUserinfoHoldsADelimiter() {

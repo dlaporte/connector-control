@@ -393,10 +393,10 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// A command that is a path is not tokenized, since a Windows path holds spaces. It keeps its
     /// launcher — the last component of the path, which runs to the last word holding a separator
     /// — only when the words after its first are plainly more path or plain words: none starts
-    /// with <c>-</c> or <c>/</c> or holds <c>://</c>, <c>=</c> or <c>:</c>. Otherwise that last
-    /// component could be the tail of a packed argument, and the launcher is omitted. The packed
-    /// words are never shown, but a flag named for a secret among them still guards
-    /// <c>args[0]</c>. A path-shaped raw secret that passes these checks
+    /// with <c>-</c> or <c>/</c> or holds <c>:</c> (which covers <c>://</c>), <c>=</c> or a quote.
+    /// Otherwise that last component could be the tail of a packed argument, and the launcher is
+    /// omitted. The packed words are never shown, but a flag named for a secret at their end,
+    /// read with its quotes removed as a shell would pass it, still guards <c>args[0]</c>. A path-shaped raw secret that passes these checks
     /// (<c>C:\x\tool.exe abc\cd.ef</c>) is accepted: residual 2 in the B1 report.
     /// </summary>
     private static (string, List<string>) SplitCommandLine(string text, IEnumerable<string> args)
@@ -411,9 +411,11 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             return (text, args.ToList());
         }
-        var guarded = IsSecretNamedFlag(words[^1]) ? new[] { words[^1] } : [];
+        var flag = string.Concat(ShellWords(words[^1]));
+        var guarded = IsSecretNamedFlag(flag) ? new[] { flag } : [];
         var isPlain = !words.Skip(1).Any(w =>
-            w.StartsWith('-') || w.StartsWith('/') || w.Contains("://", StringComparison.Ordinal) || w.Contains('=') || w.Contains(':'));
+            w.StartsWith('-') || w.StartsWith('/') || w.Contains(':') || w.Contains('=')
+            || w.Contains('"') || w.Contains('\''));
         var pathEnd = Math.Max(Array.FindLastIndex(words, w => w.Contains('/') || w.Contains('\\')), 0);
         return (isPlain ? string.Join(" ", words[..(pathEnd + 1)]) : "", guarded.Concat(args).ToList());
     }

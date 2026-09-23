@@ -341,6 +341,29 @@ public class CollectionsModelTests
     }
 
     /// <summary>
+    /// A quote packed into a path command costs it its launcher, and a quoted or partly quoted
+    /// flag at its end is still a flag named for a secret.
+    /// </summary>
+    [Fact]
+    public void TargetReadsAQuotedFlagPackedIntoAPathCommand()
+    {
+        AssertTarget(Local(@"/opt/bin/tool ""--password""", "hunter.2x"), "", "hunter.2x");
+        AssertTarget(Local(@"C:\x\tool.exe ""--token"" ab\cd.ef"), "", "cd.ef");
+        AssertTarget(Local(@"/opt/bin/tool --to""ken""", "hunter.2x"), "", "hunter.2x");
+    }
+
+    /// <summary>
+    /// Each check that keeps a path command plain is load-bearing: a Windows switch and an
+    /// assignment packed in both cost it its launcher.
+    /// </summary>
+    [Fact]
+    public void TargetNamesNoLauncherForAPathCommandWithASwitchOrAnAssignment()
+    {
+        AssertTarget(Local(@"C:\x\tool.exe /key ab\cd.ef"), "", "cd.ef");
+        AssertTarget(Local("/opt/bin/tool key=ab/cd.ef"), "", "cd.ef");
+    }
+
+    /// <summary>
     /// A password holding an unencoded <c>/</c>, <c>?</c> or <c>#</c> ends the authority early; what
     /// is left of the userinfo is refused as a host rather than shown, and so is a scheme that is not one.
     /// </summary>

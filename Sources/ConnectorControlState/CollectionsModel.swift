@@ -336,9 +336,10 @@ public final class CollectionsModel: ObservableObject {
     /// A command that is a path is not tokenized, since a Windows path holds spaces. It keeps its
     /// launcher — the last component of the path, which runs to the last word holding a separator
     /// — only when the words after its first are plainly more path or plain words: none starts
-    /// with `-` or `/` or holds `://`, `=` or `:`. Otherwise that last component could be the tail
-    /// of a packed argument, and the launcher is omitted. The packed words are never shown, but a
-    /// flag named for a secret among them still guards `args[0]`. A path-shaped raw secret that
+    /// with `-` or `/` or holds `:` (which covers `://`), `=` or a quote. Otherwise that last
+    /// component could be the tail of a packed argument, and the launcher is omitted. The packed
+    /// words are never shown, but a flag named for a secret at their end, read with its quotes
+    /// removed as a shell would pass it, still guards `args[0]`. A path-shaped raw secret that
     /// passes these checks (`C:\x\tool.exe abc\cd.ef`) is accepted: residual 2 in the B1 report.
     private static func splitCommandLine(_ text: String, _ args: [String]) -> (String, [String]) {
         guard isExplicitPath(text) else {
@@ -347,9 +348,11 @@ public final class CollectionsModel: ObservableObject {
         }
         let words = text.split(whereSeparator: \.isWhitespace).map(String.init)
         guard let last = words.last, words.count > 1 else { return (text, args) }
-        let guarded = isSecretNamedFlag(last) ? [last] : []
+        let flag = shellWords(last).joined()
+        let guarded = isSecretNamedFlag(flag) ? [flag] : []
         let isPlain = !words.dropFirst().contains {
-            startsWith($0, "-") || startsWith($0, "/") || $0.contains("://") || $0.contains("=") || $0.contains(":")
+            startsWith($0, "-") || startsWith($0, "/") || $0.contains(":") || $0.contains("=")
+                || $0.contains("\"") || $0.contains("'")
         }
         let pathEnd = words.lastIndex { $0.contains("/") || $0.contains("\\") } ?? 0
         return (isPlain ? words[...pathEnd].joined(separator: " ") : "", guarded + args)
