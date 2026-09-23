@@ -754,6 +754,24 @@ public final class AppState: ObservableObject {
         persistStore()
     }
 
+    /// Removes several connectors as one write; the caller applies. A loop over `remove(name:in:)`
+    /// would rotate a backup, recompute the pending updates and republish once per connector, and
+    /// announce each store change to every open window. Names the collection does not hold are
+    /// skipped, and removing nothing writes nothing.
+    public func remove(names: [String], in collection: String? = nil) {
+        let target = collection ?? activeCollection
+        var removed = false
+        for name in names where store.collections[target]?.mcps[name] != nil {
+            store.collections[target]?.mcps.removeValue(forKey: name)
+            // As in the single-name case: a mark left behind would refuse every later publish as
+            // a path that had moved.
+            editPublishIntent(of: target) { $0 = $0.movingConnector(name, to: nil) }
+            removed = true
+        }
+        guard removed else { return }
+        persistStore()
+    }
+
     /// Rewrites a published collection's intent in memory, for the save that follows to write.
     /// A collection that publishes nothing is left alone, and so is the sidecar when the edit
     /// changes nothing — every assignment announces itself to the windows watching it.

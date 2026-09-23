@@ -2654,4 +2654,49 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.store.collections["Default"]?.mcps.keys.filter { $0.hasPrefix("github") }.sorted(),
                        ["github", "github 2"], "and with no choice it still lands beside")
     }
+
+    /// Removing several connectors is one write, not one per connector: a loop would rotate a
+    /// backup and republish for each. Each one's publish ticks and path marks go with it.
+    func testRemovingSeveralConnectorsPersistsOnce() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        for name in ["alpha", "beta", "gamma"] {
+            XCTAssertNil(state.upsert(name: name, entry: MCPEntry(config: .object([
+                "command": .string("/bin/" + name),
+            ])), renamedFrom: nil, in: "Default"))
+        }
+        let before = try backupCount(h, series: "mcps")
+
+        state.remove(names: ["alpha", "gamma"], in: "Default")
+
+        XCTAssertNil(state.store.collections["Default"]?.mcps["alpha"], "alpha went")
+        XCTAssertNil(state.store.collections["Default"]?.mcps["gamma"], "and gamma")
+        XCTAssertNotNil(state.store.collections["Default"]?.mcps["beta"], "beta stayed")
+        XCTAssertEqual(try backupCount(h, series: "mcps"), before + 1,
+                       "one write, so one backup rotation")
+    }
+
+    /// A name the collection does not hold is skipped rather than failing, and removing nothing
+    /// writes nothing.
+    func testRemovingNoConnectorsWritesNothing() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.upsert(name: "alpha", entry: MCPEntry(config: .object([
+            "command": .string("/bin/alpha"),
+        ])), renamedFrom: nil, in: "Default"))
+        let before = try backupCount(h, series: "mcps")
+
+        state.remove(names: [], in: "Default")
+        XCTAssertEqual(try backupCount(h, series: "mcps"), before, "nothing to do, nothing written")
+
+        state.remove(names: ["nosuch"], in: "Default")
+        XCTAssertNotNil(state.store.collections["Default"]?.mcps["alpha"], "a name it never held is skipped")
+    }
+
+    /// How many files the named backup series holds, for proving a write happened once.
+    private func backupCount(_ h: AppStateHarness, series: String) throws -> Int {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: h.backupsDir.path) else { return 0 }
+        return try fm.contentsOfDirectory(atPath: h.backupsDir.path).filter { $0.hasPrefix(series) }.count
+    }
 }

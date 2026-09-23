@@ -1006,6 +1006,40 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Removes several connectors as one write; the caller applies. A loop over
+    /// <see cref="Remove(string, string?)"/> would rotate a backup, recompute the pending updates
+    /// and republish once per connector, and announce each store change to every open window.
+    /// Names the collection does not hold are skipped, and removing nothing writes nothing.
+    /// </summary>
+    public void Remove(IReadOnlyList<string> names, string? collection = null)
+    {
+        var target = collection ?? ActiveCollection;
+        if (!Store.Collections.TryGetValue(target, out var held))
+        {
+            return;
+        }
+        var removed = false;
+        foreach (var name in names)
+        {
+            if (!held.Mcps.ContainsKey(name))
+            {
+                continue;
+            }
+            held.Mcps.Remove(name);
+            // As in the single-name case: a mark left behind would refuse every later publish as
+            // a path that had moved.
+            EditPublishIntent(target, intent => intent.MovingConnector(name, null));
+            removed = true;
+        }
+        if (!removed)
+        {
+            return;
+        }
+        PersistStore();
+        RaiseAll();
+    }
+
+    /// <summary>
     /// Rewrites a published collection's intent in memory, for the save that follows to write. A
     /// collection that publishes nothing is left alone, and so is the sidecar when the edit changes
     /// nothing — every assignment announces itself to the windows watching it.

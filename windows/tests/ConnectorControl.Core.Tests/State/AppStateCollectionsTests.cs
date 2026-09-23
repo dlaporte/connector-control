@@ -3061,4 +3061,53 @@ public class AppStateCollectionsTests
         Assert.Equal(["github", "github 2"], AppStateHarness.Keys(
             state.Store.Collections["Default"].Mcps.Keys.Where(k => k.StartsWith("github", StringComparison.Ordinal))));
     }
+
+    // Removing several connectors is one write, not one per connector: a loop would rotate a
+    // backup and republish for each. Each one's publish ticks and path marks go with it.
+    [Fact]
+    public void RemovingSeveralConnectorsPersistsOnce()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        foreach (var name in new[] { "alpha", "beta", "gamma" })
+        {
+            Assert.Null(state.Upsert(name, new McpEntry(JsonValue.Object(
+                ("command", JsonValue.String("/bin/" + name)))), null, "Default"));
+        }
+        var before = BackupCount(h, "mcps");
+
+        state.Remove(["alpha", "gamma"], "Default");
+
+        Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("alpha"));
+        Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("gamma"));
+        Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("beta"));
+        // One write, so one backup rotation.
+        Assert.Equal(before + 1, BackupCount(h, "mcps"));
+    }
+
+    // A name the collection does not hold is skipped rather than failing, and removing nothing
+    // writes nothing.
+    [Fact]
+    public void RemovingNoConnectorsWritesNothing()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.Upsert("alpha", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("/bin/alpha")))), null, "Default"));
+        var before = BackupCount(h, "mcps");
+
+        state.Remove([], "Default");
+        // Nothing to do, nothing written.
+        Assert.Equal(before, BackupCount(h, "mcps"));
+
+        state.Remove(["nosuch"], "Default");
+        // A name it never held is skipped.
+        Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("alpha"));
+    }
+
+    // How many files the named backup series holds, for proving a write happened once.
+    private static int BackupCount(AppStateHarness h, string series) =>
+        Directory.Exists(h.BackupsDir)
+            ? Directory.GetFiles(h.BackupsDir).Count(f => Path.GetFileName(f).StartsWith(series, StringComparison.Ordinal))
+            : 0;
 }
