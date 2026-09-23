@@ -51,9 +51,10 @@ internal static class CollectionBannerPresentation
         CollectionBanner.UpdateAvailable => FlyoutModel.ReviewAndApplyButton,
         CollectionBanner.Locate locate => FlyoutModel.LocateButton(locate.FileName),
         CollectionBanner.PublishFailed => FlyoutModel.ChooseFolderButton,
-        // The command's own name, as the window's toolbar and link spell it: the ellipsis already
-        // says a dialog follows, and a second wording for one command would be one too many.
-        CollectionBanner.PublishBlocked => CollectionsModel.PublishButton,
+        // A publish is only blocked on a collection that already publishes, so the dialog is
+        // reached under the name it has for one: Start Publishing would offer to begin what has
+        // been going on all along.
+        CollectionBanner.PublishBlocked => CollectionsModel.PublishSettingsButton,
         _ => throw new ArgumentOutOfRangeException(nameof(banner)),
     };
 

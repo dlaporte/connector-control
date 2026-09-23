@@ -292,7 +292,7 @@ public class FlyoutWindowTests
         WpfApp.Invoke(() => Showing(h, state, (window, model, _) =>
         {
             var menu = window.BuildCollectionMenu();
-            Assert.Equal(["Import…", "Export “Default”…", "Manage Collections…"], MenuCommands(menu, model));
+            Assert.Equal(["Import", "Export “Default”", "Manage Collections"], MenuCommands(menu, model));
             Assert.Equal(2, menu.Items.OfType<Separator>().Count());
             var collections = menu.Items.OfType<MenuItem>().Take(model.CollectionItems.Count).ToList();
             Assert.Equal(["Data team", "Default"], collections.Select(MenuName).ToArray());
@@ -318,7 +318,7 @@ public class FlyoutWindowTests
             // to pass a second copy of it on.
             state.SwitchCollection("Data team");
             Layout(window);
-            Assert.Equal(["Import…", "Manage Collections…"], MenuCommands(window.BuildCollectionMenu(), model));
+            Assert.Equal(["Import", "Manage Collections"], MenuCommands(window.BuildCollectionMenu(), model));
         }));
     }
 

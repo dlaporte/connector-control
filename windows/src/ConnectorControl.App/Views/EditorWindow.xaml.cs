@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
 using ConnectorControl.Core;
@@ -17,12 +16,9 @@ public partial class EditorWindow : Window
     /// <summary>New remote connectors on Windows use the cmd /c npx bridge shape.</summary>
     public const RemoteLaunchStyle NewRemoteStyle = RemoteLaunchStyle.CmdNpx;
 
-    private readonly AppState state;
-
     public EditorWindow(AppState state, EditTarget target)
     {
         InitializeComponent();
-        this.state = state;
         Model = new EditorModel(state, target, new WpfDialogs(() => this), NewRemoteStyle);
         DataContext = Model;
         Title = Model.WindowTitle;
@@ -48,8 +44,6 @@ public partial class EditorWindow : Window
     private void OnSave(object sender, RoutedEventArgs e) => Model.Save();
 
     private void OnCancel(object sender, RoutedEventArgs e) => Model.Cancel();
-
-    private void OnRemove(object sender, RoutedEventArgs e) => Model.Remove();
 
     private void OnAddArg(object sender, RoutedEventArgs e) => Model.AddArg();
 
@@ -86,37 +80,6 @@ public partial class EditorWindow : Window
         {
             tip.PlacementTarget = (UIElement)sender;
             tip.IsOpen = true;
-        }
-    }
-
-    /// <summary>
-    /// The local collections this connector can be copied into, as a menu under the button. Its
-    /// own collection is synced, so it is never among them; the filter says so rather than
-    /// relying on it.
-    /// </summary>
-    private void OnMakeLocalCopy(object sender, RoutedEventArgs e)
-    {
-        var button = (Button)sender;
-        var menu = new ContextMenu { PlacementTarget = button, Placement = PlacementMode.Top };
-        foreach (var name in state.LocalCollectionNames.Where(n => n != Model.CollectionName))
-        {
-            var item = new MenuItem { Header = name };
-            item.Click += (_, _) => MakeLocalCopy(name);
-            menu.Items.Add(item);
-        }
-        button.ContextMenu = menu;
-        menu.IsOpen = true;
-    }
-
-    /// <summary>
-    /// The one failure AppState reports here is a target that is not local, which a menu built
-    /// from the local collections cannot offer.
-    /// </summary>
-    internal void MakeLocalCopy(string collection)
-    {
-        if (Model.MakeLocalCopy(collection) is null)
-        {
-            Close();
         }
     }
 

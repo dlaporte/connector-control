@@ -45,12 +45,12 @@
     "format": "{0} of {1} enabled"
   },
   "AppState.keptPathCarriedError": {
-    "format": "“{0}” carries a path this machine keeps back, in {1}. Open Publish… to review it."
+    "format": "“{0}” carries a path this machine keeps back, in {1}. Open Publishing Settings to review it."
   },
   "AppState.lastLocalCollectionError": "The last local collection can’t be deleted.",
   "AppState.locateCaution": "Locate the collection file to resolve paths.",
   "AppState.malformedConfigMessage": {
-    "format": "Claude's config file is not valid JSON ({0}). Nothing was written. Use Backups ▸ Restore… to recover it."
+    "format": "Claude's config file is not valid JSON ({0}). Nothing was written. Use Backups ▸ Restore to recover it."
   },
   "AppState.nameEmptyError": "Name must not be empty.",
   "AppState.needsValueCaution": {
@@ -61,10 +61,10 @@
   "AppState.noConnectorsSubtitle": "No connectors configured",
   "AppState.ownCollectionError": "This is your own published collection.",
   "AppState.pathMarkMovedError": {
-    "format": "A path marked in “{0}” has moved. Open Publish… to mark it again."
+    "format": "A path marked in “{0}” has moved. Open Publishing Settings to mark it again."
   },
   "AppState.publishFolderCarriedError": {
-    "format": "“{0}” carries this machine's publish folder as written, in {1}. Open Publish… to use ${COLLECTION_DIR} in its place."
+    "format": "“{0}” carries this machine's publish folder as written, in {1}. Open Publishing Settings to use ${COLLECTION_DIR} in its place."
   },
   "AppState.publishIntoStoreError": "Choose a folder other than the master list folder or its backups.",
   "AppState.publishSlugTakenError": {
@@ -129,16 +129,16 @@
   },
   "CollectionsModel.activeSuffix": " · active",
   "CollectionsModel.copyToButton": "Copy to",
-  "CollectionsModel.deleteAction": "Delete…",
+  "CollectionsModel.deleteAction": "Delete",
   "CollectionsModel.deletePublishedFileQuestion": {
     "format": "Also remove {0} from the folder?"
   },
   "CollectionsModel.editTooltip": "Edit",
   "CollectionsModel.exportButton": {
-    "format": "Export {0}…"
+    "format": "Export {0}"
   },
   "CollectionsModel.exportCheckedButton": "Export",
-  "CollectionsModel.importButton": "Import…",
+  "CollectionsModel.importButton": "Import",
   "CollectionsModel.keepFileButton": "Keep",
   "CollectionsModel.localDetail": {
     "format": "local · {0} connectors"
@@ -148,9 +148,10 @@
   },
   "CollectionsModel.lockedGlyphTooltip": "Read-only: synced from the collection's author",
   "CollectionsModel.makeActiveAction": "Make Active",
-  "CollectionsModel.makeLocalCopyButton": "Make Local Copy…",
-  "CollectionsModel.newButton": "New…",
-  "CollectionsModel.publishButton": "Publish…",
+  "CollectionsModel.makeLocalCopyButton": "Make Local Copy",
+  "CollectionsModel.newButton": "New Collection",
+  "CollectionsModel.publishButton": "Start Publishing",
+  "CollectionsModel.publishSettingsButton": "Publishing Settings",
   "CollectionsModel.publishedDetail": {
     "mac": {
       "format": "publishes to {0} from this Mac"
@@ -170,13 +171,17 @@
     "format": "Remove “{0}”?"
   },
   "CollectionsModel.removeFileButton": "Remove",
-  "CollectionsModel.renameAction": "Rename…",
+  "CollectionsModel.renameAction": "Rename",
   "CollectionsModel.selectedCount": {
     "format": "{0} selected"
   },
   "CollectionsModel.stopPublishingAction": "Stop Publishing",
-  "CollectionsModel.stopSyncingAction": "Stop Syncing (keeps a local copy)",
-  "CollectionsModel.subscribeButton": "Subscribe…",
+  "CollectionsModel.stopSyncingAction": "Stop Syncing",
+  "CollectionsModel.stopSyncingInformative": "The connectors stay as a local collection you can edit.",
+  "CollectionsModel.stopSyncingMessage": {
+    "format": "Stop Syncing “{0}”?"
+  },
+  "CollectionsModel.subscribeButton": "Subscribe",
   "CollectionsModel.syncedDetail": {
     "format": "synced from {0} · read-only · {1}"
   },
@@ -193,7 +198,7 @@
   "ConfigService.invalidBackupMcpServersError": {
     "format": "backup {0} has an invalid mcpServers section"
   },
-  "ConfigService.malformedClaudeConfigNote": "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore… to repair the file.",
+  "ConfigService.malformedClaudeConfigNote": "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.",
   "ConnectorRow.editTooltip": {
     "format": "Edit “{0}”"
   },
@@ -239,7 +244,6 @@
     "format": "Synced from {0} · read-only"
   },
   "EditorModel.lossWarningPrefix": "Switching to Form view can’t fully represent this configuration. These elements would be lost or altered:\n",
-  "EditorModel.makeLocalCopyButton": "Make Local Copy…",
   "EditorModel.needsPath": "needs your path",
   "EditorModel.needsValue": "needs your value",
   "EditorModel.notValidJSON": "Not valid JSON — check for a stray brace, missing comma, or unquoted value.",
@@ -254,11 +258,6 @@
     "format": "Published to {0} — saving updates the file your team reads. Secrets stay here."
   },
   "EditorModel.remoteFooter": "Runs via npx mcp-remote — managed for you.",
-  "EditorModel.removeButton": "Remove",
-  "EditorModel.removeInformative": "A copy remains in Backups.",
-  "EditorModel.removeMessage": {
-    "format": "Remove “{0}”? A copy remains in Backups."
-  },
   "EditorModel.removedOutsideDetail": "Saving will add it back.",
   "EditorModel.removedOutsideMessage": {
     "format": "“{0}” was removed outside this editor."
@@ -337,30 +336,30 @@
   "Notifications.title": "Connector Control",
   "PopoverModel.addDisabledTooltip": "Additions go in a local collection.",
   "PopoverModel.addTooltip": "Add Connector",
-  "PopoverModel.chooseFolderButton": "Choose Folder…",
+  "PopoverModel.chooseFolderButton": "Choose Folder",
   "PopoverModel.emptyText": "No connectors configured yet.",
   "PopoverModel.exportTitleFor": {
-    "format": "Export “{0}”…"
+    "format": "Export “{0}”"
   },
-  "PopoverModel.importTitle": "Import…",
+  "PopoverModel.importTitle": "Import",
   "PopoverModel.locateButton": {
-    "format": "Locate {0}…"
+    "format": "Locate {0}"
   },
-  "PopoverModel.manageTitle": "Manage Collections…",
+  "PopoverModel.manageTitle": "Manage Collections",
   "PopoverModel.pendingMenuMark": " · update available",
   "PopoverModel.quitTooltip": "Quit Connector Control",
   "PopoverModel.restartTitle": "Restart Required",
   "PopoverModel.retryTitle": "Apply Failed — Retry",
-  "PopoverModel.reviewAndApplyButton": "Review & Apply…",
+  "PopoverModel.reviewAndApplyButton": "Review & Apply",
   "PopoverModel.settingsTooltip": "Settings",
   "PopoverModel.sourceTooltipFormat": {
     "format": "Synced from {0}"
   },
   "PopoverModel.title": "Connector Control",
   "PublishModel.cancelButton": "Cancel",
-  "PublishModel.chooseFolderButton": "Choose Folder…",
+  "PublishModel.chooseFolderButton": "Choose Folder",
   "PublishModel.envSectionTitle": "Environment values · stripped unless shared",
-  "PublishModel.exportButton": "Export…",
+  "PublishModel.exportButton": "Export",
   "PublishModel.exportTitle": {
     "format": "Export “{0}”"
   },
@@ -422,7 +421,7 @@
   },
   "RestoreModel.headline": "Restore Claude config from a backup",
   "RestoreModel.restoreButton": "Restore",
-  "RestoreModel.restoreTitle": "Restore…",
+  "RestoreModel.restoreTitle": "Restore",
   "ReviewModel.addedLabel": "Added",
   "ReviewModel.applyButton": "Apply",
   "ReviewModel.cancelButton": "Cancel",
@@ -436,8 +435,8 @@
   "SettingsModel.autoUpdateTitle": "Automatically download and install updates",
   "SettingsModel.backupsCaption": "Both config files are backed up automatically before every change.",
   "SettingsModel.backupsHeader": "Backups",
-  "SettingsModel.checkForUpdatesTitle": "Check for Updates…",
-  "SettingsModel.chooseTitle": "Choose…",
+  "SettingsModel.checkForUpdatesTitle": "Check for Updates",
+  "SettingsModel.chooseTitle": "Choose",
   "SettingsModel.claudeAppHeader": "Claude App",
   "SettingsModel.claudeAppRejectedTitle": {
     "mac": "That app can’t be used as Claude Desktop",
@@ -480,7 +479,7 @@
   "SettingsModel.masterListHeader": "Master List Location",
   "SettingsModel.notifyTitle": "Notify on external changes",
   "SettingsModel.restoreTitle": {
-    "mac": "Restore…"
+    "mac": "Restore"
   },
   "SettingsModel.revealInFinderTitle": {
     "mac": "Reveal in Finder",

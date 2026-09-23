@@ -49,7 +49,7 @@ public struct ConfigService: Sendable {
         } catch is ClaudeConfigError {
             return (loaded.store,
                     notes + ["Claude's config file is not valid JSON. Your MCP list is safe; "
-                     + "use Backups ▸ Restore… to repair the file."],
+                     + "use Backups ▸ Restore to repair the file."],
                     nil)
         }
         // A corrupt store is rebuilt with fresh-launch (nil-baseline) import

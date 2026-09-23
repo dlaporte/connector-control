@@ -15,9 +15,9 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string NotifyTitle = "Notify on external changes";
     public const string UpdatesHeader = "Updates";
     public const string AutoUpdateTitle = "Automatically download and install updates";
-    public const string CheckForUpdatesTitle = "Check for Updates…";
+    public const string CheckForUpdatesTitle = "Check for Updates";
     public const string MasterListHeader = "Master List Location";
-    public const string ChooseTitle = "Choose…";
+    public const string ChooseTitle = "Choose";
     public const string UseDefaultTitle = "Use Default";
     public const string BackupsHeader = "Backups";
     public const string BackupsCaption = "Both config files are backed up automatically before every change.";

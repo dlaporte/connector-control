@@ -99,6 +99,7 @@ public class StringCatalogTests
         ["CollectionsModel.removeCheckedMessage.many"] = ["3"],
         ["CollectionsModel.removeCheckedMessage.one"] = ["X"],
         ["CollectionsModel.selectedCount"] = ["3"],
+        ["CollectionsModel.stopSyncingMessage"] = ["X"],
         ["CollectionsModel.syncedDetail"] = ["X", "Y"],
         ["ConfigService.corruptStoreNote"] = ["X"],
         ["ConfigService.invalidBackupError"] = ["X", "Y"],
@@ -113,7 +114,6 @@ public class StringCatalogTests
         ["EditorModel.lockedFieldsNote"] = ["X"],
         ["EditorModel.propagateLabel"] = ["X", "Y"],
         ["EditorModel.publishedNote"] = ["X"],
-        ["EditorModel.removeMessage"] = ["X"],
         ["EditorModel.removedOutsideMessage"] = ["X"],
         ["FlyoutModel.settingsNotSavedCaution"] = ["X"],
         ["FieldName.argument"] = ["1"],
@@ -255,6 +255,7 @@ public class StringCatalogTests
         actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.MakeLocalCopyButton;
         actual["CollectionsModel.newButton"] = CollectionsModel.NewButton;
         actual["CollectionsModel.publishButton"] = CollectionsModel.PublishButton;
+        actual["CollectionsModel.publishSettingsButton"] = CollectionsModel.PublishSettingsButton;
         actual["CollectionsModel.publishedDetail"] = CollectionsModel.PublishedDetail("X");
         actual["CollectionsModel.refreshButton"] = CollectionsModel.RefreshButton;
         actual["CollectionsModel.remoteType"] = CollectionsModel.RemoteType;
@@ -267,6 +268,8 @@ public class StringCatalogTests
         actual["CollectionsModel.selectedCount"] = CollectionsModel.SelectedCount(3);
         actual["CollectionsModel.stopPublishingAction"] = CollectionsModel.StopPublishingAction;
         actual["CollectionsModel.stopSyncingAction"] = CollectionsModel.StopSyncingAction;
+        actual["CollectionsModel.stopSyncingInformative"] = CollectionsModel.StopSyncingInformative;
+        actual["CollectionsModel.stopSyncingMessage"] = CollectionsModel.StopSyncingMessage("X");
         actual["CollectionsModel.subscribeButton"] = CollectionsModel.SubscribeButton;
         actual["CollectionsModel.syncedDetail"] = CollectionsModel.SyncedDetail("X", "Y");
         actual["CollectionsModel.unlocatedDetail"] = CollectionsModel.UnlocatedDetail;
@@ -284,7 +287,7 @@ public class StringCatalogTests
         actual["ConfigService.invalidBackupError"] = "backup X is not a valid config file (Y)";
         actual["ConfigService.invalidBackupMcpServersError"] = "backup X has an invalid mcpServers section";
         actual["ConfigService.malformedClaudeConfigNote"] =
-            "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore… to repair the file.";
+            "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.";
 
         // MARK: ConnectorRow / Dialogs / AlertDialogs
 
@@ -321,7 +324,6 @@ public class StringCatalogTests
         actual["EditorModel.jsonTip"] = EditorModel.JsonTip;
         actual["EditorModel.lockedFieldsNote"] = EditorModel.LockedFieldsNote("X");
         actual["EditorModel.lossWarningPrefix"] = EditorModel.LossWarningPrefix;
-        actual["EditorModel.makeLocalCopyButton"] = EditorModel.MakeLocalCopyButton;
         actual["EditorModel.needsPath"] = EditorModel.NeedsPath;
         actual["EditorModel.needsValue"] = EditorModel.NeedsValue;
         actual["EditorModel.notValidJSON"] = EditorModel.NotValidJson;
@@ -329,9 +331,6 @@ public class StringCatalogTests
         actual["EditorModel.propagateLabel"] = EditorModel.PropagateLabel("X", "Y");
         actual["EditorModel.publishedNote"] = EditorModel.PublishedNote("X");
         actual["EditorModel.remoteFooter"] = EditorModel.RemoteFooter;
-        actual["EditorModel.removeButton"] = EditorModel.RemoveButton;
-        actual["EditorModel.removeInformative"] = EditorModel.RemoveInformative;
-        actual["EditorModel.removeMessage"] = EditorModel.RemoveMessage("X");
         actual["EditorModel.removedOutsideDetail"] = EditorModel.RemovedOutsideDetail;
         actual["EditorModel.removedOutsideMessage"] = EditorModel.RemovedOutsideMessage("X");
         actual["EditorModel.saveAnywayButton"] = EditorModel.SaveAnywayButton;

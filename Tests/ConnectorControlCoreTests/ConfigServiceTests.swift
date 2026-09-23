@@ -159,7 +159,7 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude's config."))
         XCTAssertEqual(result.notes[1],
                        "Claude's config file is not valid JSON. Your MCP list is safe; "
-                       + "use Backups ▸ Restore… to repair the file.")
+                       + "use Backups ▸ Restore to repair the file.")
     }
 
     func testRestoreClaudeConfigFromBackup() throws {
@@ -215,7 +215,7 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(result.notes.count, 1)
         XCTAssertEqual(result.notes[0],
                        "Claude's config file is not valid JSON. Your MCP list is safe; "
-                       + "use Backups ▸ Restore… to repair the file.")
+                       + "use Backups ▸ Restore to repair the file.")
         XCTAssertNil(result.claudeServers, "no baseline should be recorded from a failed reconcile")
         XCTAssertEqual(try service.backups.backups(series: "mcps").count, backupCountBefore,
                        "a failed reconcile pass must not save (and thus back up) the store")

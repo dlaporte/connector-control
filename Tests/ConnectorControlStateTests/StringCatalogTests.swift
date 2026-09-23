@@ -93,6 +93,7 @@ final class StringCatalogTests: XCTestCase {
         "CollectionsModel.removeCheckedMessage.many": ["3"],
         "CollectionsModel.removeCheckedMessage.one": ["X"],
         "CollectionsModel.selectedCount": ["3"],
+        "CollectionsModel.stopSyncingMessage": ["X"],
         "CollectionsModel.syncedDetail": ["X", "Y"],
         "ConfigService.corruptStoreNote": ["X"],
         "ConfigService.invalidBackupError": ["X", "Y"],
@@ -106,7 +107,6 @@ final class StringCatalogTests: XCTestCase {
         "EditorModel.lockedFieldsNote": ["X"],
         "EditorModel.propagateLabel": ["X", "Y"],
         "EditorModel.publishedNote": ["X"],
-        "EditorModel.removeMessage": ["X"],
         "EditorModel.removedOutsideMessage": ["X"],
         "FieldName.argument": ["1"],
         "FieldName.document": ["X"],
@@ -223,7 +223,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ConfigService.invalidBackupError"] = "backup X is not a valid config file (Y)"
         actual["ConfigService.invalidBackupMcpServersError"] = "backup X has an invalid mcpServers section"
         actual["ConfigService.malformedClaudeConfigNote"] =
-            "Claude's config file is not valid JSON. Your MCP list is safe; use Backups \u{25B8} Restore\u{2026} to repair the file."
+            "Claude's config file is not valid JSON. Your MCP list is safe; use Backups \u{25B8} Restore to repair the file."
 
         // MARK: CollectionsModel
 
@@ -243,6 +243,7 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.makeLocalCopyButton
         actual["CollectionsModel.newButton"] = CollectionsModel.newButton
         actual["CollectionsModel.publishButton"] = CollectionsModel.publishButton
+        actual["CollectionsModel.publishSettingsButton"] = CollectionsModel.publishSettingsButton
         actual["CollectionsModel.publishedDetail"] = CollectionsModel.publishedDetail("X")
         actual["CollectionsModel.refreshButton"] = CollectionsModel.refreshButton
         actual["CollectionsModel.remoteType"] = CollectionsModel.remoteType
@@ -255,6 +256,8 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.selectedCount"] = CollectionsModel.selectedCount(3)
         actual["CollectionsModel.stopPublishingAction"] = CollectionsModel.stopPublishingAction
         actual["CollectionsModel.stopSyncingAction"] = CollectionsModel.stopSyncingAction
+        actual["CollectionsModel.stopSyncingInformative"] = CollectionsModel.stopSyncingInformative
+        actual["CollectionsModel.stopSyncingMessage"] = CollectionsModel.stopSyncingMessage("X")
         actual["CollectionsModel.subscribeButton"] = CollectionsModel.subscribeButton
         actual["CollectionsModel.syncedDetail"] = CollectionsModel.syncedDetail("X", "Y")
         actual["CollectionsModel.unlocatedDetail"] = CollectionsModel.unlocatedDetail
@@ -294,7 +297,6 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.jsonTip"] = EditorModel.jsonTip
         actual["EditorModel.lockedFieldsNote"] = EditorModel.lockedFieldsNote("X")
         actual["EditorModel.lossWarningPrefix"] = EditorModel.lossWarningPrefix
-        actual["EditorModel.makeLocalCopyButton"] = EditorModel.makeLocalCopyButton
         actual["EditorModel.needsPath"] = EditorModel.needsPath
         actual["EditorModel.needsValue"] = EditorModel.needsValue
         actual["EditorModel.notValidJSON"] = EditorModel.notValidJSON
@@ -302,9 +304,6 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.propagateLabel"] = EditorModel.propagateLabel("X", "Y")
         actual["EditorModel.publishedNote"] = EditorModel.publishedNote("X")
         actual["EditorModel.remoteFooter"] = EditorModel.remoteFooter
-        actual["EditorModel.removeButton"] = EditorModel.removeButton
-        actual["EditorModel.removeInformative"] = EditorModel.removeInformative
-        actual["EditorModel.removeMessage"] = EditorModel.removeMessage("X")
         actual["EditorModel.removedOutsideDetail"] = EditorModel.removedOutsideDetail
         actual["EditorModel.removedOutsideMessage"] = EditorModel.removedOutsideMessage("X")
         actual["EditorModel.saveAnywayButton"] = EditorModel.saveAnywayButton

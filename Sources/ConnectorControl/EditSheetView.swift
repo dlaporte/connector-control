@@ -75,16 +75,6 @@ struct EditSheetView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 HStack {
-                    if model.canRemove {
-                        Button(EditorModel.removeButton, role: .destructive) { model.requestRemove() }
-                    } else if model.isReadOnly {
-                        Menu(EditorModel.makeLocalCopyButton) {
-                            ForEach(localCopyTargets, id: \.self) { name in
-                                Button(name) { makeLocalCopy(into: name) }
-                            }
-                        }
-                        .fixedSize()
-                    }
                     Spacer()
                     Button(AlertDialogs.cancelTitle) { dismiss() }
                     Button("Save") { if model.save() { dismiss() } }
@@ -107,22 +97,6 @@ struct EditSheetView: View {
         ) {
             Button(EditorModel.switchAnywayButton, role: .destructive) { model.forceSwitchToForm() }
             Button(EditorModel.stayInJSONButton, role: .cancel) { model.stayInJSON() }
-        }
-        .confirmationDialog(
-            model.removeConfirmationMessage,
-            isPresented: Binding(get: { model.removeConfirmationPending },
-                                 set: { if !$0 { model.cancelRemove() } }),
-            titleVisibility: .visible
-        ) {
-            Button(EditorModel.removeButton, role: .destructive) {
-                model.confirmRemove()
-                // SwiftUI's dismissal actions have proven unreliable from a
-                // dialog context in this window; close the AppKit window
-                // directly once the dialog has torn down.
-                DispatchQueue.main.async {
-                    hostWindow?.close()
-                }
-            }
         }
         .background(WindowFinder { hostWindow = $0 })
     }
@@ -442,20 +416,6 @@ struct EditSheetView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
-    }
-
-    // MARK: make local copy
-
-    /// The local collections this connector can be copied into. Its own is synced, so it never
-    /// appears; the filter says so rather than relying on it.
-    private var localCopyTargets: [String] {
-        state.localCollectionNames.filter { $0 != model.collectionName }
-    }
-
-    private func makeLocalCopy(into collection: String) {
-        // The one failure AppState reports here is a target that is not local, which a menu
-        // built from the local collections cannot offer.
-        if model.makeLocalCopy(into: collection) == nil { dismiss() }
     }
 }
 

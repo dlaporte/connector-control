@@ -57,7 +57,7 @@ public sealed class ConfigService
         catch (ClaudeConfigException)
         {
             notes.Add("Claude's config file is not valid JSON. Your MCP list is safe; "
-                + "use Backups ▸ Restore… to repair the file.");
+                + "use Backups ▸ Restore to repair the file.");
             return new LoadResult(store, notes, null);
         }
         // A corrupt store is rebuilt with fresh-launch (null-baseline) import

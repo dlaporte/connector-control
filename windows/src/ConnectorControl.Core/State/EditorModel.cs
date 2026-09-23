@@ -34,8 +34,6 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public const string SwitchAnywayButton = "Switch Anyway";
     public const string StayInJsonButton = "Stay in JSON";
     public const string SaveAnywayButton = "Save Anyway";
-    public const string RemoveButton = "Remove";
-    public const string RemoveInformative = "A copy remains in Backups.";
     public const string AddArgumentTitle = "＋ Add argument";
     public const string AddVariableTitle = "＋ Add variable";
     public const string ChangedOutsideDetail = "Saving will overwrite that change with this editor's version.";
@@ -44,7 +42,6 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public const string WhatCanIChangeAnswer = "Fill in the highlighted values and switch it on or off. Everything else follows the source; make a local copy to change it.";
     public const string NeedsValue = "needs your value";
     public const string NeedsPath = "needs your path";
-    public const string MakeLocalCopyButton = "Make Local Copy…";
 
     public static string LockedFieldsNote(string collection) => $"Synced from {collection} · read-only";
 
@@ -58,7 +55,6 @@ public sealed class EditorModel : ObservableObject, IDisposable
         $"Also apply this change to {collections}, which has an identical {connector}";
 
     public static string DuplicateEnvError(string name) => $"Duplicate environment variable name: {name}";
-    public static string RemoveMessage(string name) => $"Remove “{name}”? {RemoveInformative}";
     public static string ChangedOutsideMessage(string name) => $"“{name}” changed outside this editor.";
     public static string RemovedOutsideMessage(string name) => $"“{name}” was removed outside this editor.";
 
@@ -506,9 +502,6 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// </summary>
     public bool CanSave => IsReadOnly || !((view == EditView.Json && jsonError is not null) || (view == EditView.Form && isRemote && !(RemoteUrlValid && RemoteUrlCmdSafe)));
 
-    /// <summary>Remove leaves the footer's left slot to Make Local Copy… when the connector is not this machine's to delete.</summary>
-    public bool CanRemove => !Target.IsNew && !IsReadOnly;
-
     // MARK: collection
 
     /// <summary>
@@ -579,12 +572,6 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     /// <summary>The propagate checkbox: off unless the user ticks it.</summary>
     public bool Propagate { get => propagate; set => Set(ref propagate, value); }
-
-    /// <summary>
-    /// The footer's Make Local Copy…, which takes Remove's slot for a synced connector. null on
-    /// success, else the message; the window closes on success.
-    /// </summary>
-    public string? MakeLocalCopy(string collection) => state.MakeLocalCopy([Target.Name], CollectionName, collection);
 
     private static IReadOnlyList<string> TwinsOf(AppState state, EditTarget target)
     {
@@ -826,7 +813,6 @@ public sealed class EditorModel : ObservableObject, IDisposable
             Raise(nameof(Header));
             Raise(nameof(HeaderNote));
             Raise(nameof(HasHeaderNote));
-            Raise(nameof(CanRemove));
             Raise(nameof(CanSave));
             Raise(nameof(ShowJsonTip));
             Raise(nameof(ShowPropagate));
@@ -1439,18 +1425,6 @@ public sealed class EditorModel : ObservableObject, IDisposable
             }
         }
         return followed;
-    }
-
-    /// <summary>Remove and apply in the same turn: a watcher-driven reload between the two once resurrected the connector.</summary>
-    public void Remove()
-    {
-        if (!dialogs.Confirm(RemoveMessage(Target.Name), null, RemoveButton, destructive: true))
-        {
-            return;
-        }
-        state.Remove(Target.Name, Target.Collection);
-        state.ApplyInteractively();
-        CloseRequested?.Invoke();
     }
 
     /// <summary>Discards all edits; nothing persisted.</summary>

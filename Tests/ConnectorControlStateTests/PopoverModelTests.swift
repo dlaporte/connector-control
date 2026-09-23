@@ -127,17 +127,17 @@ final class PopoverModelTests: XCTestCase {
 
         XCTAssertEqual(popover.collectionBanner, .locate(collection: "Team", fileName: "team.json"))
         XCTAssertEqual(popover.collectionBannerText, "Team's file isn’t on this Mac yet.")
-        XCTAssertEqual(popover.collectionBannerButton, "Locate team.json…")
+        XCTAssertEqual(popover.collectionBannerButton, "Locate team.json")
 
         let diff = CollectionDiff(added: ["jira"], removed: ["confluence"], changed: [])
         state.pendingUpdates = ["Team": diff]
         XCTAssertEqual(popover.collectionBannerText, "Team changed at its source: adds jira; removes confluence.")
-        XCTAssertEqual(popover.collectionBannerButton, "Review & Apply…")
+        XCTAssertEqual(popover.collectionBannerButton, "Review & Apply")
 
         state.publishError = CollectionPublishError(collection: "Default", message: "the folder is read-only")
         XCTAssertEqual(popover.collectionBannerText,
                        "Couldn’t publish Default to \(folder.path): the folder is read-only")
-        XCTAssertEqual(popover.collectionBannerButton, "Choose Folder…")
+        XCTAssertEqual(popover.collectionBannerButton, "Choose Folder")
 
         state.publishError = nil
         state.pendingUpdates = [:]
@@ -302,13 +302,13 @@ final class PopoverModelTests: XCTestCase {
         defer { h.dispose() }
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
-        XCTAssertEqual(PopoverModel.importTitle, "Import…")
-        XCTAssertEqual(PopoverModel.manageTitle, "Manage Collections…")
-        XCTAssertEqual(popover.exportTitle, "Export “Default”…")
+        XCTAssertEqual(PopoverModel.importTitle, "Import")
+        XCTAssertEqual(PopoverModel.manageTitle, "Manage Collections")
+        XCTAssertEqual(popover.exportTitle, "Export “Default”")
         XCTAssertEqual(popover.addTooltipText, PopoverModel.addTooltip)
 
         XCTAssertNil(state.createCollection(named: "Work"))
-        XCTAssertEqual(popover.exportTitle, "Export “Work”…")
+        XCTAssertEqual(popover.exportTitle, "Export “Work”")
     }
 
     func testTheChipMarksAndLocksFollowTheActiveCollection() throws {
@@ -604,7 +604,7 @@ final class PopoverModelTests: XCTestCase {
         state.publishError = CollectionPublishError(collection: "Default", message: moved, kind: .blockedForReview)
         XCTAssertEqual(popover.collectionBanner, .publishBlocked(collection: "Default", message: moved))
         XCTAssertEqual(popover.collectionBannerText, moved)
-        XCTAssertEqual(popover.collectionBannerButton, CollectionsModel.publishButton)
+        XCTAssertEqual(popover.collectionBannerButton, CollectionsModel.publishSettingsButton)
         XCTAssertNil(popover.collectionBannerSecondaryButton)
 
         // The button asks the Collections window for the Publish sheet, and true tells the view to

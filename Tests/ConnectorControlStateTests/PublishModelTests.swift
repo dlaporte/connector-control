@@ -587,11 +587,11 @@ final class PublishModelTests: XCTestCase {
 
     func testTheSheetOwnsItsButtonsAndItsExportTitle() {
         XCTAssertEqual(PublishModel.cancelButton, "Cancel")
-        XCTAssertEqual(PublishModel.chooseFolderButton, "Choose Folder…")
+        XCTAssertEqual(PublishModel.chooseFolderButton, "Choose Folder")
         XCTAssertEqual(PublishModel.markPathLabel, "Mark as a path this machine supplies")
         // The menu item that opens this sheet ends in an ellipsis; the sheet itself does not.
         XCTAssertEqual(PublishModel.exportTitle("Data team"), "Export “Data team”")
-        XCTAssertEqual(PopoverModel.exportTitleFor("Data team"), "Export “Data team”…")
+        XCTAssertEqual(PopoverModel.exportTitleFor("Data team"), "Export “Data team”")
     }
 
     func testTheFooterNamesTheFileAndTheOriginOnceThereIsOne() throws {

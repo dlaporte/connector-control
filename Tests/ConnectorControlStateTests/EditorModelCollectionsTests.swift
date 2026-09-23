@@ -34,7 +34,6 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertTrue(dbt.isReadOnly)
         XCTAssertEqual(dbt.headerState, .synced(collection: "Data team"))
         XCTAssertEqual(dbt.headerNote, "Synced from Data team · read-only")
-        XCTAssertFalse(dbt.canRemove, "Make Local Copy… takes Remove's slot")
         XCTAssertTrue(dbt.canSave, "the placeholder fields are editable, so Save stays enabled")
         XCTAssertFalse(dbt.showJSONTip, "the paste tip offers something a read-only JSON view cannot do")
 
@@ -71,7 +70,6 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertFalse(editor.isReadOnly)
         XCTAssertEqual(editor.headerState, .none)
         XCTAssertNil(editor.headerNote)
-        XCTAssertTrue(editor.canRemove)
         XCTAssertTrue(editor.showJSONTip)
         XCTAssertFalse(editor.bearerTokenIsPlaceholder)
         XCTAssertEqual(editor.argsWithPlaceholders, [])
@@ -213,28 +211,6 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertEqual(published.headerNote,
                        "Published to \(folder.path) — saving updates the file your team reads. Secrets stay here.")
         XCTAssertFalse(published.isReadOnly)
-        XCTAssertTrue(published.canRemove)
-    }
-
-    // MARK: - Make Local Copy
-
-    func testMakeLocalCopyFromTheEditor() throws {
-        let rig = EditorRig()
-        defer { rig.dispose() }
-        try subscribeToDataTeam(rig)
-        let state = rig.state
-
-        let editor = rig.editor("notion", in: "Data team")
-        XCTAssertEqual(EditorModel.makeLocalCopyButton, "Make Local Copy…")
-        XCTAssertNil(editor.makeLocalCopy(into: "Default"))
-        XCTAssertEqual(state.store.collections["Default"]?.mcps["notion"]?.config,
-                       state.store.collections["Data team"]?.mcps["notion"]?.config,
-                       "the copy carries its unfilled marker, exactly as it stands")
-        XCTAssertEqual(state.store.collections["Default"]?.mcps["notion"]?.enabled, false)
-        XCTAssertEqual(state.collectionsFile.collections["Default"]?.provenance["notion"]?.from, "Data team")
-
-        XCTAssertEqual(editor.makeLocalCopy(into: "Data team"), AppState.targetMustBeLocalError,
-                       "a synced collection is nobody's copy target")
     }
 
     // MARK: - Propagate

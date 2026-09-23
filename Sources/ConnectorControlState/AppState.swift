@@ -56,7 +56,7 @@ public final class AppState: ObservableObject {
 
     public static func duplicateNameError(_ name: String) -> String { "A connector named “\(name)” already exists." }
 
-    public static func malformedConfigMessage(detail: String) -> String { "Claude's config file is not valid JSON (\(detail)). Nothing was written. Use Backups ▸ Restore… to recover it." }
+    public static func malformedConfigMessage(detail: String) -> String { "Claude's config file is not valid JSON (\(detail)). Nothing was written. Use Backups ▸ Restore to recover it." }
 
     public static func enabledSubtitle(enabled: Int, total: Int) -> String { "\(enabled) of \(total) enabled" }
 
@@ -75,11 +75,11 @@ public final class AppState: ObservableObject {
 
     public static func publishSlugTakenError(_ fileName: String) -> String { "\(fileName) already exists there and belongs to a different collection." }
 
-    public static func pathMarkMovedError(_ connector: String) -> String { "A path marked in “\(connector)” has moved. Open Publish… to mark it again." }
+    public static func pathMarkMovedError(_ connector: String) -> String { "A path marked in “\(connector)” has moved. Open Publishing Settings to mark it again." }
 
-    public static func publishFolderCarriedError(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine's publish folder as written, in \(field). Open Publish… to use ${COLLECTION_DIR} in its place." }
+    public static func publishFolderCarriedError(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine's publish folder as written, in \(field). Open Publishing Settings to use ${COLLECTION_DIR} in its place." }
 
-    public static func keptPathCarriedError(_ connector: String, _ field: String) -> String { "“\(connector)” carries a path this machine keeps back, in \(field). Open Publish… to review it." }
+    public static func keptPathCarriedError(_ connector: String, _ field: String) -> String { "“\(connector)” carries a path this machine keeps back, in \(field). Open Publishing Settings to review it." }
 
     /// The way back is the second sentence: the refusal holds whatever the user does, and a
     /// collection of that name makes the same backup restorable.

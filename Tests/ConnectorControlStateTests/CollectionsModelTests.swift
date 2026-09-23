@@ -262,6 +262,36 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.selected, state.activeCollection)
     }
 
+    func testStopSyncingConfirmsAndADeclineLeavesTheCollectionSynced() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        state.switchCollection(to: "Default")
+        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]),
+                 cache: CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")], published: [:]))
+        XCTAssertTrue(state.isSynced("Team"))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Team"
+
+        // Declined: the collection is still synced. The reassurance lives in the question now
+        // that the button no longer carries it.
+        h.dialogs.nextConfirm = false
+        model.stopSyncing()
+        let asked = try XCTUnwrap(h.dialogs.confirms.last)
+        XCTAssertEqual(asked.message, CollectionsModel.stopSyncingMessage("Team"))
+        XCTAssertEqual(asked.informative, CollectionsModel.stopSyncingInformative)
+        XCTAssertEqual(asked.primary, CollectionsModel.stopSyncingAction)
+        XCTAssertFalse(asked.destructive, "nothing is lost: every connector stays")
+        XCTAssertTrue(state.isSynced("Team"))
+
+        h.dialogs.nextConfirm = true
+        model.stopSyncing()
+        XCTAssertFalse(state.isSynced("Team"))
+        XCTAssertEqual(state.collectionNames, ["Default", "Team"], "the collection stays, now local")
+        XCTAssertEqual(h.dialogs.confirms.count, 2)
+    }
+
     func testDeletingAPublishedCollectionAsksAboutTheFile() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
@@ -650,7 +680,8 @@ final class CollectionsModelTests: XCTestCase {
         let moved = AppState.pathMarkMovedError("ledger")
         state.publishError = CollectionPublishError(collection: "Shared", message: moved, kind: .blockedForReview)
         XCTAssertEqual(model.bannerText, moved)
-        XCTAssertEqual(model.bannerButton, CollectionsModel.publishButton)
+        XCTAssertEqual(model.bannerButton, CollectionsModel.publishSettingsButton,
+                       "a blocked publish is always on a collection that already publishes")
         // False: true would put the Review sheet up. The view shows Publish for this kind.
         XCTAssertFalse(model.bannerAction())
         XCTAssertEqual(model.choosePublishFolder(h.dir.file("elsewhere").path), moved,

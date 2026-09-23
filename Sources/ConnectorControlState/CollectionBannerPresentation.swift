@@ -43,9 +43,10 @@ enum CollectionBannerPresentation {
         case .updateAvailable: return PopoverModel.reviewAndApplyButton
         case .locate(_, let fileName): return PopoverModel.locateButton(fileName)
         case .publishFailed: return PopoverModel.chooseFolderButton
-        // The command's own name, as the window's toolbar and link spell it: the ellipsis already
-        // says a sheet follows, and a second wording for one command would be one too many.
-        case .publishBlocked: return CollectionsModel.publishButton
+        // A publish is only blocked on a collection that already publishes, so the sheet is
+        // reached under the name it has for one: Start Publishing would offer to begin what has
+        // been going on all along.
+        case .publishBlocked: return CollectionsModel.publishSettingsButton
         }
     }
 

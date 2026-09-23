@@ -44,7 +44,7 @@ public sealed class AppState : ObservableObject, IDisposable
     public static string DuplicateNameError(string name) => $"A connector named “{name}” already exists.";
     public static string DeleteCollectionMessage(string collection) => $"Delete Collection “{collection}”?";
     public static string MalformedConfigMessage(string detail) =>
-        $"Claude's config file is not valid JSON ({detail}). Nothing was written. Use Backups ▸ Restore… to recover it.";
+        $"Claude's config file is not valid JSON ({detail}). Nothing was written. Use Backups ▸ Restore to recover it.";
     public static string NeedsValueCaution(string names) => $"needs your value: {names}";
     public static string CollectionUpdateBanner(string collection, string summary) => $"{collection} changed at its source: {summary}.";
     /// <summary>"this PC" is the platform-forced half of this sentence; the Mac mirror says "this Mac".</summary>
@@ -53,9 +53,9 @@ public sealed class AppState : ObservableObject, IDisposable
     public static string CollectionUpdateNotificationBody(string collection, string summary) => $"{collection} changed at its source: {summary}. Review it in Connector Control.";
     public static string SourceUnreadableError(string fileName, string detail) => $"{fileName} couldn\u2019t be read: {detail}";
     public static string PublishSlugTakenError(string fileName) => $"{fileName} already exists there and belongs to a different collection.";
-    public static string PathMarkMovedError(string connector) => $"A path marked in “{connector}” has moved. Open Publish… to mark it again.";
-    public static string PublishFolderCarriedError(string connector, string field) => $"“{connector}” carries this machine's publish folder as written, in {field}. Open Publish… to use ${{COLLECTION_DIR}} in its place.";
-    public static string KeptPathCarriedError(string connector, string field) => $"“{connector}” carries a path this machine keeps back, in {field}. Open Publish… to review it.";
+    public static string PathMarkMovedError(string connector) => $"A path marked in “{connector}” has moved. Open Publishing Settings to mark it again.";
+    public static string PublishFolderCarriedError(string connector, string field) => $"“{connector}” carries this machine's publish folder as written, in {field}. Open Publishing Settings to use ${{COLLECTION_DIR}} in its place.";
+    public static string KeptPathCarriedError(string connector, string field) => $"“{connector}” carries a path this machine keeps back, in {field}. Open Publishing Settings to review it.";
     /// <summary>The way back is the second sentence: the refusal holds whatever the user does, and a collection of that name makes the same backup restorable.</summary>
     public static string RestoreCollectionGoneError(string collection) => $"This backup was taken from “{collection}”, which no longer exists. Nothing was restored. Create a collection named “{collection}” again, and this backup goes back into it.";
     /// <summary>Claude's launch time is re-read 3 s after the restart completes.</summary>

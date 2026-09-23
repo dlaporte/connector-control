@@ -13,16 +13,20 @@ namespace ConnectorControl.Core.State;
 public sealed class CollectionsModel : ObservableObject, IDisposable
 {
     public const string WindowTitle = "Collections";
-    public const string ImportButton = "Import…";
-    public const string SubscribeButton = "Subscribe…";
-    public const string PublishButton = "Publish…";
+    public const string ImportButton = "Import";
+    public const string SubscribeButton = "Subscribe";
+    public const string PublishButton = "Start Publishing";
+    /// <summary>The same sheet, reached from a collection that already publishes.</summary>
+    public const string PublishSettingsButton = "Publishing Settings";
     public const string RefreshButton = "Refresh";
-    public const string MakeLocalCopyButton = "Make Local Copy…";
-    public const string NewButton = "New…";
-    public const string RenameAction = "Rename…";
-    public const string DeleteAction = "Delete…";
+    public const string MakeLocalCopyButton = "Make Local Copy";
+    public const string NewButton = "New Collection";
+    public const string RenameAction = "Rename";
+    public const string DeleteAction = "Delete";
     public const string StopPublishingAction = "Stop Publishing";
-    public const string StopSyncingAction = "Stop Syncing (keeps a local copy)";
+    public const string StopSyncingAction = "Stop Syncing";
+    public const string StopSyncingInformative = "The connectors stay as a local collection you can edit.";
+    public static string StopSyncingMessage(string collection) => $"Stop Syncing “{collection}”?";
     public const string ActiveSuffix = " · active";
     public const string UnlocatedDetail = "synced · file not located on this machine";
     /// <summary>
@@ -45,7 +49,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>The lock at the head of a synced collection's row.</summary>
     public const string LockedGlyphTooltip = "Read-only: synced from the collection's author";
 
-    public static string ExportButton(int count) => $"Export {count}…";
+    public static string ExportButton(int count) => $"Export {count}";
 
     // MARK: selection bar
 
@@ -61,15 +65,15 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// Names the connector when there is exactly one ticked, and states the count otherwise: a
-    /// removal of one row deserves the same specificity <c>EditorModel.RemoveMessage</c> gives
-    /// it, and a removal of several would only get longer for naming them all.
+    /// removal of one row deserves the same specificity the editor's own Remove used to give it,
+    /// and a removal of several would only get longer for naming them all.
     /// </summary>
     public static string RemoveCheckedMessage(IReadOnlyList<string> names) =>
         names.Count == 1 ? $"Remove “{names[0]}”?" : $"Remove {names.Count} connectors?";
 
     /// <summary>
-    /// Lifted from <c>EditorModel.RemoveInformative</c>, which Task 4 retires: the sentence — the
-    /// most useful thing in that confirmation — survives here unchanged.
+    /// Lifted from the editor's Remove confirmation, which the list now replaces: the sentence —
+    /// the most useful thing in that confirmation — survives here unchanged.
     /// </summary>
     public const string RemoveCheckedInformative = "A copy remains in Backups.";
 
@@ -684,10 +688,15 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// Stop Syncing keeps every connector, every filled value and every switch, so there is
-    /// nothing to warn about and nothing to confirm.
+    /// nothing to warn about. It still asks, because the question is where the reassurance that
+    /// nothing is lost is said; the button no longer carries it.
     /// </summary>
     public void StopSyncing()
     {
+        if (!dialogs.Confirm(StopSyncingMessage(SelectedCollection), StopSyncingInformative, StopSyncingAction, destructive: false))
+        {
+            return;
+        }
         state.StopSyncing(SelectedCollection);
         LastError = null;
     }

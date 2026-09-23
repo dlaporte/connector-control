@@ -235,27 +235,6 @@ final class EditorModelSaveTests: XCTestCase {
         XCTAssertEqual(state.store.mcps["scoutbook"]?.enabled, true)   // a re-added entry takes the editor's snapshot enabled state
     }
 
-    func testRemoveConfirmsThenRemovesAndAppliesInOneTurn() throws {
-        let rig = EditorRig()
-        defer { rig.dispose() }
-        let state = rig.state
-        let editor = rig.editor(.existing(name: "scoutbook", entry: try XCTUnwrap(state.store.mcps["scoutbook"])))
-        XCTAssertFalse(editor.removeConfirmationPending)
-        editor.requestRemove()
-        XCTAssertTrue(editor.removeConfirmationPending)
-        XCTAssertEqual(editor.removeConfirmationMessage, "Remove “scoutbook”? A copy remains in Backups.")
-        editor.cancelRemove()
-        XCTAssertFalse(editor.removeConfirmationPending)
-        XCTAssertNotNil(state.store.mcps["scoutbook"])
-
-        editor.requestRemove()
-        editor.confirmRemove()
-        XCTAssertFalse(editor.removeConfirmationPending)
-        XCTAssertNil(state.store.mcps["scoutbook"])
-        XCTAssertNil(try rig.h.claudeServers()["scoutbook"])
-        XCTAssertTrue(rig.h.dialogs.confirms.isEmpty)   // a sheet, not an NSAlert
-    }
-
     func testAdditionalKeysAreMergedOnARemoteSave() throws {
         let rig = EditorRig()
         defer { rig.dispose() }

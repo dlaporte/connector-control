@@ -11,16 +11,20 @@ import ConnectorControlCore
 @MainActor
 public final class CollectionsModel: ObservableObject {
     public static let windowTitle = "Collections"
-    public static let importButton = "Import…"
-    public static let subscribeButton = "Subscribe…"
-    public static let publishButton = "Publish…"
+    public static let importButton = "Import"
+    public static let subscribeButton = "Subscribe"
+    public static let publishButton = "Start Publishing"
+    /// The same sheet, reached from a collection that already publishes.
+    public static let publishSettingsButton = "Publishing Settings"
     public static let refreshButton = "Refresh"
-    public static let makeLocalCopyButton = "Make Local Copy…"
-    public static let newButton = "New…"
-    public static let renameAction = "Rename…"
-    public static let deleteAction = "Delete…"
+    public static let makeLocalCopyButton = "Make Local Copy"
+    public static let newButton = "New Collection"
+    public static let renameAction = "Rename"
+    public static let deleteAction = "Delete"
     public static let stopPublishingAction = "Stop Publishing"
-    public static let stopSyncingAction = "Stop Syncing (keeps a local copy)"
+    public static let stopSyncingAction = "Stop Syncing"
+    public static let stopSyncingInformative = "The connectors stay as a local collection you can edit."
+    public static func stopSyncingMessage(_ collection: String) -> String { "Stop Syncing “\(collection)”?" }
     public static let activeSuffix = " · active"
     public static let unlocatedDetail = "synced · file not located on this machine"
     /// The source's status in the detail line. The cache records no timestamp, so this says what
@@ -42,7 +46,7 @@ public final class CollectionsModel: ObservableObject {
     /// actor, the same reason `AppState.chooseClaude` is spelled that way.
     nonisolated public static let lockedGlyphTooltip = "Read-only: synced from the collection's author"
 
-    public static func exportButton(_ count: Int) -> String { "Export \(count)…" }
+    public static func exportButton(_ count: Int) -> String { "Export \(count)" }
 
     // MARK: - Selection bar
 
@@ -55,14 +59,14 @@ public final class CollectionsModel: ObservableObject {
     public static func selectedCount(_ n: Int) -> String { "\(n) selected" }
 
     /// Names the connector when there is exactly one ticked, and states the count otherwise: a
-    /// removal of one row deserves the same specificity `EditorModel.removeMessage` gives it,
+    /// removal of one row deserves the same specificity the editor's own Remove used to give it,
     /// and a removal of several would only get longer for naming them all.
     public static func removeCheckedMessage(_ names: [String]) -> String {
         names.count == 1 ? "Remove “\(names[0])”?" : "Remove \(names.count) connectors?"
     }
 
-    /// Lifted from `EditorModel.removeInformative`, which Task 4 retires: the sentence — the
-    /// most useful thing in that confirmation — survives here unchanged.
+    /// Lifted from the editor's Remove confirmation, which the list now replaces: the sentence —
+    /// the most useful thing in that confirmation — survives here unchanged.
     public static let removeCheckedInformative = "A copy remains in Backups."
 
     /// The sidebar's chain glyph, or nil when there is no chain to explain: a local collection
@@ -526,8 +530,12 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// Stop Syncing keeps every connector, every filled value and every switch, so there is
-    /// nothing to warn about and nothing to confirm.
+    /// nothing to warn about. It still asks, because the question is where the reassurance that
+    /// nothing is lost is said; the button no longer carries it.
     public func stopSyncing() {
+        guard dialogs.confirm(message: CollectionsModel.stopSyncingMessage(selectedCollection),
+                              informative: CollectionsModel.stopSyncingInformative,
+                              primary: CollectionsModel.stopSyncingAction, destructive: false) else { return }
         state.stopSyncing(selectedCollection)
         lastError = nil
     }

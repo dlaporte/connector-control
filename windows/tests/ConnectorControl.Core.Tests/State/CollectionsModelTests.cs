@@ -275,6 +275,36 @@ public class CollectionsModelTests
     }
 
     [Fact]
+    public void StopSyncingConfirmsAndADeclineLeavesTheCollectionSynced()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        state.SwitchCollection("Default");
+        Seed(h, state, File_(("Team", Synced("team.json"))), Cache([new("Team", Bound("/shared/team.json"))]));
+        Assert.True(state.IsSynced("Team"));
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Team";
+
+        // Declined: the collection is still synced. The reassurance lives in the question now
+        // that the button no longer carries it.
+        h.Dialogs.NextConfirm = false;
+        model.StopSyncing();
+        var asked = h.Dialogs.Confirms[^1];
+        Assert.Equal(CollectionsModel.StopSyncingMessage("Team"), asked.Message);
+        Assert.Equal(CollectionsModel.StopSyncingInformative, asked.Informative);
+        Assert.Equal(CollectionsModel.StopSyncingAction, asked.Primary);
+        Assert.False(asked.Destructive);   // nothing is lost: every connector stays
+        Assert.True(state.IsSynced("Team"));
+
+        h.Dialogs.NextConfirm = true;
+        model.StopSyncing();
+        Assert.False(state.IsSynced("Team"));
+        Assert.Equal(["Default", "Team"], state.CollectionNames);   // the collection stays, now local
+        Assert.Equal(2, h.Dialogs.Confirms.Count);
+    }
+
+    [Fact]
     public void DeletingAPublishedCollectionAsksAboutTheFile()
     {
         using var h = new AppStateHarness(seedClaudeConfig: false);
@@ -721,7 +751,7 @@ public class CollectionsModelTests
         var moved = AppState.PathMarkMovedError("ledger");
         state.PublishError = new CollectionPublishError("Shared", moved, PublishErrorKind.BlockedForReview);
         Assert.Equal(moved, model.BannerText);
-        Assert.Equal(CollectionsModel.PublishButton, model.BannerButton);
+        Assert.Equal(CollectionsModel.PublishSettingsButton, model.BannerButton);   // a blocked publish is always on a collection that already publishes
         // False: true would put the Review dialog up. The view shows Publish for this kind.
         Assert.False(model.BannerAction());
         // A folder is no answer to this.

@@ -15,10 +15,10 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public const string RetryTitle = "Apply Failed — Retry";
     public const string RestartTitle = "Restart Required";
     public const string AddDisabledTooltip = "Additions go in a local collection.";
-    public const string ReviewAndApplyButton = "Review & Apply…";
-    public const string ChooseFolderButton = "Choose Folder…";
-    public const string ImportTitle = "Import…";
-    public const string ManageTitle = "Manage Collections…";
+    public const string ReviewAndApplyButton = "Review & Apply";
+    public const string ChooseFolderButton = "Choose Folder";
+    public const string ImportTitle = "Import";
+    public const string ManageTitle = "Manage Collections";
     /// <summary>Segoe Fluent Icons: Warning (exclamationmark.arrow.circlepath's nearest) and Refresh (arrow.clockwise).</summary>
     public const string RetryGlyph = "\ue7ba";
     public const string RestartGlyph = "\ue72c";
@@ -50,10 +50,10 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public static string SettingsNotSavedCaution(string detail) => $"Settings could not be saved ({detail}); changes apply until the app quits.";
 
-    public static string LocateButton(string fileName) => $"Locate {fileName}…";
+    public static string LocateButton(string fileName) => $"Locate {fileName}";
 
     /// <summary>A static and an instance member cannot share one name here; the Mac carries this same name rather than shadowing, so the pair reads the same in both files.</summary>
-    public static string ExportTitleFor(string active) => $"Export “{active}”…";
+    public static string ExportTitleFor(string active) => $"Export “{active}”";
 
     /// <summary>
     /// One row of the collections menu, as the Mac draws it: the chain is the row's single image

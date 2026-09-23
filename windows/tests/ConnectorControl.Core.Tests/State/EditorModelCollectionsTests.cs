@@ -37,8 +37,6 @@ public class EditorModelCollectionsTests
         Assert.True(dbt.IsReadOnly);
         Assert.Equal(new EditorModel.HeaderState.Synced("Data team"), dbt.Header);
         Assert.Equal("Synced from Data team · read-only", dbt.HeaderNote);
-        // Make Local Copy… takes Remove's slot.
-        Assert.False(dbt.CanRemove);
         // The placeholder fields are editable, so Save stays enabled.
         Assert.True(dbt.CanSave);
         // The paste tip offers something a read-only JSON view cannot do.
@@ -81,7 +79,6 @@ public class EditorModelCollectionsTests
         Assert.False(editor.IsReadOnly);
         Assert.Equal(new EditorModel.HeaderState.None(), editor.Header);
         Assert.Null(editor.HeaderNote);
-        Assert.True(editor.CanRemove);
         Assert.True(editor.ShowJsonTip);
         Assert.False(editor.BearerTokenIsPlaceholder);
         Assert.Empty(editor.ArgsWithPlaceholders);
@@ -252,29 +249,6 @@ public class EditorModelCollectionsTests
         Assert.Equal($"Published to {folder} — saving updates the file your team reads. Secrets stay here.",
                      published.HeaderNote);
         Assert.False(published.IsReadOnly);
-        Assert.True(published.CanRemove);
-    }
-
-    // MARK: Make Local Copy
-
-    [Fact]
-    public void MakeLocalCopyFromTheEditor()
-    {
-        using var rig = new EditorRig();
-        SubscribeToDataTeam(rig);
-        var state = rig.State;
-
-        using var editor = rig.Editor("notion", "Data team");
-        Assert.Equal("Make Local Copy…", EditorModel.MakeLocalCopyButton);
-        Assert.Null(editor.MakeLocalCopy("Default"));
-        // The copy carries its unfilled marker, exactly as it stands.
-        Assert.Equal(state.Store.Collections["Data team"].Mcps["notion"].Config,
-                     state.Store.Collections["Default"].Mcps["notion"].Config);
-        Assert.False(state.Store.Collections["Default"].Mcps["notion"].Enabled);
-        Assert.Equal("Data team", state.CollectionsFile.Collections["Default"].Provenance["notion"].From);
-
-        // A synced collection is nobody's copy target.
-        Assert.Equal(AppState.TargetMustBeLocalError, editor.MakeLocalCopy("Data team"));
     }
 
     // MARK: propagate
@@ -688,7 +662,6 @@ public class EditorModelCollectionsTests
         Assert.Contains(nameof(EditorModel.Header), raised);
         Assert.Contains(nameof(EditorModel.HeaderNote), raised);
         Assert.Contains(nameof(EditorModel.HasHeaderNote), raised);
-        Assert.Contains(nameof(EditorModel.CanRemove), raised);
         Assert.Contains(nameof(EditorModel.ShowJsonTip), raised);
         Assert.Contains(nameof(EditorModel.HasPublishedHints), raised);
     }

@@ -14,10 +14,10 @@ public final class PopoverModel: ObservableObject {
     public static let retryTitle = "Apply Failed — Retry"
     public static let restartTitle = "Restart Required"
     public static let addDisabledTooltip = "Additions go in a local collection."
-    public static let reviewAndApplyButton = "Review & Apply…"
-    public static let chooseFolderButton = "Choose Folder…"
-    public static let importTitle = "Import…"
-    public static let manageTitle = "Manage Collections…"
+    public static let reviewAndApplyButton = "Review & Apply"
+    public static let chooseFolderButton = "Choose Folder"
+    public static let importTitle = "Import"
+    public static let manageTitle = "Manage Collections"
     /// SF Symbols: the retry footer, the restart footer, and the row caution glyph.
     public static let retryGlyph = "exclamationmark.arrow.circlepath"
     public static let restartGlyph = "arrow.clockwise"
@@ -51,9 +51,9 @@ public final class PopoverModel: ObservableObject {
     /// Carries the C#-forced name on this side too, so the pair reads the same in both files: a
     /// static and an instance member cannot share one name there, and one spelling of the
     /// factory is easier to follow than two.
-    public static func exportTitleFor(_ active: String) -> String { "Export “\(active)”…" }
+    public static func exportTitleFor(_ active: String) -> String { "Export “\(active)”" }
 
-    public static func locateButton(_ fileName: String) -> String { "Locate \(fileName)…" }
+    public static func locateButton(_ fileName: String) -> String { "Locate \(fileName)" }
 
     /// The chain glyph's tooltip. Named with the `Format` suffix because the Windows mirror
     /// cannot carry a static and an instance member under one name.

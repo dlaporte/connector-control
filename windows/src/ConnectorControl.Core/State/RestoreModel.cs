@@ -8,7 +8,7 @@ public sealed class RestoreModel : ObservableObject
     public const string Headline = "Restore Claude config from a backup";
     public const string Caption = "The current file is backed up first, then replaced by the selected backup.";
     public const string CancelTitle = "Cancel";
-    public const string RestoreTitle = "Restore…";
+    public const string RestoreTitle = "Restore";
     public const string RestoreButton = "Restore";
     private const string Series = "claude_desktop_config";
 

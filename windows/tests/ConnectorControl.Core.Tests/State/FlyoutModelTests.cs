@@ -129,18 +129,18 @@ public class FlyoutModelTests
         Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
         Assert.True(flyout.HasCollectionBanner);
         Assert.Equal("Team's file isn’t on this PC yet.", flyout.CollectionBannerText);
-        Assert.Equal("Locate team.json…", flyout.CollectionBannerButton);
+        Assert.Equal("Locate team.json", flyout.CollectionBannerButton);
 
         state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
         {
             ["Team"] = new CollectionDiff(["jira"], ["confluence"], []),
         };
         Assert.Equal("Team changed at its source: adds jira; removes confluence.", flyout.CollectionBannerText);
-        Assert.Equal("Review & Apply…", flyout.CollectionBannerButton);
+        Assert.Equal("Review & Apply", flyout.CollectionBannerButton);
 
         state.PublishError = new CollectionPublishError("Default", "the folder is read-only");
         Assert.Equal($"Couldn’t publish Default to {folder}: the folder is read-only", flyout.CollectionBannerText);
-        Assert.Equal("Choose Folder…", flyout.CollectionBannerButton);
+        Assert.Equal("Choose Folder", flyout.CollectionBannerButton);
 
         state.PublishError = null;
         state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal);
@@ -326,13 +326,13 @@ public class FlyoutModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
-        Assert.Equal("Import…", FlyoutModel.ImportTitle);
-        Assert.Equal("Manage Collections…", FlyoutModel.ManageTitle);
-        Assert.Equal("Export “Default”…", flyout.ExportTitle);
+        Assert.Equal("Import", FlyoutModel.ImportTitle);
+        Assert.Equal("Manage Collections", FlyoutModel.ManageTitle);
+        Assert.Equal("Export “Default”", flyout.ExportTitle);
         Assert.Equal(FlyoutModel.AddTooltip, flyout.AddTooltipText);
 
         Assert.Null(state.CreateCollection("Work"));
-        Assert.Equal("Export “Work”…", flyout.ExportTitle);
+        Assert.Equal("Export “Work”", flyout.ExportTitle);
     }
 
     [Fact]
@@ -660,7 +660,7 @@ public class FlyoutModelTests
         state.PublishError = new CollectionPublishError("Default", moved, PublishErrorKind.BlockedForReview);
         Assert.Equal(new CollectionBanner.PublishBlocked("Default", moved), flyout.CollectionBanner);
         Assert.Equal(moved, flyout.CollectionBannerText);
-        Assert.Equal(CollectionsModel.PublishButton, flyout.CollectionBannerButton);
+        Assert.Equal(CollectionsModel.PublishSettingsButton, flyout.CollectionBannerButton);
         Assert.Null(flyout.CollectionBannerSecondaryButton);
 
         // The button asks the Collections window for the Publish dialog, and true tells the view to

@@ -9,7 +9,7 @@ public final class RestoreModel: ObservableObject {
     public static let headline = "Restore Claude config from a backup"
     public static let caption = "The current file is backed up first, then replaced by the selected backup."
     public static let cancelTitle = "Cancel"
-    public static let restoreTitle = "Restore…"
+    public static let restoreTitle = "Restore"
     public static let restoreButton = "Restore"
     public static let series = "claude_desktop_config"
 

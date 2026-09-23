@@ -29,8 +29,6 @@ public final class EditorModel: ObservableObject {
     public static let switchAnywayButton = "Switch Anyway"
     public static let stayInJSONButton = "Stay in JSON"
     public static let saveAnywayButton = "Save Anyway"
-    public static let removeButton = "Remove"
-    public static let removeInformative = "A copy remains in Backups."
     public static let addArgumentTitle = "＋ Add argument"
     public static let addVariableTitle = "＋ Add variable"
     public static let changedOutsideDetail = "Saving will overwrite that change with this editor's version."
@@ -39,7 +37,6 @@ public final class EditorModel: ObservableObject {
     public static let whatCanIChangeAnswer = "Fill in the highlighted values and switch it on or off. Everything else follows the source; make a local copy to change it."
     public static let needsValue = "needs your value"
     public static let needsPath = "needs your path"
-    public static let makeLocalCopyButton = "Make Local Copy…"
 
     public static func lockedFieldsNote(_ collection: String) -> String { "Synced from \(collection) · read-only" }
 
@@ -56,8 +53,6 @@ public final class EditorModel: ObservableObject {
     }
 
     public static func duplicateEnvError(_ name: String) -> String { "Duplicate environment variable name: \(name)" }
-
-    public static func removeMessage(_ name: String) -> String { "Remove “\(name)”? \(removeInformative)" }
 
     public static func changedOutsideMessage(_ name: String) -> String { "“\(name)” changed outside this editor." }
 
@@ -181,8 +176,6 @@ public final class EditorModel: ObservableObject {
     @Published public private(set) var validationError: String?
     /// Non-nil while the loss-warning sheet is up.
     @Published public private(set) var lossWarning: [String]?
-    /// True while the remove confirmation sheet is up.
-    @Published public private(set) var removeConfirmationPending = false
     /// The launcher this connector needs; nil for none, a path, or unparseable JSON.
     @Published public private(set) var requiredTool: Tool?
 
@@ -261,18 +254,12 @@ public final class EditorModel: ObservableObject {
         EditorModel.lossWarningPrefix + (lossWarning ?? []).joined(separator: "\n")
     }
 
-    public var removeConfirmationMessage: String { EditorModel.removeMessage(target.name) }
-
     /// Save is disabled with a JSON error, or in the remote form without a valid URL. A
     /// read-only window saves only the placeholders, none of which can put it in either state,
     /// so its Save stays enabled.
     public var canSave: Bool {
         isReadOnly || !((view == .json && jsonError != nil) || (view == .form && isRemote && !remoteURLValid))
     }
-
-    /// Remove leaves the footer's left slot to Make Local Copy… when the connector is not this
-    /// machine's to delete.
-    public var canRemove: Bool { !target.isNew && !isReadOnly }
 
     // MARK: - Collection
 
@@ -323,12 +310,6 @@ public final class EditorModel: ObservableObject {
 
     public var propagateMessage: String {
         EditorModel.propagateLabel(propagateTargets.joined(separator: ", "), target.name)
-    }
-
-    /// The footer's Make Local Copy…, which takes Remove's slot for a synced connector. nil on
-    /// success, else the message; the view closes the window on success.
-    public func makeLocalCopy(into collection: String) -> String? {
-        state.makeLocalCopy(of: [target.name], from: collectionName, into: collection)
     }
 
     private static func twins(of target: EditTarget, in state: AppState) -> [String] {
@@ -938,19 +919,6 @@ public final class EditorModel: ObservableObject {
                 PublishIntent.PathMark(name: mark.name, hint: mark.hint, value: row.value)
         }
         return followed
-    }
-
-    /// The Remove button: opens the confirmation sheet.
-    public func requestRemove() { removeConfirmationPending = true }
-
-    public func cancelRemove() { removeConfirmationPending = false }
-
-    /// The sheet's Remove button: remove and apply in the same turn — a
-    /// watcher-driven reload between the two once resurrected the connector.
-    public func confirmRemove() {
-        removeConfirmationPending = false
-        state.remove(name: target.name, in: target.collection)
-        state.applyInteractively()
     }
 
     /// Stops listening to AppState. The app does not call this: the

@@ -21,7 +21,6 @@ final class EditorModelOpeningTests: XCTestCase {
         XCTAssertEqual(editor.remoteURL, "")
         XCTAssertFalse(editor.showURLHint)   // hint only once something invalid is typed
         XCTAssertFalse(editor.canSave)
-        XCTAssertFalse(editor.canRemove)
         XCTAssertEqual(editor.authKind, .automatic)
     }
 
@@ -34,7 +33,6 @@ final class EditorModelOpeningTests: XCTestCase {
         XCTAssertTrue(editor.isRemote)
         XCTAssertEqual(editor.remoteURL, url)
         XCTAssertTrue(editor.canSave)
-        XCTAssertTrue(editor.canRemove)
     }
 
     func testExistingRemoteWithAuthFlagsOpensInTheLocalForm() throws {

@@ -239,26 +239,6 @@ public class EditorModelSaveTests
     }
 
     [Fact]
-    public void RemoveConfirmsThenRemovesAndAppliesInOneTurn()
-    {
-        using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.Existing("scoutbook", rig.State.Store.Mcps["scoutbook"]));
-        var closed = 0;
-        editor.CloseRequested += () => closed++;
-        rig.H.Dialogs.NextConfirm = false;
-        editor.Remove();
-        Assert.Equal(new FakeDialogs.ConfirmCall("Remove “scoutbook”? A copy remains in Backups.", null, "Remove", "Cancel", true), rig.H.Dialogs.Confirms[0]);
-        Assert.True(rig.State.Store.Mcps.ContainsKey("scoutbook"));
-        Assert.Equal(0, closed);
-
-        rig.H.Dialogs.NextConfirm = true;
-        editor.Remove();
-        Assert.False(rig.State.Store.Mcps.ContainsKey("scoutbook"));
-        Assert.False(rig.H.ClaudeServers().ContainsKey("scoutbook"));
-        Assert.Equal(1, closed);
-    }
-
-    [Fact]
     public void AdditionalKeysAreMergedOnARemoteSave()
     {
         using var rig = new EditorRig();

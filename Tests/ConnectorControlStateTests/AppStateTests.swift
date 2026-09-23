@@ -206,7 +206,7 @@ final class AppStateTests: XCTestCase {
         try Data("{oops".utf8).write(to: h.claudeConfigURL)
         state.reload()
         XCTAssertEqual(state.lastError,
-                       "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore… to repair the file.")
+                       "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.")
         XCTAssertEqual(state.sortedNames, fixture)
         XCTAssertTrue(h.notifier.sent.isEmpty)
         XCTAssertFalse(state.applyRetryNeeded)
@@ -215,7 +215,7 @@ final class AppStateTests: XCTestCase {
         XCTAssertTrue(state.applyRetryNeeded)
         let message = try XCTUnwrap(state.lastError)
         XCTAssertTrue(message.hasPrefix("Claude's config file is not valid JSON ("), message)
-        XCTAssertTrue(message.hasSuffix("). Nothing was written. Use Backups ▸ Restore… to recover it."), message)
+        XCTAssertTrue(message.hasSuffix("). Nothing was written. Use Backups ▸ Restore to recover it."), message)
         XCTAssertEqual(try h.storeOnDisk().mcps["aws-mcp"]?.enabled, false)   // the store change persisted even though the apply failed
         XCTAssertEqual(try String(contentsOf: h.claudeConfigURL, encoding: .utf8), "{oops")
 
@@ -270,7 +270,7 @@ final class AppStateTests: XCTestCase {
         // Both sentences, in reconcile order; the second is the one that says what to do.
         let message = try XCTUnwrap(state.lastError)
         XCTAssertTrue(message.hasPrefix("The MCP list file was unreadable; it was preserved as mcps.corrupt."), message)
-        XCTAssertTrue(message.hasSuffix(" Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore… to repair the file."), message)
+        XCTAssertTrue(message.hasSuffix(" Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file."), message)
     }
 
     func testReloadOverwritesLastError() {
@@ -284,7 +284,7 @@ final class AppStateTests: XCTestCase {
     func testFriendlyMapsMalformedConfigAndPassesOtherMessagesThrough() {
         XCTAssertEqual(
             AppState.friendly(ClaudeConfigError.malformed("top level is not a JSON object")),
-            "Claude's config file is not valid JSON (top level is not a JSON object). Nothing was written. Use Backups ▸ Restore… to recover it.")
+            "Claude's config file is not valid JSON (top level is not a JSON object). Nothing was written. Use Backups ▸ Restore to recover it.")
         XCTAssertEqual(
             AppState.friendly(NSError(domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "disk full"])),
             "disk full")

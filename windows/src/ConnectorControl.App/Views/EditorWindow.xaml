@@ -130,10 +130,6 @@
           <TextBlock Text="{Binding PropagateMessage}" TextWrapping="Wrap" />
         </CheckBox>
         <Grid>
-          <Button Content="{x:Static state:EditorModel.RemoveButton}" HorizontalAlignment="Left" Style="{StaticResource DestructiveButton}" Visibility="{Binding CanRemove, Converter={StaticResource Vis}}" Click="OnRemove" />
-          <!-- Remove's slot, for a connector that is not this machine's to delete. -->
-          <Button x:Name="MakeLocalCopyButton" Content="{x:Static state:EditorModel.MakeLocalCopyButton}" HorizontalAlignment="Left"
-                  Visibility="{Binding IsReadOnly, Converter={StaticResource Vis}}" Click="OnMakeLocalCopy" />
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Content="Cancel" MinWidth="80" Click="OnCancel" />
             <Button Content="Save" MinWidth="80" Margin="8,0,0,0" IsDefault="True" IsEnabled="{Binding CanSave}" Style="{DynamicResource AccentButtonStyle}" Click="OnSave" />

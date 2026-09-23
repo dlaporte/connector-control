@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
@@ -126,7 +125,6 @@ public class EditorWindowTests
             Assert.Equal(Visibility.Collapsed, window.TypePicker.Visibility);
             Assert.Equal(Visibility.Visible, window.RemoteSection.Visibility);
             Assert.True(window.Model.CanSave);
-            Assert.True(window.Model.CanRemove);
         }));
     }
 
@@ -266,9 +264,7 @@ public class EditorWindowTests
                 Assert.False(window.CommandBox.IsEnabled);
                 Assert.False(window.AddArgButton.IsEnabled);
                 Assert.False(window.AddEnvButton.IsEnabled);
-                // Make Local Copy… takes Remove's slot, and Save stays live for the placeholder.
-                Assert.False(window.Model.CanRemove);
-                Assert.Equal(Visibility.Visible, window.MakeLocalCopyButton.Visibility);
+                // Save stays live for the placeholder.
                 Assert.True(window.Model.CanSave);
 
                 var token = window.Model.EnvRows.Single(r => r.Name == "DBT_TOKEN");
@@ -489,63 +485,6 @@ public class EditorWindowTests
                 twinned.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
                 Assert.True(twinned.Model.Propagate);
             });
-        });
-    }
-
-    /// <summary>
-    /// Make Local Copy… hands one local collection to the model and closes: what the user came
-    /// for now lives somewhere they can change it. The window has to be gone, not merely hidden —
-    /// one left in the application's list is the answer WpfDialogs.ResolveOwner() gives every
-    /// later test.
-    /// </summary>
-    [Fact]
-    public void MakeLocalCopyClosesAfterCopying()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        SubscribeToDataTeam(h, state);
-        WpfApp.Invoke(() =>
-        {
-            // Shown, so that closing is something this test can see happen, and — as everywhere
-            // here — shown without taking the activation, with nothing between the Show and the
-            // close that pumps the dispatcher. See Editing for why both matter.
-            var window = new EditorWindow(state, In(state, "Data team", "notion")) { ShowActivated = false };
-            var closed = false;
-            window.Closed += (_, _) => closed = true;
-            try
-            {
-                Layout(window);
-                Assert.Equal(Visibility.Visible, window.MakeLocalCopyButton.Visibility);
-
-                window.Show();
-                Assert.True(window.IsVisible);
-
-                // Through the button, so the menu construction and its "never the collection I am
-                // in" filter run rather than being taken on trust.
-                window.MakeLocalCopyButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-                var menu = window.MakeLocalCopyButton.ContextMenu;
-                Assert.NotNull(menu);
-                var targets = menu.Items.OfType<MenuItem>().ToList();
-                Assert.Equal(["Default"], targets.Select(i => (string)i.Header));
-                menu.IsOpen = false;   // leave no popup behind on the shared host
-
-                Assert.Single(targets).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-
-                Assert.True(closed);
-                Assert.False(window.IsVisible);
-                Assert.DoesNotContain(window, Application.Current!.Windows.OfType<Window>());
-                // The copy carries its unfilled marker, exactly as it stands.
-                Assert.Equal(state.Store.Collections["Data team"].Mcps["notion"].Config,
-                             state.Store.Collections["Default"].Mcps["notion"].Config);
-                Assert.Equal("Data team", state.CollectionsFile.Collections["Default"].Provenance["notion"].From);
-            }
-            finally
-            {
-                if (!closed)
-                {
-                    window.Close();
-                }
-            }
         });
     }
 }

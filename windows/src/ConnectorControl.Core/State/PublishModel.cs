@@ -17,10 +17,10 @@ public sealed class PublishModel : ObservableObject
     public const string HintPlaceholder = "hint for recipients";
     public const string PathNamePlaceholder = "placeholder name";
     public const string PublishButton = "Publish";
-    public const string ExportButton = "Export…";
+    public const string ExportButton = "Export";
     public const string CancelButton = "Cancel";
     /// <summary>This sheet's own folder picker, not the failed-publish banner's button of the same words: a sheet's buttons are its model's, as Settings' and the Import sheet's already are.</summary>
-    public const string ChooseFolderButton = "Choose Folder…";
+    public const string ChooseFolderButton = "Choose Folder";
     /// <summary>What a screen reader says for the bare tick beside a path row, which has no visible label.</summary>
     public const string MarkPathLabel = "Mark as a path this machine supplies";
     /// <summary>The button beside an unresolved mark's note: drop the mark and let the path travel as the preview shows it.</summary>
