@@ -226,10 +226,11 @@ struct CollectionsWindowView: View {
                         .accessibilityLabel(caution)
                 }
                 Spacer(minLength: 8)
-                Text(row.typeText)
+                Text(row.target)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .truncationMode(.middle)
                 Toggle("", isOn: enabledBinding(row))
                     .toggleStyle(.switch)
                     .controlSize(.small)

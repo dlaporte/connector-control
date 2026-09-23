@@ -123,7 +123,7 @@ public class CollectionsModelTests
         // Uppercase first: ordinal, the order the flyout lists the same connectors in.
         Assert.Equal(["Ledger", "github", "jira"], model.Rows.Select(r => r.Name));
         Assert.Equal(["Ledger", "github", "jira"], model.Rows.Select(r => r.Id));
-        Assert.Equal(["local · node", "remote", "local · npx"], model.Rows.Select(r => r.TypeText));
+        Assert.Equal(["node index.js", "github.example", "npx"], model.Rows.Select(r => r.Target));
         // Every row of a synced collection carries the lock.
         Assert.All(model.Rows, r => Assert.True(r.IsLocked));
         Assert.Equal([null, null, AppState.NeedsValueCaution("JIRA_TOKEN")], model.Rows.Select(r => r.Caution));
@@ -139,7 +139,7 @@ public class CollectionsModelTests
         // The same rows in a local collection do tick, and the ticks belong to that collection.
         model.Selected = "Default";
         Assert.Equal(["notes"], model.Rows.Select(r => r.Name));
-        Assert.Equal(["local · uvx"], model.Rows.Select(r => r.TypeText));
+        Assert.Equal(["uvx"], model.Rows.Select(r => r.Target));
         Assert.All(model.Rows, r => Assert.False(r.IsLocked));
         model.SetChecked("notes", true);
         Assert.Equal([true], model.Rows.Select(r => r.Checked));
@@ -162,6 +162,86 @@ public class CollectionsModelTests
         state.SwitchCollection("Team");
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal(flyout.Rows.Select(r => r.Name), model.Rows.Select(r => r.Name));
+    }
+
+    // MARK: target column
+
+    [Fact]
+    public void TargetShowsARemoteConnectorsHostOnly()
+    {
+        Assert.Equal("api.githubcopilot.com",
+            CollectionsModel.TargetOf(AppStateHarness.Remote("https://u:p@api.githubcopilot.com/mcp?k=v"), "/Users/x"));
+        Assert.Equal("localhost:8080", CollectionsModel.TargetOf(AppStateHarness.Remote("http://localhost:8080/mcp"), "/Users/x"));
+    }
+
+    [Fact]
+    public void TargetShortensAScopedPackageAndTheHomeFolder()
+    {
+        Assert.Equal("npx …/server-filesystem ~/Documents",
+            CollectionsModel.TargetOf(Local("npx", "-y", "@modelcontextprotocol/server-filesystem", "/Users/x/Documents").Config, "/Users/x"));
+    }
+
+    /// <summary>
+    /// A connector authored on Windows abbreviates its home folder the same way, whichever
+    /// separator follows it.
+    /// </summary>
+    [Fact]
+    public void TargetShortensAWindowsHomeFolder()
+    {
+        Assert.Equal(@"node ~\srv\index.js …/pkg@1.2",
+            CollectionsModel.TargetOf(Local("node", @"C:\Users\x\srv\index.js", "@scope/pkg@1.2").Config, @"C:\Users\x"));
+    }
+
+    [Fact]
+    public void TargetMasksTheValueAfterASecretNamedFlag()
+    {
+        Assert.Equal("tool --api-key •••• --port 80",
+            CollectionsModel.TargetOf(Local("/usr/local/bin/tool", "--api-key", "abc", "--port", "80").Config, "/Users/x"));
+    }
+
+    [Fact]
+    public void TargetMasksASecretNamedFlagWithAnEqualsValue()
+    {
+        Assert.Equal("tool --token=•••• --mode=fast",
+            CollectionsModel.TargetOf(Local("tool", "--token=abc", "--mode=fast").Config, "/Users/x"));
+    }
+
+    [Fact]
+    public void TargetMasksAnythingThatLooksLikeACredential()
+    {
+        Assert.Equal("tool •••• •••• --x=••••",
+            CollectionsModel.TargetOf(Local("tool", "ghp_abcdef", "sk-xyz", "--x=Bearer abc").Config, "/Users/x"));
+    }
+
+    [Fact]
+    public void TargetStripsUserinfoAndQueryFromAUrlArgument()
+    {
+        Assert.Equal("tool https://h.example/x",
+            CollectionsModel.TargetOf(Local("tool", "https://me:pw@h.example/x?token=t").Config, "/Users/x"));
+    }
+
+    /// <summary>
+    /// End to end through the rows: a connector carrying secrets three ways shows none of them.
+    /// (The harness's seeded fixture holds no secrets, so this plants its own.)
+    /// </summary>
+    [Fact]
+    public void NoRowTargetCarriesASecret()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        string[] secrets = ["ghp_0123456789abcdef0123456789abcdef", "s3cr3t-pass", "tok123"];
+        var entry = new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("/opt/bin/tool")),
+            ("args", JsonValue.Array(new[] { "--password", secrets[1], $"--token={secrets[2]}", secrets[0] }.Select(JsonValue.String))),
+            ("env", JsonValue.Object(("API_KEY", JsonValue.String("envsecret"))))));
+        Assert.Null(state.Upsert("leaky", entry, null, "Default"));
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Default";
+        var target = Assert.Single(model.Rows, r => r.Name == "leaky").Target;
+        foreach (var secret in secrets.Append("envsecret"))
+        {
+            Assert.DoesNotContain(secret, target);
+        }
     }
 
     // MARK: toolbar

@@ -260,8 +260,8 @@
                              TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="4,0,10,0" />
                   <TextBlock x:Name="RowCautionGlyph" Grid.Column="2" Style="{StaticResource RowCaution}"
                              ToolTip="{Binding Caution}" AutomationProperties.Name="{Binding Caution}" />
-                  <TextBlock x:Name="RowTypeText" Grid.Column="3" Text="{Binding TypeText}"
-                             Style="{StaticResource CaptionText}" TextWrapping="NoWrap"
+                  <TextBlock x:Name="RowTypeText" Grid.Column="3" Text="{Binding Target}"
+                             Style="{StaticResource CaptionText}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                              VerticalAlignment="Center" Margin="0,0,10,0" />
                   <ToggleButton x:Name="RowSwitch" Grid.Column="4" Style="{StaticResource Switch}"
                                 AutomationProperties.Name="{Binding Name}"

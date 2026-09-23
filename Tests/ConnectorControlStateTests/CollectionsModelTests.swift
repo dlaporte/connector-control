@@ -111,7 +111,7 @@ final class CollectionsModelTests: XCTestCase {
         // Uppercase first: ordinal, the order the popover lists the same connectors in.
         XCTAssertEqual(model.rows.map(\.name), ["Ledger", "github", "jira"])
         XCTAssertEqual(model.rows.map(\.id), ["Ledger", "github", "jira"])
-        XCTAssertEqual(model.rows.map(\.typeText), ["local · node", "remote", "local · npx"])
+        XCTAssertEqual(model.rows.map(\.target), ["node index.js", "github.example", "npx"])
         XCTAssertTrue(model.rows.allSatisfy(\.isLocked), "every row of a synced collection carries the lock")
         XCTAssertEqual(model.rows.map(\.caution), [nil, nil, AppState.needsValueCaution("JIRA_TOKEN")])
         XCTAssertEqual(model.rows.map(\.enabled), [true, true, true])
@@ -126,7 +126,7 @@ final class CollectionsModelTests: XCTestCase {
         // The same rows in a local collection do tick, and the ticks belong to that collection.
         model.selected = "Default"
         XCTAssertEqual(model.rows.map(\.name), ["notes"])
-        XCTAssertEqual(model.rows.map(\.typeText), ["local · uvx"])
+        XCTAssertEqual(model.rows.map(\.target), ["uvx"])
         XCTAssertTrue(model.rows.allSatisfy { !$0.isLocked })
         model.setChecked("notes", true)
         XCTAssertEqual(model.rows.map(\.checked), [true])
@@ -150,6 +150,65 @@ final class CollectionsModelTests: XCTestCase {
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertEqual(model.rows.map(\.name), popover.rows.map(\.name))
+    }
+
+    // MARK: - Target column
+
+    func testTargetShowsARemoteConnectorsHostOnly() {
+        XCTAssertEqual(CollectionsModel.target(of: RemotePattern.make(url: "https://u:p@api.githubcopilot.com/mcp?k=v"), home: "/Users/x"),
+                       "api.githubcopilot.com")
+        XCTAssertEqual(CollectionsModel.target(of: RemotePattern.make(url: "http://localhost:8080/mcp"), home: "/Users/x"), "localhost:8080")
+    }
+
+    func testTargetShortensAScopedPackageAndTheHomeFolder() {
+        XCTAssertEqual(CollectionsModel.target(of: local("npx", ["-y", "@modelcontextprotocol/server-filesystem", "/Users/x/Documents"]).config, home: "/Users/x"),
+                       "npx …/server-filesystem ~/Documents")
+    }
+
+    /// A connector authored on Windows abbreviates its home folder the same way, whichever
+    /// separator follows it.
+    func testTargetShortensAWindowsHomeFolder() {
+        XCTAssertEqual(CollectionsModel.target(of: local("node", [#"C:\Users\x\srv\index.js"#, "@scope/pkg@1.2"]).config, home: #"C:\Users\x"#),
+                       #"node ~\srv\index.js …/pkg@1.2"#)
+    }
+
+    func testTargetMasksTheValueAfterASecretNamedFlag() {
+        XCTAssertEqual(CollectionsModel.target(of: local("/usr/local/bin/tool", ["--api-key", "abc", "--port", "80"]).config, home: "/Users/x"),
+                       "tool --api-key •••• --port 80")
+    }
+
+    func testTargetMasksASecretNamedFlagWithAnEqualsValue() {
+        XCTAssertEqual(CollectionsModel.target(of: local("tool", ["--token=abc", "--mode=fast"]).config, home: "/Users/x"),
+                       "tool --token=•••• --mode=fast")
+    }
+
+    func testTargetMasksAnythingThatLooksLikeACredential() {
+        XCTAssertEqual(CollectionsModel.target(of: local("tool", ["ghp_abcdef", "sk-xyz", "--x=Bearer abc"]).config, home: "/Users/x"),
+                       "tool •••• •••• --x=••••")
+    }
+
+    func testTargetStripsUserinfoAndQueryFromAURLArgument() {
+        XCTAssertEqual(CollectionsModel.target(of: local("tool", ["https://me:pw@h.example/x?token=t"]).config, home: "/Users/x"),
+                       "tool https://h.example/x")
+    }
+
+    /// End to end through the rows: a connector carrying secrets three ways shows none of them.
+    /// (The harness's seeded fixture holds no secrets, so this plants its own.)
+    func testNoRowTargetCarriesASecret() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let secrets = ["ghp_0123456789abcdef0123456789abcdef", "s3cr3t-pass", "tok123"]
+        let entry = MCPEntry(config: .object([
+            "command": .string("/opt/bin/tool"),
+            "args": .array(["--password", secrets[1], "--token=\(secrets[2])", secrets[0]].map(JSONValue.string)),
+            "env": .object(["API_KEY": .string("envsecret")]),
+        ]))
+        XCTAssertNil(state.upsert(name: "leaky", entry: entry, renamedFrom: nil, in: "Default"))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Default"
+        let target = try XCTUnwrap(model.rows.first { $0.name == "leaky" }).target
+        for secret in secrets + ["envsecret"] { XCTAssertFalse(target.contains(secret), secret) }
     }
 
     // MARK: - Toolbar

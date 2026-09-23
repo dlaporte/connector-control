@@ -143,12 +143,10 @@
   "CollectionsModel.localDetail": {
     "format": "local · {0} connectors"
   },
-  "CollectionsModel.localType": {
-    "format": "local · {0}"
-  },
   "CollectionsModel.lockedGlyphTooltip": "Read-only: synced from the collection's author",
   "CollectionsModel.makeActiveAction": "Make Active",
   "CollectionsModel.makeLocalCopyButton": "Make Local Copy",
+  "CollectionsModel.maskedValue": "••••",
   "CollectionsModel.newButton": "New Collection",
   "CollectionsModel.publishButton": "Start Publishing",
   "CollectionsModel.publishSettingsButton": "Publishing Settings",

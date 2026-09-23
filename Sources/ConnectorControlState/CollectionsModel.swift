@@ -36,6 +36,8 @@ public final class CollectionsModel: ObservableObject {
     public static let removeFileButton = "Remove"
     public static let keepFileButton = "Keep"
     public static let remoteType = "remote"
+    /// What the target column shows in place of a value it will not: see `target(of:home:)`.
+    public static let maskedValue = "••••"
     /// The row's pencil, which names no connector: the row it sits on is the answer. The
     /// popover's `ConnectorRow.editTooltip` spells the name out, because that menu has no rows.
     public static let editTooltip = "Edit"
@@ -79,8 +81,6 @@ public final class CollectionsModel: ObservableObject {
         guard let source = item.source else { return nil }
         return PopoverModel.sourceTooltipFormat(source)
     }
-
-    public static func localType(_ command: String) -> String { "local · \(command)" }
 
     public static func localDetail(_ count: Int) -> String { "local · \(count) connectors" }
 
@@ -146,16 +146,16 @@ public final class CollectionsModel: ObservableObject {
         public let caution: String?
         public let isLocked: Bool
         public var checked: Bool
-        public let typeText: String
+        public let target: String
 
-        public init(name: String, enabled: Bool, caution: String?, isLocked: Bool, checked: Bool, typeText: String) {
+        public init(name: String, enabled: Bool, caution: String?, isLocked: Bool, checked: Bool, target: String) {
             self.id = name
             self.name = name
             self.enabled = enabled
             self.caution = caution
             self.isLocked = isLocked
             self.checked = checked
-            self.typeText = typeText
+            self.target = target
         }
     }
 
@@ -280,15 +280,75 @@ public final class CollectionsModel: ObservableObject {
             return Row(name: name, enabled: entry?.enabled ?? false,
                        caution: state.connectorCaution(name, in: collection), isLocked: locked,
                        checked: checks.contains(name),
-                       typeText: CollectionsModel.typeText(of: entry?.config ?? .object([:])))
+                       target: CollectionsModel.target(of: entry?.config ?? .object([:])))
         }
     }
 
-    /// The type column: the bridge the remote form recognises, or the launcher this connector
-    /// runs, named the way it would be typed rather than by its full path.
-    private static func typeText(of config: JSONValue) -> String {
-        guard RemotePattern.detect(config) == nil else { return remoteType }
-        return localType(launcherName(FormMapper.analyze(config).model.command))
+    /// What a row says the connector runs, never a secret: a remote connector's host; a local
+    /// one's launcher and arguments, shortened and masked. Public and pure so both platforms test
+    /// the same inputs. `home` is the user's home folder, abbreviated to "~".
+    public static func target(of config: JSONValue, home: String = NSHomeDirectory()) -> String {
+        if let url = RemotePattern.detect(config) {
+            let host = authority(of: url)
+            return host.isEmpty ? remoteType : host
+        }
+        let model = FormMapper.analyze(config).model
+        var tokens = [launcherName(model.command)]
+        for (index, arg) in model.args.enumerated() {
+            if arg == "-y" || arg == "--yes" { continue }
+            let previous = index > 0 ? model.args[index - 1] : nil
+            tokens.append(shown(arg, after: previous, home: home))
+        }
+        return tokens.filter { !$0.isEmpty }.joined(separator: " ")
+    }
+
+    /// One argument as the target column shows it: the first of the masking rules that applies,
+    /// then the shortening ones, then the argument as written.
+    private static func shown(_ arg: String, after previous: String?, home: String) -> String {
+        if let previous, previous.hasPrefix("-"), !previous.contains("="), isSecretNamed(previous) {
+            return maskedValue
+        }
+        if arg.hasPrefix("-"), let equals = arg.firstIndex(of: "=") {
+            let name = String(arg[..<equals])
+            if isSecretNamed(name) || CredentialHeuristics.looksLikeCredential(String(arg[arg.index(after: equals)...])) {
+                return name + "=" + maskedValue
+            }
+        }
+        if CredentialHeuristics.looksLikeCredential(arg) { return maskedValue }
+        if let scheme = arg.range(of: "://") {
+            let rest = arg[scheme.upperBound...]
+            let authorityEnd = rest.firstIndex(where: { "/?#".contains($0) }) ?? rest.endIndex
+            let pathEnd = rest[authorityEnd...].firstIndex(where: { "?#".contains($0) }) ?? rest.endIndex
+            return String(arg[..<scheme.upperBound]) + authority(of: arg) + String(rest[authorityEnd..<pathEnd])
+        }
+        if arg.hasPrefix("@"), let slash = arg.firstIndex(of: "/"), slash > arg.index(after: arg.startIndex) {
+            let name = arg[arg.index(after: slash)...]
+            if !name.isEmpty, !name.contains("/") { return "…/" + name }
+        }
+        let root = home.hasSuffix("/") || home.hasSuffix("\\") ? String(home.dropLast()) : home
+        if !root.isEmpty, arg.hasPrefix(root) {
+            let remainder = arg.dropFirst(root.count)
+            if remainder.isEmpty || remainder.hasPrefix("/") || remainder.hasPrefix("\\") { return "~" + remainder }
+        }
+        return arg
+    }
+
+    /// A flag whose name says its value is a secret, whatever its dashes and case.
+    private static func isSecretNamed(_ flag: String) -> Bool {
+        let name = flag.lowercased()
+        return ["token", "key", "secret", "password", "passwd", "pwd", "auth", "credential", "bearer"]
+            .contains { name.contains($0) }
+    }
+
+    /// The host of the URL in `text`, and its port when one is written, without the userinfo
+    /// before it: taken from the text by hand rather than by a URL parser, because the two
+    /// platforms' parsers disagree about case, default ports and IPv6 brackets. Empty when there
+    /// is no host.
+    private static func authority(of text: String) -> String {
+        guard let scheme = text.range(of: "://") else { return "" }
+        let rest = text[scheme.upperBound...]
+        let authority = rest[..<(rest.firstIndex(where: { "/?#".contains($0) }) ?? rest.endIndex)]
+        return String(authority.lastIndex(of: "@").map { authority[authority.index(after: $0)...] } ?? authority)
     }
 
     /// The last component of a command, splitting on both separators rather than this platform's:

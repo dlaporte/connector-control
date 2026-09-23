@@ -88,7 +88,6 @@ final class StringCatalogTests: XCTestCase {
         "CollectionsModel.deletePublishedFileQuestion": ["X"],
         "CollectionsModel.exportButton": ["3"],
         "CollectionsModel.localDetail": ["3"],
-        "CollectionsModel.localType": ["X"],
         "CollectionsModel.publishedDetail": ["X"],
         "CollectionsModel.removeCheckedMessage.many": ["3"],
         "CollectionsModel.removeCheckedMessage.one": ["X"],
@@ -237,10 +236,10 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.importButton"] = CollectionsModel.importButton
         actual["CollectionsModel.keepFileButton"] = CollectionsModel.keepFileButton
         actual["CollectionsModel.localDetail"] = CollectionsModel.localDetail(3)
-        actual["CollectionsModel.localType"] = CollectionsModel.localType("X")
         actual["CollectionsModel.lockedGlyphTooltip"] = CollectionsModel.lockedGlyphTooltip
         actual["CollectionsModel.makeActiveAction"] = CollectionsModel.makeActiveAction
         actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.makeLocalCopyButton
+        actual["CollectionsModel.maskedValue"] = CollectionsModel.maskedValue
         actual["CollectionsModel.newButton"] = CollectionsModel.newButton
         actual["CollectionsModel.publishButton"] = CollectionsModel.publishButton
         actual["CollectionsModel.publishSettingsButton"] = CollectionsModel.publishSettingsButton

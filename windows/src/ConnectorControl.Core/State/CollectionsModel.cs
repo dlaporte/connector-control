@@ -42,6 +42,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public const string RemoveFileButton = "Remove";
     public const string KeepFileButton = "Keep";
     public const string RemoteType = "remote";
+    /// <summary>What the target column shows in place of a value it will not: see <see cref="TargetOf"/>.</summary>
+    public const string MaskedValue = "••••";
     /// <summary>The row's pencil, which names no connector: the row it sits on is the answer. The flyout's <c>ConnectorRow.EditTooltip</c> spells the name out, because that menu has no rows.</summary>
     public const string EditTooltip = "Edit";
     /// <summary>The sidebar's double-click, and the same action in its context menu.</summary>
@@ -88,8 +90,6 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public static string? SyncedGlyphTooltip(Item item) =>
         item.Source is { } source ? FlyoutModel.SourceTooltipFormat(source) : null;
 
-    public static string LocalType(string command) => $"local · {command}";
-
     public static string LocalDetail(int count) => $"local · {count} connectors";
 
     /// <summary><paramref name="source"/> is the document's path on this machine, never the sidecar's origin, which is a UUID.</summary>
@@ -132,7 +132,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// One connector of the selected collection. Checked is the window's own state — an export
     /// tick, not anything the store holds — so it is the one field the model fills in itself.
     /// </summary>
-    public sealed record Row(string Name, bool Enabled, string? Caution, bool IsLocked, bool Checked, string TypeText)
+    public sealed record Row(string Name, bool Enabled, string? Caution, bool IsLocked, bool Checked, string Target)
     {
         public string Id => Name;
     }
@@ -328,18 +328,116 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         return mcps.Keys
             .Order(StringComparer.Ordinal)
             .Select(name => new Row(name, mcps[name].Enabled, state.ConnectorCaution(name, collection),
-                locked, checks.Contains(name), TypeTextOf(mcps[name].Config)))
+                locked, checks.Contains(name), TargetOf(mcps[name].Config)))
             .ToList();
     }
 
     /// <summary>
-    /// The type column: the bridge the remote form recognises, or the launcher this connector
-    /// runs, named the way it would be typed rather than by its full path.
+    /// What a row says the connector runs, never a secret: a remote connector's host; a local
+    /// one's launcher and arguments, shortened and masked. Public and pure so both platforms test
+    /// the same inputs. <paramref name="home"/> is the user's home folder, abbreviated to "~".
     /// </summary>
-    private static string TypeTextOf(JsonValue config) =>
-        RemotePattern.Detect(config) is not null
-            ? RemoteType
-            : LocalType(LauncherName(FormMapper.Analyze(config).Model.Command));
+    public static string TargetOf(JsonValue config, string? home = null)
+    {
+        home ??= Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (RemotePattern.Detect(config) is { } url)
+        {
+            var host = Authority(url);
+            return host.Length == 0 ? RemoteType : host;
+        }
+        var model = FormMapper.Analyze(config).Model;
+        var tokens = new List<string> { LauncherName(model.Command) };
+        for (var index = 0; index < model.Args.Count; index++)
+        {
+            var arg = model.Args[index];
+            if (arg is "-y" or "--yes")
+            {
+                continue;
+            }
+            var previous = index > 0 ? model.Args[index - 1] : null;
+            tokens.Add(Shown(arg, previous, home));
+        }
+        return string.Join(" ", tokens.Where(t => t.Length > 0));
+    }
+
+    /// <summary>
+    /// One argument as the target column shows it: the first of the masking rules that applies,
+    /// then the shortening ones, then the argument as written.
+    /// </summary>
+    private static string Shown(string arg, string? previous, string home)
+    {
+        if (previous is not null && previous.StartsWith('-') && !previous.Contains('=') && IsSecretNamed(previous))
+        {
+            return MaskedValue;
+        }
+        var equals = arg.IndexOf('=');
+        if (arg.StartsWith('-') && equals >= 0)
+        {
+            var name = arg[..equals];
+            if (IsSecretNamed(name) || CredentialHeuristics.LooksLikeCredential(arg[(equals + 1)..]))
+            {
+                return name + "=" + MaskedValue;
+            }
+        }
+        if (CredentialHeuristics.LooksLikeCredential(arg))
+        {
+            return MaskedValue;
+        }
+        var scheme = arg.IndexOf("://", StringComparison.Ordinal);
+        if (scheme >= 0)
+        {
+            var rest = arg[(scheme + 3)..];
+            var authorityEnd = rest.IndexOfAny(['/', '?', '#']) is var a and >= 0 ? a : rest.Length;
+            var pathEnd = rest.IndexOfAny(['?', '#'], authorityEnd) is var p and >= 0 ? p : rest.Length;
+            return arg[..(scheme + 3)] + Authority(arg) + rest[authorityEnd..pathEnd];
+        }
+        var slash = arg.IndexOf('/');
+        if (arg.StartsWith('@') && slash > 1)
+        {
+            var name = arg[(slash + 1)..];
+            if (name.Length > 0 && !name.Contains('/'))
+            {
+                return "…/" + name;
+            }
+        }
+        var root = home.EndsWith('/') || home.EndsWith('\\') ? home[..^1] : home;
+        if (root.Length > 0 && arg.StartsWith(root, StringComparison.Ordinal))
+        {
+            var remainder = arg[root.Length..];
+            if (remainder.Length == 0 || remainder.StartsWith('/') || remainder.StartsWith('\\'))
+            {
+                return "~" + remainder;
+            }
+        }
+        return arg;
+    }
+
+    /// <summary>A flag whose name says its value is a secret, whatever its dashes and case.</summary>
+    private static bool IsSecretNamed(string flag)
+    {
+        var name = flag.ToLowerInvariant();
+        return new[] { "token", "key", "secret", "password", "passwd", "pwd", "auth", "credential", "bearer" }
+            .Any(name.Contains);
+    }
+
+    /// <summary>
+    /// The host of the URL in <paramref name="text"/>, and its port when one is written, without
+    /// the userinfo before it: taken from the text by hand rather than by a URL parser, because
+    /// the two platforms' parsers disagree about case, default ports and IPv6 brackets. Empty when
+    /// there is no host.
+    /// </summary>
+    private static string Authority(string text)
+    {
+        var scheme = text.IndexOf("://", StringComparison.Ordinal);
+        if (scheme < 0)
+        {
+            return "";
+        }
+        var rest = text[(scheme + 3)..];
+        var end = rest.IndexOfAny(['/', '?', '#']);
+        var authority = end >= 0 ? rest[..end] : rest;
+        return authority[(authority.LastIndexOf('@') + 1)..];
+    }
 
     /// <summary>
     /// The last component of a command, splitting on both separators rather than this platform's:

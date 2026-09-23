@@ -94,7 +94,6 @@ public class StringCatalogTests
         ["CollectionsModel.deletePublishedFileQuestion"] = ["X"],
         ["CollectionsModel.exportButton"] = ["3"],
         ["CollectionsModel.localDetail"] = ["3"],
-        ["CollectionsModel.localType"] = ["X"],
         ["CollectionsModel.publishedDetail"] = ["X"],
         ["CollectionsModel.removeCheckedMessage.many"] = ["3"],
         ["CollectionsModel.removeCheckedMessage.one"] = ["X"],
@@ -249,10 +248,10 @@ public class StringCatalogTests
         actual["CollectionsModel.importButton"] = CollectionsModel.ImportButton;
         actual["CollectionsModel.keepFileButton"] = CollectionsModel.KeepFileButton;
         actual["CollectionsModel.localDetail"] = CollectionsModel.LocalDetail(3);
-        actual["CollectionsModel.localType"] = CollectionsModel.LocalType("X");
         actual["CollectionsModel.lockedGlyphTooltip"] = CollectionsModel.LockedGlyphTooltip;
         actual["CollectionsModel.makeActiveAction"] = CollectionsModel.MakeActiveAction;
         actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.MakeLocalCopyButton;
+        actual["CollectionsModel.maskedValue"] = CollectionsModel.MaskedValue;
         actual["CollectionsModel.newButton"] = CollectionsModel.NewButton;
         actual["CollectionsModel.publishButton"] = CollectionsModel.PublishButton;
         actual["CollectionsModel.publishSettingsButton"] = CollectionsModel.PublishSettingsButton;
