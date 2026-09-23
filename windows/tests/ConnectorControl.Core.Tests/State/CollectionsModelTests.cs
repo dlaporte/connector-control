@@ -312,6 +312,32 @@ public class CollectionsModelTests
         AssertTarget(Local(@"""C:\Program Files\nodejs\node.exe""", "index.js"), "node index.js", "Program");
         AssertTarget(Local(@"C:\Program Files\nodejs\npx.cmd", "-y", "mcp-remote", "https://h.example/mcp"), "h.example", "npx");
         AssertTarget(Local("/opt/bin/tool --password hunter.2x", "srv.js"), "srv.js", "hunter.2x");
+        AssertTarget(Local(@"C:\Program Files (x86)\Tool\tool.exe", "index.js"), "tool index.js", "Program");
+        // Plain words packed after a Unix path do not cost it its launcher.
+        AssertTarget(Local("/usr/bin/tool srv"), "tool", "srv");
+    }
+
+    /// <summary>
+    /// A path command with a flag, a URL or a switch packed into it names no launcher: its last
+    /// component could be the tail of an argument.
+    /// </summary>
+    [Fact]
+    public void TargetNamesNoLauncherForAPathCommandWithAPackedArgument()
+    {
+        AssertTarget(Local("cmd", "/c", @"C:\tools\notify.exe https://hooks.slack.com/services/T000/B000/XXXXsecret"), "", "XXXXsecret");
+        AssertTarget(Local("/usr/local/bin/mcp --api-key abc/hunter.2x"), "", "hunter.2x");
+        AssertTarget(Local(@"C:\x\tool.exe --token ab\cd.ef"), "", "cd.ef");
+    }
+
+    /// <summary>
+    /// A flag named for a secret at the end of a command guards the first argument after it,
+    /// whether the command is a path or a tokenized line.
+    /// </summary>
+    [Fact]
+    public void TargetLeavesOutTheFirstArgumentAfterASecretNamedFlagInTheCommand()
+    {
+        AssertTarget(Local("/opt/bin/tool --password", "hunter.2x"), "", "hunter.2x");
+        AssertTarget(Local("tool --token", "abc.def"), "tool", "abc.def");
     }
 
     /// <summary>

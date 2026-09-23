@@ -387,18 +387,35 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>
     /// A launcher written as a whole command line — <c>npx -y server --token x</c> in one string —
     /// split into arguments the way a shell passes them: its first argument is the launcher and
-    /// the rest are arguments ahead of <paramref name="args"/>, each held to the same rule. A
-    /// command that is a path is never split, since a Windows path holds spaces, so it is the
-    /// launcher whole.
+    /// the rest are arguments ahead of <paramref name="args"/>, each held to the same rule, so a
+    /// flag named for a secret at its end guards <c>args[0]</c> as it would any value.
+    ///
+    /// A command that is a path is not tokenized, since a Windows path holds spaces. It keeps its
+    /// launcher — the last component of the path, which runs to the last word holding a separator
+    /// — only when the words after its first are plainly more path or plain words: none starts
+    /// with <c>-</c> or <c>/</c> or holds <c>://</c>, <c>=</c> or <c>:</c>. Otherwise that last
+    /// component could be the tail of a packed argument, and the launcher is omitted. The packed
+    /// words are never shown, but a flag named for a secret among them still guards
+    /// <c>args[0]</c>. A path-shaped raw secret that passes these checks
+    /// (<c>C:\x\tool.exe abc\cd.ef</c>) is accepted: residual 2 in the B1 report.
     /// </summary>
     private static (string, List<string>) SplitCommandLine(string text, IEnumerable<string> args)
     {
-        if (IsExplicitPath(text))
+        if (!IsExplicitPath(text))
+        {
+            var tokens = ShellWords(text);
+            return (tokens.Count > 0 ? tokens[0] : "", tokens.Skip(1).Concat(args).ToList());
+        }
+        var words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length <= 1)
         {
             return (text, args.ToList());
         }
-        var words = ShellWords(text);
-        return (words.Count > 0 ? words[0] : "", words.Skip(1).Concat(args).ToList());
+        var guarded = IsSecretNamedFlag(words[^1]) ? new[] { words[^1] } : [];
+        var isPlain = !words.Skip(1).Any(w =>
+            w.StartsWith('-') || w.StartsWith('/') || w.Contains("://", StringComparison.Ordinal) || w.Contains('=') || w.Contains(':'));
+        var pathEnd = Math.Max(Array.FindLastIndex(words, w => w.Contains('/') || w.Contains('\\')), 0);
+        return (isPlain ? string.Join(" ", words[..(pathEnd + 1)]) : "", guarded.Concat(args).ToList());
     }
 
     /// <summary>

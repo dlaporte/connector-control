@@ -279,6 +279,25 @@ final class CollectionsModelTests: XCTestCase {
         assertTarget(local(#""C:\Program Files\nodejs\node.exe""#, ["index.js"]), is: "node index.js", hides: "Program")
         assertTarget(local(#"C:\Program Files\nodejs\npx.cmd"#, ["-y", "mcp-remote", "https://h.example/mcp"]), is: "h.example", hides: "npx")
         assertTarget(local("/opt/bin/tool --password hunter.2x", ["srv.js"]), is: "srv.js", hides: "hunter.2x")
+        assertTarget(local(#"C:\Program Files (x86)\Tool\tool.exe"#, ["index.js"]), is: "tool index.js", hides: "Program")
+        // Plain words packed after a Unix path do not cost it its launcher.
+        assertTarget(local("/usr/bin/tool srv"), is: "tool", hides: "srv")
+    }
+
+    /// A path command with a flag, a URL or a switch packed into it names no launcher: its last
+    /// component could be the tail of an argument.
+    func testTargetNamesNoLauncherForAPathCommandWithAPackedArgument() {
+        assertTarget(local("cmd", ["/c", #"C:\tools\notify.exe https://hooks.slack.com/services/T000/B000/XXXXsecret"#]),
+                     is: "", hides: "XXXXsecret")
+        assertTarget(local("/usr/local/bin/mcp --api-key abc/hunter.2x"), is: "", hides: "hunter.2x")
+        assertTarget(local(#"C:\x\tool.exe --token ab\cd.ef"#), is: "", hides: "cd.ef")
+    }
+
+    /// A flag named for a secret at the end of a command guards the first argument after it,
+    /// whether the command is a path or a tokenized line.
+    func testTargetLeavesOutTheFirstArgumentAfterASecretNamedFlagInTheCommand() {
+        assertTarget(local("/opt/bin/tool --password", ["hunter.2x"]), is: "", hides: "hunter.2x")
+        assertTarget(local("tool --token", ["abc.def"]), is: "tool", hides: "abc.def")
     }
 
     /// A password holding an unencoded `/`, `?` or `#` ends the authority early; what is left of

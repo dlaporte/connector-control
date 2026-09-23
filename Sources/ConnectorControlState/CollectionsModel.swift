@@ -330,12 +330,29 @@ public final class CollectionsModel: ObservableObject {
 
     /// A launcher written as a whole command line — `npx -y server --token x` in one string —
     /// split into arguments the way a shell passes them: its first argument is the launcher and
-    /// the rest are arguments ahead of `args`, each held to the same rule. A command that is a
-    /// path is never split, since a Windows path holds spaces, so it is the launcher whole.
+    /// the rest are arguments ahead of `args`, each held to the same rule, so a flag named for a
+    /// secret at its end guards `args[0]` as it would any value.
+    ///
+    /// A command that is a path is not tokenized, since a Windows path holds spaces. It keeps its
+    /// launcher — the last component of the path, which runs to the last word holding a separator
+    /// — only when the words after its first are plainly more path or plain words: none starts
+    /// with `-` or `/` or holds `://`, `=` or `:`. Otherwise that last component could be the tail
+    /// of a packed argument, and the launcher is omitted. The packed words are never shown, but a
+    /// flag named for a secret among them still guards `args[0]`. A path-shaped raw secret that
+    /// passes these checks (`C:\x\tool.exe abc\cd.ef`) is accepted: residual 2 in the B1 report.
     private static func splitCommandLine(_ text: String, _ args: [String]) -> (String, [String]) {
-        if isExplicitPath(text) { return (text, args) }
-        let words = shellWords(text)
-        return (words.first ?? "", Array(words.dropFirst()) + args)
+        guard isExplicitPath(text) else {
+            let words = shellWords(text)
+            return (words.first ?? "", Array(words.dropFirst()) + args)
+        }
+        let words = text.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard let last = words.last, words.count > 1 else { return (text, args) }
+        let guarded = isSecretNamedFlag(last) ? [last] : []
+        let isPlain = !words.dropFirst().contains {
+            startsWith($0, "-") || startsWith($0, "/") || $0.contains("://") || $0.contains("=") || $0.contains(":")
+        }
+        let pathEnd = words.lastIndex { $0.contains("/") || $0.contains("\\") } ?? 0
+        return (isPlain ? words[...pathEnd].joined(separator: " ") : "", guarded + args)
     }
 
     /// `text` as a shell passes it: whitespace separates arguments, a `"…"` or `'…'` run belongs
