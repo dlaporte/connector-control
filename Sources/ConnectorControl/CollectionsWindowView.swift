@@ -4,21 +4,23 @@ import UniformTypeIdentifiers
 import ConnectorControlState
 
 /// The Collections window: the collections in the left pane, the selected one's connectors in the
-/// right, the toolbar and the action links that act on it, and the four sheets it puts in front of
-/// itself. Layout, bindings and the native panels only; every rule and string is CollectionsModel's.
+/// right, the header menu and the selection bar that act on them, and the five sheets it puts in
+/// front of itself. Layout, bindings and the native panels only; every rule and string is
+/// CollectionsModel's.
 struct CollectionsWindowView: View {
     /// The scene id, which the popover's Manage Collections opens.
     static let windowID = "collections"
 
     /// The lock leading a synced row, dimmed so it reads as a mark rather than as a control.
     private static let lockOpacity = 0.55
-    /// What joins the selected collection's name to its detail line. The model leaves the name
-    /// out — its line says what is true of the collection, not which one — so the window, whose
-    /// sidebar may be narrower than the name, is where the two are put together.
-    private static let nameSeparator = " · "
     /// Wide enough for the longest collection name the sidebar is likely to hold without taking
-    /// width the rows need for a type column and three controls.
+    /// width the rows need for a target column and the pencil.
     private static let sidebarWidth: CGFloat = 200
+    /// The most the name column takes, however long the longest name: past it the name is cut and
+    /// the target keeps the room it needs to say anything.
+    private static let maxNameWidth: CGFloat = 240
+    /// The selection bar's height, the same idle or ticked, so ticking a row cannot move the list.
+    private static let selectionBarHeight: CGFloat = 30
 
     @StateObject private var model: CollectionsModel
     /// The popover's request and the banner both travel through AppState, so this window repaints
@@ -37,6 +39,8 @@ struct CollectionsWindowView: View {
     /// The model's last refusal, kept here because only the view knows when it has been read:
     /// `lastError` is cleared by the next action that succeeds, never by an OK button.
     @State private var shownError: String?
+    /// The longest name cell in the list, so every target starts at the same x.
+    @State private var nameWidth: CGFloat = 0
 
     init(state: AppState, dialogs: Dialogs) {
         self.state = state
@@ -58,6 +62,7 @@ struct CollectionsWindowView: View {
             case review(ReviewModel)
             case publish(PublishModel)
             case export(PublishModel)
+            case copy(CopyModel)
         }
 
         @MainActor static func importFile(_ model: ImportModel) -> Sheet {
@@ -75,6 +80,18 @@ struct CollectionsWindowView: View {
         @MainActor static func export(_ model: PublishModel) -> Sheet {
             Sheet(id: "export\(model.collection)", content: .export(model))
         }
+
+        @MainActor static func copy(_ model: CopyModel) -> Sheet {
+            Sheet(id: "copy\(model.destination)", content: .copy(model))
+        }
+    }
+
+    /// The widest name cell, gathered from every row rather than only the ones on screen.
+    private struct NameWidthKey: PreferenceKey {
+        static let defaultValue: CGFloat = 0
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+            value = max(value, nextValue())
+        }
     }
 
     var body: some View {
@@ -84,7 +101,6 @@ struct CollectionsWindowView: View {
             detail
         }
         .frame(minWidth: 720, minHeight: 480)
-        .toolbar { toolbar }
         .sheet(item: $sheet, onDismiss: { presentPending() }) { present($0) }
         .alert(Text(shownError ?? ""), isPresented: errorShowing) { }
         // On appear and on every change, because the window stays open and is brought forward:
@@ -102,38 +118,79 @@ struct CollectionsWindowView: View {
     // MARK: - Sidebar
 
     private var sidebar: some View {
-        List(model.items, selection: $model.selected) { item in
-            HStack(spacing: 6) {
-                Text(item.name)
-                    .fontWeight(item.isActive ? .bold : .regular)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    // A collection whose document this machine has never found is still usable,
-                    // and still shows its connectors; the dimmed name says it is not in step.
-                    .foregroundStyle(item.isLocated ? .primary : .secondary)
-                // The marks sit at the trailing edge, where the mockup and the Windows sidebar
-                // put them, rather than trailing the name at whatever width it happens to be.
-                Spacer(minLength: 6)
-                if item.kind == .synced { chain(item) }
-                if item.hasPendingUpdate {
-                    Circle()
-                        .fill(.orange)
-                        .frame(width: 6, height: 6)
-                }
-            }
-            // The row answers across its whole width, not only over its text.
-            .contentShape(Rectangle())
-            // Selecting a collection only shows it; making it the active one is a second action.
-            // The double-click is the quick one — simultaneous, so it does not swallow the single
-            // click that selects — and the context menu is the labelled route that a keyboard
-            // reaches and a screen reader reads out.
-            .simultaneousGesture(TapGesture(count: 2).onEnded { act { model.switchTo(item.name) } })
-            .contextMenu {
-                Button(CollectionsModel.makeActiveAction) { act { model.switchTo(item.name) } }
-                    .disabled(item.isActive)
+        // The header sits above the list rather than in a section of it: a sidebar section grows
+        // a collapse chevron on hover, in the very corner the `+` occupies.
+        VStack(alignment: .leading, spacing: 0) {
+            sidebarHeader
+                .padding(.leading, 18)
+                .padding(.trailing, 12)
+                .padding(.vertical, 4)
+            List(model.items, selection: $model.selected) { item in
+                sidebarRow(item)
             }
         }
         .navigationSplitViewColumnWidth(min: 160, ideal: CollectionsWindowView.sidebarWidth)
+    }
+
+    /// The section title and the `+` whose menu makes a collection or brings one in. Import and
+    /// Subscribe carry their subtitles, because which of the two to use is the one question the
+    /// words alone do not answer.
+    private var sidebarHeader: some View {
+        HStack {
+            Text(CollectionsModel.windowTitle)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            Menu {
+                Button(CollectionsModel.newButton) { act { model.create() } }
+                Divider()
+                Button { openDocument(keepInSync: false) } label: {
+                    Text(CollectionsModel.importButton)
+                    Text(CollectionsModel.importSubtitle)
+                }
+                Button { openDocument(keepInSync: true) } label: {
+                    Text(CollectionsModel.subscribeButton)
+                    Text(CollectionsModel.subscribeSubtitle)
+                }
+            } label: {
+                Image(systemName: "plus")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+        }
+    }
+
+    private func sidebarRow(_ item: CollectionsModel.Item) -> some View {
+        HStack(spacing: 6) {
+            Text(item.name)
+                .fontWeight(item.isActive ? .bold : .regular)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                // A collection whose document this machine has never found is still usable,
+                // and still shows its connectors; the dimmed name says it is not in step.
+                .foregroundStyle(item.isLocated ? .primary : .secondary)
+            // The marks sit at the trailing edge, where the mockup and the Windows sidebar
+            // put them, rather than trailing the name at whatever width it happens to be.
+            Spacer(minLength: 6)
+            if item.kind == .synced { chain(item) }
+            if item.hasPendingUpdate {
+                Circle()
+                    .fill(.orange)
+                    .frame(width: 6, height: 6)
+            }
+        }
+        // The row answers across its whole width, not only over its text.
+        .contentShape(Rectangle())
+        // Selecting a collection only shows it; making it the active one is a second action.
+        // The double-click is the quick one — simultaneous, so it does not swallow the single
+        // click that selects — and the context menu is the labelled route that a keyboard
+        // reaches and a screen reader reads out.
+        .simultaneousGesture(TapGesture(count: 2).onEnded { act { model.switchTo(item.name) } })
+        .contextMenu {
+            Button(CollectionsModel.makeActiveAction) { act { model.switchTo(item.name) } }
+                .disabled(item.isActive)
+        }
     }
 
     /// The chain, and the sentence naming the document behind it — which the model withholds for
@@ -153,29 +210,119 @@ struct CollectionsWindowView: View {
     // MARK: - Detail
 
     private var detail: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            detailLine
-            if let text = model.bannerText { banner(text) }
-            rows
-            actionLinks
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                header
+                if let text = model.bannerText { banner(text) }
+                connectorsHeader
+                rows
+            }
+            .padding([.horizontal, .top], 12)
+            .padding(.bottom, 8)
+            selectionBar
         }
-        .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    /// The selected collection, bold, then what the model says about it. Paths in that line are
-    /// raw, so a window too narrow for one elides its middle rather than losing its end.
-    private var detailLine: some View {
-        (Text(model.selected ?? "").fontWeight(.semibold)
-            + Text(CollectionsWindowView.nameSeparator + model.detailLine))
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .truncationMode(.middle)
+    /// The collection's name, the pills that mark it as other than an ordinary local one, and the
+    /// `⋯` that holds everything done to the collection itself. Nothing else goes in this line.
+    private var header: some View {
+        HStack(spacing: 8) {
+            Text(model.selected ?? "")
+                .font(.title3.weight(.semibold))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            ForEach(model.pills, id: \.self) { pill in
+                pillView(pill)
+            }
+            Spacer(minLength: 8)
+            Menu {
+                collectionMenu
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help(CollectionsModel.moreActionsLabel)
+            .accessibilityLabel(CollectionsModel.moreActionsLabel)
+        }
     }
 
-    /// One strip, one button: Stop Publishing is an action link under the rows already, which is
-    /// the second button the popover's failed-publish banner needs and this one does not.
+    /// Active is the one pill in colour: it is the collection Claude is running, and the others
+    /// only say where a collection's document comes from or goes.
+    private func pillView(_ pill: CollectionsModel.Pill) -> some View {
+        let tint: Color = pill == .active ? .green : .secondary
+        return Text(CollectionsModel.title(for: pill))
+            .font(.caption)
+            .foregroundStyle(tint)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 1)
+            .overlay(Capsule().stroke(tint))
+    }
+
+    /// The model's list, in its order; the entries that do not apply are already left out, and
+    /// the two it dims arrive saying so.
+    @ViewBuilder private var collectionMenu: some View {
+        // By position: the separators repeat, so the entries cannot identify themselves.
+        ForEach(Array(model.collectionMenu.enumerated()), id: \.offset) { _, entry in
+            switch entry {
+            case .separator:
+                Divider()
+            case .exportAll(let enabled):
+                menuButton(entry) {
+                    show(.export(PublishModel(state: state, collection: model.selected ?? "", connectors: nil)))
+                }
+                .disabled(!enabled)
+            case .delete(let enabled):
+                menuButton(entry) { act { model.delete() } }
+                    .disabled(!enabled)
+            default:
+                menuButton(entry) { run(entry) }
+            }
+        }
+    }
+
+    private func menuButton(_ entry: CollectionsModel.MenuEntry, _ action: @escaping () -> Void) -> some View {
+        Button(CollectionsModel.title(for: entry), action: action)
+    }
+
+    /// The menu entries that take no argument of their own. Both publish entries open the same
+    /// sheet: a published collection's is its settings.
+    private func run(_ entry: CollectionsModel.MenuEntry) {
+        switch entry {
+        case .makeActive:
+            if let collection = model.selected { act { model.switchTo(collection) } }
+        case .rename:
+            act { model.rename() }
+        case .duplicate:
+            act { model.duplicate() }
+        case .startPublishing, .publishingSettings:
+            show(.publish(publishModel()))
+        case .stopPublishing:
+            act { model.stopPublishing() }
+        case .showPublishedFile:
+            reveal(model.publishedFilePath)
+        case .showSourceFile:
+            reveal(model.sourceFilePath)
+        case .makeLocalCopy:
+            act { model.makeLocalCopy() }
+        case .refresh:
+            act { model.refresh() }
+        case .stopSyncing:
+            act { model.stopSyncing() }
+        case .exportAll, .delete, .separator:
+            break
+        }
+    }
+
+    private func reveal(_ path: String?) {
+        guard let path else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+    }
+
+    /// One strip, one button: Stop Publishing is in the header's menu already, which is the
+    /// second button the popover's failed-publish banner needs and this one does not.
     @ViewBuilder private func banner(_ text: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(text)
@@ -189,6 +336,28 @@ struct CollectionsWindowView: View {
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 6).fill(Color.orange.opacity(0.12)))
+    }
+
+    /// The list's title and count, and the `+` that adds a connector here — dimmed on a synced
+    /// collection, whose tooltip then says where additions go instead.
+    private var connectorsHeader: some View {
+        HStack(spacing: 6) {
+            Text(CollectionsModel.connectorsHeader)
+                .fontWeight(.semibold)
+            Text("\(model.rows.count)")
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            Button {
+                openWindow(id: EditTarget.editorWindowID, value: model.newConnectorTarget())
+            } label: {
+                Image(systemName: "plus")
+            }
+            .buttonStyle(.accessoryBar)
+            .disabled(!model.canAddConnector)
+            .help(model.addConnectorTooltipText)
+            .accessibilityLabel(model.addConnectorTooltipText)
+        }
+        .font(.callout)
     }
 
     private var rows: some View {
@@ -212,30 +381,14 @@ struct CollectionsWindowView: View {
                     }
                 }
                 .frame(width: 18, alignment: .leading)
-                Text(row.name)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-                    .layoutPriority(1)
-                if let caution = row.caution {
-                    // Advisory only: the switch and the pencil stay live, and the tooltip sends
-                    // the user to the editor's full note.
-                    Image(systemName: PopoverModel.toolWarningGlyph)
-                        .imageScale(.small)
-                        .foregroundStyle(.orange)
-                        .help(caution)
-                        .accessibilityLabel(caution)
-                }
-                Spacer(minLength: 8)
+                nameCell(row)
+                    .frame(width: nameWidth, alignment: .leading)
                 Text(row.target)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Toggle("", isOn: enabledBinding(row))
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .labelsHidden()
-                    .accessibilityLabel(row.name)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Button {
                     openWindow(id: EditTarget.editorWindowID, value: model.editTarget(for: row.name))
                 } label: {
@@ -249,61 +402,98 @@ struct CollectionsWindowView: View {
             }
             .padding(.vertical, 2)
         }
-        // The rows are the tall half of the window: the list takes what is left after the detail
-        // line, the banner and the links, and scrolls inside it.
+        // The rows are the tall half of the window: the list takes what is left after the header,
+        // the banner and the list's own title, and scrolls inside it.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    /// What can be done to the collection itself, rather than to one of its connectors. Each link
-    /// is here only while its flag says the collection can take it.
-    private var actionLinks: some View {
-        HStack(spacing: 14) {
-            Button(CollectionsModel.renameAction) { act { model.rename() } }
-            Button(CollectionsModel.deleteAction) { act { model.delete() } }
-                .disabled(!model.canDelete)
-            // Two independent flags, not two halves of one: a collection whose document another
-            // machine publishes can be published from this one as well, and both links belong to
-            // it — the toolbar's publish action follows the same flag.
-            if model.canPublish {
-                Button(model.publishActionTitle) { show(.publish(publishModel())) }
-            }
-            if model.canStopPublishing {
-                Button(CollectionsModel.stopPublishingAction) { act { model.stopPublishing() } }
-            }
-            if model.canStopSyncing {
-                Button(CollectionsModel.stopSyncingAction) { act { model.stopSyncing() } }
-            }
-            Spacer(minLength: 0)
-        }
-        .buttonStyle(.link)
-        .font(.callout)
-    }
-
-    // MARK: - Toolbar
-
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        ToolbarItemGroup {
-            Button(CollectionsModel.importButton) { openDocument(keepInSync: false) }
-            Button(CollectionsModel.subscribeButton) { openDocument(keepInSync: true) }
-            Button(CollectionsModel.exportButton(model.checkedNames.count)) { show(.export(exportModel())) }
-                .disabled(!model.canExport)
-            Button(model.publishActionTitle) { show(.publish(publishModel())) }
-                .disabled(!model.canPublish)
-            Button(CollectionsModel.refreshButton) { act { model.refresh() } }
-                .disabled(!model.canRefresh)
-            Button(CollectionsModel.makeLocalCopyButton) { act { model.makeLocalCopy() } }
-                .disabled(!model.canMakeLocalCopy)
-        }
-        ToolbarItem(placement: .primaryAction) {
-            // The plus is the mockup's; the words are the model's.
-            Button {
-                act { model.create() }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "plus")
-                    Text(CollectionsModel.newButton)
+        // Every row's name cell measured at its natural width, off screen rows included, since
+        // the list lays out only the rows it shows.
+        .background(alignment: .topLeading) {
+            ZStack(alignment: .topLeading) {
+                ForEach(model.rows) { row in
+                    nameCell(row)
+                        .fixedSize()
+                        .background(GeometryReader { proxy in
+                            Color.clear.preference(key: NameWidthKey.self, value: proxy.size.width)
+                        })
                 }
             }
+            .hidden()
+        }
+        .onPreferenceChange(NameWidthKey.self) { width in
+            nameWidth = min(width, CollectionsWindowView.maxNameWidth)
+        }
+    }
+
+    /// The name and its caution mark, measured and laid out as one: the column is as wide as the
+    /// longest of these, so a mark cannot push its row's target out of line.
+    @ViewBuilder private func nameCell(_ row: CollectionsModel.Row) -> some View {
+        HStack(spacing: 4) {
+            Text(row.name)
+                .fontWeight(.medium)
+                .lineLimit(1)
+            if let caution = row.caution {
+                // Advisory only: the pencil stays live, and the tooltip sends the user to the
+                // editor's full note.
+                Image(systemName: PopoverModel.toolWarningGlyph)
+                    .imageScale(.small)
+                    .foregroundStyle(.orange)
+                    .help(caution)
+                    .accessibilityLabel(caution)
+            }
+        }
+    }
+
+    // MARK: - Selection bar
+
+    /// Idle, what the collection is and where its document lives; with rows ticked, what can be
+    /// done to them. Remove sits apart at the far end, so a hand moving from the safe pair cannot
+    /// land on it, and is absent where the rows are not the user's to remove.
+    private var selectionBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+            HStack(spacing: 10) {
+                if model.checkedNames.isEmpty {
+                    // Paths in this line are raw, so a window too narrow for one elides its middle
+                    // rather than losing its end.
+                    Text(model.detailLine)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 0)
+                } else {
+                    Text(CollectionsModel.selectedCount(model.checkedNames.count))
+                        .fontWeight(.semibold)
+                    Menu(CollectionsModel.copyToButton) {
+                        ForEach(model.copyDestinations) { destination in
+                            Button { copy(to: destination.name) } label: {
+                                Text(destination.name)
+                                if !destination.isEnabled { Text(CollectionsModel.readOnlyNote) }
+                            }
+                            .disabled(!destination.isEnabled)
+                        }
+                        if !model.copyDestinations.isEmpty { Divider() }
+                        Button(CollectionsModel.newButton) { act { model.copyCheckedIntoNewCollection() } }
+                    }
+                    .fixedSize()
+                    Button(CollectionsModel.exportCheckedButton) { show(.export(exportModel())) }
+                    Spacer(minLength: 16)
+                    if model.canRemoveChecked {
+                        Button(CollectionsModel.removeCheckedButton) { act { model.removeChecked() } }
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(height: CollectionsWindowView.selectionBarHeight)
+        }
+    }
+
+    /// Straight through when nothing clashes; otherwise the sheet asks about the clashes first.
+    private func copy(to destination: String) {
+        if model.checkedNamesClashing(in: destination).isEmpty {
+            act { _ = model.copyChecked(into: destination) }
+        } else {
+            show(.copy(CopyModel(collections: model, destination: destination)))
         }
     }
 
@@ -319,6 +509,8 @@ struct CollectionsWindowView: View {
             PublishSheetView(model: model, mode: .publish) { self.sheet = nil }
         case .export(let model):
             PublishSheetView(model: model, mode: .export) { self.sheet = nil }
+        case .copy(let copyModel):
+            CopySheetView(model: copyModel, refusal: { model.lastError }) { self.sheet = nil }
         }
     }
 
@@ -334,9 +526,8 @@ struct CollectionsWindowView: View {
         PublishModel(state: state, collection: model.selected ?? "")
     }
 
-    /// The Export sheet writes only what is ticked, which is what the count beside the button
-    /// says and what `canExport` waits for. The Publish sheet above takes no subset: publishing
-    /// binds the whole collection.
+    /// The Export sheet writes only what is ticked, which is what the selection bar's count says.
+    /// The Publish sheet above takes no subset: publishing binds the whole collection.
     private func exportModel() -> PublishModel {
         PublishModel(state: state, collection: model.selected ?? "",
                      connectors: model.exportIntentForChecked())
@@ -454,10 +645,6 @@ struct CollectionsWindowView: View {
 
     private func checkedBinding(_ row: CollectionsModel.Row) -> Binding<Bool> {
         Binding(get: { row.checked }, set: { model.setChecked(row.name, $0) })
-    }
-
-    private func enabledBinding(_ row: CollectionsModel.Row) -> Binding<Bool> {
-        Binding(get: { row.enabled }, set: { on in act { model.setEnabled(row.name, on) } })
     }
 
     /// One collection action and the refusal it may leave behind, read straight after the call
