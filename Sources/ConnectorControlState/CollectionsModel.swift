@@ -495,7 +495,7 @@ public final class CollectionsModel: ObservableObject {
         let names = checkedNames
         guard !names.isEmpty,
               let typed = dialogs.promptForName(title: AppState.newCollectionTitle, initial: "") else { return false }
-        guard report(state.createCollection(named: typed, copyingCurrent: false)) else { return false }
+        guard report(state.addEmptyCollection(named: typed)) else { return false }
         return copy(names, into: typed.trimmingCharacters(in: .whitespaces), choices: [:])
     }
 

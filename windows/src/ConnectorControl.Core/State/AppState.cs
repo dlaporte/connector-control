@@ -1212,23 +1212,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// Copies the active collection under a new name and makes it active, as the chip menu's
     /// New Collection has always done. null on success, else the message to show.
-    ///
-    /// <c>copyingCurrent: false</c> makes an empty one instead, and it does not become active:
-    /// switching to it would empty Claude's config, so nothing is applied either.
     /// </summary>
-    public string? CreateCollection(string name, bool copyingCurrent = true)
+    public string? CreateCollection(string name)
     {
-        var active = Store.ActiveCollection;
-        if (Store.AddCollection(name, copyingCurrent) is { } error)
+        if (Store.AddCollection(name, copyingCurrent: true) is { } error)
         {
             return error;
-        }
-        if (!copyingCurrent)
-        {
-            Store.ActiveCollection = active;
-            PersistStore();
-            RaiseAll();
-            return null;
         }
         PersistStore();
         PerformApply();
@@ -2125,6 +2114,24 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         Store.Collections[name] = new Collection(entries);
         SetSidecarEntry(name, new CollectionsFile.Entry(CollectionKind.Local, provenance: provenance));
+        PersistStore();
+        RaiseAll();
+        return null;
+    }
+
+    /// <summary>
+    /// A new local collection with no connectors in it, for a copy to start from the ticked rows
+    /// alone. It does not become the active collection: switching to an empty one would empty
+    /// Claude's config, so nothing is applied either. null on success, else the message.
+    /// </summary>
+    public string? AddEmptyCollection(string name)
+    {
+        var active = Store.ActiveCollection;
+        if (Store.AddCollection(name, copyingCurrent: false) is { } error)
+        {
+            return error;
+        }
+        Store.ActiveCollection = active;
         PersistStore();
         RaiseAll();
         return null;

@@ -142,20 +142,26 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(h.settings.lastApplyDate, h.now)
     }
 
-    /// Copy to ▸ New Collection's first half: an empty collection, and not an active one, since
-    /// switching to it would empty Claude's config.
-    func testCreateWithoutCopyingMakesAnEmptyCollectionThatStaysInactive() throws {
+    /// Copy to ▸ New Collection's first half: a collection holding nothing, not a copy of the
+    /// active one, and not made active, since switching to it would empty Claude's config.
+    func testAddEmptyCollectionLeavesTheActiveCollectionAndClaudesConfigAlone() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let before = try h.claudeServers()
-        XCTAssertNil(state.createCollection(named: "  Empty  ", copyingCurrent: false))
+        XCTAssertNotNil(state.store.collections["Default"]?.mcps["aws-mcp"])
+        let before = try Data(contentsOf: h.claudeConfigURL)
+        XCTAssertNil(state.addEmptyCollection(named: "  Empty  "))
         XCTAssertEqual(state.collectionNames, ["Default", "Empty"])
         XCTAssertEqual(state.store.collections["Empty"]?.mcps, [:], "empty, not a copy of the active collection")
+        XCTAssertNil(state.store.collections["Empty"]?.mcps["aws-mcp"])
         XCTAssertEqual(state.activeCollection, "Default")
-        XCTAssertEqual(state.sortedNames, ["aws-mcp", "scoutbook", "service-now"])
-        XCTAssertEqual(try h.claudeServers(), before, "nothing Claude runs has changed")
+        XCTAssertEqual(try Data(contentsOf: h.claudeConfigURL), before, "nothing Claude runs has changed, to the byte")
         state.reload()
         XCTAssertEqual(state.store.collections["Empty"]?.mcps, [:], "and it was saved")
+
+        // A name the store refuses is the store's own error, and nothing is added.
+        XCTAssertEqual(state.addEmptyCollection(named: "Empty"), "A collection named \u{201C}Empty\u{201D} already exists.")
+        XCTAssertEqual(state.collectionNames, ["Default", "Empty"])
+        XCTAssertEqual(state.activeCollection, "Default")
     }
 
     func testRenameAndDeleteReportTheStoresErrors() {

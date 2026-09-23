@@ -615,7 +615,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             return false;
         }
-        if (!Report(state.CreateCollection(typed, copyingCurrent: false)))
+        if (!Report(state.AddEmptyCollection(typed)))
         {
             return false;
         }

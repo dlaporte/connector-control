@@ -850,17 +850,8 @@ public final class AppState: ObservableObject {
 
     /// Copies the active collection under a new name and makes it active, as the chip menu's
     /// New Collection has always done. nil on success, else the message to show.
-    ///
-    /// `copyingCurrent: false` makes an empty one instead, and it does not become active:
-    /// switching to it would empty Claude's config, so nothing is applied either.
-    public func createCollection(named name: String, copyingCurrent: Bool = true) -> String? {
-        let active = store.activeCollection
-        if let error = store.addCollection(named: name, copyingCurrent: copyingCurrent) { return error }
-        guard copyingCurrent else {
-            store.activeCollection = active
-            persistStore()
-            return nil
-        }
+    public func createCollection(named name: String) -> String? {
+        if let error = store.addCollection(named: name, copyingCurrent: true) { return error }
         persistStore()
         performApply()
         return nil
@@ -1401,6 +1392,17 @@ public final class AppState: ObservableObject {
         }
         store.collections[name] = Collection(mcps: entries)
         collectionsFile.collections[name] = CollectionsFile.Entry(kind: .local, provenance: provenance)
+        persistStore()
+        return nil
+    }
+
+    /// A new local collection with no connectors in it, for a copy to start from the ticked rows
+    /// alone. It does not become the active collection: switching to an empty one would empty
+    /// Claude's config, so nothing is applied either. nil on success, else the message.
+    public func addEmptyCollection(named name: String) -> String? {
+        let active = store.activeCollection
+        if let error = store.addCollection(named: name, copyingCurrent: false) { return error }
+        store.activeCollection = active
         persistStore()
         return nil
     }

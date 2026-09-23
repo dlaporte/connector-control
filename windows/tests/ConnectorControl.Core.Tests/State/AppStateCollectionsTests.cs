@@ -160,23 +160,29 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
-    /// Copy to ▸ New Collection's first half: an empty collection, and not an active one, since
-    /// switching to it would empty Claude's config.
+    /// Copy to ▸ New Collection's first half: a collection holding nothing, not a copy of the
+    /// active one, and not made active, since switching to it would empty Claude's config.
     /// </summary>
     [Fact]
-    public void CreateWithoutCopyingMakesAnEmptyCollectionThatStaysInactive()
+    public void AddEmptyCollectionLeavesTheActiveCollectionAndClaudesConfigAlone()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var before = h.ClaudeServers();
-        Assert.Null(state.CreateCollection("  Empty  ", copyingCurrent: false));
+        Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("aws-mcp"));
+        var before = File.ReadAllBytes(h.ClaudeConfigPath);
+        Assert.Null(state.AddEmptyCollection("  Empty  "));
         Assert.Equal(["Default", "Empty"], state.CollectionNames);
         Assert.Empty(state.Store.Collections["Empty"].Mcps);   // empty, not a copy of the active collection
+        Assert.False(state.Store.Collections["Empty"].Mcps.ContainsKey("aws-mcp"));
         Assert.Equal("Default", state.ActiveCollection);
-        Assert.Equal(["aws-mcp", "scoutbook", "service-now"], state.SortedNames);
-        Assert.True(DictionaryEquality.Equal(before, h.ClaudeServers()));   // nothing Claude runs has changed
+        Assert.Equal(before, File.ReadAllBytes(h.ClaudeConfigPath));   // nothing Claude runs has changed, to the byte
         state.Reload();
         Assert.Empty(state.Store.Collections["Empty"].Mcps);   // and it was saved
+
+        // A name the store refuses is the store's own error, and nothing is added.
+        Assert.Equal("A collection named “Empty” already exists.", state.AddEmptyCollection("Empty"));
+        Assert.Equal(["Default", "Empty"], state.CollectionNames);
+        Assert.Equal("Default", state.ActiveCollection);
     }
 
     [Fact]
