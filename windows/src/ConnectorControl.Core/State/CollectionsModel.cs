@@ -387,13 +387,37 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>
     /// A launcher written as a whole command line — <c>npx -y server --token x</c> in one string —
     /// split on whitespace: its first word is the launcher and the rest are arguments ahead of
-    /// <paramref name="args"/>, each held to the same rule. Quotes are not interpreted: a quoted
-    /// fragment fails the rule rather than being reassembled into something that might pass it.
+    /// <paramref name="args"/>, each held to the same rule. A quoted phrase — a header value, some
+    /// JSON — is left out whole, from the word holding its opening <c>"</c> or <c>'</c> through the
+    /// word holding the closing one, or to the end when it is never closed: nothing in one is a
+    /// thing to name.
     /// </summary>
     private static (string, List<string>) SplitCommandLine(string text, IEnumerable<string> args)
     {
-        var words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        return words.Length == 0 ? (text, args.ToList()) : (words[0], words.Skip(1).Concat(args).ToList());
+        var words = new List<string>();
+        char? openQuote = null;
+        foreach (var word in text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (openQuote is { } open)
+            {
+                if (word.Count(c => c == open) % 2 == 1)
+                {
+                    openQuote = null;
+                }
+            }
+            else if (word.FirstOrDefault(c => c is '"' or '\'') is var quote and not '\0')
+            {
+                if (word.Count(c => c == quote) % 2 == 1)
+                {
+                    openQuote = quote;
+                }
+            }
+            else
+            {
+                words.Add(word);
+            }
+        }
+        return (words.Count > 0 ? words[0] : "", words.Skip(1).Concat(args).ToList());
     }
 
     /// <summary>The launcher, named the way it would be typed, or null when it could be a secret.</summary>

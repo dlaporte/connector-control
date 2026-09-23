@@ -250,6 +250,15 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertFalse(CollectionsModel.target(of: local("cmd", ["/c", quoted]).config, home: "/Users/x").contains("Bearer"))
     }
 
+    /// A quoted phrase in a one-string command line — a header value, some JSON — is left out
+    /// whole, its inner words included, and an unterminated quote runs to the end.
+    func testTargetLeavesOutAQuotedPhraseInACommandLine() {
+        assertTarget(local("cmd", ["/c", #"tool --header "X-Key: abc.def extra""#]), is: "tool", hides: "abc.def")
+        assertTarget(local("cmd", ["/c", #"npx -y @acme/server --config '{"k":"v.w"}'"#]), is: "npx …/server", hides: "v.w")
+        assertTarget(MCPEntry(config: .object(["command": .string(#"tool "abc.def"#)])), is: "tool", hides: "abc.def")
+        assertTarget(MCPEntry(config: .object(["command": .string(#""hunter.2 x" srv.js"#)])), is: "srv.js", hides: "hunter")
+    }
+
     /// A password holding an unencoded `/`, `?` or `#` ends the authority early; what is left of
     /// the userinfo is refused as a host rather than shown, and so is a scheme that is not one.
     func testTargetRefusesAURLWhoseUserinfoHoldsADelimiter() {

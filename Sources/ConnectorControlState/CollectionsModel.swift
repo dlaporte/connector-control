@@ -330,12 +330,23 @@ public final class CollectionsModel: ObservableObject {
 
     /// A launcher written as a whole command line — `npx -y server --token x` in one string —
     /// split on whitespace: its first word is the launcher and the rest are arguments ahead of
-    /// `args`, each held to the same rule. Quotes are not interpreted: a quoted fragment fails the
-    /// rule rather than being reassembled into something that might pass it.
+    /// `args`, each held to the same rule. A quoted phrase — a header value, some JSON — is left
+    /// out whole, from the word holding its opening `"` or `'` through the word holding the
+    /// closing one, or to the end when it is never closed: nothing in one is a thing to name.
     private static func splitCommandLine(_ text: String, _ args: [String]) -> (String, [String]) {
-        let words = text.split(whereSeparator: \.isWhitespace).map(String.init)
-        guard let first = words.first else { return (text, args) }
-        return (first, Array(words.dropFirst()) + args)
+        var words: [String] = []
+        var openQuote: Unicode.Scalar?
+        for word in text.split(whereSeparator: \.isWhitespace).map(String.init) {
+            let scalars = word.unicodeScalars
+            if let quote = openQuote {
+                if scalars.filter({ $0 == quote }).count % 2 == 1 { openQuote = nil }
+            } else if let quote = scalars.first(where: { $0 == "\"" || $0 == "'" }) {
+                if scalars.filter({ $0 == quote }).count % 2 == 1 { openQuote = quote }
+            } else {
+                words.append(word)
+            }
+        }
+        return (words.first ?? "", Array(words.dropFirst()) + args)
     }
 
     /// The launcher, named the way it would be typed, or nil when it could be a secret.

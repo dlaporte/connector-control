@@ -272,6 +272,19 @@ public class CollectionsModelTests
     }
 
     /// <summary>
+    /// A quoted phrase in a one-string command line — a header value, some JSON — is left out
+    /// whole, its inner words included, and an unterminated quote runs to the end.
+    /// </summary>
+    [Fact]
+    public void TargetLeavesOutAQuotedPhraseInACommandLine()
+    {
+        AssertTarget(Local("cmd", "/c", "tool --header \"X-Key: abc.def extra\""), "tool", "abc.def");
+        AssertTarget(Local("cmd", "/c", "npx -y @acme/server --config '{\"k\":\"v.w\"}'"), "npx …/server", "v.w");
+        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("tool \"abc.def")))), "tool", "abc.def");
+        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("\"hunter.2 x\" srv.js")))), "srv.js", "hunter");
+    }
+
+    /// <summary>
     /// A password holding an unencoded <c>/</c>, <c>?</c> or <c>#</c> ends the authority early; what
     /// is left of the userinfo is refused as a host rather than shown, and so is a scheme that is not one.
     /// </summary>
