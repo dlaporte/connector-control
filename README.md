@@ -167,10 +167,11 @@ Check the column before you share a screenshot of the window.
 dimmed and marked "read-only", since its connectors are the author's — then
 **New Collection**, which asks for a name and makes an empty local
 collection to take the copies. Copies arrive switched off and record where
-they came from, so nothing Claude runs changes. When the destination already
-holds a name you ticked, the Copy sheet asks about each clash: **Replace**,
-**Keep both**, which lands the copy as `<name> 2` and is the default, or
-**Skip**; the rest are listed as "new · arrives off". **Export** opens the
+they came from. When the destination already holds a name you ticked, the
+Copy sheet asks about each clash: **Replace**, **Keep both**, which lands the
+copy as `<name> 2` and is the default, or **Skip**; the rest are listed as
+"new · arrives off". Replacing a connector in the active collection applies
+at once. **Export** opens the
 Export sheet on the ticked rows. **Remove** asks first — "Remove
 “<name>”?", or "Remove 3 connectors?" — adding "A copy remains in Backups.";
 removing from the active collection applies at once.

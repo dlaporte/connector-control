@@ -92,6 +92,48 @@ public class CopyModelTests
     }
 
     /// <summary>
+    /// A Replace over a connector that is on in the active collection lands the copy off, so
+    /// Claude must stop running the old one at once; into an inactive collection nothing Claude
+    /// runs changes.
+    /// </summary>
+    [Fact]
+    public void PerformWithReplaceAppliesOnlyWhenTheDestinationIsActive()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.AddEmptyCollection("Spare"));
+        Assert.Null(state.AddEmptyCollection("Work"));
+        Assert.Null(state.Upsert("scoutbook", Local("/bin/scoutbook"), null, "Spare"));
+        Assert.Null(state.Upsert("scoutbook", Local("/bin/old"), null, "Work"));
+        using var collections = new CollectionsModel(state, h.Dialogs);
+        collections.Selected = "Spare";
+
+        // An enabled connector in the active collection that has not been applied yet: an apply
+        // from the inactive leg would write it, so that leg can catch an unconditional one.
+        Assert.Null(state.Upsert("delta", Local("/bin/delta"), null, "Default"));
+        Assert.False(h.ClaudeServers().ContainsKey("delta"));   // upserted, not applied
+
+        // Inactive destination: the copy lands, but Claude's config is untouched.
+        var before = h.ClaudeServers();
+        collections.SetChecked("scoutbook", true);
+        var inactive = new CopyModel(collections, "Work");
+        inactive.Rows[0].Choice = ImportChoice.Replace;
+        Assert.True(inactive.Perform());
+        Assert.Equal(Local("/bin/scoutbook").Config, state.Store.Collections["Work"].Mcps["scoutbook"].Config);
+        Assert.Equal(before, h.ClaudeServers());   // Work is not active, so nothing Claude runs has changed
+
+        // Active destination: the enabled scoutbook Claude runs is replaced by a copy that is off.
+        Assert.True(state.Store.Collections["Default"].Mcps["scoutbook"].Enabled);
+        Assert.True(h.ClaudeServers().ContainsKey("scoutbook"));   // Claude runs it before the copy
+        collections.SetChecked("scoutbook", true);
+        var active = new CopyModel(collections, "Default");
+        active.Rows[0].Choice = ImportChoice.Replace;
+        Assert.True(active.Perform());
+        Assert.False(state.Store.Collections["Default"].Mcps["scoutbook"].Enabled);
+        Assert.False(h.ClaudeServers().ContainsKey("scoutbook"));   // the replaced connector is off, so Claude stops running it
+    }
+
+    /// <summary>
     /// Skip leaves the destination's own entry untouched, and a non-clashing ticked row still
     /// lands beside it.
     /// </summary>

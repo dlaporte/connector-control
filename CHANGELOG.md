@@ -95,7 +95,8 @@ bullet once the section is about to ship.
   you to name; a synced collection is listed but cannot take copies. The copies arrive
   switched off and record where they came from, and a name the destination already holds
   can replace the one there, land beside it as `<name> 2`, which is the default, or be
-  left out. Export writes the ticked connectors as a document.
+  left out. Replacing a connector in the active collection applies at once. Export writes
+  the ticked connectors as a document.
 - Remove takes out any number of ticked connectors at once. It asks first, naming the
   connector or the count, and says a copy remains in Backups; the connector editor no
   longer has a Remove button.

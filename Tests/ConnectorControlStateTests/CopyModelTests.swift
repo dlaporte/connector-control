@@ -80,6 +80,45 @@ final class CopyModelTests: XCTestCase {
         XCTAssertEqual(collections.checkedNames, [], "the ticks went with it")
     }
 
+    /// A Replace over a connector that is on in the active collection lands the copy off, so
+    /// Claude must stop running the old one at once; into an inactive collection nothing Claude
+    /// runs changes.
+    func testPerformWithReplaceAppliesOnlyWhenTheDestinationIsActive() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.addEmptyCollection(named: "Spare"))
+        XCTAssertNil(state.addEmptyCollection(named: "Work"))
+        XCTAssertNil(state.upsert(name: "scoutbook", entry: local("/bin/scoutbook"), renamedFrom: nil, in: "Spare"))
+        XCTAssertNil(state.upsert(name: "scoutbook", entry: local("/bin/old"), renamedFrom: nil, in: "Work"))
+        let collections = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { collections.dispose() }
+        collections.selected = "Spare"
+
+        // An enabled connector in the active collection that has not been applied yet: an apply
+        // from the inactive leg would write it, so that leg can catch an unconditional one.
+        XCTAssertNil(state.upsert(name: "delta", entry: local("/bin/delta"), renamedFrom: nil, in: "Default"))
+        XCTAssertNil(try h.claudeServers()["delta"], "upserted, not applied")
+
+        // Inactive destination: the copy lands, but Claude's config is untouched.
+        let before = try h.claudeServers()
+        collections.setChecked("scoutbook", true)
+        let inactive = CopyModel(collections: collections, destination: "Work")
+        inactive.rows[0].choice = .replace
+        XCTAssertTrue(inactive.perform())
+        XCTAssertEqual(state.store.collections["Work"]?.mcps["scoutbook"]?.config, local("/bin/scoutbook").config)
+        XCTAssertEqual(try h.claudeServers(), before, "Work is not active, so nothing Claude runs has changed")
+
+        // Active destination: the enabled scoutbook Claude runs is replaced by a copy that is off.
+        XCTAssertEqual(state.store.collections["Default"]?.mcps["scoutbook"]?.enabled, true)
+        XCTAssertNotNil(try h.claudeServers()["scoutbook"], "Claude runs it before the copy")
+        collections.setChecked("scoutbook", true)
+        let active = CopyModel(collections: collections, destination: "Default")
+        active.rows[0].choice = .replace
+        XCTAssertTrue(active.perform())
+        XCTAssertEqual(state.store.collections["Default"]?.mcps["scoutbook"]?.enabled, false)
+        XCTAssertNil(try h.claudeServers()["scoutbook"], "the replaced connector is off, so Claude stops running it")
+    }
+
     /// `.skip` leaves the destination's own entry untouched, and a non-clashing ticked row still
     /// lands beside it.
     func testPerformWithSkipLeavesTheDestinationsEntryUntouchedAndStillCopiesTheRest() throws {

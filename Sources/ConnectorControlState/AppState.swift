@@ -1368,7 +1368,9 @@ public final class AppState: ObservableObject {
         guard landed else { return nil }
         collectionsFile.collections[target] = entry
         persistStore()
-        // Every copy is off, so nothing here can change what Claude runs.
+        // Every copy arrives off, so only a Replace over a connector that was already on can
+        // change what Claude runs — and the dirty check spares the write when it doesn't.
+        if target == activeCollection, isDirty { performApply() }
         return nil
     }
 
