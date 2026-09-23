@@ -671,7 +671,13 @@ final class CollectionsModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Other"))
+        // Created first: the sidecar only annotates a collection already in the master list
+        // (CollectionsFile.reconciled(with:)), so seeding "Team" with nothing to annotate would
+        // leave it dropped, and excluded from copyTargets for not existing rather than for being
+        // synced.
+        XCTAssertNil(state.createCollection(named: "Team"))
         try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        XCTAssertTrue(state.isSynced("Team"))
         let model = CollectionsModel(state: state, dialogs: h.dialogs)
 
         model.selected = "Default"
@@ -680,17 +686,11 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.copyTargets, ["Default"])
     }
 
-    /// Both verbs need something ticked, and a synced collection can do neither: its rows have an
-    /// author elsewhere, and `setChecked` already refuses there.
-    func testCopyAndRemovePredicatesFollowTheTicksAndTheKind() throws {
+    /// Both verbs need something ticked.
+    func testCopyAndRemovePredicatesFollowTheTicks() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
-        // Created first, as the master list decides which collections exist; the sidecar only
-        // annotates one already there (CollectionsFile.reconciled(with:)), so seeding a "Team"
-        // entry with nothing to annotate would leave it dropped and unreachable.
-        XCTAssertNil(state.createCollection(named: "Team"))
-        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
         let model = CollectionsModel(state: state, dialogs: h.dialogs)
 
         model.selected = "Default"
@@ -699,9 +699,29 @@ final class CollectionsModelTests: XCTestCase {
         model.setChecked("alpha", true)
         XCTAssertTrue(model.canCopyChecked)
         XCTAssertTrue(model.canRemoveChecked)
+    }
 
+    /// The kind guard specifically, not just an empty tick set: `selected` clears the ticks on
+    /// every switch (`CollectionsModel.swift` around 204-205), so a leg that ticks a row and only
+    /// then switches to the synced collection would find both predicates false regardless of the
+    /// `isSynced` term — the empty tick set alone would explain it. Reload does not clear ticks,
+    /// so ticking first and letting the *same* collection turn synced underneath is the one path
+    /// that isolates the guard.
+    func testCopyAndRemovePredicatesAreGatedBySyncSpecifically() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Team"))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
         model.selected = "Team"
-        XCTAssertFalse(model.canCopyChecked, "a synced collection's rows are the author's")
+        model.setChecked("alpha", true)
+        XCTAssertTrue(model.canCopyChecked, "still local, and something is ticked")
+        XCTAssertTrue(model.canRemoveChecked)
+
+        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        XCTAssertTrue(state.isSynced("Team"))
+        XCTAssertEqual(model.checkedNames, ["alpha"], "reload does not clear the ticks")
+        XCTAssertFalse(model.canCopyChecked, "the guard, not an empty tick set, is what changed")
         XCTAssertFalse(model.canRemoveChecked)
     }
 
@@ -734,5 +754,93 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNil(state.store.collections["Default"]?.mcps["beta"])
         XCTAssertTrue(h.dialogs.confirms.last?.message.contains("2") ?? false, "several are counted")
         XCTAssertEqual(model.checkedNames, [], "and the ticks go with them")
+    }
+
+    /// `remove(names:in:)` persists but never applies on its own; the caller applies only when
+    /// the collection losing rows is the active one — the same rule `setEnabled` follows.
+    func testRemoveCheckedAppliesOnlyWhenTheActiveCollectionLosesRows() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.upsert(name: "gamma", entry: local("/bin/gamma"), renamedFrom: nil, in: "Work"))
+        state.switchCollection(to: "Default")
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        h.dialogs.nextConfirm = true
+
+        // Inactive collection: the write lands, but Claude's config is untouched.
+        let before = try h.claudeServers()
+        model.selected = "Work"
+        model.setChecked("gamma", true)
+        model.removeChecked()
+        XCTAssertNil(state.store.collections["Work"]?.mcps["gamma"], "removed from the store")
+        XCTAssertEqual(try h.claudeServers(), before, "Work was never active, so nothing Claude runs has changed")
+
+        // The active collection: the same call does apply.
+        model.selected = "Default"
+        model.setChecked("aws-mcp", true)
+        model.removeChecked()
+        XCTAssertNil(state.store.collections["Default"]?.mcps["aws-mcp"])
+        XCTAssertNil(try h.claudeServers()["aws-mcp"], "the active collection changed, so Claude's config follows")
+    }
+
+    /// The copy lands in the target, disabled, and the ticks go with it — the same clearing
+    /// `removeChecked` does on success. Every copy arrives disabled, so this never applies.
+    func testCopyCheckedCopiesIntoTheTargetClearsTicksAndDoesNotApply() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        // Created first: `createCollection` starts a collection as a copy of whichever one is
+        // active when it is made, so making Spare before alpha exists keeps alpha out of that
+        // starting snapshot — otherwise the copy below would collide with it and land as
+        // "alpha 2" instead, leaving the original untouched and this test green for the wrong
+        // reason.
+        XCTAssertNil(state.createCollection(named: "Spare"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Default"
+        model.setChecked("alpha", true)
+
+        let before = try h.claudeServers()
+        XCTAssertNil(model.copyChecked(into: "Spare", choices: [:]))
+        XCTAssertEqual(state.store.collections["Spare"]?.mcps["alpha"]?.enabled, false, "the copy landed, disabled")
+        XCTAssertEqual(model.checkedNames, [], "the ticks went with it")
+        XCTAssertEqual(try h.claudeServers(), before, "every copy arrives disabled, so nothing Claude runs has changed")
+    }
+
+    /// The two early-outs `copyChecked` documents: a target outside `copyTargets` — the source
+    /// itself, or a synced collection — and an empty tick set. Both return nil without reaching
+    /// `AppState.makeLocalCopy`, so nothing lands anywhere and the ticks are left standing.
+    func testCopyCheckedRefusesATargetOutsideCopyTargets() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        // Created first, for the same reason as the success test above, and so seeding the
+        // sidecar afterwards has something in the master list to annotate
+        // (CollectionsFile.reconciled(with:)).
+        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Default"
+        model.setChecked("alpha", true)
+
+        XCTAssertNil(model.copyChecked(into: "Default", choices: [:]), "the source is not a target")
+        XCTAssertNil(model.copyChecked(into: "Team", choices: [:]), "a synced collection is not a target either")
+        XCTAssertEqual(model.checkedNames, ["alpha"], "both are unreachable early-outs, so the ticks stand")
+        XCTAssertNil(state.store.collections["Team"]?.mcps["alpha"], "nothing landed in Team")
+    }
+
+    func testCopyCheckedRefusesWhenNothingIsTicked() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Spare"))
+        let before = state.store.collections["Spare"]
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Default"
+
+        XCTAssertNil(model.copyChecked(into: "Spare", choices: [:]), "nothing ticked, so there is nothing to copy")
+        XCTAssertEqual(state.store.collections["Spare"], before, "and nothing about Spare changed")
     }
 }

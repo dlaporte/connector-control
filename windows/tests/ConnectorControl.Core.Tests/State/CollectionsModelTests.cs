@@ -745,7 +745,12 @@ public class CollectionsModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Other"));
+        // Created first: the sidecar only annotates a collection already in the master list
+        // (CollectionsFile.Reconciled), so seeding "Team" with nothing to annotate would leave it
+        // dropped, and excluded from CopyTargets for not existing rather than for being synced.
+        Assert.Null(state.CreateCollection("Team"));
         Seed(h, state, File_(("Team", Synced("team.json"))));
+        Assert.True(state.IsSynced("Team"));
         using var model = new CollectionsModel(state, h.Dialogs);
 
         model.Selected = "Default";
@@ -754,21 +759,13 @@ public class CollectionsModelTests
         Assert.Equal(["Default"], model.CopyTargets);
     }
 
-    /// <summary>
-    /// Both verbs need something ticked, and a synced collection can do neither: its rows have an
-    /// author elsewhere, and SetChecked already refuses there.
-    /// </summary>
+    /// <summary>Both verbs need something ticked.</summary>
     [Fact]
-    public void CopyAndRemovePredicatesFollowTheTicksAndTheKind()
+    public void CopyAndRemovePredicatesFollowTheTicks()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
-        // Created first, as the master list decides which collections exist; the sidecar only
-        // annotates one already there (CollectionsFile.Reconciled), so seeding a "Team" entry
-        // with nothing to annotate would leave it dropped and unreachable.
-        Assert.Null(state.CreateCollection("Team"));
-        Seed(h, state, File_(("Team", Synced("team.json"))));
         using var model = new CollectionsModel(state, h.Dialogs);
 
         model.Selected = "Default";
@@ -777,9 +774,32 @@ public class CollectionsModelTests
         model.SetChecked("alpha", true);
         Assert.True(model.CanCopyChecked);
         Assert.True(model.CanRemoveChecked);
+    }
 
+    /// <summary>
+    /// The kind guard specifically, not just an empty tick set: Selected clears the ticks on
+    /// every switch, so a leg that ticks a row and only then switches to the synced collection
+    /// would find both predicates false regardless of the IsSynced term — the empty tick set
+    /// alone would explain it. Reload does not clear ticks, so ticking first and letting the
+    /// *same* collection turn synced underneath is the one path that isolates the guard.
+    /// </summary>
+    [Fact]
+    public void CopyAndRemovePredicatesAreGatedBySyncSpecifically()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Team"));
+        using var model = new CollectionsModel(state, h.Dialogs);
         model.Selected = "Team";
-        Assert.False(model.CanCopyChecked);   // a synced collection's rows are the author's
+        model.SetChecked("alpha", true);
+        Assert.True(model.CanCopyChecked);   // still local, and something is ticked
+        Assert.True(model.CanRemoveChecked);
+
+        Seed(h, state, File_(("Team", Synced("team.json"))));
+        Assert.True(state.IsSynced("Team"));
+        Assert.Equal(["alpha"], model.CheckedNames);   // reload does not clear the ticks
+        Assert.False(model.CanCopyChecked);   // the guard, not an empty tick set, is what changed
         Assert.False(model.CanRemoveChecked);
     }
 
@@ -817,5 +837,105 @@ public class CollectionsModelTests
         Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("beta"));
         Assert.Contains("2", h.Dialogs.Confirms[^1].Message);   // several are counted
         Assert.Empty(model.CheckedNames);   // and the ticks go with them
+    }
+
+    /// <summary>
+    /// Remove(names, collection) persists but never applies on its own; the caller applies only
+    /// when the collection losing rows is the active one — the same rule SetEnabled follows.
+    /// </summary>
+    [Fact]
+    public void RemoveCheckedAppliesOnlyWhenTheActiveCollectionLosesRows()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.Upsert("gamma", Local("/bin/gamma"), null, "Work"));
+        state.SwitchCollection("Default");
+        using var model = new CollectionsModel(state, h.Dialogs);
+        h.Dialogs.NextConfirm = true;
+
+        // Inactive collection: the write lands, but Claude's config is untouched.
+        var before = h.ClaudeServers();
+        model.Selected = "Work";
+        model.SetChecked("gamma", true);
+        model.RemoveChecked();
+        Assert.False(state.Store.Collections["Work"].Mcps.ContainsKey("gamma"));   // removed from the store
+        // Work was never active, so nothing Claude runs has changed.
+        Assert.True(DictionaryEquality.Equal(before, h.ClaudeServers()));
+
+        // The active collection: the same call does apply.
+        model.Selected = "Default";
+        model.SetChecked("aws-mcp", true);
+        model.RemoveChecked();
+        Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("aws-mcp"));
+        Assert.False(h.ClaudeServers().ContainsKey("aws-mcp"));   // the active collection changed, so Claude's config follows
+    }
+
+    /// <summary>
+    /// The copy lands in the target, disabled, and the ticks go with it — the same clearing
+    /// RemoveChecked does on success. Every copy arrives disabled, so this never applies.
+    /// </summary>
+    [Fact]
+    public void CopyCheckedCopiesIntoTheTargetClearsTicksAndDoesNotApply()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        // Created first: CreateCollection starts a collection as a copy of whichever one is
+        // active when it is made, so making Spare before alpha exists keeps alpha out of that
+        // starting snapshot — otherwise the copy below would collide with it and land as
+        // "alpha 2" instead, leaving the original untouched and this test green for the wrong
+        // reason.
+        Assert.Null(state.CreateCollection("Spare"));
+        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Default";
+        model.SetChecked("alpha", true);
+
+        var before = h.ClaudeServers();
+        Assert.Null(model.CopyChecked("Spare", new Dictionary<string, ImportChoice>()));
+        Assert.False(state.Store.Collections["Spare"].Mcps["alpha"].Enabled);   // the copy landed, disabled
+        Assert.Empty(model.CheckedNames);   // the ticks went with it
+        // Every copy arrives disabled, so nothing Claude runs has changed.
+        Assert.True(DictionaryEquality.Equal(before, h.ClaudeServers()));
+    }
+
+    /// <summary>
+    /// The two early-outs CopyChecked documents: a target outside CopyTargets — the source
+    /// itself, or a synced collection — and an empty tick set. Both return null without reaching
+    /// AppState.MakeLocalCopy, so nothing lands anywhere and the ticks are left standing.
+    /// </summary>
+    [Fact]
+    public void CopyCheckedRefusesATargetOutsideCopyTargets()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        // Created first, for the same reason as the success test above, and so seeding the
+        // sidecar afterwards has something in the master list to annotate (CollectionsFile.Reconciled).
+        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
+        Seed(h, state, File_(("Team", Synced("team.json"))));
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Default";
+        model.SetChecked("alpha", true);
+
+        var choices = new Dictionary<string, ImportChoice>();
+        Assert.Null(model.CopyChecked("Default", choices));   // the source is not a target
+        Assert.Null(model.CopyChecked("Team", choices));      // a synced collection is not a target either
+        Assert.Equal(["alpha"], model.CheckedNames);   // both are unreachable early-outs, so the ticks stand
+        Assert.False(state.Store.Collections["Team"].Mcps.ContainsKey("alpha"));   // nothing landed in Team
+    }
+
+    [Fact]
+    public void CopyCheckedRefusesWhenNothingIsTicked()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Spare"));
+        var before = state.Store.Collections["Spare"];
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Default";
+
+        Assert.Null(model.CopyChecked("Spare", new Dictionary<string, ImportChoice>()));   // nothing ticked, so there is nothing to copy
+        Assert.Equal(before, state.Store.Collections["Spare"]);   // and nothing about Spare changed
     }
 }

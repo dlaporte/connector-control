@@ -44,7 +44,7 @@ public final class CollectionsModel: ObservableObject {
 
     public static func exportButton(_ count: Int) -> String { "Export \(count)…" }
 
-    // MARK: Selection bar
+    // MARK: - Selection bar
 
     public static let copyToButton = "Copy to"
     public static let exportCheckedButton = "Export"
@@ -441,10 +441,13 @@ public final class CollectionsModel: ObservableObject {
     public func exportIntentForChecked() -> [String] { checkedNames }
 
     /// The selection bar's Copy to: the ticked rows into another local collection, name clashes
-    /// settled by `choices` the way the editor's own copy sheet settles them. nil both on success
-    /// and on doing nothing, matching `AppState.makeLocalCopy`; either way the ticks are cleared,
-    /// as they are after `removeChecked` succeeds. It does not apply: every copy arrives
-    /// disabled, so nothing Claude runs has changed.
+    /// settled by `choices` the way the editor's own copy sheet settles them. It does not apply:
+    /// every copy arrives disabled, so nothing Claude runs has changed.
+    ///
+    /// nil both on success and on doing nothing, matching `AppState.makeLocalCopy`, and either
+    /// one clears the ticks, as `removeChecked` does once it succeeds. An error message — the
+    /// target stopped being local, say — leaves them ticked for a retry; so do the two
+    /// early-outs below, which never reach `makeLocalCopy` at all.
     ///
     /// The two early-outs are unreachable from the UI: the button that calls this is gated by
     /// `canCopyChecked`, and its destination menu is built from `copyTargets`.

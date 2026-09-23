@@ -548,9 +548,12 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>
     /// The selection bar's Copy to: the ticked rows into another local collection, name clashes
     /// settled by <paramref name="choices"/> the way the editor's own copy sheet settles them.
-    /// Null both on success and on doing nothing, matching <see cref="AppState.MakeLocalCopy"/>;
-    /// either way the ticks are cleared, as they are after <see cref="RemoveChecked"/> succeeds.
     /// It does not apply: every copy arrives disabled, so nothing Claude runs has changed.
+    ///
+    /// Null both on success and on doing nothing, matching <see cref="AppState.MakeLocalCopy"/>,
+    /// and either one clears the ticks, as <see cref="RemoveChecked"/> does once it succeeds. An
+    /// error message — the target stopped being local, say — leaves them ticked for a retry; so
+    /// do the two early-outs below, which never reach <see cref="AppState.MakeLocalCopy"/> at all.
     ///
     /// The two early-outs are unreachable from the UI: the button that calls this is gated by
     /// <see cref="CanCopyChecked"/>, and its destination menu is built from <see cref="CopyTargets"/>.
