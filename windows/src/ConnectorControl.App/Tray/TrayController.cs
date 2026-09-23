@@ -12,7 +12,7 @@ namespace ConnectorControl.App.Tray;
 /// The tray icon (powerplug, or the warning triangle while an apply
 /// awaits retry; black on a light taskbar, white on a dark one, re-rendered on
 /// theme change), left-click toggles the flyout, right-click shows Open /
-/// Settings… / Quit Connector Control.
+/// Settings / Quit Connector Control.
 /// </summary>
 public sealed class TrayController : IDisposable
 {
@@ -42,7 +42,7 @@ public sealed class TrayController : IDisposable
     {
         var menu = new ContextMenu();
         menu.Items.Add(Item("Open", open));
-        menu.Items.Add(Item("Settings…", settings));
+        menu.Items.Add(Item("Settings", settings));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Quit Connector Control", quit));
         return menu;

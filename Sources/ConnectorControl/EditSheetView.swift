@@ -10,7 +10,6 @@ struct EditSheetView: View {
     /// window is open has to repaint it from here.
     @ObservedObject private var state: AppState
     @Environment(\.dismiss) private var dismiss
-    @State private var hostWindow: NSWindow?
     @State private var whatCanIChangeShown = false
     @FocusState private var envFocus: UUID?
 
@@ -98,7 +97,6 @@ struct EditSheetView: View {
             Button(EditorModel.switchAnywayButton, role: .destructive) { model.forceSwitchToForm() }
             Button(EditorModel.stayInJSONButton, role: .cancel) { model.stayInJSON() }
         }
-        .background(WindowFinder { hostWindow = $0 })
     }
 
     // MARK: header

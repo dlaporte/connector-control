@@ -262,9 +262,9 @@ struct CollectionsWindowView: View {
                 .disabled(!model.canDelete)
             // Two independent flags, not two halves of one: a collection whose document another
             // machine publishes can be published from this one as well, and both links belong to
-            // it — the toolbar's Publish… follows the same flag.
+            // it — the toolbar's publish action follows the same flag.
             if model.canPublish {
-                Button(CollectionsModel.publishButton) { show(.publish(publishModel())) }
+                Button(model.publishActionTitle) { show(.publish(publishModel())) }
             }
             if model.canStopPublishing {
                 Button(CollectionsModel.stopPublishingAction) { act { model.stopPublishing() } }
@@ -286,7 +286,7 @@ struct CollectionsWindowView: View {
             Button(CollectionsModel.subscribeButton) { openDocument(keepInSync: true) }
             Button(CollectionsModel.exportButton(model.checkedNames.count)) { show(.export(exportModel())) }
                 .disabled(!model.canExport)
-            Button(CollectionsModel.publishButton) { show(.publish(publishModel())) }
+            Button(model.publishActionTitle) { show(.publish(publishModel())) }
                 .disabled(!model.canPublish)
             Button(CollectionsModel.refreshButton) { act { model.refresh() } }
                 .disabled(!model.canRefresh)

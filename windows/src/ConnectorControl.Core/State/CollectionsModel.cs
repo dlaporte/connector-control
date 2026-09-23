@@ -230,6 +230,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         Raise(nameof(CanCopyChecked));
         Raise(nameof(CanRemoveChecked));
         Raise(nameof(CanPublish));
+        Raise(nameof(PublishActionTitle));
         Raise(nameof(CanRefresh));
         Raise(nameof(CanMakeLocalCopy));
         Raise(nameof(CanStopSyncing));
@@ -464,6 +465,12 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// collection has an author elsewhere and nothing here to publish.
     /// </summary>
     public bool CanPublish => !state.IsSynced(SelectedCollection);
+
+    /// <summary>
+    /// Start Publishing for a collection that does not publish yet, Publishing Settings for one
+    /// that does: the same dialog, but by then it changes what is shared rather than starting.
+    /// </summary>
+    public string PublishActionTitle => state.IsPublished(SelectedCollection) ? PublishSettingsButton : PublishButton;
 
     /// <summary>Refresh reads the bound document, so it needs one this machine can name.</summary>
     public bool CanRefresh => LocatedSource(SelectedCollection) is not null;

@@ -390,6 +390,12 @@ public final class CollectionsModel: ObservableObject {
     /// A synced collection has an author elsewhere and nothing here to publish.
     public var canPublish: Bool { !state.isSynced(selectedCollection) }
 
+    /// Start Publishing for a collection that does not publish yet, Publishing Settings for one
+    /// that does: the same sheet, but by then it changes what is shared rather than starting.
+    public var publishActionTitle: String {
+        state.isPublished(selectedCollection) ? CollectionsModel.publishSettingsButton : CollectionsModel.publishButton
+    }
+
     /// Refresh reads the bound document, so it needs one this machine can name.
     public var canRefresh: Bool { locatedSource(of: selectedCollection) != nil }
 

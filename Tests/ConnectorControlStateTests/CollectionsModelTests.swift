@@ -212,6 +212,24 @@ final class CollectionsModelTests: XCTestCase {
 
     // MARK: - Create, rename, delete
 
+    func testThePublishActionIsNamedForWhetherTheCollectionAlreadyPublishes() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Shared"))
+        state.switchCollection(to: "Default")
+        try seed(h, state, file: CollectionsFile(collections: ["Shared": published(slug: "shared")]),
+                 cache: CollectionsLocalCache(synced: [:], published: ["Shared": .init(folder: "/tmp/share", lastWrittenHash: nil)]))
+        XCTAssertTrue(state.isPublished("Shared"))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+
+        model.selected = "Default"
+        XCTAssertEqual(model.publishActionTitle, CollectionsModel.publishButton)
+        model.selected = "Shared"
+        XCTAssertEqual(model.publishActionTitle, CollectionsModel.publishSettingsButton,
+                       "the sheet changes what is shared by then, rather than starting")
+    }
+
     func testCreateRenameDeleteGoThroughTheDialogs() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }

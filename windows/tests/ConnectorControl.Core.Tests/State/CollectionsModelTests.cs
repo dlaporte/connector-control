@@ -224,6 +224,25 @@ public class CollectionsModelTests
     // MARK: create, rename, delete
 
     [Fact]
+    public void ThePublishActionIsNamedForWhetherTheCollectionAlreadyPublishes()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Shared"));
+        state.SwitchCollection("Default");
+        Seed(h, state, File_(("Shared", Published("shared"))),
+             Cache(published: [new("Shared", new CollectionsLocalCache.PublishBinding("/tmp/share", null))]));
+        Assert.True(state.IsPublished("Shared"));
+        using var model = new CollectionsModel(state, h.Dialogs);
+
+        model.Selected = "Default";
+        Assert.Equal(CollectionsModel.PublishButton, model.PublishActionTitle);
+        model.Selected = "Shared";
+        // The dialog changes what is shared by then, rather than starting.
+        Assert.Equal(CollectionsModel.PublishSettingsButton, model.PublishActionTitle);
+    }
+
+    [Fact]
     public void CreateRenameDeleteGoThroughTheDialogs()
     {
         using var h = new AppStateHarness(seedClaudeConfig: false);

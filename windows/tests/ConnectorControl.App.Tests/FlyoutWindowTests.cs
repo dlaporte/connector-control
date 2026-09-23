@@ -530,7 +530,7 @@ public class FlyoutWindowTests
             Assert.Equal(4, menu.Items.Count);   // three items and a separator
             return items.Select(i => (string)i.Header).ToArray();
         });
-        Assert.Equal(["Open", "Settings…", "Quit Connector Control"], headers);
+        Assert.Equal(["Open", "Settings", "Quit Connector Control"], headers);
         Assert.Equal(["open", "settings", "quit"], clicks);
     }
 

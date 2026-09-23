@@ -111,7 +111,7 @@
         <Button x:Name="ExportButton" Style="{StaticResource ToolbarButton}"
                 IsEnabled="{Binding CanExport}" Click="OnExport" />
         <Button x:Name="PublishButton" Style="{StaticResource ToolbarButton}"
-                Content="{x:Static state:CollectionsModel.PublishButton}"
+                Content="{Binding PublishActionTitle}"
                 IsEnabled="{Binding CanPublish}" Click="OnPublish" />
         <Button x:Name="RefreshButton" Style="{StaticResource ToolbarButton}"
                 Content="{x:Static state:CollectionsModel.RefreshButton}"
@@ -284,7 +284,7 @@
                   Content="{x:Static state:CollectionsModel.DeleteAction}"
                   IsEnabled="{Binding CanDelete}" Click="OnDelete" />
           <Button x:Name="PublishLink" Style="{StaticResource ActionLink}"
-                  Content="{x:Static state:CollectionsModel.PublishButton}"
+                  Content="{Binding PublishActionTitle}"
                   Visibility="{Binding CanPublish, Converter={StaticResource Vis}}" Click="OnPublish" />
           <Button x:Name="StopPublishingLink" Style="{StaticResource ActionLink}"
                   Content="{x:Static state:CollectionsModel.StopPublishingAction}"
