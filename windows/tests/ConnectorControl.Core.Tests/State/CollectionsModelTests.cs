@@ -297,6 +297,22 @@ public class CollectionsModelTests
     }
 
     /// <summary>
+    /// Claude Desktop on Windows runs a server through <c>cmd /c</c>: what cmd runs is the launcher,
+    /// named without its <c>.cmd</c>, and a bridge spelled that way is still a remote connector.
+    /// </summary>
+    [Fact]
+    public void TargetUnwrapsCmdAndAWindowsLaunchersExtension()
+    {
+        Assert.Equal(@"npx …/server-filesystem ~\Docs",
+            CollectionsModel.TargetOf(Local("cmd", "/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", @"C:\Users\x\Docs").Config,
+                @"C:\Users\x"));
+        Assert.Equal("npx mcp-server-fetch", CollectionsModel.TargetOf(Local("npx.cmd", "-y", "mcp-server-fetch").Config, "/Users/x"));
+        AssertTarget(Local("cmd", "/c", "tool", "--token", "abc"), "tool", "abc");
+        AssertTarget(Local("CMD.EXE", "/K", "npx", "-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"),
+            "h.example", "abc");
+    }
+
+    /// <summary>
     /// A command that is a shell line keeps its last word; one that could itself be a secret is
     /// left out, and the arguments still show.
     /// </summary>

@@ -293,19 +293,31 @@ public final class CollectionsModel: ObservableObject {
     /// whatever follows a flag named for a secret is left out too, since a password can look
     /// like a package.
     public static func target(of config: JSONValue, home: String = NSHomeDirectory()) -> String {
-        if let remote = RemotePattern.decode(config) {
+        let model = FormMapper.analyze(config).model
+        var command = model.command
+        var commandArgs = model.args
+        // Windows' `cmd /c npx …`: what cmd runs is the launcher, and the rule applies to what
+        // follows it.
+        if launcherName(command).lowercased() == "cmd", let first = commandArgs.first,
+           ["/c", "/k"].contains(first.lowercased()) {
+            commandArgs.removeFirst()
+            if !commandArgs.isEmpty { command = commandArgs.removeFirst() }
+        }
+        // Read through the unwrapping and the launcher's extension, so the same bridge is a remote
+        // connector however it is spelled, and on both platforms.
+        if launcherName(command).lowercased() == "npx",
+           let remote = RemotePattern.decode(.object(["command": .string("npx"), "args": .array(commandArgs.map(JSONValue.string))])) {
             return urlOrigin(remote.url).map(\.host) ?? remoteType
         }
-        let model = FormMapper.analyze(config).model
         // The slot where a package runner names the server it fetches: the one place a bare
         // hyphenated word is a package rather than, as likely, a password.
-        let serverSlot = packageRunners.contains(launcherName(model.command).lowercased())
-            ? model.args.firstIndex { !$0.hasPrefix("-") } : nil
-        let args = model.args.enumerated().compactMap { index, arg -> String? in
-            if index > 0, isSecretNamedFlag(model.args[index - 1]) { return nil }
+        let serverSlot = packageRunners.contains(launcherName(command).lowercased())
+            ? commandArgs.firstIndex { !$0.hasPrefix("-") } : nil
+        let args = commandArgs.enumerated().compactMap { index, arg -> String? in
+            if index > 0, isSecretNamedFlag(commandArgs[index - 1]) { return nil }
             return shown(arg, home: home, isServerSlot: index == serverSlot)
         }
-        let tokens = [launcher(model.command)].compactMap { $0 } + args
+        let tokens = [launcher(command)].compactMap { $0 } + args
         return tokens.joined(separator: " ")
     }
 
@@ -388,9 +400,12 @@ public final class CollectionsModel: ObservableObject {
     /// The last component of a command, splitting on both separators rather than this platform's:
     /// a collection carries connectors authored on either, and a Windows command's launcher is
     /// still worth naming on a Mac. Split by hand, because the path APIs on the two platforms
-    /// disagree about which separators count.
+    /// disagree about which separators count. A Windows launcher's `.cmd`, `.exe` or `.bat` is
+    /// dropped: `npx.cmd` is `npx`, both to name and to recognise.
     private static func launcherName(_ command: String) -> String {
-        command.split(whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init) ?? command
+        let name = command.split(whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init) ?? command
+        let isWindowsLauncher = name.count > 4 && [".cmd", ".exe", ".bat"].contains(name.suffix(4).lowercased())
+        return isWindowsLauncher ? String(name.dropLast(4)) : name
     }
 
     public var detailLine: String {

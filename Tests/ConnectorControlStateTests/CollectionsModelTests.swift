@@ -273,6 +273,18 @@ final class CollectionsModelTests: XCTestCase {
                        "npx hunter-2 …/pkg")
     }
 
+    /// Claude Desktop on Windows runs a server through `cmd /c`: what cmd runs is the launcher,
+    /// named without its `.cmd`, and a bridge spelled that way is still a remote connector.
+    func testTargetUnwrapsCmdAndAWindowsLaunchersExtension() {
+        XCTAssertEqual(CollectionsModel.target(of: local("cmd", ["/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", #"C:\Users\x\Docs"#]).config,
+                                               home: #"C:\Users\x"#),
+                       #"npx …/server-filesystem ~\Docs"#)
+        XCTAssertEqual(CollectionsModel.target(of: local("npx.cmd", ["-y", "mcp-server-fetch"]).config, home: "/Users/x"), "npx mcp-server-fetch")
+        assertTarget(local("cmd", ["/c", "tool", "--token", "abc"]), is: "tool", hides: "abc")
+        assertTarget(local("CMD.EXE", ["/K", "npx", "-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"]),
+                     is: "h.example", hides: "abc")
+    }
+
     /// A command that is a shell line keeps its last word; one that could itself be a secret is
     /// left out, and the arguments still show.
     func testTargetShowsOnlyALaunchersLastWordOrNothing() {

@@ -345,18 +345,37 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public static string TargetOf(JsonValue config, string? home = null)
     {
         home ??= Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        if (RemotePattern.Decode(config) is { } remote)
+        var model = FormMapper.Analyze(config).Model;
+        var command = model.Command;
+        var commandArgs = model.Args.ToList();
+        // Windows' `cmd /c npx …`: what cmd runs is the launcher, and the rule applies to what
+        // follows it.
+        if (LauncherName(command).ToLowerInvariant() == "cmd" && commandArgs.Count > 0
+            && commandArgs[0].ToLowerInvariant() is "/c" or "/k")
+        {
+            commandArgs.RemoveAt(0);
+            if (commandArgs.Count > 0)
+            {
+                command = commandArgs[0];
+                commandArgs.RemoveAt(0);
+            }
+        }
+        // Read through the unwrapping and the launcher's extension, so the same bridge is a remote
+        // connector however it is spelled, and on both platforms.
+        if (LauncherName(command).ToLowerInvariant() == "npx"
+            && RemotePattern.Decode(JsonValue.Object(
+                ("command", JsonValue.String("npx")),
+                ("args", JsonValue.Array(commandArgs.Select(JsonValue.String))))) is { } remote)
         {
             return UrlOrigin(remote.Url)?.Host ?? RemoteType;
         }
-        var model = FormMapper.Analyze(config).Model;
         // The slot where a package runner names the server it fetches: the one place a bare
         // hyphenated word is a package rather than, as likely, a password.
-        var serverSlot = PackageRunners.Contains(LauncherName(model.Command).ToLowerInvariant())
-            ? model.Args.ToList().FindIndex(a => !a.StartsWith('-')) : -1;
-        var args = model.Args.Select((arg, index) =>
-            index > 0 && IsSecretNamedFlag(model.Args[index - 1]) ? null : Shown(arg, home, index == serverSlot));
-        var tokens = new[] { Launcher(model.Command) }.Concat(args);
+        var serverSlot = PackageRunners.Contains(LauncherName(command).ToLowerInvariant())
+            ? commandArgs.FindIndex(a => !a.StartsWith('-')) : -1;
+        var args = commandArgs.Select((arg, index) =>
+            index > 0 && IsSecretNamedFlag(commandArgs[index - 1]) ? null : Shown(arg, home, index == serverSlot));
+        var tokens = new[] { Launcher(command) }.Concat(args);
         return string.Join(" ", tokens.OfType<string>());
     }
 
@@ -484,12 +503,15 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// The last component of a command, splitting on both separators rather than this platform's:
     /// a collection carries connectors authored on either, and a Mac command's launcher is still
     /// worth naming on a PC. Split by hand, because the path APIs on the two platforms disagree
-    /// about which separators count.
+    /// about which separators count. A Windows launcher's <c>.cmd</c>, <c>.exe</c> or <c>.bat</c> is
+    /// dropped: <c>npx.cmd</c> is <c>npx</c>, both to name and to recognise.
     /// </summary>
     private static string LauncherName(string command)
     {
         var parts = command.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length > 0 ? parts[^1] : command;
+        var name = parts.Length > 0 ? parts[^1] : command;
+        var isWindowsLauncher = name.Length > 4 && name[^4..].ToLowerInvariant() is ".cmd" or ".exe" or ".bat";
+        return isWindowsLauncher ? name[..^4] : name;
     }
 
     public string DetailLine
