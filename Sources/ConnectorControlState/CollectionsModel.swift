@@ -742,8 +742,9 @@ public final class CollectionsModel: ObservableObject {
             if sourceFilePath != nil { entries.append(.showSourceFile) }
             entries.append(.stopSyncing)
         } else {
-            entries.append(state.isPublished(collection) ? .publishingSettings : .startPublishing)
-            if state.isPublished(collection) { entries.append(.stopPublishing) }
+            let published = state.isPublished(collection)
+            entries.append(published ? .publishingSettings : .startPublishing)
+            if published { entries.append(.stopPublishing) }
             if publishedFilePath != nil { entries.append(.showPublishedFile) }
         }
         entries.append(.exportAll(enabled: !synced))

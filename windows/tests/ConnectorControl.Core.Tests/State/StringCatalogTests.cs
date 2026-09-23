@@ -280,6 +280,7 @@ public class StringCatalogTests
         actual["CollectionsModel.stopSyncingInformative"] = CollectionsModel.StopSyncingInformative;
         actual["CollectionsModel.stopSyncingMessage"] = CollectionsModel.StopSyncingMessage("X");
         actual["CollectionsModel.subscribeButton"] = CollectionsModel.SubscribeButton;
+        actual["CollectionsModel.subscribeSubtitle"] = CollectionsModel.SubscribeSubtitle;
         actual["CollectionsModel.subscribedPill"] = CollectionsModel.SubscribedPill;
         actual["CollectionsModel.syncedDetail"] = CollectionsModel.SyncedDetail("X", "Y");
         actual["CollectionsModel.unlocatedDetail"] = CollectionsModel.UnlocatedDetail;

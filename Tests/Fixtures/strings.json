@@ -190,6 +190,7 @@
     "format": "Stop Syncing “{0}”?"
   },
   "CollectionsModel.subscribeButton": "Subscribe",
+  "CollectionsModel.subscribeSubtitle": "Stays in sync, read-only",
   "CollectionsModel.subscribedPill": "Subscribed",
   "CollectionsModel.syncedDetail": {
     "format": "synced from {0} · read-only · {1}"

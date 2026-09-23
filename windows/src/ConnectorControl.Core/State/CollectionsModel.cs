@@ -969,8 +969,9 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             }
             else
             {
-                entries.Add(state.IsPublished(collection) ? new MenuEntry.PublishingSettings() : new MenuEntry.StartPublishing());
-                if (state.IsPublished(collection))
+                var published = state.IsPublished(collection);
+                entries.Add(published ? new MenuEntry.PublishingSettings() : new MenuEntry.StartPublishing());
+                if (published)
                 {
                     entries.Add(new MenuEntry.StopPublishing());
                 }

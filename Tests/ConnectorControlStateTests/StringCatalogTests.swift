@@ -268,6 +268,7 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.stopSyncingInformative"] = CollectionsModel.stopSyncingInformative
         actual["CollectionsModel.stopSyncingMessage"] = CollectionsModel.stopSyncingMessage("X")
         actual["CollectionsModel.subscribeButton"] = CollectionsModel.subscribeButton
+        actual["CollectionsModel.subscribeSubtitle"] = CollectionsModel.subscribeSubtitle
         actual["CollectionsModel.subscribedPill"] = CollectionsModel.subscribedPill
         actual["CollectionsModel.syncedDetail"] = CollectionsModel.syncedDetail("X", "Y")
         actual["CollectionsModel.unlocatedDetail"] = CollectionsModel.unlocatedDetail
