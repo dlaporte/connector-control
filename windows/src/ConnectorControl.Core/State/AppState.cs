@@ -2030,8 +2030,8 @@ public sealed class AppState : ObservableObject, IDisposable
             {
                 continue;
             }
-            // Replace keeps the target's own key, so the connector subscribers and Claude know by
-            // name is the one that changes rather than gaining a neighbour.
+            // Replace keeps the target's own key, so the connector that subscribers and Claude
+            // know by name is the one that changes rather than gaining a neighbour.
             var taken = into.Mcps.ContainsKey(name);
             var copied = choices?.GetValueOrDefault(name) == ImportChoice.Replace && taken
                 ? name

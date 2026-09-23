@@ -1338,8 +1338,8 @@ public final class AppState: ObservableObject {
         for name in connectors.sorted() {
             guard let held = store.collections[source]?.mcps[name] else { continue }
             if choices[name] == .skip { continue }
-            // Replace keeps the target's own key, so the connector subscribers and Claude know
-            // by name is the one that changes rather than gaining a neighbour.
+            // Replace keeps the target's own key, so the connector that subscribers and Claude
+            // know by name is the one that changes rather than gaining a neighbour.
             let taken = store.collections[target]?.mcps[name] != nil
             let copied = (choices[name] == .replace && taken) ? name : freeConnectorName(name, in: target)
             store.collections[target]?.mcps[copied] = MCPEntry(
