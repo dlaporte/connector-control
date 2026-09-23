@@ -174,12 +174,6 @@ public partial class FlyoutWindow : Window
         }
     }
 
-    private void OnAdd(object sender, RoutedEventArgs e)
-    {
-        HideFlyout();
-        windows.OpenEditor(EditTarget.NewRemote(EditorWindow.NewRemoteStyle));
-    }
-
     private void OnSettings(object sender, RoutedEventArgs e)
     {
         HideFlyout();
@@ -188,24 +182,14 @@ public partial class FlyoutWindow : Window
 
     private void OnQuit(object sender, RoutedEventArgs e) => model.Quit();
 
-    private void OnEdit(object sender, RoutedEventArgs e)
-    {
-        if (((FrameworkElement)sender).DataContext is not ConnectorRow row || model.EntryFor(row.Name) is not { } entry)
-        {
-            return;   // the entry vanished since the row was drawn
-        }
-        HideFlyout();
-        windows.OpenEditor(EditTarget.Existing(row.Name, entry));
-    }
-
     private void OnFooter(object sender, RoutedEventArgs e) => model.FooterAction();
 
     private void OnCollectionChip(object sender, RoutedEventArgs e) => OpenCollectionMenu();
 
     /// <summary>
     /// The collection chip menu: the collections to switch between with a check on the active
-    /// one, then the two document commands, then the window that owns everything else — creating,
-    /// renaming and deleting included. Built without being shown, so a test can read it.
+    /// one, then the window that owns everything else — creating, renaming, deleting, and the
+    /// document commands included. Built without being shown, so a test can read it.
     /// </summary>
     internal ContextMenu BuildCollectionMenu()
     {
@@ -235,14 +219,6 @@ public partial class FlyoutWindow : Window
                 entry.Click += (_, _) => model.SwitchCollection(name);
             }
             menu.Items.Add(entry);
-        }
-        menu.Items.Add(new Separator());
-        menu.Items.Add(Command(FlyoutModel.ImportTitle, model.RequestImport));
-        // A synced collection is the author's document already; passing a second copy of it on
-        // is theirs to do, not this machine's.
-        if (!model.ActiveCollectionIsSynced)
-        {
-            menu.Items.Add(Command(model.ExportTitle, model.RequestExport));
         }
         menu.Items.Add(new Separator());
         menu.Items.Add(Command(FlyoutModel.ManageTitle));

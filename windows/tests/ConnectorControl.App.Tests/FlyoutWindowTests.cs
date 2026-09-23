@@ -284,7 +284,7 @@ public class FlyoutWindowTests
     }
 
     [Fact]
-    public void TheMenuHasImportExportAndManageButNoHousekeeping()
+    public void TheMenuHasCollectionsAndManageButNoHousekeeping()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -292,8 +292,8 @@ public class FlyoutWindowTests
         WpfApp.Invoke(() => Showing(h, state, (window, model, _) =>
         {
             var menu = window.BuildCollectionMenu();
-            Assert.Equal(["Import", "Export “Default”", "Manage Collections"], MenuCommands(menu, model));
-            Assert.Equal(2, menu.Items.OfType<Separator>().Count());
+            Assert.Equal(["Manage Collections"], MenuCommands(menu, model));
+            Assert.Single(menu.Items.OfType<Separator>());
             var collections = menu.Items.OfType<MenuItem>().Take(model.CollectionItems.Count).ToList();
             Assert.Equal(["Data team", "Default"], collections.Select(MenuName).ToArray());
             // Every synced row names its source, not only the active one the chip speaks for:
@@ -314,32 +314,28 @@ public class FlyoutWindowTests
             Assert.Equal(model.CollectionItems.Select(FlyoutModel.MenuTitle).ToArray(),
                 collections.Select(i => AutomationProperties.GetName(i)).ToArray());
 
-            // A synced collection is the author's document already; this machine does not offer
-            // to pass a second copy of it on.
+            // A synced collection changes the collection rows, not the commands after them: the
+            // menu offers nothing document-shaped any more, active or not.
             state.SwitchCollection("Data team");
             Layout(window);
-            Assert.Equal(["Import", "Manage Collections"], MenuCommands(window.BuildCollectionMenu(), model));
+            Assert.Equal(["Manage Collections"], MenuCommands(window.BuildCollectionMenu(), model));
         }));
     }
 
     [Fact]
-    public void ARowInASyncedCollectionShowsTheLockAndAddIsDisabled()
+    public void ARowInASyncedCollectionShowsTheLock()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
         SubscribeToDataTeam(h, state);
         WpfApp.Invoke(() => Showing(h, state, (window, model, _) =>
         {
-            Assert.True(window.AddButton.IsEnabled);
-            Assert.Equal(FlyoutModel.AddTooltip, window.AddButton.ToolTip);
             Assert.Equal(Visibility.Collapsed, RowLock(window, model.Rows[0]).Visibility);
         }, rows: true));
 
         state.SwitchCollection("Data team");
         WpfApp.Invoke(() => Showing(h, state, (window, model, _) =>
         {
-            Assert.False(window.AddButton.IsEnabled);
-            Assert.Equal(FlyoutModel.AddDisabledTooltip, window.AddButton.ToolTip);
             var row = model.Rows[0];
             var glyph = RowLock(window, row);
             Assert.Equal(Visibility.Visible, glyph.Visibility);

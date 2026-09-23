@@ -16,9 +16,10 @@
         </DataTrigger>
       </Style.Triggers>
     </Style>
-    <!-- The collection banner's second answer, which only a failed publish has: the Collections
-         window's own action link, worded there and reached from here, so it is drawn as one. Its
-         visibility follows the caption, because a banner with no second answer has none. -->
+    <!-- The collection banner's second answer, which only a failed publish has: Stop Publishing,
+         worded as it is in the Collections window's More menu and reached from here, so it reads
+         as one. Its visibility follows the caption, because a banner with no second answer has
+         none. -->
     <Style x:Key="BannerSecondaryButton" TargetType="Button" BasedOn="{StaticResource LinkButton}">
       <Setter Property="Margin" Value="8,0,0,0" />
       <Style.Triggers>
@@ -59,11 +60,6 @@
             </Button>
           </StackPanel>
           <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="20,0,0,0">
-            <!-- Nothing can be added to a synced collection, and the tooltip is the model's to
-                 pick: it says why the button is dead as often as what it does. -->
-            <Button x:Name="AddButton" Style="{StaticResource IconButton}" Content="&#xE710;"
-                    IsEnabled="{Binding CanAddConnector}" ToolTip="{Binding AddTooltipText}"
-                    ToolTipService.ShowOnDisabled="True" Click="OnAdd" />
             <Button Style="{StaticResource IconButton}" Content="&#xE713;" ToolTip="{x:Static state:FlyoutModel.SettingsTooltip}" Click="OnSettings" />
             <Button Style="{StaticResource IconButton}" Content="&#xE7E8;" ToolTip="{x:Static state:FlyoutModel.QuitTooltip}" Click="OnQuit" />
           </StackPanel>
@@ -120,12 +116,11 @@
                       <ColumnDefinition Width="Auto" />
                       <ColumnDefinition Width="*" />
                       <ColumnDefinition Width="Auto" />
-                      <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <ToggleButton Style="{StaticResource Switch}" IsChecked="{Binding Enabled}" VerticalAlignment="Center" />
                     <!-- The lock leading a synced collection's row, dimmed so it reads as a mark
-                         rather than as a control: the switch and the pencil beside it stay live.
-                         A private-use glyph reads as nothing, so it says its sentence out loud. -->
+                         rather than as a control: the switch beside it stays live. A private-use
+                         glyph reads as nothing, so it says its sentence out loud. -->
                     <TextBlock x:Name="RowLockGlyph" Grid.Column="1"
                                Text="{StaticResource LockGlyph}" FontFamily="{StaticResource IconFont}" FontSize="11"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" Opacity="0.55"
@@ -142,7 +137,6 @@
                                ToolTip="{Binding ToolWarning}"
                                Visibility="{Binding HasToolWarning, Converter={StaticResource Vis}}"
                                VerticalAlignment="Center" Margin="0,0,6,0" />
-                    <Button Grid.Column="4" Style="{StaticResource IconButton}" Content="&#xE70F;" ToolTip="{Binding EditTooltip}" Click="OnEdit" />
                   </Grid>
                   <Separator Margin="0" />
                 </StackPanel>
