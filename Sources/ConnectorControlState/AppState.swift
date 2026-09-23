@@ -1320,8 +1320,16 @@ public final class AppState: ObservableObject {
 
     /// Copies connectors from one collection into a local one exactly as they stand: markers
     /// stay unfilled, every copy arrives disabled, and each one records where it came from. A
-    /// name the target already holds lands beside it as "<name> 2". nil on success.
-    public func makeLocalCopy(of connectors: [String], from source: String, into target: String) -> String? {
+    /// name the target already holds lands beside it as "<name> 2" unless `choices` says
+    /// otherwise: `.replace` takes the target's entry over under its own name, `.skip` copies
+    /// nothing. `choices` is keyed by the connector's name in the source. nil on success.
+    ///
+    /// Unlike `importCopies`, a collision nothing is said about still lands beside — and `.add`
+    /// means the same. An import arrives from a file the user did not write, where silence
+    /// should change nothing; a copy is an act they just asked for on rows they ticked, where
+    /// silence should do it. Only `.skip` and `.replace` read the same way in both.
+    public func makeLocalCopy(of connectors: [String], from source: String, into target: String,
+                              choices: [String: ImportChoice] = [:]) -> String? {
         guard store.collections[source] != nil, store.collections[target] != nil else { return nil }
         guard kind(of: target) == .local else { return AppState.targetMustBeLocalError }
         let date = today
@@ -1329,7 +1337,11 @@ public final class AppState: ObservableObject {
         var landed = false
         for name in connectors.sorted() {
             guard let held = store.collections[source]?.mcps[name] else { continue }
-            let copied = freeConnectorName(name, in: target)
+            if choices[name] == .skip { continue }
+            // Replace keeps the target's own key, so the connector subscribers and Claude know
+            // by name is the one that changes rather than gaining a neighbour.
+            let taken = store.collections[target]?.mcps[name] != nil
+            let copied = (choices[name] == .replace && taken) ? name : freeConnectorName(name, in: target)
             store.collections[target]?.mcps[copied] = MCPEntry(
                 enabled: false, config: copiedConfig(held.config, from: source), lastEditView: held.lastEditView)
             entry.provenance[copied] = CollectionsFile.Provenance(from: source, author: nil, date: date)

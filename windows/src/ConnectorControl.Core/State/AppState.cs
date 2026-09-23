@@ -1994,9 +1994,19 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// Copies connectors from one collection into a local one exactly as they stand: markers stay
     /// unfilled, every copy arrives disabled, and each one records where it came from. A name the
-    /// target already holds lands beside it as "&lt;name&gt; 2". null on success.
+    /// target already holds lands beside it as "&lt;name&gt; 2" unless <paramref name="choices"/>
+    /// says otherwise: Replace takes the target's entry over under its own name, Skip copies
+    /// nothing. <paramref name="choices"/> is keyed by the connector's name in the source. null on
+    /// success.
+    /// <para>
+    /// Unlike <see cref="ImportCopies"/>, a collision nothing is said about still lands beside —
+    /// and Add means the same. An import arrives from a file the user did not write, where
+    /// silence should change nothing; a copy is an act they just asked for on rows they ticked,
+    /// where silence should do it. Only Skip and Replace read the same way in both.
+    /// </para>
     /// </summary>
-    public string? MakeLocalCopy(IReadOnlyList<string> connectors, string source, string target)
+    public string? MakeLocalCopy(IReadOnlyList<string> connectors, string source, string target,
+        IReadOnlyDictionary<string, ImportChoice>? choices = null)
     {
         if (!Store.Collections.TryGetValue(source, out var from) || !Store.Collections.TryGetValue(target, out var into))
         {
@@ -2016,7 +2026,16 @@ public sealed class AppState : ObservableObject, IDisposable
             {
                 continue;
             }
-            var copied = FreeConnectorName(name, target);
+            if (choices?.GetValueOrDefault(name) == ImportChoice.Skip)
+            {
+                continue;
+            }
+            // Replace keeps the target's own key, so the connector subscribers and Claude know by
+            // name is the one that changes rather than gaining a neighbour.
+            var taken = into.Mcps.ContainsKey(name);
+            var copied = choices?.GetValueOrDefault(name) == ImportChoice.Replace && taken
+                ? name
+                : FreeConnectorName(name, target);
             into.Mcps[copied] = held with { Enabled = false, Config = CopiedConfig(held.Config, source) };
             provenance[copied] = new CollectionsFile.Provenance(source, null, date);
             landed = true;

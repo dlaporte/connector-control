@@ -3024,4 +3024,41 @@ public class AppStateCollectionsTests
         Assert.Null(state.MakeLocalCopyOfCollection("Nowhere", "Ghost"));
         Assert.DoesNotContain("Ghost", state.CollectionNames);
     }
+
+    // A copy whose name the target already holds: the author's answer decides. Replace takes the
+    // target's entry over, skip copies nothing, and the default is still to land beside it.
+    [Fact]
+    public void CopyingAConnectorHonoursTheCollisionChoice()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Source"));
+        Assert.Null(state.Upsert("github", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("/new/github")))), null, "Source"));
+        Assert.Null(state.Upsert("github", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("/old/github")))), null, "Default"));
+
+        Assert.Null(state.MakeLocalCopy(["github"], "Source", "Default", Choices(("github", ImportChoice.Skip))));
+        // Skip copies nothing.
+        Assert.Equal(["github"], AppStateHarness.Keys(
+            state.Store.Collections["Default"].Mcps.Keys.Where(k => k.StartsWith("github", StringComparison.Ordinal))));
+        // And leaves the target alone.
+        Assert.Equal(JsonValue.Object(("command", JsonValue.String("/old/github"))),
+            state.Store.Collections["Default"].Mcps["github"].Config);
+
+        Assert.Null(state.MakeLocalCopy(["github"], "Source", "Default", Choices(("github", ImportChoice.Replace))));
+        // Replace makes no second entry.
+        Assert.Equal(["github"], AppStateHarness.Keys(
+            state.Store.Collections["Default"].Mcps.Keys.Where(k => k.StartsWith("github", StringComparison.Ordinal))));
+        // And takes the source's config.
+        Assert.Equal(JsonValue.Object(("command", JsonValue.String("/new/github"))),
+            state.Store.Collections["Default"].Mcps["github"].Config);
+        // A replaced copy is still off.
+        Assert.False(state.Store.Collections["Default"].Mcps["github"].Enabled);
+
+        Assert.Null(state.MakeLocalCopy(["github"], "Source", "Default"));
+        // And with no choice it still lands beside.
+        Assert.Equal(["github", "github 2"], AppStateHarness.Keys(
+            state.Store.Collections["Default"].Mcps.Keys.Where(k => k.StartsWith("github", StringComparison.Ordinal))));
+    }
 }

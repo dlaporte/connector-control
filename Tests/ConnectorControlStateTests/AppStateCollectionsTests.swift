@@ -2620,4 +2620,38 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.makeLocalCopyOfCollection("Nowhere", named: "Ghost"))
         XCTAssertFalse(state.collectionNames.contains("Ghost"))
     }
+
+    /// A copy whose name the target already holds: the author's answer decides. Replace takes the
+    /// target's entry over, skip copies nothing, and the default is still to land beside it.
+    func testCopyingAConnectorHonoursTheCollisionChoice() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Source"))
+        XCTAssertNil(state.upsert(name: "github", entry: MCPEntry(config: .object([
+            "command": .string("/new/github"),
+        ])), renamedFrom: nil, in: "Source"))
+        XCTAssertNil(state.upsert(name: "github", entry: MCPEntry(config: .object([
+            "command": .string("/old/github"),
+        ])), renamedFrom: nil, in: "Default"))
+
+        XCTAssertNil(state.makeLocalCopy(of: ["github"], from: "Source", into: "Default",
+                                         choices: ["github": .skip]))
+        XCTAssertEqual(state.store.collections["Default"]?.mcps.keys.filter { $0.hasPrefix("github") }.sorted(),
+                       ["github"], "skip copies nothing")
+        XCTAssertEqual(state.store.collections["Default"]?.mcps["github"]?.config,
+                       .object(["command": .string("/old/github")]), "and leaves the target alone")
+
+        XCTAssertNil(state.makeLocalCopy(of: ["github"], from: "Source", into: "Default",
+                                         choices: ["github": .replace]))
+        XCTAssertEqual(state.store.collections["Default"]?.mcps.keys.filter { $0.hasPrefix("github") }.sorted(),
+                       ["github"], "replace makes no second entry")
+        XCTAssertEqual(state.store.collections["Default"]?.mcps["github"]?.config,
+                       .object(["command": .string("/new/github")]), "and takes the source's config")
+        XCTAssertEqual(state.store.collections["Default"]?.mcps["github"]?.enabled, false,
+                       "a replaced copy is still off")
+
+        XCTAssertNil(state.makeLocalCopy(of: ["github"], from: "Source", into: "Default"))
+        XCTAssertEqual(state.store.collections["Default"]?.mcps.keys.filter { $0.hasPrefix("github") }.sorted(),
+                       ["github", "github 2"], "and with no choice it still lands beside")
+    }
 }
