@@ -735,4 +735,87 @@ public class CollectionsModelTests
         model.StopPublishing();
         Assert.Equal([CollectionsModel.DeletePublishedFileQuestion("shared.json")], h.Dialogs.Confirms.Select(c => c.Message));
     }
+
+    // MARK: selection bar
+
+    /// <summary>Where a copy can go: local collections only, never the one the ticked rows already sit in.</summary>
+    [Fact]
+    public void CopyTargetsExcludeTheSourceAndEverySyncedCollection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Other"));
+        Seed(h, state, File_(("Team", Synced("team.json"))));
+        using var model = new CollectionsModel(state, h.Dialogs);
+
+        model.Selected = "Default";
+        Assert.Equal(["Other"], model.CopyTargets);   // not Default, which is the source, and not Team, which is synced
+        model.Selected = "Other";
+        Assert.Equal(["Default"], model.CopyTargets);
+    }
+
+    /// <summary>
+    /// Both verbs need something ticked, and a synced collection can do neither: its rows have an
+    /// author elsewhere, and SetChecked already refuses there.
+    /// </summary>
+    [Fact]
+    public void CopyAndRemovePredicatesFollowTheTicksAndTheKind()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
+        // Created first, as the master list decides which collections exist; the sidecar only
+        // annotates one already there (CollectionsFile.Reconciled), so seeding a "Team" entry
+        // with nothing to annotate would leave it dropped and unreachable.
+        Assert.Null(state.CreateCollection("Team"));
+        Seed(h, state, File_(("Team", Synced("team.json"))));
+        using var model = new CollectionsModel(state, h.Dialogs);
+
+        model.Selected = "Default";
+        Assert.False(model.CanCopyChecked);   // nothing ticked yet
+        Assert.False(model.CanRemoveChecked);
+        model.SetChecked("alpha", true);
+        Assert.True(model.CanCopyChecked);
+        Assert.True(model.CanRemoveChecked);
+
+        model.Selected = "Team";
+        Assert.False(model.CanCopyChecked);   // a synced collection's rows are the author's
+        Assert.False(model.CanRemoveChecked);
+    }
+
+    /// <summary>
+    /// Removing the ticked rows asks first, names the connector when there is one and the count
+    /// when there are more, and always says a copy remains in Backups.
+    /// </summary>
+    [Fact]
+    public void RemoveCheckedConfirmsAndCarriesTheBackupsSentence()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        foreach (var name in new[] { "alpha", "beta" })
+        {
+            Assert.Null(state.Upsert(name, Local("/bin/" + name), null, "Default"));
+        }
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Default";
+
+        // Declined: nothing goes.
+        model.SetChecked("alpha", true);
+        h.Dialogs.NextConfirm = false;
+        model.RemoveChecked();
+        Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("alpha"));    // declined, so alpha stays
+        Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("beta"));
+        Assert.Equal(CollectionsModel.RemoveCheckedInformative, h.Dialogs.Confirms[^1].Informative);
+        Assert.True(h.Dialogs.Confirms[^1].Destructive);
+        Assert.Contains("alpha", h.Dialogs.Confirms[^1].Message);   // one connector is named
+
+        // Accepted, two ticked: the count is stated and the ticks are dropped.
+        h.Dialogs.NextConfirm = true;
+        model.SetChecked("beta", true);
+        model.RemoveChecked();
+        Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("alpha"));   // both ticked rows went
+        Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("beta"));
+        Assert.Contains("2", h.Dialogs.Confirms[^1].Message);   // several are counted
+        Assert.Empty(model.CheckedNames);   // and the ticks go with them
+    }
 }

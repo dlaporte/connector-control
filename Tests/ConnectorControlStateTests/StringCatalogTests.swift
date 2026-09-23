@@ -90,6 +90,9 @@ final class StringCatalogTests: XCTestCase {
         "CollectionsModel.localDetail": ["3"],
         "CollectionsModel.localType": ["X"],
         "CollectionsModel.publishedDetail": ["X"],
+        "CollectionsModel.removeCheckedMessage.many": ["3"],
+        "CollectionsModel.removeCheckedMessage.one": ["X"],
+        "CollectionsModel.selectedCount": ["3"],
         "CollectionsModel.syncedDetail": ["X", "Y"],
         "ConfigService.corruptStoreNote": ["X"],
         "ConfigService.invalidBackupError": ["X", "Y"],
@@ -225,10 +228,12 @@ final class StringCatalogTests: XCTestCase {
         // MARK: CollectionsModel
 
         actual["CollectionsModel.activeSuffix"] = CollectionsModel.activeSuffix
+        actual["CollectionsModel.copyToButton"] = CollectionsModel.copyToButton
         actual["CollectionsModel.deleteAction"] = CollectionsModel.deleteAction
         actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.deletePublishedFileQuestion("X")
         actual["CollectionsModel.editTooltip"] = CollectionsModel.editTooltip
         actual["CollectionsModel.exportButton"] = CollectionsModel.exportButton(3)
+        actual["CollectionsModel.exportCheckedButton"] = CollectionsModel.exportCheckedButton
         actual["CollectionsModel.importButton"] = CollectionsModel.importButton
         actual["CollectionsModel.keepFileButton"] = CollectionsModel.keepFileButton
         actual["CollectionsModel.localDetail"] = CollectionsModel.localDetail(3)
@@ -241,8 +246,13 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.publishedDetail"] = CollectionsModel.publishedDetail("X")
         actual["CollectionsModel.refreshButton"] = CollectionsModel.refreshButton
         actual["CollectionsModel.remoteType"] = CollectionsModel.remoteType
+        actual["CollectionsModel.removeCheckedButton"] = CollectionsModel.removeCheckedButton
+        actual["CollectionsModel.removeCheckedInformative"] = CollectionsModel.removeCheckedInformative
+        actual["CollectionsModel.removeCheckedMessage.many"] = CollectionsModel.removeCheckedMessage(["X", "Y", "Z"])
+        actual["CollectionsModel.removeCheckedMessage.one"] = CollectionsModel.removeCheckedMessage(["X"])
         actual["CollectionsModel.removeFileButton"] = CollectionsModel.removeFileButton
         actual["CollectionsModel.renameAction"] = CollectionsModel.renameAction
+        actual["CollectionsModel.selectedCount"] = CollectionsModel.selectedCount(3)
         actual["CollectionsModel.stopPublishingAction"] = CollectionsModel.stopPublishingAction
         actual["CollectionsModel.stopSyncingAction"] = CollectionsModel.stopSyncingAction
         actual["CollectionsModel.subscribeButton"] = CollectionsModel.subscribeButton

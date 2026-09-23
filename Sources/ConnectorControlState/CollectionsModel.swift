@@ -44,6 +44,27 @@ public final class CollectionsModel: ObservableObject {
 
     public static func exportButton(_ count: Int) -> String { "Export \(count)…" }
 
+    // MARK: Selection bar
+
+    public static let copyToButton = "Copy to"
+    public static let exportCheckedButton = "Export"
+    public static let removeCheckedButton = "Remove"
+
+    /// The bar's own tally, e.g. "2 selected" — distinct from `exportButton`, which names what
+    /// its button does rather than what is ticked.
+    public static func selectedCount(_ n: Int) -> String { "\(n) selected" }
+
+    /// Names the connector when there is exactly one ticked, and states the count otherwise: a
+    /// removal of one row deserves the same specificity `EditorModel.removeMessage` gives it,
+    /// and a removal of several would only get longer for naming them all.
+    public static func removeCheckedMessage(_ names: [String]) -> String {
+        names.count == 1 ? "Remove “\(names[0])”?" : "Remove \(names.count) connectors?"
+    }
+
+    /// Lifted from `EditorModel.removeInformative`, which Task 4 retires: the sentence — the
+    /// most useful thing in that confirmation — survives here unchanged.
+    public static let removeCheckedInformative = "A copy remains in Backups."
+
     /// The sidebar's chain glyph, or nil when there is no chain to explain: a local collection
     /// has no source, and a synced one whose file is still to be found has no path to name. The
     /// sentence is the popover chip's, borrowed rather than copied — one fact, one wording.
@@ -349,6 +370,15 @@ public final class CollectionsModel: ObservableObject {
 
     public var canExport: Bool { !state.isSynced(selectedCollection) && !activeChecks.isEmpty }
 
+    /// Where the selection bar's Copy to can send the ticked rows: any local collection but the
+    /// one showing them, which is their source. A synced collection is excluded too, following
+    /// `EditSheetView.localCopyTargets` — it has no local write path of its own to copy into.
+    public var copyTargets: [String] { state.localCollectionNames.filter { $0 != selectedCollection } }
+
+    public var canCopyChecked: Bool { !state.isSynced(selectedCollection) && !checkedNames.isEmpty }
+
+    public var canRemoveChecked: Bool { !state.isSynced(selectedCollection) && !checkedNames.isEmpty }
+
     /// Any local collection, published or not. Reopening the sheet on a published one shows what
     /// its record says — the folder, every shared value, every marked path — and pressing
     /// Publish again updates the record and rewrites the document. That is the only way to
@@ -409,6 +439,36 @@ public final class CollectionsModel: ObservableObject {
 
     /// The names the export sheet writes, in the order the rows show them.
     public func exportIntentForChecked() -> [String] { checkedNames }
+
+    /// The selection bar's Copy to: the ticked rows into another local collection, name clashes
+    /// settled by `choices` the way the editor's own copy sheet settles them. nil both on success
+    /// and on doing nothing, matching `AppState.makeLocalCopy`; either way the ticks are cleared,
+    /// as they are after `removeChecked` succeeds. It does not apply: every copy arrives
+    /// disabled, so nothing Claude runs has changed.
+    ///
+    /// The two early-outs are unreachable from the UI: the button that calls this is gated by
+    /// `canCopyChecked`, and its destination menu is built from `copyTargets`.
+    public func copyChecked(into collection: String, choices: [String: ImportChoice]) -> String? {
+        let names = checkedNames
+        guard !names.isEmpty, copyTargets.contains(collection) else { return nil }
+        let result = state.makeLocalCopy(of: names, from: selectedCollection, into: collection, choices: choices)
+        if result == nil { for name in names { setChecked(name, false) } }
+        return result
+    }
+
+    /// The selection bar's Remove: asks first, names the connector when there is one and the
+    /// count when there are more, and always says a copy remains in Backups.
+    public func removeChecked() {
+        let names = checkedNames
+        guard !names.isEmpty else { return }
+        guard dialogs.confirm(message: CollectionsModel.removeCheckedMessage(names),
+                              informative: CollectionsModel.removeCheckedInformative,
+                              primary: CollectionsModel.removeCheckedButton, destructive: true) else { return }
+        state.remove(names: names, in: selectedCollection)
+        // remove(names:in:) persists but does not apply, as its single-name sibling does not.
+        if selectedCollection == state.activeCollection { state.applyInteractively() }
+        for name in names { setChecked(name, false) }
+    }
 
     // MARK: - Collection actions
 

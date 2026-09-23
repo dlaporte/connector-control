@@ -663,4 +663,76 @@ final class CollectionsModelTests: XCTestCase {
         model.stopPublishing()
         XCTAssertEqual(h.dialogs.confirms.map(\.message), [CollectionsModel.deletePublishedFileQuestion("shared.json")])
     }
+
+    // MARK: - Selection bar
+
+    /// Where a copy can go: local collections only, never the one the ticked rows already sit in.
+    func testCopyTargetsExcludeTheSourceAndEverySyncedCollection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Other"))
+        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+
+        model.selected = "Default"
+        XCTAssertEqual(model.copyTargets, ["Other"], "not Default, which is the source, and not Team, which is synced")
+        model.selected = "Other"
+        XCTAssertEqual(model.copyTargets, ["Default"])
+    }
+
+    /// Both verbs need something ticked, and a synced collection can do neither: its rows have an
+    /// author elsewhere, and `setChecked` already refuses there.
+    func testCopyAndRemovePredicatesFollowTheTicksAndTheKind() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        // Created first, as the master list decides which collections exist; the sidecar only
+        // annotates one already there (CollectionsFile.reconciled(with:)), so seeding a "Team"
+        // entry with nothing to annotate would leave it dropped and unreachable.
+        XCTAssertNil(state.createCollection(named: "Team"))
+        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+
+        model.selected = "Default"
+        XCTAssertFalse(model.canCopyChecked, "nothing ticked yet")
+        XCTAssertFalse(model.canRemoveChecked)
+        model.setChecked("alpha", true)
+        XCTAssertTrue(model.canCopyChecked)
+        XCTAssertTrue(model.canRemoveChecked)
+
+        model.selected = "Team"
+        XCTAssertFalse(model.canCopyChecked, "a synced collection's rows are the author's")
+        XCTAssertFalse(model.canRemoveChecked)
+    }
+
+    /// Removing the ticked rows asks first, names the connector when there is one and the count
+    /// when there are more, and always says a copy remains in Backups.
+    func testRemoveCheckedConfirmsAndCarriesTheBackupsSentence() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        for name in ["alpha", "beta"] {
+            XCTAssertNil(state.upsert(name: name, entry: local("/bin/" + name), renamedFrom: nil, in: "Default"))
+        }
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        model.selected = "Default"
+
+        // Declined: nothing goes.
+        model.setChecked("alpha", true)
+        h.dialogs.nextConfirm = false
+        model.removeChecked()
+        XCTAssertNotNil(state.store.collections["Default"]?.mcps["alpha"], "declined, so alpha stays")
+        XCTAssertNotNil(state.store.collections["Default"]?.mcps["beta"])
+        XCTAssertEqual(h.dialogs.confirms.last?.informative, CollectionsModel.removeCheckedInformative)
+        XCTAssertEqual(h.dialogs.confirms.last?.destructive, true)
+        XCTAssertTrue(h.dialogs.confirms.last?.message.contains("alpha") ?? false, "one connector is named")
+
+        // Accepted, two ticked: the count is stated and the ticks are dropped.
+        h.dialogs.nextConfirm = true
+        model.setChecked("beta", true)
+        model.removeChecked()
+        XCTAssertNil(state.store.collections["Default"]?.mcps["alpha"], "both ticked rows went")
+        XCTAssertNil(state.store.collections["Default"]?.mcps["beta"])
+        XCTAssertTrue(h.dialogs.confirms.last?.message.contains("2") ?? false, "several are counted")
+        XCTAssertEqual(model.checkedNames, [], "and the ticks go with them")
+    }
 }

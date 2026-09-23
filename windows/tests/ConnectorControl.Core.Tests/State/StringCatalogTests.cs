@@ -96,6 +96,9 @@ public class StringCatalogTests
         ["CollectionsModel.localDetail"] = ["3"],
         ["CollectionsModel.localType"] = ["X"],
         ["CollectionsModel.publishedDetail"] = ["X"],
+        ["CollectionsModel.removeCheckedMessage.many"] = ["3"],
+        ["CollectionsModel.removeCheckedMessage.one"] = ["X"],
+        ["CollectionsModel.selectedCount"] = ["3"],
         ["CollectionsModel.syncedDetail"] = ["X", "Y"],
         ["ConfigService.corruptStoreNote"] = ["X"],
         ["ConfigService.invalidBackupError"] = ["X", "Y"],
@@ -237,10 +240,12 @@ public class StringCatalogTests
         // MARK: CollectionsModel
 
         actual["CollectionsModel.activeSuffix"] = CollectionsModel.ActiveSuffix;
+        actual["CollectionsModel.copyToButton"] = CollectionsModel.CopyToButton;
         actual["CollectionsModel.deleteAction"] = CollectionsModel.DeleteAction;
         actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.DeletePublishedFileQuestion("X");
         actual["CollectionsModel.editTooltip"] = CollectionsModel.EditTooltip;
         actual["CollectionsModel.exportButton"] = CollectionsModel.ExportButton(3);
+        actual["CollectionsModel.exportCheckedButton"] = CollectionsModel.ExportCheckedButton;
         actual["CollectionsModel.importButton"] = CollectionsModel.ImportButton;
         actual["CollectionsModel.keepFileButton"] = CollectionsModel.KeepFileButton;
         actual["CollectionsModel.localDetail"] = CollectionsModel.LocalDetail(3);
@@ -253,8 +258,13 @@ public class StringCatalogTests
         actual["CollectionsModel.publishedDetail"] = CollectionsModel.PublishedDetail("X");
         actual["CollectionsModel.refreshButton"] = CollectionsModel.RefreshButton;
         actual["CollectionsModel.remoteType"] = CollectionsModel.RemoteType;
+        actual["CollectionsModel.removeCheckedButton"] = CollectionsModel.RemoveCheckedButton;
+        actual["CollectionsModel.removeCheckedInformative"] = CollectionsModel.RemoveCheckedInformative;
+        actual["CollectionsModel.removeCheckedMessage.many"] = CollectionsModel.RemoveCheckedMessage(["X", "Y", "Z"]);
+        actual["CollectionsModel.removeCheckedMessage.one"] = CollectionsModel.RemoveCheckedMessage(["X"]);
         actual["CollectionsModel.removeFileButton"] = CollectionsModel.RemoveFileButton;
         actual["CollectionsModel.renameAction"] = CollectionsModel.RenameAction;
+        actual["CollectionsModel.selectedCount"] = CollectionsModel.SelectedCount(3);
         actual["CollectionsModel.stopPublishingAction"] = CollectionsModel.StopPublishingAction;
         actual["CollectionsModel.stopSyncingAction"] = CollectionsModel.StopSyncingAction;
         actual["CollectionsModel.subscribeButton"] = CollectionsModel.SubscribeButton;

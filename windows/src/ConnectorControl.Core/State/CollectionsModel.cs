@@ -47,6 +47,32 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     public static string ExportButton(int count) => $"Export {count}…";
 
+    // MARK: selection bar
+
+    public const string CopyToButton = "Copy to";
+    public const string ExportCheckedButton = "Export";
+    public const string RemoveCheckedButton = "Remove";
+
+    /// <summary>
+    /// The bar's own tally, e.g. "2 selected" — distinct from <see cref="ExportButton"/>, which
+    /// names what its button does rather than what is ticked.
+    /// </summary>
+    public static string SelectedCount(int n) => $"{n} selected";
+
+    /// <summary>
+    /// Names the connector when there is exactly one ticked, and states the count otherwise: a
+    /// removal of one row deserves the same specificity <c>EditorModel.RemoveMessage</c> gives
+    /// it, and a removal of several would only get longer for naming them all.
+    /// </summary>
+    public static string RemoveCheckedMessage(IReadOnlyList<string> names) =>
+        names.Count == 1 ? $"Remove “{names[0]}”?" : $"Remove {names.Count} connectors?";
+
+    /// <summary>
+    /// Lifted from <c>EditorModel.RemoveInformative</c>, which Task 4 retires: the sentence — the
+    /// most useful thing in that confirmation — survives here unchanged.
+    /// </summary>
+    public const string RemoveCheckedInformative = "A copy remains in Backups.";
+
     /// <summary>
     /// The sidebar's chain glyph, or null when there is no chain to explain: a local collection
     /// has no source, and a synced one whose file is still to be found has no path to name. The
@@ -196,6 +222,9 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         Raise(nameof(BannerButton));
         Raise(nameof(HasBanner));
         Raise(nameof(CanExport));
+        Raise(nameof(CopyTargets));
+        Raise(nameof(CanCopyChecked));
+        Raise(nameof(CanRemoveChecked));
         Raise(nameof(CanPublish));
         Raise(nameof(CanRefresh));
         Raise(nameof(CanMakeLocalCopy));
@@ -412,6 +441,18 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public bool CanExport => !state.IsSynced(SelectedCollection) && ActiveChecks.Count > 0;
 
     /// <summary>
+    /// Where the selection bar's Copy to can send the ticked rows: any local collection but the
+    /// one showing them, which is their source. A synced collection is excluded too, following
+    /// <c>EditSheetView.LocalCopyTargets</c> — it has no local write path of its own to copy into.
+    /// </summary>
+    public IReadOnlyList<string> CopyTargets =>
+        state.LocalCollectionNames.Where(name => name != SelectedCollection).ToList();
+
+    public bool CanCopyChecked => !state.IsSynced(SelectedCollection) && CheckedNames.Count > 0;
+
+    public bool CanRemoveChecked => !state.IsSynced(SelectedCollection) && CheckedNames.Count > 0;
+
+    /// <summary>
     /// Any local collection, published or not. Reopening the dialog on a published one shows what
     /// its record says — the folder, every shared value, every marked path — and pressing Publish
     /// again updates the record and rewrites the document. That is the only way to change what is
@@ -476,6 +517,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         }
         RefreshRows();
         Raise(nameof(CanExport));
+        Raise(nameof(CanCopyChecked));
+        Raise(nameof(CanRemoveChecked));
     }
 
     /// <summary>The row switch, in the collection the window is showing rather than the active one.</summary>
@@ -501,6 +544,61 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>The names the export sheet writes, in the order the rows show them.</summary>
     public IReadOnlyList<string> ExportIntentForChecked() => CheckedNames;
+
+    /// <summary>
+    /// The selection bar's Copy to: the ticked rows into another local collection, name clashes
+    /// settled by <paramref name="choices"/> the way the editor's own copy sheet settles them.
+    /// Null both on success and on doing nothing, matching <see cref="AppState.MakeLocalCopy"/>;
+    /// either way the ticks are cleared, as they are after <see cref="RemoveChecked"/> succeeds.
+    /// It does not apply: every copy arrives disabled, so nothing Claude runs has changed.
+    ///
+    /// The two early-outs are unreachable from the UI: the button that calls this is gated by
+    /// <see cref="CanCopyChecked"/>, and its destination menu is built from <see cref="CopyTargets"/>.
+    /// </summary>
+    public string? CopyChecked(string collection, IReadOnlyDictionary<string, ImportChoice> choices)
+    {
+        var names = CheckedNames;
+        if (names.Count == 0 || !CopyTargets.Contains(collection))
+        {
+            return null;
+        }
+        var result = state.MakeLocalCopy(names, SelectedCollection, collection, choices);
+        if (result is null)
+        {
+            foreach (var name in names)
+            {
+                SetChecked(name, false);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// The selection bar's Remove: asks first, names the connector when there is one and the
+    /// count when there are more, and always says a copy remains in Backups.
+    /// </summary>
+    public void RemoveChecked()
+    {
+        var names = CheckedNames;
+        if (names.Count == 0)
+        {
+            return;
+        }
+        if (!dialogs.Confirm(RemoveCheckedMessage(names), RemoveCheckedInformative, RemoveCheckedButton, destructive: true))
+        {
+            return;
+        }
+        state.Remove(names, SelectedCollection);
+        // Remove(names, collection) persists but does not apply, as its single-name sibling does not.
+        if (SelectedCollection == state.ActiveCollection)
+        {
+            state.ApplyInteractively();
+        }
+        foreach (var name in names)
+        {
+            SetChecked(name, false);
+        }
+    }
 
     // MARK: collection actions
 
