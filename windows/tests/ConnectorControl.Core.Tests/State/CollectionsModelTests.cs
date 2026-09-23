@@ -250,8 +250,63 @@ public class CollectionsModelTests
     public void TargetLeavesOutInlineJson() => AssertTarget(Local("tool", "--config", """{"apiKey":"abc"}"""), "tool", "abc");
 
     [Fact]
-    public void TargetLeavesOutAValueASecretNamedFlagIsSeparatedFrom() =>
-        AssertTarget(Local("tool", "--token", "--verbose", "abc"), "tool", "abc");
+    public void TargetLeavesOutTheValueOfASecretNamedFlagWhateverItsCase()
+    {
+        AssertTarget(Local("tool", "--token", "x.y"), "tool", "x.y");
+        AssertTarget(Local("tool", "--TOKEN", "abc.def"), "tool", "abc.def");
+    }
+
+    /// <summary>
+    /// A command line written as one string is split into launcher and arguments and each word
+    /// held to the rule, so its last word — often a flag's value — is never shown for the launcher.
+    /// </summary>
+    [Fact]
+    public void TargetSplitsACommandLineWrittenAsOneString()
+    {
+        AssertTarget(Local("cmd", "/c", "npx -y @acme/server --api-key hunter2"), "npx …/server", "hunter2");
+        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("npx -y server --token hunter2")))), "npx", "hunter2");
+        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("tool --token a.b")))), "tool", "a.b");
+        const string quoted = "npx -y mcp-remote https://h.example/mcp --header \"Authorization: Bearer abc\"";
+        AssertTarget(Local("cmd", "/c", quoted), "h.example", "abc");
+        Assert.DoesNotContain("Bearer", CollectionsModel.TargetOf(Local("cmd", "/c", quoted).Config, "/Users/x"));
+    }
+
+    /// <summary>
+    /// A password holding an unencoded <c>/</c>, <c>?</c> or <c>#</c> ends the authority early; what
+    /// is left of the userinfo is refused as a host rather than shown, and so is a scheme that is not one.
+    /// </summary>
+    [Fact]
+    public void TargetRefusesAUrlWhoseUserinfoHoldsADelimiter()
+    {
+        AssertTarget(Local("tool", "postgres://admin:hunter2#x@db.local/app"), "tool", "hunter2");
+        AssertTarget(Local("tool", "https://apikey:sk_live_abc/x@api.example.com"), "tool", "sk_live");
+        AssertTarget(Local("tool", "https://sk_live_abc/x@h"), "tool", "sk_live");
+        AssertTarget(Local("tool", "sk-proj-abc123://x"), "tool", "abc123");
+        AssertTarget(Local("tool", "mongodb+srv://u:p@cluster.example.net/db"), "tool mongodb+srv://cluster.example.net", "u:p");
+        // The remote decoder accepts this URL, and its host is still checked.
+        AssertTarget(Local("npx", "-y", "mcp-remote", "https://token123/x@h.example/mcp"), CollectionsModel.RemoteType, "token123");
+    }
+
+    /// <summary>
+    /// A long random token is left out even with a <c>/</c> in it, which <c>LooksLikeCredential</c>
+    /// would not consider; paths and names with a dot, a hyphen or no digits are kept.
+    /// </summary>
+    [Fact]
+    public void TargetLeavesOutARandomTokenEvenWithASlash()
+    {
+        AssertTarget(Local("tool", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"), "tool", "wJalr");
+        Assert.Equal("tool ~/Documents ghcr.io/github/github-mcp-server ./build/v2Server",
+            CollectionsModel.TargetOf(Local("tool", "/Users/x/Documents", "ghcr.io/github/github-mcp-server", "./build/v2Server").Config,
+                "/Users/x"));
+    }
+
+    /// <summary>A Windows switch's value is not a path: a colon anywhere but a drive letter's drops it.</summary>
+    [Fact]
+    public void TargetLeavesOutAWindowsSwitchesValue()
+    {
+        AssertTarget(Local("tool", "/p:Hunter2", "/token:abc", "/x:secret"), "tool", "secret");
+        AssertTarget(Local("tool", @"C:\Users\x\Docs"), @"tool C:\Users\x\Docs", "secret");
+    }
 
     /// <summary>A secret shaped like a package still vanishes when a flag named for a secret precedes it.</summary>
     [Fact]
@@ -313,13 +368,13 @@ public class CollectionsModelTests
     }
 
     /// <summary>
-    /// A command that is a shell line keeps its last word; one that could itself be a secret is
-    /// left out, and the arguments still show.
+    /// A launcher that could itself be a secret is left out, and the arguments still show; a
+    /// command line's words after its first are arguments, held to the rule like any other.
     /// </summary>
     [Fact]
-    public void TargetShowsOnlyALaunchersLastWordOrNothing()
+    public void TargetLeavesOutALauncherThatCouldBeASecret()
     {
-        AssertTarget(Local("TOKEN=abc node", "srv.js"), "node srv.js", "abc");
+        AssertTarget(Local("TOKEN=abc node", "srv.js"), "srv.js", "abc");
         AssertTarget(Local("ghp_0123456789abcdef0123456789abcdef", "srv.js"), "srv.js", "ghp_");
     }
 

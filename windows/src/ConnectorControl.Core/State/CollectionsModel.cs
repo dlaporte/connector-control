@@ -346,8 +346,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     {
         home ??= Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var model = FormMapper.Analyze(config).Model;
-        var command = model.Command;
-        var commandArgs = model.Args.ToList();
+        var (command, commandArgs) = SplitCommandLine(model.Command, model.Args);
         // Windows' `cmd /c npx …`: what cmd runs is the launcher, and the rule applies to what
         // follows it.
         if (LauncherName(command).ToLowerInvariant() == "cmd" && commandArgs.Count > 0
@@ -356,12 +355,14 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             commandArgs.RemoveAt(0);
             if (commandArgs.Count > 0)
             {
-                command = commandArgs[0];
+                var inner = commandArgs[0];
                 commandArgs.RemoveAt(0);
+                (command, commandArgs) = SplitCommandLine(inner, commandArgs);
             }
         }
         // Read through the unwrapping and the launcher's extension, so the same bridge is a remote
-        // connector however it is spelled, and on both platforms.
+        // connector however it is spelled, and on both platforms. The decoder's URL is checked
+        // like any other: it vouches for a URL, not for a host free of userinfo.
         if (LauncherName(command).ToLowerInvariant() == "npx"
             && RemotePattern.Decode(JsonValue.Object(
                 ("command", JsonValue.String("npx")),
@@ -370,7 +371,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             return UrlOrigin(remote.Url)?.Host ?? RemoteType;
         }
         // The slot where a package runner names the server it fetches: the one place a bare
-        // hyphenated word is a package rather than, as likely, a password.
+        // hyphenated word is a package rather than, as likely, a password. It can land on the
+        // value of a flag named for a secret, which the first check below drops before it counts.
         var serverSlot = PackageRunners.Contains(LauncherName(command).ToLowerInvariant())
             ? commandArgs.FindIndex(a => !a.StartsWith('-')) : -1;
         var args = commandArgs.Select((arg, index) =>
@@ -383,16 +385,23 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     private static readonly HashSet<string> PackageRunners = ["npx", "uvx", "pipx", "bunx", "pnpx"];
 
     /// <summary>
-    /// The launcher, named the way it would be typed, or null when even its last word could be a
-    /// secret: a command that is a shell line rather than a program keeps only its last word.
+    /// A launcher written as a whole command line — <c>npx -y server --token x</c> in one string —
+    /// split on whitespace: its first word is the launcher and the rest are arguments ahead of
+    /// <paramref name="args"/>, each held to the same rule. Quotes are not interpreted: a quoted
+    /// fragment fails the rule rather than being reassembled into something that might pass it.
     /// </summary>
+    private static (string, List<string>) SplitCommandLine(string text, IEnumerable<string> args)
+    {
+        var words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return words.Length == 0 ? (text, args.ToList()) : (words[0], words.Skip(1).Concat(args).ToList());
+    }
+
+    /// <summary>The launcher, named the way it would be typed, or null when it could be a secret.</summary>
     private static string? Launcher(string command)
     {
         var name = LauncherName(command);
-        var word = name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "";
-        return new[] { name, word }.FirstOrDefault(candidate =>
-            candidate.Length > 0 && !candidate.Any(char.IsWhiteSpace) && !candidate.Contains('=')
-            && !CredentialHeuristics.LooksLikeCredential(candidate));
+        return name.Length == 0 || name.Contains('=') || CredentialHeuristics.LooksLikeCredential(name)
+            || LooksLikeRandomToken(name) ? null : name;
     }
 
     /// <summary>
@@ -407,13 +416,15 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             return UrlOrigin(arg) is { } origin ? $"{origin.Scheme}://{origin.Host}" : null;
         }
-        if (CredentialHeuristics.LooksLikeCredential(arg))
+        if (CredentialHeuristics.LooksLikeCredential(arg) || LooksLikeRandomToken(arg))
         {
             return null;
         }
         if (IsExplicitPath(arg))
         {
-            if (arg.Contains('='))
+            // A colon anywhere but a drive letter's is a Windows switch's value, `/p:secret`.
+            var colonIsDrive = IsDriveRoot(arg) && !arg[2..].Contains(':');
+            if (arg.Contains('=') || (arg.Contains(':') && !colonIsDrive))
             {
                 return null;
             }
@@ -445,6 +456,20 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// A random token rather than a name: with its slashes removed, at least 20 characters, with
+    /// an upper-case letter, a lower-case letter and a digit, and none of <c>.</c>, <c>-</c> or
+    /// <c>_</c>. An AWS secret key has this shape and a <c>/</c>, which <c>LooksLikeCredential</c>
+    /// refuses to consider; a real path or package name nearly always has a dot, a hyphen or no digits.
+    /// </summary>
+    private static bool LooksLikeRandomToken(string text)
+    {
+        var body = text.Where(c => c != '/' && c != '\\').ToList();
+        return body.Count >= 20
+            && body.Any(char.IsAsciiLetterUpper) && body.Any(char.IsAsciiLetterLower)
+            && body.Any(char.IsAsciiDigit) && !body.Any(c => c is '.' or '-' or '_');
+    }
+
+    /// <summary>
     /// A flag without an attached value whose name says the next argument is a secret, whatever
     /// its dashes and case.
     /// </summary>
@@ -455,25 +480,30 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             return false;
         }
         var name = arg.ToLowerInvariant();
-        return new[] { "token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer" }.Any(name.Contains);
+        return SecretNames.Any(name.Contains);
     }
 
+    private static readonly string[] SecretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"];
+
     /// <summary>Starts with <c>/</c>, <c>~</c>, <c>./</c>, <c>../</c> or a drive root (<c>X:\</c> or <c>X:/</c>).</summary>
-    private static bool IsExplicitPath(string arg)
-    {
-        if (new[] { "/", "~", "./", "../" }.Any(p => arg.StartsWith(p, StringComparison.Ordinal)))
-        {
-            return true;
-        }
-        return arg.Length >= 3 && char.IsAsciiLetter(arg[0]) && arg[1] == ':' && (arg[2] == '/' || arg[2] == '\\');
-    }
+    private static bool IsExplicitPath(string arg) =>
+        PathPrefixes.Any(p => arg.StartsWith(p, StringComparison.Ordinal)) || IsDriveRoot(arg);
+
+    private static readonly string[] PathPrefixes = ["/", "~", "./", "../"];
+
+    /// <summary><c>X:\</c> or <c>X:/</c>.</summary>
+    private static bool IsDriveRoot(string arg) =>
+        arg.Length >= 3 && char.IsAsciiLetter(arg[0]) && arg[1] == ':' && (arg[2] == '/' || arg[2] == '\\');
 
     /// <summary>
     /// The scheme and the host of the URL in <paramref name="text"/>, the host with its port when
-    /// one is written and without the userinfo before it; null when the text before <c>://</c> is
-    /// not a bare scheme or the host holds anything a host cannot. Taken from the text by hand
-    /// rather than by a URL parser, because the two platforms' parsers disagree about case,
-    /// default ports and IPv6 brackets.
+    /// one is written; null when either is not plainly one. The authority runs from <c>://</c> to
+    /// the first <c>/</c>, <c>?</c> or <c>#</c>, and the host is what follows its last <c>@</c>.
+    /// What remains must be a bare host and optional port: a password holding an unencoded
+    /// <c>/</c>, <c>?</c> or <c>#</c> ends the authority early, and whatever of it is left is
+    /// refused rather than shown as the host, as is any URL with an <c>@</c> past its authority,
+    /// where the boundary is in doubt. Taken from the text by hand rather than by a URL parser,
+    /// because the two platforms' parsers disagree about case and default ports.
     /// </summary>
     private static (string Scheme, string Host)? UrlOrigin(string text)
     {
@@ -483,16 +513,24 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             return null;
         }
         var scheme = text[..separator];
-        if (scheme.Length == 0 || !char.IsAsciiLetter(scheme[0])
-            || !scheme.All(c => char.IsAsciiLetterOrDigit(c) || "+.-".Contains(c)))
+        if (scheme.Length is < 2 or > 16 || !char.IsAsciiLetterLower(scheme[0])
+            || !scheme.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '+'))
         {
             return null;
         }
         var rest = text[(separator + 3)..];
         var end = rest.IndexOfAny(['/', '?', '#']);
+        // An `@` after the authority ends means the boundary cannot be trusted: `u:p/w@h` is a
+        // password holding a `/`, not a host `u:p` with an `@` in its path.
+        if (end >= 0 && rest[end..].Contains('@'))
+        {
+            return null;
+        }
         var authority = end >= 0 ? rest[..end] : rest;
         var host = authority[(authority.LastIndexOf('@') + 1)..];
-        if (host.Length == 0 || !host.All(c => char.IsAsciiLetterOrDigit(c) || ".-_:[]".Contains(c)))
+        var parts = host.Split(':', 2);
+        if (parts[0].Length == 0 || !parts[0].All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-')
+            || (parts.Length == 2 && (parts[1].Length is < 1 or > 5 || !parts[1].All(char.IsAsciiDigit))))
         {
             return null;
         }

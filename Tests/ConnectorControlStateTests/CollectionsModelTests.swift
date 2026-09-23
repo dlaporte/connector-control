@@ -232,8 +232,49 @@ final class CollectionsModelTests: XCTestCase {
         assertTarget(local("tool", ["--config", #"{"apiKey":"abc"}"#]), is: "tool", hides: "abc")
     }
 
-    func testTargetLeavesOutAValueASecretNamedFlagIsSeparatedFrom() {
-        assertTarget(local("tool", ["--token", "--verbose", "abc"]), is: "tool", hides: "abc")
+    /// The value is one the allowlist would show, so only the flag rule keeps it out; the flag's
+    /// name is matched whatever its case.
+    func testTargetLeavesOutTheValueOfASecretNamedFlagWhateverItsCase() {
+        assertTarget(local("tool", ["--token", "x.y"]), is: "tool", hides: "x.y")
+        assertTarget(local("tool", ["--TOKEN", "abc.def"]), is: "tool", hides: "abc.def")
+    }
+
+    /// A command line written as one string is split into launcher and arguments and each word
+    /// held to the rule, so its last word — often a flag's value — is never shown for the launcher.
+    func testTargetSplitsACommandLineWrittenAsOneString() {
+        assertTarget(local("cmd", ["/c", "npx -y @acme/server --api-key hunter2"]), is: "npx …/server", hides: "hunter2")
+        assertTarget(MCPEntry(config: .object(["command": .string("npx -y server --token hunter2")])), is: "npx", hides: "hunter2")
+        assertTarget(MCPEntry(config: .object(["command": .string("tool --token a.b")])), is: "tool", hides: "a.b")
+        let quoted = #"npx -y mcp-remote https://h.example/mcp --header "Authorization: Bearer abc""#
+        assertTarget(local("cmd", ["/c", quoted]), is: "h.example", hides: "abc")
+        XCTAssertFalse(CollectionsModel.target(of: local("cmd", ["/c", quoted]).config, home: "/Users/x").contains("Bearer"))
+    }
+
+    /// A password holding an unencoded `/`, `?` or `#` ends the authority early; what is left of
+    /// the userinfo is refused as a host rather than shown, and so is a scheme that is not one.
+    func testTargetRefusesAURLWhoseUserinfoHoldsADelimiter() {
+        assertTarget(local("tool", ["postgres://admin:hunter2#x@db.local/app"]), is: "tool", hides: "hunter2")
+        assertTarget(local("tool", ["https://apikey:sk_live_abc/x@api.example.com"]), is: "tool", hides: "sk_live")
+        assertTarget(local("tool", ["https://sk_live_abc/x@h"]), is: "tool", hides: "sk_live")
+        assertTarget(local("tool", ["sk-proj-abc123://x"]), is: "tool", hides: "abc123")
+        assertTarget(local("tool", ["mongodb+srv://u:p@cluster.example.net/db"]), is: "tool mongodb+srv://cluster.example.net", hides: "u:p")
+        // The remote decoder accepts this URL, and its host is still checked.
+        assertTarget(local("npx", ["-y", "mcp-remote", "https://token123/x@h.example/mcp"]), is: CollectionsModel.remoteType, hides: "token123")
+    }
+
+    /// A long random token is left out even with a `/` in it, which `looksLikeCredential` would
+    /// not consider; paths and names with a dot, a hyphen or no digits are kept.
+    func testTargetLeavesOutARandomTokenEvenWithASlash() {
+        assertTarget(local("tool", ["wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"]), is: "tool", hides: "wJalr")
+        XCTAssertEqual(CollectionsModel.target(of: local("tool", ["/Users/x/Documents", "ghcr.io/github/github-mcp-server", "./build/v2Server"]).config,
+                                               home: "/Users/x"),
+                       "tool ~/Documents ghcr.io/github/github-mcp-server ./build/v2Server")
+    }
+
+    /// A Windows switch's value is not a path: a colon anywhere but a drive letter's drops it.
+    func testTargetLeavesOutAWindowsSwitchesValue() {
+        assertTarget(local("tool", ["/p:Hunter2", "/token:abc", "/x:secret"]), is: "tool", hides: "secret")
+        assertTarget(local("tool", [#"C:\Users\x\Docs"#]), is: #"tool C:\Users\x\Docs"#, hides: "secret")
     }
 
     /// A secret shaped like a package still vanishes when a flag named for a secret precedes it.
@@ -285,10 +326,10 @@ final class CollectionsModelTests: XCTestCase {
                      is: "h.example", hides: "abc")
     }
 
-    /// A command that is a shell line keeps its last word; one that could itself be a secret is
-    /// left out, and the arguments still show.
-    func testTargetShowsOnlyALaunchersLastWordOrNothing() {
-        assertTarget(local("TOKEN=abc node", ["srv.js"]), is: "node srv.js", hides: "abc")
+    /// A launcher that could itself be a secret is left out, and the arguments still show; a
+    /// command line's words after its first are arguments, held to the rule like any other.
+    func testTargetLeavesOutALauncherThatCouldBeASecret() {
+        assertTarget(local("TOKEN=abc node", ["srv.js"]), is: "srv.js", hides: "abc")
         assertTarget(local("ghp_0123456789abcdef0123456789abcdef", ["srv.js"]), is: "srv.js", hides: "ghp_")
     }
 

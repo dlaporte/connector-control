@@ -294,25 +294,29 @@ public final class CollectionsModel: ObservableObject {
     /// like a package.
     public static func target(of config: JSONValue, home: String = NSHomeDirectory()) -> String {
         let model = FormMapper.analyze(config).model
-        var command = model.command
-        var commandArgs = model.args
+        var (command, commandArgs) = splitCommandLine(model.command, model.args)
         // Windows' `cmd /c npx …`: what cmd runs is the launcher, and the rule applies to what
         // follows it.
         if launcherName(command).lowercased() == "cmd", let first = commandArgs.first,
            ["/c", "/k"].contains(first.lowercased()) {
             commandArgs.removeFirst()
-            if !commandArgs.isEmpty { command = commandArgs.removeFirst() }
+            if !commandArgs.isEmpty {
+                let inner = commandArgs.removeFirst()
+                (command, commandArgs) = splitCommandLine(inner, commandArgs)
+            }
         }
         // Read through the unwrapping and the launcher's extension, so the same bridge is a remote
-        // connector however it is spelled, and on both platforms.
+        // connector however it is spelled, and on both platforms. The decoder's URL is checked
+        // like any other: it vouches for a URL, not for a host free of userinfo.
         if launcherName(command).lowercased() == "npx",
            let remote = RemotePattern.decode(.object(["command": .string("npx"), "args": .array(commandArgs.map(JSONValue.string))])) {
-            return urlOrigin(remote.url).map(\.host) ?? remoteType
+            return urlOrigin(remote.url)?.host ?? remoteType
         }
         // The slot where a package runner names the server it fetches: the one place a bare
-        // hyphenated word is a package rather than, as likely, a password.
+        // hyphenated word is a package rather than, as likely, a password. It can land on the
+        // value of a flag named for a secret, which the first check below drops before it counts.
         let serverSlot = packageRunners.contains(launcherName(command).lowercased())
-            ? commandArgs.firstIndex { !$0.hasPrefix("-") } : nil
+            ? commandArgs.firstIndex { !startsWith($0, "-") } : nil
         let args = commandArgs.enumerated().compactMap { index, arg -> String? in
             if index > 0, isSecretNamedFlag(commandArgs[index - 1]) { return nil }
             return shown(arg, home: home, isServerSlot: index == serverSlot)
@@ -324,15 +328,22 @@ public final class CollectionsModel: ObservableObject {
     /// Launchers whose first positional argument names the package they fetch and run.
     private static let packageRunners: Set<String> = ["npx", "uvx", "pipx", "bunx", "pnpx"]
 
-    /// The launcher, named the way it would be typed, or nil when even its last word could be a
-    /// secret: a command that is a shell line rather than a program keeps only its last word.
+    /// A launcher written as a whole command line — `npx -y server --token x` in one string —
+    /// split on whitespace: its first word is the launcher and the rest are arguments ahead of
+    /// `args`, each held to the same rule. Quotes are not interpreted: a quoted fragment fails the
+    /// rule rather than being reassembled into something that might pass it.
+    private static func splitCommandLine(_ text: String, _ args: [String]) -> (String, [String]) {
+        let words = text.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard let first = words.first else { return (text, args) }
+        return (first, Array(words.dropFirst()) + args)
+    }
+
+    /// The launcher, named the way it would be typed, or nil when it could be a secret.
     private static func launcher(_ command: String) -> String? {
         let name = launcherName(command)
-        let word = name.split(whereSeparator: \.isWhitespace).last.map(String.init) ?? ""
-        return [name, word].first { candidate in
-            !candidate.isEmpty && !candidate.contains(where: \.isWhitespace) && !candidate.contains("=")
-                && !CredentialHeuristics.looksLikeCredential(candidate)
-        }
+        guard !name.isEmpty, !name.contains("="), !CredentialHeuristics.looksLikeCredential(name),
+              !looksLikeRandomToken(name) else { return nil }
+        return name
     }
 
     /// One argument as the target column shows it, or nil when it is none of the three shapes
@@ -343,14 +354,17 @@ public final class CollectionsModel: ObservableObject {
         if arg.contains("://") {
             return urlOrigin(arg).map { "\($0.scheme)://\($0.host)" }
         }
-        guard !CredentialHeuristics.looksLikeCredential(arg) else { return nil }
+        guard !CredentialHeuristics.looksLikeCredential(arg), !looksLikeRandomToken(arg) else { return nil }
         if isExplicitPath(arg) {
-            guard !arg.contains("=") else { return nil }
-            let root = home.hasSuffix("/") || home.hasSuffix("\\") ? String(home.dropLast()) : home
+            // A colon anywhere but a drive letter's is a Windows switch's value, `/p:secret`.
+            let colonIsDrive = isDriveRoot(arg) && !arg.dropFirst(2).contains(":")
+            guard !arg.contains("="), !arg.contains(":") || colonIsDrive else { return nil }
+            let root = home.unicodeScalars.last.map { $0 == "/" || $0 == "\\" } == true
+                ? String(String.UnicodeScalarView(home.unicodeScalars.dropLast())) : home
             // Case-insensitive, as both platforms' default file systems are.
             guard !root.isEmpty, let prefix = arg.range(of: root, options: [.anchored, .caseInsensitive]) else { return arg }
-            let remainder = arg[prefix.upperBound...]
-            return remainder.isEmpty || remainder.hasPrefix("/") || remainder.hasPrefix("\\") ? "~" + remainder : arg
+            let remainder = String(arg[prefix.upperBound...])
+            return remainder.isEmpty || startsWith(remainder, "/") || startsWith(remainder, "\\") ? "~" + remainder : arg
         }
         guard arg.count <= 100, arg.first.map({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "@") }) == true,
               arg.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "._@/-".contains($0)) }),
@@ -363,38 +377,74 @@ public final class CollectionsModel: ObservableObject {
         return arg
     }
 
+    /// A random token rather than a name: with its slashes removed, at least 20 characters, with
+    /// an upper-case letter, a lower-case letter and a digit, and none of `.`, `-` or `_`. An AWS
+    /// secret key has this shape and a `/`, which `looksLikeCredential` refuses to consider; a
+    /// real path or package name nearly always has a dot, a hyphen or no digits.
+    private static func looksLikeRandomToken(_ text: String) -> Bool {
+        let body = text.unicodeScalars.filter { $0 != "/" && $0 != "\\" }
+        return body.count >= 20
+            && body.contains { ("A"..."Z").contains($0) } && body.contains { ("a"..."z").contains($0) }
+            && body.contains { ("0"..."9").contains($0) } && !body.contains { $0 == "." || $0 == "-" || $0 == "_" }
+    }
+
     /// A flag without an attached value whose name says the next argument is a secret, whatever
     /// its dashes and case.
     private static func isSecretNamedFlag(_ arg: String) -> Bool {
-        guard arg.hasPrefix("-"), !arg.contains("=") else { return false }
+        guard startsWith(arg, "-"), !arg.contains("=") else { return false }
         let name = arg.lowercased()
-        return ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"].contains { name.contains($0) }
+        return secretNames.contains { name.contains($0) }
     }
+
+    private static let secretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"]
 
     /// Starts with `/`, `~`, `./`, `../` or a drive root (`X:\` or `X:/`).
     private static func isExplicitPath(_ arg: String) -> Bool {
-        if ["/", "~", "./", "../"].contains(where: { arg.hasPrefix($0) }) { return true }
-        let chars = Array(arg.prefix(3))
-        return chars.count == 3 && chars[0].isASCII && chars[0].isLetter && chars[1] == ":" && (chars[2] == "/" || chars[2] == "\\")
+        ["/", "~", "./", "../"].contains { startsWith(arg, $0) } || isDriveRoot(arg)
     }
 
-    /// The scheme and the host of the URL in `text`, the host with its port when one is written
-    /// and without the userinfo before it; nil when the text before `://` is not a bare scheme or
-    /// the host holds anything a host cannot. Taken from the text by hand rather than by a URL
-    /// parser, because the two platforms' parsers disagree about case, default ports and IPv6
-    /// brackets.
+    /// `X:\` or `X:/`.
+    private static func isDriveRoot(_ arg: String) -> Bool {
+        let scalars = Array(arg.unicodeScalars.prefix(3))
+        return scalars.count == 3 && (("A"..."Z").contains(scalars[0]) || ("a"..."z").contains(scalars[0]))
+            && scalars[1] == ":" && (scalars[2] == "/" || scalars[2] == "\\")
+    }
+
+    /// Compared by Unicode scalar rather than by character, as the Windows mirror compares by
+    /// UTF-16 unit: a combining mark after a leading `-` must not make the two disagree about
+    /// whether an argument is a flag.
+    private static func startsWith(_ text: String, _ prefix: String) -> Bool {
+        text.unicodeScalars.starts(with: prefix.unicodeScalars)
+    }
+
+    /// The scheme and the host of the URL in `text`, the host with its port when one is written;
+    /// nil when either is not plainly one. The authority runs from `://` to the first `/`, `?` or
+    /// `#`, and the host is what follows its last `@`. What remains must be a bare host and
+    /// optional port: a password holding an unencoded `/`, `?` or `#` ends the authority early,
+    /// and whatever of it is left is refused rather than shown as the host, as is any URL with an
+    /// `@` past its authority, where the boundary is in doubt. Taken from the text
+    /// by hand rather than by a URL parser, because the two platforms' parsers disagree about
+    /// case and default ports.
     private static func urlOrigin(_ text: String) -> (scheme: String, host: String)? {
         guard let separator = text.range(of: "://") else { return nil }
-        let scheme = text[..<separator.lowerBound]
-        guard let first = scheme.first, first.isASCII, first.isLetter,
-              scheme.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "+.-".contains($0)) })
+        let scheme = Array(text[..<separator.lowerBound].unicodeScalars)
+        guard (2...16).contains(scheme.count), ("a"..."z").contains(scheme[0]),
+              scheme.allSatisfy({ ("a"..."z").contains($0) || ("0"..."9").contains($0) || $0 == "+" })
         else { return nil }
         let rest = text[separator.upperBound...]
-        let authority = rest[..<(rest.firstIndex(where: { "/?#".contains($0) }) ?? rest.endIndex)]
+        let authorityEnd = rest.firstIndex(where: { "/?#".contains($0) }) ?? rest.endIndex
+        // An `@` after the authority ends means the boundary cannot be trusted: `u:p/w@h` is a
+        // password holding a `/`, not a host `u:p` with an `@` in its path.
+        guard !rest[authorityEnd...].contains("@") else { return nil }
+        let authority = rest[..<authorityEnd]
         let host = authority.lastIndex(of: "@").map { authority[authority.index(after: $0)...] } ?? authority
-        guard !host.isEmpty, host.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || ".-_:[]".contains($0)) })
+        let parts = host.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+        let name = parts[0].unicodeScalars
+        guard !name.isEmpty,
+              name.allSatisfy({ ("A"..."Z").contains($0) || ("a"..."z").contains($0) || ("0"..."9").contains($0) || $0 == "." || $0 == "-" }),
+              parts.count == 1 || ((1...5).contains(parts[1].unicodeScalars.count) && parts[1].unicodeScalars.allSatisfy { ("0"..."9").contains($0) })
         else { return nil }
-        return (String(scheme), String(host))
+        return (String(text[..<separator.lowerBound]), String(host))
     }
 
     /// The last component of a command, splitting on both separators rather than this platform's:
