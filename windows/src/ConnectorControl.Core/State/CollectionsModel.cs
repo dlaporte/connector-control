@@ -169,7 +169,10 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         state.PropertyChanged += OnStateChanged;
     }
 
-    /// <summary>What the last action AppState refused reported, cleared by the next one that succeeds.</summary>
+    /// <summary>
+    /// What the last action AppState refused reported, cleared by the next one that succeeds, is
+    /// cancelled, or finds nothing to do. A declined confirmation leaves it as it was.
+    /// </summary>
     public string? LastError { get => lastError; private set => Set(ref lastError, value); }
 
     // MARK: selection
@@ -976,6 +979,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         var collection = SelectedCollection;
         if (dialogs.PromptForName(AppState.NewCollectionTitle, "") is not { } typed)
         {
+            LastError = null;
             return false;
         }
         return Report(state.MakeLocalCopyOfCollection(collection, typed));
@@ -1098,6 +1102,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         var names = CheckedNames;
         if (names.Count == 0 || !CopyTargets.Contains(collection))
         {
+            LastError = null;
             return false;
         }
         return Copy(names, collection, choices);
@@ -1115,6 +1120,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         var names = CheckedNames;
         if (names.Count == 0 || dialogs.PromptForName(AppState.NewCollectionTitle, "") is not { } typed)
         {
+            LastError = null;
             return false;
         }
         if (!Report(state.AddEmptyCollection(typed)))
@@ -1159,6 +1165,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         var names = CheckedNames;
         if (names.Count == 0)
         {
+            LastError = null;
             return;
         }
         if (!dialogs.Confirm(RemoveCheckedMessage(names), RemoveCheckedInformative, RemoveCheckedButton, destructive: true))
@@ -1184,6 +1191,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     {
         if (dialogs.PromptForName(AppState.NewCollectionTitle, "") is not { } typed)
         {
+            LastError = null;
             return;
         }
         if (Report(state.CreateCollection(typed)))
@@ -1197,6 +1205,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         var collection = SelectedCollection;
         if (dialogs.PromptForName(AppState.RenameCollectionTitle, collection) is not { } typed)
         {
+            LastError = null;
             return;
         }
         // The store trimmed the name the same way; following it keeps the window on the collection
@@ -1239,6 +1248,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         var collection = SelectedCollection;
         if (!state.IsPublished(collection))
         {
+            LastError = null;
             return;
         }
         // Nothing on this machine writes the document when there is no binding for it, so there is
@@ -1282,12 +1292,9 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public void MakeLocalCopy()
     {
         var collection = SelectedCollection;
-        if (!state.IsSynced(collection))
+        if (!state.IsSynced(collection) || dialogs.PromptForName(AppState.NewCollectionTitle, collection) is not { } typed)
         {
-            return;
-        }
-        if (dialogs.PromptForName(AppState.NewCollectionTitle, collection) is not { } typed)
-        {
+            LastError = null;
             return;
         }
         if (Report(state.MakeLocalCopyOfCollection(collection, typed)))

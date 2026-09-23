@@ -561,6 +561,53 @@ public class CollectionsModelTests
 
     // MARK: create, rename, delete
 
+    /// <summary>
+    /// A cancelled prompt, or a verb that finds nothing to act on, leaves no error behind: the
+    /// window shows LastError after every verb, so one left over from an earlier failure would
+    /// come back as if this verb had failed. A declined confirmation is the exception, and changes
+    /// nothing, the last error included.
+    /// </summary>
+    [Fact]
+    public void AVerbThatDoesNothingClearsTheLastError()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Default";
+
+        void LeavesNoError(string verb, Action action)
+        {
+            PresetError(model, h);
+            h.Dialogs.NextPromptAnswer = null;
+            action();
+            Assert.True(model.LastError is null, $"{verb} brought the earlier error back");
+        }
+
+        // Cancelled prompts.
+        LeavesNoError("Create", model.Create);
+        LeavesNoError("Rename", model.Rename);
+        LeavesNoError("Duplicate", () => model.Duplicate());
+
+        // Nothing to act on.
+        LeavesNoError("MakeLocalCopy of a local collection", model.MakeLocalCopy);
+        LeavesNoError("StopPublishing of a collection that does not publish", model.StopPublishing);
+        LeavesNoError("CopyChecked with nothing ticked", () => model.CopyChecked("Team"));
+        LeavesNoError("CopyCheckedIntoNewCollection with nothing ticked", () => model.CopyCheckedIntoNewCollection());
+        LeavesNoError("RemoveChecked with nothing ticked", model.RemoveChecked);
+
+        model.SetChecked("alpha", true);
+        LeavesNoError("CopyChecked into a collection it does not offer", () => model.CopyChecked("Default"));
+        LeavesNoError("CopyCheckedIntoNewCollection, cancelled", () => model.CopyCheckedIntoNewCollection());
+        Assert.Equal(["alpha"], model.CheckedNames);   // nothing was copied, so the ticks stay
+
+        Seed(h, state, File_(("Team", Synced("team.json"))));
+        model.Selected = "Team";
+        LeavesNoError("MakeLocalCopy, cancelled", model.MakeLocalCopy);
+        Assert.Equal(["Default", "Team"], state.CollectionNames);   // no prompt that was cancelled made anything
+    }
+
     [Fact]
     public void CreateRenameDeleteGoThroughTheDialogs()
     {
@@ -1307,8 +1354,8 @@ public class CollectionsModelTests
     /// <summary>
     /// The two early-outs CopyChecked documents: a target outside CopyTargets — the source
     /// itself, or a synced collection — and an empty tick set. Both return false without reaching
-    /// AppState.MakeLocalCopy, so nothing lands anywhere, and the ticks and the last error are
-    /// left standing.
+    /// AppState.MakeLocalCopy, so nothing lands anywhere and the ticks are left standing. The last
+    /// error is cleared, so the window does not show it again as if this copy had failed.
     /// </summary>
     [Fact]
     public void CopyCheckedRefusesATargetOutsideCopyTargets()
@@ -1324,12 +1371,11 @@ public class CollectionsModelTests
         model.Selected = "Default";
         model.SetChecked("alpha", true);
         PresetError(model, h);
-        var stale = model.LastError;
 
         Assert.False(model.CopyChecked("Default"));   // the source is not a target
         Assert.False(model.CopyChecked("Team"));      // a synced collection is not a target either
         Assert.Equal(["alpha"], model.CheckedNames);   // both are unreachable early-outs, so the ticks stand
-        Assert.Equal(stale, model.LastError);   // and so does the last error
+        Assert.Null(model.LastError);   // the earlier error is not shown again
         Assert.False(state.Store.Collections["Team"].Mcps.ContainsKey("alpha"));   // nothing landed in Team
     }
 

@@ -479,6 +479,49 @@ final class CollectionsModelTests: XCTestCase {
 
     // MARK: - Create, rename, delete
 
+    /// A cancelled prompt, or a verb that finds nothing to act on, leaves no error behind: the
+    /// window shows `lastError` after every verb, so one left over from an earlier failure would
+    /// come back as if this verb had failed. A declined confirmation is the exception, and changes
+    /// nothing, the last error included.
+    func testAVerbThatDoesNothingClearsTheLastError() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Default"
+
+        func leavesNoError(_ verb: String, _ action: () -> Void, line: UInt = #line) {
+            presetError(model, h)
+            h.dialogs.nextPromptAnswer = nil
+            action()
+            XCTAssertNil(model.lastError, "\(verb) brought the earlier error back", line: line)
+        }
+
+        // Cancelled prompts.
+        leavesNoError("create") { model.create() }
+        leavesNoError("rename") { model.rename() }
+        leavesNoError("duplicate") { model.duplicate() }
+
+        // Nothing to act on.
+        leavesNoError("makeLocalCopy of a local collection") { model.makeLocalCopy() }
+        leavesNoError("stopPublishing of a collection that does not publish") { model.stopPublishing() }
+        leavesNoError("copyChecked with nothing ticked") { model.copyChecked(into: "Team") }
+        leavesNoError("copyCheckedIntoNewCollection with nothing ticked") { model.copyCheckedIntoNewCollection() }
+        leavesNoError("removeChecked with nothing ticked") { model.removeChecked() }
+
+        model.setChecked("alpha", true)
+        leavesNoError("copyChecked into a collection it does not offer") { model.copyChecked(into: "Default") }
+        leavesNoError("copyCheckedIntoNewCollection, cancelled") { model.copyCheckedIntoNewCollection() }
+        XCTAssertEqual(model.checkedNames, ["alpha"], "nothing was copied, so the ticks stay")
+
+        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        model.selected = "Team"
+        leavesNoError("makeLocalCopy, cancelled") { model.makeLocalCopy() }
+        XCTAssertEqual(state.collectionNames, ["Default", "Team"], "no prompt that was cancelled made anything")
+    }
+
     func testCreateRenameDeleteGoThroughTheDialogs() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
@@ -1142,8 +1185,8 @@ final class CollectionsModelTests: XCTestCase {
 
     /// The two early-outs `copyChecked` documents: a target outside `copyTargets` — the source
     /// itself, or a synced collection — and an empty tick set. Both return false without reaching
-    /// `AppState.makeLocalCopy`, so nothing lands anywhere, and the ticks and the last error are
-    /// left standing.
+    /// `AppState.makeLocalCopy`, so nothing lands anywhere and the ticks are left standing. The last
+    /// error is cleared, so the window does not show it again as if this copy had failed.
     func testCopyCheckedRefusesATargetOutsideCopyTargets() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
@@ -1158,12 +1201,11 @@ final class CollectionsModelTests: XCTestCase {
         model.selected = "Default"
         model.setChecked("alpha", true)
         presetError(model, h)
-        let stale = model.lastError
 
         XCTAssertFalse(model.copyChecked(into: "Default"), "the source is not a target")
         XCTAssertFalse(model.copyChecked(into: "Team"), "a synced collection is not a target either")
         XCTAssertEqual(model.checkedNames, ["alpha"], "both are unreachable early-outs, so the ticks stand")
-        XCTAssertEqual(model.lastError, stale, "and so does the last error")
+        XCTAssertNil(model.lastError, "the earlier error is not shown again")
         XCTAssertNil(state.store.collections["Team"]?.mcps["alpha"], "nothing landed in Team")
     }
 

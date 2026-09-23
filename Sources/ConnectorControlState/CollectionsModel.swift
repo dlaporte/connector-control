@@ -157,7 +157,8 @@ public final class CollectionsModel: ObservableObject {
         }
     }
 
-    /// What the last action AppState refused reported, cleared by the next one that succeeds.
+    /// What the last action AppState refused reported, cleared by the next one that succeeds, is
+    /// cancelled, or finds nothing to do. A declined confirmation leaves it as it was.
     @Published public private(set) var lastError: String?
 
     private let state: AppState
@@ -745,7 +746,10 @@ public final class CollectionsModel: ObservableObject {
     @discardableResult
     public func duplicate() -> Bool {
         let collection = selectedCollection
-        guard let typed = dialogs.promptForName(title: AppState.newCollectionTitle, initial: "") else { return false }
+        guard let typed = dialogs.promptForName(title: AppState.newCollectionTitle, initial: "") else {
+            lastError = nil
+            return false
+        }
         return report(state.makeLocalCopyOfCollection(collection, named: typed))
     }
 
@@ -825,7 +829,10 @@ public final class CollectionsModel: ObservableObject {
     @discardableResult
     public func copyChecked(into collection: String, choices: [String: ImportChoice] = [:]) -> Bool {
         let names = checkedNames
-        guard !names.isEmpty, copyTargets.contains(collection) else { return false }
+        guard !names.isEmpty, copyTargets.contains(collection) else {
+            lastError = nil
+            return false
+        }
         return copy(names, into: collection, choices: choices)
     }
 
@@ -838,7 +845,10 @@ public final class CollectionsModel: ObservableObject {
     public func copyCheckedIntoNewCollection() -> Bool {
         let names = checkedNames
         guard !names.isEmpty,
-              let typed = dialogs.promptForName(title: AppState.newCollectionTitle, initial: "") else { return false }
+              let typed = dialogs.promptForName(title: AppState.newCollectionTitle, initial: "") else {
+            lastError = nil
+            return false
+        }
         guard report(state.addEmptyCollection(named: typed)) else { return false }
         return copy(names, into: typed.trimmingCharacters(in: .whitespaces), choices: [:])
     }
@@ -863,7 +873,10 @@ public final class CollectionsModel: ObservableObject {
     /// count when there are more, and always says a copy remains in Backups.
     public func removeChecked() {
         let names = checkedNames
-        guard !names.isEmpty else { return }
+        guard !names.isEmpty else {
+            lastError = nil
+            return
+        }
         guard dialogs.confirm(message: CollectionsModel.removeCheckedMessage(names),
                               informative: CollectionsModel.removeCheckedInformative,
                               primary: CollectionsModel.removeCheckedButton, destructive: true) else { return }
@@ -877,14 +890,20 @@ public final class CollectionsModel: ObservableObject {
     // MARK: - Collection actions
 
     public func create() {
-        guard let typed = dialogs.promptForName(title: AppState.newCollectionTitle, initial: "") else { return }
+        guard let typed = dialogs.promptForName(title: AppState.newCollectionTitle, initial: "") else {
+            lastError = nil
+            return
+        }
         guard report(state.createCollection(named: typed)) else { return }
         retarget(to: typed.trimmingCharacters(in: .whitespaces))
     }
 
     public func rename() {
         let collection = selectedCollection
-        guard let typed = dialogs.promptForName(title: AppState.renameCollectionTitle, initial: collection) else { return }
+        guard let typed = dialogs.promptForName(title: AppState.renameCollectionTitle, initial: collection) else {
+            lastError = nil
+            return
+        }
         guard report(state.renameCollection(collection, to: typed)) else { return }
         // The store trimmed the name the same way; following it keeps the window on the
         // collection the user just renamed rather than dropping back to the active one.
@@ -910,7 +929,10 @@ public final class CollectionsModel: ObservableObject {
     /// Stop Publishing: the collection stays, and only the document in the folder is in question.
     public func stopPublishing() {
         let collection = selectedCollection
-        guard state.isPublished(collection) else { return }
+        guard state.isPublished(collection) else {
+            lastError = nil
+            return
+        }
         // Nothing on this machine writes the document when there is no binding for it, so there
         // is no file here to offer to remove. Nor is there anything to ask while the last write
         // failed: the folder that refused it would refuse the delete too, so the question would
@@ -945,8 +967,11 @@ public final class CollectionsModel: ObservableObject {
     /// The whole synced collection again as a local one the user can edit.
     public func makeLocalCopy() {
         let collection = selectedCollection
-        guard state.isSynced(collection) else { return }
-        guard let typed = dialogs.promptForName(title: AppState.newCollectionTitle, initial: collection) else { return }
+        guard state.isSynced(collection),
+              let typed = dialogs.promptForName(title: AppState.newCollectionTitle, initial: collection) else {
+            lastError = nil
+            return
+        }
         guard report(state.makeLocalCopyOfCollection(collection, named: typed)) else { return }
         retarget(to: typed.trimmingCharacters(in: .whitespaces))
     }
