@@ -265,6 +265,37 @@ public class CollectionsModelTests
     public void TargetLeavesOutACredentialShapedArtefact() =>
         AssertTarget(Local("tool", "sk-abc.def", "ghp_0123456789abcdef0123456789abcdef.js"), "tool", "abc");
 
+    [Fact]
+    public void TargetShowsTheServerAPackageRunnerNames()
+    {
+        Assert.Equal("uvx mcp-server-fetch", CollectionsModel.TargetOf(Local("uvx", "mcp-server-fetch").Config, "/Users/x"));
+        Assert.Equal("python mcp_server.py", CollectionsModel.TargetOf(Local("python", "mcp_server.py").Config, "/Users/x"));
+    }
+
+    /// <summary>A bare hyphenated word anywhere but the server slot is as likely a password as a package.</summary>
+    [Fact]
+    public void TargetLeavesOutABareHyphenatedWordOutsideTheServerSlot()
+    {
+        AssertTarget(Local("tool", "hunter-2"), "tool", "hunter-2");
+        AssertTarget(Local("tool", "-p", "s3cr3t-pass"), "tool", "s3cr3t");
+        AssertTarget(Local("tool", "correct-horse-battery-staple"), "tool", "horse");
+        AssertTarget(Local("uvx", "--from", "x", "my-server", "extra-word"), "uvx", "extra-word");
+    }
+
+    [Fact]
+    public void TargetLeavesOutThePwFlagsValue() => AssertTarget(Local("tool", "--pw", "a.b"), "tool", "a.b");
+
+    /// <summary>
+    /// The server slot is the first positional argument, whatever it holds: a bare word there is
+    /// shown because it cannot be told from a package name, and only there.
+    /// </summary>
+    [Fact]
+    public void TargetTrustsOnlyTheFirstPositionalAfterAPackageRunner()
+    {
+        Assert.Equal("npx hunter-2 …/pkg",
+            CollectionsModel.TargetOf(Local("npx", "-y", "hunter-2", "@scope/pkg", "other-word").Config, "/Users/x"));
+    }
+
     /// <summary>
     /// A command that is a shell line keeps its last word; one that could itself be a secret is
     /// left out, and the arguments still show.

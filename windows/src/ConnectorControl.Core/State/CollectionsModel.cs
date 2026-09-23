@@ -350,11 +350,18 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             return UrlOrigin(remote.Url)?.Host ?? RemoteType;
         }
         var model = FormMapper.Analyze(config).Model;
+        // The slot where a package runner names the server it fetches: the one place a bare
+        // hyphenated word is a package rather than, as likely, a password.
+        var serverSlot = PackageRunners.Contains(LauncherName(model.Command).ToLowerInvariant())
+            ? model.Args.ToList().FindIndex(a => !a.StartsWith('-')) : -1;
         var args = model.Args.Select((arg, index) =>
-            index > 0 && IsSecretNamedFlag(model.Args[index - 1]) ? null : Shown(arg, home));
+            index > 0 && IsSecretNamedFlag(model.Args[index - 1]) ? null : Shown(arg, home, index == serverSlot));
         var tokens = new[] { Launcher(model.Command) }.Concat(args);
         return string.Join(" ", tokens.OfType<string>());
     }
+
+    /// <summary>Launchers whose first positional argument names the package they fetch and run.</summary>
+    private static readonly HashSet<string> PackageRunners = ["npx", "uvx", "pipx", "bunx", "pnpx"];
 
     /// <summary>
     /// The launcher, named the way it would be typed, or null when even its last word could be a
@@ -372,9 +379,10 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>
     /// One argument as the target column shows it, or null when it is none of the three shapes
     /// known to be safe: a URL, as its scheme and host; an explicit path, with the home folder
-    /// abbreviated; or a named artefact — a package, image, script or module.
+    /// abbreviated; or a named artefact — a package, image, script or module. A bare word, one
+    /// with no <c>/</c>, <c>@</c> or <c>.</c>, is an artefact only in the server slot.
     /// </summary>
-    private static string? Shown(string arg, string home)
+    private static string? Shown(string arg, string home, bool isServerSlot)
     {
         if (arg.Contains("://", StringComparison.Ordinal))
         {
@@ -401,7 +409,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         }
         if (arg.Length is 0 or > 100 || !(char.IsAsciiLetterOrDigit(arg[0]) || arg[0] == '@')
             || !arg.All(c => char.IsAsciiLetterOrDigit(c) || "._@/-".Contains(c))
-            || !arg.Any(c => "/.@-".Contains(c)))
+            || !(arg.Any(c => "/.@".Contains(c)) || (isServerSlot && arg.Any(c => "-_".Contains(c)))))
         {
             return null;
         }
@@ -428,7 +436,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             return false;
         }
         var name = arg.ToLowerInvariant();
-        return new[] { "token", "key", "secret", "pass", "pwd", "auth", "credential", "bearer" }.Any(name.Contains);
+        return new[] { "token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer" }.Any(name.Contains);
     }
 
     /// <summary>Starts with <c>/</c>, <c>~</c>, <c>./</c>, <c>../</c> or a drive root (<c>X:\</c> or <c>X:/</c>).</summary>

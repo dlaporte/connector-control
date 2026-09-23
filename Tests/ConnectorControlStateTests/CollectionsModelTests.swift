@@ -249,6 +249,30 @@ final class CollectionsModelTests: XCTestCase {
         assertTarget(local("tool", ["sk-abc.def", "ghp_0123456789abcdef0123456789abcdef.js"]), is: "tool", hides: "abc")
     }
 
+    func testTargetShowsTheServerAPackageRunnerNames() {
+        XCTAssertEqual(CollectionsModel.target(of: local("uvx", ["mcp-server-fetch"]).config, home: "/Users/x"), "uvx mcp-server-fetch")
+        XCTAssertEqual(CollectionsModel.target(of: local("python", ["mcp_server.py"]).config, home: "/Users/x"), "python mcp_server.py")
+    }
+
+    /// A bare hyphenated word anywhere but the server slot is as likely a password as a package.
+    func testTargetLeavesOutABareHyphenatedWordOutsideTheServerSlot() {
+        assertTarget(local("tool", ["hunter-2"]), is: "tool", hides: "hunter-2")
+        assertTarget(local("tool", ["-p", "s3cr3t-pass"]), is: "tool", hides: "s3cr3t")
+        assertTarget(local("tool", ["correct-horse-battery-staple"]), is: "tool", hides: "horse")
+        assertTarget(local("uvx", ["--from", "x", "my-server", "extra-word"]), is: "uvx", hides: "extra-word")
+    }
+
+    func testTargetLeavesOutThePwFlagsValue() {
+        assertTarget(local("tool", ["--pw", "a.b"]), is: "tool", hides: "a.b")
+    }
+
+    /// The server slot is the first positional argument, whatever it holds: a bare word there is
+    /// shown because it cannot be told from a package name, and only there.
+    func testTargetTrustsOnlyTheFirstPositionalAfterAPackageRunner() {
+        XCTAssertEqual(CollectionsModel.target(of: local("npx", ["-y", "hunter-2", "@scope/pkg", "other-word"]).config, home: "/Users/x"),
+                       "npx hunter-2 …/pkg")
+    }
+
     /// A command that is a shell line keeps its last word; one that could itself be a secret is
     /// left out, and the arguments still show.
     func testTargetShowsOnlyALaunchersLastWordOrNothing() {

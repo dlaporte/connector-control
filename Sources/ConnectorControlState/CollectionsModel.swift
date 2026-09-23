@@ -297,13 +297,20 @@ public final class CollectionsModel: ObservableObject {
             return urlOrigin(remote.url).map(\.host) ?? remoteType
         }
         let model = FormMapper.analyze(config).model
+        // The slot where a package runner names the server it fetches: the one place a bare
+        // hyphenated word is a package rather than, as likely, a password.
+        let serverSlot = packageRunners.contains(launcherName(model.command).lowercased())
+            ? model.args.firstIndex { !$0.hasPrefix("-") } : nil
         let args = model.args.enumerated().compactMap { index, arg -> String? in
             if index > 0, isSecretNamedFlag(model.args[index - 1]) { return nil }
-            return shown(arg, home: home)
+            return shown(arg, home: home, isServerSlot: index == serverSlot)
         }
         let tokens = [launcher(model.command)].compactMap { $0 } + args
         return tokens.joined(separator: " ")
     }
+
+    /// Launchers whose first positional argument names the package they fetch and run.
+    private static let packageRunners: Set<String> = ["npx", "uvx", "pipx", "bunx", "pnpx"]
 
     /// The launcher, named the way it would be typed, or nil when even its last word could be a
     /// secret: a command that is a shell line rather than a program keeps only its last word.
@@ -318,8 +325,9 @@ public final class CollectionsModel: ObservableObject {
 
     /// One argument as the target column shows it, or nil when it is none of the three shapes
     /// known to be safe: a URL, as its scheme and host; an explicit path, with the home folder
-    /// abbreviated; or a named artefact — a package, image, script or module.
-    private static func shown(_ arg: String, home: String) -> String? {
+    /// abbreviated; or a named artefact — a package, image, script or module. A bare word, one
+    /// with no `/`, `@` or `.`, is an artefact only in the server slot.
+    private static func shown(_ arg: String, home: String, isServerSlot: Bool) -> String? {
         if arg.contains("://") {
             return urlOrigin(arg).map { "\($0.scheme)://\($0.host)" }
         }
@@ -334,7 +342,7 @@ public final class CollectionsModel: ObservableObject {
         }
         guard arg.count <= 100, arg.first.map({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "@") }) == true,
               arg.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "._@/-".contains($0)) }),
-              arg.contains(where: { "/.@-".contains($0) })
+              arg.contains(where: { "/.@".contains($0) }) || (isServerSlot && arg.contains(where: { "-_".contains($0) }))
         else { return nil }
         if arg.hasPrefix("@"), let slash = arg.firstIndex(of: "/"), slash > arg.index(after: arg.startIndex) {
             let name = arg[arg.index(after: slash)...]
@@ -348,7 +356,7 @@ public final class CollectionsModel: ObservableObject {
     private static func isSecretNamedFlag(_ arg: String) -> Bool {
         guard arg.hasPrefix("-"), !arg.contains("=") else { return false }
         let name = arg.lowercased()
-        return ["token", "key", "secret", "pass", "pwd", "auth", "credential", "bearer"].contains { name.contains($0) }
+        return ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"].contains { name.contains($0) }
     }
 
     /// Starts with `/`, `~`, `./`, `../` or a drive root (`X:\` or `X:/`).
