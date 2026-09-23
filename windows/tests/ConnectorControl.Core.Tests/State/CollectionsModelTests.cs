@@ -564,8 +564,8 @@ public class CollectionsModelTests
     /// <summary>
     /// A cancelled prompt, or a verb that finds nothing to act on, leaves no error behind: the
     /// window shows LastError after every verb, so one left over from an earlier failure would
-    /// come back as if this verb had failed. A declined confirmation is the exception, and changes
-    /// nothing, the last error included.
+    /// come back as if this verb had failed. A declined confirmation counts as a cancel: it clears
+    /// the last error too, and changes nothing else.
     /// </summary>
     [Fact]
     public void AVerbThatDoesNothingClearsTheLastError()
@@ -643,7 +643,8 @@ public class CollectionsModelTests
         Assert.Equal("Team B", model.Selected);   // the selection follows the name it just gave
         Assert.Null(model.LastError);             // a successful action clears the last one's error
 
-        // Declined: the collection stays.
+        // Declined: the collection stays, and the earlier error does not come back.
+        PresetError(model, h);
         h.Dialogs.NextConfirm = false;
         model.Delete();
         var asked = h.Dialogs.Confirms[^1];
@@ -651,6 +652,7 @@ public class CollectionsModelTests
         Assert.Equal(AppState.DeleteButton, asked.Primary);
         Assert.True(asked.Destructive);
         Assert.Equal(["Default", "Team B", "Work"], state.CollectionNames);
+        Assert.Null(model.LastError);   // a declined confirmation clears the last error
 
         h.Dialogs.NextConfirm = true;
         model.Delete();
@@ -671,8 +673,9 @@ public class CollectionsModelTests
         using var model = new CollectionsModel(state, h.Dialogs);
         model.Selected = "Team";
 
-        // Declined: the collection is still synced. The reassurance lives in the question now
-        // that the button no longer carries it.
+        // Declined: the collection is still synced, and the earlier error does not come back.
+        // The reassurance lives in the question now that the button no longer carries it.
+        PresetError(model, h);
         h.Dialogs.NextConfirm = false;
         model.StopSyncing();
         var asked = h.Dialogs.Confirms[^1];
@@ -681,6 +684,7 @@ public class CollectionsModelTests
         Assert.Equal(CollectionsModel.StopSyncingAction, asked.Primary);
         Assert.False(asked.Destructive);   // nothing is lost: every connector stays
         Assert.True(state.IsSynced("Team"));
+        Assert.Null(model.LastError);   // a declined confirmation clears the last error
 
         h.Dialogs.NextConfirm = true;
         model.StopSyncing();
@@ -1257,13 +1261,12 @@ public class CollectionsModelTests
         using var model = new CollectionsModel(state, h.Dialogs);
         model.Selected = "Default";
 
-        // Declined: nothing goes, the last error included.
+        // Declined: nothing goes, and the earlier error does not come back.
         PresetError(model, h);
-        var stale = model.LastError;
         model.SetChecked("alpha", true);
         h.Dialogs.NextConfirm = false;
         model.RemoveChecked();
-        Assert.Equal(stale, model.LastError);   // a declined confirmation changes nothing
+        Assert.Null(model.LastError);   // a declined confirmation clears the last error
         Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("alpha"));    // declined, so alpha stays
         Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("beta"));
         Assert.Equal(CollectionsModel.RemoveCheckedInformative, h.Dialogs.Confirms[^1].Informative);

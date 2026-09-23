@@ -158,7 +158,7 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// What the last action AppState refused reported, cleared by the next one that succeeds, is
-    /// cancelled, or finds nothing to do. A declined confirmation leaves it as it was.
+    /// cancelled, declined at its confirmation, or finds nothing to do.
     @Published public private(set) var lastError: String?
 
     private let state: AppState
@@ -879,7 +879,10 @@ public final class CollectionsModel: ObservableObject {
         }
         guard dialogs.confirm(message: CollectionsModel.removeCheckedMessage(names),
                               informative: CollectionsModel.removeCheckedInformative,
-                              primary: CollectionsModel.removeCheckedButton, destructive: true) else { return }
+                              primary: CollectionsModel.removeCheckedButton, destructive: true) else {
+            lastError = nil
+            return
+        }
         state.remove(names: names, in: selectedCollection)
         // remove(names:in:) persists but does not apply, as its single-name sibling does not.
         if selectedCollection == state.activeCollection { state.applyInteractively() }
@@ -913,7 +916,10 @@ public final class CollectionsModel: ObservableObject {
     public func delete() {
         let collection = selectedCollection
         guard dialogs.confirm(message: AppState.deleteCollectionMessage(collection), informative: nil,
-                              primary: AppState.deleteButton, destructive: true) else { return }
+                              primary: AppState.deleteButton, destructive: true) else {
+            lastError = nil
+            return
+        }
         // The store refuses to delete the last local collection, and the last one of any kind.
         // Asked here as well as in the toolbar, so a refusal cannot arrive after the publishing
         // below has already stopped. The store reports it: it refuses before it touches anything,
@@ -954,7 +960,10 @@ public final class CollectionsModel: ObservableObject {
     public func stopSyncing() {
         guard dialogs.confirm(message: CollectionsModel.stopSyncingMessage(selectedCollection),
                               informative: CollectionsModel.stopSyncingInformative,
-                              primary: CollectionsModel.stopSyncingAction, destructive: false) else { return }
+                              primary: CollectionsModel.stopSyncingAction, destructive: false) else {
+            lastError = nil
+            return
+        }
         state.stopSyncing(selectedCollection)
         lastError = nil
     }

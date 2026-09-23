@@ -171,7 +171,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// What the last action AppState refused reported, cleared by the next one that succeeds, is
-    /// cancelled, or finds nothing to do. A declined confirmation leaves it as it was.
+    /// cancelled, declined at its confirmation, or finds nothing to do.
     /// </summary>
     public string? LastError { get => lastError; private set => Set(ref lastError, value); }
 
@@ -1170,6 +1170,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         }
         if (!dialogs.Confirm(RemoveCheckedMessage(names), RemoveCheckedInformative, RemoveCheckedButton, destructive: true))
         {
+            LastError = null;
             return;
         }
         state.Remove(names, SelectedCollection);
@@ -1221,6 +1222,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         var collection = SelectedCollection;
         if (!dialogs.Confirm(AppState.DeleteCollectionMessage(collection), null, AppState.DeleteButton, destructive: true))
         {
+            LastError = null;
             return;
         }
         // The store refuses to delete the last local collection, and the last one of any kind.
@@ -1276,6 +1278,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     {
         if (!dialogs.Confirm(StopSyncingMessage(SelectedCollection), StopSyncingInformative, StopSyncingAction, destructive: false))
         {
+            LastError = null;
             return;
         }
         state.StopSyncing(SelectedCollection);

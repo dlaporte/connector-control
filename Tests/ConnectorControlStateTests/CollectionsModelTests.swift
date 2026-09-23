@@ -481,8 +481,8 @@ final class CollectionsModelTests: XCTestCase {
 
     /// A cancelled prompt, or a verb that finds nothing to act on, leaves no error behind: the
     /// window shows `lastError` after every verb, so one left over from an earlier failure would
-    /// come back as if this verb had failed. A declined confirmation is the exception, and changes
-    /// nothing, the last error included.
+    /// come back as if this verb had failed. A declined confirmation counts as a cancel: it clears
+    /// the last error too, and changes nothing else.
     func testAVerbThatDoesNothingClearsTheLastError() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
@@ -556,7 +556,8 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.selected, "Team B", "the selection follows the name it just gave")
         XCTAssertNil(model.lastError, "a successful action clears the last one's error")
 
-        // Declined: the collection stays.
+        // Declined: the collection stays, and the earlier error does not come back.
+        presetError(model, h)
         h.dialogs.nextConfirm = false
         model.delete()
         let asked = try XCTUnwrap(h.dialogs.confirms.last)
@@ -564,6 +565,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(asked.primary, AppState.deleteButton)
         XCTAssertTrue(asked.destructive)
         XCTAssertEqual(state.collectionNames, ["Default", "Team B", "Work"])
+        XCTAssertNil(model.lastError, "a declined confirmation clears the last error")
 
         h.dialogs.nextConfirm = true
         model.delete()
@@ -584,8 +586,9 @@ final class CollectionsModelTests: XCTestCase {
         defer { model.dispose() }
         model.selected = "Team"
 
-        // Declined: the collection is still synced. The reassurance lives in the question now
-        // that the button no longer carries it.
+        // Declined: the collection is still synced, and the earlier error does not come back.
+        // The reassurance lives in the question now that the button no longer carries it.
+        presetError(model, h)
         h.dialogs.nextConfirm = false
         model.stopSyncing()
         let asked = try XCTUnwrap(h.dialogs.confirms.last)
@@ -594,6 +597,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(asked.primary, CollectionsModel.stopSyncingAction)
         XCTAssertFalse(asked.destructive, "nothing is lost: every connector stays")
         XCTAssertTrue(state.isSynced("Team"))
+        XCTAssertNil(model.lastError, "a declined confirmation clears the last error")
 
         h.dialogs.nextConfirm = true
         model.stopSyncing()
@@ -1097,13 +1101,12 @@ final class CollectionsModelTests: XCTestCase {
         let model = CollectionsModel(state: state, dialogs: h.dialogs)
         model.selected = "Default"
 
-        // Declined: nothing goes, the last error included.
+        // Declined: nothing goes, and the earlier error does not come back.
         presetError(model, h)
-        let stale = model.lastError
         model.setChecked("alpha", true)
         h.dialogs.nextConfirm = false
         model.removeChecked()
-        XCTAssertEqual(model.lastError, stale, "a declined confirmation changes nothing")
+        XCTAssertNil(model.lastError, "a declined confirmation clears the last error")
         XCTAssertNotNil(state.store.collections["Default"]?.mcps["alpha"], "declined, so alpha stays")
         XCTAssertNotNil(state.store.collections["Default"]?.mcps["beta"])
         XCTAssertEqual(h.dialogs.confirms.last?.informative, CollectionsModel.removeCheckedInformative)
