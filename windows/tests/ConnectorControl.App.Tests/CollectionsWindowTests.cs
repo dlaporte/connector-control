@@ -49,12 +49,15 @@ public class CollectionsWindowTests
 
         public List<(PublishModel Model, PublishDialogMode Mode)> Publishes { get; } = [];
 
+        public List<CopyModel> Copies { get; } = [];
+
         public CollectionsWindow.Presenters Presenters => new(
             _ => { DocumentAsks++; return Document; },
             _ => { FolderAsks++; return Folder; },
             (_, model) => { Imports.Add(model); return true; },
             (_, model) => { Reviews.Add(model); return true; },
-            (_, model, mode) => { Publishes.Add((model, mode)); return true; });
+            (_, model, mode) => { Publishes.Add((model, mode)); return true; },
+            (_, model, _) => { Copies.Add(model); return true; });
     }
 
     /// <summary>
@@ -165,6 +168,39 @@ public class CollectionsWindowTests
         where T : FrameworkElement =>
         RowElements.Find<T>(window.RowList, window.Model.Rows.Single(r => r.Name == connector), name);
 
+    /// <summary>The separator's stand-in in <see cref="Entries"/>.</summary>
+    private const string Rule = "—";
+
+    /// <summary>
+    /// A code-built menu read the way a screen reader hears it: a plain entry by its header, a
+    /// two-line one by the name it is given, a separator as <see cref="Rule"/>.
+    /// </summary>
+    private static List<string> Entries(ContextMenu menu) =>
+        menu.Items.Cast<object>().Select(entry => entry switch
+        {
+            Separator => Rule,
+            MenuItem { Header: string header } => header,
+            MenuItem item => AutomationProperties.GetName(item),
+            _ => throw new InvalidOperationException(entry.GetType().Name),
+        }).ToList();
+
+    private static MenuItem Entry(ContextMenu menu, string title) =>
+        menu.Items.OfType<MenuItem>().Single(item =>
+            item.Header as string == title || AutomationProperties.GetName(item) == title);
+
+    private static void Click(MenuItem item) => item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, item));
+
+    private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+
+    /// <summary>Ticks or unticks one row the way a click does, then gives the rebuilt rows their pass.</summary>
+    private static void Tick(CollectionsWindow window, string connector, bool on)
+    {
+        var tick = InRow<CheckBox>(window, connector, "RowTick");
+        tick.IsChecked = on;
+        tick.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, tick));
+        Layout(window);
+    }
+
     [Fact]
     public void TheSidebarListsCollectionsWithTheActiveOneBold()
     {
@@ -191,9 +227,9 @@ public class CollectionsWindowTests
             Assert.Equal(Visibility.Collapsed, InSidebar<TextBlock>(window, "Default", "SidebarChainGlyph").Visibility);
             Assert.Equal(Visibility.Collapsed, InSidebar<Ellipse>(window, "Data team", "SidebarPendingDot").Visibility);
 
-            // The detail line is the model's, with the name this window puts in front of it.
+            // The header names the collection; the detail line is the model's, in the idle bar.
             Assert.Equal("Default", window.SelectedNameText.Text);
-            Assert.Equal(" · " + window.Model.DetailLine, window.DetailText.Text);
+            Assert.Equal(window.Model.DetailLine, window.DetailText.Text);
             Assert.Equal(Visibility.Collapsed, window.BannerStrip.Visibility);
         });
     }
@@ -350,87 +386,263 @@ public class CollectionsWindowTests
                 // sentence is both what the pointer uncovers and what a screen reader says.
                 Assert.Equal(CollectionsModel.LockedGlyphTooltip, lockGlyph.ToolTip);
                 Assert.Equal(CollectionsModel.LockedGlyphTooltip, AutomationProperties.GetName(lockGlyph));
-                // A synced collection's rows cannot be exported, so they cannot be ticked either.
+                // A synced collection's rows are the author's, so they cannot be ticked either —
+                // and with nothing to tick, the selection bar never offers Export or Remove.
                 Assert.Equal(Visibility.Collapsed, InRow<CheckBox>(window, row.Name, "RowTick").Visibility);
+                Assert.Equal(row.Target, InRow<TextBlock>(window, row.Name, "RowTargetText").Text);
             }
+            Assert.Equal(Visibility.Collapsed, window.TickedBar.Visibility);
 
-            Assert.False(window.ExportButton.IsEnabled);
-            Assert.False(window.PublishButton.IsEnabled);
-            Assert.True(window.RefreshButton.IsEnabled);
-            Assert.True(window.MakeLocalCopyButton.IsEnabled);
+            // The Subscribed pill, and not the Active one: Default is still the active collection.
+            Assert.Equal([CollectionsModel.Pill.Subscribed], window.PillList.Items.Cast<CollectionsModel.Pill>());
 
-            Assert.Equal(Visibility.Visible, window.StopSyncingLink.Visibility);
-            Assert.Equal(Visibility.Collapsed, window.PublishLink.Visibility);
-            Assert.Equal(Visibility.Collapsed, window.StopPublishingLink.Visibility);
+            // The More menu offers what a subscription can do, and no publishing. Export All is
+            // listed but dimmed; the collection is not the last one, so it can be deleted.
+            var menu = window.BuildCollectionMenu();
+            Assert.Equal(
+                [
+                    CollectionsModel.MakeActiveAction, Rule,
+                    CollectionsModel.RenameAction, CollectionsModel.MakeLocalCopyButton, Rule,
+                    CollectionsModel.RefreshButton, CollectionsModel.ShowSourceFileAction,
+                    CollectionsModel.StopSyncingAction, CollectionsModel.ExportAllAction, Rule,
+                    CollectionsModel.DeleteAction,
+                ],
+                Entries(menu));
+            Assert.False(Entry(menu, CollectionsModel.ExportAllAction).IsEnabled);
+            Assert.True(Entry(menu, CollectionsModel.DeleteAction).IsEnabled);
+            Assert.True(Entry(menu, CollectionsModel.StopSyncingAction).IsEnabled);
+
+            // Make Active acts on the collection on show.
+            Click(Entry(menu, CollectionsModel.MakeActiveAction));
+            Assert.Equal("Data team", state.ActiveCollection);
         }, select: "Data team");
     }
 
     [Fact]
-    public void TheToolbarFollowsTheModelFlags()
+    public void TheCollectionMenuFollowsTheModelFlags()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        SubscribeToDataTeam(h, state);
+        Showing(h, state, (window, recorder) =>
+        {
+            // The active local collection: no Make Active, publishing not started yet, and the
+            // last local collection stays, so Delete is refused before it is offered.
+            Assert.Equal("Default", window.Model.Selected);
+            Assert.Equal([CollectionsModel.Pill.Active], window.PillList.Items.Cast<CollectionsModel.Pill>());
+            var menu = window.BuildCollectionMenu();
+            Assert.Equal(
+                [
+                    CollectionsModel.RenameAction, CollectionsModel.DuplicateAction, Rule,
+                    CollectionsModel.PublishButton, CollectionsModel.ExportAllAction, Rule,
+                    CollectionsModel.DeleteAction,
+                ],
+                Entries(menu));
+            Assert.False(Entry(menu, CollectionsModel.DeleteAction).IsEnabled);
+            Assert.True(Entry(menu, CollectionsModel.ExportAllAction).IsEnabled);
+            Assert.Equal(CollectionsModel.MoreActionsLabel, window.MoreButton.ToolTip);
+            Assert.Equal(CollectionsModel.MoreActionsLabel, AutomationProperties.GetName(window.MoreButton));
+
+            // Export All offers the whole collection, whatever is ticked; Start Publishing opens
+            // the Publish dialog over it.
+            window.Model.SetChecked(window.Model.Rows[0].Name, true);
+            Click(Entry(menu, CollectionsModel.ExportAllAction));
+            Click(Entry(menu, CollectionsModel.PublishButton));
+            Assert.Collection(recorder.Publishes,
+                export =>
+                {
+                    Assert.Equal(PublishDialogMode.Export, export.Mode);
+                    Assert.Equal("Default", export.Model.Collection);
+                    Assert.Null(export.Model.Connectors);
+                },
+                publish =>
+                {
+                    Assert.Equal(PublishDialogMode.Publish, publish.Mode);
+                    Assert.Equal("Default", publish.Model.Collection);
+                    Assert.Null(publish.Model.Connectors);
+                });
+        });
+    }
+
+    [Fact]
+    public void TheSidebarPlusMakesACollectionOrBringsOneIn()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var document = SubscribeToDataTeam(h, state);
+        Showing(h, state, (window, recorder) =>
+        {
+            var menu = window.BuildSidebarMenu();
+            Assert.Equal(
+                [CollectionsModel.NewButton, Rule, CollectionsModel.ImportButton, CollectionsModel.SubscribeButton],
+                Entries(menu));
+            // A composed header announces nothing of its own, so the subtitle is the help text.
+            Assert.Equal(CollectionsModel.ImportSubtitle, AutomationProperties.GetHelpText(Entry(menu, CollectionsModel.ImportButton)));
+            Assert.Equal(CollectionsModel.SubscribeSubtitle, AutomationProperties.GetHelpText(Entry(menu, CollectionsModel.SubscribeButton)));
+
+            // Import and Subscribe are the same picker, and the dialog opens in the mode asked for.
+            recorder.Document = document;
+            Click(Entry(menu, CollectionsModel.ImportButton));
+            Click(Entry(menu, CollectionsModel.SubscribeButton));
+            Assert.Equal(2, recorder.DocumentAsks);
+            Assert.Collection(recorder.Imports,
+                import => Assert.Equal(ImportModel.Mode.AddToCollection, import.ImportMode),
+                subscribe => Assert.Equal(ImportModel.Mode.KeepInSync, subscribe.ImportMode));
+        });
+    }
+
+    [Fact]
+    public void TheListHeadersAddIsDisabledForASyncedCollection()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
         SubscribeToDataTeam(h, state);
         Showing(h, state, (window, _) =>
         {
-            // A local collection with nothing ticked: Export waits for a tick, Publish is open,
-            // and the two that read a source are out of reach.
             Assert.Equal("Default", window.Model.Selected);
-            Assert.Equal(CollectionsModel.ExportButton(0), window.ExportButton.Content);
-            Assert.False(window.ExportButton.IsEnabled);
-            Assert.True(window.PublishButton.IsEnabled);
-            Assert.False(window.RefreshButton.IsEnabled);
-            Assert.False(window.MakeLocalCopyButton.IsEnabled);
+            Assert.True(window.AddConnectorButton.IsEnabled);
+            Assert.Equal(CollectionsModel.AddConnectorTooltip, window.AddConnectorButton.ToolTip);
+            Assert.Equal(CollectionsModel.AddConnectorTooltip, AutomationProperties.GetName(window.AddConnectorButton));
+            Assert.Equal(window.Model.Rows.Count.ToString(System.Globalization.CultureInfo.CurrentCulture),
+                window.ConnectorCountText.Text);
 
-            // The last local collection stays, so Delete is refused before it is offered.
-            Assert.False(window.DeleteLink.IsEnabled);
-            Assert.Equal(Visibility.Visible, window.PublishLink.Visibility);
-            Assert.Equal(Visibility.Collapsed, window.StopSyncingLink.Visibility);
-            Assert.Equal(Visibility.Collapsed, window.StopPublishingLink.Visibility);
+            // The same button on a synced collection is dead, and its tooltip says where
+            // additions go instead.
+            window.Model.Selected = "Data team";
+            Layout(window);
+            Assert.False(window.AddConnectorButton.IsEnabled);
+            Assert.Equal(CollectionsModel.AddConnectorDisabledTooltip, window.AddConnectorButton.ToolTip);
+            Assert.Equal(CollectionsModel.AddConnectorDisabledTooltip, AutomationProperties.GetName(window.AddConnectorButton));
+            Assert.Equal(window.Model.Rows.Count.ToString(System.Globalization.CultureInfo.CurrentCulture),
+                window.ConnectorCountText.Text);
         });
     }
 
     [Fact]
-    public void CheckingRowsUpdatesTheExportCount()
+    public void TheSelectionBarShowsTheDetailLineWhenNothingIsTicked()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Showing(h, state, (window, _) =>
+        {
+            Assert.Empty(window.Model.CheckedNames);
+            Assert.Equal(Visibility.Visible, window.DetailText.Visibility);
+            Assert.Equal(window.Model.DetailLine, window.DetailText.Text);
+            Assert.Equal(Visibility.Collapsed, window.TickedBar.Visibility);
+
+            // A tick swaps the line for the actions, and the last untick swaps it back.
+            var first = window.Model.Rows[0].Name;
+            Tick(window, first, true);
+            Assert.Equal(Visibility.Collapsed, window.DetailText.Visibility);
+            Assert.Equal(Visibility.Visible, window.TickedBar.Visibility);
+            Tick(window, first, false);
+            Assert.Equal(Visibility.Visible, window.DetailText.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.TickedBar.Visibility);
+        });
+    }
+
+    [Fact]
+    public void TickingRowsFillsTheSelectionBar()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
         Showing(h, state, (window, recorder) =>
         {
             var first = window.Model.Rows[0].Name;
-            var tick = InRow<CheckBox>(window, first, "RowTick");
-            Assert.Equal(Visibility.Visible, tick.Visibility);
+            var second = window.Model.Rows[1].Name;
+            Assert.Equal(Visibility.Visible, InRow<CheckBox>(window, first, "RowTick").Visibility);
             Assert.Equal(CollectionsModel.EditTooltip, InRow<Button>(window, first, "RowEdit").ToolTip);
 
-            tick.IsChecked = true;
-            tick.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, tick));
-            // The model rebuilt the rows, so the list needs its pass before it is read into again.
-            Layout(window);
+            Tick(window, first, true);
+            Tick(window, second, true);
+            Assert.Equal([first, second], window.Model.CheckedNames);
+            Assert.Equal(CollectionsModel.SelectedCount(2), window.SelectedCountText.Text);
+            Assert.Equal(CollectionsModel.CopyToButton, window.CopyToButton.Content);
+            // Export carries no count: the bar says it already.
+            Assert.Equal(CollectionsModel.ExportCheckedButton, window.ExportCheckedButton.Content);
+            Assert.Equal(CollectionsModel.RemoveCheckedButton, window.RemoveCheckedButton.Content);
+            Assert.Equal(Visibility.Visible, window.RemoveCheckedButton.Visibility);
 
-            Assert.Equal([first], window.Model.CheckedNames);
-            Assert.Equal(CollectionsModel.ExportButton(1), window.ExportButton.Content);
-            Assert.True(window.ExportButton.IsEnabled);
-
-            // What the button then exports is that one connector, into the file name the
+            // What the bar's Export then exports is the ticked connectors, into the file name the
             // collection's slug makes — the subset changes what travels, not what it is called.
-            window.ExportButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, window.ExportButton));
+            Click(window.ExportCheckedButton);
             var (exported, mode) = Assert.Single(recorder.Publishes);
             Assert.Equal(PublishDialogMode.Export, mode);
-            Assert.Equal([first], exported.Connectors);
-            // The subset changes what travels, not what it is called: the collection's own slug,
-            // which is also what a model over the whole of it would answer.
+            Assert.Equal([first, second], exported.Connectors);
             Assert.Equal(Slug.Make(window.Model.Selected!) + "." + CollectionDocument.FileExtension, exported.FileName);
             Assert.Equal(new PublishModel(state, window.Model.Selected!).FileName, exported.FileName);
 
             // The tick survives the rebuild the model raises, and unticking takes the count back.
-            var again = InRow<CheckBox>(window, first, "RowTick");
-            Assert.True(again.IsChecked);
-            again.IsChecked = false;
-            again.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, again));
+            Assert.True(InRow<CheckBox>(window, first, "RowTick").IsChecked);
+            Tick(window, second, false);
+            Assert.Equal(CollectionsModel.SelectedCount(1), window.SelectedCountText.Text);
+
+            // Remove asks first, and removes what is ticked.
+            h.Dialogs.NextConfirm = true;
+            Click(window.RemoveCheckedButton);
             Layout(window);
+            Assert.Equal(CollectionsModel.RemoveCheckedMessage([first]), h.Dialogs.Confirms[0].Message);
+            Assert.DoesNotContain(first, window.Model.Rows.Select(r => r.Name));
+            Assert.Contains(second, window.Model.Rows.Select(r => r.Name));
             Assert.Empty(window.Model.CheckedNames);
-            Assert.Equal(CollectionsModel.ExportButton(0), window.ExportButton.Content);
-            Assert.False(window.ExportButton.IsEnabled);
+            Assert.Equal(Visibility.Collapsed, window.TickedBar.Visibility);
+        });
+    }
+
+    [Fact]
+    public void TheCopyToMenuListsEveryOtherCollectionWithSyncedOnesDisabled()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        SubscribeToDataTeam(h, state);
+        // Spare starts as a copy of Default, so everything ticked there clashes; Empty holds
+        // nothing, so a copy into it goes straight through.
+        Assert.Null(state.CreateCollection("Spare"));
+        Assert.Null(state.AddEmptyCollection("Empty"));
+        state.SwitchCollection("Default");
+        Showing(h, state, (window, recorder) =>
+        {
+            Assert.Equal("Default", window.Model.Selected);
+            var first = window.Model.Rows[0].Name;
+            Tick(window, first, true);
+
+            // Every collection but this one, in the sidebar's order; the synced one is listed but
+            // dead, and says why under its name.
+            var menu = window.BuildCopyMenu();
+            Assert.Equal(["Data team", "Empty", "Spare", Rule, CollectionsModel.NewButton], Entries(menu));
+            var synced = Entry(menu, "Data team");
+            Assert.False(synced.IsEnabled);
+            Assert.Equal(CollectionsModel.ReadOnlyNote, AutomationProperties.GetHelpText(synced));
+            Assert.True(Entry(menu, "Empty").IsEnabled);
+            Assert.True(Entry(menu, "Spare").IsEnabled);
+
+            // A clash asks first, about the destination chosen, and copies nothing yet.
+            Click(Entry(menu, "Spare"));
+            var asked = Assert.Single(recorder.Copies);
+            Assert.Equal("Spare", asked.Destination);
+            var row = Assert.Single(asked.Rows);
+            Assert.Equal(first, row.Name);
+            Assert.True(row.Clashes);
+            Assert.Equal([first], window.Model.CheckedNames);
+
+            // Nothing in the way goes straight through, and the ticks go with it.
+            Click(Entry(menu, "Empty"));
+            Assert.Single(recorder.Copies);
+            Assert.True(state.Store.Collections["Empty"].Mcps.ContainsKey(first));
+            Assert.Empty(window.Model.CheckedNames);
+            Assert.Empty(h.Dialogs.Informs);
+        });
+    }
+
+    [Fact]
+    public void TheCopyToMenuHasNoSeparatorWithNowhereElseToGo()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Showing(h, state, (window, _) =>
+        {
+            Tick(window, window.Model.Rows[0].Name, true);
+            Assert.Equal([CollectionsModel.NewButton], Entries(window.BuildCopyMenu()));
         });
     }
 

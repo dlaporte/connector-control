@@ -1,6 +1,9 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
@@ -13,9 +16,9 @@ namespace ConnectorControl.App.Views;
 
 /// <summary>
 /// The Collections window: the collections in the left pane, the selected one's connectors in the
-/// right, the toolbar and the action links that act on it, and the three dialogs it puts in front
-/// of itself. Layout, bindings, the native pickers and the one formatted button caption; every
-/// rule and string is CollectionsModel's.
+/// right, the header menu and the selection bar that act on them, and the five dialogs it puts in
+/// front of itself. Layout, bindings, the native pickers, the three menus and the two formatted
+/// captions; every rule and string is CollectionsModel's.
 /// </summary>
 public partial class CollectionsWindow : Window
 {
@@ -93,34 +96,42 @@ public partial class CollectionsWindow : Window
     internal CollectionsWindowRequest? LastRequest { get; private set; }
 
     /// <summary>
-    /// The two pickers and the three dialogs this window puts in front of itself. One overridable
+    /// The two pickers and the four dialogs this window puts in front of itself. One overridable
     /// bundle, because a test drives this window on the very dispatcher it lives on: a real modal
-    /// would block the test that opened it, and a real picker would wait for a person.
+    /// would block the test that opened it, and a real picker would wait for a person. The Copy
+    /// dialog is handed the refusal a failed copy leaves in this window's model as well, which it
+    /// cannot reach through CopyModel.
     /// </summary>
     internal sealed record Presenters(
         Func<Window, string?> ChooseDocument,
         Func<Window, string?> ChooseFolder,
         Func<Window, ImportModel, bool> ShowImport,
         Func<Window, ReviewModel, bool> ShowReview,
-        Func<Window, PublishModel, PublishDialogMode, bool> ShowPublish);
+        Func<Window, PublishModel, PublishDialogMode, bool> ShowPublish,
+        Func<Window, CopyModel, Func<string?>, bool> ShowCopy);
 
     internal static Presenters Live { get; } = new(
         PickDocument,
         PickFolder,
         (owner, model) => ImportDialog.Show(owner, model),
         (owner, model) => ReviewDialog.Show(owner, model),
-        (owner, model, mode) => PublishDialog.Show(owner, model, mode));
+        (owner, model, mode) => PublishDialog.Show(owner, model, mode),
+        (owner, model, refusal) => CopyDialog.Show(owner, model, refusal));
 
     internal Presenters Surfaces { get; set; } = Live;
 
     /// <summary>
-    /// The one caption built from a value rather than bound: the count beside Export is a format,
-    /// and the ticks it counts are a plain field of a row that notifies nobody. Everything else
-    /// on this window is a binding the model raises.
+    /// The two captions built from a value rather than bound — the selection bar's count is a
+    /// format, and the list header's is a number — and which half of the bar shows, which follows
+    /// that same count. Everything else on this window is a binding the model raises.
     /// </summary>
     private void Refresh()
     {
-        ExportButton.Content = CollectionsModel.ExportButton(Model.CheckedNames.Count);
+        var ticked = Model.CheckedNames.Count;
+        SelectedCountText.Text = CollectionsModel.SelectedCount(ticked);
+        DetailText.Visibility = ticked == 0 ? Visibility.Visible : Visibility.Collapsed;
+        TickedBar.Visibility = ticked == 0 ? Visibility.Collapsed : Visibility.Visible;
+        ConnectorCountText.Text = Model.Rows.Count.ToString(CultureInfo.CurrentCulture);
         if (!selectionResyncQueued)
         {
             selectionResyncQueued = true;
@@ -146,30 +157,115 @@ public partial class CollectionsWindow : Window
         }
     }
 
-    // MARK: toolbar
+    // MARK: sidebar header
 
-    private void OnImport(object sender, RoutedEventArgs e) => Import(keepInSync: false);
-
-    private void OnSubscribe(object sender, RoutedEventArgs e) => Import(keepInSync: true);
+    private void OnAddCollection(object sender, RoutedEventArgs e) => BuildSidebarMenu().IsOpen = true;
 
     /// <summary>
-    /// Export writes only the ticked connectors — what the count beside the button says, and what
-    /// <see cref="CollectionsModel.CanExport"/> waits for.
+    /// The sidebar's plus: a new collection, then the two ways to bring one in. Import and
+    /// Subscribe carry their subtitles, because which of the two to use is the one question the
+    /// words alone do not answer. Built without being shown, so a test can read it.
     /// </summary>
-    private void OnExport(object sender, RoutedEventArgs e)
+    internal ContextMenu BuildSidebarMenu()
     {
-        if (Model.Selected is { } collection)
+        var menu = new ContextMenu { PlacementTarget = AddCollectionButton, Placement = PlacementMode.Bottom, StaysOpen = false };
+        menu.Items.Add(Entry(CollectionsModel.NewButton, () => Act(Model.Create)));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Entry(CollectionsModel.ImportButton, CollectionsModel.ImportSubtitle, () => Import(keepInSync: false)));
+        menu.Items.Add(Entry(CollectionsModel.SubscribeButton, CollectionsModel.SubscribeSubtitle, () => Import(keepInSync: true)));
+        return menu;
+    }
+
+    // MARK: collection header
+
+    private void OnMore(object sender, RoutedEventArgs e) => BuildCollectionMenu().IsOpen = true;
+
+    /// <summary>
+    /// The header's More: the model's list, in its order. The entries that do not apply are
+    /// already left out, and the two it dims arrive saying so. Built without being shown, so a
+    /// test can read it.
+    /// </summary>
+    internal ContextMenu BuildCollectionMenu()
+    {
+        var menu = new ContextMenu { PlacementTarget = MoreButton, Placement = PlacementMode.Bottom, StaysOpen = false };
+        foreach (var entry in Model.CollectionMenu)
         {
-            PresentPublish(new PublishModel(state, collection, Model.ExportIntentForChecked()), PublishDialogMode.Export);
+            if (entry is CollectionsModel.MenuEntry.Separator)
+            {
+                menu.Items.Add(new Separator());
+                continue;
+            }
+            var item = Entry(CollectionsModel.Title(entry), () => Run(entry));
+            item.IsEnabled = entry switch
+            {
+                CollectionsModel.MenuEntry.ExportAll exportAll => exportAll.Enabled,
+                CollectionsModel.MenuEntry.Delete delete => delete.Enabled,
+                _ => true,
+            };
+            menu.Items.Add(item);
+        }
+        return menu;
+    }
+
+    /// <summary>
+    /// One entry of the More menu. Both publish entries open the same dialog: a published
+    /// collection's is its settings.
+    /// </summary>
+    private void Run(CollectionsModel.MenuEntry entry)
+    {
+        switch (entry)
+        {
+            case CollectionsModel.MenuEntry.MakeActive:
+                if (Model.Selected is { } collection)
+                {
+                    Act(() => Model.SwitchTo(collection));
+                }
+                break;
+            case CollectionsModel.MenuEntry.Rename:
+                Act(Model.Rename);
+                break;
+            case CollectionsModel.MenuEntry.Duplicate:
+                Act(() => Model.Duplicate());
+                break;
+            case CollectionsModel.MenuEntry.StartPublishing:
+            case CollectionsModel.MenuEntry.PublishingSettings:
+                PublishSelected();
+                break;
+            case CollectionsModel.MenuEntry.StopPublishing:
+                Act(Model.StopPublishing);
+                break;
+            case CollectionsModel.MenuEntry.ShowPublishedFile:
+                Reveal(Model.PublishedFilePath);
+                break;
+            case CollectionsModel.MenuEntry.ShowSourceFile:
+                Reveal(Model.SourceFilePath);
+                break;
+            case CollectionsModel.MenuEntry.ExportAll:
+                // The whole collection: the menu acts on the collection, not on what is ticked.
+                if (Model.Selected is { } shown)
+                {
+                    PresentPublish(new PublishModel(state, shown), PublishDialogMode.Export);
+                }
+                break;
+            case CollectionsModel.MenuEntry.MakeLocalCopy:
+                Act(Model.MakeLocalCopy);
+                break;
+            case CollectionsModel.MenuEntry.Refresh:
+                Act(Model.Refresh);
+                break;
+            case CollectionsModel.MenuEntry.StopSyncing:
+                Act(Model.StopSyncing);
+                break;
+            case CollectionsModel.MenuEntry.Delete:
+                Act(Model.Delete);
+                break;
         }
     }
 
-    private void OnPublish(object sender, RoutedEventArgs e) => PublishSelected();
-
     /// <summary>
     /// The Publish dialog over the collection on show. Publishing binds the whole collection, so
-    /// this one takes no subset. Shared by the toolbar, the action link and a blocked publish's
-    /// banner, so all three open the same dialog the same way.
+    /// this one takes no subset. Shared by the More menu and a blocked publish's banner, so both
+    /// open the same dialog the same way.
     /// </summary>
     private void PublishSelected()
     {
@@ -179,21 +275,115 @@ public partial class CollectionsWindow : Window
         }
     }
 
-    private void OnRefresh(object sender, RoutedEventArgs e) => Act(Model.Refresh);
+    /// <summary>The Mac's "Show in Finder": the document selected in its folder.</summary>
+    private static void Reveal(string? path)
+    {
+        if (path is null)
+        {
+            return;
+        }
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
+        {
+            // Settings' Show in Explorer does the same: explorer.exe failing to launch is not
+            // worth a sentence of its own, so it is a silent no-op rather than a crash.
+        }
+    }
 
-    private void OnMakeLocalCopy(object sender, RoutedEventArgs e) => Act(Model.MakeLocalCopy);
+    // MARK: connector list header
 
-    private void OnNew(object sender, RoutedEventArgs e) => Act(Model.Create);
+    /// <summary>
+    /// A new connector in the collection on show, through the same editor the pencil opens.
+    /// </summary>
+    private void OnAddConnector(object sender, RoutedEventArgs e) => windows.OpenEditor(Model.NewConnectorTarget());
 
-    // MARK: action links
+    // MARK: selection bar
 
-    private void OnRename(object sender, RoutedEventArgs e) => Act(Model.Rename);
+    private void OnCopyTo(object sender, RoutedEventArgs e) => BuildCopyMenu().IsOpen = true;
 
-    private void OnDelete(object sender, RoutedEventArgs e) => Act(Model.Delete);
+    /// <summary>
+    /// Copy to: every other collection, a synced one listed but dimmed with the reason under its
+    /// name — a read-only mirror cannot take copies, and the picker says so rather than the copy
+    /// refusing after the fact — then New Collection. Opens upward, from the bottom of the window.
+    /// Built without being shown, so a test can read it.
+    /// </summary>
+    internal ContextMenu BuildCopyMenu()
+    {
+        var menu = new ContextMenu { PlacementTarget = CopyToButton, Placement = PlacementMode.Top, StaysOpen = false };
+        var destinations = Model.CopyDestinations;
+        foreach (var destination in destinations)
+        {
+            var name = destination.Name;
+            var item = destination.IsEnabled
+                ? Entry(name, () => Copy(name))
+                : Entry(name, CollectionsModel.ReadOnlyNote, () => { });
+            item.IsEnabled = destination.IsEnabled;
+            menu.Items.Add(item);
+        }
+        // A lone collection has nowhere else to copy to, and its menu does not start with a separator.
+        if (destinations.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+        }
+        menu.Items.Add(Entry(CollectionsModel.NewButton, () => Act(() => Model.CopyCheckedIntoNewCollection())));
+        return menu;
+    }
 
-    private void OnStopPublishing(object sender, RoutedEventArgs e) => Act(Model.StopPublishing);
+    /// <summary>Straight through when nothing clashes; otherwise the Copy dialog asks about the clashes first.</summary>
+    private void Copy(string destination)
+    {
+        if (Model.CheckedNamesClashing(destination).Count == 0)
+        {
+            Act(() => Model.CopyChecked(destination));
+        }
+        else
+        {
+            Surfaces.ShowCopy(this, new CopyModel(Model, destination), () => Model.LastError);
+        }
+    }
 
-    private void OnStopSyncing(object sender, RoutedEventArgs e) => Act(Model.StopSyncing);
+    /// <summary>
+    /// Export writes only the ticked connectors — what the bar's count says. The More menu's
+    /// Export All takes the whole collection instead.
+    /// </summary>
+    private void OnExportChecked(object sender, RoutedEventArgs e)
+    {
+        if (Model.Selected is { } collection)
+        {
+            PresentPublish(new PublishModel(state, collection, Model.ExportIntentForChecked()), PublishDialogMode.Export);
+        }
+    }
+
+    private void OnRemoveChecked(object sender, RoutedEventArgs e) => Act(Model.RemoveChecked);
+
+    // MARK: menus
+
+    private static MenuItem Entry(string header, Action action)
+    {
+        var item = new MenuItem { Header = header };
+        item.Click += (_, _) => action();
+        return item;
+    }
+
+    /// <summary>
+    /// A two-line entry: the name, and under it the subtitle that tells it apart. A header built
+    /// from elements gives the item nothing of its own to announce, so the item is given the name
+    /// and the subtitle as its help text.
+    /// </summary>
+    private MenuItem Entry(string header, string subtitle, Action action)
+    {
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock { Text = header });
+        panel.Children.Add(new TextBlock { Text = subtitle, Style = (Style)FindResource("CaptionText") });
+        var item = new MenuItem { Header = panel };
+        AutomationProperties.SetName(item, header);
+        AutomationProperties.SetHelpText(item, subtitle);
+        item.Click += (_, _) => action();
+        return item;
+    }
 
     // MARK: panes
 
@@ -265,14 +455,6 @@ public partial class CollectionsWindow : Window
         if (sender is CheckBox { DataContext: CollectionsModel.Row row } box)
         {
             Model.SetChecked(row.Name, box.IsChecked == true);
-        }
-    }
-
-    private void OnRowSwitched(object sender, RoutedEventArgs e)
-    {
-        if (sender is ToggleButton { DataContext: CollectionsModel.Row row } toggle)
-        {
-            Act(() => Model.SetEnabled(row.Name, toggle.IsChecked == true));
         }
     }
 
@@ -441,6 +623,19 @@ public partial class CollectionsWindow : Window
             dialogs.Inform(failure, null);
         }
     }
+}
+
+/// <summary>
+/// One header pill's words, from <see cref="CollectionsModel.Title(CollectionsModel.Pill)"/>; this
+/// exists only because XAML cannot call a method.
+/// </summary>
+public sealed class CollectionPillTitleConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is CollectionsModel.Pill pill ? CollectionsModel.Title(pill) : string.Empty;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        Binding.DoNothing;
 }
 
 /// <summary>

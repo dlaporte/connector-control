@@ -11,10 +11,8 @@
   <Window.Resources>
     <!-- The chain's tooltip, which the model answers from the item itself. -->
     <views:CollectionSourceTooltipConverter x:Key="SourceTooltip" />
-    <Style x:Key="ToolbarButton" TargetType="Button">
-      <Setter Property="Padding" Value="10,4" />
-      <Setter Property="Margin" Value="0,0,6,0" />
-    </Style>
+    <!-- A header pill's words, which the model answers from the pill itself. -->
+    <views:CollectionPillTitleConverter x:Key="PillTitle" />
     <!-- The collection's own name in the sidebar: bold while it is the active one, dimmed while
          its document has never been found on this machine — still usable, just not in step. -->
     <Style x:Key="SidebarName" TargetType="TextBlock">
@@ -44,9 +42,26 @@
         </DataTrigger>
       </Style.Triggers>
     </Style>
-    <!-- The export tick, which only a local collection's rows carry: a synced row shows the lock
-         in its place, so the two never both occupy the leading slot. -->
-    <Style x:Key="ExportTick" TargetType="CheckBox">
+    <!-- One header pill. Active is the one in colour: it is the collection Claude is running, and
+         the others only say where a collection's document comes from or goes. -->
+    <Style x:Key="Pill" TargetType="Border">
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="7,0" />
+      <Setter Property="Margin" Value="8,0,0,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="BorderBrush" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+      <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding}" Value="{x:Static state:CollectionsModel+Pill.Active}">
+          <Setter Property="BorderBrush" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+          <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+    <!-- The tick, which only a local collection's rows carry: a synced row shows the lock in its
+         place, so the two never both occupy the leading slot. -->
+    <Style x:Key="RowTickStyle" TargetType="CheckBox">
       <Setter Property="VerticalAlignment" Value="Center" />
       <Style.Triggers>
         <DataTrigger Binding="{Binding IsLocked}" Value="True">
@@ -73,76 +88,48 @@
         </DataTrigger>
       </Style.Triggers>
     </Style>
-    <!-- One row's caution glyph, advisory only: the switch and the pencil stay live. -->
+    <!-- One row's caution glyph, advisory only: the pencil stays live, and the tooltip sends the
+         user to the editor's full note. -->
     <Style x:Key="RowCaution" TargetType="TextBlock" BasedOn="{StaticResource CautionText}">
       <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
       <Setter Property="Text" Value="{x:Static state:FlyoutModel.ToolWarningGlyph}" />
       <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="Margin" Value="0,0,6,0" />
+      <Setter Property="Margin" Value="4,0,0,0" />
       <Style.Triggers>
         <DataTrigger Binding="{Binding Caution}" Value="{x:Null}">
           <Setter Property="Visibility" Value="Collapsed" />
         </DataTrigger>
       </Style.Triggers>
     </Style>
-    <Style x:Key="ActionLink" TargetType="Button" BasedOn="{StaticResource LinkButton}">
-      <Setter Property="Margin" Value="0,0,14,0" />
-    </Style>
   </Window.Resources>
+  <!-- Two panes: the collections, and the selected one. No toolbar: everything done to a
+       collection is in the sidebar's plus or the header's More, and everything done to its
+       connectors is in the list header's Add or the selection bar. -->
   <Grid Margin="10">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto" />
-      <RowDefinition Height="*" />
-    </Grid.RowDefinitions>
+    <Grid.ColumnDefinitions>
+      <!-- Resizable, as the Mac's split view is: a long collection name is otherwise elided
+           here for good. -->
+      <ColumnDefinition Width="200" MinWidth="140" />
+      <ColumnDefinition Width="Auto" />
+      <ColumnDefinition Width="*" MinWidth="380" />
+    </Grid.ColumnDefinitions>
 
-    <!-- Toolbar: what can be done to collections in general on the left, a new one on the right.
-         Two columns, so the six on the left run out of room before they reach New Collection — at a large
-         text scale one cell would let them overrun it. -->
-    <Grid Margin="0,0,0,8">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*" />
-        <ColumnDefinition Width="Auto" />
-      </Grid.ColumnDefinitions>
-      <StackPanel Orientation="Horizontal">
-        <Button x:Name="ImportButton" Style="{StaticResource ToolbarButton}"
-                Content="{x:Static state:CollectionsModel.ImportButton}" Click="OnImport" />
-        <Button x:Name="SubscribeButton" Style="{StaticResource ToolbarButton}"
-                Content="{x:Static state:CollectionsModel.SubscribeButton}" Click="OnSubscribe" />
-        <Button x:Name="ExportButton" Style="{StaticResource ToolbarButton}"
-                IsEnabled="{Binding CanExport}" Click="OnExport" />
-        <Button x:Name="PublishButton" Style="{StaticResource ToolbarButton}"
-                Content="{Binding PublishActionTitle}"
-                IsEnabled="{Binding CanPublish}" Click="OnPublish" />
-        <Button x:Name="RefreshButton" Style="{StaticResource ToolbarButton}"
-                Content="{x:Static state:CollectionsModel.RefreshButton}"
-                IsEnabled="{Binding CanRefresh}" Click="OnRefresh" />
-        <Button x:Name="MakeLocalCopyButton" Style="{StaticResource ToolbarButton}"
-                Content="{x:Static state:CollectionsModel.MakeLocalCopyButton}"
-                IsEnabled="{Binding CanMakeLocalCopy}" Click="OnMakeLocalCopy" />
-      </StackPanel>
-      <Button x:Name="NewButton" Grid.Column="1" Style="{StaticResource ToolbarButton}" Margin="6,0,0,0"
-              AutomationProperties.Name="{x:Static state:CollectionsModel.NewButton}" Click="OnNew">
-        <!-- The plus is the mockup's; the words are the model's. -->
-        <StackPanel Orientation="Horizontal">
-          <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="12"
-                     VerticalAlignment="Center" Margin="0,0,6,0" />
-          <TextBlock Text="{x:Static state:CollectionsModel.NewButton}" VerticalAlignment="Center" />
-        </StackPanel>
-      </Button>
-    </Grid>
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
 
-    <!-- Two panes: the collections, and the selected one. -->
-    <Grid Grid.Row="1">
-      <Grid.ColumnDefinitions>
-        <!-- Resizable, as the Mac's split view is: a long collection name is otherwise elided
-             here for good. -->
-        <ColumnDefinition Width="200" MinWidth="140" />
-        <ColumnDefinition Width="Auto" />
-        <ColumnDefinition Width="*" MinWidth="380" />
-      </Grid.ColumnDefinitions>
+      <!-- The section title and the plus whose menu makes a collection or brings one in. -->
+      <DockPanel Margin="4,0,0,4">
+        <Button x:Name="AddCollectionButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}"
+                Content="&#xE710;" Click="OnAddCollection" />
+        <TextBlock Text="{x:Static state:CollectionsModel.WindowTitle}" Style="{StaticResource CaptionText}"
+                   FontWeight="SemiBold" TextWrapping="NoWrap" VerticalAlignment="Center" />
+      </DockPanel>
 
-      <!-- Selecting a collection only shows it. Making it the active one is a double-click, which
-           is what this window has to offer: every labelled route to it is a flyout menu item. -->
+      <!-- Selecting a collection only shows it. Making it the active one is a double-click, or
+           Make Active in the row's context menu or the header's More. -->
       <!-- The selection is bound one way only, and the way back is OnSelectionChanged, guarded.
            CollectionsModel's Selected setter raises for every write, changed or not, and every
            raise hands this list a freshly built Items collection; a two-way binding answers that
@@ -150,7 +137,7 @@
            was the loop that overflowed the stack. The double-click is handled here too and
            resolved to the container it landed on, so the empty space under the items answers for
            nothing. -->
-      <ListBox x:Name="Sidebar" ItemsSource="{Binding Items}"
+      <ListBox x:Name="Sidebar" Grid.Row="1" ItemsSource="{Binding Items}"
                SelectedValuePath="Name" SelectedValue="{Binding Selected, Mode=OneWay}"
                SelectionChanged="OnSelectionChanged"
                PreviewMouseDoubleClick="OnActivate">
@@ -194,106 +181,147 @@
           </DataTemplate>
         </ListBox.ItemTemplate>
       </ListBox>
+    </Grid>
 
-      <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                    Background="Transparent" />
+    <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                  Background="Transparent" />
 
-      <Grid Grid.Column="2" Margin="5,0,0,0">
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="*" />
-          <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <Grid Grid.Column="2" Margin="5,0,0,0">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
 
-        <!-- The selected collection, then what the model says about it. The name keeps its width
-             and the line beside it trims, so a raw path loses its tail rather than the name. -->
-        <Grid Margin="0,0,0,6">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
-          </Grid.ColumnDefinitions>
-          <TextBlock x:Name="SelectedNameText" Style="{StaticResource CaptionText}" FontWeight="SemiBold"
-                     TextWrapping="NoWrap" Text="{Binding Selected}" />
-          <TextBlock x:Name="DetailText" Grid.Column="1" Style="{StaticResource CaptionText}"
-                     TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                     Text="{Binding DetailLine, StringFormat=' · {0}'}" />
-        </Grid>
-
-        <!-- One strip, one button: Stop Publishing is an action link under the rows already, which
-             is the second button the flyout's failed-publish banner needs and this one does not. -->
-        <Border x:Name="BannerStrip" Grid.Row="1" Margin="0,0,0,8" Padding="8" CornerRadius="6"
-                BorderThickness="1" BorderBrush="{DynamicResource SystemFillColorCautionBrush}"
-                Visibility="{Binding HasBanner, Converter={StaticResource Vis}}">
-          <Grid>
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <TextBlock x:Name="BannerText" Text="{Binding BannerText}" TextWrapping="Wrap" VerticalAlignment="Center" />
-            <Button x:Name="BannerButton" Grid.Column="1" Margin="10,0,0,0" Padding="10,4"
-                    Content="{Binding BannerButton}" Click="OnBannerAction" />
-          </Grid>
-        </Border>
-
-        <!-- The rows are the tall half of the window: they take what is left and scroll in it. -->
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-          <ItemsControl x:Name="RowList" ItemsSource="{Binding Rows}">
+      <!-- The collection's name, the pills that mark it as other than an ordinary local one, and
+           the More that holds everything done to the collection itself. Nothing else goes in this
+           line. The inner panel sizes to its content, so the pills follow the name, and a name
+           too long for the line trims rather than pushing them out. -->
+      <DockPanel Margin="0,0,0,8">
+        <Button x:Name="MoreButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE712;"
+                ToolTip="{x:Static state:CollectionsModel.MoreActionsLabel}"
+                AutomationProperties.Name="{x:Static state:CollectionsModel.MoreActionsLabel}" Click="OnMore" />
+        <DockPanel HorizontalAlignment="Left">
+          <ItemsControl x:Name="PillList" DockPanel.Dock="Right" ItemsSource="{Binding Pills}" VerticalAlignment="Center">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Grid Margin="0,5">
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="20" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                  </Grid.ColumnDefinitions>
-                  <!-- One leading slot for both marks, so ticking a row cannot shift its name and
-                       a synced collection's rows line up with a local one's. -->
-                  <CheckBox x:Name="RowTick" Style="{StaticResource ExportTick}"
-                            AutomationProperties.Name="{Binding Name}"
-                            IsChecked="{Binding Checked, Mode=OneWay}" Click="OnRowTicked" />
-                  <TextBlock x:Name="RowLockGlyph" Style="{StaticResource RowLock}" />
-                  <TextBlock x:Name="RowNameText" Grid.Column="1" Text="{Binding Name}" FontWeight="Medium"
-                             TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="4,0,10,0" />
-                  <TextBlock x:Name="RowCautionGlyph" Grid.Column="2" Style="{StaticResource RowCaution}"
-                             ToolTip="{Binding Caution}" AutomationProperties.Name="{Binding Caution}" />
-                  <TextBlock x:Name="RowTypeText" Grid.Column="3" Text="{Binding Target}"
-                             Style="{StaticResource CaptionText}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                             VerticalAlignment="Center" Margin="0,0,10,0" />
-                  <ToggleButton x:Name="RowSwitch" Grid.Column="4" Style="{StaticResource Switch}"
-                                AutomationProperties.Name="{Binding Name}"
-                                IsChecked="{Binding Enabled, Mode=OneWay}" Click="OnRowSwitched"
-                                VerticalAlignment="Center" />
-                  <Button x:Name="RowEdit" Grid.Column="5" Style="{StaticResource IconButton}" Content="&#xE70F;"
-                          ToolTip="{x:Static state:CollectionsModel.EditTooltip}"
-                          AutomationProperties.Name="{x:Static state:CollectionsModel.EditTooltip}" Click="OnEdit" />
-                </Grid>
+                <Border x:Name="PillBorder" Style="{StaticResource Pill}">
+                  <TextBlock x:Name="PillText" FontSize="12" Text="{Binding Converter={StaticResource PillTitle}}" />
+                </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-        </ScrollViewer>
+          <TextBlock x:Name="SelectedNameText" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"
+                     TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Text="{Binding Selected}" />
+        </DockPanel>
+      </DockPanel>
 
-        <!-- What can be done to the collection itself rather than to one of its connectors. -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0">
-          <Button x:Name="RenameLink" Style="{StaticResource ActionLink}"
-                  Content="{x:Static state:CollectionsModel.RenameAction}" Click="OnRename" />
-          <Button x:Name="DeleteLink" Style="{StaticResource ActionLink}"
-                  Content="{x:Static state:CollectionsModel.DeleteAction}"
-                  IsEnabled="{Binding CanDelete}" Click="OnDelete" />
-          <Button x:Name="PublishLink" Style="{StaticResource ActionLink}"
-                  Content="{Binding PublishActionTitle}"
-                  Visibility="{Binding CanPublish, Converter={StaticResource Vis}}" Click="OnPublish" />
-          <Button x:Name="StopPublishingLink" Style="{StaticResource ActionLink}"
-                  Content="{x:Static state:CollectionsModel.StopPublishingAction}"
-                  Visibility="{Binding CanStopPublishing, Converter={StaticResource Vis}}" Click="OnStopPublishing" />
-          <Button x:Name="StopSyncingLink" Style="{StaticResource ActionLink}"
-                  Content="{x:Static state:CollectionsModel.StopSyncingAction}"
-                  Visibility="{Binding CanStopSyncing, Converter={StaticResource Vis}}" Click="OnStopSyncing" />
+      <!-- One strip, one button: Stop Publishing is in the header's More already, which is the
+           second button the flyout's failed-publish banner needs and this one does not. -->
+      <Border x:Name="BannerStrip" Grid.Row="1" Margin="0,0,0,8" Padding="8" CornerRadius="6"
+              BorderThickness="1" BorderBrush="{DynamicResource SystemFillColorCautionBrush}"
+              Visibility="{Binding HasBanner, Converter={StaticResource Vis}}">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock x:Name="BannerText" Text="{Binding BannerText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+          <Button x:Name="BannerButton" Grid.Column="1" Margin="10,0,0,0" Padding="10,4"
+                  Content="{Binding BannerButton}" Click="OnBannerAction" />
+        </Grid>
+      </Border>
+
+      <!-- The list's title and count, and the plus that adds a connector here — dimmed on a synced
+           collection, whose tooltip then says where additions go instead. -->
+      <DockPanel Grid.Row="2" Margin="0,0,0,4">
+        <Button x:Name="AddConnectorButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;"
+                IsEnabled="{Binding CanAddConnector}" ToolTip="{Binding AddConnectorTooltipText}"
+                AutomationProperties.Name="{Binding AddConnectorTooltipText}"
+                ToolTipService.ShowOnDisabled="True" Click="OnAddConnector" />
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <TextBlock Text="{x:Static state:CollectionsModel.ConnectorsHeader}" FontWeight="SemiBold" />
+          <TextBlock x:Name="ConnectorCountText" Margin="6,0,0,0"
+                     Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
         </StackPanel>
-      </Grid>
+      </DockPanel>
+
+      <!-- The rows are the tall half of the window: they take what is left and scroll in it. One
+           size scope over every row, so the name column is as wide as the longest name cell —
+           capped, so a very long name trims and the target keeps room to say anything — and
+           every target starts at the same x. -->
+      <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+        <ItemsControl x:Name="RowList" ItemsSource="{Binding Rows}" Grid.IsSharedSizeScope="True">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Grid Margin="0,5">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="20" />
+                  <ColumnDefinition Width="Auto" MaxWidth="240" SharedSizeGroup="Name" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <!-- One leading slot for both marks, so ticking a row cannot shift its name and
+                     a synced collection's rows line up with a local one's. -->
+                <CheckBox x:Name="RowTick" Style="{StaticResource RowTickStyle}"
+                          AutomationProperties.Name="{Binding Name}"
+                          IsChecked="{Binding Checked, Mode=OneWay}" Click="OnRowTicked" />
+                <TextBlock x:Name="RowLockGlyph" Style="{StaticResource RowLock}" />
+                <!-- The name and its caution mark, measured and laid out as one: the column is as
+                     wide as the longest of these, so a mark cannot push its row's target out of
+                     line. The panel sizes to its content, so the mark follows the name, and a name
+                     past the cap trims rather than pushing the mark out. -->
+                <DockPanel Grid.Column="1" HorizontalAlignment="Left" Margin="4,0,10,0">
+                  <TextBlock x:Name="RowCautionGlyph" DockPanel.Dock="Right" Style="{StaticResource RowCaution}"
+                             ToolTip="{Binding Caution}" AutomationProperties.Name="{Binding Caution}" />
+                  <TextBlock x:Name="RowNameText" Text="{Binding Name}" FontWeight="Medium"
+                             TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                </DockPanel>
+                <!-- What the connector runs, never a secret: the model masks it. Trimmed at the
+                     end, as this window's detail line is. -->
+                <TextBlock x:Name="RowTargetText" Grid.Column="2" Text="{Binding Target}"
+                           Style="{StaticResource CaptionText}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" Margin="0,0,10,0" />
+                <Button x:Name="RowEdit" Grid.Column="3" Style="{StaticResource IconButton}" Content="&#xE70F;"
+                        ToolTip="{x:Static state:CollectionsModel.EditTooltip}"
+                        AutomationProperties.Name="{x:Static state:CollectionsModel.EditTooltip}" Click="OnEdit" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <!-- The selection bar. Idle, what the collection is and where its document lives; with rows
+           ticked, what can be done to them. Remove sits apart at the far end, so a hand moving from
+           the safe pair cannot land on it, and is absent where the rows are not the user's to
+           remove. One fixed height, idle or ticked, so ticking a row cannot move the list. -->
+      <Border Grid.Row="4" Margin="0,8,0,0" Height="44" BorderThickness="0,1,0,0"
+              BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+        <Grid>
+          <!-- Paths in this line are raw, so a pane too narrow for one loses its tail. -->
+          <TextBlock x:Name="DetailText" Style="{StaticResource CaptionText}" VerticalAlignment="Center"
+                     TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Text="{Binding DetailLine}" />
+          <DockPanel x:Name="TickedBar" VerticalAlignment="Center" Visibility="Collapsed">
+            <Button x:Name="RemoveCheckedButton" DockPanel.Dock="Right" Padding="10,4" Margin="16,0,0,0"
+                    Content="{x:Static state:CollectionsModel.RemoveCheckedButton}"
+                    Visibility="{Binding CanRemoveChecked, Converter={StaticResource Vis}}" Click="OnRemoveChecked" />
+            <StackPanel Orientation="Horizontal">
+              <TextBlock x:Name="SelectedCountText" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0" />
+              <Button x:Name="CopyToButton" Padding="10,4" Margin="0,0,6,0"
+                      Content="{x:Static state:CollectionsModel.CopyToButton}" Click="OnCopyTo" />
+              <Button x:Name="ExportCheckedButton" Padding="10,4"
+                      Content="{x:Static state:CollectionsModel.ExportCheckedButton}" Click="OnExportChecked" />
+            </StackPanel>
+          </DockPanel>
+        </Grid>
+      </Border>
     </Grid>
   </Grid>
 </Window>
