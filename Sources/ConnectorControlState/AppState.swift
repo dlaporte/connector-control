@@ -849,8 +849,17 @@ public final class AppState: ObservableObject {
 
     /// Copies the active collection under a new name and makes it active, as the chip menu's
     /// New Collection has always done. nil on success, else the message to show.
-    public func createCollection(named name: String) -> String? {
-        if let error = store.addCollection(named: name, copyingCurrent: true) { return error }
+    ///
+    /// `copyingCurrent: false` makes an empty one instead, and it does not become active:
+    /// switching to it would empty Claude's config, so nothing is applied either.
+    public func createCollection(named name: String, copyingCurrent: Bool = true) -> String? {
+        let active = store.activeCollection
+        if let error = store.addCollection(named: name, copyingCurrent: copyingCurrent) { return error }
+        guard copyingCurrent else {
+            store.activeCollection = active
+            persistStore()
+            return nil
+        }
         persistStore()
         performApply()
         return nil

@@ -118,6 +118,17 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// One entry in Copy to's destination menu. Every collection except the one the rows are in
+    /// appears; a synced one is listed but cannot take copies, so the menu can say why rather than
+    /// hide it.
+    /// </summary>
+    /// <param name="IsEnabled">False for a synced collection: its connectors are the author's.</param>
+    public sealed record CopyDestination(string Name, bool IsEnabled)
+    {
+        public string Id => Name;
+    }
+
+    /// <summary>
     /// One connector of the selected collection. Checked is the window's own state — an export
     /// tick, not anything the store holds — so it is the one field the model fills in itself.
     /// </summary>
@@ -227,6 +238,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         Raise(nameof(HasBanner));
         Raise(nameof(CanExport));
         Raise(nameof(CopyTargets));
+        Raise(nameof(CopyDestinations));
         Raise(nameof(CanCopyChecked));
         Raise(nameof(CanRemoveChecked));
         Raise(nameof(CanPublish));
@@ -453,6 +465,22 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public IReadOnlyList<string> CopyTargets =>
         state.LocalCollectionNames.Where(name => name != SelectedCollection).ToList();
 
+    /// <summary>
+    /// Every collection but the selected one, in the sidebar's order, each marked whether it can
+    /// take copies. <see cref="CopyTargets"/> is exactly the enabled ones.
+    /// </summary>
+    public IReadOnlyList<CopyDestination> CopyDestinations
+    {
+        get
+        {
+            var collection = SelectedCollection;
+            return state.CollectionNames
+                .Where(name => name != collection)
+                .Select(name => new CopyDestination(name, !state.IsSynced(name)))
+                .ToList();
+        }
+    }
+
     public bool CanCopyChecked => !state.IsSynced(SelectedCollection) && CheckedNames.Count > 0;
 
     public bool CanRemoveChecked => !state.IsSynced(SelectedCollection) && CheckedNames.Count > 0;
@@ -557,34 +585,67 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public IReadOnlyList<string> ExportIntentForChecked() => CheckedNames;
 
     /// <summary>
-    /// The selection bar's Copy to: the ticked rows into another local collection, name clashes
-    /// settled by <paramref name="choices"/> the way the editor's own copy sheet settles them.
-    /// It does not apply: every copy arrives disabled, so nothing Claude runs has changed.
-    ///
-    /// Null both on success and on doing nothing, matching <see cref="AppState.MakeLocalCopy"/>,
-    /// and either one clears the ticks, as <see cref="RemoveChecked"/> does once it succeeds. An
-    /// error message — the target stopped being local, say — leaves them ticked for a retry; so
-    /// do the two early-outs below, which never reach <see cref="AppState.MakeLocalCopy"/> at all.
-    ///
-    /// The two early-outs are unreachable from the UI: the button that calls this is gated by
-    /// <see cref="CanCopyChecked"/>, and its destination menu is built from <see cref="CopyTargets"/>.
+    /// Copies the ticked connectors into another local collection: they arrive disabled and record
+    /// where they came from, so nothing Claude runs changes and nothing is applied. true when they
+    /// landed, and the ticks go with them; false when there was nothing to copy, the destination is
+    /// not one <see cref="CopyTargets"/> offers, or the copy failed, with the reason in
+    /// <see cref="LastError"/> for the last.
     /// </summary>
-    public string? CopyChecked(string collection, IReadOnlyDictionary<string, ImportChoice> choices)
+    public bool CopyChecked(string collection, IReadOnlyDictionary<string, ImportChoice>? choices = null)
     {
         var names = CheckedNames;
         if (names.Count == 0 || !CopyTargets.Contains(collection))
         {
-            return null;
+            return false;
         }
-        var result = state.MakeLocalCopy(names, SelectedCollection, collection, choices);
-        if (result is null)
+        return Copy(names, collection, choices);
+    }
+
+    /// <summary>
+    /// Copy to ▸ New Collection: asks for a name, makes an empty local collection, and copies the
+    /// ticked connectors into it. The window stays on the collection the rows came from and the
+    /// ticks clear, exactly as a copy into an existing collection does. An empty collection rather
+    /// than a copy of the active one, because the point is to start one from the ticked rows alone.
+    /// true when the copies landed.
+    /// </summary>
+    public bool CopyCheckedIntoNewCollection()
+    {
+        var names = CheckedNames;
+        if (names.Count == 0 || dialogs.PromptForName(AppState.NewCollectionTitle, "") is not { } typed)
         {
-            foreach (var name in names)
-            {
-                SetChecked(name, false);
-            }
+            return false;
         }
-        return result;
+        if (!Report(state.CreateCollection(typed, copyingCurrent: false)))
+        {
+            return false;
+        }
+        return Copy(names, typed.TrimSpaces(), null);
+    }
+
+    /// <summary>
+    /// The ticked connectors whose names the collection already holds: the ones a copy there needs
+    /// an answer for. Empty when nothing clashes, so the copy can go straight through.
+    /// </summary>
+    public IReadOnlyList<string> CheckedNamesClashing(string collection)
+    {
+        var held = state.Store.Collections.TryGetValue(collection, out var into)
+            ? into.Mcps
+            : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
+        return CheckedNames.Where(held.ContainsKey).Order(StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>Both copy verbs' shared tail: the copy itself, reported like every other verb here.</summary>
+    private bool Copy(IReadOnlyList<string> names, string collection, IReadOnlyDictionary<string, ImportChoice>? choices)
+    {
+        if (!Report(state.MakeLocalCopy(names, SelectedCollection, collection, choices)))
+        {
+            return false;
+        }
+        foreach (var name in names)
+        {
+            SetChecked(name, false);
+        }
+        return true;
     }
 
     /// <summary>
@@ -612,6 +673,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             SetChecked(name, false);
         }
+        LastError = null;
     }
 
     // MARK: collection actions

@@ -122,6 +122,21 @@ public final class CollectionsModel: ObservableObject {
         }
     }
 
+    /// One entry in Copy to's destination menu. Every collection except the one the rows are in
+    /// appears; a synced one is listed but cannot take copies, so the menu can say why rather than
+    /// hide it.
+    public struct CopyDestination: Equatable, Identifiable, Sendable {
+        public let name: String
+        /// False for a synced collection: its connectors are the author's.
+        public let isEnabled: Bool
+        public var id: String { name }
+
+        public init(name: String, isEnabled: Bool) {
+            self.name = name
+            self.isEnabled = isEnabled
+        }
+    }
+
     /// One connector of the selected collection. `checked` is the window's own state — an export
     /// tick, not anything the store holds — so it is the one field the model fills in itself.
     public struct Row: Identifiable, Equatable, Sendable {
@@ -379,6 +394,15 @@ public final class CollectionsModel: ObservableObject {
     /// `EditSheetView.localCopyTargets` — it has no local write path of its own to copy into.
     public var copyTargets: [String] { state.localCollectionNames.filter { $0 != selectedCollection } }
 
+    /// Every collection but the selected one, in the sidebar's order, each marked whether it can
+    /// take copies. `copyTargets` is exactly the enabled ones.
+    public var copyDestinations: [CopyDestination] {
+        let collection = selectedCollection
+        return state.collectionNames.filter { $0 != collection }.map { name in
+            CopyDestination(name: name, isEnabled: !state.isSynced(name))
+        }
+    }
+
     public var canCopyChecked: Bool { !state.isSynced(selectedCollection) && !checkedNames.isEmpty }
 
     public var canRemoveChecked: Bool { !state.isSynced(selectedCollection) && !checkedNames.isEmpty }
@@ -450,23 +474,45 @@ public final class CollectionsModel: ObservableObject {
     /// The names the export sheet writes, in the order the rows show them.
     public func exportIntentForChecked() -> [String] { checkedNames }
 
-    /// The selection bar's Copy to: the ticked rows into another local collection, name clashes
-    /// settled by `choices` the way the editor's own copy sheet settles them. It does not apply:
-    /// every copy arrives disabled, so nothing Claude runs has changed.
-    ///
-    /// nil both on success and on doing nothing, matching `AppState.makeLocalCopy`, and either
-    /// one clears the ticks, as `removeChecked` does once it succeeds. An error message — the
-    /// target stopped being local, say — leaves them ticked for a retry; so do the two
-    /// early-outs below, which never reach `makeLocalCopy` at all.
-    ///
-    /// The two early-outs are unreachable from the UI: the button that calls this is gated by
-    /// `canCopyChecked`, and its destination menu is built from `copyTargets`.
-    public func copyChecked(into collection: String, choices: [String: ImportChoice]) -> String? {
+    /// Copies the ticked connectors into another local collection: they arrive disabled and record
+    /// where they came from, so nothing Claude runs changes and nothing is applied. true when they
+    /// landed, and the ticks go with them; false when there was nothing to copy, the destination is
+    /// not one `copyTargets` offers, or the copy failed, with the reason in `lastError` for the last.
+    @discardableResult
+    public func copyChecked(into collection: String, choices: [String: ImportChoice] = [:]) -> Bool {
         let names = checkedNames
-        guard !names.isEmpty, copyTargets.contains(collection) else { return nil }
-        let result = state.makeLocalCopy(of: names, from: selectedCollection, into: collection, choices: choices)
-        if result == nil { for name in names { setChecked(name, false) } }
-        return result
+        guard !names.isEmpty, copyTargets.contains(collection) else { return false }
+        return copy(names, into: collection, choices: choices)
+    }
+
+    /// Copy to ▸ New Collection: asks for a name, makes an empty local collection, and copies the
+    /// ticked connectors into it. The window stays on the collection the rows came from and the
+    /// ticks clear, exactly as a copy into an existing collection does. An empty collection rather
+    /// than a copy of the active one, because the point is to start one from the ticked rows alone.
+    /// true when the copies landed.
+    @discardableResult
+    public func copyCheckedIntoNewCollection() -> Bool {
+        let names = checkedNames
+        guard !names.isEmpty,
+              let typed = dialogs.promptForName(title: AppState.newCollectionTitle, initial: "") else { return false }
+        guard report(state.createCollection(named: typed, copyingCurrent: false)) else { return false }
+        return copy(names, into: typed.trimmingCharacters(in: .whitespaces), choices: [:])
+    }
+
+    /// The ticked connectors whose names `collection` already holds: the ones a copy there needs an
+    /// answer for. Empty when nothing clashes, so the copy can go straight through.
+    public func checkedNamesClashing(in collection: String) -> [String] {
+        let held = state.store.collections[collection]?.mcps ?? [:]
+        return checkedNames.filter { held[$0] != nil }.sorted()
+    }
+
+    /// Both copy verbs' shared tail: the copy itself, reported like every other verb here.
+    private func copy(_ names: [String], into collection: String, choices: [String: ImportChoice]) -> Bool {
+        guard report(state.makeLocalCopy(of: names, from: selectedCollection, into: collection, choices: choices)) else {
+            return false
+        }
+        for name in names { setChecked(name, false) }
+        return true
     }
 
     /// The selection bar's Remove: asks first, names the connector when there is one and the
@@ -481,6 +527,7 @@ public final class CollectionsModel: ObservableObject {
         // remove(names:in:) persists but does not apply, as its single-name sibling does not.
         if selectedCollection == state.activeCollection { state.applyInteractively() }
         for name in names { setChecked(name, false) }
+        lastError = nil
     }
 
     // MARK: - Collection actions

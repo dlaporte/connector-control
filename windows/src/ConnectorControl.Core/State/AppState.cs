@@ -1212,12 +1212,23 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// Copies the active collection under a new name and makes it active, as the chip menu's
     /// New Collection has always done. null on success, else the message to show.
+    ///
+    /// <c>copyingCurrent: false</c> makes an empty one instead, and it does not become active:
+    /// switching to it would empty Claude's config, so nothing is applied either.
     /// </summary>
-    public string? CreateCollection(string name)
+    public string? CreateCollection(string name, bool copyingCurrent = true)
     {
-        if (Store.AddCollection(name, copyingCurrent: true) is { } error)
+        var active = Store.ActiveCollection;
+        if (Store.AddCollection(name, copyingCurrent) is { } error)
         {
             return error;
+        }
+        if (!copyingCurrent)
+        {
+            Store.ActiveCollection = active;
+            PersistStore();
+            RaiseAll();
+            return null;
         }
         PersistStore();
         PerformApply();

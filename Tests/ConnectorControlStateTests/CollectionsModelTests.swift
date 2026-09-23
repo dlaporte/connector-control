@@ -35,6 +35,14 @@ final class CollectionsModelTests: XCTestCase {
         MCPEntry(config: .object(["command": .string(command), "args": .array(args.map(JSONValue.string))]))
     }
 
+    /// Leaves a refusal in `lastError` without moving the window: the store refuses an empty name
+    /// before it renames anything.
+    private func presetError(_ model: CollectionsModel, _ h: AppStateHarness) {
+        h.dialogs.nextPromptAnswer = ""
+        model.rename()
+        XCTAssertNotNil(model.lastError)
+    }
+
     // MARK: - Items
 
     func testItemsMirrorTheStoreAndMarkSyncedPublishedAndPending() throws {
@@ -735,6 +743,31 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.copyTargets, ["Default"])
     }
 
+    /// The picker's menu: every collection but the source, a synced one listed but disabled so it
+    /// can say why, and `copyTargets` exactly the enabled ones.
+    func testCopyDestinationsListEveryOtherCollectionAndDisableTheSyncedOnes() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Other"))
+        XCTAssertNil(state.createCollection(named: "Team"))
+        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        XCTAssertTrue(state.isSynced("Team"))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+
+        model.selected = "Default"
+        XCTAssertEqual(model.copyDestinations, [
+            CollectionsModel.CopyDestination(name: "Other", isEnabled: true),
+            CollectionsModel.CopyDestination(name: "Team", isEnabled: false),
+        ], "not Default, which is the source; Team is there, but cannot take copies")
+        XCTAssertEqual(model.copyTargets, model.copyDestinations.filter(\.isEnabled).map(\.name))
+
+        model.selected = "Other"
+        XCTAssertEqual(model.copyDestinations.map(\.name), ["Default", "Team"], "the sidebar's order")
+        XCTAssertEqual(model.copyDestinations.map(\.isEnabled), [true, false])
+        XCTAssertEqual(model.copyTargets, model.copyDestinations.filter(\.isEnabled).map(\.name))
+    }
+
     /// Both verbs need something ticked.
     func testCopyAndRemovePredicatesFollowTheTicks() throws {
         let (h, state) = AppStateHarness.started()
@@ -785,10 +818,13 @@ final class CollectionsModelTests: XCTestCase {
         let model = CollectionsModel(state: state, dialogs: h.dialogs)
         model.selected = "Default"
 
-        // Declined: nothing goes.
+        // Declined: nothing goes, the last error included.
+        presetError(model, h)
+        let stale = model.lastError
         model.setChecked("alpha", true)
         h.dialogs.nextConfirm = false
         model.removeChecked()
+        XCTAssertEqual(model.lastError, stale, "a declined confirmation changes nothing")
         XCTAssertNotNil(state.store.collections["Default"]?.mcps["alpha"], "declined, so alpha stays")
         XCTAssertNotNil(state.store.collections["Default"]?.mcps["beta"])
         XCTAssertEqual(h.dialogs.confirms.last?.informative, CollectionsModel.removeCheckedInformative)
@@ -803,6 +839,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNil(state.store.collections["Default"]?.mcps["beta"])
         XCTAssertTrue(h.dialogs.confirms.last?.message.contains("2") ?? false, "several are counted")
         XCTAssertEqual(model.checkedNames, [], "and the ticks go with them")
+        XCTAssertNil(model.lastError, "a removal that lands clears the stale error")
     }
 
     /// `remove(names:in:)` persists but never applies on its own; the caller applies only when
@@ -817,6 +854,12 @@ final class CollectionsModelTests: XCTestCase {
         defer { model.dispose() }
         h.dialogs.nextConfirm = true
 
+        // An enabled connector in the active collection that has not been applied yet: an apply
+        // from the inactive leg below would write it, so that leg can catch an unconditional one.
+        XCTAssertNil(state.upsert(name: "delta", entry: local("/bin/delta"), renamedFrom: nil, in: "Default"))
+        XCTAssertEqual(state.store.collections["Default"]?.mcps["delta"]?.enabled, true)
+        XCTAssertNil(try h.claudeServers()["delta"], "upserted, not applied")
+
         // Inactive collection: the write lands, but Claude's config is untouched.
         let before = try h.claudeServers()
         model.selected = "Work"
@@ -824,8 +867,10 @@ final class CollectionsModelTests: XCTestCase {
         model.removeChecked()
         XCTAssertNil(state.store.collections["Work"]?.mcps["gamma"], "removed from the store")
         XCTAssertEqual(try h.claudeServers(), before, "Work was never active, so nothing Claude runs has changed")
+        XCTAssertNil(try h.claudeServers()["delta"], "no apply ran, so the pending connector is still unwritten")
 
         // The active collection: the same call does apply.
+        XCTAssertNotNil(before["aws-mcp"], "there before, so its absence below is the apply's doing")
         model.selected = "Default"
         model.setChecked("aws-mcp", true)
         model.removeChecked()
@@ -850,16 +895,19 @@ final class CollectionsModelTests: XCTestCase {
         model.selected = "Default"
         model.setChecked("alpha", true)
 
+        presetError(model, h)
         let before = try h.claudeServers()
-        XCTAssertNil(model.copyChecked(into: "Spare", choices: [:]))
+        XCTAssertTrue(model.copyChecked(into: "Spare"))
         XCTAssertEqual(state.store.collections["Spare"]?.mcps["alpha"]?.enabled, false, "the copy landed, disabled")
         XCTAssertEqual(model.checkedNames, [], "the ticks went with it")
+        XCTAssertNil(model.lastError, "a copy that lands clears the stale error")
         XCTAssertEqual(try h.claudeServers(), before, "every copy arrives disabled, so nothing Claude runs has changed")
     }
 
     /// The two early-outs `copyChecked` documents: a target outside `copyTargets` — the source
-    /// itself, or a synced collection — and an empty tick set. Both return nil without reaching
-    /// `AppState.makeLocalCopy`, so nothing lands anywhere and the ticks are left standing.
+    /// itself, or a synced collection — and an empty tick set. Both return false without reaching
+    /// `AppState.makeLocalCopy`, so nothing lands anywhere, and the ticks and the last error are
+    /// left standing.
     func testCopyCheckedRefusesATargetOutsideCopyTargets() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
@@ -873,10 +921,13 @@ final class CollectionsModelTests: XCTestCase {
         defer { model.dispose() }
         model.selected = "Default"
         model.setChecked("alpha", true)
+        presetError(model, h)
+        let stale = model.lastError
 
-        XCTAssertNil(model.copyChecked(into: "Default", choices: [:]), "the source is not a target")
-        XCTAssertNil(model.copyChecked(into: "Team", choices: [:]), "a synced collection is not a target either")
+        XCTAssertFalse(model.copyChecked(into: "Default"), "the source is not a target")
+        XCTAssertFalse(model.copyChecked(into: "Team"), "a synced collection is not a target either")
         XCTAssertEqual(model.checkedNames, ["alpha"], "both are unreachable early-outs, so the ticks stand")
+        XCTAssertEqual(model.lastError, stale, "and so does the last error")
         XCTAssertNil(state.store.collections["Team"]?.mcps["alpha"], "nothing landed in Team")
     }
 
@@ -889,7 +940,100 @@ final class CollectionsModelTests: XCTestCase {
         defer { model.dispose() }
         model.selected = "Default"
 
-        XCTAssertNil(model.copyChecked(into: "Spare", choices: [:]), "nothing ticked, so there is nothing to copy")
+        XCTAssertFalse(model.copyChecked(into: "Spare"), "nothing ticked, so there is nothing to copy")
         XCTAssertEqual(state.store.collections["Spare"], before, "and nothing about Spare changed")
+    }
+
+    /// Copy to ▸ New Collection: an empty collection holding only the copies, while the window
+    /// stays where the rows came from and nothing Claude runs changes.
+    func testCopyCheckedIntoNewCollectionMakesAnEmptyCollectionOfTheCopiesAlone() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        XCTAssertNil(state.upsert(name: "beta", entry: local("/bin/beta"), renamedFrom: nil, in: "Default"))
+        XCTAssertNotNil(state.store.collections["Default"]?.mcps["aws-mcp"])
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Default"
+        model.setChecked("alpha", true)
+        model.setChecked("beta", true)
+        presetError(model, h)
+
+        let before = try h.claudeServers()
+        h.dialogs.nextPromptAnswer = "  Fresh  "
+        XCTAssertTrue(model.copyCheckedIntoNewCollection())
+        XCTAssertEqual(h.dialogs.prompts.last, FakeDialogs.PromptCall(title: AppState.newCollectionTitle, initial: ""))
+        let fresh = try XCTUnwrap(state.store.collections["Fresh"], "the store trimmed the name")
+        XCTAssertEqual(fresh.mcps.keys.sorted(), ["alpha", "beta"], "the copies alone, not a copy of the active collection")
+        XCTAssertNil(fresh.mcps["aws-mcp"])
+        XCTAssertEqual(fresh.mcps.values.map(\.enabled), [false, false], "they arrive disabled")
+        XCTAssertEqual(model.selected, "Default", "the window stays where the rows came from")
+        XCTAssertEqual(state.activeCollection, "Default")
+        XCTAssertEqual(model.checkedNames, [], "the ticks went with them")
+        XCTAssertNil(model.lastError)
+        XCTAssertEqual(try h.claudeServers(), before, "nothing Claude runs has changed")
+    }
+
+    func testCopyCheckedIntoNewCollectionCancelledChangesNothing() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Default"
+        model.setChecked("alpha", true)
+
+        h.dialogs.nextPromptAnswer = nil
+        XCTAssertFalse(model.copyCheckedIntoNewCollection())
+        XCTAssertEqual(state.collectionNames, ["Default"])
+        XCTAssertEqual(model.checkedNames, ["alpha"])
+        XCTAssertNil(model.lastError)
+    }
+
+    /// A name the store refuses is the store's error, and nothing is made or copied. The ticks
+    /// stay for a retry, as they do after any copy that did not land.
+    func testCopyCheckedIntoNewCollectionReportsARefusedName() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        state.switchCollection(to: "Default")
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Default"
+        model.setChecked("alpha", true)
+
+        h.dialogs.nextPromptAnswer = "Work"
+        XCTAssertFalse(model.copyCheckedIntoNewCollection())
+        XCTAssertEqual(model.lastError, "A collection named \u{201C}Work\u{201D} already exists.", "the store's own words")
+        XCTAssertEqual(state.collectionNames, ["Default", "Work"])
+        XCTAssertNil(state.store.collections["Work"]?.mcps["alpha"], "nothing landed in the collection of that name")
+        XCTAssertEqual(model.selected, "Default")
+        XCTAssertEqual(model.checkedNames, ["alpha"])
+    }
+
+    /// The ticked names a destination already holds, sorted, and nothing when none clash.
+    func testCheckedNamesClashingNamesTheTickedConnectorsTheDestinationHolds() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Spare"))
+        state.switchCollection(to: "Default")
+        for name in ["zeta", "alpha", "beta"] {
+            XCTAssertNil(state.upsert(name: name, entry: local("/bin/" + name), renamedFrom: nil, in: "Default"))
+        }
+        for name in ["zeta", "alpha"] {
+            XCTAssertNil(state.upsert(name: name, entry: local("/bin/other"), renamedFrom: nil, in: "Spare"))
+        }
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        model.selected = "Default"
+        model.setChecked("zeta", true)
+        model.setChecked("beta", true)
+        model.setChecked("alpha", true)
+
+        XCTAssertEqual(model.checkedNamesClashing(in: "Spare"), ["alpha", "zeta"], "beta is not in Spare")
+        model.setChecked("alpha", false)
+        model.setChecked("zeta", false)
+        XCTAssertEqual(model.checkedNamesClashing(in: "Spare"), [], "nothing ticked clashes")
     }
 }

@@ -41,6 +41,17 @@ public class CollectionsModelTests
             ("command", JsonValue.String(command)),
             ("args", JsonValue.Array(args.Select(JsonValue.String)))));
 
+    /// <summary>
+    /// Leaves a refusal in LastError without moving the window: the store refuses an empty name
+    /// before it renames anything.
+    /// </summary>
+    private static void PresetError(CollectionsModel model, AppStateHarness h)
+    {
+        h.Dialogs.NextPromptAnswer = "";
+        model.Rename();
+        Assert.NotNull(model.LastError);
+    }
+
     private static Dictionary<string, CollectionDiff> Pending(string collection) =>
         new(StringComparer.Ordinal) { [collection] = new CollectionDiff(["jira"], [], []) };
 
@@ -808,6 +819,34 @@ public class CollectionsModelTests
         Assert.Equal(["Default"], model.CopyTargets);
     }
 
+    /// <summary>
+    /// The picker's menu: every collection but the source, a synced one listed but disabled so it
+    /// can say why, and CopyTargets exactly the enabled ones.
+    /// </summary>
+    [Fact]
+    public void CopyDestinationsListEveryOtherCollectionAndDisableTheSyncedOnes()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Other"));
+        Assert.Null(state.CreateCollection("Team"));
+        Seed(h, state, File_(("Team", Synced("team.json"))));
+        Assert.True(state.IsSynced("Team"));
+        using var model = new CollectionsModel(state, h.Dialogs);
+
+        model.Selected = "Default";
+        // Not Default, which is the source; Team is there, but cannot take copies.
+        Assert.Equal(
+            [new CollectionsModel.CopyDestination("Other", true), new CollectionsModel.CopyDestination("Team", false)],
+            model.CopyDestinations);
+        Assert.Equal(model.CopyDestinations.Where(d => d.IsEnabled).Select(d => d.Name), model.CopyTargets);
+
+        model.Selected = "Other";
+        Assert.Equal(["Default", "Team"], model.CopyDestinations.Select(d => d.Name));   // the sidebar's order
+        Assert.Equal([true, false], model.CopyDestinations.Select(d => d.IsEnabled));
+        Assert.Equal(model.CopyDestinations.Where(d => d.IsEnabled).Select(d => d.Name), model.CopyTargets);
+    }
+
     /// <summary>Both verbs need something ticked.</summary>
     [Fact]
     public void CopyAndRemovePredicatesFollowTheTicks()
@@ -868,10 +907,13 @@ public class CollectionsModelTests
         using var model = new CollectionsModel(state, h.Dialogs);
         model.Selected = "Default";
 
-        // Declined: nothing goes.
+        // Declined: nothing goes, the last error included.
+        PresetError(model, h);
+        var stale = model.LastError;
         model.SetChecked("alpha", true);
         h.Dialogs.NextConfirm = false;
         model.RemoveChecked();
+        Assert.Equal(stale, model.LastError);   // a declined confirmation changes nothing
         Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("alpha"));    // declined, so alpha stays
         Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("beta"));
         Assert.Equal(CollectionsModel.RemoveCheckedInformative, h.Dialogs.Confirms[^1].Informative);
@@ -886,6 +928,7 @@ public class CollectionsModelTests
         Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("beta"));
         Assert.Contains("2", h.Dialogs.Confirms[^1].Message);   // several are counted
         Assert.Empty(model.CheckedNames);   // and the ticks go with them
+        Assert.Null(model.LastError);   // a removal that lands clears the stale error
     }
 
     /// <summary>
@@ -903,6 +946,12 @@ public class CollectionsModelTests
         using var model = new CollectionsModel(state, h.Dialogs);
         h.Dialogs.NextConfirm = true;
 
+        // An enabled connector in the active collection that has not been applied yet: an apply
+        // from the inactive leg below would write it, so that leg can catch an unconditional one.
+        Assert.Null(state.Upsert("delta", Local("/bin/delta"), null, "Default"));
+        Assert.True(state.Store.Collections["Default"].Mcps["delta"].Enabled);
+        Assert.False(h.ClaudeServers().ContainsKey("delta"));   // upserted, not applied
+
         // Inactive collection: the write lands, but Claude's config is untouched.
         var before = h.ClaudeServers();
         model.Selected = "Work";
@@ -911,8 +960,10 @@ public class CollectionsModelTests
         Assert.False(state.Store.Collections["Work"].Mcps.ContainsKey("gamma"));   // removed from the store
         // Work was never active, so nothing Claude runs has changed.
         Assert.True(DictionaryEquality.Equal(before, h.ClaudeServers()));
+        Assert.False(h.ClaudeServers().ContainsKey("delta"));   // no apply ran, so the pending connector is still unwritten
 
         // The active collection: the same call does apply.
+        Assert.True(before.ContainsKey("aws-mcp"));   // there before, so its absence below is the apply's doing
         model.Selected = "Default";
         model.SetChecked("aws-mcp", true);
         model.RemoveChecked();
@@ -940,18 +991,21 @@ public class CollectionsModelTests
         model.Selected = "Default";
         model.SetChecked("alpha", true);
 
+        PresetError(model, h);
         var before = h.ClaudeServers();
-        Assert.Null(model.CopyChecked("Spare", new Dictionary<string, ImportChoice>()));
+        Assert.True(model.CopyChecked("Spare"));
         Assert.False(state.Store.Collections["Spare"].Mcps["alpha"].Enabled);   // the copy landed, disabled
         Assert.Empty(model.CheckedNames);   // the ticks went with it
+        Assert.Null(model.LastError);   // a copy that lands clears the stale error
         // Every copy arrives disabled, so nothing Claude runs has changed.
         Assert.True(DictionaryEquality.Equal(before, h.ClaudeServers()));
     }
 
     /// <summary>
     /// The two early-outs CopyChecked documents: a target outside CopyTargets — the source
-    /// itself, or a synced collection — and an empty tick set. Both return null without reaching
-    /// AppState.MakeLocalCopy, so nothing lands anywhere and the ticks are left standing.
+    /// itself, or a synced collection — and an empty tick set. Both return false without reaching
+    /// AppState.MakeLocalCopy, so nothing lands anywhere, and the ticks and the last error are
+    /// left standing.
     /// </summary>
     [Fact]
     public void CopyCheckedRefusesATargetOutsideCopyTargets()
@@ -966,11 +1020,13 @@ public class CollectionsModelTests
         using var model = new CollectionsModel(state, h.Dialogs);
         model.Selected = "Default";
         model.SetChecked("alpha", true);
+        PresetError(model, h);
+        var stale = model.LastError;
 
-        var choices = new Dictionary<string, ImportChoice>();
-        Assert.Null(model.CopyChecked("Default", choices));   // the source is not a target
-        Assert.Null(model.CopyChecked("Team", choices));      // a synced collection is not a target either
+        Assert.False(model.CopyChecked("Default"));   // the source is not a target
+        Assert.False(model.CopyChecked("Team"));      // a synced collection is not a target either
         Assert.Equal(["alpha"], model.CheckedNames);   // both are unreachable early-outs, so the ticks stand
+        Assert.Equal(stale, model.LastError);   // and so does the last error
         Assert.False(state.Store.Collections["Team"].Mcps.ContainsKey("alpha"));   // nothing landed in Team
     }
 
@@ -984,7 +1040,111 @@ public class CollectionsModelTests
         using var model = new CollectionsModel(state, h.Dialogs);
         model.Selected = "Default";
 
-        Assert.Null(model.CopyChecked("Spare", new Dictionary<string, ImportChoice>()));   // nothing ticked, so there is nothing to copy
+        Assert.False(model.CopyChecked("Spare"));   // nothing ticked, so there is nothing to copy
         Assert.Equal(before, state.Store.Collections["Spare"]);   // and nothing about Spare changed
+    }
+
+    /// <summary>
+    /// Copy to ▸ New Collection: an empty collection holding only the copies, while the window
+    /// stays where the rows came from and nothing Claude runs changes.
+    /// </summary>
+    [Fact]
+    public void CopyCheckedIntoNewCollectionMakesAnEmptyCollectionOfTheCopiesAlone()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
+        Assert.Null(state.Upsert("beta", Local("/bin/beta"), null, "Default"));
+        Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("aws-mcp"));
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Default";
+        model.SetChecked("alpha", true);
+        model.SetChecked("beta", true);
+        PresetError(model, h);
+
+        var before = h.ClaudeServers();
+        h.Dialogs.NextPromptAnswer = "  Fresh  ";
+        Assert.True(model.CopyCheckedIntoNewCollection());
+        Assert.Equal(new FakeDialogs.PromptCall(AppState.NewCollectionTitle, ""), h.Dialogs.Prompts[^1]);
+        var fresh = state.Store.Collections["Fresh"];   // the store trimmed the name
+        // The copies alone, not a copy of the active collection.
+        Assert.Equal(["alpha", "beta"], fresh.Mcps.Keys.Order(StringComparer.Ordinal));
+        Assert.False(fresh.Mcps.ContainsKey("aws-mcp"));
+        Assert.All(fresh.Mcps.Values, entry => Assert.False(entry.Enabled));   // they arrive disabled
+        Assert.Equal("Default", model.Selected);   // the window stays where the rows came from
+        Assert.Equal("Default", state.ActiveCollection);
+        Assert.Empty(model.CheckedNames);   // the ticks went with them
+        Assert.Null(model.LastError);
+        Assert.True(DictionaryEquality.Equal(before, h.ClaudeServers()));   // nothing Claude runs has changed
+    }
+
+    [Fact]
+    public void CopyCheckedIntoNewCollectionCancelledChangesNothing()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Default";
+        model.SetChecked("alpha", true);
+
+        h.Dialogs.NextPromptAnswer = null;
+        Assert.False(model.CopyCheckedIntoNewCollection());
+        Assert.Equal(["Default"], state.CollectionNames);
+        Assert.Equal(["alpha"], model.CheckedNames);
+        Assert.Null(model.LastError);
+    }
+
+    /// <summary>
+    /// A name the store refuses is the store's error, and nothing is made or copied. The ticks
+    /// stay for a retry, as they do after any copy that did not land.
+    /// </summary>
+    [Fact]
+    public void CopyCheckedIntoNewCollectionReportsARefusedName()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
+        state.SwitchCollection("Default");
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Default";
+        model.SetChecked("alpha", true);
+
+        h.Dialogs.NextPromptAnswer = "Work";
+        Assert.False(model.CopyCheckedIntoNewCollection());
+        Assert.Equal("A collection named “Work” already exists.", model.LastError);   // the store's own words
+        Assert.Equal(["Default", "Work"], state.CollectionNames);
+        Assert.False(state.Store.Collections["Work"].Mcps.ContainsKey("alpha"));   // nothing landed in the collection of that name
+        Assert.Equal("Default", model.Selected);
+        Assert.Equal(["alpha"], model.CheckedNames);
+    }
+
+    /// <summary>The ticked names a destination already holds, sorted, and nothing when none clash.</summary>
+    [Fact]
+    public void CheckedNamesClashingNamesTheTickedConnectorsTheDestinationHolds()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Spare"));
+        state.SwitchCollection("Default");
+        foreach (var name in new[] { "zeta", "alpha", "beta" })
+        {
+            Assert.Null(state.Upsert(name, Local("/bin/" + name), null, "Default"));
+        }
+        foreach (var name in new[] { "zeta", "alpha" })
+        {
+            Assert.Null(state.Upsert(name, Local("/bin/other"), null, "Spare"));
+        }
+        using var model = new CollectionsModel(state, h.Dialogs);
+        model.Selected = "Default";
+        model.SetChecked("zeta", true);
+        model.SetChecked("beta", true);
+        model.SetChecked("alpha", true);
+
+        Assert.Equal(["alpha", "zeta"], model.CheckedNamesClashing("Spare"));   // beta is not in Spare
+        model.SetChecked("alpha", false);
+        model.SetChecked("zeta", false);
+        Assert.Empty(model.CheckedNamesClashing("Spare"));   // nothing ticked clashes
     }
 }

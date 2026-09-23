@@ -159,6 +159,26 @@ public class AppStateCollectionsTests
         Assert.Equal(h.Now, h.Settings.LastApplyDate);
     }
 
+    /// <summary>
+    /// Copy to ▸ New Collection's first half: an empty collection, and not an active one, since
+    /// switching to it would empty Claude's config.
+    /// </summary>
+    [Fact]
+    public void CreateWithoutCopyingMakesAnEmptyCollectionThatStaysInactive()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var before = h.ClaudeServers();
+        Assert.Null(state.CreateCollection("  Empty  ", copyingCurrent: false));
+        Assert.Equal(["Default", "Empty"], state.CollectionNames);
+        Assert.Empty(state.Store.Collections["Empty"].Mcps);   // empty, not a copy of the active collection
+        Assert.Equal("Default", state.ActiveCollection);
+        Assert.Equal(["aws-mcp", "scoutbook", "service-now"], state.SortedNames);
+        Assert.True(DictionaryEquality.Equal(before, h.ClaudeServers()));   // nothing Claude runs has changed
+        state.Reload();
+        Assert.Empty(state.Store.Collections["Empty"].Mcps);   // and it was saved
+    }
+
     [Fact]
     public void RenameAndDeleteReportTheStoresErrors()
     {
