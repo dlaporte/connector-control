@@ -647,6 +647,28 @@ public class CollectionsWindowTests
     }
 
     [Fact]
+    public void TheCopyToMenusNewCollectionAsksForANameAndCopiesIntoIt()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Showing(h, state, (window, recorder) =>
+        {
+            var first = window.Model.Rows[0].Name;
+            Tick(window, first, true);
+
+            h.Dialogs.NextPromptAnswer = "Fresh";
+            Click(Entry(window.BuildCopyMenu(), CollectionsModel.NewButton));
+            Assert.Empty(recorder.Copies);   // a new collection holds nothing to clash with
+            Assert.Equal(["Default", "Fresh"], state.CollectionNames);
+            var copy = Assert.Single(state.Store.Collections["Fresh"].Mcps);
+            Assert.Equal(first, copy.Key);
+            Assert.False(copy.Value.Enabled);   // copies arrive off
+            Assert.Empty(window.Model.CheckedNames);
+            Assert.Empty(h.Dialogs.Informs);
+        });
+    }
+
+    [Fact]
     public void TheCopyToMenuHasNoSeparatorWithNowhereElseToGo()
     {
         using var h = new AppStateHarness();

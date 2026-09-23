@@ -3,9 +3,10 @@ import Foundation
 import ConnectorControlCore
 
 /// The Collections window, minus pixels: the collections as items in the left pane, the selected
-/// collection's connectors as rows in the right one, the detail line above them, and a toolbar
-/// whose every button follows the selection. Everything is derived from AppState; the model owns
-/// only what the window itself knows — which collection is showing and which rows are ticked.
+/// collection's connectors as rows in the right one, the detail line above them, and the controls
+/// that follow the selection: the sidebar's +, the header's ⋯ menu, the list header's + and the
+/// selection bar. Everything is derived from AppState; the model owns only what the window itself
+/// knows — which collection is showing and which rows are ticked.
 ///
 /// Mirror: windows/src/ConnectorControl.Core/State/CollectionsModel.cs
 @MainActor
@@ -602,7 +603,7 @@ public final class CollectionsModel: ObservableObject {
         }
     }
 
-    // MARK: - Toolbar
+    // MARK: - Control state
 
     public var canExport: Bool { !state.isSynced(selectedCollection) && !activeChecks.isEmpty }
 
@@ -679,7 +680,7 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// The collection's `⋯` menu (spec §4), built here so both platforms show the same list from
-    /// the same flags the toolbar already reads.
+    /// the same flags the window's other controls already read.
     public enum MenuEntry: Hashable, Sendable {
         case makeActive, rename, duplicate, startPublishing, publishingSettings, stopPublishing,
              showPublishedFile, exportAll(enabled: Bool), makeLocalCopy, refresh, showSourceFile,
@@ -921,7 +922,7 @@ public final class CollectionsModel: ObservableObject {
             return
         }
         // The store refuses to delete the last local collection, and the last one of any kind.
-        // Asked here as well as in the toolbar, so a refusal cannot arrive after the publishing
+        // Asked here as well as in the ⋯ menu, so a refusal cannot arrive after the publishing
         // below has already stopped. The store reports it: it refuses before it touches anything,
         // so asking it early is a no-op that still produces the right message.
         guard canDelete else { report(state.deleteCollection(named: collection)); return }

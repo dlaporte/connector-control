@@ -476,6 +476,7 @@ struct CollectionsWindowView: View {
                                 if !destination.isEnabled { Text(CollectionsModel.readOnlyNote) }
                             }
                             .disabled(!destination.isEnabled)
+                            .help(destination.isEnabled ? "" : CollectionsModel.readOnlyNote)
                         }
                         if !model.copyDestinations.isEmpty { Divider() }
                         Button(CollectionsModel.newButton) { act { model.copyCheckedIntoNewCollection() } }

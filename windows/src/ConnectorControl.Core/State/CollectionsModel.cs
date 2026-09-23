@@ -4,9 +4,10 @@ namespace ConnectorControl.Core.State;
 
 /// <summary>
 /// The Collections window, minus pixels: the collections as items in the left pane, the selected
-/// collection's connectors as rows in the right one, the detail line above them, and a toolbar
-/// whose every button follows the selection. Everything is derived from AppState; the model owns
-/// only what the window itself knows — which collection is showing and which rows are ticked.
+/// collection's connectors as rows in the right one, the detail line above them, and the controls
+/// that follow the selection: the sidebar's +, the header's ⋯ menu, the list header's + and the
+/// selection bar. Everything is derived from AppState; the model owns only what the window itself
+/// knows — which collection is showing and which rows are ticked.
 ///
 /// Mirror: Sources/ConnectorControlState/CollectionsModel.swift
 /// </summary>
@@ -736,7 +737,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         _ => null,
     };
 
-    // MARK: toolbar
+    // MARK: control state
 
     public bool CanExport => !state.IsSynced(SelectedCollection) && ActiveChecks.Count > 0;
 
@@ -854,9 +855,10 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// The collection's ⋯ menu (spec §4), built here so both platforms show the same list from
-    /// the same flags the toolbar already reads. A record hierarchy, the same shape
-    /// <see cref="CollectionBanner"/> uses, because two members — <see cref="MenuEntry.ExportAll"/>
-    /// and <see cref="MenuEntry.Delete"/> — carry an <c>Enabled</c> flag the rest do not.
+    /// the same flags the window's other controls already read. A record hierarchy, the same
+    /// shape <see cref="CollectionBanner"/> uses, because two members —
+    /// <see cref="MenuEntry.ExportAll"/> and <see cref="MenuEntry.Delete"/> — carry an
+    /// <c>Enabled</c> flag the rest do not.
     /// </summary>
     public abstract record MenuEntry
     {
@@ -1226,7 +1228,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             return;
         }
         // The store refuses to delete the last local collection, and the last one of any kind.
-        // Asked here as well as in the toolbar, so a refusal cannot arrive after the publishing
+        // Asked here as well as in the ⋯ menu, so a refusal cannot arrive after the publishing
         // below has already stopped. The store reports it: it refuses before it touches anything,
         // so asking it early is a no-op that still produces the right message.
         if (!CanDelete)
