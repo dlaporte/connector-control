@@ -309,6 +309,10 @@ public struct RenderedCollection: Equatable, Sendable {
 public struct CollectionDocument: Equatable, Sendable {
     public static let formatVersion = 1
     public static let fileExtension = "json"
+
+    /// The document's name in a publish folder: the slug publishing fixed, never re-derived from
+    /// the collection's current name.
+    public static func fileName(slug: String) -> String { slug + "." + fileExtension }
     public static let tokenNeed = "token"
     public static let headerValueNeed = "header_value"
     public static let clientSecretNeed = "client_secret"

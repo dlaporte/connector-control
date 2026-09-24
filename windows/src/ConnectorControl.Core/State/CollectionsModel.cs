@@ -1321,7 +1321,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         state.CollectionsCache.Published.ContainsKey(collection)
         && state.CollectionsFile.Collections.TryGetValue(collection, out var entry)
         && entry.Publish is { } record
-            ? record.Slug + "." + CollectionDocument.FileExtension
+            ? CollectionDocument.FileName(record.Slug)
             : null;
 
     /// <summary>Default no: the view's default button is Keep, and this model only records the answer.</summary>

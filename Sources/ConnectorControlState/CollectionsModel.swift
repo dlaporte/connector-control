@@ -997,7 +997,7 @@ public final class CollectionsModel: ObservableObject {
     private func publishedFileName(of collection: String) -> String? {
         guard state.collectionsCache.published[collection] != nil,
               let record = state.collectionsFile.collections[collection]?.publish else { return nil }
-        return record.slug + "." + CollectionDocument.fileExtension
+        return CollectionDocument.fileName(slug: record.slug)
     }
 
     /// Default no: the view's default button is Keep, and this model only records the answer.

@@ -1314,8 +1314,6 @@ public sealed class AppState : ObservableObject, IDisposable
         // copy or an ingest. What Stop Publishing remembers, this remembers too.
         RememberWhatWasKeptBack(name);
         ForgetOriginsOfDepartedCollections();
-        PendingUpdates = Without(PendingUpdates, name);
-        SourceErrors = Without(SourceErrors, name);
         ForgetSource(name);
         if (PublishError is { } failure && failure.Collection == name)
         {
@@ -1716,8 +1714,6 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         SetSidecarEntry(collection, null);
         SetBinding(collection, null);
-        SetPending(collection, null);
-        SetSourceError(collection, null);
         ForgetSource(collection);
         PersistStore();
         // The expansion above changed what the collection holds; if it is the live one, that is
@@ -1865,9 +1861,15 @@ public sealed class AppState : ObservableObject, IDisposable
         });
     }
 
-    /// <summary>Everything this run knows about one collection's document, dropped when the collection stops being synced or goes away.</summary>
+    /// <summary>
+    /// Everything this run knows about one collection's document, dropped when the collection
+    /// stops being synced or goes away: what it would change, what reading it said, and the
+    /// state of the reads themselves.
+    /// </summary>
     private void ForgetSource(string collection)
     {
+        SetPending(collection, null);
+        SetSourceError(collection, null);
         pendingRendered.Remove(collection);
         sourceFailures.Remove(collection);
         sourceRetryScheduled.Remove(collection);
@@ -2176,6 +2178,10 @@ public sealed class AppState : ObservableObject, IDisposable
 
     // MARK: publishing and export
 
+    /// <summary>What a publish verb returns: the message of the failure its own collection is left with.</summary>
+    private string? PublishFailure(string collection) =>
+        PublishError?.Collection == collection ? PublishError.Message : null;
+
     /// <summary>
     /// Starts publishing a local collection into <paramref name="folder"/>, or re-points one that
     /// already publishes (the failed-write banner's Choose Folder). The slug and the origin are
@@ -2221,7 +2227,7 @@ public sealed class AppState : ObservableObject, IDisposable
         var slug = entry.Publish?.Slug ?? Slug.Make(collection);
         var previousOrigin = entry.Publish?.Origin;
         var origin = previousOrigin ?? Guid.NewGuid().ToString("D").ToLowerInvariant();
-        var fileName = slug + "." + CollectionDocument.FileExtension;
+        var fileName = CollectionDocument.FileName(slug);
         var target = Path.Combine(full, fileName);
         // Somebody else's document under the name this one would take: publishing over it would
         // replace what their subscribers follow. A file that cannot be decoded counts too — it
@@ -2277,7 +2283,7 @@ public sealed class AppState : ObservableObject, IDisposable
             ApplyIfChanged();
         }
         RaiseAll();
-        return PublishError?.Collection == collection ? PublishError.Message : null;
+        return PublishFailure(collection);
     }
 
     /// <summary>
@@ -2342,7 +2348,7 @@ public sealed class AppState : ObservableObject, IDisposable
             new CollectionsFile.PublishRecord(record.Slug, record.Origin, intent), entry.Provenance));
         PersistStore();
         RaiseAll();
-        return PublishError?.Collection == collection ? PublishError.Message : null;
+        return PublishFailure(collection);
     }
 
     /// <summary>
@@ -2376,7 +2382,7 @@ public sealed class AppState : ObservableObject, IDisposable
         // After the save, so a failure here reaches the banner rather than being overwritten by it.
         if (deleteFile && folder is not null)
         {
-            var target = Path.Combine(folder, record.Slug + "." + CollectionDocument.FileExtension);
+            var target = Path.Combine(folder, CollectionDocument.FileName(record.Slug));
             try
             {
                 if (File.Exists(target))
@@ -2480,7 +2486,7 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         PublishIfChanged(collection);
         RaiseAll();
-        return PublishError?.Collection == collection ? PublishError.Message : null;
+        return PublishFailure(collection);
     }
 
     /// <summary>
@@ -2525,7 +2531,7 @@ public sealed class AppState : ObservableObject, IDisposable
                     }
                     continue;
                 }
-                var target = Path.Combine(binding.Folder, record.Slug + "." + CollectionDocument.FileExtension);
+                var target = Path.Combine(binding.Folder, CollectionDocument.FileName(record.Slug));
                 AtomicFile.Write(document.Serialize(), target);
                 // Only ever added to here: a publish nobody reviewed may learn a path it now keeps
                 // back, never forget one.

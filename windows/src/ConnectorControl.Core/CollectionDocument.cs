@@ -489,6 +489,12 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
 {
     public const int FormatVersion = 1;
     public const string FileExtension = "json";
+
+    /// <summary>
+    /// The document's name in a publish folder: the slug publishing fixed, never re-derived from
+    /// the collection's current name.
+    /// </summary>
+    public static string FileName(string slug) => slug + "." + FileExtension;
     public const string TokenNeed = "token";
     public const string HeaderValueNeed = "header_value";
     public const string ClientSecretNeed = "client_secret";

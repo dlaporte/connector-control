@@ -915,8 +915,6 @@ public final class AppState: ObservableObject {
         // import, a copy or an ingest. What Stop Publishing remembers, this remembers too.
         rememberWhatWasKeptBack(of: name)
         forgetOriginsOfDepartedCollections()
-        pendingUpdates.removeValue(forKey: name)
-        sourceErrors.removeValue(forKey: name)
         forgetSource(name)
         if publishError?.collection == name { publishError = nil }
         persistStore()
@@ -1117,8 +1115,6 @@ public final class AppState: ObservableObject {
         }
         collectionsFile.collections.removeValue(forKey: collection)
         collectionsCache.synced.removeValue(forKey: collection)
-        pendingUpdates.removeValue(forKey: collection)
-        sourceErrors.removeValue(forKey: collection)
         forgetSource(collection)
         persistStore()
         // The expansion above changed what the collection holds; if it is the live one, that is
@@ -1227,8 +1223,11 @@ public final class AppState: ObservableObject {
     }
 
     /// Everything this run knows about one collection's document, dropped when the collection
-    /// stops being synced or goes away.
+    /// stops being synced or goes away: what it would change, what reading it said, and the
+    /// state of the reads themselves.
     private func forgetSource(_ collection: String) {
+        pendingUpdates.removeValue(forKey: collection)
+        sourceErrors.removeValue(forKey: collection)
         pendingRendered.removeValue(forKey: collection)
         sourceFailures.removeValue(forKey: collection)
         sourceRetryScheduled.remove(collection)
@@ -1427,6 +1426,11 @@ public final class AppState: ObservableObject {
 
     // MARK: - Publishing and export
 
+    /// What a publish verb returns: the message of the failure its own collection is left with.
+    private func publishFailure(of collection: String) -> String? {
+        publishError?.collection == collection ? publishError?.message : nil
+    }
+
     /// Starts publishing a local collection into `folder`, or re-points one that already
     /// publishes (the failed-write banner's Choose Folder). The slug and the origin are fixed
     /// the first time and never re-derived, so renaming the collection cannot orphan the document
@@ -1458,7 +1462,7 @@ public final class AppState: ObservableObject {
         let record = collectionsFile.collections[collection]?.publish
         let slug = record?.slug ?? Slug.make(collection)
         let origin = record?.origin ?? UUID().uuidString.lowercased()
-        let fileName = slug + "." + CollectionDocument.fileExtension
+        let fileName = CollectionDocument.fileName(slug: slug)
         let target = url.appendingPathComponent(fileName)
         // Somebody else's document under the name this one would take: publishing over it would
         // replace what their subscribers follow. A file that cannot be decoded counts too — it
@@ -1509,7 +1513,7 @@ public final class AppState: ObservableObject {
         // changes the moment publishing starts. The dirty check spares the write when nothing in
         // the collection uses the token.
         if collection == activeCollection { applyIfChanged() }
-        return publishError?.collection == collection ? publishError?.message : nil
+        return publishFailure(of: collection)
     }
 
     /// Publishing again into a different folder, which is what the failed-write banner's Choose
@@ -1550,7 +1554,7 @@ public final class AppState: ObservableObject {
         entry.publish = CollectionsFile.PublishRecord(slug: record.slug, origin: record.origin, intent: intent)
         collectionsFile.collections[collection] = entry
         persistStore()
-        return publishError?.collection == collection ? publishError?.message : nil
+        return publishFailure(of: collection)
     }
 
     /// Stop Publishing: the record and this machine's binding go, and the document in the folder
@@ -1574,7 +1578,7 @@ public final class AppState: ObservableObject {
         if collection == activeCollection { applyIfChanged() }
         // After the save, so a failure here reaches the banner rather than being overwritten by it.
         guard deleteFile, let folder else { return }
-        let target = URL(fileURLWithPath: folder).appendingPathComponent(record.slug + "." + CollectionDocument.fileExtension)
+        let target = URL(fileURLWithPath: folder).appendingPathComponent(CollectionDocument.fileName(slug: record.slug))
         guard FileManager.default.fileExists(atPath: target.path) else { return }
         do {
             try FileManager.default.removeItem(at: target)
@@ -1646,7 +1650,7 @@ public final class AppState: ObservableObject {
     public func republish(_ collection: String) -> String? {
         guard collectionsCache.published[collection] != nil else { return nil }
         publishIfChanged(forcing: collection)
-        return publishError?.collection == collection ? publishError?.message : nil
+        return publishFailure(of: collection)
     }
 
     /// Which way a caught publish error did not land. A mark that has moved stops the write for
@@ -1833,7 +1837,7 @@ public final class AppState: ObservableObject {
                     continue
                 }
                 let target = URL(fileURLWithPath: binding.folder)
-                    .appendingPathComponent(record.slug + "." + CollectionDocument.fileExtension)
+                    .appendingPathComponent(CollectionDocument.fileName(slug: record.slug))
                 try AtomicFile.write(document.serialized(), to: target, staging: service.paths.stagingDirURL)
                 collectionsCache.published[collection]?.lastWrittenHash = hash
                 // Only ever added to here: a publish nobody reviewed may learn a path it now

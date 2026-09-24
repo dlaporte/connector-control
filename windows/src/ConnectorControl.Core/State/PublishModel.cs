@@ -394,8 +394,7 @@ public sealed class PublishModel : ObservableObject
 
     /// <summary>The document's name in the folder: the slug publishing fixed, or what this collection's name would make of it.</summary>
     public string FileName =>
-        (state.CollectionsFile.Collections.GetValueOrDefault(Collection)?.Publish?.Slug ?? Slug.Make(Collection))
-        + "." + CollectionDocument.FileExtension;
+        CollectionDocument.FileName(state.CollectionsFile.Collections.GetValueOrDefault(Collection)?.Publish?.Slug ?? Slug.Make(Collection));
 
     /// <summary>The Mac calls this <c>folderLine</c>; here the static factory already owns that name.</summary>
     public string FolderSentence => FolderLine(FileName);

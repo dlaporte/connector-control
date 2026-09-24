@@ -265,8 +265,7 @@ public final class PublishModel: ObservableObject {
     /// The document's name in the folder: the slug publishing fixed, or what this collection's
     /// name would make of it.
     public var fileName: String {
-        (state.collectionsFile.collections[collection]?.publish?.slug ?? Slug.make(collection))
-            + "." + CollectionDocument.fileExtension
+        CollectionDocument.fileName(slug: state.collectionsFile.collections[collection]?.publish?.slug ?? Slug.make(collection))
     }
 
     public var folderLine: String { PublishModel.folderLine(fileName) }
