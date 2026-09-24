@@ -17,6 +17,8 @@ bullet once the section is about to ship.
 
 ### macOS
 
+- Escape answers "Keep" when stopping publishing or deleting a published collection asks
+  whether to remove its file, as it does on Windows; before, Escape did nothing there.
 - Escape cancels every sheet in the Collections window, and the connector editor, as their
   Cancel buttons do.
 

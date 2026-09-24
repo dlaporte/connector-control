@@ -13,7 +13,10 @@ final class AlertDialogs: Dialogs {
         alert.messageText = message
         if let informative { alert.informativeText = informative }
         alert.addButton(withTitle: primary)
-        alert.addButton(withTitle: cancel)
+        // NSAlert gives Escape only to a button titled "Cancel". Keep, the published-file
+        // question's second answer, needs it too: Escape answers the cancel button whatever it
+        // says, as it does on the Windows dialog's IsCancel button.
+        alert.addButton(withTitle: cancel).keyEquivalent = "\u{1b}"
         if destructive { alert.buttons.first?.hasDestructiveAction = true }
         return alert.runModal() == .alertFirstButtonReturn
     }
