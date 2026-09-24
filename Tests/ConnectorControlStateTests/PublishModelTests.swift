@@ -547,6 +547,33 @@ final class PublishModelTests: XCTestCase {
         XCTAssertFalse(state.isPublished(state.activeCollection), "exporting binds nothing")
     }
 
+    /// One sheet, two modes, and the model says which title, which gate and which verb: an export
+    /// needs no folder and writes where it is told, a publish waits for its folder and binds it.
+    func testTheModeChoosesTheTitleTheGateAndTheVerb() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let collection = state.activeCollection
+
+        let export = PublishModel(state: state, collection: collection, mode: .export)
+        XCTAssertEqual(export.mode, .export)
+        XCTAssertEqual(export.sheetTitle, PublishModel.exportTitle(collection))
+        XCTAssertTrue(export.canFinish, "an export waits for no folder")
+        let out = h.dir.file("away/copy.json")
+        XCTAssertNil(export.finish(path: out.path))
+        XCTAssertEqual(try Data(contentsOf: out), try state.exportDocument(for: collection,
+                                                                          intent: export.intent).serialized())
+        XCTAssertFalse(state.isPublished(collection), "exporting binds nothing")
+
+        let publish = PublishModel(state: state, collection: collection)
+        XCTAssertEqual(publish.mode, .publish, "a sheet opened with no mode is the Publish sheet")
+        XCTAssertEqual(publish.sheetTitle, PublishModel.title(collection))
+        XCTAssertFalse(publish.canFinish, "nothing is published until a folder is chosen")
+        publish.folder = try publishFolder(h).path
+        XCTAssertTrue(publish.canFinish)
+        XCTAssertNil(publish.finish())
+        XCTAssertTrue(state.isPublished(collection))
+    }
+
     func testPublishAgainRetriesAFailedWrite() throws {
         let (h, state) = try started()
         defer { h.dispose() }

@@ -45,10 +45,9 @@ public class PublishDialogTests
     /// whether the body finishes or throws — a sheet left alive and on screen is a window every
     /// later test in this assembly then finds.
     /// </summary>
-    private static void Publishing(PublishModel model, Action<PublishDialog> body,
-                                   PublishDialogMode mode = PublishDialogMode.Publish)
+    private static void Publishing(PublishModel model, Action<PublishDialog> body)
     {
-        var window = new PublishDialog(model, mode) { ShowActivated = false };
+        var window = new PublishDialog(model) { ShowActivated = false };
         var closed = false;
         window.Closed += (_, _) => closed = true;
         try
@@ -239,7 +238,7 @@ public class PublishDialogTests
 
             // Export asks the save panel for a path when its button is pressed, so it has no
             // folder row and nothing to wait for.
-            Publishing(new PublishModel(state, state.ActiveCollection), export =>
+            Publishing(new PublishModel(state, state.ActiveCollection, mode: PublishModel.Mode.Export), export =>
             {
                 Assert.Equal(PublishModel.ExportTitle(state.ActiveCollection), export.Title);
                 Assert.Equal(export.Title, export.TitleText.Text);
@@ -251,7 +250,7 @@ public class PublishDialogTests
                 Assert.True(export.ExportButton.IsEnabled);
                 Assert.Empty(export.UnresolvedList.Items);
                 Assert.False(export.Accepted);
-            }, PublishDialogMode.Export);
+            });
         });
     }
 
@@ -285,7 +284,7 @@ public class PublishDialogTests
 
             // Forgetting belongs to the sheet it was pressed in: a fresh one on the same record
             // holds Export the same way, until its own Forget Mark.
-            var fresh = new PublishModel(state, state.ActiveCollection);
+            var fresh = new PublishModel(state, state.ActiveCollection, mode: PublishModel.Mode.Export);
             Publishing(fresh, export =>
             {
                 Assert.False(export.ExportButton.IsEnabled);
@@ -295,7 +294,7 @@ public class PublishDialogTests
 
                 Assert.Empty(export.UnresolvedList.Items);
                 Assert.True(export.ExportButton.IsEnabled);
-            }, PublishDialogMode.Export);
+            });
         });
     }
 
@@ -338,7 +337,7 @@ public class PublishDialogTests
                 Assert.Equal(PublishModel.KeptPathKind.Path, kept.Kind);
                 Assert.Equal(Visibility.Visible, RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue").Visibility);
                 Assert.Equal(Visibility.Collapsed, RowElements.Find<Button>(window.KeptList, kept, "UseDirectoryToken").Visibility);
-                // The export button is bound to its gate in both modes, so one sheet shows both.
+                // Both buttons answer to the model's one gate, the shown one and the hidden one alike.
                 Assert.False(window.PublishButton.IsEnabled);
                 Assert.False(window.ExportButton.IsEnabled);
 

@@ -8,44 +8,31 @@ using Microsoft.Win32;
 namespace ConnectorControl.App.Views;
 
 /// <summary>
-/// Publishing binds the collection to a folder it rewrites on every change; exporting writes the
-/// same document once and binds nothing. The sheet is the same sheet because the decision the
-/// author is making — what travels — is the same one.
-/// </summary>
-public enum PublishDialogMode
-{
-    Publish,
-    Export,
-}
-
-/// <summary>
-/// The Publish sheet and, with one flag flipped, the Export sheet: layout, bindings and the two
-/// native pickers. Every rule and string is PublishModel's, and so is every refresh — a tick or a
-/// keystroke reaches the preview because the row it changed raises it, not because this window
-/// nudges a binding.
+/// The Publish dialog and, in the model's other mode, the Export dialog: layout, bindings and the
+/// two native pickers. Every rule and string is PublishModel's — the mode included, and with it
+/// the title, the gate and the verb — and so is every refresh: a tick or a keystroke reaches the
+/// preview because the row it changed raises it, not because this window nudges a binding.
 /// </summary>
 public partial class PublishDialog : DialogWindow
 {
-    public PublishDialog(PublishModel model, PublishDialogMode mode)
+    public PublishDialog(PublishModel model)
     {
         InitializeComponent();
         Model = model;
-        Mode = mode;
         DataContext = model;
-        Title = mode == PublishDialogMode.Publish
-            ? model.SheetTitle
-            : PublishModel.ExportTitle(model.Collection);
+        Title = model.SheetTitle;
         TitleText.Text = Title;
-        FolderRow.Visibility = mode == PublishDialogMode.Publish ? Visibility.Visible : Visibility.Collapsed;
-        PublishButton.Visibility = mode == PublishDialogMode.Publish ? Visibility.Visible : Visibility.Collapsed;
-        ExportButton.Visibility = mode == PublishDialogMode.Export ? Visibility.Visible : Visibility.Collapsed;
-        PublishButton.IsDefault = mode == PublishDialogMode.Publish;
-        ExportButton.IsDefault = mode == PublishDialogMode.Export;
+        // Export asks the save dialog for a path when its button is pressed, so it has no folder
+        // row. One button per mode, each the default of its own dialog.
+        var publishing = model.SheetMode == PublishModel.Mode.Publish;
+        FolderRow.Visibility = publishing ? Visibility.Visible : Visibility.Collapsed;
+        PublishButton.Visibility = publishing ? Visibility.Visible : Visibility.Collapsed;
+        ExportButton.Visibility = publishing ? Visibility.Collapsed : Visibility.Visible;
+        PublishButton.IsDefault = publishing;
+        ExportButton.IsDefault = !publishing;
     }
 
     public PublishModel Model { get; }
-
-    public PublishDialogMode Mode { get; }
 
     /// <summary>
     /// Whether the sheet published or exported before it closed. A plain property, like every other
@@ -54,9 +41,9 @@ public partial class PublishDialog : DialogWindow
     /// </summary>
     public bool Accepted { get; private set; }
 
-    public static bool Show(Window? owner, PublishModel model, PublishDialogMode mode)
+    public static bool Show(Window? owner, PublishModel model)
     {
-        var dialog = new PublishDialog(model, mode);
+        var dialog = new PublishDialog(model);
         return Present(dialog, owner, () => dialog.Accepted);
     }
 
@@ -101,15 +88,23 @@ public partial class PublishDialog : DialogWindow
         }
     }
 
-    private void OnPublish(object sender, RoutedEventArgs e) => Finish(Model.Publish());
-
-    private void OnExport(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// The model's verb. An export first asks the save dialog where to write, and a dialog
+    /// cancelled writes nothing.
+    /// </summary>
+    private void OnFinish(object sender, RoutedEventArgs e)
     {
-        var picker = new SaveFileDialog { FileName = Model.FileName, Filter = "Collection (*.json)|*.json" };
-        if (picker.ShowDialog(this) == true)
+        string? path = null;
+        if (Model.SheetMode == PublishModel.Mode.Export)
         {
-            Finish(Model.Export(picker.FileName));
+            var picker = new SaveFileDialog { FileName = Model.FileName, Filter = "Collection (*.json)|*.json" };
+            if (picker.ShowDialog(this) != true)
+            {
+                return;
+            }
+            path = picker.FileName;
         }
+        Finish(Model.Finish(path));
     }
 
     /// <summary>

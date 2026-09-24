@@ -13,7 +13,8 @@
     <TextBlock x:Name="TitleText" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,12" />
 
     <!-- Folder row: the folder this collection would write into, and what it writes there.
-         Export needs no folder, so the code-behind collapses the whole row in that mode. -->
+         Export needs no folder, so the code-behind collapses the whole row in the model's export
+         mode. -->
     <StackPanel x:Name="FolderRow" Margin="0,0,0,12">
       <StackPanel Orientation="Horizontal">
         <!-- Trimmed at the end, as the footer is, since WPF has no middle ellipsis; the Mac sheet
@@ -226,10 +227,11 @@
                  HorizontalAlignment="Left" VerticalAlignment="Center" Margin="0,0,12,0" />
       <StackPanel Grid.Column="1" Style="{StaticResource DialogButtons}">
         <Button Content="{x:Static state:PublishModel.CancelButton}" MinWidth="80" IsCancel="True" />
+        <!-- One of the two shows, by the model's mode; both answer to the model's one gate and verb. -->
         <Button x:Name="PublishButton" Content="{x:Static state:PublishModel.PublishButton}" MinWidth="90" Margin="8,0,0,0"
-                IsEnabled="{Binding CanPublish}" Style="{DynamicResource AccentButtonStyle}" Click="OnPublish" />
+                IsEnabled="{Binding CanFinish}" Style="{DynamicResource AccentButtonStyle}" Click="OnFinish" />
         <Button x:Name="ExportButton" Content="{x:Static state:PublishModel.ExportButton}" MinWidth="90" Margin="8,0,0,0"
-                IsEnabled="{Binding CanExport}" Style="{DynamicResource AccentButtonStyle}" Click="OnExport" />
+                IsEnabled="{Binding CanFinish}" Style="{DynamicResource AccentButtonStyle}" Click="OnFinish" />
       </StackPanel>
     </Grid>
   </StackPanel>

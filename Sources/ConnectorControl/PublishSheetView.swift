@@ -1,20 +1,12 @@
 import SwiftUI
 import ConnectorControlState
 
-/// The Publish sheet and, with one flag flipped, the Export sheet: layout, bindings and the two
-/// native panels, which are FilePanels'. Every rule and string is PublishModel's; the preview
-/// under the ticks is the document itself, so nothing here filters, elides or reformats it.
+/// The Publish sheet and, in the model's other mode, the Export sheet: layout, bindings and the
+/// two native panels, which are FilePanels'. Every rule and string is PublishModel's — the mode
+/// included, and with it the title, the gate and the verb; the preview under the ticks is the
+/// document itself, so nothing here filters, elides or reformats it.
 struct PublishSheetView: View {
-    /// Publishing binds the collection to a folder it rewrites on every change; exporting writes
-    /// the same document once, wherever the save panel says, and binds nothing. The sheet is the
-    /// same sheet because the decision the author is making — what travels — is the same one.
-    enum Mode {
-        case publish
-        case export
-    }
-
     @ObservedObject var model: PublishModel
-    let mode: Mode
     let onDone: () -> Void
 
     /// What publish() or export(to:) answered. The model hands the message back rather than
@@ -23,9 +15,11 @@ struct PublishSheetView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.headline)
+            Text(model.sheetTitle).font(.headline)
 
-            if mode == .publish {
+            // Export asks the save panel for a path when its button is pressed, so it has no
+            // folder row.
+            if model.mode == .publish {
                 folderRow
             }
 
@@ -76,12 +70,6 @@ struct PublishSheetView: View {
         // long path can be read in full rather than truncated for good. Same width as the
         // Windows dialog.
         .frame(minWidth: 620, idealWidth: 620, maxWidth: .infinity)
-    }
-
-    /// Publishing names the collection it binds; exporting borrows the menu item's own wording,
-    /// which names the collection it writes once.
-    private var title: String {
-        mode == .publish ? model.title : PublishModel.exportTitle(model.collection)
     }
 
     // MARK: folder
@@ -288,15 +276,9 @@ struct PublishSheetView: View {
             Spacer()
             Button(PublishModel.cancelButton) { onDone() }
                 .keyboardShortcut(.cancelAction)
-            if mode == .publish {
-                Button(PublishModel.publishButton) { publish() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!model.canPublish)
-            } else {
-                Button(PublishModel.exportButton) { export() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!model.canExport)
-            }
+            Button(model.mode == .publish ? PublishModel.publishButton : PublishModel.exportButton) { finish() }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!model.canFinish)
         }
     }
 
@@ -309,14 +291,15 @@ struct PublishSheetView: View {
         failure = nil
     }
 
-    private func publish() {
-        failure = model.publish()
-        if failure == nil { onDone() }
-    }
-
-    private func export() {
-        guard let path = FilePanels.saveCollectionDocument(named: model.fileName) else { return }
-        failure = model.export(to: path)
+    /// The model's verb. An export first asks the save panel where to write, and a panel
+    /// cancelled writes nothing.
+    private func finish() {
+        var path: String?
+        if model.mode == .export {
+            guard let chosen = FilePanels.saveCollectionDocument(named: model.fileName) else { return }
+            path = chosen
+        }
+        failure = model.finish(path: path)
         if failure == nil { onDone() }
     }
 }

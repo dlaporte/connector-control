@@ -170,11 +170,25 @@ public sealed class PublishModel : ObservableObject
     /// <summary>Each row's name as the dialog opened it, so a tick that answers a lost mark gives it that mark's name only while the author has not typed one of their own.</summary>
     private readonly Dictionary<string, string> namesAtOpen = new(StringComparer.Ordinal);
 
-    public PublishModel(AppState state, string collection, IReadOnlyList<string>? connectors = null)
+    /// <summary>
+    /// Publishing binds the collection to a folder it rewrites on every change; exporting writes
+    /// the same document once, wherever the save dialog says, and binds nothing. The dialog is the
+    /// same dialog because the decision the author is making — what travels — is the same one, so
+    /// the mode is the model's, and with it which title, which gate and which verb.
+    /// </summary>
+    public enum Mode
+    {
+        Publish,
+        Export,
+    }
+
+    public PublishModel(AppState state, string collection, IReadOnlyList<string>? connectors = null,
+                        Mode mode = Mode.Publish)
     {
         this.state = state;
         Collection = collection;
         Connectors = connectors;
+        SheetMode = mode;
         // A collection that already publishes reopens showing what it publishes: the folder it
         // writes to and every tick the record remembers.
         var intent = state.CollectionsFile.Collections.GetValueOrDefault(collection)?.Publish?.Intent ?? PublishIntent.None;
@@ -269,6 +283,12 @@ public sealed class PublishModel : ObservableObject
     public string Collection { get; }
 
     /// <summary>
+    /// Which of the two dialogs this is. Fixed for the dialog's life: the menu entry that opened it
+    /// chose. The Mac calls this <c>mode</c>; here the nested enum already owns that name.
+    /// </summary>
+    public Mode SheetMode { get; }
+
+    /// <summary>
     /// The connectors this dialog speaks for: the Export dialog's ticked subset, or null for the
     /// whole collection. Publishing always writes the whole collection, so a model built with a
     /// subset is an export's — <see cref="Publish"/> on one would record an intent that speaks
@@ -301,6 +321,7 @@ public sealed class PublishModel : ObservableObject
             if (Set(ref folder, value))
             {
                 Raise(nameof(CanPublish));
+                Raise(nameof(CanFinish));
             }
         }
     }
@@ -400,8 +421,11 @@ public sealed class PublishModel : ObservableObject
         }
     }
 
-    /// <summary>The Mac calls this <c>title</c>; here the static factory already owns that name.</summary>
-    public string SheetTitle => Title(Collection);
+    /// <summary>
+    /// Publishing names the collection it binds; exporting borrows the menu item's own wording,
+    /// which names the collection it writes once.
+    /// </summary>
+    public string SheetTitle => SheetMode == Mode.Publish ? Title(Collection) : ExportTitle(Collection);
 
     /// <summary>The document's name in the folder: the slug publishing fixed, or what this collection's name would make of it.</summary>
     public string FileName =>
@@ -451,6 +475,12 @@ public sealed class PublishModel : ObservableObject
 
     /// <summary>Nothing is exported while either waits, for the same reason.</summary>
     public bool CanExport => UnresolvedMarks.Count == 0 && KeptPaths.Count == 0;
+
+    /// <summary>
+    /// The gate on the dialog's one verb: a publish waits for a folder as well, an export only for
+    /// what the two lists above hold.
+    /// </summary>
+    public bool CanFinish => SheetMode == Mode.Publish ? CanPublish : CanExport;
 
     /// <summary>
     /// The lost marks still unanswered, one note each, in connector then pointer order. A lost mark
@@ -683,6 +713,7 @@ public sealed class PublishModel : ObservableObject
         Raise(nameof(KeptPaths));
         Raise(nameof(CanPublish));
         Raise(nameof(CanExport));
+        Raise(nameof(CanFinish));
     }
 
     /// <summary>
@@ -864,6 +895,14 @@ public sealed class PublishModel : ObservableObject
     /// note while anything waits, as <see cref="Publish"/> is.
     /// </summary>
     public string? Export(string path) => FirstUnanswered ?? state.WriteExport(Collection, Intent, path, Connectors, ReviewedValues, LetGo);
+
+    /// <summary>
+    /// The dialog's one verb: publish into the chosen folder, or export to <paramref name="path"/>,
+    /// which the save dialog answers and only an export reads. null on success.
+    /// </summary>
+    public string? Finish(string? path = null) => SheetMode == Mode.Publish
+        ? Publish()
+        : Export(path ?? throw new ArgumentNullException(nameof(path), "An export is written where the save dialog says."));
 
     // MARK: rows
 

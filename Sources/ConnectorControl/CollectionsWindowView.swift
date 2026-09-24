@@ -292,7 +292,7 @@ struct CollectionsWindowView: View {
         case .startPublishing, .publishingSettings:
             if let collection = model.selected { show(.publish(publishModel(for: collection))) }
         case .exportAll:
-            if let collection = model.selected { show(.export(publishModel(for: collection))) }
+            if let collection = model.selected { show(.export(publishModel(for: collection, mode: .export))) }
         case .delete:
             act { model.delete() }
         case .stopPublishing:
@@ -496,10 +496,8 @@ struct CollectionsWindowView: View {
             ImportSheetView(model: model) { self.sheet = nil }
         case .review(let model):
             ReviewSheetView(model: model) { self.sheet = nil }
-        case .publish(let model):
-            PublishSheetView(model: model, mode: .publish) { self.sheet = nil }
-        case .export(let model):
-            PublishSheetView(model: model, mode: .export) { self.sheet = nil }
+        case .publish(let model), .export(let model):
+            PublishSheetView(model: model) { self.sheet = nil }
         case .copy(let copyModel):
             CopySheetView(model: copyModel, refusal: { model.lastError }) { self.sheet = nil }
         }
@@ -513,17 +511,17 @@ struct CollectionsWindowView: View {
         return sheetModel
     }
 
-    /// The Publish sheet's model, which is the Export All sheet's too: both take the whole
-    /// collection.
-    private func publishModel(for collection: String) -> PublishModel {
-        PublishModel(state: state, collection: collection)
+    /// The Publish sheet's model, which is the Export All sheet's too in the other mode: both take
+    /// the whole collection.
+    private func publishModel(for collection: String, mode: PublishModel.Mode = .publish) -> PublishModel {
+        PublishModel(state: state, collection: collection, mode: mode)
     }
 
     /// The Export sheet writes only what is ticked, which is what the selection bar's count says.
     /// The Publish sheet above takes no subset: publishing binds the whole collection.
     private func exportModel() -> PublishModel {
         PublishModel(state: state, collection: model.selected ?? "",
-                     connectors: model.exportIntentForChecked())
+                     connectors: model.exportIntentForChecked(), mode: .export)
     }
 
     // MARK: - Requests

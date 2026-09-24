@@ -150,7 +150,19 @@ public final class PublishModel: ObservableObject {
         }
     }
 
+    /// Publishing binds the collection to a folder it rewrites on every change; exporting writes
+    /// the same document once, wherever the save panel says, and binds nothing. The sheet is the
+    /// same sheet because the decision the author is making — what travels — is the same one, so
+    /// the mode is the model's, and with it which title, which gate and which verb.
+    public enum Mode {
+        case publish
+        case export
+    }
+
     public let collection: String
+    /// Which of the two sheets this is. Fixed for the sheet's life: the menu entry that opened it
+    /// chose.
+    public let mode: Mode
     /// The connectors this sheet speaks for: the Export sheet's ticked subset, or nil for the
     /// whole collection. Publishing always writes the whole collection, so a model built with a
     /// subset is an export's — `publish()` on one would record an intent that speaks for only
@@ -192,10 +204,11 @@ public final class PublishModel: ObservableObject {
     private let namesAtOpen: [String: String]
     private var answering = false
 
-    public init(state: AppState, collection: String, connectors: [String]? = nil) {
+    public init(state: AppState, collection: String, connectors: [String]? = nil, mode: Mode = .publish) {
         self.state = state
         self.collection = collection
         self.connectors = connectors
+        self.mode = mode
         // A collection that already publishes reopens showing what it publishes: the folder it
         // writes to and every tick the record remembers.
         let intent = state.collectionsFile.collections[collection]?.publish?.intent ?? .none
@@ -270,7 +283,14 @@ public final class PublishModel: ObservableObject {
                        pointer: pointer)
     }
 
-    public var title: String { PublishModel.title(collection) }
+    /// Publishing names the collection it binds; exporting borrows the menu item's own wording,
+    /// which names the collection it writes once.
+    public var sheetTitle: String {
+        switch mode {
+        case .publish: return PublishModel.title(collection)
+        case .export: return PublishModel.exportTitle(collection)
+        }
+    }
 
     /// The document's name in the folder: the slug publishing fixed, or what this collection's
     /// name would make of it.
@@ -318,6 +338,15 @@ public final class PublishModel: ObservableObject {
 
     /// Nothing is exported while either waits, for the same reason.
     public var canExport: Bool { unresolvedMarks.isEmpty && keptPaths.isEmpty }
+
+    /// The gate on the sheet's one verb: a publish waits for a folder as well, an export only for
+    /// what the two lists above hold.
+    public var canFinish: Bool {
+        switch mode {
+        case .publish: return canPublish
+        case .export: return canExport
+        }
+    }
 
     /// The lost marks still unanswered, one note each, in connector then pointer order. A lost
     /// mark is answered by its own tick — a path row of its connector ticked since the sheet
@@ -605,6 +634,18 @@ public final class PublishModel: ObservableObject {
         if let note = firstUnanswered { return note }
         return state.writeExport(for: collection, intent: intent, to: path, only: connectors,
                                  reviewed: reviewedValues, released: letGo)
+    }
+
+    /// The sheet's one verb: publish into the chosen folder, or export to `path`, which the save
+    /// panel answers and only an export reads. nil on success.
+    public func finish(path: String? = nil) -> String? {
+        switch mode {
+        case .publish:
+            return publish()
+        case .export:
+            guard let path else { preconditionFailure("an export is written where the save panel says") }
+            return export(to: path)
+        }
     }
 
     // MARK: - Rows

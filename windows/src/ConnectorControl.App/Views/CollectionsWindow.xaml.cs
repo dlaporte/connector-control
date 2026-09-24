@@ -107,7 +107,7 @@ public partial class CollectionsWindow : Window
         Func<Window, string?> ChooseFolder,
         Func<Window, ImportModel, bool> ShowImport,
         Func<Window, ReviewModel, bool> ShowReview,
-        Func<Window, PublishModel, PublishDialogMode, bool> ShowPublish,
+        Func<Window, PublishModel, bool> ShowPublish,
         Func<Window, CopyModel, Func<string?>, bool> ShowCopy);
 
     internal static Presenters Live { get; } = new(
@@ -115,7 +115,7 @@ public partial class CollectionsWindow : Window
         PickFolder,
         (owner, model) => ImportDialog.Show(owner, model),
         (owner, model) => ReviewDialog.Show(owner, model),
-        (owner, model, mode) => PublishDialog.Show(owner, model, mode),
+        (owner, model) => PublishDialog.Show(owner, model),
         (owner, model, refusal) => CopyDialog.Show(owner, model, refusal));
 
     internal Presenters Surfaces { get; set; } = Live;
@@ -244,7 +244,7 @@ public partial class CollectionsWindow : Window
                 // The whole collection: the menu acts on the collection, not on what is ticked.
                 if (Model.Selected is { } shown)
                 {
-                    PresentPublish(new PublishModel(state, shown), PublishDialogMode.Export);
+                    PresentPublish(new PublishModel(state, shown, mode: PublishModel.Mode.Export));
                 }
                 break;
             case CollectionsModel.MenuEntry.MakeLocalCopy:
@@ -271,7 +271,7 @@ public partial class CollectionsWindow : Window
     {
         if (Model.Selected is { } collection)
         {
-            PresentPublish(new PublishModel(state, collection), PublishDialogMode.Publish);
+            PresentPublish(new PublishModel(state, collection));
         }
     }
 
@@ -353,7 +353,7 @@ public partial class CollectionsWindow : Window
     {
         if (Model.Selected is { } collection)
         {
-            PresentPublish(new PublishModel(state, collection, Model.ExportIntentForChecked()), PublishDialogMode.Export);
+            PresentPublish(new PublishModel(state, collection, Model.ExportIntentForChecked(), PublishModel.Mode.Export));
         }
     }
 
@@ -543,7 +543,7 @@ public partial class CollectionsWindow : Window
                 // A publish the app stopped for review, for the collection it names — which need
                 // not be the one this window is showing. The dialog is where the author answers it.
                 Model.Selected = publish.Collection;
-                PresentPublish(new PublishModel(state, publish.Collection), PublishDialogMode.Publish);
+                PresentPublish(new PublishModel(state, publish.Collection));
                 break;
         }
     }
@@ -570,8 +570,7 @@ public partial class CollectionsWindow : Window
         Surfaces.ShowImport(this, model);
     }
 
-    private void PresentPublish(PublishModel model, PublishDialogMode mode) =>
-        Surfaces.ShowPublish(this, model, mode);
+    private void PresentPublish(PublishModel model) => Surfaces.ShowPublish(this, model);
 
     private void Review(string collection)
     {

@@ -47,7 +47,7 @@ public class CollectionsWindowTests
 
         public List<ReviewModel> Reviews { get; } = [];
 
-        public List<(PublishModel Model, PublishDialogMode Mode)> Publishes { get; } = [];
+        public List<(PublishModel Model, PublishModel.Mode Mode)> Publishes { get; } = [];
 
         public List<CopyModel> Copies { get; } = [];
 
@@ -56,7 +56,7 @@ public class CollectionsWindowTests
             _ => { FolderAsks++; return Folder; },
             (_, model) => { Imports.Add(model); return true; },
             (_, model) => { Reviews.Add(model); return true; },
-            (_, model, mode) => { Publishes.Add((model, mode)); return true; },
+            (_, model) => { Publishes.Add((model, model.SheetMode)); return true; },
             (_, model, _) => { Copies.Add(model); return true; });
     }
 
@@ -451,13 +451,13 @@ public class CollectionsWindowTests
             Assert.Collection(recorder.Publishes,
                 export =>
                 {
-                    Assert.Equal(PublishDialogMode.Export, export.Mode);
+                    Assert.Equal(PublishModel.Mode.Export, export.Mode);
                     Assert.Equal("Default", export.Model.Collection);
                     Assert.Null(export.Model.Connectors);
                 },
                 publish =>
                 {
-                    Assert.Equal(PublishDialogMode.Publish, publish.Mode);
+                    Assert.Equal(PublishModel.Mode.Publish, publish.Mode);
                     Assert.Equal("Default", publish.Model.Collection);
                     Assert.Null(publish.Model.Connectors);
                 });
@@ -579,7 +579,7 @@ public class CollectionsWindowTests
             // collection's slug makes — the subset changes what travels, not what it is called.
             Click(window.ExportCheckedButton);
             var (exported, mode) = Assert.Single(recorder.Publishes);
-            Assert.Equal(PublishDialogMode.Export, mode);
+            Assert.Equal(PublishModel.Mode.Export, mode);
             Assert.Equal([first, second], exported.Connectors);
             Assert.Equal(Slug.Make(window.Model.Selected!) + "." + CollectionDocument.FileExtension, exported.FileName);
             Assert.Equal(new PublishModel(state, window.Model.Selected!).FileName, exported.FileName);
@@ -740,7 +740,7 @@ public class CollectionsWindowTests
             Assert.Null(state.CollectionsWindowRequest);   // taken, so nothing acts on it twice
             Assert.Equal("Spare", window.Model.Selected);
             var (model, mode) = Assert.Single(recorder.Publishes);
-            Assert.Equal(PublishDialogMode.Publish, mode);
+            Assert.Equal(PublishModel.Mode.Publish, mode);
             Assert.Equal("Spare", model.Collection);
             Assert.Null(model.Connectors);
             Assert.Equal(0, recorder.DocumentAsks);
@@ -768,7 +768,7 @@ public class CollectionsWindowTests
             window.BannerButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, window.BannerButton));
 
             var (model, mode) = Assert.Single(recorder.Publishes);
-            Assert.Equal(PublishDialogMode.Publish, mode);
+            Assert.Equal(PublishModel.Mode.Publish, mode);
             Assert.Equal("Default", model.Collection);
             Assert.Equal(0, recorder.FolderAsks);
             Assert.Equal(0, recorder.DocumentAsks);
@@ -794,7 +794,7 @@ public class CollectionsWindowTests
             Assert.Null(state.CollectionsWindowRequest);   // taken, so nothing acts on it twice
             Assert.Equal(state.ActiveCollection, window.Model.Selected);
             var (model, mode) = Assert.Single(recorder.Publishes);
-            Assert.Equal(PublishDialogMode.Publish, mode);
+            Assert.Equal(PublishModel.Mode.Publish, mode);
             Assert.Equal(state.ActiveCollection, model.Collection);
 
             // A second request, after the first was consumed, reaches the window just the same.

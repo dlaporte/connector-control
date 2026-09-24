@@ -676,6 +676,39 @@ public class PublishModelTests
         Assert.False(state.IsPublished(state.ActiveCollection));   // exporting binds nothing
     }
 
+    /// <summary>
+    /// One dialog, two modes, and the model says which title, which gate and which verb: an export
+    /// needs no folder and writes where it is told, a publish waits for its folder and binds it.
+    /// </summary>
+    [Fact]
+    public void TheModeChoosesTheTitleTheGateAndTheVerb()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var collection = state.ActiveCollection;
+
+        var export = new PublishModel(state, collection, mode: PublishModel.Mode.Export);
+        Assert.Equal(PublishModel.Mode.Export, export.SheetMode);
+        Assert.Equal(PublishModel.ExportTitle(collection), export.SheetTitle);
+        Assert.True(export.CanFinish);   // an export waits for no folder
+        var path = h.Dir.File("away/copy.json");
+        Assert.Null(export.Finish(path));
+        Assert.Equal(state.ExportDocument(collection, export.Intent).Serialize(), File.ReadAllBytes(path));
+        Assert.False(state.IsPublished(collection));   // exporting binds nothing
+
+        var publish = new PublishModel(state, collection);
+        Assert.Equal(PublishModel.Mode.Publish, publish.SheetMode);   // a dialog opened with no mode is the Publish dialog
+        Assert.Equal(PublishModel.Title(collection), publish.SheetTitle);
+        Assert.False(publish.CanFinish);   // nothing is published until a folder is chosen
+        var raised = new List<string>();
+        publish.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");
+        publish.Folder = PublishFolder(h);
+        Assert.Contains(nameof(PublishModel.CanFinish), raised);
+        Assert.True(publish.CanFinish);
+        Assert.Null(publish.Finish());
+        Assert.True(state.IsPublished(collection));
+    }
+
     [Fact]
     public void PublishAgainRetriesAFailedWrite()
     {
