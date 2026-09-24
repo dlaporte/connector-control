@@ -77,6 +77,7 @@ struct CopySheetView: View {
         HStack {
             Spacer()
             Button(ImportModel.cancelButton) { onDone() }
+                .keyboardShortcut(.cancelAction)
             Button(CopyModel.copyButton) { perform() }
                 .keyboardShortcut(.defaultAction)
         }

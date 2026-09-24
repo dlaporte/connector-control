@@ -210,6 +210,7 @@ struct ImportSheetView: View {
         HStack {
             Spacer()
             Button(ImportModel.cancelButton) { onDone() }
+                .keyboardShortcut(.cancelAction)
             Button(ImportModel.importButton(model.importCount)) { perform() }
                 .keyboardShortcut(.defaultAction)
                 .disabled(!model.canImport)

@@ -75,7 +75,10 @@ struct EditSheetView: View {
                 }
                 HStack {
                     Spacer()
+                    // Escape cancels, as it does in the Windows editor: this is a window rather
+                    // than a sheet, and a window has no cancel key until a button claims it.
                     Button(AlertDialogs.cancelTitle) { dismiss() }
+                        .keyboardShortcut(.cancelAction)
                     Button("Save") { if model.save() { dismiss() } }
                         .keyboardShortcut(.defaultAction)
                         .disabled(!model.canSave)

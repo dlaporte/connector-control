@@ -124,6 +124,7 @@ struct ReviewSheetView: View {
         HStack {
             Spacer()
             Button(ReviewModel.cancelButton) { onDone() }
+                .keyboardShortcut(.cancelAction)
             Button(ReviewModel.applyButton) { apply() }
                 .keyboardShortcut(.defaultAction)
         }

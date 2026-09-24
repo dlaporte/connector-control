@@ -292,6 +292,7 @@ struct PublishSheetView: View {
                 .truncationMode(.middle)
             Spacer()
             Button(PublishModel.cancelButton) { onDone() }
+                .keyboardShortcut(.cancelAction)
             if mode == .publish {
                 Button(PublishModel.publishButton) { publish() }
                     .keyboardShortcut(.defaultAction)

@@ -25,6 +25,7 @@ struct RestoreSheetView: View {
             HStack {
                 Spacer()
                 Button(RestoreModel.cancelTitle) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
                 Button(RestoreModel.restoreTitle) { model.requestRestore() }
                     .disabled(!model.canRestore)
             }
