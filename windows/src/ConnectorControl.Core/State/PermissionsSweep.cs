@@ -13,7 +13,7 @@ namespace ConnectorControl.Core.State;
 /// is not additive — it strips inheritance, SYSTEM, Administrators and any
 /// sharing the owner set up — and the store directory can be a folder the
 /// user chose (OneDrive, Documents, a repo checkout). So in the store
-/// directory only mcps.json and the corrupt-file asides beside it are
+/// directory only the files <see cref="IsStoreFile"/> names are
 /// repaired, never anything else in the folder and never anything below it,
 /// and the folder's own DACL is rewritten only while it is the app's default
 /// location. The backups directory is always the app's own (machine-local,
@@ -90,8 +90,15 @@ public static class PermissionsSweep
 
     /// <summary>
     /// mcps.json, the <c>mcps.corrupt.&lt;timestamp&gt;.json</c> asides MasterStoreIO leaves beside
-    /// it, and the collections sidecar: the sidecar carries hints and origins, no secrets, but it
-    /// is written and swept like the store so the two never differ in who can read them.
+    /// it, and the collections sidecar.
+    ///
+    /// Listing the sidecar changes almost nothing today. It is new in this release and has been
+    /// written owner-only from the first, so there is nothing to repair; <see cref="CurrentVersion"/>
+    /// was not raised for it, so an install that has already swept never sweeps it; and a fresh
+    /// install sweeps before the file exists. It is listed so the next pass covers it with the
+    /// store it sits beside. The local cache, <c>collections-local.json</c>, is not listed: it too
+    /// has only ever been written owner-only. Compared ignoring case, as Windows' file system
+    /// compares names; the Mac compares them exactly.
     /// </summary>
     internal static bool IsStoreFile(string name) =>
         string.Equals(name, "mcps.json", StringComparison.OrdinalIgnoreCase)

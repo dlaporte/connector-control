@@ -4,6 +4,8 @@ import ConnectorControlCore
 /// PopoverView, minus pixels: header, error banner, rows, footer,
 /// and every action it wires. Everything is computed from AppState; the model
 /// only forwards AppState's objectWillChange so the view re-reads.
+///
+/// Mirror: windows/src/ConnectorControl.Core/State/FlyoutModel.cs (named for the Windows surface)
 @MainActor
 public final class PopoverModel: ObservableObject {
     public static let title = "Connector Control"

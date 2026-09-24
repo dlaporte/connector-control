@@ -1,6 +1,11 @@
 namespace ConnectorControl.Core.State;
 
-/// <summary>A switch, the name, and an advisory caution glyph.</summary>
+/// <summary>
+/// A switch, the name, and an advisory caution glyph.
+///
+/// Mirror: Sources/ConnectorControlState/ConnectorRow.swift (a value there, toggled through
+/// <c>PopoverModel.setEnabled</c>)
+/// </summary>
 public sealed class ConnectorRow : ObservableObject
 {
     private readonly AppState state;

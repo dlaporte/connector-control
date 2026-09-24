@@ -47,7 +47,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public const string EditTooltip = "Edit";
     /// <summary>The sidebar's double-click, and the same action in its context menu.</summary>
     public const string MakeActiveAction = "Make Active";
-    /// <summary>The lock at the head of a synced collection's row.</summary>
+    /// <summary>The lock at the head of a synced collection's row, and on the flyout's rows too.</summary>
     public const string LockedGlyphTooltip = "Read-only: synced from the collection's author";
 
     // MARK: selection bar

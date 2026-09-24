@@ -60,8 +60,8 @@ internal static class CollectionBannerPresentation
 
     /// <summary>
     /// A second button, for the one banner that has two answers: point the collection at another
-    /// folder, or stop publishing it. The wording is the Collections window's action link, since
-    /// this is the same command reached from somewhere else. Null for the other two banners.
+    /// folder, or stop publishing it. The wording is the Collections window's ⋯ menu entry, since
+    /// this is the same command reached from somewhere else. Null for every other banner.
     /// </summary>
     internal static string? SecondaryButton(CollectionBanner banner) =>
         banner is CollectionBanner.PublishFailed ? CollectionsModel.StopPublishingAction : null;

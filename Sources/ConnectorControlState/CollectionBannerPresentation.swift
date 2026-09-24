@@ -51,8 +51,8 @@ enum CollectionBannerPresentation {
     }
 
     /// A second button, for the one banner that has two answers: point the collection at another
-    /// folder, or stop publishing it. The wording is the Collections window's action link, since
-    /// this is the same command reached from somewhere else. nil for the other two banners.
+    /// folder, or stop publishing it. The wording is the Collections window's ⋯ menu entry, since
+    /// this is the same command reached from somewhere else. nil for every other banner.
     static func secondaryButton(_ banner: CollectionBanner) -> String? {
         guard case .publishFailed = banner else { return nil }
         return CollectionsModel.stopPublishingAction

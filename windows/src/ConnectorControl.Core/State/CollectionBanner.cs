@@ -20,7 +20,10 @@ public abstract record CollectionBanner
     /// <summary>A synced collection's document has never been found on this machine.</summary>
     public sealed record Locate(string Collection, string FileName) : CollectionBanner;
 
-    /// <summary>The last attempt to write a published collection's document failed.</summary>
+    /// <summary>
+    /// The last attempt to write a published collection's document failed. Another folder is an
+    /// answer, which is why this banner offers Choose Folder.
+    /// </summary>
     public sealed record PublishFailed(string Collection, string Message) : CollectionBanner;
 
     /// <summary>

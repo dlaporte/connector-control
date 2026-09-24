@@ -11,8 +11,8 @@ public sealed class ReviewModel : ObservableObject
 {
     public const string ApplyButton = "Apply";
     /// <summary>
-    /// This sheet's own footer buttons, not the Import dialog's and not the Collections window's
-    /// action link: a dialog's buttons are its model's, as Settings' and the Import dialog's are.
+    /// This dialog's own footer buttons, not the Import dialog's and not the Collections window's
+    /// ⋯ menu: a dialog's buttons are its model's, as Settings' and the Import dialog's are.
     /// </summary>
     public const string CancelButton = "Cancel";
     public const string RefreshButton = "Refresh";

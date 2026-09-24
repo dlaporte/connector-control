@@ -1,6 +1,9 @@
 /// MCPRow's data: a switch, the name, and an advisory caution glyph. A value:
 /// SwiftUI identifies the row by name, and toggling goes through
 /// `PopoverModel.setEnabled`.
+///
+/// Mirror: windows/src/ConnectorControl.Core/State/ConnectorRow.cs (a class there, which
+/// toggles itself, because WPF's two-way binding needs a row that stays put)
 public struct ConnectorRow: Identifiable, Equatable, Sendable {
     public let name: String
     public let enabled: Bool

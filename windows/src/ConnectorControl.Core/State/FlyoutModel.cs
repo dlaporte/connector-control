@@ -4,7 +4,11 @@ using ConnectorControl.Core.Services;
 
 namespace ConnectorControl.Core.State;
 
-/// <summary>The popover view, minus pixels: header, error banner, rows, footer, and every action it wires.</summary>
+/// <summary>
+/// The flyout, minus pixels: header, error banner, rows, footer, and every action it wires.
+///
+/// Mirror: Sources/ConnectorControlState/PopoverModel.swift (named for the Mac surface)
+/// </summary>
 public sealed class FlyoutModel : ObservableObject, IDisposable
 {
     public const string Title = Product.Name;
@@ -134,7 +138,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public string? CollectionBannerButton =>
         state.CollectionBanner is { } banner ? CollectionBannerPresentation.Button(banner) : null;
 
-    public bool HasCollectionBanner => CollectionBannerText is not null;
+    public bool HasCollectionBanner => state.CollectionBanner is not null;
 
     public ObservableCollection<ConnectorRow> Rows { get; }
 

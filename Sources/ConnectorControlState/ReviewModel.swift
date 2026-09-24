@@ -11,7 +11,7 @@ import ConnectorControlCore
 public final class ReviewModel: ObservableObject {
     public static let applyButton = "Apply"
     /// This sheet's own footer buttons, not the Import sheet's and not the Collections window's
-    /// action link: a sheet's buttons are its model's, as Settings' and the Import sheet's are.
+    /// ⋯ menu: a sheet's buttons are its model's, as Settings' and the Import sheet's are.
     public static let cancelButton = "Cancel"
     public static let refreshButton = "Refresh"
     public static let addedLabel = "Added"

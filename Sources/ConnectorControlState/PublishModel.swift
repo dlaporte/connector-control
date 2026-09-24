@@ -81,6 +81,8 @@ public final class PublishModel: ObservableObject {
         /// Which answer the entry takes.
         public let kind: Kind
 
+        /// PublishModel.cs calls this `KeptPathKind`, beside the record rather than inside it: C#
+        /// forbids a nested type named like the record's own `Kind` property.
         public enum Kind: Equatable {
             /// A path this machine keeps back: ticked where it sits in an argument row, or released
             /// with `releaseKeptPath`.
@@ -268,6 +270,8 @@ public final class PublishModel: ObservableObject {
         CollectionDocument.fileName(slug: state.collectionsFile.collections[collection]?.publish?.slug ?? Slug.make(collection))
     }
 
+    /// The Windows mirror calls this `FolderSentence`, where the static factory already owns the
+    /// name, as with `footerLine`.
     public var folderLine: String { PublishModel.folderLine(fileName) }
 
     /// Whether each section has anything to show. A collection of remote connectors with no
@@ -448,7 +452,8 @@ public final class PublishModel: ObservableObject {
     /// Answers lost marks with the ticks made since `previous`: each row newly ticked, not ticked
     /// on open, answers the next unanswered lost mark of its connector in pointer order, and takes
     /// its name and hint while the author has not typed their own. A row unticked gives its lost
-    /// mark back.
+    /// mark back. PublishModel.cs answers one row at a time, as `AnswerLostMark(row)`, because each
+    /// of its rows announces its own tick; here the rows are values, and only the array announces.
     private func answerLostMarks(since previous: [PathRow]) {
         let before = Dictionary(uniqueKeysWithValues: previous.map { ($0.id, $0.marked) })
         var rows = pathRows

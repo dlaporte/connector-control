@@ -1,7 +1,7 @@
 namespace ConnectorControl.Core.State;
 
 /// <summary>
-/// The Publish/Export sheet: every environment value this collection carries and every argument
+/// The Publish/Export dialog: every environment value this collection carries and every argument
 /// that looks like a path on this machine, with the ticks that decide what travels as a value and
 /// what travels as a placeholder. The preview under them is the document itself, because the only
 /// guarantee worth making about a secret is that the author saw every byte that leaves.
@@ -19,7 +19,7 @@ public sealed class PublishModel : ObservableObject
     public const string PublishButton = "Publish";
     public const string ExportButton = "Export";
     public const string CancelButton = "Cancel";
-    /// <summary>This sheet's own folder picker, not the failed-publish banner's button of the same words: a sheet's buttons are its model's, as Settings' and the Import sheet's already are.</summary>
+    /// <summary>This dialog's own folder picker, not the failed-publish banner's button of the same words: a dialog's buttons are its model's, as Settings' and the Import dialog's already are.</summary>
     public const string ChooseFolderButton = "Choose Folder";
     /// <summary>What a screen reader says for the bare tick beside a path row, which has no visible label.</summary>
     public const string MarkPathLabel = "Mark as a path this machine supplies";
@@ -32,7 +32,7 @@ public sealed class PublishModel : ObservableObject
 
     public static string Title(string collection) => $"Publish “{collection}”";
 
-    /// <summary>The sheet's own title in export mode.</summary>
+    /// <summary>The dialog's own title in export mode.</summary>
     public static string ExportTitle(string collection) => $"Export “{collection}”";
 
     /// <summary>"this PC" is the platform-forced half of this sentence; the Mac mirror says "this Mac".</summary>
@@ -68,7 +68,10 @@ public sealed class PublishModel : ObservableObject
         internal JsonPointer Pointer { get; init; } = new([]);
     }
 
-    /// <summary>Which answer a <see cref="KeptPath"/> takes.</summary>
+    /// <summary>
+    /// Which answer a <see cref="KeptPath"/> takes. The Mac nests this as <c>KeptPath.Kind</c>; C#
+    /// forbids a nested type named like the record's own <c>Kind</c> property.
+    /// </summary>
     public enum KeptPathKind
     {
         /// <summary>A path this machine keeps back: ticked where it sits in an argument row, or released with <see cref="ReleaseKeptPath"/>.</summary>
@@ -92,7 +95,7 @@ public sealed class PublishModel : ObservableObject
 
     /// <summary>
     /// One environment variable of one connector. Stripped by default: its name and hint travel,
-    /// its value does not. A class, not a record: the sheet edits <see cref="Share"/> and
+    /// its value does not. A class, not a record: the dialog edits <see cref="Share"/> and
     /// <see cref="Hint"/> in place through two-way bindings. It raises PropertyChanged so the
     /// model can re-raise what a tick changes; the Mac needs none of this, because its rows are
     /// structs inside a @Published array and the array itself is what announces the edit.
@@ -108,7 +111,7 @@ public sealed class PublishModel : ObservableObject
 
         /// <summary>
         /// What the variable holds now, in full and unelided, so the tick beside it is a decision
-        /// made with the value in view. Shortening it is the sheet's business, not the model's.
+        /// made with the value in view. Shortening it is the dialog's business, not the model's.
         /// </summary>
         public string Value { get; } = value;
 
@@ -283,7 +286,7 @@ public sealed class PublishModel : ObservableObject
             .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
     }
 
-    /// <summary>Where the document is written, null until the user chooses. Settable: the sheet's Choose Folder is the only thing that fills it.</summary>
+    /// <summary>Where the document is written, null until the user chooses. Settable: the dialog's Choose Folder is the only thing that fills it.</summary>
     public string? Folder
     {
         get => folder;
@@ -303,7 +306,7 @@ public sealed class PublishModel : ObservableObject
     /// <summary>
     /// Whether each section has anything to show. A collection of remote connectors with no
     /// passthrough environment has neither, and an empty heading over nothing is worse than no
-    /// heading; the sheet binds these rather than counting rows itself.
+    /// heading; the dialog binds these rather than counting rows itself.
     /// </summary>
     public bool HasEnvRows => EnvRows.Count > 0;
 
@@ -312,7 +315,7 @@ public sealed class PublishModel : ObservableObject
     /// <summary>
     /// Takes a new set of rows, listening to each one and letting the previous set go. Every tick
     /// and every keystroke in a row changes what the document says, so the model re-raises what
-    /// the rows feed rather than leaving the sheet to refresh itself. The rows live and die with
+    /// the rows feed rather than leaving the dialog to refresh itself. The rows live and die with
     /// this model, so there is nothing to unsubscribe beyond a replacement.
     /// </summary>
     private void ReplaceRows(IReadOnlyList<EnvRow> env, IReadOnlyList<PathRow> paths)
@@ -362,7 +365,9 @@ public sealed class PublishModel : ObservableObject
     /// <summary>
     /// A row newly ticked, not ticked on open, answers the next unanswered lost mark of its
     /// connector in pointer order, and takes its name and hint while the author has not typed their
-    /// own. A row unticked gives its lost mark back.
+    /// own. A row unticked gives its lost mark back. The Mac answers every row at once, as
+    /// <c>answerLostMarks(since:)</c>, because its rows are values and only the array announces a
+    /// tick; here each row announces its own.
     /// </summary>
     private void AnswerLostMark(PathRow row)
     {
@@ -804,7 +809,7 @@ public sealed class PublishModel : ObservableObject
     }
 
     /// <summary>
-    /// Publish, or re-publish with what the sheet now says. A folder that is not the one on record
+    /// Publish, or re-publish with what the dialog now says. A folder that is not the one on record
     /// starts publishing again there, which is how the failed-write banner's Choose Folder moves
     /// a collection. null on success. Refused with the first note while a mark is unresolved or a
     /// kept path unanswered, behind the disabled button: what the rows say would send the path as

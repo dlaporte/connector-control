@@ -3,9 +3,12 @@ import Combine
 import ConnectorControlCore
 
 /// EditSheetView without the pixels: every field, switch rule,
-/// validation string, and the save/remove flow. The two sheet-style
-/// confirmations (loss warning, remove) are published state the view binds
-/// to, with one method per button; the save-conflict alert goes through Dialogs.
+/// validation string, and the save flow. The loss warning is published
+/// state the view binds to as a sheet, with one method per button; the
+/// save-conflict alert goes through Dialogs. The Windows mirror asks the
+/// loss warning through `dialogs.Confirm` instead, because WPF has no sheet.
+///
+/// Mirror: windows/src/ConnectorControl.Core/State/EditorModel.cs
 @MainActor
 public final class EditorModel: ObservableObject {
     public static let notValidJSON = "Not valid JSON — check for a stray brace, missing comma, or unquoted value."
@@ -300,6 +303,8 @@ public final class EditorModel: ObservableObject {
         }
     }
 
+    /// A mirror of the Windows `HasHeaderNote`, which XAML binds for the header's visibility;
+    /// SwiftUI binds `headerNote` itself, so no view here reads this.
     public var hasHeaderNote: Bool { headerNote != nil }
 
     /// The paste tip offers something a read-only JSON view cannot do.
@@ -397,6 +402,8 @@ public final class EditorModel: ObservableObject {
 
     /// The same question for an argument. Takes an index because that is what a view has, and
     /// resolves it through the row's identity so a row inserted above does not move the answer.
+    /// EditorModel.cs calls this `AsksForArg`: C# has no argument labels to tell it apart from
+    /// the env-row overload.
     public func asksFor(arg index: Int) -> Bool {
         args.indices.contains(index) && askedArgs.contains(args[index].id)
     }
@@ -430,6 +437,7 @@ public final class EditorModel: ObservableObject {
     /// opened, which the published document has never described.
     /// The mark is placed on the opened arguments the way the exporter places it, so a mark that
     /// moved before the window opened still shows its hint beside the argument it stands for.
+    /// EditorModel.cs calls this `PublishedHintForArg`, as it names `PlaceholderHintForArg`.
     public func publishedHint(arg index: Int) -> String? {
         guard state.collectionsCache.published[collectionName] != nil, args.indices.contains(index),
               let published = openArgIndexByRow[args[index].id] else { return nil }
@@ -438,7 +446,9 @@ public final class EditorModel: ObservableObject {
     }
 
     /// Whether this connector has any author's hint to show at all, so the view can leave the
-    /// column out rather than reserve space for nothing.
+    /// column out rather than reserve space for nothing. The Windows editor binds it to the hint
+    /// column; the Mac's shows each row's `publishedHint(arg:)` where there is one and reserves
+    /// no column, so no view here reads this, and it is kept as the mirror.
     public var hasPublishedHints: Bool {
         guard state.collectionsCache.published[collectionName] != nil else { return false }
         if !publishedEnvHints.isEmpty { return true }
@@ -591,14 +601,14 @@ public final class EditorModel: ObservableObject {
     /// position, which is exact in a synced form — its JSON is read-only, so the round trip is
     /// always unchanged — and approximate only in an editable published form after a JSON edit
     /// that inserts, removes or reorders arguments, which is the one case this cannot follow.
-    private struct CarriedRecords {
+    private struct Carried {
         let askedEnvNames: Set<String>
         let askedArgPositions: Set<Int>
         let openArgIndexByPosition: [Int: Int]
     }
 
-    private func carriedRecords() -> CarriedRecords {
-        CarriedRecords(
+    private func carriedRecords() -> Carried {
+        Carried(
             askedEnvNames: Set(envRows.filter { askedEnvRows.contains($0.id) }.map(\.name)),
             askedArgPositions: Set(args.indices.filter { askedArgs.contains(args[$0].id) }),
             openArgIndexByPosition: Dictionary(uniqueKeysWithValues: args.indices.compactMap { position in
@@ -606,7 +616,7 @@ public final class EditorModel: ObservableObject {
             }))
     }
 
-    private func restore(_ carried: CarriedRecords) {
+    private func restore(_ carried: Carried) {
         askedEnvRows = Set(envRows.filter { carried.askedEnvNames.contains($0.name) }.map(\.id))
         askedArgs = Set(carried.askedArgPositions.filter { args.indices.contains($0) }.map { args[$0].id })
         openArgIndexByRow = Dictionary(uniqueKeysWithValues: carried.openArgIndexByPosition
@@ -756,7 +766,7 @@ public final class EditorModel: ObservableObject {
         return nil
     }
 
-    // MARK: - Save / remove
+    // MARK: - Save
 
     /// The config this window opened on, with the `${CC_NEEDS:…}` leaves — and only those —
     /// carrying whatever the form now holds at the same JSON pointers. Anything else the fields

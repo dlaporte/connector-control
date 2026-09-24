@@ -75,11 +75,10 @@ public final class ImportModel: ObservableObject {
     /// here republishes the whole `rows` array, which is what makes `importCount` and the button
     /// re-read; the Windows mirror has to raise PropertyChanged from the row for the same effect.
     ///
-    /// `present` is what
-    /// the badge says and what `choice` answers; an excluded connector cannot be included at all,
-    /// since this platform has no way to run it. A struct the sheet edits through its index, as
-    /// the publish rows are; the Windows mirror is a class, because WPF's two-way bindings need
-    /// a row that stays put.
+    /// `present` is what the badge says and what `choice` answers; an excluded connector cannot be
+    /// included at all, since this platform has no way to run it. A struct the sheet edits through
+    /// its index, as the publish rows are; the Windows mirror is a class, because WPF's two-way
+    /// bindings need a row that stays put.
     public struct Row: Identifiable, Equatable {
         public let id: String
         public let name: String

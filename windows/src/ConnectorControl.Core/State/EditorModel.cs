@@ -4,7 +4,14 @@ using System.ComponentModel;
 
 namespace ConnectorControl.Core.State;
 
-/// <summary>The edit-sheet view without the pixels: every field, switch rule, validation string, and save/remove flow.</summary>
+/// <summary>
+/// The editor window without the pixels: every field, switch rule, validation string, and the
+/// save flow. The loss warning and the save-conflict question both go through
+/// <see cref="IDialogs.Confirm"/>; the Mac's loss warning is published state its view binds to
+/// as a sheet instead, because WPF has no sheet.
+///
+/// Mirror: Sources/ConnectorControlState/EditorModel.swift
+/// </summary>
 public sealed class EditorModel : ObservableObject, IDisposable
 {
     public const string NotValidJson = "Not valid JSON — check for a stray brace, missing comma, or unquoted value.";
@@ -375,10 +382,11 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public bool IsOAuth => authKind == RemoteAuthKind.OAuthClient;
 
     /// <summary>
-    /// The three secret fields raise what is read off their text as well as the text itself: a
-    /// synced connector unlocks exactly the fields whose value is still a placeholder, and the
-    /// hint under one is the author's. Typing over the marker locks the field again, so the two
-    /// have to move together. The Mac needs none of this — there these are <c>@Published</c>, and
+    /// The three secret fields raise what is read off their text as well as the text itself: the
+    /// caution ring and the author's hint under a field follow whether its value is still a
+    /// placeholder, so the two have to move together. Whether the field is locked does not: that
+    /// is the asked-for snapshot taken when the window opened, so typing over the marker never
+    /// locks the field again. The Mac needs none of this — there these are <c>@Published</c>, and
     /// a change to one republishes the whole object.
     /// </summary>
     public string BearerToken
@@ -812,8 +820,6 @@ public sealed class EditorModel : ObservableObject, IDisposable
             Raise(nameof(HasHeaderNote));
             Raise(nameof(CanSave));
             Raise(nameof(ShowJsonTip));
-            Raise(nameof(ShowPropagate));
-            Raise(nameof(PropagateMessage));
             Raise(nameof(HasPublishedHints));
             if (retook)
             {
@@ -1207,7 +1213,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         return null;
     }
 
-    // MARK: save / remove / cancel
+    // MARK: save
 
     /// <summary>
     /// The config this window opened on, with the <c>${CC_NEEDS:…}</c> leaves — and only those —
