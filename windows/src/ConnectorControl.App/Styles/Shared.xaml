@@ -202,6 +202,9 @@
     <Setter Property="MinWidth" Value="{DynamicResource TextControlThemeMinWidth}" />
     <Setter Property="VerticalContentAlignment" Value="Top" />
     <Setter Property="SelectionBrush" Value="{DynamicResource TextControlSelectionHighlightColor}" />
+    <!-- UI Automation does not read a watermark, so the Tag is also the field's name unless the
+         field sets one of its own: a box named only by its watermark is otherwise nameless. -->
+    <Setter Property="AutomationProperties.Name" Value="{Binding Tag, RelativeSource={RelativeSource Self}}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="TextBox">

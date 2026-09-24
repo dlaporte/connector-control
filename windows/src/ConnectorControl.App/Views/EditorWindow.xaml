@@ -8,6 +8,13 @@
         Background="{DynamicResource ApplicationBackgroundBrush}">
   <Window.Resources>
     <views:NotConverter x:Key="Not" />
+    <!-- Every EditorRule MultiBinding below binds one value it never reads, only so the converter
+         asks again when that value moves and nothing else here would say so:
+         - IsReadOnly on a row's: the model retakes its "asks for" snapshot when the form unlocks,
+           and a hint belongs to the subscription that asked for it, so it must not outlive it;
+         - AsksFor… on an auth field's, which is raised after the snapshot is retaken;
+         - HasPublishedHints on a published hint's, for when the collection starts or stops being
+           published. -->
     <views:EditorRuleConverter x:Key="EditorRule" />
     <Style x:Key="FieldLabel" TargetType="TextBlock">
       <Setter Property="VerticalAlignment" Value="Center" />
@@ -59,10 +66,12 @@
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <DataTemplate x:Key="MaskedValue">
-      <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+      <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                   AutomationProperties.Name="{x:Static state:EditorModel.ValueLabel}" />
     </DataTemplate>
     <DataTemplate x:Key="RevealedValue">
-      <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}" />
+      <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}"
+               AutomationProperties.Name="{x:Static state:EditorModel.ValueLabel}" />
     </DataTemplate>
     <Style x:Key="JsonBox" TargetType="TextBox">
       <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
@@ -83,8 +92,8 @@
   <DockPanel Grid.IsSharedSizeScope="True">
     <!-- View switch -->
     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10">
-      <RadioButton x:Name="FormToggle" Content="Form" GroupName="View" MinWidth="72" IsChecked="{Binding View, Converter={StaticResource EnumToBool}, ConverterParameter=Form}" Style="{DynamicResource DefaultToggleButtonStyle}" />
-      <RadioButton x:Name="JsonToggle" Content="JSON" GroupName="View" MinWidth="72" Margin="4,0,0,0" IsChecked="{Binding View, Converter={StaticResource EnumToBool}, ConverterParameter=Json}" Style="{DynamicResource DefaultToggleButtonStyle}" />
+      <RadioButton x:Name="FormToggle" Content="{x:Static state:EditorModel.FormTab}" GroupName="View" MinWidth="72" IsChecked="{Binding View, Converter={StaticResource EnumToBool}, ConverterParameter=Form}" Style="{DynamicResource DefaultToggleButtonStyle}" />
+      <RadioButton x:Name="JsonToggle" Content="{x:Static state:EditorModel.JsonTab}" GroupName="View" MinWidth="72" Margin="4,0,0,0" IsChecked="{Binding View, Converter={StaticResource EnumToBool}, ConverterParameter=Json}" Style="{DynamicResource DefaultToggleButtonStyle}" />
     </StackPanel>
 
     <!-- Where this connector came from. An ordinary connector in an ordinary local collection has
@@ -127,8 +136,8 @@
         </CheckBox>
         <Grid>
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="Cancel" MinWidth="80" Click="OnCancel" />
-            <Button Content="Save" MinWidth="80" Margin="8,0,0,0" IsDefault="True" IsEnabled="{Binding CanSave}" Style="{DynamicResource AccentButtonStyle}" Click="OnSave" />
+            <Button Content="{x:Static state:EditorModel.CancelButton}" MinWidth="80" Click="OnCancel" />
+            <Button Content="{x:Static state:EditorModel.SaveButton}" MinWidth="80" Margin="8,0,0,0" IsDefault="True" IsEnabled="{Binding CanSave}" Style="{DynamicResource AccentButtonStyle}" Click="OnSave" />
           </StackPanel>
         </Grid>
       </StackPanel>
@@ -156,21 +165,21 @@
               <Grid x:Name="TypePicker" Margin="0,0,0,8" Visibility="{Binding ShowTypePicker, Converter={StaticResource Vis}}" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                 <StackPanel Style="{StaticResource FieldLabelRow}">
-                  <TextBlock Text="Type" />
+                  <TextBlock Text="{x:Static state:EditorModel.TypeLabel}" />
                   <TextBlock Style="{StaticResource LabelLock}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                  <RadioButton Content="Remote" GroupName="Type" MinWidth="72" IsChecked="{Binding IsRemote}" Style="{DynamicResource DefaultToggleButtonStyle}" />
-                  <RadioButton Content="Local" GroupName="Type" MinWidth="72" Margin="4,0,0,0" IsChecked="{Binding IsLocal}" Style="{DynamicResource DefaultToggleButtonStyle}" />
+                  <RadioButton Content="{x:Static state:EditorModel.RemoteTypeTitle}" GroupName="Type" MinWidth="72" IsChecked="{Binding IsRemote}" Style="{DynamicResource DefaultToggleButtonStyle}" />
+                  <RadioButton Content="{x:Static state:EditorModel.LocalTypeTitle}" GroupName="Type" MinWidth="72" Margin="4,0,0,0" IsChecked="{Binding IsLocal}" Style="{DynamicResource DefaultToggleButtonStyle}" />
                 </StackPanel>
               </Grid>
               <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                 <StackPanel Style="{StaticResource FieldLabelRow}">
-                  <TextBlock Text="Name" />
+                  <TextBlock Text="{x:Static state:EditorModel.NameLabel}" />
                   <TextBlock Style="{StaticResource LabelLock}" />
                 </StackPanel>
-                <TextBox x:Name="NameBox" Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="my-mcp" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
+                <TextBox x:Name="NameBox" Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="{x:Static state:EditorModel.NamePrompt}" AutomationProperties.Name="{x:Static state:EditorModel.NameLabel}" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
               </Grid>
             </StackPanel>
           </Border>
@@ -181,10 +190,10 @@
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                   <StackPanel Style="{StaticResource FieldLabelRow}">
-                    <TextBlock Text="Server URL" />
+                    <TextBlock Text="{x:Static state:EditorModel.ServerUrlLabel}" />
                     <TextBlock Style="{StaticResource LabelLock}" />
                   </StackPanel>
-                  <TextBox Grid.Column="1" Text="{Binding RemoteUrl, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="https://example.com/mcp" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
+                  <TextBox Grid.Column="1" Text="{Binding RemoteUrl, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="{x:Static state:EditorModel.ServerUrlPrompt}" AutomationProperties.Name="{x:Static state:EditorModel.ServerUrlLabel}" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
                 </Grid>
                 <TextBlock Text="{x:Static state:EditorModel.UrlHint}" Style="{StaticResource ErrorText}" FontSize="12" Margin="110,4,0,0" Visibility="{Binding ShowUrlHint, Converter={StaticResource Vis}}" />
                 <TextBlock Text="{Binding UrlCaution}" Style="{StaticResource CautionText}" FontSize="12" Margin="110,4,0,0" TextWrapping="Wrap" Visibility="{Binding ShowUrlCaution, Converter={StaticResource Vis}}" />
@@ -194,37 +203,36 @@
             </Border>
             <Border Style="{StaticResource Card}">
               <StackPanel>
-                <TextBlock Text="Authentication" Style="{StaticResource SectionTitle}" />
+                <TextBlock Text="{x:Static state:EditorModel.AuthenticationHeader}" Style="{StaticResource SectionTitle}" />
                 <Grid Margin="0,0,0,8">
                   <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                   <StackPanel Style="{StaticResource FieldLabelRow}">
-                    <TextBlock Text="Type" />
+                    <TextBlock Text="{x:Static state:EditorModel.TypeLabel}" />
                     <TextBlock Style="{StaticResource LabelLock}" />
                   </StackPanel>
-                  <ComboBox Grid.Column="1" ItemsSource="{x:Static state:EditorModel.AuthKindTitles}" SelectedIndex="{Binding AuthKindIndex}" HorizontalAlignment="Left" MinWidth="220" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
+                  <ComboBox Grid.Column="1" ItemsSource="{x:Static state:EditorModel.AuthKindTitles}" SelectedIndex="{Binding AuthKindIndex}" AutomationProperties.Name="{x:Static state:EditorModel.AuthenticationHeader}" HorizontalAlignment="Left" MinWidth="220" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
                 </Grid>
                 <TextBlock Text="{x:Static state:EditorModel.AutomaticCaption}" Style="{StaticResource CaptionText}" Visibility="{Binding IsAutomatic, Converter={StaticResource Vis}}" />
                 <StackPanel Visibility="{Binding IsBearer, Converter={StaticResource Vis}}">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                    <TextBlock Text="Token" Style="{StaticResource FieldLabel}" />
+                    <TextBlock Text="{x:Static state:EditorModel.TokenLabel}" Style="{StaticResource FieldLabel}" />
                     <Border Grid.Column="1" Style="{StaticResource PlaceholderMark}">
                       <Border.BorderThickness>
                         <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedThickness:BearerToken">
                           <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                           <Binding Path="BearerToken" />
-                          <!-- Raised after the snapshot is retaken; only so this asks again. -->
                           <Binding Path="AsksForBearerToken" />
                         </MultiBinding>
                       </Border.BorderThickness>
                       <PasswordBox x:Name="BearerTokenBox" views:PasswordBoxHelper.BoundPassword="{Binding BearerToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                   AutomationProperties.Name="{x:Static state:EditorModel.TokenLabel}"
                                    AutomationProperties.HelpText="{Binding BearerTokenHint}">
                         <PasswordBox.IsEnabled>
                           <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Live:BearerToken">
                             <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                             <Binding Path="BearerToken" />
                             <Binding Path="IsReadOnly" />
-                            <!-- Raised after the snapshot is retaken; only so this asks again. -->
                             <Binding Path="AsksForBearerToken" />
                           </MultiBinding>
                         </PasswordBox.IsEnabled>
@@ -236,7 +244,6 @@
                       <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedVisibility:BearerToken">
                         <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                         <Binding Path="BearerToken" />
-                        <!-- Raised after the snapshot is retaken; only so this asks again. -->
                         <Binding Path="AsksForBearerToken" />
                       </MultiBinding>
                     </StackPanel.Visibility>
@@ -251,29 +258,28 @@
                 <StackPanel Visibility="{Binding IsHeader, Converter={StaticResource Vis}}">
                   <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                    <TextBlock Text="Header name" Style="{StaticResource FieldLabel}" />
-                    <TextBox Grid.Column="1" Text="{Binding HeaderName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="X-API-Key" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
+                    <TextBlock Text="{x:Static state:EditorModel.HeaderNameLabel}" Style="{StaticResource FieldLabel}" />
+                    <TextBox Grid.Column="1" Text="{Binding HeaderName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="{x:Static state:EditorModel.HeaderNamePrompt}" AutomationProperties.Name="{x:Static state:EditorModel.HeaderNameLabel}" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
                   </Grid>
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                    <TextBlock Text="Header value" Style="{StaticResource FieldLabel}" />
+                    <TextBlock Text="{x:Static state:EditorModel.HeaderValueLabel}" Style="{StaticResource FieldLabel}" />
                     <Border Grid.Column="1" Style="{StaticResource PlaceholderMark}">
                       <Border.BorderThickness>
                         <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedThickness:HeaderValue">
                           <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                           <Binding Path="HeaderValue" />
-                          <!-- Raised after the snapshot is retaken; only so this asks again. -->
                           <Binding Path="AsksForHeaderValue" />
                         </MultiBinding>
                       </Border.BorderThickness>
                       <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding HeaderValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                   AutomationProperties.Name="{x:Static state:EditorModel.HeaderValueLabel}"
                                    AutomationProperties.HelpText="{Binding HeaderValueHint}">
                         <PasswordBox.IsEnabled>
                           <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Live:HeaderValue">
                             <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                             <Binding Path="HeaderValue" />
                             <Binding Path="IsReadOnly" />
-                            <!-- Raised after the snapshot is retaken; only so this asks again. -->
                             <Binding Path="AsksForHeaderValue" />
                           </MultiBinding>
                         </PasswordBox.IsEnabled>
@@ -285,7 +291,6 @@
                       <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedVisibility:HeaderValue">
                         <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                         <Binding Path="HeaderValue" />
-                        <!-- Raised after the snapshot is retaken; only so this asks again. -->
                         <Binding Path="AsksForHeaderValue" />
                       </MultiBinding>
                     </StackPanel.Visibility>
@@ -299,29 +304,28 @@
                 <StackPanel Visibility="{Binding IsOAuth, Converter={StaticResource Vis}}">
                   <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                    <TextBlock Text="Client ID" Style="{StaticResource FieldLabel}" />
-                    <TextBox Grid.Column="1" Text="{Binding OAuthClientId, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
+                    <TextBlock Text="{x:Static state:EditorModel.ClientIdLabel}" Style="{StaticResource FieldLabel}" />
+                    <TextBox Grid.Column="1" Text="{Binding OAuthClientId, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="{x:Static state:EditorModel.ClientIdLabel}" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
                   </Grid>
                   <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                    <TextBlock Text="Client Secret" Style="{StaticResource FieldLabel}" />
+                    <TextBlock Text="{x:Static state:EditorModel.ClientSecretLabel}" Style="{StaticResource FieldLabel}" />
                     <Border Grid.Column="1" Style="{StaticResource PlaceholderMark}">
                       <Border.BorderThickness>
                         <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedThickness:OAuthClientSecret">
                           <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                           <Binding Path="OAuthClientSecret" />
-                          <!-- Raised after the snapshot is retaken; only so this asks again. -->
                           <Binding Path="AsksForClientSecret" />
                         </MultiBinding>
                       </Border.BorderThickness>
                       <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding OAuthClientSecret, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                   AutomationProperties.Name="{x:Static state:EditorModel.ClientSecretLabel}"
                                    AutomationProperties.HelpText="{Binding ClientSecretHint}">
                         <PasswordBox.IsEnabled>
                           <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="Live:OAuthClientSecret">
                             <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                             <Binding Path="OAuthClientSecret" />
                             <Binding Path="IsReadOnly" />
-                            <!-- Raised after the snapshot is retaken; only so this asks again. -->
                             <Binding Path="AsksForClientSecret" />
                           </MultiBinding>
                         </PasswordBox.IsEnabled>
@@ -333,7 +337,6 @@
                       <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="OwedVisibility:OAuthClientSecret">
                         <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                         <Binding Path="OAuthClientSecret" />
-                        <!-- Raised after the snapshot is retaken; only so this asks again. -->
                         <Binding Path="AsksForClientSecret" />
                       </MultiBinding>
                     </StackPanel.Visibility>
@@ -346,8 +349,8 @@
                   <TextBlock Text="{x:Static state:EditorModel.OAuthSecretCaption}" Style="{StaticResource CaptionText}" Margin="0,4,0,8" TextWrapping="Wrap" />
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                    <TextBlock Text="Scopes (optional)" Style="{StaticResource FieldLabel}" />
-                    <TextBox Grid.Column="1" Text="{Binding OAuthScopes, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="space separated" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
+                    <TextBlock Text="{x:Static state:EditorModel.ScopesLabel}" Style="{StaticResource FieldLabel}" />
+                    <TextBox Grid.Column="1" Text="{Binding OAuthScopes, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="{x:Static state:EditorModel.ScopesPrompt}" AutomationProperties.Name="{x:Static state:EditorModel.ScopesLabel}" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
                   </Grid>
                 </StackPanel>
               </StackPanel>
@@ -360,17 +363,17 @@
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition Width="110" SharedSizeGroup="Label" /><ColumnDefinition /></Grid.ColumnDefinitions>
                   <StackPanel Style="{StaticResource FieldLabelRow}">
-                    <TextBlock Text="Command" />
+                    <TextBlock Text="{x:Static state:EditorModel.CommandLabel}" />
                     <TextBlock Style="{StaticResource LabelLock}" />
                   </StackPanel>
-                  <TextBox x:Name="CommandBox" Grid.Column="1" Text="{Binding Command, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="npx" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
+                  <TextBox x:Name="CommandBox" Grid.Column="1" Text="{Binding Command, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="{x:Static state:EditorModel.CommandPrompt}" AutomationProperties.Name="{x:Static state:EditorModel.CommandLabel}" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
                 </Grid>
                 <views:ToolNoteBlock x:Name="LocalToolNote" Note="{Binding ToolNote}" Margin="110,6,0,0" />
               </StackPanel>
             </Border>
             <Border Style="{StaticResource Card}">
               <StackPanel>
-                <TextBlock Text="Arguments" Style="{StaticResource SectionTitle}" />
+                <TextBlock Text="{x:Static state:EditorModel.ArgumentsHeader}" Style="{StaticResource SectionTitle}" />
                 <ItemsControl x:Name="ArgList" ItemsSource="{Binding Args}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -386,8 +389,6 @@
                                 <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                 <Binding />
                                 <Binding Path="Value" />
-                                <!-- The model retakes its "asks for" snapshot when the form unlocks, so the
-                                     answer moves with IsReadOnly and nothing else here would say so. -->
                                 <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                               </MultiBinding>
                             </Border.BorderThickness>
@@ -403,8 +404,6 @@
                                     <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                     <Binding />
                                     <Binding Path="Value" />
-                                    <!-- The needs a hint comes from go with the subscription, so a hint must not
-                                       outlive it. -->
                                     <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                                   </MultiBinding>
                                 </AutomationProperties.HelpText>
@@ -412,21 +411,17 @@
                                   <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="PlaceholderVisibility">
                                     <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                     <Binding />
-                                    <!-- The model retakes its "asks for" snapshot when the form unlocks, so the
-                                         answer moves with IsReadOnly and nothing else here would say so. -->
                                     <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                                   </MultiBinding>
                                 </TextBox.Visibility>
                               </TextBox>
                               <TextBox x:Name="ArgValue" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}"
-                                       Style="{StaticResource Watermarked}" Tag="argument"
+                                       Style="{StaticResource Watermarked}" Tag="{x:Static state:EditorModel.ArgumentPrompt}"
                                        IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}">
                                 <TextBox.Visibility>
                                   <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="FilledVisibility">
                                     <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                     <Binding />
-                                    <!-- The model retakes its "asks for" snapshot when the form unlocks, so the
-                                         answer moves with IsReadOnly and nothing else here would say so. -->
                                     <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                                   </MultiBinding>
                                 </TextBox.Visibility>
@@ -439,8 +434,6 @@
                                 <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                 <Binding />
                                 <Binding Path="Value" />
-                                <!-- The model retakes its "asks for" snapshot when the form unlocks, so the
-                                     answer moves with IsReadOnly and nothing else here would say so. -->
                                 <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                               </MultiBinding>
                             </StackPanel.Visibility>
@@ -454,8 +447,6 @@
                                   <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                   <Binding />
                                   <Binding Path="Value" />
-                                  <!-- The needs a hint comes from go with the subscription, so a hint must not
-                                     outlive it. -->
                                   <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                                 </MultiBinding>
                               </TextBlock.Text>
@@ -469,14 +460,13 @@
                                 <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                 <Binding />
                                 <Binding Path="Value" />
-                                <!-- Only so this asks again when the collection starts
-                                or stops being published. -->
                                 <Binding Path="DataContext.HasPublishedHints" RelativeSource="{RelativeSource AncestorType=Window}" />
                               </MultiBinding>
                             </TextBlock.Text>
                           </TextBlock>
                         </StackPanel>
-                        <Button Grid.Column="1" Style="{StaticResource IconButton}" Content="&#xE711;" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnRemoveArg"
+                        <Button x:Name="RemoveArgButton" Grid.Column="1" Style="{StaticResource IconButton}" Content="&#xE711;" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnRemoveArg"
+                                ToolTip="{x:Static state:EditorModel.RemoveArgumentLabel}" AutomationProperties.Name="{x:Static state:EditorModel.RemoveArgumentLabel}"
                                 IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
                       </Grid>
                     </DataTemplate>
@@ -487,7 +477,7 @@
             </Border>
             <Border Style="{StaticResource Card}">
               <StackPanel>
-                <TextBlock Text="Environment Variables" Style="{StaticResource SectionTitle}" />
+                <TextBlock Text="{x:Static state:EditorModel.EnvironmentHeader}" Style="{StaticResource SectionTitle}" />
                 <Grid Margin="0,0,0,4" Visibility="{Binding HasEnvRows, Converter={StaticResource Vis}}">
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition />
@@ -495,8 +485,8 @@
                     <ColumnDefinition />
                     <ColumnDefinition Width="62" />
                   </Grid.ColumnDefinitions>
-                  <TextBlock Text="Name" Style="{StaticResource CaptionText}" />
-                  <TextBlock Grid.Column="2" Text="Value" Style="{StaticResource CaptionText}" />
+                  <TextBlock Text="{x:Static state:EditorModel.NameLabel}" Style="{StaticResource CaptionText}" />
+                  <TextBlock Grid.Column="2" Text="{x:Static state:EditorModel.ValueLabel}" Style="{StaticResource CaptionText}" />
                 </Grid>
                 <ItemsControl x:Name="EnvList" ItemsSource="{Binding EnvRows}">
                   <ItemsControl.ItemTemplate>
@@ -512,6 +502,7 @@
                              and the row itself are the author's even here: only a value the
                              document asked this machine for is live. -->
                         <TextBox x:Name="EnvName" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Top"
+                                 AutomationProperties.Name="{x:Static state:EditorModel.NameLabel}"
                                  IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
                         <StackPanel Grid.Column="2">
                           <Border x:Name="EnvMark" Style="{StaticResource PlaceholderMark}">
@@ -520,8 +511,6 @@
                                 <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                 <Binding />
                                 <Binding Path="Value" />
-                                <!-- The model retakes its "asks for" snapshot when the form unlocks, so the
-                                     answer moves with IsReadOnly and nothing else here would say so. -->
                                 <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                               </MultiBinding>
                             </Border.BorderThickness>
@@ -529,6 +518,7 @@
                               <!-- A marker is nobody's secret, and masking it would hide which
                                    value the author is asking for. -->
                               <TextBox x:Name="EnvPlaceholder" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}"
+                                       AutomationProperties.Name="{x:Static state:EditorModel.ValueLabel}"
                                        Style="{StaticResource Watermarked}" Tag="{x:Static state:EditorModel.NeedsValue}">
                                 <!-- The caution line beneath is sight-only; the box carries the author's hint
                                      for anyone reading the form aloud. -->
@@ -537,8 +527,6 @@
                                     <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                     <Binding />
                                     <Binding Path="Value" />
-                                    <!-- The needs a hint comes from go with the subscription, so a hint must not
-                                       outlive it. -->
                                     <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                                   </MultiBinding>
                                 </AutomationProperties.HelpText>
@@ -546,8 +534,6 @@
                                   <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="PlaceholderVisibility">
                                     <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                     <Binding />
-                                    <!-- The model retakes its "asks for" snapshot when the form unlocks, so the
-                                         answer moves with IsReadOnly and nothing else here would say so. -->
                                     <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                                   </MultiBinding>
                                 </TextBox.Visibility>
@@ -558,8 +544,6 @@
                                   <MultiBinding Converter="{StaticResource EditorRule}" ConverterParameter="FilledVisibility">
                                     <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                     <Binding />
-                                    <!-- The model retakes its "asks for" snapshot when the form unlocks, so the
-                                         answer moves with IsReadOnly and nothing else here would say so. -->
                                     <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                                   </MultiBinding>
                                 </ContentControl.Visibility>
@@ -582,8 +566,6 @@
                                 <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                 <Binding />
                                 <Binding Path="Value" />
-                                <!-- The model retakes its "asks for" snapshot when the form unlocks, so the
-                                     answer moves with IsReadOnly and nothing else here would say so. -->
                                 <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                               </MultiBinding>
                             </StackPanel.Visibility>
@@ -597,8 +579,6 @@
                                   <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                   <Binding />
                                   <Binding Path="Value" />
-                                  <!-- The needs a hint comes from go with the subscription, so a hint must not
-                                     outlive it. -->
                                   <Binding Path="DataContext.IsReadOnly" RelativeSource="{RelativeSource AncestorType=Window}" />
                                 </MultiBinding>
                               </TextBlock.Text>
@@ -612,16 +592,29 @@
                                 <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
                                 <Binding />
                                 <Binding Path="Value" />
-                                <!-- Only so this asks again when the collection starts
-                                or stops being published. -->
                                 <Binding Path="DataContext.HasPublishedHints" RelativeSource="{RelativeSource AncestorType=Window}" />
                               </MultiBinding>
                             </TextBlock.Text>
                           </TextBlock>
                         </StackPanel>
                         <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="6,0,0,0" VerticalAlignment="Top">
-                          <Button Style="{StaticResource IconButton}" Content="&#xE7B3;" Click="OnToggleReveal" />
-                          <Button Style="{StaticResource IconButton}" Content="&#xE711;" Click="OnRemoveEnv"
+                          <!-- The eye's words follow what it would do next: show a masked value, or hide it again. -->
+                          <Button x:Name="RevealButton" Content="&#xE7B3;" Click="OnToggleReveal">
+                            <Button.Style>
+                              <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
+                                <Setter Property="ToolTip" Value="{x:Static state:EditorModel.ShowValueLabel}" />
+                                <Setter Property="AutomationProperties.Name" Value="{x:Static state:EditorModel.ShowValueLabel}" />
+                                <Style.Triggers>
+                                  <DataTrigger Binding="{Binding Revealed}" Value="True">
+                                    <Setter Property="ToolTip" Value="{x:Static state:EditorModel.HideValueLabel}" />
+                                    <Setter Property="AutomationProperties.Name" Value="{x:Static state:EditorModel.HideValueLabel}" />
+                                  </DataTrigger>
+                                </Style.Triggers>
+                              </Style>
+                            </Button.Style>
+                          </Button>
+                          <Button x:Name="RemoveEnvButton" Style="{StaticResource IconButton}" Content="&#xE711;" Click="OnRemoveEnv"
+                                  ToolTip="{x:Static state:EditorModel.RemoveVariableLabel}" AutomationProperties.Name="{x:Static state:EditorModel.RemoveVariableLabel}"
                                   IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
                         </StackPanel>
                       </Grid>
@@ -669,12 +662,12 @@
             <ColumnDefinition />
           </Grid.ColumnDefinitions>
           <StackPanel Style="{StaticResource FieldLabelRow}">
-            <TextBlock Text="Name" />
+            <TextBlock Text="{x:Static state:EditorModel.NameLabel}" />
             <TextBlock Style="{StaticResource LabelLock}" />
           </StackPanel>
-          <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="my-mcp" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
+          <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Watermarked}" Tag="{x:Static state:EditorModel.NamePrompt}" AutomationProperties.Name="{x:Static state:EditorModel.NameLabel}" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
         </Grid>
-        <TextBox x:Name="JsonEditor" Grid.Row="1" Style="{StaticResource JsonBox}" Text="{Binding JsonText, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsReadOnly}" />
+        <TextBox x:Name="JsonEditor" Grid.Row="1" Style="{StaticResource JsonBox}" AutomationProperties.Name="{x:Static state:EditorModel.JsonTab}" Text="{Binding JsonText, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsReadOnly}" />
         <!-- The error and the paste tip are separate lines: the tip offers a paste this pane
              cannot accept when the connector is somebody else's. -->
         <TextBlock x:Name="JsonErrorLine" Grid.Row="2" Text="{Binding JsonError}" Margin="0,6,0,0" TextWrapping="Wrap" FontSize="12"
