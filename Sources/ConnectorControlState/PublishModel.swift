@@ -52,11 +52,16 @@ public final class PublishModel: ObservableObject {
 
     public static func publishFolderNote(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine's publish folder as written, in \(field). Use ${COLLECTION_DIR} in its place." }
 
-    /// The folder sits where this sheet cannot write: the author's editor is the way out.
+    /// The folder sits where this sheet cannot write: the author's editor is the way out. "sheet"
+    /// is the platform-forced half of this sentence; the Windows mirror says "dialog".
     public static func publishFolderEditNote(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine's publish folder as written, in \(field), which this sheet cannot write over. Open “\(connector)” and write ${COLLECTION_DIR} there." }
 
     /// Another collection's folder, or a synced collection's: whose it is, since releasing it
     /// sends one of this machine's own folders.
+    /// Publish with no folder chosen. The button is disabled then, so only a caller that skips
+    /// it hears this.
+    public static let noFolderError = "Choose a folder to publish to."
+
     public static func otherFolderNote(_ connector: String, _ field: String, _ collection: String) -> String { "“\(connector)” carries, in \(field), the folder this machine keeps “\(collection)” in. Tick it where it sits, or release it." }
 
     /// A path mark that lost its argument: its text is held by no argument now. It waits for the
@@ -210,7 +215,7 @@ public final class PublishModel: ObservableObject {
             let shared = intent.shareValues[name] ?? []
             let hints = intent.hints[name] ?? [:]
             let variables = PublishModel.env(of: config)
-            for key in variables.keys.sorted() {
+            for key in variables.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
                 env.append(EnvRow(connector: name, name: key, value: variables[key] ?? "",
                                   share: shared.contains(key), hint: hints[key] ?? ""))
             }
@@ -230,8 +235,7 @@ public final class PublishModel: ObservableObject {
             let texts = Set(arguments.map(KeptValue.nfc))
             lost += PublishModel.sortedByPointer(placement.unresolved)
                 .filter { $0.value.value.map { !texts.contains(KeptValue.nfc($0)) } ?? false }
-                .map { UnresolvedMark(id: name + $0.key.description, connector: name,
-                                      name: $0.value.name, hint: $0.value.hint, pointer: $0.key) }
+                .map { PublishModel.lost(name, $0.key, $0.value) }
             for (index, argument) in arguments.enumerated() {
                 let mark = placement.placed[index] ?? byValue[KeptValue.nfc(argument)]
                 let ticked = mark != nil || denied.contains(KeptValue.nfc(argument))
@@ -249,8 +253,7 @@ public final class PublishModel: ObservableObject {
         let all = state.store.collections[collection]?.mcps ?? [:]
         for name in intent.pathMarks.keys.sorted(by: { $0.ordinallyPrecedes($1) }) where all[name] == nil {
             lost += PublishModel.sortedByPointer(intent.pathMarks[name] ?? [:]).filter { $0.value.value != nil }
-                .map { UnresolvedMark(id: name + $0.key.description, connector: name,
-                                      name: $0.value.name, hint: $0.value.hint, pointer: $0.key) }
+                .map { PublishModel.lost(name, $0.key, $0.value) }
         }
         envRows = env
         pathRows = paths
@@ -260,6 +263,11 @@ public final class PublishModel: ObservableObject {
         }
         tickedAtOpen = Set(paths.filter(\.marked).map(\.id))
         namesAtOpen = Dictionary(uniqueKeysWithValues: paths.map { ($0.id, $0.name) })
+    }
+
+    private static func lost(_ connector: String, _ pointer: JSONPointer, _ mark: PublishIntent.PathMark) -> UnresolvedMark {
+        UnresolvedMark(id: connector + pointer.description, connector: connector, name: mark.name, hint: mark.hint,
+                       pointer: pointer)
     }
 
     public var title: String { PublishModel.title(collection) }
@@ -299,7 +307,14 @@ public final class PublishModel: ObservableObject {
 
     /// Nothing is published while a mark is unresolved or a kept path unanswered: the rows would
     /// send the path as written.
-    public var canPublish: Bool { !(folder ?? "").isEmpty && unresolvedMarks.isEmpty && keptPaths.isEmpty }
+    public var canPublish: Bool { chosenFolder != nil && unresolvedMarks.isEmpty && keptPaths.isEmpty }
+
+    /// The folder exactly as the picker gave it, or nil when there is none. Not trimmed: a folder
+    /// whose name ends in a space is a different folder. One that is only spaces is no folder.
+    private var chosenFolder: String? {
+        guard let folder, !folder.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return folder
+    }
 
     /// Nothing is exported while either waits, for the same reason.
     public var canExport: Bool { unresolvedMarks.isEmpty && keptPaths.isEmpty }
@@ -426,6 +441,10 @@ public final class PublishModel: ObservableObject {
         let arguments = PublishModel.arguments(of: config)
         let now = Dictionary(uniqueKeysWithValues: arguments.enumerated().map { (JSONPointer(["args", String($0.offset)]), $0.element) })
         pathRows = pathRows.filter { $0.connector != connector || now[$0.pointer] == $0.value }
+        // A row that went takes its answer with it, or the lost mark it answered could be answered
+        // by no other tick.
+        let kept = Set(pathRows.map(\.id))
+        answers = answers.filter { kept.contains($0.key) }
     }
 
     /// Lets one kept path travel as written in this collection's document, by the author's
@@ -529,6 +548,9 @@ public final class PublishModel: ObservableObject {
         Set(intent.pathMarks.values.flatMap { $0.values.compactMap(\.value) })
     }
 
+    /// What the author released and has not ticked since: a ticked path is kept back again.
+    private var letGo: Set<String> { released.subtracting(reviewedValues) }
+
     /// The first thing still waiting for the author, as the note the sheet shows for it.
     private var firstUnanswered: String? {
         if let lost = unresolvedMarks.first { return PublishModel.unresolvedMarkNote(lost.connector, lost.name) }
@@ -551,7 +573,7 @@ public final class PublishModel: ObservableObject {
     public var warnings: [String] {
         let intent = self.intent
         let held = PublishModel.held(in: state, collection, only: connectors)
-        return held.keys.sorted().flatMap { name -> [String] in
+        return held.keys.sorted(by: { $0.ordinallyPrecedes($1) }).flatMap { name -> [String] in
             guard let config = held[name]?.config else { return [] }
             return CollectionDocument.credentialWarnings(config, sharedEnv: intent.shareValues[name] ?? [])
                 .map { PublishModel.warningLine(name, $0) }
@@ -565,8 +587,7 @@ public final class PublishModel: ObservableObject {
     /// send the path as written. What the author released goes on record with the ticks.
     public func publish() -> String? {
         if let note = firstUnanswered { return note }
-        guard let chosen = folder?.trimmingCharacters(in: .whitespaces), !chosen.isEmpty else { return nil }
-        let letGo = released.subtracting(reviewedValues)
+        guard let chosen = chosenFolder else { return PublishModel.noFolderError }
         guard state.isPublished(collection), state.collectionsCache.published[collection]?.folder == chosen else {
             return state.startPublishing(collection, to: chosen, intent: intent, reviewedValues: reviewedValues,
                                          releasedValues: letGo)
@@ -583,7 +604,7 @@ public final class PublishModel: ObservableObject {
     public func export(to path: String) -> String? {
         if let note = firstUnanswered { return note }
         return state.writeExport(for: collection, intent: intent, to: path, only: connectors,
-                                 reviewed: reviewedValues, released: released.subtracting(reviewedValues))
+                                 reviewed: reviewedValues, released: letGo)
     }
 
     // MARK: - Rows
@@ -602,17 +623,12 @@ public final class PublishModel: ObservableObject {
         return FormMapper.analyze(config).model.args
     }
 
-    /// An argument worth offering as machine-specific: it is written as a path, or something by
-    /// that name is on this disk. A flag or a URL is neither.
+    /// An argument worth offering as machine-specific: it is written as a path, by the same rule
+    /// the Collections window's target column uses, or something by that name is on this disk. A
+    /// flag or a URL is neither.
     private static func looksLikeAPath(_ argument: String) -> Bool {
         if Placeholder.containsMarker(argument) { return false }
-        for prefix in ["/", "~", "./", "../"] where argument.hasPrefix(prefix) { return true }
-        // A Windows path written on either platform: one letter, a colon, a backslash.
-        let scalars = Array(argument.unicodeScalars)
-        if scalars.count >= 3, CharacterSet.letters.contains(scalars[0]), scalars[1] == ":", scalars[2] == "\\" {
-            return true
-        }
-        return FileManager.default.fileExists(atPath: argument)
+        return CollectionsModel.isExplicitPath(argument) || FileManager.default.fileExists(atPath: argument)
     }
 
     /// A connector's recorded marks by the text each was made on, in NFC; where two share a text,

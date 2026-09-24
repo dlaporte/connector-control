@@ -51,9 +51,15 @@ public sealed class PublishModel : ObservableObject
     public static string PublishFolderNote(string connector, string field) =>
         $"“{connector}” carries this machine's publish folder as written, in {field}. Use ${{COLLECTION_DIR}} in its place.";
 
-    /// <summary>The folder sits where this dialog cannot write: the author's editor is the way out.</summary>
+    /// <summary>
+    /// The folder sits where this dialog cannot write: the author's editor is the way out.
+    /// "dialog" is the platform-forced half of this sentence; the Mac mirror says "sheet".
+    /// </summary>
     public static string PublishFolderEditNote(string connector, string field) =>
-        $"“{connector}” carries this machine's publish folder as written, in {field}, which this sheet cannot write over. Open “{connector}” and write ${{COLLECTION_DIR}} there.";
+        $"“{connector}” carries this machine's publish folder as written, in {field}, which this dialog cannot write over. Open “{connector}” and write ${{COLLECTION_DIR}} there.";
+
+    /// <summary>Publish with no folder chosen. The button is disabled then, so only a caller that skips it hears this.</summary>
+    public const string NoFolderError = "Choose a folder to publish to.";
 
     /// <summary>Another collection's folder, or a synced collection's: whose it is, since releasing it sends one of this machine's own folders.</summary>
     public static string OtherFolderNote(string connector, string field, string collection) =>
@@ -435,7 +441,13 @@ public sealed class PublishModel : ObservableObject
     }
 
     /// <summary>Nothing is published while a mark is unresolved or a kept path unanswered: the rows would send the path as written.</summary>
-    public bool CanPublish => !string.IsNullOrEmpty(Folder) && UnresolvedMarks.Count == 0 && KeptPaths.Count == 0;
+    public bool CanPublish => ChosenFolder is not null && UnresolvedMarks.Count == 0 && KeptPaths.Count == 0;
+
+    /// <summary>
+    /// The folder exactly as the picker gave it, or null when there is none. Not trimmed: a folder
+    /// whose name ends in a space is a different folder. One that is only spaces is no folder.
+    /// </summary>
+    private string? ChosenFolder => Folder is { } folder && folder.TrimSpaces().Length > 0 ? folder : null;
 
     /// <summary>Nothing is exported while either waits, for the same reason.</summary>
     public bool CanExport => UnresolvedMarks.Count == 0 && KeptPaths.Count == 0;
@@ -656,6 +668,13 @@ public sealed class PublishModel : ObservableObject
         var paths = PathRows.Where(row => row.Connector != connector
             || (now.TryGetValue(row.Pointer, out var argument) && argument == row.Value)).ToList();
         ReplaceRows(env, paths);
+        // A row that went takes its answer with it, or the lost mark it answered could be answered
+        // by no other tick.
+        var kept = paths.Select(row => row.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var gone in answers.Keys.Where(id => !kept.Contains(id)).ToList())
+        {
+            answers.Remove(gone);
+        }
     }
 
     private void RaiseMarkGates()
@@ -824,10 +843,9 @@ public sealed class PublishModel : ObservableObject
         {
             return note;
         }
-        var chosen = Folder?.TrimSpaces() ?? string.Empty;
-        if (chosen.Length == 0)
+        if (ChosenFolder is not { } chosen)
         {
-            return null;
+            return NoFolderError;
         }
         if (!state.IsPublished(Collection)
             || !string.Equals(state.CollectionsCache.Published.GetValueOrDefault(Collection)?.Folder, chosen, StringComparison.Ordinal))
@@ -857,20 +875,18 @@ public sealed class PublishModel : ObservableObject
     private static IReadOnlyList<string> Arguments(JsonValue config) =>
         RemotePattern.Decode(config) is not null ? [] : FormMapper.Analyze(config).Model.Args;
 
-    /// <summary>An argument worth offering as machine-specific: it is written as a path, or something by that name is on this disk. A flag or a URL is neither.</summary>
+    /// <summary>
+    /// An argument worth offering as machine-specific: it is written as a path, by the same rule
+    /// the Collections window's target column uses, or something by that name is on this disk. A
+    /// flag or a URL is neither.
+    /// </summary>
     private static bool LooksLikeAPath(string argument)
     {
         if (Placeholder.ContainsMarker(argument))
         {
             return false;
         }
-        if (argument.StartsWith('/') || argument.StartsWith('~')
-            || argument.StartsWith("./", StringComparison.Ordinal) || argument.StartsWith("../", StringComparison.Ordinal))
-        {
-            return true;
-        }
-        // A Windows path written on either platform: one letter, a colon, a backslash.
-        if (argument.Length >= 3 && char.IsLetter(argument[0]) && argument[1] == ':' && argument[2] == '\\')
+        if (CollectionsModel.IsExplicitPath(argument))
         {
             return true;
         }

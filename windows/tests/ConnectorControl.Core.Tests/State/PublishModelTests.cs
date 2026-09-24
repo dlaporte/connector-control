@@ -91,6 +91,67 @@ public class PublishModelTests
         Assert.Equal(["c", "two"], model.PathRows.Select(r => r.Connector).Distinct().Order(StringComparer.Ordinal));
     }
 
+    /// <summary>
+    /// A path row is offered by the Collections window's own path rule: a drive root written with
+    /// either separator, and only an ASCII drive letter.
+    /// </summary>
+    [Fact]
+    public void APathRowIsOfferedByTheCollectionsWindowsPathRule()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        Assert.Null(state.Upsert("win", new McpEntry(true, JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String("C:/tools/x.js"), JsonValue.String("C:\\tools\\y.js"), JsonValue.String("é:\\z.js")])))), null));
+        var model = new PublishModel(state, state.ActiveCollection);
+        Assert.Equal(["C:/tools/x.js", "C:\\tools\\y.js"], model.PathRows.Where(r => r.Connector == "win").Select(r => r.Value));
+    }
+
+    /// <summary>
+    /// Rows and warnings list in UTF-16 code-unit order, as Windows sorts them: a character beyond
+    /// U+FFFF comes before U+FF5E here, where Swift's own <c>&lt;</c> puts it after.
+    /// </summary>
+    [Fact]
+    public void RowsAndWarningsSortAsWindowsDoes()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        foreach (var name in new[] { "\uFF5E", "\U0001F600" })
+        {
+            Assert.Null(state.Upsert(name, new McpEntry(true, JsonValue.Object(
+                ("command", JsonValue.String("node")),
+                ("env", JsonValue.Object(("\uFF5E", JsonValue.String("sk-live-a")), ("\U0001F600", JsonValue.String("sk-live-b")))))), null));
+        }
+        var model = new PublishModel(state, state.ActiveCollection);
+        Assert.Equal(["\U0001F600", "\uFF5E", "\U0001F600", "\uFF5E"], model.EnvRows.Select(r => r.Name));
+        foreach (var row in model.EnvRows)
+        {
+            row.Share = true;
+        }
+        Assert.Equal(["\U0001F600", "\U0001F600", "\uFF5E", "\uFF5E"], model.Warnings.Select(w => w[..w.IndexOf(':')]));
+    }
+
+    /// <summary>
+    /// The folder goes to publishing exactly as the picker gave it; one that is empty or only
+    /// spaces is no folder, and saying so beats a silent success that wrote nothing.
+    /// </summary>
+    [Fact]
+    public void TheFolderIsNotTrimmedAndAnEmptyOneIsRefused()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var model = new PublishModel(state, state.ActiveCollection) { Folder = "   " };
+        Assert.False(model.CanPublish);
+        Assert.Equal(PublishModel.NoFolderError, model.Publish());
+        Assert.False(state.CollectionsCache.Published.ContainsKey(state.ActiveCollection));
+
+        var spaced = h.Dir.File("pub ");
+        Directory.CreateDirectory(spaced);
+        model.Folder = spaced;
+        Assert.Null(model.Publish());
+        Assert.Equal(spaced, state.CollectionsCache.Published[state.ActiveCollection].Folder);
+    }
+
     [Fact]
     public void PreviewHidesUnsharedValuesAndListsWarnings()
     {

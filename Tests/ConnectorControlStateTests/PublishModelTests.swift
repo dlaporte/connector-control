@@ -73,6 +73,55 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(Set(model.pathRows.map(\.connector)), ["c", "two"])
     }
 
+    /// A path row is offered by the Collections window's own path rule: a drive root written with
+    /// either separator, and only an ASCII drive letter.
+    func testAPathRowIsOfferedByTheCollectionsWindowsPathRule() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        XCTAssertNil(state.upsert(name: "win", entry: MCPEntry(config: .object([
+            "command": .string("node"),
+            "args": .array([.string("C:/tools/x.js"), .string("C:\\tools\\y.js"), .string("é:\\z.js")]),
+        ])), renamedFrom: nil))
+        let model = PublishModel(state: state, collection: state.activeCollection)
+        XCTAssertEqual(model.pathRows.filter { $0.connector == "win" }.map(\.value), ["C:/tools/x.js", "C:\\tools\\y.js"])
+    }
+
+    /// Rows and warnings list in UTF-16 code-unit order, as Windows sorts them: a character beyond
+    /// U+FFFF comes before U+FF5E there, where Swift's own `<` puts it after.
+    func testRowsAndWarningsSortAsWindowsDoes() throws {
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        for name in ["\u{FF5E}", "\u{1F600}"] {
+            XCTAssertNil(state.upsert(name: name, entry: MCPEntry(config: .object([
+                "command": .string("node"),
+                "env": .object(["\u{FF5E}": .string("sk-live-a"), "\u{1F600}": .string("sk-live-b")]),
+            ])), renamedFrom: nil))
+        }
+        let model = PublishModel(state: state, collection: state.activeCollection)
+        XCTAssertEqual(model.envRows.map(\.name), ["\u{1F600}", "\u{FF5E}", "\u{1F600}", "\u{FF5E}"])
+        for index in model.envRows.indices { model.envRows[index].share = true }
+        XCTAssertEqual(model.warnings.map { String($0.prefix(while: { $0 != ":" })) },
+                       ["\u{1F600}", "\u{1F600}", "\u{FF5E}", "\u{FF5E}"])
+    }
+
+    /// The folder goes to publishing exactly as the picker gave it; one that is empty or only
+    /// spaces is no folder, and saying so beats a silent success that wrote nothing.
+    func testTheFolderIsNotTrimmedAndAnEmptyOneIsRefused() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let model = PublishModel(state: state, collection: state.activeCollection)
+        model.folder = "   "
+        XCTAssertFalse(model.canPublish)
+        XCTAssertEqual(model.publish(), PublishModel.noFolderError)
+        XCTAssertNil(state.collectionsCache.published[state.activeCollection])
+
+        let spaced = h.dir.file("pub ")
+        try FileManager.default.createDirectory(at: spaced, withIntermediateDirectories: true)
+        model.folder = spaced.path
+        XCTAssertNil(model.publish())
+        XCTAssertEqual(state.collectionsCache.published[state.activeCollection]?.folder, spaced.path)
+    }
+
     func testPreviewHidesUnsharedValuesAndListsWarnings() throws {
         let (h, state) = try started()
         defer { h.dispose() }

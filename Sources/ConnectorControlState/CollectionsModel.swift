@@ -451,8 +451,9 @@ public final class CollectionsModel: ObservableObject {
 
     private static let secretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"]
 
-    /// Starts with `/`, `~`, `./`, `../` or a drive root (`X:\` or `X:/`).
-    private static func isExplicitPath(_ arg: String) -> Bool {
+    /// Starts with `/`, `~`, `./`, `../` or a drive root (`X:\` or `X:/`). Internal rather than
+    /// private because the Publish sheet offers a path row by the same rule.
+    static func isExplicitPath(_ arg: String) -> Bool {
         ["/", "~", "./", "../"].contains { startsWith(arg, $0) } || isDriveRoot(arg)
     }
 

@@ -383,6 +383,7 @@
     "format": "“{0}” carries a path this machine keeps back, in {1}. Tick it where it sits, or release it."
   },
   "PublishModel.markPathLabel": "Mark as a path this machine supplies",
+  "PublishModel.noFolderError": "Choose a folder to publish to.",
   "PublishModel.otherFolderNote": {
     "format": "“{0}” carries, in {1}, the folder this machine keeps “{2}” in. Tick it where it sits, or release it."
   },
@@ -391,7 +392,12 @@
   "PublishModel.previewTitle": "Document preview",
   "PublishModel.publishButton": "Publish",
   "PublishModel.publishFolderEditNote": {
-    "format": "“{0}” carries this machine's publish folder as written, in {1}, which this sheet cannot write over. Open “{0}” and write ${COLLECTION_DIR} there."
+    "mac": {
+      "format": "“{0}” carries this machine's publish folder as written, in {1}, which this sheet cannot write over. Open “{0}” and write ${COLLECTION_DIR} there."
+    },
+    "win": {
+      "format": "“{0}” carries this machine's publish folder as written, in {1}, which this dialog cannot write over. Open “{0}” and write ${COLLECTION_DIR} there."
+    }
   },
   "PublishModel.publishFolderNote": {
     "format": "“{0}” carries this machine's publish folder as written, in {1}. Use ${COLLECTION_DIR} in its place."

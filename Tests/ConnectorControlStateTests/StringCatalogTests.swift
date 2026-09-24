@@ -400,6 +400,7 @@ final class StringCatalogTests: XCTestCase {
         actual["PublishModel.forgetMarkButton"] = PublishModel.forgetMarkButton
         actual["PublishModel.hintPlaceholder"] = PublishModel.hintPlaceholder
         actual["PublishModel.markPathLabel"] = PublishModel.markPathLabel
+        actual["PublishModel.noFolderError"] = PublishModel.noFolderError
         actual["PublishModel.pathNamePlaceholder"] = PublishModel.pathNamePlaceholder
         actual["PublishModel.pathsSectionTitle"] = PublishModel.pathsSectionTitle
         actual["PublishModel.previewTitle"] = PublishModel.previewTitle

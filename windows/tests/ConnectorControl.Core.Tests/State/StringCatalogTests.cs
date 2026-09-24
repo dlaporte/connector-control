@@ -430,6 +430,7 @@ public class StringCatalogTests
         actual["PublishModel.forgetMarkButton"] = PublishModel.ForgetMarkButton;
         actual["PublishModel.hintPlaceholder"] = PublishModel.HintPlaceholder;
         actual["PublishModel.markPathLabel"] = PublishModel.MarkPathLabel;
+        actual["PublishModel.noFolderError"] = PublishModel.NoFolderError;
         actual["PublishModel.pathNamePlaceholder"] = PublishModel.PathNamePlaceholder;
         actual["PublishModel.pathsSectionTitle"] = PublishModel.PathsSectionTitle;
         actual["PublishModel.previewTitle"] = PublishModel.PreviewTitle;

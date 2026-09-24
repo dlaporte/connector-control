@@ -565,8 +565,11 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     private static readonly string[] SecretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"];
 
-    /// <summary>Starts with <c>/</c>, <c>~</c>, <c>./</c>, <c>../</c> or a drive root (<c>X:\</c> or <c>X:/</c>).</summary>
-    private static bool IsExplicitPath(string arg) =>
+    /// <summary>
+    /// Starts with <c>/</c>, <c>~</c>, <c>./</c>, <c>../</c> or a drive root (<c>X:\</c> or <c>X:/</c>).
+    /// Internal rather than private because the Publish dialog offers a path row by the same rule.
+    /// </summary>
+    internal static bool IsExplicitPath(string arg) =>
         PathPrefixes.Any(p => arg.StartsWith(p, StringComparison.Ordinal)) || IsDriveRoot(arg);
 
     private static readonly string[] PathPrefixes = ["/", "~", "./", "../"];
