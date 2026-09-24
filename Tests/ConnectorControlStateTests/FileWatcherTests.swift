@@ -2,18 +2,24 @@ import XCTest
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/FileWatcherTests.cs.
+///
 /// The marshalled watcher: the callback is posted, never
 /// delivered until the test pumps, and dropped after a stop or restart. A
 /// truncate+write can post two callbacks before one pump, so hit counts are
 /// lower bounds, as the C# suite asserts them. `TempDir.touch`/
 /// `bumpModificationDate` give a triggering write an mtime distinct from
 /// whatever the watcher saw at arm time, deterministically — no sleep needed.
+/// The C# suite's error, cooldown and rebuild tests have no mirror here: this
+/// watcher tells a replaced folder by device and inode, and has no error event.
 @MainActor
 final class FileWatcherTests: XCTestCase {
     private let wait: TimeInterval = 5
     /// A window to prove an event does NOT arrive (a stopped watcher, an
     /// unrelated file) — unlike `wait`, timing out here is the pass case, so
-    /// it cannot be replaced by `pumpUntil` waiting on a condition.
+    /// it cannot be replaced by `pumpUntil` waiting on a condition. An event
+    /// slower than the window would pass wrongly, and a real kqueue source
+    /// leaves no signal to wait on instead; each use asserts that it timed out.
     private let settle: TimeInterval = 0.7
 
     @MainActor
@@ -165,14 +171,16 @@ final class FileWatcherTests: XCTestCase {
         XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait), "the file's own disappearance")
         try FileManager.default.removeItem(at: r.dir.url)
         XCTAssertTrue(r.ui.pumpUntil({ !watcher.isArmed }, timeout: wait), "the directory's deletion disarms")
-        _ = r.ui.pumpUntil({ false }, timeout: settle)   // give a possible second event a chance to (mis)fire
+        XCTAssertFalse(r.ui.pumpUntil({ r.hits > 2 }, timeout: settle), "a possible second event had its chance to (mis)fire")
         XCTAssertEqual(r.hits, 2, "one callback for the file, exactly one for the directory")
     }
 
     /// The shape the app actually meets: the directory goes with the file still
     /// in it. Which disappearance the watcher sees first is the kernel's
     /// choice, so only the end state is asserted — the change is reported and
-    /// the watcher ends up disarmed.
+    /// the watcher ends up disarmed. Swift-only: on Windows a real deletion
+    /// under a live FileSystemWatcher races the OS's own error event, so the C#
+    /// suite drives that branch through its HandleError seam instead.
     func testRemovingTheDirectoryWithTheFileStillInItReportsAndDisarms() throws {
         let r = Rig()
         defer { r.dispose() }
@@ -197,6 +205,7 @@ final class FileWatcherTests: XCTestCase {
         XCTAssertFalse(watcher.isArmed)
     }
 
+    /// The C# suite folds this into its ADeletedDirectoryDisarmsTheWatcherSoTheNextStartReArms.
     func testStartAfterTheDirectoryReappearsWatchesAgain() throws {
         let r = Rig()
         defer { r.dispose() }
@@ -230,7 +239,7 @@ final class FileWatcherTests: XCTestCase {
     /// file. Only the directory source can see a create — the file source has
     /// no descriptor to arm on a file that does not exist yet — which is what
     /// makes that assertion fail for a watcher still on the old directory.
-    func testAReplacedDirectoryIsFollowedOnTheNextStart() throws {
+    func testAReplacedFolderIsFollowedOnTheNextStart() throws {
         let r = Rig()
         defer { r.dispose() }
         try Data("a".utf8).write(to: r.file)
@@ -246,13 +255,13 @@ final class FileWatcherTests: XCTestCase {
         XCTAssertTrue(watcher.isArmed)
         // The swap took the watched file out of the path, and the re-arm's own
         // re-check reports that whether or not an event ever arrives for the
-        // swap. Exactly one callback either way: whichever of the two gets
-        // there first leaves the last-seen date at "no file", and the other
-        // then finds nothing changed. So the count below can only be the write.
+        // swap, so the count is settled before the write below rather than
+        // racing it.
         XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait),
                       "the swap itself is reported: the watched file is not in the folder that is there now")
+        let before = r.hits
         try TempDir.touch(r.file, "back")
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 2 }, timeout: wait),
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= before + 1 }, timeout: wait),
                       "the watcher follows the path, not the descriptor it happened to open")
     }
 
@@ -262,7 +271,7 @@ final class FileWatcherTests: XCTestCase {
     /// event is delivered for either, and the re-arm's own re-check is the only
     /// thing that can notice the difference. This is the shape a synced
     /// collection meets when the shared folder holding it is replaced.
-    func testAReplacedGrandparentIsReCheckedByTheReArm() throws {
+    func testTheReArmReportsAChangeAlreadyWaitingInAReplacedFolder() throws {
         let r = Rig()
         defer { r.dispose() }
         let team = r.dir.file("team")
@@ -282,8 +291,8 @@ final class FileWatcherTests: XCTestCase {
         XCTAssertEqual(renamex_np(replacement.url.path, team.path, UInt32(RENAME_SWAP)), 0)
 
         XCTAssertFalse(watcher.isArmed, "the descriptor is no longer the directory at the path")
-        _ = r.ui.pumpUntil({ false }, timeout: settle)
-        XCTAssertEqual(r.hits, 0, "no inode the watcher holds was touched, so no event can fire")
+        XCTAssertFalse(r.ui.pumpUntil({ r.hits > 0 }, timeout: settle),
+                       "no inode the watcher holds was touched, so no event can fire")
         watcher.start()   // AppState re-arms on every reload
         XCTAssertTrue(watcher.isArmed)
         XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait),
@@ -298,7 +307,7 @@ final class FileWatcherTests: XCTestCase {
     /// descriptor the watcher kept is the directory at the path again, so it
     /// reports itself armed on it without another start(), which a watcher that
     /// had thrown that descriptor away cannot do.
-    func testAReArmThatCannotOpenTheReplacementKeepsTheLiveSource() throws {
+    func testAReArmThatCannotWatchTheReplacementKeepsTheLiveWatcher() throws {
         let r = Rig()
         defer { r.dispose() }
         try Data("a".utf8).write(to: r.file)

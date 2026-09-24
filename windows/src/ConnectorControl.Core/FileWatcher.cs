@@ -429,13 +429,14 @@ public sealed class FileWatcher : IDisposable
     /// returns 1601-01-01 UTC, which differs from any time recorded at arm time, so a missing
     /// folder is kept from reading as a replacement only by DirectoryWasReplaced's own existence
     /// check. Null comes back only when the read itself fails for a transient reason, and a null
-    /// is never read as a replacement.
+    /// is never read as a replacement. Read through the probe, so a test can replace the folder
+    /// without touching the disk.
     /// </summary>
-    private static DateTime? CreationTime(string directory)
+    private DateTime? CreationTime(string directory)
     {
         try
         {
-            return Directory.GetCreationTimeUtc(directory);
+            return probe.CreationTimeUtc(directory);
         }
         catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
