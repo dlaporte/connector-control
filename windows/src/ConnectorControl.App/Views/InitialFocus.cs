@@ -32,11 +32,12 @@ internal static class InitialFocus
 
     /// <summary>
     /// The first editable text or password box in the tree, in layout order, that is shown and
-    /// enabled; a read-only box, such as a preview, is not a field.
+    /// enabled; a read-only box, such as a preview, is not a field. The window's own visibility is
+    /// not asked: it is Collapsed until it is shown, and what matters is what it holds.
     /// </summary>
     internal static Control? FirstField(DependencyObject root)
     {
-        if (root is UIElement { Visibility: not Visibility.Visible } or UIElement { IsEnabled: false })
+        if (root is UIElement { Visibility: not Visibility.Visible } and not Window or UIElement { IsEnabled: false })
         {
             return null;
         }
