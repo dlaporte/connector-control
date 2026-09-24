@@ -125,7 +125,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.createCollection(named: "Work"))
         XCTAssertNil(state.renameCollection("Work", to: "Team"))
         XCTAssertEqual(state.collectionNames, ["Default", "Team"])
-        XCTAssertEqual(state.activeCollection, "Team", "a new collection becomes the active one, as the chip menu has always done")
+        XCTAssertEqual(state.activeCollection, "Team", "a new collection becomes the active one")
         XCTAssertNil(state.deleteCollection(named: "Team"))
         XCTAssertEqual(state.collectionNames, ["Default"])
         XCTAssertEqual(state.deleteCollection(named: state.activeCollection), AppState.lastLocalCollectionError)
@@ -460,6 +460,14 @@ final class AppStateCollectionsTests: XCTestCase {
             connectors: [name: .init(launcher: .local(.init(command: command, args: args, platform: platform)))])
     }
 
+    /// The sample with github gone and dbt's arguments changed — an author's next commit.
+    private func changedSample() -> CollectionDocument {
+        var doc = CollectionDocumentSamples.dataTeam
+        doc.connectors["github"] = nil
+        doc.connectors["dbt"]?.launcher = .local(.init(command: "npx", args: ["-y", "@dbt/mcp@2"], platform: .mac))
+        return doc
+    }
+
     func testSubscribeCreatesADisabledReadOnlyMirror() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
@@ -536,10 +544,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertTrue(state.pendingUpdates.isEmpty, "a filled marker is not a change to the collection")
 
         // The author changes dbt's args and removes github.
-        var doc = CollectionDocumentSamples.dataTeam
-        doc.connectors["github"] = nil
-        doc.connectors["dbt"]?.launcher = .local(.init(command: "npx", args: ["-y", "@dbt/mcp@2"], platform: .mac))
-        try writeDocument(doc, at: url)
+        try writeDocument(changedSample(), at: url)
         try TempDir.bumpModificationDate(of: url)
         XCTAssertTrue(h.ui.pumpUntil({ state.pendingUpdates["Data team"] != nil }, timeout: 8))
         XCTAssertEqual(state.pendingUpdates["Data team"]?.summary(), "removes github; changes dbt")
@@ -630,12 +635,9 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.connectorCaution("ledger", in: "Data team"), AppState.needsValueCaution("server_path"),
                        "an unfilled marker is still text in the config, so the row still says so")
 
-        // The author's next change reaches nobody: there is no binding left to watch.
-        var doc = CollectionDocumentSamples.dataTeam
-        doc.connectors["github"] = nil
-        try writeDocument(doc, at: url)
-        try TempDir.bumpModificationDate(of: url)
-        _ = h.ui.pumpUntil({ false }, timeout: 1.0)
+        // The author's next change reaches nobody: there is no binding left to read it through.
+        try writeDocument(changedSample(), at: url)
+        state.recomputePending()
         XCTAssertTrue(state.pendingUpdates.isEmpty)
     }
 
@@ -793,9 +795,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.activeCollection, "Default")
         let before = try h.claudeServers()
 
-        var doc = CollectionDocumentSamples.dataTeam
-        doc.connectors["github"] = nil
-        try writeDocument(doc, at: url)
+        try writeDocument(changedSample(), at: url)
         try TempDir.bumpModificationDate(of: url)
         XCTAssertTrue(h.ui.pumpUntil({ state.pendingUpdates["Data team"] != nil }, timeout: 8))
 
@@ -918,7 +918,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNotNil(document.origin)
         XCTAssertEqual(document.name, state.activeCollection)
         XCTAssertEqual(document.exported, IsoTimestamp.string(from: h.now))
-        XCTAssertNil(document.connectors["new"]?.env.keys.first, "a disabled connector still travels")
+        XCTAssertEqual(document.connectors["new"]?.env, [:], "the added connector travels, with no env to share")
         XCTAssertNil(state.publishError)
     }
 
@@ -1044,11 +1044,11 @@ final class AppStateCollectionsTests: XCTestCase {
         let file = folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json")
         XCTAssertEqual(try CollectionDocument.decode(try Data(contentsOf: file)).connectors["ledger"]?.env["B"], .hint(nil))
 
-        XCTAssertNil(state.updatePublishIntent(state.activeCollection,
-                                               intent: PublishIntent(shareValues: ["ledger": ["B"]], pathMarks: [:], hints: [:])))
+        let shared = PublishIntent(shareValues: ["ledger": ["B"]], pathMarks: [:], hints: [:])
+        XCTAssertNil(state.updatePublishIntent(state.activeCollection, intent: shared))
         XCTAssertEqual(try CollectionDocument.decode(try Data(contentsOf: file)).connectors["ledger"]?.env["B"], .value("us"))
-        XCTAssertEqual(state.collectionsFile.collections[state.activeCollection]?.publish?.intent.shareValues,
-                       ["ledger": ["B"]], "what was ticked is remembered for the next write")
+        XCTAssertEqual(state.collectionsFile.collections[state.activeCollection]?.publish?.intent,
+                       shared, "what was ticked is remembered for the next write")
     }
 
     func testStopPublishingDropsTheRecordAndCanDeleteTheFile() throws {
@@ -1201,7 +1201,9 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.publishError)
         let intent = try XCTUnwrap(state.collectionsFile.collections[state.activeCollection]?.publish?.intent)
         XCTAssertNil(intent.pathMarks["ledger"])
-        XCTAssertEqual(intent.pathMarks["books"]?.values.first?.value, markedPath)
+        let marks = try XCTUnwrap(intent.pathMarks["books"])
+        XCTAssertEqual(marks.count, 1)
+        XCTAssertEqual(marks.values.first?.value, markedPath)
         let document = try CollectionDocument.decode(try Data(contentsOf: file))
         XCTAssertEqual(document.connectors["books"]?.needs.keys.sorted(), ["server_path"])
 

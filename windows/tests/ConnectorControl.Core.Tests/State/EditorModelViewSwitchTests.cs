@@ -103,6 +103,7 @@ public class EditorModelViewSwitchTests
 
         rig.H.Dialogs.NextConfirm = true;
         editor.RequestView(EditView.Form);
+        Assert.Equal(2, rig.H.Dialogs.Confirms.Count);   // the second attempt asks again
         Assert.Equal(EditView.Form, editor.View);
         Assert.Equal("", editor.Command);
         Assert.Equal(["a"], editor.Args.Select(a => a.Value).ToArray());

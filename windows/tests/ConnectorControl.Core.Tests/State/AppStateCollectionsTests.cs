@@ -120,7 +120,7 @@ public class AppStateCollectionsTests
     public void ACustomStoreDirKeepsTheCacheMachineLocal()
     {
         using var h = new AppStateHarness();
-        var custom = h.Dir.File("Dropbox");
+        var custom = h.Dir.File(Path.Combine("Dropbox", "Connector Control"));
         h.Settings.MasterStoreDir = custom;
         using var state = h.Create();
         Assert.Equal(custom, state.Service.Paths.StoreDir);
@@ -139,7 +139,7 @@ public class AppStateCollectionsTests
         Assert.Null(state.CreateCollection("Work"));
         Assert.Null(state.RenameCollection("Work", "Team"));
         Assert.Equal(["Default", "Team"], state.CollectionNames);
-        // A new collection becomes the active one, as the chip menu has always done.
+        // A new collection becomes the active one.
         Assert.Equal("Team", state.ActiveCollection);
         Assert.Null(state.DeleteCollection("Team"));
         Assert.Equal(["Default"], state.CollectionNames);
@@ -718,10 +718,9 @@ public class AppStateCollectionsTests
         // An unfilled marker is still text in the config, so the row still says so.
         Assert.Equal(AppState.NeedsValueCaution("server_path"), state.ConnectorCaution("ledger", "Data team"));
 
-        // The author's next change reaches nobody: there is no binding left to watch.
+        // The author's next change reaches nobody: there is no binding left to read it through.
         WriteDocument(ChangedSample(), path);
-        TempDir.BumpModificationTime(path);
-        h.Ui.PumpUntil(() => false, TimeSpan.FromSeconds(1));
+        state.RecomputePending();
         Assert.Empty(state.PendingUpdates);
     }
 
@@ -1063,7 +1062,7 @@ public class AppStateCollectionsTests
         Assert.NotNull(document.Origin);
         Assert.Equal(state.ActiveCollection, document.Name);
         Assert.Equal(IsoTimestamp.String(h.Now), document.Exported);
-        Assert.Contains("new", document.Connectors.Keys);   // a disabled connector still travels
+        Assert.Empty(document.Connectors["new"].Env);   // the added connector travels, with no env to share
         Assert.Null(state.PublishError);
     }
 

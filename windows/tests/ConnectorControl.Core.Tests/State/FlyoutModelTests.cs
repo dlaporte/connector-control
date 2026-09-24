@@ -52,13 +52,23 @@ public class FlyoutModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
+        // The raise is what makes the flyout repaint, and it is the one line a passthrough cannot
+        // prove.
+        var repaints = 0;
+        flyout.PropertyChanged += (_, _) => repaints++;
         var row = flyout.Rows.Single(r => r.Name == "aws-mcp");
         state.SetEnabled("aws-mcp", false);
         Assert.False(row.Enabled);
+        Assert.True(repaints > 0, "an AppState change is raised to the view");
         state.Remove(["scoutbook"]);
         Assert.Equal(["aws-mcp", "service-now"], flyout.Rows.Select(r => r.Name).ToArray());
-        state.Upsert("alpha", new McpEntry(AppStateHarness.Remote("https://alpha.example/mcp")), null);
+        Assert.Null(state.Upsert("alpha", new McpEntry(AppStateHarness.Remote("https://alpha.example/mcp")), null));
         Assert.Equal(["alpha", "aws-mcp", "service-now"], flyout.Rows.Select(r => r.Name).ToArray());
+        // Dispose cuts the raise: nothing repaints.
+        flyout.Dispose();
+        var before = repaints;
+        state.SetEnabled("alpha", false);
+        Assert.Equal(before, repaints);
     }
 
     [Fact]
@@ -176,12 +186,14 @@ public class FlyoutModelTests
         state.SetEnabled("aws-mcp", false);
         Assert.Equal(FooterKind.RestartRequired, flyout.Footer);
         Assert.Equal("Restart Required", flyout.FooterTitle);
+        Assert.Equal(FlyoutModel.RestartGlyph, flyout.FooterGlyph);
         Assert.True(flyout.ShowFooter);
 
         File.WriteAllText(h.ClaudeConfigPath, "{oops");
         state.SetEnabled("scoutbook", false);   // apply fails
         Assert.Equal(FooterKind.RetryApply, flyout.Footer);
         Assert.Equal("Apply Failed — Retry", flyout.FooterTitle);
+        Assert.Equal(FlyoutModel.RetryGlyph, flyout.FooterGlyph);
         Assert.True(flyout.HasError);
 
         File.WriteAllText(h.ClaudeConfigPath, Fixtures.RealisticClaudeConfig);
@@ -284,6 +296,18 @@ public class FlyoutModelTests
         Assert.Equal(0, h.Tools.Batches);
         Assert.Empty(h.Tools.Probed);
         Assert.All(flyout.Rows, r => Assert.False(r.HasToolWarning));
+    }
+
+    /// <summary>Segoe Fluent Icons code points: platform-specific glyph identifiers, deliberately
+    /// out of the shared string catalog (the Mac uses SF Symbol names instead), so pinned here
+    /// instead.</summary>
+    [Fact]
+    public void GlyphNamesAreSessionLocalAndStable()
+    {
+        Assert.Equal("\ue7ba", FlyoutModel.RetryGlyph);
+        Assert.Equal("\ue72c", FlyoutModel.RestartGlyph);
+        Assert.Equal("\ue7ba", FlyoutModel.ToolWarningGlyph);
+        Assert.Equal(FlyoutModel.ToolWarningGlyph, FlyoutModel.CautionGlyph);   // one glyph, two names
     }
 
     [Fact]
@@ -544,18 +568,6 @@ public class FlyoutModelTests
         Assert.Equal("Default · update available", FlyoutModel.MenuTitle(unchained));
     }
 
-    [Fact]
-    public void ARowsLockSaysWhatTheWindowsLockSays()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        using var flyout = new FlyoutModel(state, h.Settings);
-        var row = flyout.Rows[0];
-        Assert.Equal(CollectionsModel.LockedGlyphTooltip, row.LockTooltip);
-        Assert.Equal("Read-only: synced from the collection’s author", row.LockTooltip);
-        // One glyph, two names.
-        Assert.Equal(FlyoutModel.ToolWarningGlyph, FlyoutModel.CautionGlyph);
-    }
     [Fact]
     public void EverySyncedMenuRowNamesItsOwnSource()
     {

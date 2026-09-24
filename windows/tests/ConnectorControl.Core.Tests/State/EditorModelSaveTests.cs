@@ -248,7 +248,10 @@ public class EditorModelSaveTests
         Assert.True(editor.HasAdditional);
         editor.RemoteUrl = "https://moved.example/mcp";
         Assert.True(editor.Save());
-        Assert.Equal(JsonValue.Bool(true), rig.State.Store.Mcps["scoutbook"].Config["disabled"]);
+        var saved = rig.State.Store.Mcps["scoutbook"].Config;
+        Assert.Equal(JsonValue.Bool(true), saved["disabled"]);
+        Assert.Equal(JsonValue.Array([JsonValue.String("-y"), JsonValue.String("mcp-remote"), JsonValue.String("https://moved.example/mcp")]),
+            saved["args"]);
     }
 
     [Fact]

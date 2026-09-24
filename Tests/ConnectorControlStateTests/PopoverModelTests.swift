@@ -110,8 +110,10 @@ final class PopoverModelTests: XCTestCase {
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         state.pendingUpdates = ["Team": CollectionDiff(added: ["jira"], removed: [], changed: [])]
-        XCTAssertEqual(popover.collectionItems.map(\.isSynced), [false, true])
-        XCTAssertEqual(popover.collectionItems.map(\.hasPendingUpdate), [false, true])
+        XCTAssertEqual(popover.collectionItems, [
+            CollectionMenuItem(name: "Default", isActive: false),
+            CollectionMenuItem(name: "Team", isActive: true, isSynced: true, hasPendingUpdate: true, source: "team.json"),
+        ])
     }
 
     func testTheCollectionBannerCarriesItsTextAndButton() throws {
@@ -494,11 +496,6 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(PopoverModel.menuTitle(for: unchained), "Default · update available")
     }
 
-    func testARowsLockSaysWhatTheWindowsLockSays() {
-        let row = ConnectorRow(name: "aws-mcp", enabled: true, toolWarning: nil, isLocked: true)
-        XCTAssertEqual(row.lockTooltip, CollectionsModel.lockedGlyphTooltip)
-        XCTAssertEqual(row.lockTooltip, "Read-only: synced from the collection’s author")
-    }
     func testEverySyncedMenuRowNamesItsOwnSource() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
