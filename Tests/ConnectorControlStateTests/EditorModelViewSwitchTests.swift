@@ -2,14 +2,14 @@ import XCTest
 import ConnectorControlCore
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/EditorModelTests.cs — the
-/// Form/JSON view-switching slice. Sheet-style confirmations are asserted as
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/EditorModelViewSwitchTests.cs —
+/// the Form/JSON view-switching slice. Sheet-style confirmations are asserted as
 /// pending state plus the method the sheet's button calls.
 @MainActor
 final class EditorModelViewSwitchTests: XCTestCase {
     private let url = "https://scoutbook.example.com/mcp"
 
-    func testSettingIsJsonViewSwitchesToJsonAndClearsIsFormView() {
+    func testSelectingJsonSwitchesToJson() {
         let rig = EditorRig()
         defer { rig.dispose() }
         let editor = rig.editor(.new(template: rig.local("node", ["x.js"])))
@@ -19,7 +19,7 @@ final class EditorModelViewSwitchTests: XCTestCase {
         XCTAssertEqual(editor.viewSelection, .json)
     }
 
-    func testSettingIsFormViewFromValidJsonSwitchesBack() {
+    func testSelectingFormFromValidJsonSwitchesBack() {
         let rig = EditorRig()
         defer { rig.dispose() }
         let editor = rig.editor(.new(template: rig.local("node", ["x.js"])))
@@ -34,7 +34,7 @@ final class EditorModelViewSwitchTests: XCTestCase {
     /// An unparseable JSON text refuses the switch and snaps the segmented control
     /// back (objectWillChange fires so the Picker re-reads viewSelection), without
     /// ever reaching the loss-warning sheet.
-    func testSettingIsFormViewWithUnrecoverableJsonIsRefusedAndSnapsBack() {
+    func testSelectingFormWithUnrecoverableJsonIsRefusedAndSnapsBack() {
         let rig = EditorRig()
         defer { rig.dispose() }
         let editor = rig.editor(.new(template: rig.local("node", ["x.js"])))
@@ -179,5 +179,26 @@ final class EditorModelViewSwitchTests: XCTestCase {
         editor.jsonText = "{\"command\": \"node\"}"
         XCTAssertNil(editor.jsonError)
         XCTAssertTrue(editor.canSave)
+    }
+
+    /// Adopting a config with a different auth kind must clear the previous kind's
+    /// fields — otherwise a bearer token typed earlier stays readable behind Header auth.
+    func testAdoptingAHeaderConfigClearsTheOldBearerToken() {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let editor = rig.editor(.newRemote())
+        editor.remoteURL = url
+        editor.authKind = .bearer
+        editor.bearerToken = "tok"
+        XCTAssertEqual(editor.authKind, .bearer)
+
+        editor.requestView(.json)
+        let headerConfig = RemotePattern.encode(RemoteConfig(url: url, auth: .header(name: "X-API-Key", value: "v")))
+        editor.jsonText = headerConfig.editorText()
+        editor.requestView(.form)
+
+        XCTAssertEqual(editor.authKind, .header)
+        XCTAssertEqual(editor.headerName, "X-API-Key")
+        XCTAssertEqual(editor.bearerToken, "")
     }
 }

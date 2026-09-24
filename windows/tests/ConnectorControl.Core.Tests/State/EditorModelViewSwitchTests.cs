@@ -8,7 +8,7 @@ public class EditorModelViewSwitchTests
     private const string Url = "https://scoutbook.example.com/mcp";
 
     [Fact]
-    public void SettingIsJsonViewSwitchesToJsonAndClearsIsFormView()
+    public void SelectingJsonSwitchesToJson()
     {
         using var rig = new EditorRig();
         var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
@@ -18,7 +18,7 @@ public class EditorModelViewSwitchTests
     }
 
     [Fact]
-    public void SettingIsFormViewFromValidJsonSwitchesBack()
+    public void SelectingFormFromValidJsonSwitchesBack()
     {
         using var rig = new EditorRig();
         var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
@@ -31,9 +31,8 @@ public class EditorModelViewSwitchTests
 
     /// <summary>An unparseable JSON text refuses the switch and snaps the segmented control back
     /// via PropertyChanged for View, without ever reaching the loss-warning dialog.</summary>
-
     [Fact]
-    public void SettingIsFormViewWithUnrecoverableJsonIsRefusedAndSnapsBack()
+    public void SelectingFormWithUnrecoverableJsonIsRefusedAndSnapsBack()
     {
         using var rig = new EditorRig();
         var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
@@ -47,8 +46,6 @@ public class EditorModelViewSwitchTests
         Assert.Contains(nameof(EditorModel.View), raised);
         Assert.Empty(rig.H.Dialogs.Confirms);
     }
-
-    /// <summary>Save() with unrecoverable JSON returns false and writes nothing.</summary>
 
     [Fact]
     public void FormToJsonSyncsTheTextAndJsonToFormAdoptsIt()
@@ -182,6 +179,8 @@ public class EditorModelViewSwitchTests
         Assert.True(editor.CanSave);
     }
 
+    /// <summary>Adopting a config with a different auth kind must clear the previous kind's
+    /// fields — otherwise a bearer token typed earlier stays readable behind Header auth.</summary>
     [Fact]
     public void AdoptingAHeaderConfigClearsTheOldBearerToken()
     {

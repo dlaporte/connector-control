@@ -341,8 +341,20 @@ public class AppStateTests
         var service = AppState.MakeService(h.Settings, h.Context);
         Assert.Equal(h.Dir.File("synced"), service.Paths.StoreDir);
         Assert.Equal(h.BackupsDir, service.Paths.BackupsDir);
+        // No staging assert: Windows AppPaths has no staging folder (see AppPathsTests.swift).
         Assert.Equal(h.ClaudeConfigPath, service.Paths.ClaudeConfigPath);
         Assert.Equal(7, service.Backups.KeepCount);
+    }
+
+    /// <summary>A stored empty string (e.g. a setting cleared by hand) counts as absent, same as
+    /// null — the default location, not a literal empty path.</summary>
+    [Fact]
+    public void AnEmptyStoredStoreDirIsTheDefault()
+    {
+        using var h = new AppStateHarness();
+        h.Settings.MasterStoreDir = "";
+        using var state = h.Create();
+        Assert.Equal(h.StoreDir, state.Service.Paths.StoreDir);
     }
 
     [Fact]
@@ -378,7 +390,9 @@ public class AppStateTests
         // has run it — asserting completion right after the publication is a race.
         Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 2 && first.IsCompleted && second.IsCompleted, TimeSpan.FromSeconds(5)));
         Assert.Equal([Tool.Npx, Tool.Node], h.Tools.Probed.Order().ToArray());
+        Assert.Equal(2, h.Tools.Batches);
         Assert.True(state.RefreshToolsAsync([]).IsCompleted);   // nothing wanted: completes synchronously
+        Assert.Equal(2, h.Tools.Batches);                        // and runs no batch
         // Once published, the same tool can be probed again (the editor asks when the command changes).
         var third = state.RefreshToolsAsync([Tool.Npx]);
         Assert.True(h.Ui.PumpUntil(() => h.Tools.Probed.Count == 3 && third.IsCompleted, TimeSpan.FromSeconds(5)));

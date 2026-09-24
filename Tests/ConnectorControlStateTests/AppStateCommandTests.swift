@@ -147,6 +147,15 @@ final class AppStateCommandTests: XCTestCase {
         h.delays.runNext()   // 3 s recheck: must be a no-op post-dispose, not a crash
         XCTAssertEqual(state.lastError, errorBefore)
         XCTAssertEqual(state.needsClaudeRestart, needsRestartBefore)
+
+        // The completion block itself — not only the delayed follow-up — must be a no-op once
+        // disposed: a restart that finishes after dispose (the app quitting mid-restart) must
+        // not resurrect state or schedule a fresh delay.
+        state.lastError = "should not survive"
+        state.performRestartClaude()
+        h.ui.pump()
+        XCTAssertEqual(state.lastError, "should not survive")
+        XCTAssertTrue(h.delays.pending.isEmpty, "no new delay is scheduled on a disposed state")
     }
 
     func testSwitchCollectionAppliesImmediately() throws {

@@ -2,10 +2,8 @@ import XCTest
 import ConnectorControlCore
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/EditorModelTests.cs — the
-/// save and remove slice. The save-conflict alert still goes through
-/// FakeDialogs; remove's confirmation is a sheet (pending state + the
-/// method the sheet's button calls).
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/EditorModelSaveTests.cs —
+/// the save slice. The save-conflict alert goes through FakeDialogs.
 @MainActor
 final class EditorModelSaveTests: XCTestCase {
     private let url = "https://scoutbook.example.com/mcp"

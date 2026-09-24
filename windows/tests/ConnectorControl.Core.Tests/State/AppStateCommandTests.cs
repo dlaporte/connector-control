@@ -77,6 +77,7 @@ public class AppStateCommandTests
         Assert.True(state.NeedsClaudeRestart);
         h.Claude.RestartResult = "Claude didn’t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again.";
         await state.RestartClaudeAsync();
+        Assert.Equal(1, h.Ui.Pending);   // the completion is posted through the host, not run inline
         h.Ui.Pump();
         Assert.Equal(h.Claude.RestartResult, state.LastError);
         Assert.True(state.NeedsClaudeRestart);
@@ -88,6 +89,8 @@ public class AppStateCommandTests
         Assert.Equal(h.Claude.RestartResult, state.LastError);
     }
 
+    /// <summary>C#-only: the Mac's restart reports through a completion handler and cannot throw,
+    /// while Windows awaits a Task that can.</summary>
     [Fact]
     public async Task RestartExceptionOutsideTheLaunchGuardStillCompletesWithAMessage()
     {
@@ -103,6 +106,9 @@ public class AppStateCommandTests
         Assert.Equal([TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(20)], h.Delays.Pending.Select(d => d.Delay).ToArray());
     }
 
+    /// <summary>C#-only: Windows relaunches through explorer.exe, which reports success before Claude
+    /// appears, so it looks again 20 s later; the Mac's restarter launches Claude itself and
+    /// reports a failed launch through its completion.</summary>
     [Fact]
     public async Task ARelaunchThatSilentlyFailedIsReportedTwentySecondsLater()
     {

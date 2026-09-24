@@ -351,7 +351,8 @@ final class AppStateTests: XCTestCase {
     /// The pieces StringCatalogTests can't cover: the internal notification
     /// identifiers (excluded from the shared catalog on purpose), the delta
     /// summary's real formatting for non-empty adds/removes/changes, and the
-    /// numeric recheck delay.
+    /// numeric recheck delay. The C# mirror is ServerDeltaTests.cs's
+    /// BodyNamesTheChangeAndWhatToDoNext.
     func testConnectorListChangedBodySummarizesTheDeltaAndInternalIdentifiersStayStable() {
         XCTAssertEqual(Notifications.restartCategory, "restartPending")
         XCTAssertEqual(Notifications.restartAction, "restartClaude")

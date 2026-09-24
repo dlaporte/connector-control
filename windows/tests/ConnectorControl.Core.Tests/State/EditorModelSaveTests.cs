@@ -7,6 +7,7 @@ public class EditorModelSaveTests
 {
     private const string Url = "https://scoutbook.example.com/mcp";
 
+    /// <summary>Save() with unrecoverable JSON returns false and writes nothing.</summary>
     [Fact]
     public void SaveWithUnrecoverableJsonWritesNothing()
     {
@@ -20,9 +21,6 @@ public class EditorModelSaveTests
         Assert.Empty(rig.H.Dialogs.Confirms);
         Assert.Empty(rig.H.Dialogs.Informs);
     }
-
-    /// <summary>The reset-to-bridge-invocation branch is new-target-only, so an existing connector's
-    /// command/args survive a switch to Local.</summary>
 
     [Fact]
     public void JsonPasteFillsTheNameWhenBlankAndCanonicalizesTheText()
@@ -156,9 +154,6 @@ public class EditorModelSaveTests
         Assert.Equal(RemotePattern.Encode(new RemoteConfig(Url, expected, RemoteLaunchStyle.CmdNpx)), rig.State.Store.Mcps["auth"].Config);
     }
 
-    /// <summary>An out-of-range index (a ComboBox cleared to -1) leaves AuthKind untouched but
-    /// still raises PropertyChanged so the control snaps back to the current selection.</summary>
-
     [Fact]
     public void SaveExistingPreservesTheEnabledStateAndRecordsTheView()
     {
@@ -254,6 +249,7 @@ public class EditorModelSaveTests
             saved["args"]);
     }
 
+    /// <summary>C#-only: the Mac's editor view dismisses itself, so its model has no Cancel.</summary>
     [Fact]
     public void CancelClosesWithoutPersisting()
     {
