@@ -415,6 +415,21 @@ public partial class CollectionsWindow : Window
     }
 
     /// <summary>
+    /// Return on a collection makes it the active one, as a double-click does: the Mac list's
+    /// primary action answers both.
+    /// </summary>
+    private void OnSidebarKey(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter
+            && e.OriginalSource is DependencyObject source
+            && ItemsControl.ContainerFromElement(Sidebar, source) is ListBoxItem { DataContext: CollectionsModel.Item item })
+        {
+            Act(() => Model.SwitchTo(item.Name));
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
     /// The same action, labelled: the context menu is what a keyboard and a screen reader reach,
     /// and it acts on the collection it was raised over — which a right-click does not select.
     /// </summary>

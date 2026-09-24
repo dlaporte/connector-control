@@ -22,6 +22,8 @@ bullet once the section is about to ship.
 
 ### Windows
 
+- In the Collections window, Return on a collection in the sidebar makes it the active one,
+  as a double-click does and as it already did on the Mac.
 - Connectors arriving from a shared collection go through the same check as ones typed
   into the editor: a Server URL, header name, client ID or client secret containing
   `& | < > ^ "` or a space, or scopes containing any of those characters other than a

@@ -198,13 +198,19 @@ public class CollectionsWindowTests
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
 
     /// <summary>
-    /// A key pressed on a row as the keyboard delivers it, tunnelling first, then the rebuilt rows'
-    /// pass. The window may be hidden, but it has been shown, so it still has its source.
+    /// A key pressed on an element as the keyboard delivers it — tunnelling first, then bubbling
+    /// unless something took it on the way down — then the rebuilt rows' pass. The window may be
+    /// hidden, but it has been shown, so it still has its source.
     /// </summary>
     private static void Press(CollectionsWindow window, UIElement target, Key key)
     {
         var source = PresentationSource.FromVisual(target)!;
-        target.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, key) { RoutedEvent = Keyboard.PreviewKeyDownEvent });
+        var preview = new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, key) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+        target.RaiseEvent(preview);
+        if (!preview.Handled)
+        {
+            target.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, key) { RoutedEvent = Keyboard.KeyDownEvent });
+        }
         Layout(window);
     }
 
@@ -338,6 +344,24 @@ public class CollectionsWindowTests
             Assert.InRange(selectedRaises, 1, stateRaises);
             Assert.InRange(selections, 0, 6);
         });
+    }
+
+    [Fact]
+    public void ReturnOnASidebarCollectionMakesItActive()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        SubscribeToDataTeam(h, state);
+        Showing(h, state, (window, _) =>
+        {
+            // Selecting a collection only shows it; Return makes it active, as a double-click does.
+            Assert.Equal("Default", state.ActiveCollection);
+            var item = window.Model.Items.Single(i => i.Name == "Data team");
+            var container = (ListBoxItem)window.Sidebar.ItemContainerGenerator.ContainerFromItem(item)!;
+            Press(window, container, Key.Enter);
+            Assert.Equal("Data team", state.ActiveCollection);
+            Assert.Equal("Data team", window.Model.Selected);
+        }, select: "Data team");
     }
 
     /// <summary>

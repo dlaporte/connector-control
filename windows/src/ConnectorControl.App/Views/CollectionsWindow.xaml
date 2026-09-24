@@ -155,8 +155,8 @@
                    FontWeight="SemiBold" TextWrapping="NoWrap" VerticalAlignment="Center" />
       </DockPanel>
 
-      <!-- Selecting a collection only shows it. Making it the active one is a double-click, or
-           Make Active in the row's context menu or the header's More. -->
+      <!-- Selecting a collection only shows it. Making it the active one is a double-click or
+           Return, as on the Mac, or Make Active in the row's context menu or the header's More. -->
       <!-- The selection is bound one way only, and the way back is OnSelectionChanged, guarded.
            CollectionsModel's Selected setter raises for every write, changed or not, and every
            raise hands this list a freshly built Items collection; a two-way binding answers that
@@ -167,7 +167,7 @@
       <ListBox x:Name="Sidebar" Grid.Row="1" ItemsSource="{Binding Items}"
                SelectedValuePath="Name" SelectedValue="{Binding Selected, Mode=OneWay}"
                SelectionChanged="OnSelectionChanged"
-               PreviewMouseDoubleClick="OnActivate">
+               PreviewMouseDoubleClick="OnActivate" PreviewKeyDown="OnSidebarKey">
         <!-- The context menu is on the container rather than inside the template: one raised
              from the keyboard is looked for on the focused ListBoxItem, not on what it holds.
              Nothing in here may carry x:Name or an event handler — the markup compiler numbers
