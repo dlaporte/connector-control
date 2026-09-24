@@ -18,9 +18,14 @@ public static class CollectionKinds
     };
 }
 
+/// <summary>
+/// Either collections file, the sidecar or this machine's cache, would not decode. The message is
+/// the detail as it stands, as Swift's <c>CollectionsFileError.malformed</c> carries it, with no
+/// prefix naming one of the two files.
+/// </summary>
 public sealed class CollectionsFileException(string message) : Exception(message)
 {
-    public static CollectionsFileException Malformed(string detail) => new("collections file: " + detail);
+    public static CollectionsFileException Malformed(string detail) => new(detail);
 }
 
 /// <summary>

@@ -93,20 +93,25 @@ public enum KeptValue {
     static func isAbsolute(_ value: String) -> Bool {
         let units = Array(value.utf16)
         guard let first = units.first else { return false }
-        if first == slash || first == 0x7E || (units.count >= 2 && first == backslash && units[1] == backslash) { return true }
-        return units.count >= 3 && isASCIILetter(first) && units[1] == 0x3A && (units[2] == backslash || units[2] == slash)
+        if first == ascii("/") || first == ascii("~") || (units.count >= 2 && first == ascii("\\") && units[1] == ascii("\\")) {
+            return true
+        }
+        return units.count >= 3 && isASCIILetter(first) && units[1] == ascii(":") && (units[2] == ascii("\\") || units[2] == ascii("/"))
     }
 
     /// An ASCII letter or digit, `.`, `_`, `-`, or any character outside ASCII: one that continues
     /// a file name, so a path beside it is part of a longer name rather than a path of its own.
     static func continuesAName(_ unit: UInt16) -> Bool {
-        unit > 0x7F || isASCIILetter(unit) || (0x30...0x39).contains(unit) || unit == 0x2E || unit == 0x5F || unit == 0x2D
+        unit > 0x7F || isASCIILetter(unit) || (ascii("0")...ascii("9")).contains(unit)
+            || unit == ascii(".") || unit == ascii("_") || unit == ascii("-")
     }
 
-    private static let slash: UInt16 = 0x2F
-    private static let backslash: UInt16 = 0x5C
+    /// The UTF-16 code unit of an ASCII character, so a comparison reads as the character it means.
+    private static func ascii(_ scalar: Unicode.Scalar) -> UInt16 { UInt16(scalar.value) }
 
-    private static func isASCIILetter(_ unit: UInt16) -> Bool { (0x41...0x5A).contains(unit) || (0x61...0x7A).contains(unit) }
+    private static func isASCIILetter(_ unit: UInt16) -> Bool {
+        (ascii("A")...ascii("Z")).contains(unit) || (ascii("a")...ascii("z")).contains(unit)
+    }
 
     /// Where `needle` stands in `haystack` as a path of its own, left to right and not overlapping.
     private static func occurrences(of needle: [UInt16], in haystack: [UInt16]) -> [Range<Int>] {

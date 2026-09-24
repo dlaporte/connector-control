@@ -39,7 +39,7 @@ public sealed class CollectionsLocalCacheTests : IDisposable
     {
         var folded = new Dictionary<string, CollectionsLocalCache.SyncedBinding>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Team"] = new("/t.json", null, null),
+            ["Team"] = new("/t.json", null, []),
         };
         var cache = Sample with { Synced = folded };
         Assert.False(cache.Synced.ContainsKey("team"));

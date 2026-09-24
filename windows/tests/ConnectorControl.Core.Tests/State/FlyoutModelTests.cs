@@ -553,7 +553,7 @@ public class FlyoutModelTests
         ]).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
         new CollectionsLocalCache(
             [new KeyValuePair<string, CollectionsLocalCache.SyncedBinding>(
-                "Team", new CollectionsLocalCache.SyncedBinding("/Acme/mcp/team.json", null))],
+                "Team", new CollectionsLocalCache.SyncedBinding("/Acme/mcp/team.json", null, []))],
             []).Save(state.Service.Paths.CollectionsCachePath);
         state.Reload();
         using var flyout = new FlyoutModel(state, h.Settings);

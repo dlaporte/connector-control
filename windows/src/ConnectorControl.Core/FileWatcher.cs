@@ -210,15 +210,13 @@ public sealed class FileWatcher : IDisposable
     /// rebuild inside the cooldown is not done but owed — the watcher it kept may be the dead
     /// one — so it re-checks too, and the next Start() pays the debt; a folder that keeps
     /// erroring therefore costs re-checks and one rebuild per reload rather than a teardown
-    /// apiece. Only a directory that is really gone disarms
-    /// and reports, leaving the caller's next Start() (each reload re-arms it) to build a
-    /// fresh one. The
-    /// deletion is delivered directly rather than through Schedule(): Stop() disposes
-    /// whatever debounce timer is pending, so a Schedule()-then-Stop() sequence would
-    /// dispose the very timer meant to report this change and the deletion would
-    /// never reach the caller. No generation guard here — Stop() has
-    /// already run, so this is a final, deliberate notification, not a stale check;
-    /// only a Dispose() that raced the error handler suppresses it.
+    /// apiece. Only a directory that is really gone disarms and reports, leaving the caller's
+    /// next Start() (each reload re-arms it) to build a fresh one. The deletion is delivered
+    /// directly rather than through Schedule(): Stop() disposes whatever debounce timer is
+    /// pending, so a Schedule()-then-Stop() sequence would dispose the very timer meant to
+    /// report this change and the deletion would never reach the caller. No generation guard
+    /// here — Stop() has already run, so this is a final, deliberate notification, not a stale
+    /// check; only a Dispose() that raced the error handler suppresses it.
     /// Internal so the deleted-directory path is testable without provoking the OS.
     /// </summary>
     internal void HandleError(bool rebuild = true)

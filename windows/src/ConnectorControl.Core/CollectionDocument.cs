@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace ConnectorControl.Core;
@@ -526,6 +527,13 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         Connectors = new Dictionary<string, Connector>(connectors, StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// This document with another export stamp and every other field as it is. It lives beside the
+    /// constructor so a field added later is carried here too, rather than dropped by a caller that
+    /// copied the fields by hand; Swift copies the struct and assigns the one field.
+    /// </summary>
+    public CollectionDocument WithExported(string exported) => new(Name, Author, Origin, exported, Connectors);
+
     public sealed class Connector : IEquatable<Connector>
     {
         public Launcher Launcher { get; }
@@ -923,7 +931,9 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                         Auth.Bearer => new RemoteAuth.Bearer(Placeholder.Marker(TokenNeed)),
                         Auth.Header h => new RemoteAuth.Header(h.Name, Placeholder.Marker(HeaderValueNeed)),
                         Auth.OAuthClient o => new RemoteAuth.OAuthClient(o.ClientId, Placeholder.Marker(ClientSecretNeed), o.Scopes),
-                        _ => RemoteAuth.Auto,
+                        Auth.Automatic => RemoteAuth.Auto,
+                        // Every Auth is one of the four; Swift's switch over its enum is exhaustive.
+                        _ => throw new UnreachableException(),
                     };
                     var remoteConfig = new RemoteConfig(
                         url: r.Url,
@@ -947,7 +957,8 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                     authoredOn = l.Platform;
                     break;
                 default:
-                    continue;
+                    // A launcher is remote or local; Swift's switch over its enum is exhaustive.
+                    throw new UnreachableException();
             }
             var needs = new Dictionary<string, RenderedNeed>(StringComparer.Ordinal);
             foreach (var (pointer, names) in Placeholder.MarkersIn(config))
@@ -1038,9 +1049,12 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                         auth = new Auth.OAuthClient(oauth.ClientId, oauth.Scopes);
                         needs[ClientSecretNeed] = HintFor(ClientSecretNeed);
                         break;
-                    default:
+                    case RemoteAuth.Automatic:
                         auth = Auth.Auto;
                         break;
+                    default:
+                        // Every RemoteAuth is one of the four; Swift's switch over its enum is exhaustive.
+                        throw new UnreachableException();
                 }
                 var env = remote.PassthroughEnv.ToDictionary(p => p.Key, p => EnvFor(p.Key, p.Value), StringComparer.Ordinal);
                 // Whatever the form has no widget for — a key RemotePattern.Decode doesn't read —

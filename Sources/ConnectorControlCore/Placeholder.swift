@@ -11,8 +11,10 @@ public enum Placeholder {
 
     public static func isValidName(_ name: String) -> Bool {
         !name.isEmpty && name.unicodeScalars.allSatisfy { s in
-            let v = s.value
-            return (v >= 0x30 && v <= 0x39) || (v >= 0x41 && v <= 0x5A) || (v >= 0x61 && v <= 0x7A) || v == 0x5F
+            switch s {
+            case "0"..."9", "A"..."Z", "a"..."z", "_": return true
+            default: return false
+            }
         }
     }
 

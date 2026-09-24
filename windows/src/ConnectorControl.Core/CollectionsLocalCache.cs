@@ -111,8 +111,8 @@ public sealed record CollectionsLocalCache
         /// </summary>
         public string? Origin { get; init; }
 
-        public KeptRecord(IEnumerable<string>? markedValues, IEnumerable<string>? releasedValues,
-                          IEnumerable<string>? publishedFolders, IEnumerable<string>? departedFolders,
+        public KeptRecord(IEnumerable<string>? markedValues = null, IEnumerable<string>? releasedValues = null,
+                          IEnumerable<string>? publishedFolders = null, IEnumerable<string>? departedFolders = null,
                           string? origin = null)
         {
             MarkedValues = new HashSet<string>(markedValues ?? [], StringComparer.Ordinal);
@@ -260,13 +260,11 @@ public sealed record CollectionsLocalCache
         /// <summary>Connector → why this platform skipped it, so the pending diff can leave it out.</summary>
         public IReadOnlyDictionary<string, string> Excluded { get; }
 
-        public SyncedBinding(string? path, string? lastHash, IEnumerable<KeyValuePair<string, string>>? excluded = null)
+        public SyncedBinding(string? path, string? lastHash, IEnumerable<KeyValuePair<string, string>> excluded)
         {
             Path = path;
             LastHash = lastHash;
-            Excluded = excluded is null
-                ? new Dictionary<string, string>(StringComparer.Ordinal)
-                : new Dictionary<string, string>(excluded, StringComparer.Ordinal);
+            Excluded = new Dictionary<string, string>(excluded, StringComparer.Ordinal);
         }
 
         public bool Equals(SyncedBinding? other) =>
@@ -383,6 +381,7 @@ public sealed record CollectionsLocalCache
             var hash = new HashCode();
             hash.Add(Folder, StringComparer.Ordinal);
             hash.Add(LastWrittenHash ?? string.Empty, StringComparer.Ordinal);
+            hash.Add(MarkedValues.Count);
             foreach (var value in MarkedValues.Order(StringComparer.Ordinal))
             {
                 hash.Add(value, StringComparer.Ordinal);

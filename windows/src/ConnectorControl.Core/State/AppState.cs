@@ -1612,7 +1612,7 @@ public sealed class AppState : ObservableObject, IDisposable
             return failure;
         }
         SetBinding(collection, new CollectionsLocalCache.SyncedBinding(
-            full, ContentHash.Sha256(data!), SourceBinding(collection)?.Excluded));
+            full, ContentHash.Sha256(data!), SourceBinding(collection)?.Excluded ?? EmptyExcluded));
         var entry = CollectionsFile.Collections[collection];
         // relativeToStore is only ever set, never cleared: where the document sits relative to
         // the store is a fact every machine shares, and this one finding it elsewhere does not
@@ -1912,6 +1912,8 @@ public sealed class AppState : ObservableObject, IDisposable
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, CollectionsFile.Need>> EmptyNeedsByConnector =
         new Dictionary<string, IReadOnlyDictionary<string, CollectionsFile.Need>>(StringComparer.Ordinal);
+
+    private static readonly IReadOnlyDictionary<string, string> EmptyExcluded = new Dictionary<string, string>(StringComparer.Ordinal);
 
     // MARK: import as copies
 
@@ -2259,7 +2261,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             var departed = remembered?.DepartedFolders ?? new HashSet<string>(StringComparer.Ordinal);
             SetKeptRecord(collection, departed.Count == 0
-                ? null : new CollectionsLocalCache.KeptRecord(null, null, null, departed, origin));
+                ? null : new CollectionsLocalCache.KeptRecord(departedFolders: departed, origin: origin));
         }
         // PersistStore ends in PublishIfChanged, which is what writes the document.
         PersistStore();
@@ -2566,8 +2568,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// including the toggles that must never publish.
     /// </summary>
     private static string PublishHash(CollectionDocument document) =>
-        ContentHash.Sha256(new CollectionDocument(
-            document.Name, document.Author, document.Origin, string.Empty, document.Connectors).Serialize());
+        ContentHash.Sha256(document.WithExported(string.Empty).Serialize());
 
     /// <summary>The origin of the document at <paramref name="path"/>, or null when there is nothing readable there to vouch for it.</summary>
     private static string? ReadOrigin(string path)
@@ -2727,7 +2728,7 @@ public sealed class AppState : ObservableObject, IDisposable
             {
                 continue;
             }
-            synced[name] = new CollectionsLocalCache.SyncedBinding(path, ContentHash.Sha256(data), existing?.Excluded);
+            synced[name] = new CollectionsLocalCache.SyncedBinding(path, ContentHash.Sha256(data), existing?.Excluded ?? EmptyExcluded);
             bound = true;
         }
         if (!bound)

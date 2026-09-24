@@ -15,7 +15,7 @@ public class CollectionsModelTests
     private static CollectionsFile.Entry Published(string slug) =>
         new(CollectionKind.Local, publish: new CollectionsFile.PublishRecord(slug, "origin", PublishIntent.None));
 
-    private static CollectionsLocalCache.SyncedBinding Bound(string? path) => new(path, null);
+    private static CollectionsLocalCache.SyncedBinding Bound(string? path) => new(path, null, []);
 
     private static CollectionsFile File_(params (string Name, CollectionsFile.Entry Entry)[] entries) =>
         new(entries.Select(e => new KeyValuePair<string, CollectionsFile.Entry>(e.Name, e.Entry)));
