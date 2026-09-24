@@ -145,7 +145,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Same gate as mac-ci.yml (scripts/test-mac.sh): no test may skip or fail
+      # Same gate as mac-ci.yml and preview.yml (scripts/test-mac.sh): no test may skip or fail
       # before any signing or notarization minutes are spent.
       - name: Test
         run: ./scripts/test-mac.sh
@@ -154,6 +154,11 @@ jobs:
     name: macOS build, sign, notarize
     needs: [prepare, mac-test]
     runs-on: macos-15
+    # preview.yml's mac job copies these steps from "Import signing certificate" through
+    # "Remove the signing keychain", without the notes download and the appcast; a signing or
+    # notarization fix lands in both. They stay copied rather than shared because this file runs
+    # only at release time, so a shared definition could not be proved here before it is needed.
+    #
     # The Apple certificate and the Sparkle key are read here and nowhere else.
     # Keep them as secrets of the "signing" GitHub Environment (with required
     # reviewers and a v* tag policy) rather than as repository secrets: a job

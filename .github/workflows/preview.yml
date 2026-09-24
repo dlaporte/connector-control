@@ -98,7 +98,8 @@ jobs:
         run: |
           # Three sources, one result: a dispatch takes <n> and dry_run from its inputs;
           # preview-dry-<n> is a dry run (publish skipped); preview-<n> is a real preview. All
-          # three build <next>-preview.<n> under the tag preview-<n>.
+          # three build <next>-preview.<n>; the tag is preview-<n>, or preview-dry-<n> for a dry
+          # tag push.
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             N="$INPUT_NUMBER"; DRY="$INPUT_DRY_RUN"; TAG="preview-$N"
             # GitHub ignores `gh release create --target` when the tag already exists, so a
@@ -168,6 +169,11 @@ jobs:
     name: macOS build, sign, notarize
     needs: [prepare, mac-test]
     runs-on: macos-15
+    # Its steps from "Import signing certificate" through "Remove the signing keychain" are a
+    # copy of release.yml's mac job, which adds the Sparkle appcast; a signing or notarization
+    # fix lands in both. They stay copied rather than shared because release.yml runs only at
+    # release time, so a shared definition could not be proved there before it is needed.
+    #
     # The Apple certificate is read here and nowhere else; it lives in the "signing"
     # Environment (required reviewers, deployment branch policy), exactly as in release.yml.
     environment: signing

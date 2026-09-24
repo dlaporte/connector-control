@@ -56,7 +56,9 @@ public sealed class CollectionsFileTests : IDisposable
         Assert.Equal(Sample, CollectionsFile.Decode(Sample.Encode()));
         // Written once from the Mac's Foundation, then compared byte for byte there and here,
         // so both platforms write the same sidecar. This side never regenerates it.
-        Assert.Equal(File.ReadAllBytes(Fixtures.Path("collections.json")), Sample.Encode().Serialize());
+        var expected = File.ReadAllBytes(Fixtures.Path("collections.json"));
+        Assert.Equal(expected, Sample.Encode().Serialize());
+        Assert.Equal(Sample, CollectionsFile.Decode(JsonValue.Parse(expected)));
     }
 
     [Fact]

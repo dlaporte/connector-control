@@ -32,6 +32,7 @@ final class CollectionsFileTests: XCTestCase {
         let data = try Self.sample.encode().serialized()
         if ProcessInfo.processInfo.environment["CONNECTOR_CONTROL_UPDATE_GOLDENS"] == "1" { try data.write(to: url) }
         XCTAssertEqual(data, try Data(contentsOf: url))
+        XCTAssertEqual(try CollectionsFile.decode(JSONValue.parse(Data(contentsOf: url))), Self.sample)
     }
 
     func testKindDefaultsToLocal() {

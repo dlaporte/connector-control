@@ -2,9 +2,9 @@
 # Print the CHANGELOG.md section for one version heading: everything between "## vX.Y.Z" and
 # the next "## " heading (any "###" sub-headings inside are included, since they don't match
 # that boundary). This is the single source for the GitHub release notes and the text both apps
-# show in their update dialogs, so a missing section exits 1; callers that don't tolerate that
-# let it fail the run, and callers that do (e.g. a preview cut before the section exists) pass
-# --quiet to suppress the ::error:: annotation.
+# show in their update dialogs, so a missing section exits 1 and its caller lets that fail the
+# run. A caller that tolerates a missing section can pass --quiet to suppress the ::error::
+# annotation; release.yml and preview-notes.sh both fail instead.
 #
 #   changelog-section.sh [-q|--quiet] <vX.Y.Z>
 set -euo pipefail
