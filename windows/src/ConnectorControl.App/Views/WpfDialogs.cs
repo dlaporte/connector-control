@@ -32,8 +32,9 @@ public sealed class WpfDialogs : IDialogs
     internal Window? ResolveOwner() =>
         owner() ?? Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsVisible && w.IsActive && w is not FlyoutWindow);
 
-    public bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle, bool destructive) =>
-        ConfirmDialog.Show(ResolveOwner(), message, informativeText, primaryTitle, cancelTitle, destructive);
+    public bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle, bool destructive,
+                        bool cancelIsDefault) =>
+        ConfirmDialog.Show(ResolveOwner(), message, informativeText, primaryTitle, cancelTitle, destructive, cancelIsDefault);
 
     public string? PromptForName(string title, string initial) => NamePromptDialog.Show(ResolveOwner(), title, initial);
 

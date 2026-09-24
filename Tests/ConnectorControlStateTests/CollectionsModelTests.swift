@@ -661,7 +661,10 @@ final class CollectionsModelTests: XCTestCase {
         let fileQuestion = try XCTUnwrap(h.dialogs.confirms.last)
         XCTAssertEqual(fileQuestion.primary, CollectionsModel.removeFileButton)
         XCTAssertEqual(fileQuestion.cancel, CollectionsModel.keepFileButton)
-        XCTAssertFalse(fileQuestion.destructive)
+        // Removing a file the team reads is never what Return does: Keep is the default, and
+        // Remove, a click away, is marked as the destructive answer.
+        XCTAssertTrue(fileQuestion.cancelIsDefault)
+        XCTAssertTrue(fileQuestion.destructive)
         XCTAssertFalse(state.collectionNames.contains("Shared"))
         XCTAssertTrue(FileManager.default.fileExists(atPath: sharedFile.path),
                       "Keep leaves the copy the team reads where it is")
@@ -671,6 +674,7 @@ final class CollectionsModelTests: XCTestCase {
         h.dialogs.confirmAnswers = [true]
         model.stopPublishing()
         XCTAssertEqual(h.dialogs.confirms.last?.message, CollectionsModel.deletePublishedFileQuestion("consulting.json"))
+        XCTAssertEqual(h.dialogs.confirms.last?.cancelIsDefault, true)
         XCTAssertFalse(FileManager.default.fileExists(atPath: consultingFile.path))
         XCTAssertFalse(state.isPublished("Consulting"))
         XCTAssertTrue(state.collectionNames.contains("Consulting"), "Stop Publishing keeps the collection")

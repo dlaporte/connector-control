@@ -29,8 +29,8 @@ public final class CollectionsModel: ObservableObject {
     /// What the popover's pending dot says aloud. The cache records no timestamp, so this says
     /// what is true of the file, not how long ago it last changed.
     public static let updateAvailableStatus = "update available"
-    /// The two answers to the published-document question. Keep is the default: a file the team
-    /// reads is not something to remove by pressing Return.
+    /// The two answers to the published-document question. Keep is the default, on Return and on
+    /// Escape: a file the team reads is not something to remove by pressing a key.
     public static let removeFileButton = "Remove"
     public static let keepFileButton = "Keep"
     public static let remoteType = "remote"
@@ -1052,11 +1052,11 @@ public final class CollectionsModel: ObservableObject {
         return CollectionDocument.fileName(slug: record.slug)
     }
 
-    /// Default no: the view's default button is Keep, and this model only records the answer.
+    /// Keep is the answer Return and Escape both give; Remove, the destructive one, takes a click.
     private func askAboutPublishedFile(_ fileName: String) -> Bool {
         dialogs.confirm(message: CollectionsModel.deletePublishedFileQuestion(fileName), informative: nil,
                         primary: CollectionsModel.removeFileButton, cancel: CollectionsModel.keepFileButton,
-                        destructive: false)
+                        destructive: true, cancelIsDefault: true)
     }
 
     @discardableResult

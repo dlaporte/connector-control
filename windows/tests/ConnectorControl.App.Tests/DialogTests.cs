@@ -29,6 +29,27 @@ public class DialogTests
     }
 
     [Fact]
+    public void AConfirmDialogCanMakeItsCancelButtonTheDefault()
+    {
+        WpfApp.Invoke(() =>
+        {
+            // The published-file question: Return and Escape both answer Keep, the accent goes with
+            // the default, and Remove keeps its red but answers only a click.
+            var dialog = new ConfirmDialog(CollectionsModel.DeletePublishedFileQuestion("team.json"), null,
+                CollectionsModel.RemoveFileButton, CollectionsModel.KeepFileButton, destructive: true, cancelIsDefault: true);
+            Assert.True(dialog.CancelButton.IsDefault);
+            Assert.True(dialog.CancelButton.IsCancel);
+            Assert.False(dialog.PrimaryButton.IsDefault);
+            Assert.Same(dialog.TryFindResource("DestructiveButton"), dialog.PrimaryButton.Style);
+            Assert.Same(dialog.TryFindResource("AccentButtonStyle"), dialog.CancelButton.Style);
+            // Every other question keeps Return on its primary.
+            var usual = new ConfirmDialog("Restart Claude Desktop now?", null, "Restart", "Cancel", destructive: false);
+            Assert.True(usual.PrimaryButton.IsDefault);
+            Assert.False(usual.CancelButton.IsDefault);
+        });
+    }
+
+    [Fact]
     public void ConfirmDialogWithoutInformativeTextOrCancelHidesThem()
     {
         WpfApp.Invoke(() =>

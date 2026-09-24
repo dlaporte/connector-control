@@ -34,8 +34,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// </summary>
     public const string UpdateAvailableStatus = "update available";
     /// <summary>
-    /// The two answers to the published-document question. Keep is the default: a file the team
-    /// reads is not something to remove by pressing Return.
+    /// The two answers to the published-document question. Keep is the default, on Return and on
+    /// Escape: a file the team reads is not something to remove by pressing a key.
     /// </summary>
     public const string RemoveFileButton = "Remove";
     public const string KeepFileButton = "Keep";
@@ -1391,9 +1391,10 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             ? CollectionDocument.FileName(record.Slug)
             : null;
 
-    /// <summary>Default no: the view's default button is Keep, and this model only records the answer.</summary>
+    /// <summary>Keep is the answer Return and Escape both give; Remove, the destructive one, takes a click.</summary>
     private bool AskAboutPublishedFile(string fileName) =>
-        dialogs.Confirm(DeletePublishedFileQuestion(fileName), null, RemoveFileButton, KeepFileButton, destructive: false);
+        dialogs.Confirm(DeletePublishedFileQuestion(fileName), null, RemoveFileButton, KeepFileButton, destructive: true,
+                        cancelIsDefault: true);
 
     private bool Report(string? error)
     {

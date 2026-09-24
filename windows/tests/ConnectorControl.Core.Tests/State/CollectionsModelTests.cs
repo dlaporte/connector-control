@@ -765,7 +765,10 @@ public class CollectionsModelTests
         var fileQuestion = h.Dialogs.Confirms[^1];
         Assert.Equal(CollectionsModel.RemoveFileButton, fileQuestion.Primary);
         Assert.Equal(CollectionsModel.KeepFileButton, fileQuestion.Cancel);
-        Assert.False(fileQuestion.Destructive);
+        // Removing a file the team reads is never what Return does: Keep is the default, and
+        // Remove, a click away, is marked as the destructive answer.
+        Assert.True(fileQuestion.CancelIsDefault);
+        Assert.True(fileQuestion.Destructive);
         Assert.DoesNotContain("Shared", state.CollectionNames);
         // Keep leaves the copy the team reads where it is.
         Assert.True(File.Exists(sharedFile));
@@ -775,6 +778,7 @@ public class CollectionsModelTests
         h.Dialogs.ConfirmAnswers.Enqueue(true);
         model.StopPublishing();
         Assert.Equal(CollectionsModel.DeletePublishedFileQuestion("consulting.json"), h.Dialogs.Confirms[^1].Message);
+        Assert.True(h.Dialogs.Confirms[^1].CancelIsDefault);
         Assert.False(File.Exists(consultingFile));
         Assert.False(state.IsPublished("Consulting"));
         // Stop Publishing keeps the collection.

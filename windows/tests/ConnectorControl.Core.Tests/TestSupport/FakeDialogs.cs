@@ -4,7 +4,8 @@ namespace ConnectorControl.Core.Tests.TestSupport;
 
 public sealed class FakeDialogs : IDialogs
 {
-    public sealed record ConfirmCall(string Message, string? Informative, string Primary, string Cancel, bool Destructive);
+    public sealed record ConfirmCall(string Message, string? Informative, string Primary, string Cancel, bool Destructive,
+                                     bool CancelIsDefault = false);
     public sealed record PromptCall(string Title, string Initial);
     public sealed record InformCall(string Message, string? Informative);
     public sealed record OfferCall(string NewVersion, string CurrentVersion, string? Notes);
@@ -23,9 +24,10 @@ public sealed class FakeDialogs : IDialogs
     public List<InformCall> Informs { get; } = [];
     public List<OfferCall> Offers { get; } = [];
 
-    public bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle, bool destructive)
+    public bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle, bool destructive,
+                        bool cancelIsDefault)
     {
-        Confirms.Add(new ConfirmCall(message, informativeText, primaryTitle, cancelTitle, destructive));
+        Confirms.Add(new ConfirmCall(message, informativeText, primaryTitle, cancelTitle, destructive, cancelIsDefault));
         return ConfirmAnswers.Count > 0 ? ConfirmAnswers.Dequeue() : NextConfirm;
     }
 
