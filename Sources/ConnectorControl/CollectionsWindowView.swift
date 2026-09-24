@@ -130,6 +130,20 @@ struct CollectionsWindowView: View {
             List(model.items, selection: $model.selected) { item in
                 sidebarRow(item)
             }
+            // Selecting a collection only shows it; making it the active one is a second action.
+            // The list's own primary action is that action: a double-click or Return makes the
+            // row active. It is not a tap gesture on the row: a List row is an NSTableView cell,
+            // and a count-2 TapGesture there — even a simultaneous one — holds every click back
+            // to wait for a second, so single clicks select late or not at all. The menu is the
+            // labelled route that a screen reader reads out.
+            .contextMenu(forSelectionType: String.self) { names in
+                if let item = sidebarItem(names) {
+                    Button(CollectionsModel.makeActiveAction) { act { model.switchTo(item.name) } }
+                        .disabled(item.isActive)
+                }
+            } primaryAction: { names in
+                if let item = sidebarItem(names) { act { model.switchTo(item.name) } }
+            }
         }
         .navigationSplitViewColumnWidth(min: 160, ideal: CollectionsWindowView.sidebarWidth)
     }
@@ -185,15 +199,13 @@ struct CollectionsWindowView: View {
         }
         // The row answers across its whole width, not only over its text.
         .contentShape(Rectangle())
-        // Selecting a collection only shows it; making it the active one is a second action.
-        // The double-click is the quick one — simultaneous, so it does not swallow the single
-        // click that selects — and the context menu is the labelled route that a keyboard
-        // reaches and a screen reader reads out.
-        .simultaneousGesture(TapGesture(count: 2).onEnded { act { model.switchTo(item.name) } })
-        .contextMenu {
-            Button(CollectionsModel.makeActiveAction) { act { model.switchTo(item.name) } }
-                .disabled(item.isActive)
-        }
+    }
+
+    /// The one collection a sidebar click or menu names. The list allows a single selection, so
+    /// the set holds at most one name; an empty set is a click below the last row.
+    private func sidebarItem(_ names: Set<String>) -> CollectionsModel.Item? {
+        guard names.count == 1, let name = names.first else { return nil }
+        return model.items.first { $0.name == name }
     }
 
     /// The chain, and the sentence naming the document behind it — which the model withholds for
