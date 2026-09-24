@@ -114,6 +114,7 @@ public sealed class CollectionsLocalCacheTests : IDisposable
         var older = CollectionsLocalCache.Decode(Sample.Encode());
         Assert.Null(older.LastAppliedCollection);
         Assert.Empty(older.Published["Consulting"].ReleasedValues);
+        // C#-only: the record's Equals is written by hand here, and must see this field; Swift's is synthesized.
         Assert.NotEqual(cache, cache with { LastAppliedCollection = "Other" });
     }
 

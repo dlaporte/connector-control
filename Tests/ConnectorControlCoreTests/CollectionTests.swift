@@ -1,6 +1,7 @@
 import XCTest
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/CollectionTests.cs
 final class CollectionTests: XCTestCase {
     private func entry(_ url: String) -> MCPEntry {
         MCPEntry(config: RemotePattern.make(url: url))
@@ -124,8 +125,6 @@ final class CollectionTests: XCTestCase {
         XCTAssertEqual(store.activeCollection, "Default")
     }
 
-    /// windows/tests/ConnectorControl.Core.Tests/CollectionTests.cs
-    /// ErrorMessagesUseTypographicPunctuationLikeTheMacApp.
     func testErrorMessagesUseTypographicPunctuationLikeTheMacApp() {
         var store = MasterStore.empty
         let duplicate = store.addCollection(named: "Default", copyingCurrent: false)!

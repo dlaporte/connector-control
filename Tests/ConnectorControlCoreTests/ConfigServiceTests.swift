@@ -2,6 +2,7 @@ import XCTest
 import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/ConfigServiceTests.cs
 final class ConfigServiceTests: XCTestCase {
     var tempDir: TempDir!
     var dir: URL!

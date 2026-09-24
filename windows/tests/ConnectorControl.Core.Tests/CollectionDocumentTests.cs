@@ -109,7 +109,7 @@ public class CollectionDocumentTests
         var r = Assert.IsType<CollectionDocument.Launcher.Remote>(doc.Connectors["notion"].Launcher);
         Assert.Equal(new CollectionDocument.Auth.Bearer(), r.Auth);
         Assert.Equal(new Dictionary<string, string?> { ["token"] = "notion.so" }, doc.Connectors["notion"].Needs);
-        Assert.DoesNotContain("secret-1", doc.Encode().EditorText(), StringComparison.Ordinal);
+        Assert.False(JsonText.Contains(doc.Encode().Serialize(), "secret-1"));
         Assert.Equal(
             new Dictionary<string, CollectionDocument.EnvValue>
             {
@@ -296,7 +296,7 @@ public class CollectionDocumentTests
         Assert.True(KeptValue.Holds(decomposed, composed));
         Assert.True(KeptValue.Holds("--dir=" + composed, decomposed));
         var placed = PublishIntent.PlacePathMarks(Marks((0, Mark(composed))), [decomposed]).Placed;
-        Assert.Equal(Mark(composed), Assert.Single(placed, p => p.Key == 0).Value);
+        Assert.Equal(new Dictionary<int, PublishIntent.PathMark> { [0] = Mark(composed) }, placed);
     }
 
     [Fact]
@@ -489,10 +489,10 @@ public class CollectionDocumentTests
         Assert.Equal(new CollectionDocument.Auth.Header("X-Api-Key"), h.Auth);
         var o = Assert.IsType<CollectionDocument.Launcher.Remote>(doc.Connectors["oauth"].Launcher);
         Assert.Equal(new CollectionDocument.Auth.OAuthClient("id-1", "read write"), o.Auth);
-        var serialized = doc.Encode().EditorText();
+        var serialized = doc.Encode().Serialize();
         foreach (var secret in new[] { "secret-bearer", "secret-header", "secret-oauth" })
         {
-            Assert.DoesNotContain(secret, serialized, StringComparison.Ordinal);
+            Assert.False(JsonText.Contains(serialized, secret), secret);
         }
     }
 

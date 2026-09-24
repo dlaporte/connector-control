@@ -66,7 +66,7 @@ final class CollectionDocumentTests: XCTestCase {
         guard case .remote(let r) = try XCTUnwrap(doc.connectors["notion"]).launcher else { return XCTFail("notion is not remote") }
         XCTAssertEqual(r.auth, .bearer)
         XCTAssertEqual(doc.connectors["notion"]?.needs, ["token": "notion.so"])
-        XCTAssertFalse(doc.encode().serializedString.contains("secret-1"))
+        XCTAssertFalse(jsonText(try doc.encode().serialized(), contains: "secret-1"))
         XCTAssertEqual(doc.connectors["dbt"]?.env, ["DBT_TOKEN": .hint("cloud.getdbt.com"), "DBT_REGION": .value("us")])
         guard case .local(let l) = try XCTUnwrap(doc.connectors["ledger"]).launcher else { return XCTFail("ledger is not local") }
         XCTAssertEqual(l.args, ["${CC_NEEDS:server_path}"])
@@ -362,9 +362,9 @@ final class CollectionDocumentTests: XCTestCase {
         XCTAssertEqual(h.auth, .header(name: "X-Api-Key"))
         guard case .remote(let o) = try XCTUnwrap(doc.connectors["oauth"]).launcher else { return XCTFail("oauth is not remote") }
         XCTAssertEqual(o.auth, .oauthClient(clientId: "id-1", scopes: "read write"))
-        let serialized = doc.encode().serializedString
+        let serialized = try doc.encode().serialized()
         for secret in ["secret-bearer", "secret-header", "secret-oauth"] {
-            XCTAssertFalse(serialized.contains(secret))
+            XCTAssertFalse(jsonText(serialized, contains: secret), secret)
         }
     }
 
@@ -384,8 +384,4 @@ final class CollectionDocumentTests: XCTestCase {
         XCTAssertEqual(CollectionDocument.credentialWarnings(config, sharedEnv: ["API_TOKEN"]),
                        ["args[1] looks like a credential", "env.API_TOKEN looks like a credential"])
     }
-}
-
-private extension JSONValue {
-    var serializedString: String { String(decoding: (try? serialized()) ?? Data(), as: UTF8.self) }
 }

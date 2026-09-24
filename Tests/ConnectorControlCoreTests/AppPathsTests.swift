@@ -1,6 +1,7 @@
 import XCTest
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/AppPathsTests.cs
 final class AppPathsTests: XCTestCase {
     /// The real default `appSupport`, for tests that want AppPaths.live's
     /// actual home-directory behavior rather than a throwaway one.
@@ -54,7 +55,8 @@ final class AppPathsTests: XCTestCase {
     }
 
     /// The staging folder is the app's own, like backups: a chosen (synced) store dir never
-    /// gets it, so `makeService` passes the machine-local one explicitly.
+    /// gets it, so `makeService` passes the machine-local one explicitly. Swift-only: Windows has
+    /// no staging folder.
     func testExplicitStagingDirURLIsHonoredIndependentlyOfStoreDir() {
         let paths = AppPaths(
             claudeConfigURL: URL(fileURLWithPath: "/tmp/x/claude.json"),
@@ -72,6 +74,8 @@ final class AppPathsTests: XCTestCase {
                        "/Users/d/Library/Application Support/Connector Control/collections-local.json")
     }
 
+    /// Swift-only: Windows takes its folders from KnownFolders, which every C# test injects, as
+    /// LiveDefaultsPointAtClaudeAndConnectorControl does.
     func testLiveHonoursTheAppSupportDirectory() {
         let home = URL(fileURLWithPath: "/tmp/fake-home/Library/Application Support")
         let paths = AppPaths.live(environment: [:], appSupport: home)

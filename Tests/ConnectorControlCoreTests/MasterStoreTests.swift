@@ -2,6 +2,7 @@ import XCTest
 import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/MasterStoreTests.cs
 final class MasterStoreTests: XCTestCase {
     var tempDir: TempDir!
     var dir: URL!
@@ -146,7 +147,7 @@ final class MasterStoreTests: XCTestCase {
 
     /// MasterStore has no custom `init(from:)` — decoding is exactly as
     /// strict as the synthesized Codable conformance, so every one of these
-    /// six malformed shapes fails to decode and flows through the same
+    /// malformed shapes fails to decode and flows through the same
     /// corrupt-file path as garbage bytes: moved aside, empty store returned.
     func testRequiredKeysAreStrictLikeCodable() throws {
         let malformed = [
@@ -162,6 +163,14 @@ final class MasterStoreTests: XCTestCase {
             #"{"version":2,"activeProfile":"Default","profiles":[]}"#,
             // an entry missing its required "config"
             #"{"version":2,"activeProfile":"Default","profiles":{"Default":{"mcps":{"a":{"enabled":true,"lastEditView":"form"}}}}}"#,
+            // an entry missing its required "lastEditView"
+            #"{"version":2,"activeProfile":"Default","profiles":{"Default":{"mcps":{"a":{"enabled":true,"config":{}}}}}}"#,
+            // "enabled" is not a bool
+            #"{"version":2,"activeProfile":"Default","profiles":{"Default":{"mcps":{"a":{"enabled":"yes","config":{},"lastEditView":"form"}}}}}"#,
+            // an unknown view
+            #"{"version":2,"activeProfile":"Default","profiles":{"Default":{"mcps":{"a":{"enabled":true,"config":{},"lastEditView":"grid"}}}}}"#,
+            // not an object at all
+            #"[]"#,
         ]
         for (index, json) in malformed.enumerated() {
             try Data(json.utf8).write(to: url)
@@ -177,7 +186,7 @@ final class MasterStoreTests: XCTestCase {
     func testUnknownKeysAreIgnored() throws {
         let json = """
         {"version":2,"activeProfile":"Default",\
-        "profiles":{"Default":{"mcps":{}}},"unknownField":"surprise"}
+        "profiles":{"Default":{"mcps":{},"note":"x"}},"unknownField":"surprise"}
         """
         try Data(json.utf8).write(to: url)
         let result = MasterStoreIO.load(from: url)

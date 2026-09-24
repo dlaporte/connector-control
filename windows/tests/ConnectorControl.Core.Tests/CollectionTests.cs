@@ -1,14 +1,8 @@
-using ConnectorControl.Core.Tests.TestSupport;
-
 namespace ConnectorControl.Core.Tests;
 
-public class CollectionTests : IDisposable
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/CollectionTests.swift</summary>
+public class CollectionTests
 {
-    private readonly TempDir dir = new("collection-store");
-    private string Url => dir.File("mcps.json");
-
-    public void Dispose() => dir.Dispose();
-
     private static McpEntry Entry(string url) => new(JsonValue.Object(
         ("command", JsonValue.String("npx")),
         ("args", JsonValue.Array([JsonValue.String("-y"), JsonValue.String("mcp-remote"), JsonValue.String(url)]))));
@@ -32,45 +26,6 @@ public class CollectionTests : IDisposable
         Assert.Equal("Work", decoded.ActiveCollection);
         Assert.Equal(["a"], Keys(decoded.Collections["Work"]));
         Assert.Equal(["b"], Keys(decoded.Collections["Personal"]));
-    }
-
-    [Fact]
-    public void UnknownActiveCollectionFallsBackToExistingCollection()
-    {
-        File.WriteAllText(Url, "{\"version\":2,\"activeProfile\":\"Ghost\",\"profiles\":{\"Alpha\":{\"mcps\":{}},\"Beta\":{\"mcps\":{}}}}");
-        var (store, corrupt) = MasterStoreIO.Load(Url);
-        Assert.Null(corrupt);
-        Assert.Equal("Alpha", store.ActiveCollection);
-    }
-
-    [Fact]
-    public void V1FormatFileIsTreatedAsCorruptAndRebuilt()
-    {
-        File.WriteAllText(Url, "{\"version\":1,\"mcps\":{\"scoutbook\":{\"enabled\":true,\"config\":{\"command\":\"npx\",\"args\":[\"-y\",\"mcp-remote\",\"https://example.com/mcp\"]},\"lastEditView\":\"form\"}}}");
-        var (store, corrupt) = MasterStoreIO.Load(Url);
-        Assert.Equal(MasterStore.Empty(), store);
-        Assert.NotNull(corrupt);
-        Assert.StartsWith("mcps.corrupt.", Path.GetFileName(corrupt), StringComparison.Ordinal);
-        Assert.False(File.Exists(Url));
-    }
-
-    [Theory]
-    [InlineData("{\"version\":2,\"activeProfile\":\"D\",\"profiles\":{\"D\":{\"mcps\":{\"s\":{\"enabled\":true,\"config\":{}}}}}}")]                    // lastEditView missing
-    [InlineData("{\"version\":2,\"activeProfile\":\"D\",\"profiles\":{\"D\":{\"mcps\":{\"s\":{\"enabled\":\"yes\",\"config\":{},\"lastEditView\":\"form\"}}}}}")]  // enabled not bool
-    [InlineData("{\"version\":2,\"activeProfile\":\"D\",\"profiles\":{\"D\":{\"mcps\":{\"s\":{\"enabled\":true,\"config\":{},\"lastEditView\":\"grid\"}}}}}")]   // unknown view
-    [InlineData("{\"version\":\"2\",\"activeProfile\":\"D\",\"profiles\":{\"D\":{\"mcps\":{}}}}")]                                                  // version not a number
-    [InlineData("{\"version\":2,\"profiles\":{\"D\":{\"mcps\":{}}}}")]                                                                             // activeProfile missing
-    [InlineData("[]")]
-    public void RequiredKeysAreStrictLikeSwiftCodable(string json)
-    {
-        Assert.Throws<FormatException>(() => MasterStore.FromJson(JsonValue.Parse(json)));
-    }
-
-    [Fact]
-    public void UnknownKeysAreIgnored()
-    {
-        var store = MasterStore.FromJson(JsonValue.Parse("{\"version\":2,\"activeProfile\":\"D\",\"future\":1,\"profiles\":{\"D\":{\"mcps\":{},\"note\":\"x\"}}}"));
-        Assert.Equal("D", store.ActiveCollection);
     }
 
     // mcps accessor scoping
@@ -192,6 +147,7 @@ public class CollectionTests : IDisposable
         Assert.Contains('’', store.DeleteCollection(store.ActiveCollection)!);
     }
 
+    /// <summary>C#-only: MasterStore is a class here, so a copy has to be made; a Swift struct copies on assignment.</summary>
     [Fact]
     public void CloneIsDeepAndEqual()
     {
@@ -201,12 +157,5 @@ public class CollectionTests : IDisposable
         clone.Mcps["z"] = Entry("https://z.example/mcp");
         Assert.NotEqual(store, clone);
         Assert.False(store.Mcps.ContainsKey("z"));
-    }
-
-    [Fact]
-    public void VersionBeyondInt32IsAcceptedLikeSwiftInt64()
-    {
-        var store = MasterStore.FromJson(JsonValue.Parse("{\"version\":99999999999,\"activeProfile\":\"D\",\"profiles\":{\"D\":{\"mcps\":{}}}}"));
-        Assert.Equal(99999999999L, store.Version);
     }
 }

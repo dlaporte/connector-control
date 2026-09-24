@@ -2,6 +2,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
 
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/AppPathsTests.swift</summary>
 public class AppPathsTests
 {
     private static readonly string Local = Path.Combine(Path.GetTempPath(), "Users", "me", "AppData", "Local");
@@ -134,11 +135,12 @@ public class AppPathsTests
         Assert.Equal("/env/claude.json", fromEnv.ClaudeConfigPath);
     }
 
+    /// <summary>A CI/sandbox environment that inherits the variable but leaves it unset must not shadow the real default.</summary>
     [Fact]
     public void EmptyOverridesCountAsAbsent()
     {
         var paths = AppPaths.Resolve(
-            new Dictionary<string, string> { [AppPaths.StoreDirEnv] = "" },
+            new Dictionary<string, string> { [AppPaths.ClaudeConfigEnv] = "", [AppPaths.StoreDirEnv] = "" },
             new PathOverrides(ClaudeConfigPath: "", MasterStoreDir: ""), Folders, new FakePathProbe());
         Assert.Equal(Path.Combine(Local, "Connector Control"), paths.StoreDir);
         Assert.Equal(Path.Combine(Roaming, "Claude", "claude_desktop_config.json"), paths.ClaudeConfigPath);

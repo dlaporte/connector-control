@@ -2,6 +2,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
 
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/ConfigServiceTests.swift</summary>
 public class ConfigServiceTests : IDisposable
 {
     private readonly TempDir dir = new("svc");
@@ -158,9 +159,10 @@ public class ConfigServiceTests : IDisposable
         service.LoadAndReconcile();
         File.WriteAllText(paths.MasterStorePath, "garbage");
         var result = service.LoadAndReconcile();
-        Assert.Equal(3, result.Store.Mcps.Count);
+        Assert.Equal(3, result.Store.Mcps.Count);   // rebuilt from Claude's config
         Assert.Single(result.Notes);
-        Assert.Contains("mcps.corrupt.", result.Notes[0]);
+        Assert.StartsWith("The MCP list file was unreadable; it was preserved as mcps.corrupt.", result.Notes[0], StringComparison.Ordinal);
+        Assert.EndsWith(".json and rebuilt from Claude's config.", result.Notes[0], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -170,18 +172,8 @@ public class ConfigServiceTests : IDisposable
         File.WriteAllText(paths.MasterStorePath, "garbage");
         File.WriteAllText(paths.ClaudeConfigPath, "{oops");
         var result = service.LoadAndReconcile();
+        // Both sentences, in reconcile order; the second is the one that says what to do.
         Assert.Equal(2, result.Notes.Count);
-        Assert.Contains(result.Notes, n => n.Contains("mcps.corrupt."));
-        Assert.Contains(result.Notes, n => n.Contains("Backups"));
-    }
-
-    [Fact]
-    public void NoteTextsMatchTheMacApp()
-    {
-        service.LoadAndReconcile();
-        File.WriteAllText(paths.MasterStorePath, "garbage");
-        File.WriteAllText(paths.ClaudeConfigPath, "{oops");
-        var result = service.LoadAndReconcile();
         Assert.StartsWith("The MCP list file was unreadable; it was preserved as mcps.corrupt.", result.Notes[0], StringComparison.Ordinal);
         Assert.EndsWith(".json and rebuilt from Claude's config.", result.Notes[0], StringComparison.Ordinal);
         Assert.Equal("Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.", result.Notes[1]);
@@ -236,7 +228,7 @@ public class ConfigServiceTests : IDisposable
         var result = service.LoadAndReconcile();
         Assert.Equal(3, result.Store.Mcps.Count);
         Assert.Single(result.Notes);
-        Assert.Contains("Backups", result.Notes[0]);
+        Assert.Equal("Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.", result.Notes[0]);
         Assert.Null(result.ClaudeServers);
         Assert.Equal(backupsBefore, service.Backups.Backups("mcps").Count);
     }
@@ -324,6 +316,7 @@ public class ConfigServiceTests : IDisposable
         File.WriteAllText(bad, "{not json");
         var before = File.ReadAllBytes(paths.ClaudeConfigPath);
         var ex = Assert.Throws<ClaudeConfigException>(() => service.RestoreClaudeConfig(bad, store));
+        // The parenthesised detail is .NET's own JSON error text, as the Mac's is Foundation's.
         Assert.Equal(
             "backup bad-backup.json is not a valid config file "
                 + "('n' is an invalid start of a property name. Expected a '\"'. LineNumber: 0 | BytePositionInLine: 1.)",
