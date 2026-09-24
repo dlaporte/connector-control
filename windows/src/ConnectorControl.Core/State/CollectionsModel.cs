@@ -95,8 +95,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public static string DeletePublishedFileQuestion(string fileName) => $"Also remove {fileName} from the folder?";
 
     /// <summary>
-    /// One collection in the left pane. A published collection carries no mark of its own there —
-    /// IsPublished is what the detail line says, not a sidebar glyph.
+    /// One collection in the left pane. A published collection carries no mark of its own there:
+    /// publishing is what the detail line and the header's pill say, not a sidebar glyph.
     /// </summary>
     /// <param name="Source">
     /// Where a synced collection's document is, as far as this machine knows: the path it is
@@ -105,7 +105,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <c>AppState.SourceLocation</c> is the rule, shared with the flyout's chip and menu, so the
     /// sidebar's chain and the chip cannot name the same collection differently.
     /// </param>
-    public sealed record Item(string Name, CollectionKind Kind, bool IsActive, bool IsPublished,
+    public sealed record Item(string Name, CollectionKind Kind, bool IsActive,
         bool HasPendingUpdate, bool IsLocated, string? Source = null)
     {
         public string Id => Name;
@@ -129,7 +129,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// One connector of the selected collection. Checked is the window's own state — an export
     /// tick, not anything the store holds — so it is the one field the model fills in itself.
     /// </summary>
-    public sealed record Row(string Name, bool Enabled, string? Caution, bool IsLocked, bool Checked, string Target)
+    public sealed record Row(string Name, string? Caution, bool IsLocked, bool Checked, string Target)
     {
         public string Id => Name;
     }
@@ -226,8 +226,12 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Everything that follows the collection on show, and nothing that does not — in particular
-    /// not <see cref="Items"/>, whose content the selection never touches.
+    /// Everything the window binds that follows the collection on show, and nothing that does not
+    /// — in particular not <see cref="Items"/>, whose content the selection never touches. What
+    /// the code-behind reads when a menu opens — <see cref="CopyDestinations"/>,
+    /// <see cref="CollectionMenu"/>, <see cref="CanRefresh"/>, <see cref="CanDelete"/>,
+    /// <see cref="PublishedFilePath"/> and <see cref="SourceFilePath"/> — is read fresh there, so
+    /// nothing listens for it and it is not raised.
     /// </summary>
     private void RaiseSelectionDependents()
     {
@@ -236,17 +240,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         Raise(nameof(BannerText));
         Raise(nameof(BannerButton));
         Raise(nameof(HasBanner));
-        Raise(nameof(CanExport));
-        Raise(nameof(CopyTargets));
-        Raise(nameof(CopyDestinations));
         Raise(nameof(CanRemoveChecked));
-        Raise(nameof(CanPublish));
-        Raise(nameof(CanRefresh));
-        Raise(nameof(CanDelete));
         Raise(nameof(Pills));
-        Raise(nameof(CollectionMenu));
-        Raise(nameof(PublishedFilePath));
-        Raise(nameof(SourceFilePath));
         Raise(nameof(CanAddConnector));
         Raise(nameof(AddConnectorTooltipText));
     }
@@ -284,7 +279,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     {
         var active = state.ActiveCollection;
         return state.CollectionNames
-            .Select(name => new Item(name, state.KindOf(name), name == active, state.IsPublished(name),
+            .Select(name => new Item(name, state.KindOf(name), name == active,
                 state.PendingUpdates.ContainsKey(name), state.IsLocated(name), state.SourceLocation(name)))
             .ToList();
     }
@@ -328,7 +323,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         // surfaces over one list must agree on its order.
         return mcps.Keys
             .Order(StringComparer.Ordinal)
-            .Select(name => new Row(name, mcps[name].Enabled, state.ConnectorCaution(name, collection),
+            .Select(name => new Row(name, state.ConnectorCaution(name, collection),
                 locked, checks.Contains(name), TargetOf(mcps[name].Config)))
             .ToList();
     }
@@ -739,19 +734,11 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     // MARK: control state
 
-    public bool CanExport => !state.IsSynced(SelectedCollection) && ActiveChecks.Count > 0;
-
     /// <summary>
-    /// Where the selection bar's Copy to can send the ticked rows: any local collection but the
-    /// one showing them, which is their source. A synced collection is excluded too: its
-    /// connectors are the author's, and it has no local write path of its own to copy into.
-    /// </summary>
-    public IReadOnlyList<string> CopyTargets =>
-        state.LocalCollectionNames.Where(name => name != SelectedCollection).ToList();
-
-    /// <summary>
-    /// Every collection but the selected one, in the sidebar's order, each marked whether it can
-    /// take copies. <see cref="CopyTargets"/> is exactly the enabled ones.
+    /// Where the selection bar's Copy to can send the ticked rows: every collection but the
+    /// selected one, which is their source, in the sidebar's order, each marked whether it can
+    /// take copies. A synced collection is listed but disabled: its connectors are the author's,
+    /// and it has no local write path of its own to copy into.
     /// </summary>
     public IReadOnlyList<CopyDestination> CopyDestinations
     {
@@ -766,15 +753,6 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     }
 
     public bool CanRemoveChecked => !state.IsSynced(SelectedCollection) && CheckedNames.Count > 0;
-
-    /// <summary>
-    /// Any local collection, published or not. Reopening the dialog on a published one shows what
-    /// its record says — the folder, every shared value, every marked path — and pressing Publish
-    /// again updates the record and rewrites the document. That is the only way to change what is
-    /// shared or to mark a path again, so it stays offered beside Stop Publishing. A synced
-    /// collection has an author elsewhere and nothing here to publish.
-    /// </summary>
-    public bool CanPublish => !state.IsSynced(SelectedCollection);
 
     /// <summary>Refresh reads the bound document, so it needs one this machine can name.</summary>
     public bool CanRefresh => LocatedSource(SelectedCollection) is not null;
@@ -954,6 +932,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             else
             {
                 var published = state.IsPublished(collection);
+                // Publishing Settings stays beside Stop Publishing: reopening the dialog and pressing
+                // Publish again is the only way to change what is shared or to mark a path again.
                 entries.Add(published ? new MenuEntry.PublishingSettings() : new MenuEntry.StartPublishing());
                 if (published)
                 {
@@ -1064,15 +1044,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             checkedNames.Remove(name);
         }
         RefreshRows();
-        Raise(nameof(CanExport));
         Raise(nameof(CanRemoveChecked));
-    }
-
-    /// <summary>The row switch, in the collection the window is showing rather than the active one.</summary>
-    public void SetEnabled(string name, bool on)
-    {
-        state.SetEnabled(name, on, SelectedCollection);
-        LastError = null;
     }
 
     /// <summary>
@@ -1089,20 +1061,24 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         return EditTarget.Existing(row, entry, collection);
     }
 
-    /// <summary>The names the export sheet writes, in the order the rows show them.</summary>
+    /// <summary>
+    /// The names the export sheet writes, in the order the rows show them. <see cref="CheckedNames"/>
+    /// today, kept as its own member so that what an export takes is decided here, in one place,
+    /// rather than in each window that opens the sheet.
+    /// </summary>
     public IReadOnlyList<string> ExportIntentForChecked() => CheckedNames;
 
     /// <summary>
     /// Copies the ticked connectors into another local collection: they arrive disabled and record
     /// where they came from, so nothing Claude runs changes and nothing is applied. true when they
     /// landed, and the ticks go with them; false when there was nothing to copy, the destination is
-    /// not one <see cref="CopyTargets"/> offers, or the copy failed, with the reason in
+    /// not one <see cref="CopyDestinations"/> enables, or the copy failed, with the reason in
     /// <see cref="LastError"/> for the last.
     /// </summary>
     public bool CopyChecked(string collection, IReadOnlyDictionary<string, ImportChoice>? choices = null)
     {
         var names = CheckedNames;
-        if (names.Count == 0 || !CopyTargets.Contains(collection))
+        if (names.Count == 0 || !CopyDestinations.Any(d => d.Name == collection && d.IsEnabled))
         {
             LastError = null;
             return false;

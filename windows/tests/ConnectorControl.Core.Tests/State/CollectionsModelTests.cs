@@ -75,7 +75,6 @@ public class CollectionsModelTests
         Assert.Equal(["Default", "Shared", "Team"], model.Items.Select(i => i.Id));
         Assert.Equal([CollectionKind.Local, CollectionKind.Local, CollectionKind.Synced], model.Items.Select(i => i.Kind));
         Assert.Equal([true, false, false], model.Items.Select(i => i.IsActive));
-        Assert.Equal([false, true, false], model.Items.Select(i => i.IsPublished));
         Assert.Equal([false, false, false], model.Items.Select(i => i.HasPendingUpdate));
         // A local collection has no file to find.
         Assert.Equal([true, true, true], model.Items.Select(i => i.IsLocated));
@@ -127,14 +126,12 @@ public class CollectionsModelTests
         // Every row of a synced collection carries the lock.
         Assert.All(model.Rows, r => Assert.True(r.IsLocked));
         Assert.Equal([null, null, AppState.NeedsValueCaution("JIRA_TOKEN")], model.Rows.Select(r => r.Caution));
-        Assert.Equal([true, true, true], model.Rows.Select(r => r.Enabled));
 
         // Nothing in a synced collection can be exported, so nothing in one can be ticked.
         model.SetChecked("github", true);
         Assert.All(model.Rows, r => Assert.False(r.Checked));
         Assert.Empty(model.CheckedNames);
         Assert.Empty(model.ExportIntentForChecked());
-        Assert.False(model.CanExport);
 
         // The same rows in a local collection do tick, and the ticks belong to that collection.
         model.Selected = "Default";
@@ -145,9 +142,8 @@ public class CollectionsModelTests
         Assert.Equal([true], model.Rows.Select(r => r.Checked));
         Assert.Equal(["notes"], model.CheckedNames);
         Assert.Equal(["notes"], model.ExportIntentForChecked());
-        Assert.True(model.CanExport);
         model.SetChecked("notes", false);
-        Assert.False(model.CanExport);
+        Assert.Empty(model.ExportIntentForChecked());
 
         // The pencil opens the row in the collection the window is showing, not the active one.
         model.Selected = "Team";
@@ -516,24 +512,19 @@ public class CollectionsModelTests
 
         using var model = new CollectionsModel(state, h.Dialogs);
         Assert.Equal("Default", model.Selected);   // the selection starts on the active collection
-        Assert.False(model.CanExport);             // nothing is ticked yet
+        Assert.Empty(model.CheckedNames);          // nothing is ticked yet
         model.SetChecked("aws-mcp", true);
-        Assert.True(model.CanExport);
-        Assert.True(model.CanPublish);
+        Assert.Equal(["aws-mcp"], model.CheckedNames);
         Assert.False(model.CanRefresh);
         Assert.True(model.CanDelete);
 
         model.Selected = "Shared";
-        Assert.False(model.CanExport);    // the ticks belonged to the collection that was showing
-        // Published from here, and still offered: reopening the dialog shows the record and
-        // pressing Publish again updates what is shared, so both links stand side by side.
-        Assert.True(model.CanPublish);
+        Assert.Empty(model.CheckedNames);   // the ticks belonged to the collection that was showing
         Assert.False(model.CanRefresh);
         Assert.True(model.CanDelete);
 
         model.Selected = "Team";
-        Assert.False(model.CanExport);
-        Assert.False(model.CanPublish);   // a synced collection has an author elsewhere
+        Assert.Empty(model.CheckedNames);
         Assert.True(model.CanRefresh);
         // A synced collection goes without taking the last local one with it.
         Assert.True(model.CanDelete);
@@ -773,6 +764,10 @@ public class CollectionsModelTests
 
     // MARK: toggles
 
+    /// <summary>
+    /// The window has no switch of its own any more; the toggle in a named collection is
+    /// AppState's, kept here because nothing else pins it.
+    /// </summary>
     [Fact]
     public void SetEnabledInAnInactiveCollectionLeavesClaudesConfigAlone()
     {
@@ -780,20 +775,16 @@ public class CollectionsModelTests
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Work"));
         state.SwitchCollection("Default");
-        using var model = new CollectionsModel(state, h.Dialogs);
 
-        model.Selected = "Work";
-        model.SetEnabled("aws-mcp", false);
+        state.SetEnabled("aws-mcp", false, "Work");
         Assert.False(state.Store.Collections["Work"].Mcps["aws-mcp"].Enabled);
         Assert.False(h.StoreOnDisk().Collections["Work"].Mcps["aws-mcp"].Enabled);
         Assert.True(state.Store.Collections["Default"].Mcps["aws-mcp"].Enabled);
         // Claude runs the active collection, which did not change.
         Assert.True(h.ClaudeServers().ContainsKey("aws-mcp"));
-        Assert.False(model.Rows.Single(r => r.Name == "aws-mcp").Enabled);
 
         // The same toggle in the active collection does reach Claude.
-        model.Selected = "Default";
-        model.SetEnabled("aws-mcp", false);
+        state.SetEnabled("aws-mcp", false, "Default");
         Assert.False(h.ClaudeServers().ContainsKey("aws-mcp"));
     }
 
@@ -1158,28 +1149,30 @@ public class CollectionsModelTests
 
     /// <summary>Where a copy can go: local collections only, never the one the ticked rows already sit in.</summary>
     [Fact]
-    public void CopyTargetsExcludeTheSourceAndEverySyncedCollection()
+    public void CopyDestinationsEnableNeitherTheSourceNorASyncedCollection()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Other"));
         // Created first: the sidecar only annotates a collection already in the master list
         // (CollectionsFile.Reconciled), so seeding "Team" with nothing to annotate would leave it
-        // dropped, and excluded from CopyTargets for not existing rather than for being synced.
+        // dropped, and missing from CopyDestinations for not existing rather than disabled for
+        // being synced.
         Assert.Null(state.CreateCollection("Team"));
         Seed(h, state, File_(("Team", Synced("team.json"))));
         Assert.True(state.IsSynced("Team"));
         using var model = new CollectionsModel(state, h.Dialogs);
 
         model.Selected = "Default";
-        Assert.Equal(["Other"], model.CopyTargets);   // not Default, which is the source, and not Team, which is synced
+        // Not Default, which is the source, and not Team, which is synced.
+        Assert.Equal(["Other"], model.CopyDestinations.Where(d => d.IsEnabled).Select(d => d.Name));
         model.Selected = "Other";
-        Assert.Equal(["Default"], model.CopyTargets);
+        Assert.Equal(["Default"], model.CopyDestinations.Where(d => d.IsEnabled).Select(d => d.Name));
     }
 
     /// <summary>
     /// The picker's menu: every collection but the source, a synced one listed but disabled so it
-    /// can say why, and CopyTargets exactly the enabled ones.
+    /// can say why.
     /// </summary>
     [Fact]
     public void CopyDestinationsListEveryOtherCollectionAndDisableTheSyncedOnes()
@@ -1197,12 +1190,10 @@ public class CollectionsModelTests
         Assert.Equal(
             [new CollectionsModel.CopyDestination("Other", true), new CollectionsModel.CopyDestination("Team", false)],
             model.CopyDestinations);
-        Assert.Equal(model.CopyDestinations.Where(d => d.IsEnabled).Select(d => d.Name), model.CopyTargets);
 
         model.Selected = "Other";
         Assert.Equal(["Default", "Team"], model.CopyDestinations.Select(d => d.Name));   // the sidebar's order
         Assert.Equal([true, false], model.CopyDestinations.Select(d => d.IsEnabled));
-        Assert.Equal(model.CopyDestinations.Where(d => d.IsEnabled).Select(d => d.Name), model.CopyTargets);
     }
 
     /// <summary>Remove needs something ticked.</summary>
@@ -1355,13 +1346,13 @@ public class CollectionsModelTests
     }
 
     /// <summary>
-    /// The two early-outs CopyChecked documents: a target outside CopyTargets — the source
-    /// itself, or a synced collection — and an empty tick set. Both return false without reaching
-    /// AppState.MakeLocalCopy, so nothing lands anywhere and the ticks are left standing. The last
-    /// error is cleared, so the window does not show it again as if this copy had failed.
+    /// The two early-outs CopyChecked documents: a target CopyDestinations does not enable —
+    /// the source itself, or a synced collection — and an empty tick set. Both return false without
+    /// reaching AppState.MakeLocalCopy, so nothing lands anywhere and the ticks are left standing.
+    /// The last error is cleared, so the window does not show it again as if this copy had failed.
     /// </summary>
     [Fact]
-    public void CopyCheckedRefusesATargetOutsideCopyTargets()
+    public void CopyCheckedRefusesATargetCopyDestinationsDoesNotEnable()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();

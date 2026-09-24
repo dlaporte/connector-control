@@ -62,7 +62,6 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.items.map(\.id), ["Default", "Shared", "Team"])
         XCTAssertEqual(model.items.map(\.kind), [.local, .local, .synced])
         XCTAssertEqual(model.items.map(\.isActive), [true, false, false])
-        XCTAssertEqual(model.items.map(\.isPublished), [false, true, false])
         XCTAssertEqual(model.items.map(\.hasPendingUpdate), [false, false, false])
         XCTAssertEqual(model.items.map(\.isLocated), [true, true, true], "a local collection has no file to find")
 
@@ -114,14 +113,12 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.rows.map(\.target), ["node index.js", "github.example", "npx"])
         XCTAssertTrue(model.rows.allSatisfy(\.isLocked), "every row of a synced collection carries the lock")
         XCTAssertEqual(model.rows.map(\.caution), [nil, nil, AppState.needsValueCaution("JIRA_TOKEN")])
-        XCTAssertEqual(model.rows.map(\.enabled), [true, true, true])
 
         // Nothing in a synced collection can be exported, so nothing in one can be ticked.
         model.setChecked("github", true)
         XCTAssertTrue(model.rows.allSatisfy { !$0.checked })
         XCTAssertEqual(model.checkedNames, [])
         XCTAssertEqual(model.exportIntentForChecked(), [])
-        XCTAssertFalse(model.canExport)
 
         // The same rows in a local collection do tick, and the ticks belong to that collection.
         model.selected = "Default"
@@ -132,9 +129,8 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.rows.map(\.checked), [true])
         XCTAssertEqual(model.checkedNames, ["notes"])
         XCTAssertEqual(model.exportIntentForChecked(), ["notes"])
-        XCTAssertTrue(model.canExport)
         model.setChecked("notes", false)
-        XCTAssertFalse(model.canExport)
+        XCTAssertEqual(model.exportIntentForChecked(), [])
 
         // The pencil opens the row in the collection the window is showing, not the active one.
         model.selected = "Team"
@@ -435,24 +431,19 @@ final class CollectionsModelTests: XCTestCase {
         let model = CollectionsModel(state: state, dialogs: h.dialogs)
         defer { model.dispose() }
         XCTAssertEqual(model.selected, "Default", "the selection starts on the active collection")
-        XCTAssertFalse(model.canExport, "nothing is ticked yet")
+        XCTAssertEqual(model.checkedNames, [], "nothing is ticked yet")
         model.setChecked("aws-mcp", true)
-        XCTAssertTrue(model.canExport)
-        XCTAssertTrue(model.canPublish)
+        XCTAssertEqual(model.checkedNames, ["aws-mcp"])
         XCTAssertFalse(model.canRefresh)
         XCTAssertTrue(model.canDelete)
 
         model.selected = "Shared"
-        XCTAssertFalse(model.canExport, "the ticks belonged to the collection that was showing")
-        // Published from here, and still offered: reopening the sheet shows the record and
-        // pressing Publish again updates what is shared, so both links stand side by side.
-        XCTAssertTrue(model.canPublish, "the only way to change what a published collection shares")
+        XCTAssertEqual(model.checkedNames, [], "the ticks belonged to the collection that was showing")
         XCTAssertFalse(model.canRefresh)
         XCTAssertTrue(model.canDelete)
 
         model.selected = "Team"
-        XCTAssertFalse(model.canExport)
-        XCTAssertFalse(model.canPublish, "a synced collection has an author elsewhere")
+        XCTAssertEqual(model.checkedNames, [])
         XCTAssertTrue(model.canRefresh)
         XCTAssertTrue(model.canDelete, "a synced collection goes without taking the last local one with it")
 
@@ -680,25 +671,22 @@ final class CollectionsModelTests: XCTestCase {
 
     // MARK: - Toggles
 
+    /// The window has no switch of its own any more; the toggle in a named collection is
+    /// AppState's, kept here because nothing else pins it.
     func testSetEnabledInAnInactiveCollectionLeavesClaudesConfigAlone() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Work"))
         state.switchCollection(to: "Default")
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
 
-        model.selected = "Work"
-        model.setEnabled("aws-mcp", false)
+        state.setEnabled("aws-mcp", false, in: "Work")
         XCTAssertEqual(state.store.collections["Work"]?.mcps["aws-mcp"]?.enabled, false)
         XCTAssertEqual(try h.storeOnDisk().collections["Work"]?.mcps["aws-mcp"]?.enabled, false)
         XCTAssertEqual(state.store.collections["Default"]?.mcps["aws-mcp"]?.enabled, true)
         XCTAssertNotNil(try h.claudeServers()["aws-mcp"], "Claude runs the active collection, which did not change")
-        XCTAssertEqual(model.rows.first { $0.name == "aws-mcp" }?.enabled, false)
 
         // The same toggle in the active collection does reach Claude.
-        model.selected = "Default"
-        model.setEnabled("aws-mcp", false)
+        state.setEnabled("aws-mcp", false, in: "Default")
         XCTAssertNil(try h.claudeServers()["aws-mcp"])
     }
 
@@ -1011,27 +999,28 @@ final class CollectionsModelTests: XCTestCase {
     // MARK: - Selection bar
 
     /// Where a copy can go: local collections only, never the one the ticked rows already sit in.
-    func testCopyTargetsExcludeTheSourceAndEverySyncedCollection() throws {
+    func testCopyDestinationsEnableNeitherTheSourceNorASyncedCollection() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Other"))
         // Created first: the sidecar only annotates a collection already in the master list
         // (CollectionsFile.reconciled(with:)), so seeding "Team" with nothing to annotate would
-        // leave it dropped, and excluded from copyTargets for not existing rather than for being
-        // synced.
+        // leave it dropped, and missing from copyDestinations for not existing rather than
+        // disabled for being synced.
         XCTAssertNil(state.createCollection(named: "Team"))
         try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
         XCTAssertTrue(state.isSynced("Team"))
         let model = CollectionsModel(state: state, dialogs: h.dialogs)
 
         model.selected = "Default"
-        XCTAssertEqual(model.copyTargets, ["Other"], "not Default, which is the source, and not Team, which is synced")
+        XCTAssertEqual(model.copyDestinations.filter(\.isEnabled).map(\.name), ["Other"],
+                       "not Default, which is the source, and not Team, which is synced")
         model.selected = "Other"
-        XCTAssertEqual(model.copyTargets, ["Default"])
+        XCTAssertEqual(model.copyDestinations.filter(\.isEnabled).map(\.name), ["Default"])
     }
 
     /// The picker's menu: every collection but the source, a synced one listed but disabled so it
-    /// can say why, and `copyTargets` exactly the enabled ones.
+    /// can say why.
     func testCopyDestinationsListEveryOtherCollectionAndDisableTheSyncedOnes() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
@@ -1047,12 +1036,10 @@ final class CollectionsModelTests: XCTestCase {
             CollectionsModel.CopyDestination(name: "Other", isEnabled: true),
             CollectionsModel.CopyDestination(name: "Team", isEnabled: false),
         ], "not Default, which is the source; Team is there, but cannot take copies")
-        XCTAssertEqual(model.copyTargets, model.copyDestinations.filter(\.isEnabled).map(\.name))
 
         model.selected = "Other"
         XCTAssertEqual(model.copyDestinations.map(\.name), ["Default", "Team"], "the sidebar's order")
         XCTAssertEqual(model.copyDestinations.map(\.isEnabled), [true, false])
-        XCTAssertEqual(model.copyTargets, model.copyDestinations.filter(\.isEnabled).map(\.name))
     }
 
     /// Remove needs something ticked.
@@ -1186,11 +1173,11 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(try h.claudeServers(), before, "every copy arrives disabled, so nothing Claude runs has changed")
     }
 
-    /// The two early-outs `copyChecked` documents: a target outside `copyTargets` — the source
-    /// itself, or a synced collection — and an empty tick set. Both return false without reaching
-    /// `AppState.makeLocalCopy`, so nothing lands anywhere and the ticks are left standing. The last
-    /// error is cleared, so the window does not show it again as if this copy had failed.
-    func testCopyCheckedRefusesATargetOutsideCopyTargets() throws {
+    /// The two early-outs `copyChecked` documents: a target `copyDestinations` does not enable —
+    /// the source itself, or a synced collection — and an empty tick set. Both return false without
+    /// reaching `AppState.makeLocalCopy`, so nothing lands anywhere and the ticks are left standing.
+    /// The last error is cleared, so the window does not show it again as if this copy had failed.
+    func testCopyCheckedRefusesATargetCopyDestinationsDoesNotEnable() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         // Created first, for the same reason as the success test above, and so seeding the

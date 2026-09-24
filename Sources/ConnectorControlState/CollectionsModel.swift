@@ -87,14 +87,13 @@ public final class CollectionsModel: ObservableObject {
 
     public static func deletePublishedFileQuestion(_ fileName: String) -> String { "Also remove \(fileName) from the folder?" }
 
-    /// One collection in the left pane. A published collection carries no mark of its own there —
-    /// `isPublished` is what the detail line says, not a sidebar glyph.
+    /// One collection in the left pane. A published collection carries no mark of its own there:
+    /// publishing is what the detail line and the header's pill say, not a sidebar glyph.
     public struct Item: Identifiable, Equatable, Sendable {
         public let id: String
         public let name: String
         public let kind: CollectionKind
         public let isActive: Bool
-        public let isPublished: Bool
         public let hasPendingUpdate: Bool
         public let isLocated: Bool
         /// Where a synced collection's document is, as far as this machine knows: the path it is
@@ -104,13 +103,12 @@ public final class CollectionsModel: ObservableObject {
         /// menu, so the sidebar's chain and the chip cannot name the same collection differently.
         public let source: String?
 
-        public init(name: String, kind: CollectionKind, isActive: Bool, isPublished: Bool,
+        public init(name: String, kind: CollectionKind, isActive: Bool,
                     hasPendingUpdate: Bool, isLocated: Bool, source: String? = nil) {
             self.id = name
             self.name = name
             self.kind = kind
             self.isActive = isActive
-            self.isPublished = isPublished
             self.hasPendingUpdate = hasPendingUpdate
             self.isLocated = isLocated
             self.source = source
@@ -141,16 +139,14 @@ public final class CollectionsModel: ObservableObject {
     public struct Row: Identifiable, Equatable, Sendable {
         public let id: String
         public let name: String
-        public let enabled: Bool
         public let caution: String?
         public let isLocked: Bool
         public var checked: Bool
         public let target: String
 
-        public init(name: String, enabled: Bool, caution: String?, isLocked: Bool, checked: Bool, target: String) {
+        public init(name: String, caution: String?, isLocked: Bool, checked: Bool, target: String) {
             self.id = name
             self.name = name
-            self.enabled = enabled
             self.caution = caution
             self.isLocked = isLocked
             self.checked = checked
@@ -263,7 +259,7 @@ public final class CollectionsModel: ObservableObject {
         let active = state.activeCollection
         return state.collectionNames.map { name in
             Item(name: name, kind: state.kind(of: name), isActive: name == active,
-                 isPublished: state.isPublished(name), hasPendingUpdate: state.pendingUpdates[name] != nil,
+                 hasPendingUpdate: state.pendingUpdates[name] != nil,
                  isLocated: state.isLocated(name), source: state.sourceLocation(of: name))
         }
     }
@@ -276,11 +272,9 @@ public final class CollectionsModel: ObservableObject {
         // Ordinal, which is how the popover sorts the same connectors of the same collection:
         // two surfaces over one list must agree on its order.
         return mcps.keys.sorted().map { name in
-            let entry = mcps[name]
-            return Row(name: name, enabled: entry?.enabled ?? false,
-                       caution: state.connectorCaution(name, in: collection), isLocked: locked,
-                       checked: checks.contains(name),
-                       target: CollectionsModel.target(of: entry?.config ?? .object([:])))
+            Row(name: name, caution: state.connectorCaution(name, in: collection), isLocked: locked,
+                checked: checks.contains(name),
+                target: CollectionsModel.target(of: mcps[name]?.config ?? .object([:])))
         }
     }
 
@@ -605,15 +599,10 @@ public final class CollectionsModel: ObservableObject {
 
     // MARK: - Control state
 
-    public var canExport: Bool { !state.isSynced(selectedCollection) && !activeChecks.isEmpty }
-
-    /// Where the selection bar's Copy to can send the ticked rows: any local collection but the
-    /// one showing them, which is their source. A synced collection is excluded too: its
-    /// connectors are the author's, and it has no local write path of its own to copy into.
-    public var copyTargets: [String] { state.localCollectionNames.filter { $0 != selectedCollection } }
-
-    /// Every collection but the selected one, in the sidebar's order, each marked whether it can
-    /// take copies. `copyTargets` is exactly the enabled ones.
+    /// Where the selection bar's Copy to can send the ticked rows: every collection but the
+    /// selected one, which is their source, in the sidebar's order, each marked whether it can
+    /// take copies. A synced collection is listed but disabled: its connectors are the author's,
+    /// and it has no local write path of its own to copy into.
     public var copyDestinations: [CopyDestination] {
         let collection = selectedCollection
         return state.collectionNames.filter { $0 != collection }.map { name in
@@ -622,13 +611,6 @@ public final class CollectionsModel: ObservableObject {
     }
 
     public var canRemoveChecked: Bool { !state.isSynced(selectedCollection) && !checkedNames.isEmpty }
-
-    /// Any local collection, published or not. Reopening the sheet on a published one shows what
-    /// its record says — the folder, every shared value, every marked path — and pressing
-    /// Publish again updates the record and rewrites the document. That is the only way to
-    /// change what is shared or to mark a path again, so it stays offered beside Stop Publishing.
-    /// A synced collection has an author elsewhere and nothing here to publish.
-    public var canPublish: Bool { !state.isSynced(selectedCollection) }
 
     /// Refresh reads the bound document, so it needs one this machine can name.
     public var canRefresh: Bool { locatedSource(of: selectedCollection) != nil }
@@ -731,6 +713,8 @@ public final class CollectionsModel: ObservableObject {
             entries.append(.stopSyncing)
         } else {
             let published = state.isPublished(collection)
+            // Publishing Settings stays beside Stop Publishing: reopening the sheet and pressing
+            // Publish again is the only way to change what is shared or to mark a path again.
             entries.append(published ? .publishingSettings : .startPublishing)
             if published { entries.append(.stopPublishing) }
             if publishedFilePath != nil { entries.append(.showPublishedFile) }
@@ -806,12 +790,6 @@ public final class CollectionsModel: ObservableObject {
         if on { checkedNames_.insert(name) } else { checkedNames_.remove(name) }
     }
 
-    /// The row switch, in the collection the window is showing rather than the active one.
-    public func setEnabled(_ name: String, _ on: Bool) {
-        state.setEnabled(name, on, in: selectedCollection)
-        lastError = nil
-    }
-
     /// The pencil: the same connector in two collections is two windows, so the target carries
     /// the collection this window is showing.
     public func editTarget(for row: String) -> EditTarget {
@@ -820,17 +798,20 @@ public final class CollectionsModel: ObservableObject {
         return EditTarget.existing(name: row, entry: entry, in: collection)
     }
 
-    /// The names the export sheet writes, in the order the rows show them.
+    /// The names the export sheet writes, in the order the rows show them. `checkedNames` today,
+    /// kept as its own member so that what an export takes is decided here, in one place, rather
+    /// than in each window that opens the sheet.
     public func exportIntentForChecked() -> [String] { checkedNames }
 
     /// Copies the ticked connectors into another local collection: they arrive disabled and record
     /// where they came from, so nothing Claude runs changes and nothing is applied. true when they
     /// landed, and the ticks go with them; false when there was nothing to copy, the destination is
-    /// not one `copyTargets` offers, or the copy failed, with the reason in `lastError` for the last.
+    /// not one `copyDestinations` enables, or the copy failed, with the reason in `lastError` for
+    /// the last.
     @discardableResult
     public func copyChecked(into collection: String, choices: [String: ImportChoice] = [:]) -> Bool {
         let names = checkedNames
-        guard !names.isEmpty, copyTargets.contains(collection) else {
+        guard !names.isEmpty, copyDestinations.contains(where: { $0.name == collection && $0.isEnabled }) else {
             lastError = nil
             return false
         }
