@@ -228,9 +228,10 @@ public class FlyoutWindowTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Work"));   // Default + Work, with Work active
-        // Work differs from Default, so switching between them has something to apply: a switch
-        // that changes nothing Claude runs rewrites nothing, and clears no banner either.
+        // Claude runs Work with a connector Default lacks, so switching back has something to
+        // apply: a switch that changes nothing Claude runs rewrites nothing, and clears no banner.
         Assert.Null(state.Upsert("extra", new McpEntry(true, AppStateHarness.Remote("https://extra/")), null));
+        state.Apply();
         var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
