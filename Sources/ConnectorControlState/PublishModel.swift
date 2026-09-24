@@ -434,13 +434,16 @@ public final class PublishModel: ObservableObject {
     ///
     /// A folder of this collection's own is never released, whatever the view offers: it is
     /// answered by `useDirectoryToken`, or by writing `${COLLECTION_DIR}` in the connector's
-    /// editor. nil when the path is released; otherwise the note of the entry that still holds it
-    /// back, and nothing changes.
+    /// editor. nil when the path is released; otherwise a folder entry's note for where it sits,
+    /// and nothing changes. A folder's note even where the list shows it as a path kept back — a
+    /// copy of a ticked one — since that note's own answer is the Release just refused.
     @discardableResult
     public func releaseKeptPath(_ value: String) -> String? {
         let text = KeptValue.nfc(value)
         if state.keptBack(for: collection).folders.contains(where: { KeptValue.nfc($0) == text }) {
-            return keptPaths.first { KeptValue.nfc($0.value) == text }.map(note(for:))
+            return keptPaths.first { KeptValue.nfc($0.value) == text }.map {
+                note(for: KeptPath(value: $0.value, connector: $0.connector, field: $0.field, kind: .folder))
+            }
         }
         released.insert(value)
         for index in pathRows.indices where pathRows[index].marked && KeptValue.nfc(pathRows[index].value) == text {

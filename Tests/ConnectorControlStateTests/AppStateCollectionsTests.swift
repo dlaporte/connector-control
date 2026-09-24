@@ -2402,6 +2402,30 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertTrue(try jsonFile(file, contains: Placeholder.directoryToken))
     }
 
+    /// The publish folder copied beside a tick is listed as a copy of a marked path, whose note ends
+    /// "or release it". Release refuses the folder all the same, so its refusal must not repeat
+    /// that advice: it says what a folder entry says, where the token goes.
+    func testARefusedReleaseOfTheFolderNeverSuggestsReleasingIt() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        let bound = try XCTUnwrap(state.collectionsCache.published[state.activeCollection]?.folder)
+        XCTAssertNil(state.upsert(name: "tool", entry: MCPEntry(enabled: true, config: .object([
+            "command": .string("node"), "args": .array([.string(bound), .string(bound)]),
+        ])), renamedFrom: nil))
+
+        let sheet = PublishModel(state: state, collection: state.activeCollection)
+        XCTAssertEqual(sheet.pathRows.map(\.value), [bound, bound])
+        sheet.pathRows[0].marked = true
+        let kept = try XCTUnwrap(sheet.keptPaths.first)
+        XCTAssertEqual(kept.kind, .path, "the unticked copy of a ticked path")
+        XCTAssertEqual(sheet.note(for: kept), PublishModel.otherFolderNote("tool", FieldName.argument(2), state.activeCollection))
+
+        XCTAssertEqual(sheet.releaseKeptPath(bound), PublishModel.publishFolderNote("tool", FieldName.argument(2)))
+        XCTAssertEqual(sheet.pathRows.map(\.marked), [true, false], "the refused release changed nothing")
+    }
+
     /// Release is no answer for a folder of the collection's own, whatever the view offers: the
     /// entry stays, Publish and Export stay held, and the folder reaches no document. Only writing
     /// the token takes it out of the preview.

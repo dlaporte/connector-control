@@ -516,8 +516,9 @@ public sealed class PublishModel : ObservableObject
     /// <para>
     /// A folder of this collection's own is never released, whatever the view offers: it is
     /// answered by <see cref="UseDirectoryToken"/>, or by writing <c>${COLLECTION_DIR}</c> in the
-    /// connector's editor. null when the path is released; otherwise the note of the entry that still
-    /// holds it back, and nothing changes.
+    /// connector's editor. null when the path is released; otherwise a folder entry's note for where
+    /// it sits, and nothing changes. A folder's note even where the list shows it as a path kept
+    /// back — a copy of a ticked one — since that note's own answer is the Release just refused.
     /// </para>
     /// </summary>
     public string? ReleaseKeptPath(string value)
@@ -525,7 +526,9 @@ public sealed class PublishModel : ObservableObject
         var text = KeptValue.Nfc(value);
         if (state.KeptBack(Collection).Folders.Any(folder => KeptValue.Nfc(folder) == text))
         {
-            return KeptPaths.FirstOrDefault(kept => KeptValue.Nfc(kept.Value) == text) is { } entry ? Note(entry) : null;
+            return KeptPaths.FirstOrDefault(kept => KeptValue.Nfc(kept.Value) == text) is { } entry
+                ? Note(entry with { Kind = KeptPathKind.Folder })
+                : null;
         }
         released.Add(value);
         foreach (var row in PathRows.Where(row => row.Marked && KeptValue.Nfc(row.Value) == text))

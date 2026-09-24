@@ -2780,6 +2780,35 @@ public class AppStateCollectionsTests
     /// stays, Publish and Export stay held, and the folder reaches no document. Only writing the token
     /// takes it out of the preview.
     /// </summary>
+    /// <summary>
+    /// The publish folder copied beside a tick is listed as a copy of a marked path, whose note
+    /// ends "or release it". Release refuses the folder all the same, so its refusal must not
+    /// repeat that advice: it says what a folder entry says, where the token goes.
+    /// </summary>
+    [Fact]
+    public void ARefusedReleaseOfTheFolderNeverSuggestsReleasingIt()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var bound = state.CollectionsCache.Published[state.ActiveCollection].Folder;
+        Assert.Null(state.Upsert("tool", new McpEntry(true, JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String(bound), JsonValue.String(bound)])))), null));
+
+        var dialog = new PublishModel(state, state.ActiveCollection);
+        Assert.Equal([bound, bound], dialog.PathRows.Select(row => row.Value));
+        dialog.PathRows[0].Marked = true;
+        var kept = dialog.KeptPaths[0];
+        Assert.Equal(PublishModel.KeptPathKind.Path, kept.Kind);   // the unticked copy of a ticked path
+        Assert.Equal(PublishModel.OtherFolderNote("tool", FieldName.Argument(2), state.ActiveCollection), dialog.Note(kept));
+
+        Assert.Equal(PublishModel.PublishFolderNote("tool", FieldName.Argument(2)), dialog.ReleaseKeptPath(bound));
+        // The refused release changed nothing.
+        Assert.Equal([true, false], dialog.PathRows.Select(row => row.Marked));
+    }
+
     [Fact]
     public void ReleasingAFolderEntryIsRefused()
     {
