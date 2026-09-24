@@ -246,15 +246,26 @@ public sealed record CollectionsFile
     /// losing it costs hints and origins the app can rebuild — unlike a corrupt mcps.json,
     /// there is nothing to move aside and preserve.
     /// </summary>
-    public static CollectionsFile Load(string path)
+    public static CollectionsFile Load(string path) => LoadIfReadable(path) ?? new CollectionsFile([]);
+
+    /// <summary>
+    /// The sidecar, or null when it exists and cannot be read, parsed or decoded — a file a sync
+    /// tool is halfway through writing, which <see cref="Load"/> cannot tell from one with no entries.
+    /// A missing sidecar loads as empty: nothing has been written yet, so nothing is being lost.
+    /// </summary>
+    public static CollectionsFile? LoadIfReadable(string path)
     {
+        if (!File.Exists(path))
+        {
+            return new CollectionsFile([]);
+        }
         try
         {
             return Decode(JsonValue.Parse(File.ReadAllBytes(path)));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or CollectionsFileException)
         {
-            return new CollectionsFile([]);
+            return null;
         }
     }
 

@@ -2656,14 +2656,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// </summary>
     private void LoadCollections()
     {
-        var loaded = Service.LoadCollections();
+        // An unreadable sidecar loads as null (see CollectionsFile.LoadIfReadable). Reconciling the
+        // cache against it would drop every binding on this machine over a file a sync tool is
+        // halfway through writing, so it is left alone and whatever is already in memory stands.
+        // A sidecar with no entries is not that file: it loads as empty, and saves go ahead.
         collectionsNote = null;
-        // An unreadable sidecar loads as empty (see CollectionsFile.Load). Reconciling the cache
-        // against that would drop every binding on this machine over a file a sync tool is
-        // halfway through writing, so a sidecar that exists yet loads as empty is left alone and
-        // whatever is already in memory stands. A genuinely empty sidecar reads the same way and
-        // costs only a prune deferred to the next load.
-        if (loaded.Collections.Count == 0 && File.Exists(Service.Paths.CollectionsFilePath))
+        if (Service.LoadCollections() is not { } loaded)
         {
             collectionsLoaded = false;
             // At launch there is no in-memory state to stand yet, so the cache is taken as it

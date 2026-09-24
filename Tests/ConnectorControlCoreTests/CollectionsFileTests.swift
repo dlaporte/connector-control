@@ -49,6 +49,20 @@ final class CollectionsFileTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "load never moves a file aside")
     }
 
+    func testLoadIfReadableTellsAnUnreadableFileFromAnEmptyOne() throws {
+        let url = tempDir.file("collections.json")
+        XCTAssertEqual(CollectionsFile.loadIfReadable(from: url), CollectionsFile(collections: [:]), "missing is empty")
+        try CollectionsFile(collections: [:]).save(to: url, staging: nil)
+        XCTAssertEqual(CollectionsFile.loadIfReadable(from: url), CollectionsFile(collections: [:]), "no entries is empty")
+        try Data("{not json".utf8).write(to: url)
+        XCTAssertNil(CollectionsFile.loadIfReadable(from: url), "a file that cannot be parsed is unreadable")
+        try Data("{\"version\":2,\"collections\":{}}".utf8).write(to: url)
+        XCTAssertNil(CollectionsFile.loadIfReadable(from: url), "a file that cannot be decoded is unreadable")
+        try Data().write(to: url)
+        XCTAssertNil(CollectionsFile.loadIfReadable(from: url), "a file truncated to nothing is unreadable")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "load never moves a file aside")
+    }
+
     func testSaveIsOwnerOnlyAndReloads() throws {
         let url = tempDir.file("collections.json")
         try Self.sample.save(to: url, staging: nil)

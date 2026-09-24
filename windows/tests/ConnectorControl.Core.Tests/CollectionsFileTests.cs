@@ -80,6 +80,22 @@ public sealed class CollectionsFileTests : IDisposable
     }
 
     [Fact]
+    public void LoadIfReadableTellsAnUnreadableFileFromAnEmptyOne()
+    {
+        var path = dir.File("collections.json");
+        Assert.Equal(new CollectionsFile([]), CollectionsFile.LoadIfReadable(path));   // missing is empty
+        new CollectionsFile([]).Save(path);
+        Assert.Equal(new CollectionsFile([]), CollectionsFile.LoadIfReadable(path));   // no entries is empty
+        File.WriteAllText(path, "{not json");
+        Assert.Null(CollectionsFile.LoadIfReadable(path));   // a file that cannot be parsed is unreadable
+        File.WriteAllText(path, "{\"version\":2,\"collections\":{}}");
+        Assert.Null(CollectionsFile.LoadIfReadable(path));   // a file that cannot be decoded is unreadable
+        File.WriteAllBytes(path, []);
+        Assert.Null(CollectionsFile.LoadIfReadable(path));   // a file truncated to nothing is unreadable
+        Assert.True(File.Exists(path), "load never moves a file aside");
+    }
+
+    [Fact]
     [SupportedOSPlatform("windows")]
     public void SaveIsOwnerOnlyAndReloads()
     {

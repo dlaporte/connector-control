@@ -327,6 +327,78 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.lastError, "the save landed, so the note goes with it")
     }
 
+    /// The sidecar a launch with nothing published or subscribed writes, byte for byte.
+    private let emptySidecar = "{\n  \"collections\" : {\n\n  },\n  \"version\" : 1\n}"
+
+    func testAnEmptySidecarAtLaunchIsReadAsEmptyAndSaves() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let sidecar = h.storeDir.appendingPathComponent(CollectionsFile.fileName)
+        try FileManager.default.createDirectory(at: h.storeDir, withIntermediateDirectories: true)
+        try TempDir.touch(sidecar, emptySidecar)
+
+        let state = h.create()
+        try h.publish(state, state.activeCollection)
+        XCTAssertNil(state.lastError)
+        XCTAssertNotNil(CollectionsFile.load(from: sidecar).collections[state.activeCollection]?.publish,
+                        "a sidecar with no entries is empty, not unreadable")
+    }
+
+    func testAnEmptySidecarOnReloadIsReadAsEmptyAndSaves() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let sidecar = h.storeDir.appendingPathComponent(CollectionsFile.fileName)
+        try TempDir.touch(sidecar, emptySidecar)
+        state.reload()
+
+        try h.publish(state, state.activeCollection)
+        XCTAssertNil(state.lastError)
+        XCTAssertNotNil(CollectionsFile.load(from: sidecar).collections[state.activeCollection]?.publish)
+    }
+
+    func testNoSidecarLoadsAsEmptyAndSaves() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let sidecar = h.storeDir.appendingPathComponent(CollectionsFile.fileName)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sidecar.path))
+
+        try h.publish(state, state.activeCollection)
+        XCTAssertNil(state.lastError)
+        XCTAssertNotNil(CollectionsFile.load(from: sidecar).collections[state.activeCollection]?.publish)
+    }
+
+    func testAGarbledSidecarAtLaunchHoldsEverySave() throws {
+        let h = AppStateHarness()
+        defer { h.dispose() }
+        let sidecar = h.storeDir.appendingPathComponent(CollectionsFile.fileName)
+        try FileManager.default.createDirectory(at: h.storeDir, withIntermediateDirectories: true)
+        try TempDir.touch(sidecar, "garbage")
+
+        let state = h.create()
+        let folder = try publishFolder(h)
+        XCTAssertEqual(state.startPublishing(state.activeCollection, to: folder.path, intent: .none),
+                       AppState.collectionsNotSavedNote)
+        XCTAssertEqual(try String(contentsOf: sidecar, encoding: .utf8), "garbage", "nothing overwrites it")
+        XCTAssertFalse(state.isPublished(state.activeCollection))
+    }
+
+    func testASidecarTruncatedMidWriteHoldsEverySaveAndTheStateInMemoryStands() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
+        let sidecar = h.storeDir.appendingPathComponent(CollectionsFile.fileName)
+        let whole = try String(contentsOf: sidecar, encoding: .utf8)
+        let truncated = String(whole.prefix(whole.count / 2))
+
+        try TempDir.touch(sidecar, truncated)
+        state.reload()
+        let folder = try publishFolder(h)
+        XCTAssertEqual(state.startPublishing("Default", to: folder.path, intent: .none),
+                       AppState.collectionsNotSavedNote)
+        XCTAssertEqual(try String(contentsOf: sidecar, encoding: .utf8), truncated, "nothing overwrites it")
+        XCTAssertEqual(state.kind(of: "Data team"), .synced, "what was in memory stands")
+    }
+
     func testASidecarChangedElsewhereIsRewrittenWhenOurBytesReturn() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

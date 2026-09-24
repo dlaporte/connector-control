@@ -94,5 +94,15 @@ public class AppStateUpgradeTests
         Assert.Equal(shape13, Shape(saved));
         Assert.Equal(JsonValue.Int(2), JsonValue.Parse(saved).ObjectProperties["version"]);
         Assert.Equal(JsonValue.Parse(written.Store), JsonValue.Parse(saved));
+
+        // With nothing published or subscribed, this launch left the sidecar valid and empty.
+        // The next launch reads it as empty, not as unreadable, so the first publish still lands.
+        var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
+        Assert.Equal(new CollectionsFile([]), CollectionsFile.Decode(JsonValue.Parse(File.ReadAllBytes(sidecar))));
+        state.Dispose();
+        using var second = h.Create();
+        h.Publish(second, "Work");
+        Assert.Null(second.LastError);
+        Assert.NotNull(CollectionsFile.Load(sidecar).Collections["Work"].Publish);
     }
 }

@@ -371,6 +371,86 @@ public class AppStateCollectionsTests
         Assert.Null(state.LastError);   // the save landed, so the note goes with it
     }
 
+    /// <summary>The sidecar a launch with nothing published or subscribed writes, byte for byte.</summary>
+    private const string EmptySidecar = "{\n  \"collections\" : {\n\n  },\n  \"version\" : 1\n}";
+
+    [Fact]
+    public void AnEmptySidecarAtLaunchIsReadAsEmptyAndSaves()
+    {
+        using var h = new AppStateHarness();
+        var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
+        Directory.CreateDirectory(h.StoreDir);
+        TempDir.Touch(sidecar, EmptySidecar);
+
+        using var state = h.Create();
+        h.Publish(state, state.ActiveCollection);
+        Assert.Null(state.LastError);
+        // A sidecar with no entries is empty, not unreadable.
+        Assert.NotNull(CollectionsFile.Load(sidecar).Collections[state.ActiveCollection].Publish);
+    }
+
+    [Fact]
+    public void AnEmptySidecarOnReloadIsReadAsEmptyAndSaves()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
+        TempDir.Touch(sidecar, EmptySidecar);
+        state.Reload();
+
+        h.Publish(state, state.ActiveCollection);
+        Assert.Null(state.LastError);
+        Assert.NotNull(CollectionsFile.Load(sidecar).Collections[state.ActiveCollection].Publish);
+    }
+
+    [Fact]
+    public void NoSidecarLoadsAsEmptyAndSaves()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
+        Assert.False(File.Exists(sidecar));
+
+        h.Publish(state, state.ActiveCollection);
+        Assert.Null(state.LastError);
+        Assert.NotNull(CollectionsFile.Load(sidecar).Collections[state.ActiveCollection].Publish);
+    }
+
+    [Fact]
+    public void AGarbledSidecarAtLaunchHoldsEverySave()
+    {
+        using var h = new AppStateHarness();
+        var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
+        Directory.CreateDirectory(h.StoreDir);
+        TempDir.Touch(sidecar, "garbage");
+
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Equal(AppState.CollectionsNotSavedNote,
+            state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        Assert.Equal("garbage", File.ReadAllText(sidecar));   // nothing overwrites it
+        Assert.False(state.IsPublished(state.ActiveCollection));
+    }
+
+    [Fact]
+    public void ASidecarTruncatedMidWriteHoldsEverySaveAndTheStateInMemoryStands()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam);
+        var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
+        var whole = File.ReadAllText(sidecar);
+        var truncated = whole[..(whole.Length / 2)];
+
+        TempDir.Touch(sidecar, truncated);
+        state.Reload();
+        var folder = PublishFolder(h);
+        Assert.Equal(AppState.CollectionsNotSavedNote,
+            state.StartPublishing("Default", folder, PublishIntent.None));
+        Assert.Equal(truncated, File.ReadAllText(sidecar));   // nothing overwrites it
+        Assert.Equal(CollectionKind.Synced, state.KindOf("Data team"));   // what was in memory stands
+    }
+
     [Fact]
     public void ASidecarChangedElsewhereIsRewrittenWhenOurBytesReturn()
     {

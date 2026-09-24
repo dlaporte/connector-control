@@ -90,5 +90,16 @@ final class AppStateUpgradeTests: XCTestCase {
         XCTAssertEqual(try shape(of: saved), shape13)
         XCTAssertEqual(try JSONValue.parse(saved).value(at: JSONPointer(["version"])), .int(2))
         XCTAssertEqual(try JSONValue.parse(saved), try JSONValue.parse(written.store))
+
+        // With nothing published or subscribed, this launch left the sidecar valid and empty.
+        // The next launch reads it as empty, not as unreadable, so the first publish still lands.
+        let sidecar = h.storeDir.appendingPathComponent(CollectionsFile.fileName)
+        XCTAssertEqual(try CollectionsFile.decode(JSONValue.parse(Data(contentsOf: sidecar))),
+                       CollectionsFile(collections: [:]))
+        state.dispose()
+        let second = h.create()
+        try h.publish(second, "Work")
+        XCTAssertNil(second.lastError)
+        XCTAssertNotNil(CollectionsFile.load(from: sidecar).collections["Work"]?.publish)
     }
 }

@@ -124,9 +124,17 @@ public struct CollectionsFile: Equatable, Sendable {
     /// losing it costs hints and origins the app can rebuild — unlike a corrupt mcps.json,
     /// there is nothing to move aside and preserve.
     public static func load(from url: URL) -> CollectionsFile {
+        loadIfReadable(from: url) ?? CollectionsFile(collections: [:])
+    }
+
+    /// The sidecar, or nil when it exists and cannot be read, parsed or decoded — a file a sync
+    /// tool is halfway through writing, which `load(from:)` cannot tell from one with no entries.
+    /// A missing sidecar loads as empty: nothing has been written yet, so nothing is being lost.
+    public static func loadIfReadable(from url: URL) -> CollectionsFile? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return CollectionsFile(collections: [:]) }
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONValue.parse(data),
-              let file = try? decode(json) else { return CollectionsFile(collections: [:]) }
+              let file = try? decode(json) else { return nil }
         return file
     }
 

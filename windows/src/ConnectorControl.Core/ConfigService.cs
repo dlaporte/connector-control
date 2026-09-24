@@ -174,8 +174,8 @@ public sealed class ConfigService
         }
     }
 
-    /// <summary>The sidecar beside the master list; a missing or unreadable file loads as empty (see <see cref="CollectionsFile.Load"/>).</summary>
-    public CollectionsFile LoadCollections() => CollectionsFile.Load(Paths.CollectionsFilePath);
+    /// <summary>The sidecar beside the master list; a missing file loads as empty, and one that exists but cannot be read loads as null (see <see cref="CollectionsFile.LoadIfReadable"/>), so the caller can tell a file with no entries from one it must not save over.</summary>
+    public CollectionsFile? LoadCollections() => CollectionsFile.LoadIfReadable(Paths.CollectionsFilePath);
 
     /// <summary>Backup the existing sidecar (skipped when it doesn't exist yet), then atomically save the new one.</summary>
     public AtomicWriteResult SaveCollections(CollectionsFile file)

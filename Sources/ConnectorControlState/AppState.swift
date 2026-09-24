@@ -1927,14 +1927,12 @@ public final class AppState: ObservableObject {
     /// collections exist, the sidecar annotates them, and the cache binds what this machine has
     /// found. Runs after the store is assigned, so both reconcile against the list just loaded.
     private func loadCollections() {
-        let loaded = service.loadCollections()
-        // An unreadable sidecar loads as empty (see CollectionsFile.load). Reconciling the cache
-        // against that would drop every binding on this machine over a file a sync tool is
-        // halfway through writing, so a sidecar that exists yet loads as empty is left alone and
-        // whatever is already in memory stands. A genuinely empty sidecar reads the same way and
-        // costs only a prune deferred to the next load.
+        // An unreadable sidecar loads as nil (see CollectionsFile.loadIfReadable). Reconciling the
+        // cache against it would drop every binding on this machine over a file a sync tool is
+        // halfway through writing, so it is left alone and whatever is already in memory stands.
+        // A sidecar with no entries is not that file: it loads as empty, and saves go ahead.
         collectionsNote = nil
-        if loaded.collections.isEmpty, FileManager.default.fileExists(atPath: service.paths.collectionsFileURL.path) {
+        guard let loaded = service.loadCollections() else {
             collectionsLoaded = false
             // At launch there is no in-memory state to stand yet, so the cache is taken as it
             // stands — unreconciled, since the sidecar that would vouch for it is the file that

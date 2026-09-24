@@ -161,6 +161,10 @@ bullet once the section is about to ship.
   is picked up again.
 - Two backups taken in the same millisecond list, restore and prune newest first;
   before, the newer one could list below the older and be pruned in its place.
+- A collections file with nothing in it, which a launch writes when nothing is
+  published or subscribed, is read as empty. Before, it was taken for an unreadable
+  file from the second launch on, and Publish and Subscribe refused with "Collections
+  could not be saved: the collections file is unreadable."
 
 ### Release pipeline
 

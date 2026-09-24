@@ -142,10 +142,11 @@ public struct ConfigService: Sendable {
         try? BackupCollections.record(collection, for: backup, in: paths.backupsDirURL, staging: paths.stagingDirURL)
     }
 
-    /// The sidecar beside the master list; a missing or unreadable file loads as empty (see
-    /// `CollectionsFile.load`), so there is nothing else for this method to handle.
-    public func loadCollections() -> CollectionsFile {
-        CollectionsFile.load(from: paths.collectionsFileURL)
+    /// The sidecar beside the master list; a missing file loads as empty, and one that exists
+    /// but cannot be read loads as nil (see `CollectionsFile.loadIfReadable`), so the caller can
+    /// tell a file with no entries from one it must not save over.
+    public func loadCollections() -> CollectionsFile? {
+        CollectionsFile.loadIfReadable(from: paths.collectionsFileURL)
     }
 
     /// Backup the existing sidecar (skipped when it doesn't exist yet — nothing to protect on
