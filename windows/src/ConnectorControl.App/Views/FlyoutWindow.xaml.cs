@@ -137,12 +137,11 @@ public partial class FlyoutWindow : Window
     }
 
     /// <summary>
-    /// Deactivation normally dismisses the flyout — but a WPF ContextMenu lives in its
-    /// own top-level window, so opening the collection chip's menu deactivates us, and
-    /// hiding here would take the menu's PlacementTarget away with it and leave collections
-    /// unreachable — the chip menu is the only way to switch, create, rename or delete a
-    /// collection. Ignore those; the check is repeated once the menu
-    /// closes. Internal so a test can raise it without a real focus change.
+    /// Deactivation normally dismisses the flyout — but a WPF ContextMenu lives in its own
+    /// top-level window, so opening the collection chip's menu deactivates us, and hiding here
+    /// would pull the menu's PlacementTarget out from under it: the switch list and Manage
+    /// Collections would go with it. Ignore those; the check is repeated once the menu closes.
+    /// Internal so a test can raise it without a real focus change.
     /// </summary>
     internal void HandleDeactivated()
     {
@@ -191,7 +190,7 @@ public partial class FlyoutWindow : Window
     /// </summary>
     internal ContextMenu BuildCollectionMenu()
     {
-        var menu = new ContextMenu { PlacementTarget = CollectionChip, Placement = PlacementMode.Bottom, StaysOpen = false };
+        var menu = Menus.Anchored(CollectionChip, PlacementMode.Bottom);
         foreach (var item in model.CollectionItems)
         {
             var name = item.Name;
@@ -210,16 +209,14 @@ public partial class FlyoutWindow : Window
             {
                 AutomationProperties.SetHelpText(entry, source);
             }
-            // Choosing the collection already in front of the user is not a change: switching to
-            // it would save and apply it again for nothing, and clear an error banner on the way.
-            if (!item.IsActive)
-            {
-                entry.Click += (_, _) => model.SwitchCollection(name);
-            }
+            // Choosing the collection already in front of the user is not a change, and the model
+            // leaves it alone rather than saving and applying it again.
+            entry.Click += (_, _) => model.SwitchCollection(name);
             menu.Items.Add(entry);
         }
         menu.Items.Add(new Separator());
-        menu.Items.Add(Command(FlyoutModel.ManageTitle));
+        // Everything else done to a collection is the Collections window's.
+        menu.Items.Add(Menus.Item(FlyoutModel.ManageTitle, OpenCollections));
         return menu;
     }
 
@@ -232,21 +229,6 @@ public partial class FlyoutWindow : Window
         menu.Closed += (_, _) => Dispatcher.BeginInvoke(new Action(HideIfInactive), DispatcherPriority.Background);
         menu.IsOpen = true;
         return menu;
-    }
-
-    /// <summary>
-    /// One menu item that ends in the Collections window. What it wants open in front of that
-    /// window is asked for first, because the window reads the request as it appears.
-    /// </summary>
-    private MenuItem Command(string header, Action? request = null)
-    {
-        var item = new MenuItem { Header = header };
-        item.Click += (_, _) =>
-        {
-            request?.Invoke();
-            OpenCollections();
-        };
-        return item;
     }
 
     /// <summary>
@@ -311,6 +293,12 @@ public partial class FlyoutWindow : Window
                 {
                     Report(model.ChoosePublishFolder(folder));
                 }
+                break;
+            // A blocked publish never reaches here: its action queues the Publish dialog and
+            // reports true, which opens the window above.
+            case CollectionBanner.UpdateAvailable:
+            case CollectionBanner.PublishBlocked:
+            case null:
                 break;
         }
     }

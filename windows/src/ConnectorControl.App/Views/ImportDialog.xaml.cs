@@ -37,17 +37,12 @@ public partial class ImportDialog : DialogWindow
     public ImportModel Model { get; }
 
     /// <summary>
-    /// True once the import has landed. The sheet reports through this rather than DialogResult,
-    /// whose setter throws on a window presented with Show() — which is how a test drives one.
-    /// PublishDialog and ReviewDialog answer the same way, under the same name.
+    /// True once the import has landed. A plain property rather than DialogResult: a test presents the dialog with Show(),
+    /// where DialogResult's setter throws, so success is recorded here.
     /// </summary>
     public bool Accepted { get; private set; }
 
-    public static bool Show(Window? owner, ImportModel model)
-    {
-        var dialog = new ImportDialog(model);
-        return Present(dialog, owner, () => dialog.Accepted);
-    }
+    public static void Show(Window? owner, ImportModel model) => WpfDialogs.Present(new ImportDialog(model), owner);
 
     /// <summary>
     /// The two strings a binding cannot carry: the count beside Import and the mode's own sentence

@@ -144,9 +144,6 @@
   "CollectionsModel.editLabel": {
     "format": "Edit “{0}”"
   },
-  "CollectionsModel.editTooltip": {
-    "win": "Edit"
-  },
   "CollectionsModel.exportAllAction": "Export All",
   "CollectionsModel.exportCheckedButton": "Export",
   "CollectionsModel.importButton": "Import",
@@ -350,6 +347,9 @@
   },
   "FlyoutModel.storeNotPrivateCaution": {
     "win": "The master list could not be made private: its folder refused the permission change, so connector secrets in it are readable by anyone who can read that folder."
+  },
+  "FlyoutModel.trayOpenTitle": {
+    "win": "Open"
   },
   "ImportModel.addModeDetail": "Copies. No link to the file afterwards.",
   "ImportModel.addModeTitle": {

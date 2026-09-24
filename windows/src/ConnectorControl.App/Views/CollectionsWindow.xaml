@@ -18,6 +18,8 @@
     <views:CollectionSourceTooltipConverter x:Key="SourceTooltip" />
     <!-- A header pill's words, which the model answers from the pill itself. -->
     <views:CollectionPillTitleConverter x:Key="PillTitle" />
+    <!-- The pencil's words, which name the connector it edits. -->
+    <views:EditLabelConverter x:Key="EditLabel" />
     <!-- The collection's own name in the sidebar: bold while it is the active one, dimmed while
          its document has never been found on this machine — still usable, just not in step. -->
     <Style x:Key="SidebarName" TargetType="TextBlock">
@@ -95,9 +97,9 @@
       </Style.Triggers>
     </Style>
   </Window.Resources>
-  <!-- Two panes: the collections, and the selected one. No toolbar: everything done to a
-       collection is in the sidebar's plus or the header's More, and everything done to its
-       connectors is in the list header's Add or the selection bar. -->
+  <!-- Two panes: the collections, and the selected one. Everything done to a collection is in the
+       sidebar's plus or the header's More, and everything done to its connectors is in the list
+       header's Add or the selection bar. -->
   <Grid Margin="10">
     <Grid.ColumnDefinitions>
       <!-- Resizable, as the Mac's split view is: a long collection name is otherwise elided
@@ -146,6 +148,9 @@
              to whichever row claimed it last, while its PlacementTarget is set per opening. -->
         <ListBox.ItemContainerStyle>
           <Style TargetType="ListBoxItem">
+            <!-- The item holds a record, and without a name of its own a screen reader reads the
+                 record's ToString(). The Mac list reads the name. -->
+            <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
             <Setter Property="ContextMenu">
               <Setter.Value>
                 <ContextMenu>
@@ -171,6 +176,8 @@
                          ToolTip="{Binding Converter={StaticResource SourceTooltip}}"
                          AutomationProperties.Name="{Binding Converter={StaticResource SourceTooltip}}" />
               <Ellipse Grid.Column="2" x:Name="SidebarPendingDot" Style="{StaticResource PendingDot}" Margin="6,0,0,0"
+                       ToolTip="{x:Static state:FlyoutModel.PendingSpokenLabel}"
+                       AutomationProperties.Name="{x:Static state:FlyoutModel.PendingSpokenLabel}"
                        Visibility="{Binding HasPendingUpdate, Converter={StaticResource Vis}}" />
             </Grid>
           </DataTemplate>
@@ -286,8 +293,8 @@
                            Style="{StaticResource CaptionText}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                            VerticalAlignment="Center" Margin="0,0,10,0" />
                 <Button x:Name="RowEdit" Grid.Column="3" Style="{StaticResource IconButton}" Content="&#xE70F;"
-                        ToolTip="{x:Static state:CollectionsModel.EditTooltip}"
-                        AutomationProperties.Name="{x:Static state:CollectionsModel.EditTooltip}" Click="OnEdit" />
+                        ToolTip="{Binding Name, Converter={StaticResource EditLabel}}"
+                        AutomationProperties.Name="{Binding Name, Converter={StaticResource EditLabel}}" Click="OnEdit" />
               </Grid>
             </DataTemplate>
           </ItemsControl.ItemTemplate>

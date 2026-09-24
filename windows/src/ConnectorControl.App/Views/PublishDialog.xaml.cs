@@ -34,17 +34,12 @@ public partial class PublishDialog : DialogWindow
     public PublishModel Model { get; }
 
     /// <summary>
-    /// Whether the sheet published or exported before it closed. A plain property, like every other
-    /// dialog here: Window.DialogResult's setter throws on a window presented with Show(), which is
-    /// how the tests present this one.
+    /// True once the dialog has published or exported. A plain property rather than DialogResult: a test presents the dialog with Show(),
+    /// where DialogResult's setter throws, so success is recorded here.
     /// </summary>
     public bool Accepted { get; private set; }
 
-    public static bool Show(Window? owner, PublishModel model)
-    {
-        var dialog = new PublishDialog(model);
-        return Present(dialog, owner, () => dialog.Accepted);
-    }
+    public static void Show(Window? owner, PublishModel model) => WpfDialogs.Present(new PublishDialog(model), owner);
 
     private void OnChooseFolder(object sender, RoutedEventArgs e)
     {

@@ -1043,7 +1043,6 @@ public class CollectionsModelTests
     [Fact]
     public void TheWindowsGlyphsAndActionsCarryTheirOwnWords()
     {
-        Assert.Equal("Edit", CollectionsModel.EditTooltip);
         Assert.Equal("Edit “notion”", CollectionsModel.EditLabel("notion"));
         Assert.Equal("Make Active", CollectionsModel.MakeActiveAction);
         Assert.Equal("Read-only: synced from the collection's author", CollectionsModel.LockedGlyphTooltip);

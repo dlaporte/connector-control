@@ -247,7 +247,6 @@ public class StringCatalogTests
         actual["CollectionsModel.documentFilter"] = CollectionsModel.DocumentFilter;
         actual["CollectionsModel.duplicateAction"] = CollectionsModel.DuplicateAction;
         actual["CollectionsModel.editLabel"] = CollectionsModel.EditLabel("X");
-        actual["CollectionsModel.editTooltip"] = CollectionsModel.EditTooltip;
         actual["CollectionsModel.exportAllAction"] = CollectionsModel.ExportAllAction;
         actual["CollectionsModel.exportCheckedButton"] = CollectionsModel.ExportCheckedButton;
         actual["CollectionsModel.importButton"] = CollectionsModel.ImportButton;
@@ -398,6 +397,7 @@ public class StringCatalogTests
         actual["FirstRunTip.body"] = FirstRunTip.Body;
         actual["FlyoutModel.settingsNotSavedCaution"] = FlyoutModel.SettingsNotSavedCaution("X");
         actual["FlyoutModel.storeNotPrivateCaution"] = FlyoutModel.StoreNotPrivateCaution;
+        actual["FlyoutModel.trayOpenTitle"] = FlyoutModel.TrayOpenTitle;
 
         // MARK: ImportModel
 

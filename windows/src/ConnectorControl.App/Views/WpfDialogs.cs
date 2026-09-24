@@ -4,9 +4,12 @@ using ConnectorControl.Core.State;
 namespace ConnectorControl.App.Views;
 
 /// <summary>
-/// IDialogs on WPF. Owned by a window (editor, settings, restore) the dialogs
-/// center on it; tray-initiated dialogs have no owner and are centered on
-/// screen and forced to the front, like the Mac's NSApp.activate before NSAlert.
+/// IDialogs on WPF. Given a window — the editor's, whose dialogs center on it — or given none,
+/// which is App's instance, shared by AppState, the update coordinator and the Collections window's
+/// model: that one centers on whichever of our windows is active, and with none of ours up it
+/// centers on screen and is forced to the front, like the Mac's NSApp.activate before NSAlert.
+/// <see cref="Present"/> is also how every dialog here is shown, Settings' Restore and the
+/// Collections window's five among them.
 /// </summary>
 public sealed class WpfDialogs : IDialogs
 {

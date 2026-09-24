@@ -20,6 +20,12 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public const string ReviewAndApplyButton = "Review & Apply";
     public const string ChooseFolderButton = "Choose Folder";
     public const string ManageTitle = "Manage Collections";
+    /// <summary>
+    /// The tray icon's right-click menu opens the flyout with this. Windows only: the Mac's menu
+    /// bar item has no second menu. The menu's other two entries are <see cref="SettingsTooltip"/>
+    /// and <see cref="QuitTooltip"/>, the same words the flyout's header buttons carry.
+    /// </summary>
+    public const string TrayOpenTitle = "Open";
     /// <summary>Segoe Fluent Icons: Warning (exclamationmark.arrow.circlepath's nearest) and Refresh (arrow.clockwise).</summary>
     public const string RetryGlyph = "\ue7ba";
     public const string RestartGlyph = "\ue72c";

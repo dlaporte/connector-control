@@ -14,7 +14,7 @@ public partial class RestoreDialog : DialogWindow
         Model.Load();
         DataContext = Model;
         BackupList.ItemsSource = Model.BackupNames;
-        CloseWhenModelAsks(handler => Model.CloseRequested += handler);
+        this.CloseWhenAsked(handler => Model.CloseRequested += handler);
     }
 
     public RestoreModel Model { get; }

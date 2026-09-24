@@ -152,7 +152,7 @@ public class FlyoutWindowTests
         WpfApp.Invoke(() =>
         {
             using var model = new FlyoutModel(state, h.Settings);
-            var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates));
+            var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates, h.Dialogs));
             Layout(window);
             Assert.Equal(3, window.RowList.Items.Count);
             Assert.Equal(Visibility.Collapsed, window.FooterPanel.Visibility);
@@ -164,6 +164,9 @@ public class FlyoutWindowTests
             Assert.False(window.ShowInTaskbar);
             Assert.True(window.Topmost);
             Assert.Equal(WindowStyle.None, window.WindowStyle);
+            // The two header glyphs read as nothing, so each says its tooltip.
+            Assert.Equal(FlyoutModel.SettingsTooltip, AutomationProperties.GetName(window.SettingsButton));
+            Assert.Equal(FlyoutModel.QuitTooltip, AutomationProperties.GetName(window.QuitButton));
         });
     }
 
@@ -179,7 +182,7 @@ public class FlyoutWindowTests
         WpfApp.Invoke(() =>
         {
             using var model = new FlyoutModel(state, h.Settings);
-            var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates));
+            var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates, h.Dialogs));
             Layout(window);
             Assert.Equal(Visibility.Visible, window.FooterPanel.Visibility);
             Assert.Equal("Apply Failed — Retry", window.FooterTitle.Text);
@@ -197,7 +200,7 @@ public class FlyoutWindowTests
         WpfApp.Invoke(() =>
         {
             using var model = new FlyoutModel(state, h.Settings);
-            var registry = new WindowRegistry(state, services, updates);
+            var registry = new WindowRegistry(state, services, updates, h.Dialogs);
 
             var plain = new FlyoutWindow(model, registry) { TrayAnchor = () => null };
             plain.Show();
@@ -233,7 +236,7 @@ public class FlyoutWindowTests
         WpfApp.Invoke(() =>
         {
             using var model = new FlyoutModel(state, h.Settings);
-            var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates)) { TrayAnchor = () => null };
+            var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates, h.Dialogs)) { TrayAnchor = () => null };
             window.Show();
             var menu = window.OpenCollectionMenu();
 
@@ -551,7 +554,7 @@ public class FlyoutWindowTests
         WpfApp.Invoke(() =>
         {
             using var model = new FlyoutModel(state, h.Settings);
-            var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates)) { TrayAnchor = () => null };
+            var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates, h.Dialogs)) { TrayAnchor = () => null };
             window.Show();   // an ItemsControl generates no containers until the window has a real layout pass
             Layout(window);
             window.RowList.UpdateLayout();
@@ -560,6 +563,7 @@ public class FlyoutWindowTests
             var installed = model.Rows.Single(r => r.Name == "local-node");   // node, found
             Assert.Equal(Visibility.Visible, Glyph(window, missing).Visibility);
             Assert.Equal("Needs npx, which wasn’t found. Edit to see how to install it.", (string?)Glyph(window, missing).ToolTip);
+            Assert.Equal((string?)Glyph(window, missing).ToolTip, AutomationProperties.GetName(Glyph(window, missing)));
             Assert.Equal(Visibility.Collapsed, Glyph(window, installed).Visibility);
             Assert.True(missing.Enabled);   // the glyph changes nothing about the switch
 

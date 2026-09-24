@@ -136,7 +136,7 @@ public class DialogTests
             // showing a modal does — so Quit / Restart Required / the collection prompts must never
             // be owned by it, however visible and active it is when they are raised.
             using var model = new FlyoutModel(state, h.Settings);
-            var flyout = new FlyoutWindow(model, new WindowRegistry(state, services, updates)) { TrayAnchor = () => null };
+            var flyout = new FlyoutWindow(model, new WindowRegistry(state, services, updates, h.Dialogs)) { TrayAnchor = () => null };
             flyout.Show();
             flyout.Activate();
             Assert.True(flyout.IsVisible);

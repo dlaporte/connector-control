@@ -37,14 +37,14 @@ public sealed class TrayController : IDisposable
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
 
-    /// <summary>The right-click menu.</summary>
+    /// <summary>The right-click menu, in the flyout model's words.</summary>
     internal static ContextMenu BuildMenu(Action open, Action settings, Action quit)
     {
         var menu = new ContextMenu();
-        menu.Items.Add(Item("Open", open));
-        menu.Items.Add(Item("Settings", settings));
+        menu.Items.Add(Item(FlyoutModel.TrayOpenTitle, open));
+        menu.Items.Add(Item(FlyoutModel.SettingsTooltip, settings));
         menu.Items.Add(new Separator());
-        menu.Items.Add(Item("Quit Connector Control", quit));
+        menu.Items.Add(Item(FlyoutModel.QuitTooltip, quit));
         return menu;
     }
 

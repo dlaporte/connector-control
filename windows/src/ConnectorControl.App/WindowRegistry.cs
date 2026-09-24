@@ -22,17 +22,15 @@ public sealed class WindowRegistry
 
     /// <summary>
     /// <paramref name="dialogs"/> is what the Collections window's model asks its questions
-    /// through — AppState keeps its own copy private. It defaults to a fresh ownerless instance,
-    /// which is the same thing App builds, so a caller with no dialogs of its own still gets the
-    /// real behaviour rather than a null.
+    /// through — AppState keeps its own copy private, so App hands over the ownerless instance it
+    /// built for AppState, and a test hands over its fake.
     /// </summary>
-    public WindowRegistry(AppState state, PlatformServices services, UpdateCoordinator updates,
-        IDialogs? dialogs = null)
+    public WindowRegistry(AppState state, PlatformServices services, UpdateCoordinator updates, IDialogs dialogs)
     {
         this.state = state;
         this.services = services;
         this.updates = updates;
-        this.dialogs = dialogs ?? new WpfDialogs(() => null);
+        this.dialogs = dialogs;
     }
 
     public void OpenEditor(EditTarget target)

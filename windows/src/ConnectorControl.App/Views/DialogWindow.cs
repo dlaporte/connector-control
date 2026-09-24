@@ -20,14 +20,6 @@ public abstract class DialogWindow : Window
     }
 
     /// <summary>
-    /// Wires a model event shaped like <c>CloseRequested</c> to this window's Close, marshalled
-    /// onto the UI thread the way an event raised off a background continuation needs — the same
-    /// <c>Dispatcher.BeginInvoke(new Action(Close))</c> every dialog with a model wrote by hand.
-    /// </summary>
-    protected void CloseWhenModelAsks(Action<Action> subscribe) =>
-        subscribe(() => Dispatcher.BeginInvoke(new Action(Close)));
-
-    /// <summary>
     /// The red line a dialog's verb answers on: the reason it could not act, shown, or null, which
     /// clears whatever an earlier answer left there. The models hand the message back rather than
     /// publishing a property for it, so neither does the line's visibility.

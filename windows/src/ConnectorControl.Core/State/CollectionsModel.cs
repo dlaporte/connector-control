@@ -43,11 +43,6 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public const string RemoveFileButton = "Remove";
     public const string KeepFileButton = "Keep";
     public const string RemoteType = "remote";
-    /// <summary>
-    /// The row's pencil as the Windows window still shows it. Retired on the Mac for
-    /// <see cref="EditLabel"/>; it goes here too once the window's pencil reads that.
-    /// </summary>
-    public const string EditTooltip = "Edit";
     /// <summary>The sidebar's double-click, and the same action in its context menu.</summary>
     public const string MakeActiveAction = "Make Active";
     /// <summary>The lock at the head of a synced collection's row, and on the flyout's rows too.</summary>

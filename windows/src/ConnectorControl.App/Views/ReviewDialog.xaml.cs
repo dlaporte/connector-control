@@ -35,16 +35,12 @@ public partial class ReviewDialog : DialogWindow
     public ReviewModel Model { get; }
 
     /// <summary>
-    /// True once the update has landed. The sheet reports through this rather than DialogResult,
-    /// which can only be set on a window shown as a dialog — NamePromptDialog answers the same way.
+    /// True once the update has landed. A plain property rather than DialogResult: a test presents the dialog with Show(),
+    /// where DialogResult's setter throws, so success is recorded here.
     /// </summary>
     public bool Accepted { get; private set; }
 
-    public static bool Show(Window? owner, ReviewModel model)
-    {
-        var dialog = new ReviewDialog(model);
-        return Present(dialog, owner, () => dialog.Accepted);
-    }
+    public static void Show(Window? owner, ReviewModel model) => WpfDialogs.Present(new ReviewDialog(model), owner);
 
     /// <summary>
     /// The grouped view over the rows as they now stand. Re-reading the source replaces the row

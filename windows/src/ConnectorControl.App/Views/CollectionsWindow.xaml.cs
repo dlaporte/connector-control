@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Windows;
-using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -15,8 +14,15 @@ namespace ConnectorControl.App.Views;
 /// <summary>
 /// The Collections window: the collections in the left pane, the selected one's connectors in the
 /// right, the header menu and the selection bar that act on them, and the five dialogs it puts in
-/// front of itself. Layout, bindings, the native pickers, the three menus and the two formatted
-/// captions; every rule and string is CollectionsModel's.
+/// front of itself — Import, Review, Publish, Export and Copy. Layout, bindings, the native
+/// pickers, the three menus and the two formatted captions; every rule and string is
+/// CollectionsModel's.
+/// <para>
+/// Its model asks its questions through the <see cref="IDialogs"/> App builds, which owns each
+/// dialog to whichever of our windows is active rather than to this one, as the Mac window asks
+/// through AppState's. The model asks only while the user acts in this window, when this window
+/// is the active one, so the dialog lands on it all the same.
+/// </para>
 /// </summary>
 public partial class CollectionsWindow : Window
 {
@@ -94,27 +100,29 @@ public partial class CollectionsWindow : Window
     internal CollectionsWindowRequest? LastRequest { get; private set; }
 
     /// <summary>
-    /// The two pickers and the four dialogs this window puts in front of itself. One overridable
+    /// The two pickers this window puts in front of itself, and the four ways it presents its
+    /// five dialogs: Publish and Export are one dialog in the model's two modes. One overridable
     /// bundle, because a test drives this window on the very dispatcher it lives on: a real modal
     /// would block the test that opened it, and a real picker would wait for a person. The Copy
     /// dialog is handed the refusal a failed copy leaves in this window's model as well, which it
-    /// cannot reach through CopyModel.
+    /// cannot reach through CopyModel. Nothing here branches on how a dialog closed: whatever it
+    /// changed reaches this window through the model.
     /// </summary>
     internal sealed record Presenters(
         Func<Window, string?> ChooseDocument,
         Func<Window, string?> ChooseFolder,
-        Func<Window, ImportModel, bool> ShowImport,
-        Func<Window, ReviewModel, bool> ShowReview,
-        Func<Window, PublishModel, bool> ShowPublish,
-        Func<Window, CopyModel, Func<string?>, bool> ShowCopy);
+        Action<Window, ImportModel> ShowImport,
+        Action<Window, ReviewModel> ShowReview,
+        Action<Window, PublishModel> ShowPublish,
+        Action<Window, CopyModel, Func<string?>> ShowCopy);
 
     internal static Presenters Live { get; } = new(
         Pickers.Document,
         Pickers.Folder,
-        (owner, model) => ImportDialog.Show(owner, model),
-        (owner, model) => ReviewDialog.Show(owner, model),
-        (owner, model) => PublishDialog.Show(owner, model),
-        (owner, model, refusal) => CopyDialog.Show(owner, model, refusal));
+        ImportDialog.Show,
+        ReviewDialog.Show,
+        PublishDialog.Show,
+        CopyDialog.Show);
 
     internal Presenters Surfaces { get; set; } = Live;
 
@@ -166,11 +174,11 @@ public partial class CollectionsWindow : Window
     /// </summary>
     internal ContextMenu BuildSidebarMenu()
     {
-        var menu = new ContextMenu { PlacementTarget = AddCollectionButton, Placement = PlacementMode.Bottom, StaysOpen = false };
-        menu.Items.Add(Entry(CollectionsModel.NewButton, () => Act(Model.Create)));
+        var menu = Menus.Anchored(AddCollectionButton, PlacementMode.Bottom);
+        menu.Items.Add(Menus.Item(CollectionsModel.NewButton, () => Act(Model.Create)));
         menu.Items.Add(new Separator());
-        menu.Items.Add(Entry(CollectionsModel.ImportButton, CollectionsModel.ImportSubtitle, () => Import(keepInSync: false)));
-        menu.Items.Add(Entry(CollectionsModel.SubscribeButton, CollectionsModel.SubscribeSubtitle, () => Import(keepInSync: true)));
+        menu.Items.Add(TwoLine(CollectionsModel.ImportButton, CollectionsModel.ImportSubtitle, () => Import(keepInSync: false)));
+        menu.Items.Add(TwoLine(CollectionsModel.SubscribeButton, CollectionsModel.SubscribeSubtitle, () => Import(keepInSync: true)));
         return menu;
     }
 
@@ -185,7 +193,7 @@ public partial class CollectionsWindow : Window
     /// </summary>
     internal ContextMenu BuildCollectionMenu()
     {
-        var menu = new ContextMenu { PlacementTarget = MoreButton, Placement = PlacementMode.Bottom, StaysOpen = false };
+        var menu = Menus.Anchored(MoreButton, PlacementMode.Bottom);
         foreach (var entry in Model.CollectionMenu)
         {
             if (entry is CollectionsModel.MenuEntry.Separator)
@@ -193,13 +201,8 @@ public partial class CollectionsWindow : Window
                 menu.Items.Add(new Separator());
                 continue;
             }
-            var item = Entry(CollectionsModel.Title(entry), () => Run(entry));
-            item.IsEnabled = entry switch
-            {
-                CollectionsModel.MenuEntry.ExportAll exportAll => exportAll.Enabled,
-                CollectionsModel.MenuEntry.Delete delete => delete.Enabled,
-                _ => true,
-            };
+            var item = Menus.Item(CollectionsModel.Title(entry), () => Run(entry));
+            item.IsEnabled = CollectionsModel.IsEnabled(entry);
             menu.Items.Add(item);
         }
         return menu;
@@ -242,7 +245,7 @@ public partial class CollectionsWindow : Window
                 // The whole collection: the menu acts on the collection, not on what is ticked.
                 if (Model.Selected is { } shown)
                 {
-                    PresentPublish(new PublishModel(state, shown, mode: PublishModel.Mode.Export));
+                    Surfaces.ShowPublish(this, new PublishModel(state, shown, mode: PublishModel.Mode.Export));
                 }
                 break;
             case CollectionsModel.MenuEntry.MakeLocalCopy:
@@ -269,7 +272,7 @@ public partial class CollectionsWindow : Window
     {
         if (Model.Selected is { } collection)
         {
-            PresentPublish(new PublishModel(state, collection));
+            Surfaces.ShowPublish(this, new PublishModel(state, collection));
         }
     }
 
@@ -310,14 +313,14 @@ public partial class CollectionsWindow : Window
     /// </summary>
     internal ContextMenu BuildCopyMenu()
     {
-        var menu = new ContextMenu { PlacementTarget = CopyToButton, Placement = PlacementMode.Top, StaysOpen = false };
+        var menu = Menus.Anchored(CopyToButton, PlacementMode.Top);
         var destinations = Model.CopyDestinations;
         foreach (var destination in destinations)
         {
             var name = destination.Name;
             var item = destination.IsEnabled
-                ? Entry(name, () => Copy(name))
-                : Entry(name, CollectionsModel.ReadOnlyNote, () => { });
+                ? Menus.Item(name, () => Copy(name))
+                : TwoLine(name, CollectionsModel.ReadOnlyNote, () => { });
             item.IsEnabled = destination.IsEnabled;
             menu.Items.Add(item);
         }
@@ -326,7 +329,7 @@ public partial class CollectionsWindow : Window
         {
             menu.Items.Add(new Separator());
         }
-        menu.Items.Add(Entry(CollectionsModel.NewButton, () => Act(() => Model.CopyCheckedIntoNewCollection())));
+        menu.Items.Add(Menus.Item(CollectionsModel.NewButton, () => Act(() => Model.CopyCheckedIntoNewCollection())));
         return menu;
     }
 
@@ -351,7 +354,7 @@ public partial class CollectionsWindow : Window
     {
         if (Model.Selected is { } collection)
         {
-            PresentPublish(new PublishModel(state, collection, Model.ExportIntentForChecked(), PublishModel.Mode.Export));
+            Surfaces.ShowPublish(this, new PublishModel(state, collection, Model.ExportIntentForChecked(), PublishModel.Mode.Export));
         }
     }
 
@@ -359,29 +362,9 @@ public partial class CollectionsWindow : Window
 
     // MARK: menus
 
-    private static MenuItem Entry(string header, Action action)
-    {
-        var item = new MenuItem { Header = header };
-        item.Click += (_, _) => action();
-        return item;
-    }
-
-    /// <summary>
-    /// A two-line entry: the name, and under it the subtitle that tells it apart. A header built
-    /// from elements gives the item nothing of its own to announce, so the item is given the name
-    /// and the subtitle as its help text.
-    /// </summary>
-    private MenuItem Entry(string header, string subtitle, Action action)
-    {
-        var panel = new StackPanel();
-        panel.Children.Add(new TextBlock { Text = header });
-        panel.Children.Add(new TextBlock { Text = subtitle, Style = (Style)FindResource("CaptionText") });
-        var item = new MenuItem { Header = panel };
-        AutomationProperties.SetName(item, header);
-        AutomationProperties.SetHelpText(item, subtitle);
-        item.Click += (_, _) => action();
-        return item;
-    }
+    /// <summary>A two-line entry, its subtitle in this window's caption style.</summary>
+    private MenuItem TwoLine(string header, string subtitle, Action action) =>
+        Menus.Item(header, subtitle, (Style)FindResource("CaptionText"), action);
 
     // MARK: panes
 
@@ -440,9 +423,10 @@ public partial class CollectionsWindow : Window
     }
 
     /// <summary>
-    /// Greyed out for the collection that is already active, as the Mac's menu item is. The
-    /// answer comes from the parameter, never from a DataContext: one ContextMenu instance is
-    /// shared by every container the item container style makes, so its inheritance context is
+    /// Greyed out for the collection that is already active, as the Mac's menu item is. The model
+    /// would leave the active one alone anyway, so this is how the entry looks, not what guards
+    /// it. The answer comes from the parameter, never from a DataContext: one ContextMenu instance
+    /// is shared by every container the item container style makes, so its inheritance context is
     /// whatever claimed it last.
     /// </summary>
     private void OnCanMakeActive(object sender, CanExecuteRoutedEventArgs e) =>
@@ -483,7 +467,7 @@ public partial class CollectionsWindow : Window
             }
             return;
         }
-        switch (state.CollectionBanner)
+        switch (Model.Banner)
         {
             case CollectionBanner.Locate:
                 if (Surfaces.ChooseDocument(this) is { } path)
@@ -522,7 +506,13 @@ public partial class CollectionsWindow : Window
         }
     }
 
-    /// <summary>What the flyout asked for, taken so nothing can act on it twice.</summary>
+    /// <summary>
+    /// What the flyout asked for, taken so nothing can act on it twice. A dialog shown here is
+    /// app-modal — ShowDialog disables every window on this thread, the hidden flyout included —
+    /// so no request can arrive while one is up, and nothing here replaces an open dialog. The Mac
+    /// sheets are window-modal, and the popover stays live beside them, which is why the Mac
+    /// window replaces a pending sheet and this one has nothing to replace.
+    /// </summary>
     private void Consume()
     {
         // Queued below layout, so this can run after the window has gone: leave the request for
@@ -541,7 +531,7 @@ public partial class CollectionsWindow : Window
                 // A publish the app stopped for review, for the collection it names — which need
                 // not be the one this window is showing. The dialog is where the author answers it.
                 Model.Selected = publish.Collection;
-                PresentPublish(new PublishModel(state, publish.Collection));
+                Surfaces.ShowPublish(this, new PublishModel(state, publish.Collection));
                 break;
         }
     }
@@ -567,8 +557,6 @@ public partial class CollectionsWindow : Window
         }
         Surfaces.ShowImport(this, model);
     }
-
-    private void PresentPublish(PublishModel model) => Surfaces.ShowPublish(this, model);
 
     private void Review(string collection)
     {
@@ -617,4 +605,13 @@ public sealed class CollectionSourceTooltipConverter : OneWayConverter<Collectio
     protected override object? Fallback => null;
 
     protected override object? Map(CollectionsModel.Item item, object? parameter) => CollectionsModel.SyncedGlyphTooltip(item);
+}
+
+/// <summary>
+/// One row's pencil, which names the connector it edits, from <see cref="CollectionsModel.EditLabel"/>;
+/// this exists only because XAML cannot call a method.
+/// </summary>
+public sealed class EditLabelConverter : OneWayConverter<string>
+{
+    protected override object? Map(string connector, object? parameter) => CollectionsModel.EditLabel(connector);
 }

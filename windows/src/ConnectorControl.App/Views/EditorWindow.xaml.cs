@@ -22,7 +22,7 @@ public partial class EditorWindow : Window
         Model = new EditorModel(state, target, new WpfDialogs(() => this), NewRemoteStyle);
         DataContext = Model;
         Title = Model.WindowTitle;
-        Model.CloseRequested += () => Dispatcher.BeginInvoke(new Action(Close));
+        this.CloseWhenAsked(handler => Model.CloseRequested += handler);
         Model.FocusEnvRowRequested += row => Dispatcher.BeginInvoke(new Action(() => FocusEnvRow(row)), DispatcherPriority.Loaded);
         PreviewKeyDown += OnPreviewKeyDown;
         // The model watches AppState for everything the collection decides and raises it, so the

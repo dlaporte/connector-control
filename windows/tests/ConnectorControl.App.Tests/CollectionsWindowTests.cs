@@ -54,10 +54,10 @@ public class CollectionsWindowTests
         public CollectionsWindow.Presenters Presenters => new(
             _ => { DocumentAsks++; return Document; },
             _ => { FolderAsks++; return Folder; },
-            (_, model) => { Imports.Add(model); return true; },
-            (_, model) => { Reviews.Add(model); return true; },
-            (_, model) => { Publishes.Add((model, model.SheetMode)); return true; },
-            (_, model, _) => { Copies.Add(model); return true; });
+            (_, model) => Imports.Add(model),
+            (_, model) => Reviews.Add(model),
+            (_, model) => Publishes.Add((model, model.SheetMode)),
+            (_, model, _) => Copies.Add(model));
     }
 
     /// <summary>
@@ -226,6 +226,15 @@ public class CollectionsWindowTests
             Assert.Equal(CollectionsModel.SyncedGlyphTooltip(team), chain.ToolTip);
             Assert.Equal(Visibility.Collapsed, InSidebar<TextBlock>(window, "Default", "SidebarChainGlyph").Visibility);
             Assert.Equal(Visibility.Collapsed, InSidebar<Ellipse>(window, "Data team", "SidebarPendingDot").Visibility);
+            // The dot says what it stands for, as the chip's does.
+            Assert.Equal(FlyoutModel.PendingSpokenLabel, AutomationProperties.GetName(InSidebar<Ellipse>(window, "Data team", "SidebarPendingDot")));
+
+            // Each item is read as its collection's name, not as the record it holds.
+            foreach (var item in window.Model.Items)
+            {
+                var container = (ListBoxItem)window.Sidebar.ItemContainerGenerator.ContainerFromItem(item);
+                Assert.Equal(item.Name, AutomationProperties.GetName(container));
+            }
 
             // The header names the collection; the detail line is the model's, in the idle bar.
             Assert.Equal("Default", window.SelectedNameText.Text);
@@ -563,7 +572,10 @@ public class CollectionsWindowTests
             var first = window.Model.Rows[0].Name;
             var second = window.Model.Rows[1].Name;
             Assert.Equal(Visibility.Visible, InRow<CheckBox>(window, first, "RowTick").Visibility);
-            Assert.Equal(CollectionsModel.EditTooltip, InRow<Button>(window, first, "RowEdit").ToolTip);
+            // The pencil names the connector it edits, to the eye and to a screen reader.
+            var pencil = InRow<Button>(window, first, "RowEdit");
+            Assert.Equal(CollectionsModel.EditLabel(first), pencil.ToolTip);
+            Assert.Equal(CollectionsModel.EditLabel(first), AutomationProperties.GetName(pencil));
 
             Tick(window, first, true);
             Tick(window, second, true);

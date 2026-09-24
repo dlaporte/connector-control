@@ -28,17 +28,8 @@ public partial class CopyDialog : DialogWindow
 
     public CopyModel Model { get; }
 
-    /// <summary>
-    /// True once the copies have landed. The sheet reports through this rather than DialogResult,
-    /// whose setter throws on a window presented with Show() — ImportDialog answers the same way.
-    /// </summary>
-    public bool Accepted { get; private set; }
-
-    public static bool Show(Window? owner, CopyModel model, Func<string?> refusal)
-    {
-        var dialog = new CopyDialog(model, refusal);
-        return Present(dialog, owner, () => dialog.Accepted);
-    }
+    public static void Show(Window? owner, CopyModel model, Func<string?> refusal) =>
+        WpfDialogs.Present(new CopyDialog(model, refusal), owner);
 
     /// <summary>
     /// A copy that did not land with nothing to say for itself — the ticks went while the sheet
@@ -51,7 +42,6 @@ public partial class CopyDialog : DialogWindow
         ShowFailure(FailureText, failure);
         if (failure is null)
         {
-            Accepted = landed;
             Close();
         }
     }
