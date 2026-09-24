@@ -72,8 +72,8 @@ check on the active one, then **Manage Collections**. Choosing a collection
 switches to it, which applies immediately, same as any other change, and
 raises **Restart Required** just like a toggle would. The switches below the
 chip turn the active collection's connectors on and off. That is all the
-popover does: adding, editing, copying and sharing connectors happen in the
-Collections window.
+popover or flyout does: adding, editing, copying and sharing connectors
+happen in the Collections window.
 
 <p align="center">
   <img src="docs/screenshots/mac-chip-menu.png" width="344" alt="The collection chip's menu on macOS: the collections to switch between, a check on the active one and a chain on a subscribed one, then Manage Collections.">
@@ -108,7 +108,10 @@ names the folder, and the editor has a line at the top: "Published to
 <folder> — saving updates the file your team reads. Secrets stay here."
 
 **Manage Collections** opens the Collections window. Every control in it
-sits on the thing it acts on.
+sits on the thing it acts on. What this README calls a sheet — Import,
+Copy, Publish, Export, Review — opens as a dialog on Windows. On a Mac,
+Escape cancels any of these sheets, and the connector editor, as its
+**Cancel** button does.
 
 - **The sidebar** lists the collections under the heading **Collections**.
   Its **+** (tooltip "Add Collection") offers **New Collection**, which
@@ -116,7 +119,10 @@ sits on the thing it acts on.
   the active one, then **Import**, "Adds copies you own", and **Subscribe**,
   "Stays in sync, read-only" (see Sharing a collection with a team).
   Selecting a collection only shows it; double-click it, or choose **Make
-  Active** from its context menu, to switch to it.
+  Active** from its context menu, to switch to it. Double-clicking the
+  collection that is already active does nothing. Renaming or deleting a
+  collection other than the active one changes nothing Claude runs, so it
+  leaves Claude's config alone and raises no **Restart Required**.
 - **The header** carries the selected collection's name, its pills — a green
   **Active** on the collection Claude is running, then **Published** or
   **Subscribed**, never both — and a **⋯** (tooltip "More") holding
@@ -139,8 +145,8 @@ sits on the thing it acts on.
   "Edit") that opens its editor. Names line up in a column as wide as the
   longest of them, up to a cap past which a long name is cut. There is no
   switch here and no right-click menu: whether a connector is on is the
-  popover's business, so to switch a connector in another collection, make
-  that collection active first.
+  popover's or flyout's business, so to switch a connector in another
+  collection, make that collection active first.
 - **The selection bar** along the bottom shows the detail line while
   nothing is ticked — "local · 5 connectors · active", "synced from
   /Users/you/Acme/mcp/data-team.json · read-only · up to date", or "local · 4
@@ -261,8 +267,8 @@ machine that published it. **That machine has to be running for a change to
 reach the team**: an edit made on your other machine travels through the
 master list and is published the next time the publishing machine sees it. A
 write that fails puts "Couldn’t publish …" on the banner with **Choose
-Folder**, and in the popover **Stop Publishing** beside it (in the window,
-Stop Publishing is in the **⋯**). The Publish sheet stays open on
+Folder**, and in the popover or flyout **Stop Publishing** beside it (in the
+window, Stop Publishing is in the **⋯**). The Publish sheet stays open on
 a failure, and pressing Publish there, or in the sheet opened again later,
 retries at once; otherwise the next change retries the write.
 
@@ -277,14 +283,19 @@ All is dimmed on one and its rows can't be ticked.
 **Subscribe**, under the sidebar's **+**, picks a document and opens the
 Import sheet on **Keep as its own collection, in sync with this file**;
 **Import** opens the same sheet on the other mode. Either way the sheet names the document and lists its
-connectors before anything happens. A subscribed collection arrives with
-every connector switched off and does not become the active one.
+connectors before anything happens; a file it cannot read shows why
+("<file> couldn’t be read: …"), with no Import button. A subscribed
+collection arrives with every connector switched off and does not become
+the active one.
 
 What is the author's: names, commands, arguments, URLs and auth. They open
 locked in the editor under a grey line reading "Synced from <name> ·
 read-only", with a **What can I change?** link that spells out the rule.
 What is yours: the values the document asks this machine for, and which
-connectors are on.
+connectors are on. If the author changes or removes a connector while its
+editor is open, **Save** refuses — "“<name>” changed outside this editor."
+or "“<name>” was removed outside this editor." — rather than write the old
+version back; reopen the editor to fill in your values again.
 
 When the author changes the file the collection says so — "Data team changed
 at its source: adds jira; removes confluence." — with **Review & Apply**.
@@ -308,7 +319,7 @@ Local Copy** from its **⋯**: it copies the whole collection into a new local
 one, every connector switched off. **Stop Syncing** turns the collection
 itself into an ordinary local one, keeping every connector, every value you
 filled in and every switch; it asks first, and says as much. Deleting a
-synced collection never touches the source file.
+subscribed collection never touches the source file.
 
 #### Importing as copies
 
@@ -327,7 +338,7 @@ Wherever the author stripped a value, the connector waits for yours. The row
 shows a caution, the editor marks the field "needs your value" or "needs
 your path", and the author's hint sits with it. Filled values are yours:
 they live in your master list, they never go into a document, and they
-survive every update from the source. A synced collection that uses
+survive every update from the source. A subscribed collection that uses
 `${COLLECTION_DIR}` but has not found its file yet says "Locate the
 collection file to resolve paths." on the rows that need it.
 
@@ -395,8 +406,8 @@ machines that follow it, including the one that publishes it.
   refuses the published document itself.
 - Replacing an imported copy keeps a filled value only where the author left
   the placeholder in the same place. A copy is not a subscription and has
-  nothing recording where the value used to be; a synced collection does,
-  and follows the move.
+  nothing recording where the value used to be; a subscribed collection
+  does, and follows the move.
 - The document's name is only a default at import. Renaming a published
   collection never renames a subscriber's.
 
@@ -504,7 +515,9 @@ profile, so backups stay on the machine that made them):
 
 Every change (toggle, edit, add, remove, restore) writes the master list and
 regenerates the `mcpServers` section of Claude's config — atomically, after
-backing both up. A reconciliation pass runs at launch, every time the popover or flyout
+backing both up. Backups are named by the millisecond they were taken; two
+taken in the same one are numbered, and still list, restore and prune
+newest first. A reconciliation pass runs at launch, every time the popover or flyout
 opens, and whenever either file changes on disk: connectors added outside the app
 are imported, external edits are detected (and you're notified), and
 connectors missing from Claude's config are flagged for restore rather than
@@ -565,8 +578,8 @@ changes live (the file is watched). Notes:
   stores remote connectors in a neutral form, so a Mac author's remote
   connectors start on Windows and a Windows author's start on a Mac, each
   app writing its own launcher. Local servers travel as written and carry
-  the platform they were authored on; in a synced collection on the other
-  OS their row shows "authored on macOS" or "authored on Windows".
+  the platform they were authored on; in a subscribed collection on the
+  other OS their row shows "authored on macOS" or "authored on Windows".
 - The same `cmd /c` rule applies to a connector arriving from a document,
   not just to one typed into the editor: Windows skips a remote connector
   whose Server URL, header name or OAuth client ID contains `& | < > ^ "` or
@@ -581,7 +594,7 @@ changes live (the file is watched). Notes:
   are ordinary on Windows, so a collection meant for PCs is best published
   into a folder without one.
 - An app older than collections, sharing the same master list, has no idea a
-  collection is synced and edits it as an ordinary one. This app then reads
+  collection is subscribed and edits it as an ordinary one. This app then reads
   those edits as a pending update from the source, and applying reverts
   them; use Make Local Copy or Stop Syncing first if you want to keep them.
 - collections.json travels with mcps.json. The per-machine facts — where a
@@ -636,8 +649,9 @@ Run workflow with a number (a dry run by default). A preview builds `<next>-prev
 where `<next>` is the top `## vX.Y.Z` heading of CHANGELOG.md, signs and notarizes the
 Mac app and signs the Windows installers exactly like a release, and publishes them as
 one GitHub prerelease. Stable users are unaffected: a prerelease is never
-`releases/latest`, so the Mac update feed does not change, and a Windows preview install
-follows previews only. A `preview-dry-<n>` tag builds everything and publishes nothing.
+`releases/latest`, so the Mac update feed does not change. A Windows preview install
+updates itself to later previews and to the final release; a Mac preview is offered the
+final release when it ships, and each new preview is downloaded by hand. A `preview-dry-<n>` tag builds everything and publishes nothing.
 The Mac job runs in the `signing` environment, whose deployment branch policy must allow
 `preview-*` tags and any branch previews are cut from.
 
@@ -650,14 +664,14 @@ workflow's own YAML and shell/PowerShell scripts are linted by
 
 | Script | What it does | Who calls it |
 | --- | --- | --- |
-| `scripts/build-app.sh` | Assembles `build/Connector Control.app` from the SwiftPM build products, embedding Sparkle and the app icon. | `mac-ci.yml`, `release.yml` |
-| `scripts/make-dmg.sh` | Packages the app bundle into a drag-to-Applications DMG. | `mac-ci.yml`, `release.yml` |
-| `scripts/test-mac.sh` | Runs the Swift suite the way CI gates it (no test may skip or fail). | `mac-ci.yml`, `release.yml` |
+| `scripts/build-app.sh` | Assembles `build/Connector Control.app` from the SwiftPM build products, embedding Sparkle and the app icon. | `mac-ci.yml`, `preview.yml`, `release.yml` |
+| `scripts/make-dmg.sh` | Packages the app bundle into a drag-to-Applications DMG. | `mac-ci.yml`, `preview.yml`, `release.yml` |
+| `scripts/test-mac.sh` | Runs the Swift suite the way CI gates it (no test may skip or fail). | `mac-ci.yml`, `preview.yml`, `release.yml` |
 | `scripts/generate-icon.swift` | Renders the app icon — macOS `.icns` or Windows `.ico`, chosen by the output extension. | `scripts/build-app.sh`; the `.ico` path is run by hand, on a Mac |
-| `scripts/mac/import-signing-cert.sh` | Imports the Developer ID certificate into a throwaway CI keychain. | `release.yml` |
-| `scripts/mac/notarize.sh` | Submits a binary or app bundle for Apple notarization and staples the ticket. | `release.yml` |
+| `scripts/mac/import-signing-cert.sh` | Imports the Developer ID certificate into a throwaway CI keychain. | `preview.yml`, `release.yml` |
+| `scripts/mac/notarize.sh` | Submits a binary or app bundle for Apple notarization and staples the ticket. | `preview.yml`, `release.yml` |
 | `scripts/mac/make-appcast.sh` | Builds and EdDSA-signs the Sparkle appcast for one release. | `release.yml` |
-| `scripts/release/changelog-section.sh` | Prints one version's CHANGELOG.md section. | `release.yml` |
+| `scripts/release/changelog-section.sh` | Prints one version's CHANGELOG.md section. | `release.yml`, `scripts/release/preview-notes.sh` |
 | `scripts/release/preview-notes.sh` | Prints the release notes for a joint preview build. | `preview.yml` |
 | `scripts/release/ensure-release.sh` | Creates a GitHub release, or reuses one a previous run already created. | `release.yml`, `preview.yml` |
 | `scripts/release/upload-release-assets.sh` | Uploads one build's Velopack assets to an existing release. | `release.yml`, `preview.yml` |
