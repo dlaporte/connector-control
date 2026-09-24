@@ -25,6 +25,7 @@ public partial class EditorWindow : Window
         this.CloseWhenAsked(handler => Model.CloseRequested += handler);
         Model.FocusEnvRowRequested += row => Dispatcher.BeginInvoke(new Action(() => FocusEnvRow(row)), DispatcherPriority.Loaded);
         PreviewKeyDown += OnPreviewKeyDown;
+        InitialFocus.OnFirstActivation(this);
         // The model watches AppState for everything the collection decides and raises it, so the
         // window has nothing of its own to subscribe to and nothing to re-seat.
         Closed += (_, _) => Model.Dispose();

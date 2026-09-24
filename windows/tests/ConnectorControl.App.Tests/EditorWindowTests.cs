@@ -75,6 +75,16 @@ public class EditorWindowTests
         EditTarget.Existing(name, state.Store.Collections[collection].Mcps[name], collection);
 
     [Fact]
+    public void TheKeyboardStartsInTheFirstEditableField()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        // The name, as on the Mac, where the window's first text field takes the keyboard.
+        WpfApp.Invoke(() => Editing(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle, "Default"),
+            window => Assert.Same(window.NameBox, InitialFocus.FirstField(window))));
+    }
+
+    [Fact]
     public void NewRemoteTargetShowsTheRemoteFormWithTheTypePicker()
     {
         using var h = new AppStateHarness();

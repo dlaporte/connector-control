@@ -17,6 +17,7 @@ public abstract class DialogWindow : Window
         ResizeMode = ResizeMode.NoResize;
         SizeToContent = SizeToContent.Height;
         SetResourceReference(BackgroundProperty, "SolidBackgroundFillColorBaseBrush");
+        InitialFocus.OnFirstActivation(this);
     }
 
     /// <summary>

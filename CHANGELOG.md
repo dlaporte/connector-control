@@ -27,6 +27,9 @@ bullet once the section is about to ship.
 
 ### Windows
 
+- The connector editor and the Collections window's dialogs open with the keyboard in their
+  first text field, as on the Mac: the connector's name in the editor, the new collection's
+  name in Subscribe.
 - In the Collections window, Return on a collection in the sidebar makes it the active one,
   as a double-click does and as it already did on the Mac.
 - Connectors arriving from a shared collection go through the same check as ones typed
