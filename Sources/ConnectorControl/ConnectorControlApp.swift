@@ -38,6 +38,12 @@ struct ConnectorControlApp: App {
         Window(CollectionsModel.windowTitle, id: CollectionsWindowView.windowID) {
             CollectionsWindowView(state: state)
         }
+        // One surface, with no title-bar strip: the sidebar's own "Collections" header names the
+        // window, so the bar would only repeat it, in a band of another colour. The title still
+        // names the window in the Window menu, Mission Control and the Dock, and the transparent
+        // bar still drags the window. This scene only: the editor and Settings keep their bars.
+        // Windows keeps its native title bar, which is the platform's idiom there.
+        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 760, height: 520)
         .windowResizability(.contentMinSize)
 

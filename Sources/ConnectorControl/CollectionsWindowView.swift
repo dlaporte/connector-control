@@ -123,10 +123,14 @@ struct CollectionsWindowView: View {
         // The header sits above the list rather than in a section of it: a sidebar section grows
         // a collapse chevron on hover, in the very corner the `+` occupies.
         VStack(alignment: .leading, spacing: 0) {
+            // The top padding sets the title on the detail header's baseline. The scene hides
+            // the title bar, so both columns start just below the traffic lights, and the detail
+            // header's larger type sits lower in its line than this one.
             sidebarHeader
                 .padding(.leading, 18)
                 .padding(.trailing, 12)
-                .padding(.vertical, 4)
+                .padding(.top, 16)
+                .padding(.bottom, 4)
             List(model.items, selection: $model.selected) { item in
                 sidebarRow(item)
             }
@@ -145,6 +149,10 @@ struct CollectionsWindowView: View {
                 if let item = sidebarItem(names) { act { model.switchTo(item.name) } }
             }
         }
+        // No toolbar at all: the toggle was its only item, and without it the window has no
+        // strip above the columns. Set on the column, where it must go, and before the width,
+        // which it would otherwise hide from the split view.
+        .toolbar(removing: .sidebarToggle)
         .navigationSplitViewColumnWidth(min: 160, ideal: CollectionsWindowView.sidebarWidth)
     }
 
