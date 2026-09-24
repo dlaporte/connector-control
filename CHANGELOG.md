@@ -99,13 +99,15 @@ bullet once the section is about to ship.
   program, paths, URLs and package names. The column leaves out the values of flags named
   for secrets, `KEY=value` words, a URL's user and query, random-looking strings and
   anything it does not recognise. It is a best-effort mask, not a guarantee.
-- Ticking rows turns the bar at the foot of the window into a selection bar. Copy to
-  copies the ticked connectors into another local collection, or into a new one it asks
-  you to name; a subscribed collection is listed but cannot take copies. The copies arrive
-  switched off and record where they came from, and a name the destination already holds
-  can replace the one there, land beside it as `<name> 2`, which is the default, or be
-  left out. Replacing a connector in the active collection applies at once. Export writes
-  the ticked connectors as a document.
+- The bar at the foot of the window counts the collection's connectors, "14 connectors",
+  and adds why a subscribed collection's source could not be read when that is so.
+  Ticking rows turns it into a selection bar. Copy to copies the ticked connectors into
+  another local collection, or into a new one it asks you to name; a subscribed
+  collection is listed but cannot take copies. The copies arrive switched off and record
+  where they came from, and a name the destination already holds can replace the one
+  there, land beside it as `<name> 2`, which is the default, or be left out. Replacing a
+  connector in the active collection applies at once. Export writes the ticked connectors
+  as a document.
 - Remove takes out any number of ticked connectors at once. It asks first, naming the
   connector or the count, and says a copy remains in Backups; the connector editor no
   longer has a Remove button.

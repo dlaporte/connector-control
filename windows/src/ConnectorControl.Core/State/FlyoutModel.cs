@@ -40,8 +40,8 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public const string CautionGlyph = ToolWarningGlyph;
     /// <summary>
     /// The amber dot's spoken form, beside the title that uses it so a view finds it here. The
-    /// words are the Collections window's status for the same condition, borrowed rather than
-    /// written twice, as <c>ConnectorRow.LockTooltip</c> borrows that window's lock sentence.
+    /// words are the Collections model's for the same condition, borrowed rather than written
+    /// twice, as <c>ConnectorRow.LockTooltip</c> borrows that window's lock sentence.
     /// </summary>
     public const string PendingSpokenLabel = CollectionsModel.UpdateAvailableStatus;
     /// <summary>

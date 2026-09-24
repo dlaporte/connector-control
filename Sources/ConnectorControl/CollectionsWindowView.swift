@@ -346,14 +346,10 @@ struct CollectionsWindowView: View {
         .background(RoundedRectangle(cornerRadius: 6).fill(Color.orange.opacity(0.12)))
     }
 
-    /// The list's title and count, and the `+` that adds a connector here — dimmed on a synced
-    /// collection, whose tooltip then says where additions go instead.
+    /// The `+` that adds a connector here — dimmed on a synced collection, whose tooltip then says
+    /// where additions go instead. The count is the selection bar's, below the rows.
     private var connectorsHeader: some View {
         HStack(spacing: 6) {
-            Text(CollectionsModel.connectorsHeader)
-                .fontWeight(.semibold)
-            Text("\(model.rows.count)")
-                .foregroundStyle(.secondary)
             Spacer(minLength: 0)
             Button {
                 openWindow(id: EditTarget.editorWindowID, value: model.newConnectorTarget())
@@ -386,8 +382,8 @@ struct CollectionsWindowView: View {
                 .frame(width: 18, alignment: .leading)
                 nameCell(row)
                     .frame(width: nameWidth, alignment: .leading)
-                // What the connector runs, often a path: elided in the middle, as the detail line
-                // is. The Windows rows cut the tail, since WPF has no middle ellipsis.
+                // What the connector runs, often a path: elided in the middle, as the connector
+                // count is. The Windows rows cut the tail, since WPF has no middle ellipsis.
                 Text(row.target)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -446,18 +442,18 @@ struct CollectionsWindowView: View {
 
     // MARK: - Selection bar
 
-    /// Idle, what the collection is and where its document lives; with rows ticked, what can be
-    /// done to them. Remove sits apart at the far end, so a hand moving from the safe pair cannot
+    /// Idle, how many connectors the collection holds; with rows ticked, what can be done to
+    /// them. Remove sits apart at the far end, so a hand moving from the safe pair cannot
     /// land on it, and is absent where the rows are not the user's to remove.
     private var selectionBar: some View {
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 10) {
                 if model.checkedNames.isEmpty {
-                    // Paths in this line are raw, so a window too narrow for one elides its middle
-                    // and keeps the file name at its end. The Windows window cuts the tail
-                    // instead: WPF has no middle ellipsis.
-                    Text(model.detailLine)
+                    // A source failure in this line can name a raw path, so a window too narrow
+                    // for one elides its middle and keeps the file name at its end. The Windows
+                    // window cuts the tail instead: WPF has no middle ellipsis.
+                    Text(model.connectorCount)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

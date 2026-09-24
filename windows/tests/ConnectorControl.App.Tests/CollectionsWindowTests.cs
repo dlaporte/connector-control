@@ -236,9 +236,9 @@ public class CollectionsWindowTests
                 Assert.Equal(item.Name, AutomationProperties.GetName(container));
             }
 
-            // The header names the collection; the detail line is the model's, in the idle bar.
+            // The header names the collection; the connector count is the model's, in the idle bar.
             Assert.Equal("Default", window.SelectedNameText.Text);
-            Assert.Equal(window.Model.DetailLine, window.DetailText.Text);
+            Assert.Equal(window.Model.ConnectorCount, window.ConnectorCountText.Text);
             Assert.Equal(Visibility.Collapsed, window.BannerStrip.Visibility);
         });
     }
@@ -524,8 +524,8 @@ public class CollectionsWindowTests
             Assert.True(window.AddConnectorButton.IsEnabled);
             Assert.Equal(CollectionsModel.AddConnectorTooltip, window.AddConnectorButton.ToolTip);
             Assert.Equal(CollectionsModel.AddConnectorTooltip, AutomationProperties.GetName(window.AddConnectorButton));
-            Assert.Equal(window.Model.Rows.Count.ToString(System.Globalization.CultureInfo.CurrentCulture),
-                window.ConnectorCountText.Text);
+            // The plus is all the list header holds: the count is the selection bar's.
+            Assert.Equal([window.AddConnectorButton], window.ConnectorsHeader.Children.Cast<UIElement>());
 
             // The same button on a synced collection is dead, and its tooltip says where
             // additions go instead.
@@ -534,30 +534,28 @@ public class CollectionsWindowTests
             Assert.False(window.AddConnectorButton.IsEnabled);
             Assert.Equal(CollectionsModel.AddConnectorDisabledTooltip, window.AddConnectorButton.ToolTip);
             Assert.Equal(CollectionsModel.AddConnectorDisabledTooltip, AutomationProperties.GetName(window.AddConnectorButton));
-            Assert.Equal(window.Model.Rows.Count.ToString(System.Globalization.CultureInfo.CurrentCulture),
-                window.ConnectorCountText.Text);
         });
     }
 
     [Fact]
-    public void TheSelectionBarShowsTheDetailLineWhenNothingIsTicked()
+    public void TheSelectionBarShowsTheConnectorCountWhenNothingIsTicked()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
         Showing(h, state, (window, _) =>
         {
             Assert.Empty(window.Model.CheckedNames);
-            Assert.Equal(Visibility.Visible, window.DetailText.Visibility);
-            Assert.Equal(window.Model.DetailLine, window.DetailText.Text);
+            Assert.Equal(Visibility.Visible, window.ConnectorCountText.Visibility);
+            Assert.Equal(CollectionsModel.ConnectorTally(window.Model.Rows.Count), window.ConnectorCountText.Text);
             Assert.Equal(Visibility.Collapsed, window.TickedBar.Visibility);
 
             // A tick swaps the line for the actions, and the last untick swaps it back.
             var first = window.Model.Rows[0].Name;
             Tick(window, first, true);
-            Assert.Equal(Visibility.Collapsed, window.DetailText.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.ConnectorCountText.Visibility);
             Assert.Equal(Visibility.Visible, window.TickedBar.Visibility);
             Tick(window, first, false);
-            Assert.Equal(Visibility.Visible, window.DetailText.Visibility);
+            Assert.Equal(Visibility.Visible, window.ConnectorCountText.Visibility);
             Assert.Equal(Visibility.Collapsed, window.TickedBar.Visibility);
         });
     }

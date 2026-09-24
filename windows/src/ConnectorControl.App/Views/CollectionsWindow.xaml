@@ -241,18 +241,13 @@
         </Grid>
       </Border>
 
-      <!-- The list's title and count, and the plus that adds a connector here — dimmed on a synced
-           collection, whose tooltip then says where additions go instead. -->
-      <DockPanel Grid.Row="2" Margin="0,0,0,4">
+      <!-- The plus that adds a connector here — dimmed on a synced collection, whose tooltip then
+           says where additions go instead. The count is the selection bar's, below the rows. -->
+      <DockPanel x:Name="ConnectorsHeader" Grid.Row="2" Margin="0,0,0,4" LastChildFill="False">
         <Button x:Name="AddConnectorButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;"
                 IsEnabled="{Binding CanAddConnector}" ToolTip="{Binding AddConnectorTooltipText}"
                 AutomationProperties.Name="{Binding AddConnectorTooltipText}"
                 ToolTipService.ShowOnDisabled="True" Click="OnAddConnector" />
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-          <TextBlock Text="{x:Static state:CollectionsModel.ConnectorsHeader}" FontWeight="SemiBold" />
-          <TextBlock x:Name="ConnectorCountText" Margin="6,0,0,0"
-                     Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-        </StackPanel>
       </DockPanel>
 
       <!-- The rows are the tall half of the window: they take what is left and scroll in it. One
@@ -287,7 +282,7 @@
                              TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                 </DockPanel>
                 <!-- What the connector runs, never a secret: the model masks it. Trimmed at the
-                     end, as this window's detail line is, since WPF has no middle ellipsis; the
+                     end, as this window's connector count is, since WPF has no middle ellipsis; the
                      Mac rows elide the middle. -->
                 <TextBlock x:Name="RowTargetText" Grid.Column="2" Text="{Binding Target}"
                            Style="{StaticResource CaptionText}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
@@ -301,17 +296,18 @@
         </ItemsControl>
       </ScrollViewer>
 
-      <!-- The selection bar. Idle, what the collection is and where its document lives; with rows
-           ticked, what can be done to them. Remove sits apart at the far end, so a hand moving from
+      <!-- The selection bar. Idle, how many connectors the collection holds; with rows ticked,
+           what can be done to them. Remove sits apart at the far end, so a hand moving from
            the safe pair cannot land on it, and is absent where the rows are not the user's to
            remove. One fixed height, idle or ticked, so ticking a row cannot move the list. -->
       <Border Grid.Row="4" Margin="0,8,0,0" Height="{StaticResource SelectionBarHeight}" BorderThickness="0,1,0,0"
               BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
         <Grid>
-          <!-- Paths in this line are raw. WPF has no middle ellipsis, so a pane too narrow for one
-               loses its tail; the Mac window elides the middle and keeps the file name. -->
-          <TextBlock x:Name="DetailText" Style="{StaticResource CaptionText}" VerticalAlignment="Center"
-                     TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Text="{Binding DetailLine}" />
+          <!-- A source failure in this line can name a raw path. WPF has no middle ellipsis, so a
+               pane too narrow for one loses its tail; the Mac window elides the middle and keeps
+               the file name. -->
+          <TextBlock x:Name="ConnectorCountText" Style="{StaticResource CaptionText}" VerticalAlignment="Center"
+                     TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Text="{Binding ConnectorCount}" />
           <DockPanel x:Name="TickedBar" VerticalAlignment="Center" Visibility="Collapsed">
             <Button x:Name="RemoveCheckedButton" DockPanel.Dock="Right" Padding="10,4" Margin="16,0,0,0"
                     Content="{x:Static state:CollectionsModel.RemoveCheckedButton}"

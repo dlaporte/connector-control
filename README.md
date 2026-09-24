@@ -86,25 +86,25 @@ editable. Every profile from an earlier version is now a local collection
 with the same name and the same connectors. The last local collection can't
 be deleted, so there is always somewhere to add a connector.
 
-**Subscribed** collections — "synced" in the window's detail line — are
-read-only mirrors of a collection document somebody else publishes. You fill
-in the values the author left for you and switch connectors on and off;
-nothing else can be edited, and nothing can be added — the Collections
-window's **+** beside **Connectors** is dimmed with the tooltip "Additions go
-in a local collection." A chain glyph follows the collection's name on the
-chip and in the Collections window's sidebar, with the source file's path in
-its tooltip, and an amber dot joins it while an update is waiting to be
-reviewed. In the chip's menu on a Mac the chain is the row's icon and a
-waiting update reads "· update available" after the name, because a macOS
-menu row draws one title and one image; the Windows menu draws the chain and
-the dot. Every row of a subscribed collection carries a lock.
+**Subscribed** collections are read-only mirrors of a collection document
+somebody else publishes. You fill in the values the author left for you and
+switch connectors on and off; nothing else can be edited, and nothing can be
+added — the Collections window's **+** above the connector list is dimmed
+with the tooltip "Additions go in a local collection." A chain glyph follows
+the collection's name on the chip and in the Collections window's sidebar,
+with the source file's path in its tooltip, and an amber dot joins it while
+an update is waiting to be reviewed. In the chip's menu on a Mac the chain
+is the row's icon and a waiting update reads "· update available" after the
+name, because a macOS menu row draws one title and one image; the Windows
+menu draws the chain and the dot. Every row of a subscribed collection
+carries a lock.
 
 **Published** collections are local collections that also write their
 document to a folder whenever their content changes. They carry no glyph on
 the chip or in the sidebar; the Collections window's header marks them
 **Published**. Where the document goes is a fact about one machine, so only
-the machine that publishes it says so: the Collections window's detail line
-names the folder, and the editor has a line at the top: "Published to
+the machine that publishes it says so: the Collections window's ⋯ menu offers
+Show Published File, and the editor has a line at the top: "Published to
 <folder> — saving updates the file your team reads. Secrets stay here."
 
 **Manage Collections** opens the Collections window. Every control in it
@@ -137,22 +137,22 @@ Escape cancels any of these sheets, and the connector editor, as its
   **Delete**, which asks first. Duplicate and Make Local Copy both copy the
   whole collection into a new local one, every connector switched off and
   marked with where it came from.
-- **The connector list** is headed **Connectors**, with the count and a
-  **+** (tooltip "Add Connector") that opens the editor on a new connector
-  in this collection. Each row has a tick — a lock on a subscribed
-  collection — then the connector's name, a caution glyph when something
-  needs your attention, what the connector runs, and a pencil (tooltip
-  "Edit") that opens its editor. Names line up in a column as wide as the
-  longest of them, up to a cap past which a long name is cut. There is no
-  switch here and no right-click menu: whether a connector is on is the
-  popover's or flyout's business, so to switch a connector in another
-  collection, make that collection active first.
-- **The selection bar** along the bottom shows the detail line while
-  nothing is ticked — "local · 5 connectors · active", "synced from
-  /Users/you/Acme/mcp/data-team.json · read-only · up to date", or "local · 4
-  connectors · publishes to /Users/you/Acme/mcp from this Mac". Tick rows
-  and it reads "2 selected", with **Copy to**, **Export** and, apart at the
-  far end, **Remove**. The rows of a subscribed collection can't be ticked.
+- **The connector list** has a **+** above it (tooltip "Add Connector") that
+  opens the editor on a new connector in this collection. Each row has a
+  tick — a lock on a subscribed collection — then the connector's name, a
+  caution glyph when something needs your attention, what the connector
+  runs, and a pencil (tooltip "Edit") that opens its editor. Names line up
+  in a column as wide as the longest of them, up to a cap past which a long
+  name is cut. There is no switch here and no right-click menu: whether a
+  connector is on is the popover's or flyout's business, so to switch a
+  connector in another collection, make that collection active first.
+- **The selection bar** along the bottom counts the collection's connectors
+  while nothing is ticked — "5 connectors". On a subscribed collection whose
+  source couldn't be read, the reason follows the count: "5 connectors ·
+  data-team.json couldn’t be read: …". The pills, the banner and the ⋯ menu
+  say the rest. Tick rows and it reads "2 selected", with **Copy to**,
+  **Export** and, apart at the far end, **Remove**. The rows of a subscribed
+  collection can't be ticked.
 
 The column after the name says what the connector runs: a remote
 connector's host, or a local one's program with its paths, URLs and package

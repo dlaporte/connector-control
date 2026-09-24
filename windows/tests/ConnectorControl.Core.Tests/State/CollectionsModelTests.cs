@@ -798,10 +798,33 @@ public class CollectionsModelTests
                      h.Dialogs.Confirms.Select(c => c.Message));
     }
 
-    // MARK: detail line
+    // MARK: connector count
 
     [Fact]
-    public void DetailLineFollowsTheCollectionState()
+    public void ConnectorTallyIsSingularForOneConnector()
+    {
+        Assert.Equal("0 connectors", CollectionsModel.ConnectorTally(0));
+        Assert.Equal("1 connector", CollectionsModel.ConnectorTally(1));
+        Assert.Equal("14 connectors", CollectionsModel.ConnectorTally(14));
+    }
+
+    [Fact]
+    public void ConnectorCountFollowsTheSelectedCollection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var model = h.CollectionsModel(state);
+        Assert.Equal(CollectionsModel.ConnectorTally(3), model.ConnectorCount);
+
+        var names = model.Rows.Select(r => r.Name).ToList();
+        state.Remove(names.Skip(1).ToList());
+        Assert.Equal(CollectionsModel.ConnectorTally(1), model.ConnectorCount);
+        state.Remove([names[0]]);
+        Assert.Equal(CollectionsModel.ConnectorTally(0), model.ConnectorCount);
+    }
+
+    [Fact]
+    public void ConnectorCountSaysNothingElseExceptASourceThatCouldNotBeRead()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -813,23 +836,26 @@ public class CollectionsModelTests
                             [new("Shared", new CollectionsLocalCache.PublishBinding("/Acme/mcp", null))]);
         h.Seed(state, file, located);
 
+        // The active collection and a published one: the pills and the menu say the rest.
         var model = h.CollectionsModel(state);
-        Assert.Equal(CollectionsModel.LocalDetail(3) + CollectionsModel.ActiveSuffix, model.DetailLine);
-
+        Assert.Equal(CollectionsModel.ConnectorTally(3), model.ConnectorCount);
         model.Selected = "Shared";
-        Assert.Equal(CollectionsModel.LocalDetail(3) + " · " + CollectionsModel.PublishedDetail("/Acme/mcp"), model.DetailLine);
+        Assert.Equal(CollectionsModel.ConnectorTally(3), model.ConnectorCount);
 
+        // A synced one, up to date or with an update waiting: the banner speaks for the update.
         model.Selected = "Team";
-        Assert.Equal(CollectionsModel.SyncedDetail("/shared/team.json", CollectionsModel.UpToDateStatus), model.DetailLine);
+        Assert.Equal(CollectionsModel.ConnectorTally(3), model.ConnectorCount);
         state.PendingUpdates = Pending("Team");
-        Assert.Equal(CollectionsModel.SyncedDetail("/shared/team.json", CollectionsModel.UpdateAvailableStatus), model.DetailLine);
-        state.SourceErrors = new Dictionary<string, string>(StringComparer.Ordinal) { ["Team"] = "team.json couldn’t be read" };
-        // What went wrong outranks what is waiting.
-        Assert.Equal(CollectionsModel.SyncedDetail("/shared/team.json", "team.json couldn’t be read"), model.DetailLine);
+        Assert.Equal(CollectionsModel.ConnectorTally(3), model.ConnectorCount);
 
-        // Not located: there is nothing to say about the file except that it is missing.
+        // A source that could not be read has no banner, so the count carries the failure.
+        state.SourceErrors = new Dictionary<string, string>(StringComparer.Ordinal) { ["Team"] = "team.json couldn’t be read" };
+        Assert.Equal(CollectionsModel.ConnectorTally(3) + " · team.json couldn’t be read", model.ConnectorCount);
+
+        // Not located: the Locate banner says so, and the count says nothing more.
+        state.SourceErrors = new Dictionary<string, string>(StringComparer.Ordinal);
         h.Seed(state, file, Cache(published: located.Published));
-        Assert.Equal(CollectionsModel.UnlocatedDetail, model.DetailLine);
+        Assert.Equal(CollectionsModel.ConnectorTally(3), model.ConnectorCount);
         Assert.False(model.CanRefresh);
 
         // A synced entry that records no file name either — a hand-edited or foreign collections
@@ -837,7 +863,7 @@ public class CollectionsModelTests
         h.Seed(state, File_(("Shared", Published("shared")), ("Team", new CollectionsFile.Entry(CollectionKind.Synced))),
             Cache(published: located.Published));
         Assert.True(state.IsLocated("Team"));   // nothing is waiting to be pointed at
-        Assert.Equal(CollectionsModel.UnlocatedDetail, model.DetailLine);
+        Assert.Equal(CollectionsModel.ConnectorTally(3), model.ConnectorCount);
         // Refresh would read a document nobody can point at.
         Assert.False(model.CanRefresh);
     }
@@ -1130,7 +1156,7 @@ public class CollectionsModelTests
         Assert.Same(items, model.Items);
         Assert.Contains(nameof(CollectionsModel.Rows), raised);
         Assert.NotSame(rows, model.Rows);
-        Assert.Contains(nameof(CollectionsModel.DetailLine), raised);
+        Assert.Contains(nameof(CollectionsModel.ConnectorCount), raised);
 
         // A store change the sidebar's items do not reflect leaves the list where it is.
         raised.Clear();

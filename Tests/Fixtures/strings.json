@@ -127,11 +127,15 @@
     }
   },
   "CollectionsModel.activePill": "Active",
-  "CollectionsModel.activeSuffix": " · active",
   "CollectionsModel.addCollectionTooltip": "Add Collection",
   "CollectionsModel.addConnectorDisabledTooltip": "Additions go in a local collection.",
   "CollectionsModel.addConnectorTooltip": "Add Connector",
-  "CollectionsModel.connectorsHeader": "Connectors",
+  "CollectionsModel.connectorTally.many": {
+    "format": "{0} connectors"
+  },
+  "CollectionsModel.connectorTally.one": {
+    "format": "{0} connector"
+  },
   "CollectionsModel.copyToButton": "Copy to",
   "CollectionsModel.deleteAction": "Delete",
   "CollectionsModel.deletePublishedFileQuestion": {
@@ -149,9 +153,6 @@
   "CollectionsModel.importButton": "Import",
   "CollectionsModel.importSubtitle": "Adds copies you own",
   "CollectionsModel.keepFileButton": "Keep",
-  "CollectionsModel.localDetail": {
-    "format": "local · {0} connectors"
-  },
   "CollectionsModel.lockedGlyphTooltip": "Read-only: synced from the collection’s author",
   "CollectionsModel.makeActiveAction": "Make Active",
   "CollectionsModel.makeLocalCopyButton": "Make Local Copy",
@@ -159,14 +160,6 @@
   "CollectionsModel.newButton": "New Collection",
   "CollectionsModel.publishButton": "Start Publishing",
   "CollectionsModel.publishSettingsButton": "Publishing Settings",
-  "CollectionsModel.publishedDetail": {
-    "mac": {
-      "format": "publishes to {0} from this Mac"
-    },
-    "win": {
-      "format": "publishes to {0} from this PC"
-    }
-  },
   "CollectionsModel.publishedPill": "Published",
   "CollectionsModel.readOnlyNote": "read-only",
   "CollectionsModel.refreshButton": "Refresh",
@@ -195,11 +188,6 @@
   "CollectionsModel.subscribeButton": "Subscribe",
   "CollectionsModel.subscribeSubtitle": "Stays in sync, read-only",
   "CollectionsModel.subscribedPill": "Subscribed",
-  "CollectionsModel.syncedDetail": {
-    "format": "synced from {0} · read-only · {1}"
-  },
-  "CollectionsModel.unlocatedDetail": "synced · file not located on this machine",
-  "CollectionsModel.upToDateStatus": "up to date",
   "CollectionsModel.updateAvailableStatus": "update available",
   "CollectionsModel.windowTitle": "Collections",
   "ConfigService.corruptStoreNote": {

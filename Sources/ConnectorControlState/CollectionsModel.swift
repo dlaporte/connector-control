@@ -3,7 +3,7 @@ import Foundation
 import ConnectorControlCore
 
 /// The Collections window, minus pixels: the collections as items in the left pane, the selected
-/// collection's connectors as rows in the right one, the detail line above them, and the controls
+/// collection's connectors as rows in the right one, the connector count below them, and the controls
 /// that follow the selection: the sidebar's +, the header's ⋯ menu, the list header's + and the
 /// selection bar. Everything is derived from AppState; the model owns only what the window itself
 /// knows — which collection is showing and which rows are ticked.
@@ -26,12 +26,9 @@ public final class CollectionsModel: ObservableObject {
     public static let stopSyncingAction = "Stop Syncing"
     public static let stopSyncingInformative = "The connectors stay as a local collection you can edit."
     public static func stopSyncingMessage(_ collection: String) -> String { "Stop Syncing “\(collection)”?" }
-    public static let activeSuffix = " · active"
-    public static let unlocatedDetail = "synced · file not located on this machine"
-    /// The source's status in the detail line. The cache records no timestamp, so this says what
-    /// is true of the file, not how long ago it last changed.
+    /// What the popover's pending dot says aloud. The cache records no timestamp, so this says
+    /// what is true of the file, not how long ago it last changed.
     public static let updateAvailableStatus = "update available"
-    public static let upToDateStatus = "up to date"
     /// The two answers to the published-document question. Keep is the default: a file the team
     /// reads is not something to remove by pressing Return.
     public static let removeFileButton = "Remove"
@@ -75,18 +72,13 @@ public final class CollectionsModel: ObservableObject {
         return PopoverModel.sourceTooltipFormat(source)
     }
 
-    public static func localDetail(_ count: Int) -> String { "local · \(count) connectors" }
-
-    /// `source` is the document's path on this machine, never the sidecar's origin, which is a UUID.
-    public static func syncedDetail(_ source: String, _ status: String) -> String { "synced from \(source) · read-only · \(status)" }
-
-    /// "this Mac" is the platform-forced half of this sentence; the Windows mirror says "this PC".
-    public static func publishedDetail(_ folder: String) -> String { "publishes to \(folder) from this Mac" }
+    /// The idle selection bar's tally, e.g. "14 connectors".
+    public static func connectorTally(_ n: Int) -> String { n == 1 ? "\(n) connector" : "\(n) connectors" }
 
     public static func deletePublishedFileQuestion(_ fileName: String) -> String { "Also remove \(fileName) from the folder?" }
 
     /// One collection in the left pane. A published collection carries no mark of its own there:
-    /// publishing is what the detail line and the header's pill say, not a sidebar glyph.
+    /// publishing is what the header's pill says, not a sidebar glyph.
     public struct Item: Identifiable, Equatable, Sendable {
         public let id: String
         public let name: String
@@ -172,7 +164,7 @@ public final class CollectionsModel: ObservableObject {
         self.state = state
         self.dialogs = dialogs
         // Everything this window reads: the store behind the items and rows, the sidecar and the
-        // cache behind their marks, the two derived maps behind the detail line's status, and
+        // cache behind their marks, the two derived maps behind the banner and the count, and
         // the last failed publish behind the banner strip.
         relay(state.$store)
         relay(state.$collectionsFile)
@@ -516,20 +508,15 @@ public final class CollectionsModel: ObservableObject {
         return isWindowsLauncher ? String(name.dropLast(4)) : name
     }
 
-    public var detailLine: String {
+    /// The idle selection bar: how many connectors the collection holds, and nothing else — the
+    /// pills, the banner and the `⋯` menu say what kind it is and where its file is. The one
+    /// addition is a synced source that could not be read, which no banner reports: without it
+    /// the window would not say why a subscription has stopped updating.
+    public var connectorCount: String {
         let collection = selectedCollection
-        if state.isSynced(collection) {
-            guard let source = locatedSource(of: collection) else { return CollectionsModel.unlocatedDetail }
-            return CollectionsModel.syncedDetail(source, syncStatus(of: collection))
-        }
-        var line = CollectionsModel.localDetail(state.store.collections[collection]?.mcps.count ?? 0)
-        if collection == state.activeCollection { line += CollectionsModel.activeSuffix }
-        // Only this machine's binding says where the document goes, so only this machine's window
-        // says it publishes. Another machine's publish record is not a fact about this one.
-        if let folder = state.collectionsCache.published[collection]?.folder {
-            line += " · " + CollectionsModel.publishedDetail(folder)
-        }
-        return line
+        let tally = CollectionsModel.connectorTally(state.store.collections[collection]?.mcps.count ?? 0)
+        guard state.isSynced(collection), let failure = state.sourceErrors[collection] else { return tally }
+        return tally + " · " + failure
     }
 
     /// The synced document as this machine can name it, or nil when it cannot: not synced, no
@@ -538,17 +525,10 @@ public final class CollectionsModel: ObservableObject {
     /// the decoder accepts one, and there is nothing to refresh or to report about a document
     /// nobody can point at.
     ///
-    /// Still its own rule — the detail line has a sentence of its own for an unlocated file — but
+    /// Still its own rule — Refresh and Show Source File both need a document to point at — but
     /// the naming is `AppState.sourceLocation(of:)`'s, so the derivation lives in one place.
     private func locatedSource(of collection: String) -> String? {
         state.isLocated(collection) ? state.sourceLocation(of: collection) : nil
-    }
-
-    /// What the source is doing, in precedence order: what went wrong outranks what is waiting.
-    private func syncStatus(of collection: String) -> String {
-        if let failure = state.sourceErrors[collection] { return failure }
-        if state.pendingUpdates[collection] != nil { return CollectionsModel.updateAvailableStatus }
-        return CollectionsModel.upToDateStatus
     }
 
     // MARK: - Banner strip
@@ -773,8 +753,8 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// A located synced collection's document — `locatedSource(of:)` again, named for the menu's
-    /// `showSourceFile` and the header's own use, both of which want the same nil the detail line
-    /// already turns into "file not located on this machine".
+    /// `showSourceFile` and the header's own use, both of which want the same nil for a file not
+    /// located on this machine.
     public var sourceFilePath: String? { locatedSource(of: selectedCollection) }
 
     // MARK: - Sidebar and connectors header
@@ -784,7 +764,6 @@ public final class CollectionsModel: ObservableObject {
     public static let addCollectionTooltip = "Add Collection"
     public static let importSubtitle = "Adds copies you own"
     public static let subscribeSubtitle = "Stays in sync, read-only"
-    public static let connectorsHeader = "Connectors"
     public static let addConnectorTooltip = "Add Connector"
     public static let addConnectorDisabledTooltip = "Additions go in a local collection."
     /// The `⋯` button's own tooltip and accessibility label.

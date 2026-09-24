@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -127,17 +126,16 @@ public partial class CollectionsWindow : Window
     internal Presenters Surfaces { get; set; } = Live;
 
     /// <summary>
-    /// The two captions built from a value rather than bound — the selection bar's count is a
-    /// format, and the list header's is a number — and which half of the bar shows, which follows
-    /// that same count. Everything else on this window is a binding the model raises.
+    /// The one caption built from a value rather than bound — the selection bar's ticked count, a
+    /// format — and which half of the bar shows, which follows that same count. Everything else
+    /// on this window is a binding the model raises.
     /// </summary>
     private void Refresh()
     {
         var ticked = Model.CheckedNames.Count;
         SelectedCountText.Text = CollectionsModel.SelectedCount(ticked);
-        DetailText.Visibility = ticked == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ConnectorCountText.Visibility = ticked == 0 ? Visibility.Visible : Visibility.Collapsed;
         TickedBar.Visibility = ticked == 0 ? Visibility.Collapsed : Visibility.Visible;
-        ConnectorCountText.Text = Model.Rows.Count.ToString(CultureInfo.CurrentCulture);
         if (!selectionResyncQueued)
         {
             selectionResyncQueued = true;

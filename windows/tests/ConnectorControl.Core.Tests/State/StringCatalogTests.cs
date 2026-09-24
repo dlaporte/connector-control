@@ -92,15 +92,14 @@ public class StringCatalogTests
         ["ClaudeProcess.notAClaudePackageError"] = ["X"],
         ["ClaudePublisher.subjectNoOrganizationError"] = ["X", "Y"],
         ["ClaudeSignature.notFoundMessage"] = ["X"],
+        ["CollectionsModel.connectorTally.many"] = ["3"],
+        ["CollectionsModel.connectorTally.one"] = ["1"],
         ["CollectionsModel.deletePublishedFileQuestion"] = ["X"],
         ["CollectionsModel.editLabel"] = ["X"],
-        ["CollectionsModel.localDetail"] = ["3"],
-        ["CollectionsModel.publishedDetail"] = ["X"],
         ["CollectionsModel.removeCheckedMessage.many"] = ["3"],
         ["CollectionsModel.removeCheckedMessage.one"] = ["X"],
         ["CollectionsModel.selectedCount"] = ["3"],
         ["CollectionsModel.stopSyncingMessage"] = ["X"],
-        ["CollectionsModel.syncedDetail"] = ["X", "Y"],
         ["ConfigService.corruptStoreNote"] = ["X"],
         ["ConfigService.invalidBackupError"] = ["X", "Y"],
         ["ConfigService.invalidBackupMcpServersError"] = ["X"],
@@ -237,11 +236,11 @@ public class StringCatalogTests
         // MARK: CollectionsModel
 
         actual["CollectionsModel.activePill"] = CollectionsModel.ActivePill;
-        actual["CollectionsModel.activeSuffix"] = CollectionsModel.ActiveSuffix;
         actual["CollectionsModel.addCollectionTooltip"] = CollectionsModel.AddCollectionTooltip;
         actual["CollectionsModel.addConnectorDisabledTooltip"] = CollectionsModel.AddConnectorDisabledTooltip;
         actual["CollectionsModel.addConnectorTooltip"] = CollectionsModel.AddConnectorTooltip;
-        actual["CollectionsModel.connectorsHeader"] = CollectionsModel.ConnectorsHeader;
+        actual["CollectionsModel.connectorTally.many"] = CollectionsModel.ConnectorTally(3);
+        actual["CollectionsModel.connectorTally.one"] = CollectionsModel.ConnectorTally(1);
         actual["CollectionsModel.copyToButton"] = CollectionsModel.CopyToButton;
         actual["CollectionsModel.deleteAction"] = CollectionsModel.DeleteAction;
         actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.DeletePublishedFileQuestion("X");
@@ -253,7 +252,6 @@ public class StringCatalogTests
         actual["CollectionsModel.importButton"] = CollectionsModel.ImportButton;
         actual["CollectionsModel.importSubtitle"] = CollectionsModel.ImportSubtitle;
         actual["CollectionsModel.keepFileButton"] = CollectionsModel.KeepFileButton;
-        actual["CollectionsModel.localDetail"] = CollectionsModel.LocalDetail(3);
         actual["CollectionsModel.lockedGlyphTooltip"] = CollectionsModel.LockedGlyphTooltip;
         actual["CollectionsModel.makeActiveAction"] = CollectionsModel.MakeActiveAction;
         actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.MakeLocalCopyButton;
@@ -261,7 +259,6 @@ public class StringCatalogTests
         actual["CollectionsModel.newButton"] = CollectionsModel.NewButton;
         actual["CollectionsModel.publishButton"] = CollectionsModel.PublishButton;
         actual["CollectionsModel.publishSettingsButton"] = CollectionsModel.PublishSettingsButton;
-        actual["CollectionsModel.publishedDetail"] = CollectionsModel.PublishedDetail("X");
         actual["CollectionsModel.publishedPill"] = CollectionsModel.PublishedPill;
         actual["CollectionsModel.readOnlyNote"] = CollectionsModel.ReadOnlyNote;
         actual["CollectionsModel.refreshButton"] = CollectionsModel.RefreshButton;
@@ -282,10 +279,7 @@ public class StringCatalogTests
         actual["CollectionsModel.subscribeButton"] = CollectionsModel.SubscribeButton;
         actual["CollectionsModel.subscribeSubtitle"] = CollectionsModel.SubscribeSubtitle;
         actual["CollectionsModel.subscribedPill"] = CollectionsModel.SubscribedPill;
-        actual["CollectionsModel.syncedDetail"] = CollectionsModel.SyncedDetail("X", "Y");
-        actual["CollectionsModel.unlocatedDetail"] = CollectionsModel.UnlocatedDetail;
         actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.UpdateAvailableStatus;
-        actual["CollectionsModel.upToDateStatus"] = CollectionsModel.UpToDateStatus;
         actual["CollectionsModel.windowTitle"] = CollectionsModel.WindowTitle;
 
         // MARK: CopyModel

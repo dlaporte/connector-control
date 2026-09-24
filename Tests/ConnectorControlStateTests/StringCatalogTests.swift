@@ -86,15 +86,14 @@ final class StringCatalogTests: XCTestCase {
         "ClaudeSignature.notFoundMessage": ["X"],
         "ClaudeSignature.refusalMessage": ["X", "Y"],
         "ClaudeSignature.uninspectableMessage": ["X"],
+        "CollectionsModel.connectorTally.many": ["3"],
+        "CollectionsModel.connectorTally.one": ["1"],
         "CollectionsModel.deletePublishedFileQuestion": ["X"],
         "CollectionsModel.editLabel": ["X"],
-        "CollectionsModel.localDetail": ["3"],
-        "CollectionsModel.publishedDetail": ["X"],
         "CollectionsModel.removeCheckedMessage.many": ["3"],
         "CollectionsModel.removeCheckedMessage.one": ["X"],
         "CollectionsModel.selectedCount": ["3"],
         "CollectionsModel.stopSyncingMessage": ["X"],
-        "CollectionsModel.syncedDetail": ["X", "Y"],
         "ConfigService.corruptStoreNote": ["X"],
         "ConfigService.invalidBackupError": ["X", "Y"],
         "ConfigService.invalidBackupMcpServersError": ["X"],
@@ -227,11 +226,11 @@ final class StringCatalogTests: XCTestCase {
         // MARK: CollectionsModel
 
         actual["CollectionsModel.activePill"] = CollectionsModel.activePill
-        actual["CollectionsModel.activeSuffix"] = CollectionsModel.activeSuffix
         actual["CollectionsModel.addCollectionTooltip"] = CollectionsModel.addCollectionTooltip
         actual["CollectionsModel.addConnectorDisabledTooltip"] = CollectionsModel.addConnectorDisabledTooltip
         actual["CollectionsModel.addConnectorTooltip"] = CollectionsModel.addConnectorTooltip
-        actual["CollectionsModel.connectorsHeader"] = CollectionsModel.connectorsHeader
+        actual["CollectionsModel.connectorTally.many"] = CollectionsModel.connectorTally(3)
+        actual["CollectionsModel.connectorTally.one"] = CollectionsModel.connectorTally(1)
         actual["CollectionsModel.copyToButton"] = CollectionsModel.copyToButton
         actual["CollectionsModel.deleteAction"] = CollectionsModel.deleteAction
         actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.deletePublishedFileQuestion("X")
@@ -242,7 +241,6 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.importButton"] = CollectionsModel.importButton
         actual["CollectionsModel.importSubtitle"] = CollectionsModel.importSubtitle
         actual["CollectionsModel.keepFileButton"] = CollectionsModel.keepFileButton
-        actual["CollectionsModel.localDetail"] = CollectionsModel.localDetail(3)
         actual["CollectionsModel.lockedGlyphTooltip"] = CollectionsModel.lockedGlyphTooltip
         actual["CollectionsModel.makeActiveAction"] = CollectionsModel.makeActiveAction
         actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.makeLocalCopyButton
@@ -250,7 +248,6 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.newButton"] = CollectionsModel.newButton
         actual["CollectionsModel.publishButton"] = CollectionsModel.publishButton
         actual["CollectionsModel.publishSettingsButton"] = CollectionsModel.publishSettingsButton
-        actual["CollectionsModel.publishedDetail"] = CollectionsModel.publishedDetail("X")
         actual["CollectionsModel.publishedPill"] = CollectionsModel.publishedPill
         actual["CollectionsModel.readOnlyNote"] = CollectionsModel.readOnlyNote
         actual["CollectionsModel.refreshButton"] = CollectionsModel.refreshButton
@@ -271,10 +268,7 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.subscribeButton"] = CollectionsModel.subscribeButton
         actual["CollectionsModel.subscribeSubtitle"] = CollectionsModel.subscribeSubtitle
         actual["CollectionsModel.subscribedPill"] = CollectionsModel.subscribedPill
-        actual["CollectionsModel.syncedDetail"] = CollectionsModel.syncedDetail("X", "Y")
-        actual["CollectionsModel.unlocatedDetail"] = CollectionsModel.unlocatedDetail
         actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.updateAvailableStatus
-        actual["CollectionsModel.upToDateStatus"] = CollectionsModel.upToDateStatus
         actual["CollectionsModel.windowTitle"] = CollectionsModel.windowTitle
 
         // MARK: CopyModel

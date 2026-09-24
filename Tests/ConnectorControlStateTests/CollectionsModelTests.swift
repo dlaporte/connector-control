@@ -689,9 +689,28 @@ final class CollectionsModelTests: XCTestCase {
                        [CollectionsModel.deletePublishedFileQuestion("consulting.json")])
     }
 
-    // MARK: - Detail line
+    // MARK: - Connector count
 
-    func testDetailLineFollowsTheCollectionState() throws {
+    func testConnectorTallyIsSingularForOneConnector() {
+        XCTAssertEqual(CollectionsModel.connectorTally(0), "0 connectors")
+        XCTAssertEqual(CollectionsModel.connectorTally(1), "1 connector")
+        XCTAssertEqual(CollectionsModel.connectorTally(14), "14 connectors")
+    }
+
+    func testConnectorCountFollowsTheSelectedCollection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let model = h.collectionsModel(state)
+        XCTAssertEqual(model.connectorCount, CollectionsModel.connectorTally(3))
+
+        let names = model.rows.map(\.name)
+        state.remove(names: Array(names.dropFirst()))
+        XCTAssertEqual(model.connectorCount, CollectionsModel.connectorTally(1))
+        state.remove(names: [names[0]])
+        XCTAssertEqual(model.connectorCount, CollectionsModel.connectorTally(0))
+    }
+
+    func testConnectorCountSaysNothingElseExceptASourceThatCouldNotBeRead() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Shared"))
@@ -702,27 +721,26 @@ final class CollectionsModelTests: XCTestCase {
                                             published: ["Shared": .init(folder: "/Acme/mcp", lastWrittenHash: nil)])
         try h.seed(state, file: file, cache: located)
 
+        // The active collection and a published one: the pills and the menu say the rest.
         let model = h.collectionsModel(state)
-        XCTAssertEqual(model.detailLine, CollectionsModel.localDetail(3) + CollectionsModel.activeSuffix)
-
+        XCTAssertEqual(model.connectorCount, CollectionsModel.connectorTally(3))
         model.selected = "Shared"
-        XCTAssertEqual(model.detailLine,
-                       CollectionsModel.localDetail(3) + " · " + CollectionsModel.publishedDetail("/Acme/mcp"))
+        XCTAssertEqual(model.connectorCount, CollectionsModel.connectorTally(3))
 
+        // A synced one, up to date or with an update waiting: the banner speaks for the update.
         model.selected = "Team"
-        XCTAssertEqual(model.detailLine,
-                       CollectionsModel.syncedDetail("/shared/team.json", CollectionsModel.upToDateStatus))
+        XCTAssertEqual(model.connectorCount, CollectionsModel.connectorTally(3))
         state.pendingUpdates = ["Team": CollectionDiff(added: ["jira"], removed: [], changed: [])]
-        XCTAssertEqual(model.detailLine,
-                       CollectionsModel.syncedDetail("/shared/team.json", CollectionsModel.updateAvailableStatus))
-        state.sourceErrors = ["Team": "team.json couldn’t be read"]
-        XCTAssertEqual(model.detailLine,
-                       CollectionsModel.syncedDetail("/shared/team.json", "team.json couldn’t be read"),
-                       "what went wrong outranks what is waiting")
+        XCTAssertEqual(model.connectorCount, CollectionsModel.connectorTally(3))
 
-        // Not located: there is nothing to say about the file except that it is missing.
+        // A source that could not be read has no banner, so the count carries the failure.
+        state.sourceErrors = ["Team": "team.json couldn’t be read"]
+        XCTAssertEqual(model.connectorCount, CollectionsModel.connectorTally(3) + " · team.json couldn’t be read")
+
+        // Not located: the Locate banner says so, and the count says nothing more.
+        state.sourceErrors = [:]
         try h.seed(state, file: file, cache: CollectionsLocalCache(synced: [:], published: located.published))
-        XCTAssertEqual(model.detailLine, CollectionsModel.unlocatedDetail)
+        XCTAssertEqual(model.connectorCount, CollectionsModel.connectorTally(3))
         XCTAssertFalse(model.canRefresh)
 
         // A synced entry that records no file name either — a hand-edited or foreign collections
@@ -731,7 +749,7 @@ final class CollectionsModelTests: XCTestCase {
             "Shared": published(slug: "shared"), "Team": CollectionsFile.Entry(kind: .synced),
         ]), cache: CollectionsLocalCache(synced: [:], published: located.published))
         XCTAssertTrue(state.isLocated("Team"), "nothing is waiting to be pointed at")
-        XCTAssertEqual(model.detailLine, CollectionsModel.unlocatedDetail)
+        XCTAssertEqual(model.connectorCount, CollectionsModel.connectorTally(3))
         XCTAssertFalse(model.canRefresh, "Refresh would read a document nobody can point at")
     }
 

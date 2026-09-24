@@ -4,7 +4,7 @@ namespace ConnectorControl.Core.State;
 
 /// <summary>
 /// The Collections window, minus pixels: the collections as items in the left pane, the selected
-/// collection's connectors as rows in the right one, the detail line above them, and the controls
+/// collection's connectors as rows in the right one, the connector count below them, and the controls
 /// that follow the selection: the sidebar's +, the header's ⋯ menu, the list header's + and the
 /// selection bar. Everything is derived from AppState; the model owns only what the window itself
 /// knows — which collection is showing and which rows are ticked.
@@ -28,14 +28,11 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public const string StopSyncingAction = "Stop Syncing";
     public const string StopSyncingInformative = "The connectors stay as a local collection you can edit.";
     public static string StopSyncingMessage(string collection) => $"Stop Syncing “{collection}”?";
-    public const string ActiveSuffix = " · active";
-    public const string UnlocatedDetail = "synced · file not located on this machine";
     /// <summary>
-    /// The source's status in the detail line. The cache records no timestamp, so this says what
-    /// is true of the file, not how long ago it last changed.
+    /// What the flyout's pending dot says aloud. The cache records no timestamp, so this says
+    /// what is true of the file, not how long ago it last changed.
     /// </summary>
     public const string UpdateAvailableStatus = "update available";
-    public const string UpToDateStatus = "up to date";
     /// <summary>
     /// The two answers to the published-document question. Keep is the default: a file the team
     /// reads is not something to remove by pressing Return.
@@ -87,19 +84,14 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public static string? SyncedGlyphTooltip(Item item) =>
         item.Source is { } source ? FlyoutModel.SourceTooltipFormat(source) : null;
 
-    public static string LocalDetail(int count) => $"local · {count} connectors";
-
-    /// <summary><paramref name="source"/> is the document's path on this machine, never the sidecar's origin, which is a UUID.</summary>
-    public static string SyncedDetail(string source, string status) => $"synced from {source} · read-only · {status}";
-
-    /// <summary>"this PC" is the platform-forced half of this sentence; the Mac mirror says "this Mac".</summary>
-    public static string PublishedDetail(string folder) => $"publishes to {folder} from this PC";
+    /// <summary>The idle selection bar's tally, e.g. "14 connectors".</summary>
+    public static string ConnectorTally(int n) => n == 1 ? $"{n} connector" : $"{n} connectors";
 
     public static string DeletePublishedFileQuestion(string fileName) => $"Also remove {fileName} from the folder?";
 
     /// <summary>
     /// One collection in the left pane. A published collection carries no mark of its own there:
-    /// publishing is what the detail line and the header's pill say, not a sidebar glyph.
+    /// publishing is what the header's pill says, not a sidebar glyph.
     /// </summary>
     /// <param name="Source">
     /// Where a synced collection's document is, as far as this machine knows: the path it is
@@ -239,7 +231,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     private void RaiseSelectionDependents()
     {
         Raise(nameof(Selected));
-        Raise(nameof(DetailLine));
+        Raise(nameof(ConnectorCount));
         Raise(nameof(BannerText));
         Raise(nameof(BannerButton));
         Raise(nameof(HasBanner));
@@ -644,30 +636,23 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         return isWindowsLauncher ? name[..^4] : name;
     }
 
-    public string DetailLine
+    /// <summary>
+    /// The idle selection bar: how many connectors the collection holds, and nothing else — the
+    /// pills, the banner and the ⋯ menu say what kind it is and where its file is. The one
+    /// addition is a synced source that could not be read, which no banner reports: without it
+    /// the window would not say why a subscription has stopped updating.
+    /// </summary>
+    public string ConnectorCount
     {
         get
         {
             var collection = SelectedCollection;
-            if (state.IsSynced(collection))
+            var tally = ConnectorTally(state.Store.Collections.TryGetValue(collection, out var held) ? held.Mcps.Count : 0);
+            if (!state.IsSynced(collection) || !state.SourceErrors.TryGetValue(collection, out var failure))
             {
-                return LocatedSource(collection) is { } source
-                    ? SyncedDetail(source, SyncStatus(collection))
-                    : UnlocatedDetail;
+                return tally;
             }
-            var count = state.Store.Collections.TryGetValue(collection, out var held) ? held.Mcps.Count : 0;
-            var line = LocalDetail(count);
-            if (collection == state.ActiveCollection)
-            {
-                line += ActiveSuffix;
-            }
-            // Only this machine's binding says where the document goes, so only this machine's
-            // window says it publishes. Another machine's publish record is not a fact about this one.
-            if (state.CollectionsCache.Published.TryGetValue(collection, out var binding))
-            {
-                line += " · " + PublishedDetail(binding.Folder);
-            }
-            return line;
+            return tally + " · " + failure;
         }
     }
 
@@ -679,21 +664,11 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// nobody can point at.
     /// </summary>
     /// <remarks>
-    /// Still its own rule — the detail line has a sentence of its own for an unlocated file — but
+    /// Still its own rule — Refresh and Show Source File both need a document to point at — but
     /// the naming is <c>AppState.SourceLocation</c>'s, so the derivation lives in one place.
     /// </remarks>
     private string? LocatedSource(string collection) =>
         state.IsLocated(collection) ? state.SourceLocation(collection) : null;
-
-    /// <summary>What the source is doing, in precedence order: what went wrong outranks what is waiting.</summary>
-    private string SyncStatus(string collection)
-    {
-        if (state.SourceErrors.TryGetValue(collection, out var failure))
-        {
-            return failure;
-        }
-        return state.PendingUpdates.ContainsKey(collection) ? UpdateAvailableStatus : UpToDateStatus;
-    }
 
     // MARK: banner strip
 
@@ -1022,8 +997,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// A located synced collection's document — <see cref="LocatedSource"/> again, named for the
-    /// menu's ShowSourceFile and the header's own use, both of which want the same null the
-    /// detail line already turns into "file not located on this machine".
+    /// menu's ShowSourceFile and the header's own use, both of which want the same null for a
+    /// file not located on this machine.
     /// </summary>
     public string? SourceFilePath => LocatedSource(SelectedCollection);
 
@@ -1036,7 +1011,6 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public const string AddCollectionTooltip = "Add Collection";
     public const string ImportSubtitle = "Adds copies you own";
     public const string SubscribeSubtitle = "Stays in sync, read-only";
-    public const string ConnectorsHeader = "Connectors";
     public const string AddConnectorTooltip = "Add Connector";
     public const string AddConnectorDisabledTooltip = "Additions go in a local collection.";
     /// <summary>The ⋯ button's own tooltip and accessibility label.</summary>
