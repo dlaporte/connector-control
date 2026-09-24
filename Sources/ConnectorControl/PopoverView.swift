@@ -8,11 +8,13 @@ struct PopoverView: View {
     private static let disclosureMark = "▾"
 
     @StateObject private var model: PopoverModel
+    private let dialogs: Dialogs
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
     init(state: AppState) {
         _model = StateObject(wrappedValue: PopoverModel(state: state))
+        dialogs = state.dialogs
     }
 
     var body: some View {
@@ -176,16 +178,13 @@ struct PopoverView: View {
         }
     }
 
-    /// A refusal, said app-modally. A panel takes key focus from the popover on its way in, and
-    /// the popover closes with it, so an alert attached to this view would have nothing left to
-    /// present it by the time there is anything to say.
+    /// A refusal, said app-modally through Dialogs, as the Windows flyout's Tell does. A panel
+    /// takes key focus from the popover on its way in, and the popover closes with it, so an alert
+    /// attached to this view would have nothing left to present it by the time there is anything
+    /// to say.
     private func tell(_ failure: String?) {
         guard let failure else { return }
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = failure
-        alert.addButton(withTitle: AlertDialogs.okTitle)
-        alert.runModal()
+        dialogs.inform(message: failure, informative: nil)
     }
 
     /// A menu row's check. Choosing an unchecked row makes that collection the active one;
@@ -195,10 +194,9 @@ struct PopoverView: View {
         Binding(get: { item.isActive }, set: { on in if on { model.switchCollection(item.name) } })
     }
 
-    /// The Collections window, which takes no arguments: whatever the popover wants in front of
-    /// it is set as a request first, because the window reads that as it appears.
-    private func openCollections(_ request: () -> Void = {}) {
-        request()
+    /// The Collections window, which takes no arguments. Whatever the popover wants in front of
+    /// it was already raised as a request by the model, and the window reads that as it appears.
+    private func openCollections() {
         openWindow(id: CollectionsWindowView.windowID)
         NSApp.activate(ignoringOtherApps: true)
     }

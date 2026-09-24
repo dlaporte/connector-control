@@ -31,4 +31,13 @@ final class AlertDialogs: Dialogs {
         guard alert.runModal() == .alertFirstButtonReturn else { return nil }
         return field.stringValue
     }
+
+    func inform(message: String, informative: String?) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = message
+        if let informative { alert.informativeText = informative }
+        alert.addButton(withTitle: AlertDialogs.okTitle)
+        alert.runModal()
+    }
 }

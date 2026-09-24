@@ -8,6 +8,8 @@ public protocol Dialogs: AnyObject {
     func confirm(message: String, informative: String?, primary: String, cancel: String, destructive: Bool) -> Bool
     /// Text prompt with OK / Cancel; the raw (untrimmed) text, or nil on Cancel.
     func promptForName(title: String, initial: String) -> String?
+    /// One-button alert: something the user is told and can only acknowledge.
+    func inform(message: String, informative: String?)
 }
 
 public extension Dialogs {

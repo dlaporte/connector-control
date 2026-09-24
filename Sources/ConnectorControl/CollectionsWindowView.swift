@@ -101,6 +101,8 @@ struct CollectionsWindowView: View {
         }
         .frame(minWidth: 720, minHeight: 480)
         .sheet(item: $sheet, onDismiss: { presentPending() }) { present($0) }
+        // Attached to this window rather than said through Dialogs.inform, which is app-modal:
+        // a refusal here is about this window, and a window-modal alert is the Mac's way to say so.
         .alert(Text(shownError ?? ""), isPresented: errorShowing) { }
         // On appear and on every change, because the window stays open and is brought forward:
         // one that read the request only on appear would strand every later one. Both go through

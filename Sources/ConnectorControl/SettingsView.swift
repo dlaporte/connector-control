@@ -194,25 +194,17 @@ struct SettingsView: View {
             // with the reason, rather than at the next restart click. The
             // check reads the whole bundle; the model is updated when it is done.
             let model = self.model
+            let dialogs = state.dialogs
             DispatchQueue.global().async {
                 let problem = ClaudeRestarter.verifyIsClaude(at: url)
                 DispatchQueue.main.async {
                     if let problem {
-                        SettingsView.showRejectedClaudeApp(problem)
+                        dialogs.inform(message: SettingsModel.claudeAppRejectedTitle, informative: problem)
                     } else {
                         model.chooseClaudeApp(url)
                     }
                 }
             }
         }
-    }
-
-    private static func showRejectedClaudeApp(_ problem: String) {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = SettingsModel.claudeAppRejectedTitle
-        alert.informativeText = problem
-        alert.addButton(withTitle: AlertDialogs.okTitle)
-        alert.runModal()
     }
 }
