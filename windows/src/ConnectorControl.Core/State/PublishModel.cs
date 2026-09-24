@@ -881,7 +881,12 @@ public sealed class PublishModel : ObservableObject
         if (!state.IsPublished(Collection)
             || !string.Equals(state.CollectionsCache.Published.GetValueOrDefault(Collection)?.Folder, chosen, StringComparison.Ordinal))
         {
-            return state.StartPublishing(Collection, chosen, Intent, ReviewedValues, LetGo);
+            var failure = state.StartPublishing(Collection, chosen, Intent, ReviewedValues, LetGo);
+            // Starting to publish mints the collection's origin, even when the write it then
+            // attempts fails, and the footer is the one line that shows it.
+            Raise(nameof(OriginShort));
+            Raise(nameof(FooterSentence));
+            return failure;
         }
         // The same folder, already publishing: the ticks go on record, and then the document is
         // written whether or not it changed. Pressing Publish again is how a write that failed is

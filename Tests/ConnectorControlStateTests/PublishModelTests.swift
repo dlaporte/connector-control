@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 import ConnectorControlCore
 import ConnectorControlTestSupport
@@ -572,6 +573,25 @@ final class PublishModelTests: XCTestCase {
         XCTAssertTrue(publish.canFinish)
         XCTAssertNil(publish.finish())
         XCTAssertTrue(state.isPublished(collection))
+    }
+
+    /// A first publish mints the collection's origin, even when the write it then attempts fails,
+    /// and the footer is the one line that shows it: the model announces the change, as the
+    /// Windows mirror raises FooterSentence.
+    func testAFirstPublishAnnouncesTheFooterItMintsTheOriginFor() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let model = PublishModel(state: state, collection: state.activeCollection)
+        model.folder = try publishFolder(h).path
+        XCTAssertEqual(model.footerLine, model.fileName)
+        var announced = 0
+        let subscription = model.objectWillChange.sink { announced += 1 }
+        defer { subscription.cancel() }
+
+        XCTAssertNil(model.publish())
+
+        XCTAssertGreaterThan(announced, 0)
+        XCTAssertEqual(model.footerLine, PublishModel.footerLine(model.fileName, model.originShort))
     }
 
     func testPublishAgainRetriesAFailedWrite() throws {

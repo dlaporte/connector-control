@@ -618,6 +618,11 @@ public final class PublishModel: ObservableObject {
         if let note = firstUnanswered { return note }
         guard let chosen = chosenFolder else { return PublishModel.noFolderError }
         guard state.isPublished(collection), state.collectionsCache.published[collection]?.folder == chosen else {
+            // Starting to publish mints the collection's origin, even when the write it then
+            // attempts fails, and the footer is the one line that shows it. Nothing published
+            // here changes with it, so the model says so itself, as the Windows mirror raises
+            // FooterSentence.
+            objectWillChange.send()
             return state.startPublishing(collection, to: chosen, intent: intent, reviewedValues: reviewedValues,
                                          releasedValues: letGo)
         }

@@ -45,9 +45,9 @@ public partial class ImportDialog : DialogWindow
 
     /// <summary>
     /// The two strings a binding cannot carry: the count beside Import and the mode's own sentence
-    /// are built from a value rather than being properties of their own. Everything else is bound.
-    /// Reached only through the model's own notification — a row raises its edit, the model
-    /// re-raises the count and CanImport that follow it, and this runs once for the pair.
+    /// are built from a value rather than being properties of their own. Everything else is bound,
+    /// Import's IsEnabled included. Reached only through the model's own notification — a row, the
+    /// mode or the target raises the count and CanImport that follow it.
     /// </summary>
     private void Refresh()
     {
@@ -55,7 +55,6 @@ public partial class ImportDialog : DialogWindow
         // The radio's sentence is what names the target, so it is the picker's label too.
         AutomationProperties.SetName(TargetBox, ImportModel.AddModeTitle(Model.TargetCollection));
         ImportButton.Content = ImportModel.ImportButton(Model.ImportCount);
-        ImportButton.GetBindingExpression(IsEnabledProperty)?.UpdateTarget();
     }
 
     private void OnImport(object sender, RoutedEventArgs e)

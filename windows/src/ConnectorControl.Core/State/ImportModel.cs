@@ -196,8 +196,22 @@ public sealed class ImportModel : ObservableObject
     /// <summary>The Mac binds the optional above directly; XAML needs a bool for the body's visibility.</summary>
     public bool HasLoadError => LoadError is not null;
 
-    /// <summary>The Mac calls this <c>mode</c>; here the nested enum already owns that name.</summary>
-    public Mode ImportMode { get => mode; set => Set(ref mode, value); }
+    /// <summary>
+    /// The Mac calls this <c>mode</c>; here the nested enum already owns that name. The count and
+    /// the gate are the mode's, so they are raised with it; the Mac's are recomputed off the
+    /// republished model.
+    /// </summary>
+    public Mode ImportMode
+    {
+        get => mode;
+        set
+        {
+            if (Set(ref mode, value))
+            {
+                RaiseFooter();
+            }
+        }
+    }
 
     /// <summary>
     /// Which collection the copies land in. Changing it rebuilds the rows: a different target
@@ -211,11 +225,23 @@ public sealed class ImportModel : ObservableObject
             if (Set(ref targetCollection, value))
             {
                 RebuildRows();
+                RaiseFooter();
             }
         }
     }
 
-    public string SyncName { get => syncName; set => Set(ref syncName, value); }
+    /// <summary>The name a synced collection takes, which the gate reads, so it is raised with it.</summary>
+    public string SyncName
+    {
+        get => syncName;
+        set
+        {
+            if (Set(ref syncName, value))
+            {
+                Raise(nameof(CanImport));
+            }
+        }
+    }
 
     /// <summary>
     /// Setting this listens to the new rows and lets the old ones go, so a tick or a choice
@@ -239,8 +265,11 @@ public sealed class ImportModel : ObservableObject
         }
     }
 
-    /// <summary>Everything the footer says is counted off the rows, and nothing above them is.</summary>
-    private void OnRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    /// <summary>A row's tick or choice changes what the footer counts, and so whether Import can go.</summary>
+    private void OnRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => RaiseFooter();
+
+    /// <summary>The footer's count and gate, which follow the rows, the mode and the target.</summary>
+    private void RaiseFooter()
     {
         Raise(nameof(ImportCount));
         Raise(nameof(CanImport));

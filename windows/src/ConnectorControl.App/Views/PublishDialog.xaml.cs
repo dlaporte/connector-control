@@ -118,12 +118,7 @@ public partial class PublishDialog : DialogWindow
         {
             Accepted = true;
             Close();
-            return;
         }
-        // A first publish mints the collection's origin even when the write it then attempts
-        // fails, and the footer is the one line that shows it. It derives from no row, so nothing
-        // raises it; the sheet the user is left looking at asks for it once, here.
-        FooterText.GetBindingExpression(TextBlock.TextProperty)?.UpdateTarget();
     }
 
     private void ShowFailure(string? failure)

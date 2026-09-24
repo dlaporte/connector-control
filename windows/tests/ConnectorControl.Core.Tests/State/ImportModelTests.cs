@@ -367,4 +367,44 @@ public class ImportModelTests
         stale.Include = !stale.Include;
         Assert.Empty(raised);
     }
+
+    /// <summary>
+    /// C#-only, as the test above is: on the Mac the mode, the target and the name are @Published,
+    /// so changing one republishes the model. Here the Import button's gate and count follow each
+    /// of them, and the dialog must not have to nudge its own binding to see that.
+    /// </summary>
+    [Fact]
+    public void TheModeTheTargetAndTheNameRaiseTheGateThatFollowsThem()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
+        Write(CollectionDocumentSamples.DataTeam, path);
+        var model = new ImportModel(state, path);
+        var raised = new List<string>();
+        model.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");
+
+        model.ImportMode = ImportModel.Mode.KeepInSync;
+        Assert.Contains(nameof(ImportModel.CanImport), raised);
+        Assert.Contains(nameof(ImportModel.ImportCount), raised);
+
+        raised.Clear();
+        model.SyncName = "  ";
+        Assert.Contains(nameof(ImportModel.CanImport), raised);
+        Assert.False(model.CanImport);
+
+        raised.Clear();
+        model.ImportMode = ImportModel.Mode.AddToCollection;
+        Assert.Null(state.CreateCollection("Other"));
+        raised.Clear();
+        model.TargetCollection = "Other";
+        Assert.Contains(nameof(ImportModel.CanImport), raised);
+        Assert.Contains(nameof(ImportModel.ImportCount), raised);
+
+        // Setting what is already there says nothing.
+        raised.Clear();
+        model.ImportMode = ImportModel.Mode.AddToCollection;
+        model.SyncName = "  ";
+        Assert.Empty(raised);
+    }
 }

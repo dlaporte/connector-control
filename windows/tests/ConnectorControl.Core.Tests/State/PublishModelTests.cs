@@ -709,6 +709,27 @@ public class PublishModelTests
         Assert.True(state.IsPublished(collection));
     }
 
+    /// <summary>
+    /// A first publish mints the collection's origin, even when the write it then attempts fails,
+    /// and the footer is the one line that shows it. The Mac mirror sends objectWillChange.
+    /// </summary>
+    [Fact]
+    public void AFirstPublishRaisesTheFooterItMintsTheOriginFor()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var model = new PublishModel(state, state.ActiveCollection) { Folder = PublishFolder(h) };
+        Assert.Equal(model.FileName, model.FooterSentence);
+        var raised = new List<string>();
+        model.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");
+
+        Assert.Null(model.Publish());
+
+        Assert.Contains(nameof(PublishModel.FooterSentence), raised);
+        Assert.Contains(nameof(PublishModel.OriginShort), raised);
+        Assert.Equal(PublishModel.FooterLine(model.FileName, model.OriginShort), model.FooterSentence);
+    }
+
     [Fact]
     public void PublishAgainRetriesAFailedWrite()
     {
