@@ -21,19 +21,6 @@ final class CollectionsModelTests: XCTestCase {
         CollectionsLocalCache.SyncedBinding(path: path, lastHash: nil, excluded: [:])
     }
 
-    /// Writes both collection files where the app reads them, then reloads so the state picks
-    /// them up — the shape a subscribe or a publish would leave behind.
-    private func seed(_ h: AppStateHarness, _ state: AppState,
-                      file: CollectionsFile, cache: CollectionsLocalCache? = nil) throws {
-        try file.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
-        try (cache ?? CollectionsLocalCache(synced: [:], published: [:]))
-            .save(to: state.service.paths.collectionsCacheURL, staging: nil)
-        state.reload()
-    }
-
-    private func local(_ command: String, _ args: [String] = []) -> MCPEntry {
-        MCPEntry(config: .object(["command": .string(command), "args": .array(args.map(JSONValue.string))]))
-    }
 
     /// Leaves a refusal in `lastError` without moving the window: the store refuses an empty name
     /// before it renames anything.
@@ -54,10 +41,9 @@ final class CollectionsModelTests: XCTestCase {
         let file = CollectionsFile(collections: ["Shared": published(slug: "shared"), "Team": synced(fileName: "team.json")])
         let cache = CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")],
                                           published: ["Shared": .init(folder: "/tmp/share", lastWrittenHash: nil)])
-        try seed(h, state, file: file, cache: cache)
+        try h.seed(state, file: file, cache: cache)
 
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        let model = h.collectionsModel(state)
         XCTAssertEqual(model.items.map(\.name), ["Default", "Shared", "Team"])   // the chip menu's order
         XCTAssertEqual(model.items.map(\.id), ["Default", "Shared", "Team"])
         XCTAssertEqual(model.items.map(\.kind), [.local, .local, .synced])
@@ -74,7 +60,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertGreaterThan(repaints, 0)
 
         // The binding gone, the sidecar still names the file: the item says it is not located.
-        try seed(h, state, file: file, cache: CollectionsLocalCache(synced: [:], published: cache.published))
+        try h.seed(state, file: file, cache: CollectionsLocalCache(synced: [:], published: cache.published))
         XCTAssertEqual(model.items.map(\.isLocated), [true, true, false])
         XCTAssertFalse(state.isLocated("Team"))
         XCTAssertTrue(state.isLocated("Default"))
@@ -95,10 +81,9 @@ final class CollectionsModelTests: XCTestCase {
     func testRowsSortAsWindowsDoes() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        XCTAssertNil(state.upsert(name: "\u{FF5E}", entry: local("uvx"), renamedFrom: nil))
-        XCTAssertNil(state.upsert(name: "\u{1F600}", entry: local("uvx"), renamedFrom: nil))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        XCTAssertNil(state.upsert(name: "\u{FF5E}", entry: AppStateHarness.localConnector("uvx"), renamedFrom: nil))
+        XCTAssertNil(state.upsert(name: "\u{1F600}", entry: AppStateHarness.localConnector("uvx"), renamedFrom: nil))
+        let model = h.collectionsModel(state)
         XCTAssertEqual(model.rows.map(\.name), ["\u{1F600}", "\u{FF5E}"])
         model.setChecked("\u{FF5E}", true)
         model.setChecked("\u{1F600}", true)
@@ -113,18 +98,15 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNil(state.createCollection(named: "Team"))
         XCTAssertNil(state.upsert(name: "github", entry: MCPEntry(config: AppStateHarness.remote("https://github.example/mcp")),
                                   renamedFrom: nil, in: "Team"))
-        XCTAssertNil(state.upsert(name: "Ledger", entry: local("/usr/local/bin/node", ["index.js"]), renamedFrom: nil, in: "Team"))
+        XCTAssertNil(state.upsert(name: "Ledger", entry: AppStateHarness.localConnector("/usr/local/bin/node", ["index.js"]), renamedFrom: nil, in: "Team"))
         XCTAssertNil(state.upsert(name: "jira", entry: MCPEntry(config: .object([
             "command": .string("npx"),
             "env": .object(["JIRA_TOKEN": .string(Placeholder.marker("JIRA_TOKEN"))]),
         ])), renamedFrom: nil, in: "Team"))
-        XCTAssertNil(state.upsert(name: "notes", entry: local("uvx"), renamedFrom: nil, in: "Default"))
-        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]),
-                 cache: CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")], published: [:]))
+        XCTAssertNil(state.upsert(name: "notes", entry: AppStateHarness.localConnector("uvx"), renamedFrom: nil, in: "Default"))
+        try h.makeSynced(state, "Team", boundTo: "/shared/team.json")
 
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Team"
+        let model = h.collectionsModel(state, selecting: "Team")
         // Uppercase first: ordinal, the order the popover lists the same connectors in.
         XCTAssertEqual(model.rows.map(\.name), ["Ledger", "github", "jira"])
         XCTAssertEqual(model.rows.map(\.id), ["Ledger", "github", "jira"])
@@ -183,93 +165,93 @@ final class CollectionsModelTests: XCTestCase {
     }
 
     func testTargetShowsOnlyTheHostOfARemoteConnectorWithAHeader() {
-        assertTarget(local("npx", ["-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"]),
+        assertTarget(AppStateHarness.localConnector("npx", ["-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"]),
                      is: "h.example", hides: "abc")
     }
 
     func testTargetShortensAScopedPackageAndTheHomeFolder() {
-        XCTAssertEqual(CollectionsModel.target(of: local("npx", ["-y", "@modelcontextprotocol/server-filesystem", "/Users/x/Documents"]).config, home: "/Users/x"),
+        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("npx", ["-y", "@modelcontextprotocol/server-filesystem", "/Users/x/Documents"]).config, home: "/Users/x"),
                        "npx …/server-filesystem ~/Documents")
     }
 
     /// A connector authored on Windows abbreviates its home folder the same way, whichever
     /// separator follows it and however its letters are cased.
     func testTargetShortensAWindowsHomeFolder() {
-        XCTAssertEqual(CollectionsModel.target(of: local("node", [#"C:\Users\x\srv\index.js"#, "@scope/pkg@1.2", #"c:\users\X\a.js"#]).config,
+        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("node", [#"C:\Users\x\srv\index.js"#, "@scope/pkg@1.2", #"c:\users\X\a.js"#]).config,
                                                home: #"C:\Users\x"#),
                        #"node ~\srv\index.js …/pkg@1.2 ~\a.js"#)
     }
 
     func testTargetShowsAURLArgumentsSchemeAndHostOnly() {
-        assertTarget(local("tool", ["https://me:pw@h.example:8443/x?token=t#frag"]), is: "tool https://h.example:8443", hides: "pw")
+        assertTarget(AppStateHarness.localConnector("tool", ["https://me:pw@h.example:8443/x?token=t#frag"]), is: "tool https://h.example:8443", hides: "pw")
     }
 
     func testTargetLeavesOutASlackWebhooksPath() {
-        assertTarget(local("tool", ["https://hooks.slack.com/services/T000/B000/XXXXsecret"]), is: "tool https://hooks.slack.com", hides: "XXXXsecret")
+        assertTarget(AppStateHarness.localConnector("tool", ["https://hooks.slack.com/services/T000/B000/XXXXsecret"]), is: "tool https://hooks.slack.com", hides: "XXXXsecret")
     }
 
     func testTargetLeavesOutFlagsAndTheirValues() {
-        assertTarget(local("/usr/local/bin/tool", ["--api-key", "abc", "--port", "80", "--token=abc"]), is: "tool", hides: "abc")
+        assertTarget(AppStateHarness.localConnector("/usr/local/bin/tool", ["--api-key", "abc", "--port", "80", "--token=abc"]), is: "tool", hides: "abc")
     }
 
     func testTargetLeavesOutAHeaderFlag() {
-        assertTarget(local("tool", ["-H", "X-Api-Key: abc", "https://h.example/x"]), is: "tool https://h.example", hides: "abc")
+        assertTarget(AppStateHarness.localConnector("tool", ["-H", "X-Api-Key: abc", "https://h.example/x"]), is: "tool https://h.example", hides: "abc")
     }
 
     func testTargetLeavesOutAnEnvironmentAssignment() {
-        assertTarget(local("docker", ["run", "-i", "--rm", "-e", "GITHUB_TOKEN=abc", "ghcr.io/github/github-mcp-server"]),
+        assertTarget(AppStateHarness.localConnector("docker", ["run", "-i", "--rm", "-e", "GITHUB_TOKEN=abc", "ghcr.io/github/github-mcp-server"]),
                      is: "docker ghcr.io/github/github-mcp-server", hides: "abc")
     }
 
     func testTargetLeavesOutAShellString() {
-        assertTarget(local("sh", ["-c", "TOKEN=abc node srv.js"]), is: "sh", hides: "abc")
-        assertTarget(local("sh", ["-c", "curl -H 'Authorization: Bearer abc' https://h.example/x"]), is: "sh", hides: "abc")
+        assertTarget(AppStateHarness.localConnector("sh", ["-c", "TOKEN=abc node srv.js"]), is: "sh", hides: "abc")
+        assertTarget(AppStateHarness.localConnector("sh", ["-c", "curl -H 'Authorization: Bearer abc' https://h.example/x"]), is: "sh", hides: "abc")
     }
 
     func testTargetLeavesOutAnAttachedShortFlagValue() {
-        assertTarget(local("mysql-mcp", ["-pSECRET"]), is: "mysql-mcp", hides: "SECRET")
+        assertTarget(AppStateHarness.localConnector("mysql-mcp", ["-pSECRET"]), is: "mysql-mcp", hides: "SECRET")
     }
 
     func testTargetLeavesOutAShortPositionalSecret() {
-        assertTarget(local("tool", ["hunter2"]), is: "tool", hides: "hunter2")
+        assertTarget(AppStateHarness.localConnector("tool", ["hunter2"]), is: "tool", hides: "hunter2")
     }
 
     func testTargetLeavesOutAnUnprefixedKey() {
-        assertTarget(local("tool", ["sk_live_abc123"]), is: "tool", hides: "sk_live")
+        assertTarget(AppStateHarness.localConnector("tool", ["sk_live_abc123"]), is: "tool", hides: "sk_live")
     }
 
     func testTargetLeavesOutAConnectionString() {
-        assertTarget(local("tool", ["Server=h;Password=x"]), is: "tool", hides: "Password=x")
+        assertTarget(AppStateHarness.localConnector("tool", ["Server=h;Password=x"]), is: "tool", hides: "Password=x")
     }
 
     func testTargetLeavesOutInlineJSON() {
-        assertTarget(local("tool", ["--config", #"{"apiKey":"abc"}"#]), is: "tool", hides: "abc")
+        assertTarget(AppStateHarness.localConnector("tool", ["--config", #"{"apiKey":"abc"}"#]), is: "tool", hides: "abc")
     }
 
     /// The value is one the allowlist would show, so only the flag rule keeps it out; the flag's
     /// name is matched whatever its case.
     func testTargetLeavesOutTheValueOfASecretNamedFlagWhateverItsCase() {
-        assertTarget(local("tool", ["--token", "x.y"]), is: "tool", hides: "x.y")
-        assertTarget(local("tool", ["--TOKEN", "abc.def"]), is: "tool", hides: "abc.def")
+        assertTarget(AppStateHarness.localConnector("tool", ["--token", "x.y"]), is: "tool", hides: "x.y")
+        assertTarget(AppStateHarness.localConnector("tool", ["--TOKEN", "abc.def"]), is: "tool", hides: "abc.def")
     }
 
     /// A command line written as one string is split into launcher and arguments and each word
     /// held to the rule, so its last word — often a flag's value — is never shown for the launcher.
     func testTargetSplitsACommandLineWrittenAsOneString() {
-        assertTarget(local("cmd", ["/c", "npx -y @acme/server --api-key hunter2"]), is: "npx …/server", hides: "hunter2")
+        assertTarget(AppStateHarness.localConnector("cmd", ["/c", "npx -y @acme/server --api-key hunter2"]), is: "npx …/server", hides: "hunter2")
         assertTarget(MCPEntry(config: .object(["command": .string("npx -y server --token hunter2")])), is: "npx", hides: "hunter2")
         assertTarget(MCPEntry(config: .object(["command": .string("tool --token a.b")])), is: "tool", hides: "a.b")
         let quoted = #"npx -y mcp-remote https://h.example/mcp --header "Authorization: Bearer abc""#
-        assertTarget(local("cmd", ["/c", quoted]), is: "h.example", hides: "abc")
-        XCTAssertFalse(CollectionsModel.target(of: local("cmd", ["/c", quoted]).config, home: "/Users/x").contains("Bearer"))
+        assertTarget(AppStateHarness.localConnector("cmd", ["/c", quoted]), is: "h.example", hides: "abc")
+        XCTAssertFalse(CollectionsModel.target(of: AppStateHarness.localConnector("cmd", ["/c", quoted]).config, home: "/Users/x").contains("Bearer"))
     }
 
     /// A quoted argument in a one-string command line — a header value, some JSON — is one
     /// argument, and one holding whitespace fails every shape the column shows; an unterminated
     /// quote runs to the end as part of its word.
     func testTargetLeavesOutAQuotedArgumentInACommandLine() {
-        assertTarget(local("cmd", ["/c", #"tool --header "X-Key: abc.def extra""#]), is: "tool", hides: "abc.def")
-        assertTarget(local("cmd", ["/c", #"npx -y @acme/server --config '{"k":"v.w"}'"#]), is: "npx …/server", hides: "v.w")
+        assertTarget(AppStateHarness.localConnector("cmd", ["/c", #"tool --header "X-Key: abc.def extra""#]), is: "tool", hides: "abc.def")
+        assertTarget(AppStateHarness.localConnector("cmd", ["/c", #"npx -y @acme/server --config '{"k":"v.w"}'"#]), is: "npx …/server", hides: "v.w")
         assertTarget(MCPEntry(config: .object(["command": .string(#"tool "abc.def extra"#)])), is: "tool", hides: "abc.def")
         assertTarget(MCPEntry(config: .object(["command": .string(#""hunter.2 x" srv.js"#)])), is: "srv.js", hides: "hunter")
     }
@@ -289,127 +271,127 @@ final class CollectionsModelTests: XCTestCase {
     /// A command that is a path is never split, even with a space in it; one whose last component
     /// holds a space had arguments packed into it, and names no launcher.
     func testTargetNamesALauncherUnderProgramFiles() {
-        assertTarget(local(#"C:\Program Files\nodejs\node.exe"#, ["index.js"]), is: "node index.js", hides: "Program")
-        assertTarget(local(#""C:\Program Files\nodejs\node.exe""#, ["index.js"]), is: "node index.js", hides: "Program")
-        assertTarget(local(#"C:\Program Files\nodejs\npx.cmd"#, ["-y", "mcp-remote", "https://h.example/mcp"]), is: "h.example", hides: "npx")
-        assertTarget(local("/opt/bin/tool --password hunter.2x", ["srv.js"]), is: "srv.js", hides: "hunter.2x")
-        assertTarget(local(#"C:\Program Files (x86)\Tool\tool.exe"#, ["index.js"]), is: "tool index.js", hides: "Program")
+        assertTarget(AppStateHarness.localConnector(#"C:\Program Files\nodejs\node.exe"#, ["index.js"]), is: "node index.js", hides: "Program")
+        assertTarget(AppStateHarness.localConnector(#""C:\Program Files\nodejs\node.exe""#, ["index.js"]), is: "node index.js", hides: "Program")
+        assertTarget(AppStateHarness.localConnector(#"C:\Program Files\nodejs\npx.cmd"#, ["-y", "mcp-remote", "https://h.example/mcp"]), is: "h.example", hides: "npx")
+        assertTarget(AppStateHarness.localConnector("/opt/bin/tool --password hunter.2x", ["srv.js"]), is: "srv.js", hides: "hunter.2x")
+        assertTarget(AppStateHarness.localConnector(#"C:\Program Files (x86)\Tool\tool.exe"#, ["index.js"]), is: "tool index.js", hides: "Program")
         // Plain words packed after a Unix path do not cost it its launcher.
-        assertTarget(local("/usr/bin/tool srv"), is: "tool", hides: "srv")
+        assertTarget(AppStateHarness.localConnector("/usr/bin/tool srv"), is: "tool", hides: "srv")
     }
 
     /// A path command with a flag, a URL or a switch packed into it names no launcher: its last
     /// component could be the tail of an argument.
     func testTargetNamesNoLauncherForAPathCommandWithAPackedArgument() {
-        assertTarget(local("cmd", ["/c", #"C:\tools\notify.exe https://hooks.slack.com/services/T000/B000/XXXXsecret"#]),
+        assertTarget(AppStateHarness.localConnector("cmd", ["/c", #"C:\tools\notify.exe https://hooks.slack.com/services/T000/B000/XXXXsecret"#]),
                      is: "", hides: "XXXXsecret")
-        assertTarget(local("/usr/local/bin/mcp --api-key abc/hunter.2x"), is: "", hides: "hunter.2x")
-        assertTarget(local(#"C:\x\tool.exe --token ab\cd.ef"#), is: "", hides: "cd.ef")
+        assertTarget(AppStateHarness.localConnector("/usr/local/bin/mcp --api-key abc/hunter.2x"), is: "", hides: "hunter.2x")
+        assertTarget(AppStateHarness.localConnector(#"C:\x\tool.exe --token ab\cd.ef"#), is: "", hides: "cd.ef")
     }
 
     /// A flag named for a secret at the end of a command guards the first argument after it,
     /// whether the command is a path or a tokenized line.
     func testTargetLeavesOutTheFirstArgumentAfterASecretNamedFlagInTheCommand() {
-        assertTarget(local("/opt/bin/tool --password", ["hunter.2x"]), is: "", hides: "hunter.2x")
-        assertTarget(local("tool --token", ["abc.def"]), is: "tool", hides: "abc.def")
+        assertTarget(AppStateHarness.localConnector("/opt/bin/tool --password", ["hunter.2x"]), is: "", hides: "hunter.2x")
+        assertTarget(AppStateHarness.localConnector("tool --token", ["abc.def"]), is: "tool", hides: "abc.def")
     }
 
     /// A quote packed into a path command costs it its launcher, and a quoted or partly quoted
     /// flag at its end is still a flag named for a secret.
     func testTargetReadsAQuotedFlagPackedIntoAPathCommand() {
-        assertTarget(local(#"/opt/bin/tool "--password""#, ["hunter.2x"]), is: "", hides: "hunter.2x")
-        assertTarget(local(#"C:\x\tool.exe "--token" ab\cd.ef"#), is: "", hides: "cd.ef")
-        assertTarget(local(#"/opt/bin/tool --to"ken""#, ["hunter.2x"]), is: "", hides: "hunter.2x")
+        assertTarget(AppStateHarness.localConnector(#"/opt/bin/tool "--password""#, ["hunter.2x"]), is: "", hides: "hunter.2x")
+        assertTarget(AppStateHarness.localConnector(#"C:\x\tool.exe "--token" ab\cd.ef"#), is: "", hides: "cd.ef")
+        assertTarget(AppStateHarness.localConnector(#"/opt/bin/tool --to"ken""#, ["hunter.2x"]), is: "", hides: "hunter.2x")
     }
 
     /// Each check that keeps a path command plain is load-bearing: a Windows switch and an
     /// assignment packed in both cost it its launcher.
     func testTargetNamesNoLauncherForAPathCommandWithASwitchOrAnAssignment() {
-        assertTarget(local(#"C:\x\tool.exe /key ab\cd.ef"#), is: "", hides: "cd.ef")
-        assertTarget(local("/opt/bin/tool key=ab/cd.ef"), is: "", hides: "cd.ef")
+        assertTarget(AppStateHarness.localConnector(#"C:\x\tool.exe /key ab\cd.ef"#), is: "", hides: "cd.ef")
+        assertTarget(AppStateHarness.localConnector("/opt/bin/tool key=ab/cd.ef"), is: "", hides: "cd.ef")
     }
 
     /// A password holding an unencoded `/`, `?` or `#` ends the authority early; what is left of
     /// the userinfo is refused as a host rather than shown, and so is a scheme that is not one.
     func testTargetRefusesAURLWhoseUserinfoHoldsADelimiter() {
-        assertTarget(local("tool", ["postgres://admin:hunter2#x@db.local/app"]), is: "tool", hides: "hunter2")
-        assertTarget(local("tool", ["https://apikey:sk_live_abc/x@api.example.com"]), is: "tool", hides: "sk_live")
-        assertTarget(local("tool", ["https://sk_live_abc/x@h"]), is: "tool", hides: "sk_live")
-        assertTarget(local("tool", ["sk-proj-abc123://x"]), is: "tool", hides: "abc123")
-        assertTarget(local("tool", ["mongodb+srv://u:p@cluster.example.net/db"]), is: "tool mongodb+srv://cluster.example.net", hides: "u:p")
+        assertTarget(AppStateHarness.localConnector("tool", ["postgres://admin:hunter2#x@db.local/app"]), is: "tool", hides: "hunter2")
+        assertTarget(AppStateHarness.localConnector("tool", ["https://apikey:sk_live_abc/x@api.example.com"]), is: "tool", hides: "sk_live")
+        assertTarget(AppStateHarness.localConnector("tool", ["https://sk_live_abc/x@h"]), is: "tool", hides: "sk_live")
+        assertTarget(AppStateHarness.localConnector("tool", ["sk-proj-abc123://x"]), is: "tool", hides: "abc123")
+        assertTarget(AppStateHarness.localConnector("tool", ["mongodb+srv://u:p@cluster.example.net/db"]), is: "tool mongodb+srv://cluster.example.net", hides: "u:p")
         // The remote decoder accepts this URL, and its host is still checked.
-        assertTarget(local("npx", ["-y", "mcp-remote", "https://token123/x@h.example/mcp"]), is: CollectionsModel.remoteType, hides: "token123")
+        assertTarget(AppStateHarness.localConnector("npx", ["-y", "mcp-remote", "https://token123/x@h.example/mcp"]), is: CollectionsModel.remoteType, hides: "token123")
     }
 
     /// A long random token is left out even with a `/` in it, which `looksLikeCredential` would
     /// not consider; paths and names with a dot, a hyphen or no digits are kept.
     func testTargetLeavesOutARandomTokenEvenWithASlash() {
-        assertTarget(local("tool", ["wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"]), is: "tool", hides: "wJalr")
-        XCTAssertEqual(CollectionsModel.target(of: local("tool", ["/Users/x/Documents", "ghcr.io/github/github-mcp-server", "./build/v2Server"]).config,
+        assertTarget(AppStateHarness.localConnector("tool", ["wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"]), is: "tool", hides: "wJalr")
+        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("tool", ["/Users/x/Documents", "ghcr.io/github/github-mcp-server", "./build/v2Server"]).config,
                                                home: "/Users/x"),
                        "tool ~/Documents ghcr.io/github/github-mcp-server ./build/v2Server")
     }
 
     /// A Windows switch's value is not a path: a colon anywhere but a drive letter's drops it.
     func testTargetLeavesOutAWindowsSwitchesValue() {
-        assertTarget(local("tool", ["/p:Hunter2", "/token:abc", "/x:secret"]), is: "tool", hides: "secret")
-        assertTarget(local("tool", [#"C:\Users\x\Docs"#]), is: #"tool C:\Users\x\Docs"#, hides: "secret")
+        assertTarget(AppStateHarness.localConnector("tool", ["/p:Hunter2", "/token:abc", "/x:secret"]), is: "tool", hides: "secret")
+        assertTarget(AppStateHarness.localConnector("tool", [#"C:\Users\x\Docs"#]), is: #"tool C:\Users\x\Docs"#, hides: "secret")
     }
 
     /// A secret shaped like a package still vanishes when a flag named for a secret precedes it.
     func testTargetLeavesOutWhateverFollowsASecretNamedFlag() {
-        assertTarget(local("tool", ["--password", "s3cr3t-pass", "--pass", "./x.key", "index.js"]), is: "tool index.js", hides: "s3cr3t")
+        assertTarget(AppStateHarness.localConnector("tool", ["--password", "s3cr3t-pass", "--pass", "./x.key", "index.js"]), is: "tool index.js", hides: "s3cr3t")
     }
 
     func testTargetLeavesOutAPathCarryingAnAssignment() {
-        assertTarget(local("tool", ["/usr/bin/env TOKEN=abc"]), is: "tool", hides: "abc")
+        assertTarget(AppStateHarness.localConnector("tool", ["/usr/bin/env TOKEN=abc"]), is: "tool", hides: "abc")
     }
 
     func testTargetLeavesOutACredentialShapedArtefact() {
-        assertTarget(local("tool", ["sk-abc.def", "ghp_0123456789abcdef0123456789abcdef.js"]), is: "tool", hides: "abc")
+        assertTarget(AppStateHarness.localConnector("tool", ["sk-abc.def", "ghp_0123456789abcdef0123456789abcdef.js"]), is: "tool", hides: "abc")
     }
 
     func testTargetShowsTheServerAPackageRunnerNames() {
-        XCTAssertEqual(CollectionsModel.target(of: local("uvx", ["mcp-server-fetch"]).config, home: "/Users/x"), "uvx mcp-server-fetch")
-        XCTAssertEqual(CollectionsModel.target(of: local("python", ["mcp_server.py"]).config, home: "/Users/x"), "python mcp_server.py")
+        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("uvx", ["mcp-server-fetch"]).config, home: "/Users/x"), "uvx mcp-server-fetch")
+        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("python", ["mcp_server.py"]).config, home: "/Users/x"), "python mcp_server.py")
     }
 
     /// A bare hyphenated word anywhere but the server slot is as likely a password as a package.
     func testTargetLeavesOutABareHyphenatedWordOutsideTheServerSlot() {
-        assertTarget(local("tool", ["hunter-2"]), is: "tool", hides: "hunter-2")
-        assertTarget(local("tool", ["-p", "s3cr3t-pass"]), is: "tool", hides: "s3cr3t")
-        assertTarget(local("tool", ["correct-horse-battery-staple"]), is: "tool", hides: "horse")
-        assertTarget(local("uvx", ["--from", "x", "my-server", "extra-word"]), is: "uvx", hides: "extra-word")
+        assertTarget(AppStateHarness.localConnector("tool", ["hunter-2"]), is: "tool", hides: "hunter-2")
+        assertTarget(AppStateHarness.localConnector("tool", ["-p", "s3cr3t-pass"]), is: "tool", hides: "s3cr3t")
+        assertTarget(AppStateHarness.localConnector("tool", ["correct-horse-battery-staple"]), is: "tool", hides: "horse")
+        assertTarget(AppStateHarness.localConnector("uvx", ["--from", "x", "my-server", "extra-word"]), is: "uvx", hides: "extra-word")
     }
 
     func testTargetLeavesOutThePwFlagsValue() {
-        assertTarget(local("tool", ["--pw", "a.b"]), is: "tool", hides: "a.b")
+        assertTarget(AppStateHarness.localConnector("tool", ["--pw", "a.b"]), is: "tool", hides: "a.b")
     }
 
     /// The server slot is the first positional argument, whatever it holds: a bare word there is
     /// shown because it cannot be told from a package name, and only there.
     func testTargetTrustsOnlyTheFirstPositionalAfterAPackageRunner() {
-        XCTAssertEqual(CollectionsModel.target(of: local("npx", ["-y", "hunter-2", "@scope/pkg", "other-word"]).config, home: "/Users/x"),
+        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("npx", ["-y", "hunter-2", "@scope/pkg", "other-word"]).config, home: "/Users/x"),
                        "npx hunter-2 …/pkg")
     }
 
     /// Claude Desktop on Windows runs a server through `cmd /c`: what cmd runs is the launcher,
     /// named without its `.cmd`, and a bridge spelled that way is still a remote connector.
     func testTargetUnwrapsCmdAndAWindowsLaunchersExtension() {
-        XCTAssertEqual(CollectionsModel.target(of: local("cmd", ["/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", #"C:\Users\x\Docs"#]).config,
+        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("cmd", ["/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", #"C:\Users\x\Docs"#]).config,
                                                home: #"C:\Users\x"#),
                        #"npx …/server-filesystem ~\Docs"#)
-        XCTAssertEqual(CollectionsModel.target(of: local("npx.cmd", ["-y", "mcp-server-fetch"]).config, home: "/Users/x"), "npx mcp-server-fetch")
-        assertTarget(local("cmd", ["/c", "tool", "--token", "abc"]), is: "tool", hides: "abc")
-        assertTarget(local("CMD.EXE", ["/K", "npx", "-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"]),
+        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("npx.cmd", ["-y", "mcp-server-fetch"]).config, home: "/Users/x"), "npx mcp-server-fetch")
+        assertTarget(AppStateHarness.localConnector("cmd", ["/c", "tool", "--token", "abc"]), is: "tool", hides: "abc")
+        assertTarget(AppStateHarness.localConnector("CMD.EXE", ["/K", "npx", "-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"]),
                      is: "h.example", hides: "abc")
     }
 
     /// A launcher that could itself be a secret is left out, and the arguments still show; a
     /// command line's words after its first are arguments, held to the rule like any other.
     func testTargetLeavesOutALauncherThatCouldBeASecret() {
-        assertTarget(local("TOKEN=abc node", ["srv.js"]), is: "srv.js", hides: "abc")
-        assertTarget(local("ghp_0123456789abcdef0123456789abcdef", ["srv.js"]), is: "srv.js", hides: "ghp_")
+        assertTarget(AppStateHarness.localConnector("TOKEN=abc node", ["srv.js"]), is: "srv.js", hides: "abc")
+        assertTarget(AppStateHarness.localConnector("ghp_0123456789abcdef0123456789abcdef", ["srv.js"]), is: "srv.js", hides: "ghp_")
     }
 
     /// End to end through the rows: a connector carrying secrets five ways shows none of them.
@@ -425,9 +407,7 @@ final class CollectionsModelTests: XCTestCase {
             "env": .object(["API_KEY": .string("envsecret")]),
         ]))
         XCTAssertNil(state.upsert(name: "leaky", entry: entry, renamedFrom: nil, in: "Default"))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Default"
+        let model = h.collectionsModel(state, selecting: "Default")
         let target = try XCTUnwrap(model.rows.first { $0.name == "leaky" }).target
         XCTAssertEqual(target, "tool")
         for secret in secrets + ["envsecret"] { XCTAssertFalse(target.contains(secret), secret) }
@@ -444,10 +424,9 @@ final class CollectionsModelTests: XCTestCase {
         let file = CollectionsFile(collections: ["Shared": published(slug: "shared"), "Team": synced(fileName: "team.json")])
         let located = CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")],
                                             published: ["Shared": .init(folder: "/tmp/share", lastWrittenHash: nil)])
-        try seed(h, state, file: file, cache: located)
+        try h.seed(state, file: file, cache: located)
 
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        let model = h.collectionsModel(state)
         XCTAssertEqual(model.selected, "Default", "the selection starts on the active collection")
         XCTAssertEqual(model.checkedNames, [], "nothing is ticked yet")
         model.setChecked("aws-mcp", true)
@@ -466,7 +445,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertTrue(model.canDelete, "a synced collection goes without taking the last local one with it")
 
         // Nothing to refresh until the file is found on this machine.
-        try seed(h, state, file: file, cache: CollectionsLocalCache(synced: [:], published: located.published))
+        try h.seed(state, file: file, cache: CollectionsLocalCache(synced: [:], published: located.published))
         XCTAssertFalse(model.canRefresh)
 
         // With the second local collection gone, the last one cannot be deleted.
@@ -479,8 +458,8 @@ final class CollectionsModelTests: XCTestCase {
         // Nor can the last collection of any kind: the store always has an active one, so a lone
         // synced collection is no more deletable than a lone local one.
         XCTAssertNil(state.deleteCollection(named: "Team"))
-        try seed(h, state, file: CollectionsFile(collections: ["Default": synced(fileName: "default.json")]),
-                 cache: CollectionsLocalCache(synced: ["Default": bound("/shared/default.json")], published: [:]))
+        try h.seed(state, file: CollectionsFile(collections: ["Default": synced(fileName: "default.json")]),
+                   cache: CollectionsLocalCache(synced: ["Default": bound("/shared/default.json")], published: [:]))
         XCTAssertEqual(state.collectionNames, ["Default"])
         XCTAssertTrue(state.isSynced("Default"))
         XCTAssertFalse(model.canDelete)
@@ -496,10 +475,8 @@ final class CollectionsModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Default"
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        let model = h.collectionsModel(state, selecting: "Default")
 
         func leavesNoError(_ verb: String, _ action: () -> Void, line: UInt = #line) {
             presetError(model, h)
@@ -525,7 +502,7 @@ final class CollectionsModelTests: XCTestCase {
         leavesNoError("copyCheckedIntoNewCollection, cancelled") { model.copyCheckedIntoNewCollection() }
         XCTAssertEqual(model.checkedNames, ["alpha"], "nothing was copied, so the ticks stay")
 
-        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        try h.makeSynced(state, "Team")
         model.selected = "Team"
         leavesNoError("makeLocalCopy, cancelled") { model.makeLocalCopy() }
         XCTAssertEqual(state.collectionNames, ["Default", "Team"], "no prompt that was cancelled made anything")
@@ -535,8 +512,7 @@ final class CollectionsModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Work"))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        let model = h.collectionsModel(state)
         XCTAssertEqual(model.selected, "Work")
 
         // A cancelled prompt does nothing at all.
@@ -588,12 +564,9 @@ final class CollectionsModelTests: XCTestCase {
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
         state.switchCollection(to: "Default")
-        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]),
-                 cache: CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")], published: [:]))
+        try h.makeSynced(state, "Team", boundTo: "/shared/team.json")
         XCTAssertTrue(state.isSynced("Team"))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Team"
+        let model = h.collectionsModel(state, selecting: "Team")
 
         // Declined: the collection is still synced, and the earlier error does not come back.
         // The reassurance lives in the question now that the button no longer carries it.
@@ -623,10 +596,9 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNil(state.createCollection(named: "Team"))
         state.switchCollection(to: "Default")
         // Synced, but not located on this machine: nothing to refresh.
-        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        try h.makeSynced(state, "Team")
         XCTAssertTrue(state.isSynced("Team"))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        let model = h.collectionsModel(state)
 
         model.selected = "Default"
         presetError(model, h)
@@ -663,9 +635,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: sharedFile.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: consultingFile.path))
 
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Shared"
+        let model = h.collectionsModel(state, selecting: "Shared")
         h.dialogs.confirmAnswers = [true, false]   // delete the collection, keep the document
         model.delete()
         XCTAssertEqual(h.dialogs.confirms.map(\.message),
@@ -699,9 +669,7 @@ final class CollectionsModelTests: XCTestCase {
         let file = folder.appendingPathComponent("shared.json")
         XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
 
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Shared"
+        let model = h.collectionsModel(state, selecting: "Shared")
         // The folder that refused the write would refuse the delete, so Remove is not offered.
         state.publishError = CollectionPublishError(collection: "Shared", message: "the folder is read-only")
         model.stopPublishing()
@@ -732,10 +700,9 @@ final class CollectionsModelTests: XCTestCase {
         let file = CollectionsFile(collections: ["Shared": published(slug: "shared"), "Team": synced(fileName: "team.json")])
         let located = CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")],
                                             published: ["Shared": .init(folder: "/Acme/mcp", lastWrittenHash: nil)])
-        try seed(h, state, file: file, cache: located)
+        try h.seed(state, file: file, cache: located)
 
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        let model = h.collectionsModel(state)
         XCTAssertEqual(model.detailLine, CollectionsModel.localDetail(3) + CollectionsModel.activeSuffix)
 
         model.selected = "Shared"
@@ -754,13 +721,13 @@ final class CollectionsModelTests: XCTestCase {
                        "what went wrong outranks what is waiting")
 
         // Not located: there is nothing to say about the file except that it is missing.
-        try seed(h, state, file: file, cache: CollectionsLocalCache(synced: [:], published: located.published))
+        try h.seed(state, file: file, cache: CollectionsLocalCache(synced: [:], published: located.published))
         XCTAssertEqual(model.detailLine, CollectionsModel.unlocatedDetail)
         XCTAssertFalse(model.canRefresh)
 
         // A synced entry that records no file name either — a hand-edited or foreign collections
         // file. Nothing asks to be located, but there is still no document to name or to read.
-        try seed(h, state, file: CollectionsFile(collections: [
+        try h.seed(state, file: CollectionsFile(collections: [
             "Shared": published(slug: "shared"), "Team": CollectionsFile.Entry(kind: .synced),
         ]), cache: CollectionsLocalCache(synced: [:], published: located.published))
         XCTAssertTrue(state.isLocated("Team"), "nothing is waiting to be pointed at")
@@ -776,8 +743,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNil(state.createCollection(named: "Work"))
         XCTAssertNil(state.createCollection(named: "Spare"))
         state.switchCollection(to: "Default")
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        let model = h.collectionsModel(state)
 
         model.selected = "Work"
         XCTAssertEqual(model.selected, "Work")
@@ -806,8 +772,7 @@ final class CollectionsModelTests: XCTestCase {
     func testSwitchingToTheActiveCollectionSavesNothing() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        let model = h.collectionsModel(state)
         presetError(model, h)
         try FileManager.default.removeItem(at: h.masterStoreURL)
 
@@ -825,11 +790,11 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNil(state.createCollection(named: "Team"))
         state.switchCollection(to: "Default")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        try seed(h, state,
-                 file: CollectionsFile(collections: ["Team": synced(fileName: "team.json"),
-                                                     "Default": published(slug: "default")]),
-                 cache: CollectionsLocalCache(
-                     synced: [:], published: ["Default": .init(folder: folder.path, lastWrittenHash: nil)]))
+        try h.seed(state,
+                   file: CollectionsFile(collections: ["Team": synced(fileName: "team.json"),
+                                                       "Default": published(slug: "default")]),
+                   cache: CollectionsLocalCache(
+                       synced: [:], published: ["Default": .init(folder: folder.path, lastWrittenHash: nil)]))
     }
 
     func testTheBannerStripSpeaksOnlyForTheSelectedCollection() throws {
@@ -837,8 +802,7 @@ final class CollectionsModelTests: XCTestCase {
         defer { h.dispose() }
         let folder = h.dir.file("pub")
         try twoBanners(h, state, publishingInto: folder)
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        let model = h.collectionsModel(state)
 
         // Team's file is missing, but the window is showing Default: the strip says nothing.
         XCTAssertEqual(state.collectionBanner, .locate(collection: "Team", fileName: "team.json"))
@@ -882,12 +846,10 @@ final class CollectionsModelTests: XCTestCase {
         try twoBanners(h, state, publishingInto: first)
         let second = h.dir.file("second")
         try FileManager.default.createDirectory(at: second, withIntermediateDirectories: true)
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        let model = h.collectionsModel(state)
 
         // The window is showing Default, which the locate banner is not about.
-        let document = h.dir.file("team.json")
-        try CollectionDocumentSamples.dataTeam.serialized().write(to: document)
+        let document = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "team.json")
         XCTAssertNil(model.locateSource(document.path))
         XCTAssertNil(state.sourceBinding(of: "Team"))
 
@@ -922,10 +884,8 @@ final class CollectionsModelTests: XCTestCase {
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
         state.switchCollection(to: "Default")
-        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]),
-                 cache: CollectionsLocalCache(synced: ["Team": bound("/Acme/mcp/team.json")], published: [:]))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        try h.makeSynced(state, "Team", boundTo: "/Acme/mcp/team.json")
+        let model = h.collectionsModel(state)
 
         let team = try XCTUnwrap(model.items.first { $0.name == "Team" })
         XCTAssertEqual(team.source, "/Acme/mcp/team.json")
@@ -941,7 +901,7 @@ final class CollectionsModelTests: XCTestCase {
 
         // Synced but never found: the sidecar's file name is what the chain can still name, the
         // same fallback the popover's chip takes, so the two never disagree about one collection.
-        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        try h.makeSynced(state, "Team")
         let unlocated = try XCTUnwrap(model.items.first { $0.name == "Team" })
         XCTAssertFalse(unlocated.isLocated)
         XCTAssertEqual(unlocated.source, "team.json")
@@ -956,9 +916,7 @@ final class CollectionsModelTests: XCTestCase {
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Work"))
         state.switchCollection(to: "Default")
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.setChecked("aws-mcp", true)
+        let model = h.collectionsModel(state, ticking: ["aws-mcp"])
         var repaints = 0
         let sink = model.objectWillChange.sink { _ in repaints += 1 }
         defer { sink.cancel() }
@@ -989,9 +947,7 @@ final class CollectionsModelTests: XCTestCase {
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Spare"))
         state.switchCollection(to: "Default")
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Spare"
+        let model = h.collectionsModel(state, selecting: "Spare")
 
         XCTAssertNil(state.renameCollection("Spare", to: "Spare Parts"))
         XCTAssertEqual(model.selected, "Default")
@@ -1004,9 +960,7 @@ final class CollectionsModelTests: XCTestCase {
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Spare"))
         state.switchCollection(to: "Default")
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Spare"
+        let model = h.collectionsModel(state, selecting: "Spare")
         XCTAssertEqual(model.selected, "Spare")
 
         // Renamed away elsewhere: the window falls back to the active collection.
@@ -1026,9 +980,7 @@ final class CollectionsModelTests: XCTestCase {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         XCTAssertNil(state.createCollection(named: "Shared"))
         XCTAssertNil(state.startPublishing("Shared", to: folder.path, intent: .none))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Shared"
+        let model = h.collectionsModel(state, selecting: "Shared")
 
         let moved = AppState.pathMarkMovedError("ledger")
         state.publishError = CollectionPublishError(collection: "Shared", message: moved, kind: .blockedForReview)
@@ -1060,9 +1012,9 @@ final class CollectionsModelTests: XCTestCase {
         // leave it dropped, and missing from copyDestinations for not existing rather than
         // disabled for being synced.
         XCTAssertNil(state.createCollection(named: "Team"))
-        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        try h.makeSynced(state, "Team")
         XCTAssertTrue(state.isSynced("Team"))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        let model = h.collectionsModel(state)
 
         model.selected = "Default"
         XCTAssertEqual(model.copyDestinations.filter(\.isEnabled).map(\.name), ["Other"],
@@ -1078,10 +1030,9 @@ final class CollectionsModelTests: XCTestCase {
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Other"))
         XCTAssertNil(state.createCollection(named: "Team"))
-        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        try h.makeSynced(state, "Team")
         XCTAssertTrue(state.isSynced("Team"))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        let model = h.collectionsModel(state)
 
         model.selected = "Default"
         XCTAssertEqual(model.copyDestinations, [
@@ -1098,8 +1049,8 @@ final class CollectionsModelTests: XCTestCase {
     func testTheRemovePredicateFollowsTheTicks() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        let model = h.collectionsModel(state)
 
         model.selected = "Default"
         XCTAssertFalse(model.canRemoveChecked, "nothing ticked yet")
@@ -1117,13 +1068,11 @@ final class CollectionsModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Team"))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        model.selected = "Team"
-        model.setChecked("alpha", true)
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Team"))
+        let model = h.collectionsModel(state, selecting: "Team", ticking: ["alpha"])
         XCTAssertTrue(model.canRemoveChecked, "still local, and something is ticked")
 
-        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        try h.makeSynced(state, "Team")
         XCTAssertTrue(state.isSynced("Team"))
         XCTAssertEqual(model.checkedNames, ["alpha"], "reload does not clear the ticks")
         XCTAssertFalse(model.canRemoveChecked, "the guard, not an empty tick set, is what changed")
@@ -1135,10 +1084,9 @@ final class CollectionsModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         for name in ["alpha", "beta"] {
-            XCTAssertNil(state.upsert(name: name, entry: local("/bin/" + name), renamedFrom: nil, in: "Default"))
+            XCTAssertNil(state.upsert(name: name, entry: AppStateHarness.localConnector("/bin/" + name), renamedFrom: nil, in: "Default"))
         }
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        model.selected = "Default"
+        let model = h.collectionsModel(state, selecting: "Default")
 
         // Declined: nothing goes, and the earlier error does not come back.
         presetError(model, h)
@@ -1169,15 +1117,14 @@ final class CollectionsModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Work"))
-        XCTAssertNil(state.upsert(name: "gamma", entry: local("/bin/gamma"), renamedFrom: nil, in: "Work"))
+        XCTAssertNil(state.upsert(name: "gamma", entry: AppStateHarness.localConnector("/bin/gamma"), renamedFrom: nil, in: "Work"))
         state.switchCollection(to: "Default")
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        let model = h.collectionsModel(state)
         h.dialogs.nextConfirm = true
 
         // An enabled connector in the active collection that has not been applied yet: an apply
         // from the inactive leg below would write it, so that leg can catch an unconditional one.
-        XCTAssertNil(state.upsert(name: "delta", entry: local("/bin/delta"), renamedFrom: nil, in: "Default"))
+        XCTAssertNil(state.upsert(name: "delta", entry: AppStateHarness.localConnector("/bin/delta"), renamedFrom: nil, in: "Default"))
         XCTAssertEqual(state.store.collections["Default"]?.mcps["delta"]?.enabled, true)
         XCTAssertNil(try h.claudeServers()["delta"], "upserted, not applied")
 
@@ -1210,11 +1157,8 @@ final class CollectionsModelTests: XCTestCase {
         // "alpha 2" instead, leaving the original untouched and this test green for the wrong
         // reason.
         XCTAssertNil(state.createCollection(named: "Spare"))
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Default"
-        model.setChecked("alpha", true)
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        let model = h.collectionsModel(state, selecting: "Default", ticking: ["alpha"])
 
         presetError(model, h)
         let before = try h.claudeServers()
@@ -1236,12 +1180,9 @@ final class CollectionsModelTests: XCTestCase {
         // sidecar afterwards has something in the master list to annotate
         // (CollectionsFile.reconciled(with:)).
         XCTAssertNil(state.createCollection(named: "Team"))
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
-        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Default"
-        model.setChecked("alpha", true)
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        try h.makeSynced(state, "Team")
+        let model = h.collectionsModel(state, selecting: "Default", ticking: ["alpha"])
         presetError(model, h)
 
         XCTAssertFalse(model.copyChecked(into: "Default"), "the source is not a target")
@@ -1256,9 +1197,7 @@ final class CollectionsModelTests: XCTestCase {
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Spare"))
         let before = state.store.collections["Spare"]
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Default"
+        let model = h.collectionsModel(state, selecting: "Default")
 
         XCTAssertFalse(model.copyChecked(into: "Spare"), "nothing ticked, so there is nothing to copy")
         XCTAssertEqual(state.store.collections["Spare"], before, "and nothing about Spare changed")
@@ -1269,14 +1208,10 @@ final class CollectionsModelTests: XCTestCase {
     func testCopyCheckedIntoNewCollectionMakesAnEmptyCollectionOfTheCopiesAlone() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
-        XCTAssertNil(state.upsert(name: "beta", entry: local("/bin/beta"), renamedFrom: nil, in: "Default"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        XCTAssertNil(state.upsert(name: "beta", entry: AppStateHarness.localConnector("/bin/beta"), renamedFrom: nil, in: "Default"))
         XCTAssertNotNil(state.store.collections["Default"]?.mcps["aws-mcp"])
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Default"
-        model.setChecked("alpha", true)
-        model.setChecked("beta", true)
+        let model = h.collectionsModel(state, selecting: "Default", ticking: ["alpha", "beta"])
         presetError(model, h)
 
         let before = try h.claudeServers()
@@ -1297,11 +1232,8 @@ final class CollectionsModelTests: XCTestCase {
     func testCopyCheckedIntoNewCollectionCancelledChangesNothing() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Default"
-        model.setChecked("alpha", true)
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        let model = h.collectionsModel(state, selecting: "Default", ticking: ["alpha"])
 
         h.dialogs.nextPromptAnswer = nil
         XCTAssertFalse(model.copyCheckedIntoNewCollection())
@@ -1316,12 +1248,9 @@ final class CollectionsModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Work"))
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Default"))
         state.switchCollection(to: "Default")
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Default"
-        model.setChecked("alpha", true)
+        let model = h.collectionsModel(state, selecting: "Default", ticking: ["alpha"])
 
         h.dialogs.nextPromptAnswer = "Work"
         XCTAssertFalse(model.copyCheckedIntoNewCollection())
@@ -1339,17 +1268,12 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNil(state.createCollection(named: "Spare"))
         state.switchCollection(to: "Default")
         for name in ["zeta", "alpha", "beta"] {
-            XCTAssertNil(state.upsert(name: name, entry: local("/bin/" + name), renamedFrom: nil, in: "Default"))
+            XCTAssertNil(state.upsert(name: name, entry: AppStateHarness.localConnector("/bin/" + name), renamedFrom: nil, in: "Default"))
         }
         for name in ["zeta", "alpha"] {
-            XCTAssertNil(state.upsert(name: name, entry: local("/bin/other"), renamedFrom: nil, in: "Spare"))
+            XCTAssertNil(state.upsert(name: name, entry: AppStateHarness.localConnector("/bin/other"), renamedFrom: nil, in: "Spare"))
         }
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Default"
-        model.setChecked("zeta", true)
-        model.setChecked("beta", true)
-        model.setChecked("alpha", true)
+        let model = h.collectionsModel(state, selecting: "Default", ticking: ["zeta", "beta", "alpha"])
 
         XCTAssertEqual(model.checkedNamesClashing(in: "Spare"), ["alpha", "zeta"], "beta is not in Spare")
         model.setChecked("alpha", false)
@@ -1369,11 +1293,9 @@ final class CollectionsModelTests: XCTestCase {
         let file = CollectionsFile(collections: ["Shared": published(slug: "shared"), "Team": synced(fileName: "team.json")])
         let cache = CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")],
                                           published: ["Shared": .init(folder: "/tmp/share", lastWrittenHash: nil)])
-        try seed(h, state, file: file, cache: cache)
+        try h.seed(state, file: file, cache: cache)
 
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Default"
+        let model = h.collectionsModel(state, selecting: "Default")
         XCTAssertEqual(model.pills, [.active])
 
         model.selected = "Shared"
@@ -1429,9 +1351,7 @@ final class CollectionsModelTests: XCTestCase {
         // A second local collection, so the common case is not also the last-collection case.
         XCTAssertNil(state.createCollection(named: "Work"))
         state.switchCollection(to: "Default")
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Default"
+        let model = h.collectionsModel(state, selecting: "Default")
         XCTAssertEqual(model.collectionMenu, [
             .rename, .duplicate, .separator,
             .startPublishing, .exportAll(enabled: true), .separator,
@@ -1448,9 +1368,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNil(state.startPublishing("Shared", to: folder.path, intent: .none))
         state.switchCollection(to: "Default")   // Shared stays, now not the active collection
 
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Shared"
+        let model = h.collectionsModel(state, selecting: "Shared")
         XCTAssertEqual(model.collectionMenu, [
             .makeActive, .separator,
             .rename, .duplicate, .separator,
@@ -1464,14 +1382,11 @@ final class CollectionsModelTests: XCTestCase {
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
         state.switchCollection(to: "Default")
-        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Team"
+        try h.makeSynced(state, "Team")
+        let model = h.collectionsModel(state, selecting: "Team")
 
         // Located via a real file, the same flow the banner strip's Locate button drives.
-        let document = h.dir.file("team.json")
-        try CollectionDocumentSamples.dataTeam.serialized().write(to: document)
+        let document = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "team.json")
         XCTAssertNil(model.locateSource(document.path))
         XCTAssertTrue(state.isLocated("Team"))
 
@@ -1490,10 +1405,8 @@ final class CollectionsModelTests: XCTestCase {
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
         state.switchCollection(to: "Default")
-        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Team"
+        try h.makeSynced(state, "Team")
+        let model = h.collectionsModel(state, selecting: "Team")
 
         XCTAssertFalse(state.isLocated("Team"))
         XCTAssertNil(model.sourceFilePath)
@@ -1506,8 +1419,7 @@ final class CollectionsModelTests: XCTestCase {
     func testCollectionMenuDisablesDeleteForTheLastLocalCollection() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        let model = h.collectionsModel(state)
         // Only "Default" exists.
         XCTAssertFalse(model.canDelete)
         XCTAssertTrue(model.collectionMenu.contains(.delete(enabled: false)))
@@ -1519,12 +1431,10 @@ final class CollectionsModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Team"))
-        XCTAssertNil(state.upsert(name: "beta", entry: local("/bin/beta"), renamedFrom: nil, in: "Team"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Team"))
+        XCTAssertNil(state.upsert(name: "beta", entry: AppStateHarness.localConnector("/bin/beta"), renamedFrom: nil, in: "Team"))
         state.switchCollection(to: "Default")
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
-        model.selected = "Team"
+        let model = h.collectionsModel(state, selecting: "Team")
 
         // Cancelled: nothing changes.
         h.dialogs.nextPromptAnswer = nil
@@ -1555,14 +1465,13 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNil(state.createCollection(named: "Shared"))
         XCTAssertNil(state.createCollection(named: "Team"))
         state.switchCollection(to: "Default")
-        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        try h.makeSynced(state, "Team")
 
         let folder = h.dir.file("share")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         XCTAssertNil(state.startPublishing("Shared", to: folder.path, intent: .none))
 
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        let model = h.collectionsModel(state)
 
         model.selected = "Shared"
         let published = try XCTUnwrap(model.publishedFilePath)
@@ -1573,8 +1482,7 @@ final class CollectionsModelTests: XCTestCase {
 
         model.selected = "Team"
         XCTAssertNil(model.sourceFilePath, "not located yet")
-        let document = h.dir.file("team.json")
-        try CollectionDocumentSamples.dataTeam.serialized().write(to: document)
+        let document = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "team.json")
         XCTAssertNil(model.locateSource(document.path))
         XCTAssertEqual(model.sourceFilePath, state.sourceLocation(of: "Team"))
         XCTAssertEqual(model.sourceFilePath, document.path)
@@ -1587,9 +1495,8 @@ final class CollectionsModelTests: XCTestCase {
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
         state.switchCollection(to: "Default")
-        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
-        let model = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { model.dispose() }
+        try h.makeSynced(state, "Team")
+        let model = h.collectionsModel(state)
 
         model.selected = "Default"
         XCTAssertTrue(model.canAddConnector)

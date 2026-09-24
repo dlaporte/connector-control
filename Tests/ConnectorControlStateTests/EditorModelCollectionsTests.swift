@@ -12,11 +12,7 @@ final class EditorModelCollectionsTests: XCTestCase {
     /// synced collection with a marker in an env value, in an argument and in a bearer token.
     @discardableResult
     private func subscribeToDataTeam(_ rig: EditorRig) throws -> URL {
-        let url = rig.h.dir.file("shared/data-team.json")
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try CollectionDocumentSamples.dataTeam.serialized().write(to: url)
-        XCTAssertNil(rig.state.subscribe(documentAt: url.path, as: nil))
-        return url
+        try rig.h.subscribe(rig.state, to: CollectionDocumentSamples.dataTeam, at: "shared/data-team.json")
     }
 
     private func envRow(_ editor: EditorModel, _ name: String) throws -> EnvRow {
@@ -181,11 +177,8 @@ final class EditorModelCollectionsTests: XCTestCase {
                                     auth: .oauthClient(clientId: "cc-app", scopes: "read"),
                                     package: "mcp-remote", extraArgs: [])),
             env: [:], needs: ["client_secret": "the billing console"], additional: [:])
-        let url = rig.h.dir.file("shared/data-team.json")
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try doc.serialized().write(to: url)
         let state = rig.state
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        try rig.h.subscribe(state, to: doc, at: "shared/data-team.json")
 
         let notion = rig.editor("notion", in: "Data team")
         XCTAssertFalse(notion.isRemote, "the --header flags take it out of the remote form")
@@ -244,10 +237,8 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertEqual(imported.headerNote, "Imported from “Data team” on \(date). Edits stay here.")
         XCTAssertFalse(imported.isReadOnly, "a copy is the user's own")
 
-        let folder = rig.h.dir.file("share")
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         XCTAssertNil(state.createCollection(named: "Team"))
-        XCTAssertNil(state.startPublishing("Team", to: folder.path, intent: .none))
+        let folder = try rig.h.publish(state, "Team", folder: "share").deletingLastPathComponent()
         let published = rig.editor("scoutbook", in: "Team")
         XCTAssertEqual(published.headerState, .published(folder: folder.path))
         XCTAssertEqual(published.headerNote,
@@ -261,10 +252,8 @@ final class EditorModelCollectionsTests: XCTestCase {
     func testThePropagateLabelAgreesWithHowManyTwinsThereAre() {
         let rig = EditorRig()
         defer { rig.dispose() }
-        let state = rig.state
-        XCTAssertNil(state.createCollection(named: "Backup"))   // a copy of Default
-        XCTAssertNil(state.createCollection(named: "Spare"))    // a copy of Backup
-        state.switchCollection(to: "Default")
+        rig.twin("Backup")
+        rig.twin("Spare")
         XCTAssertEqual(rig.editor("scoutbook", in: "Default").propagateMessage,
                        "Also apply this change to Backup, Spare, which have an identical scoutbook")
     }
@@ -273,9 +262,8 @@ final class EditorModelCollectionsTests: XCTestCase {
         let rig = EditorRig()
         defer { rig.dispose() }
         let state = rig.state
-        XCTAssertNil(state.createCollection(named: "Backup"))   // a copy of Default, and now active
-        state.setEnabled("scoutbook", false)
-        state.switchCollection(to: "Default")
+        rig.twin("Backup")
+        state.setEnabled("scoutbook", false, in: "Backup")
 
         let editor = rig.editor("scoutbook", in: "Default")
         XCTAssertEqual(editor.propagateTargets, ["Backup"])
@@ -299,8 +287,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         let rig = EditorRig()
         defer { rig.dispose() }
         let state = rig.state
-        XCTAssertNil(state.createCollection(named: "Backup"))
-        state.switchCollection(to: "Default")
+        rig.twin("Backup")
         let twin = try XCTUnwrap(state.store.collections["Backup"]?.mcps["scoutbook"]?.config)
 
         let editor = rig.editor("scoutbook", in: "Default")
@@ -314,8 +301,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         let rig = EditorRig()
         defer { rig.dispose() }
         let state = rig.state
-        XCTAssertNil(state.createCollection(named: "Backup"))
-        state.switchCollection(to: "Default")
+        rig.twin("Backup")
 
         let editor = rig.editor("scoutbook", in: "Default")
         XCTAssertEqual(editor.propagateTargets, ["Backup"])
@@ -338,8 +324,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         defer { rig.dispose() }
         let state = rig.state
         // Edit the inactive side and propagate inward: the twin Claude runs is the one that moves.
-        XCTAssertNil(state.createCollection(named: "Spare"))
-        state.switchCollection(to: "Default")
+        rig.twin("Spare")
         let appliedBefore = rig.h.settings.lastApplyDate
 
         let editor = rig.editor("scoutbook", in: "Spare")
@@ -364,8 +349,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         let rig = EditorRig()
         defer { rig.dispose() }
         let state = rig.state
-        XCTAssertNil(state.createCollection(named: "Backup"))
-        state.switchCollection(to: "Default")
+        rig.twin("Backup")
 
         let editor = rig.editor("scoutbook", in: "Default")
         editor.propagate = true
@@ -382,8 +366,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         let rig = EditorRig()
         defer { rig.dispose() }
         let state = rig.state
-        XCTAssertNil(state.createCollection(named: "Backup"))
-        state.switchCollection(to: "Default")
+        rig.twin("Backup")
         // "Backup" already has something called "scouts", so the rename cannot land there.
         let occupant = MCPEntry(config: AppStateHarness.remote("https://scouts.example/mcp"))
         XCTAssertNil(state.upsert(name: "scouts", entry: occupant, renamedFrom: nil, in: "Backup"))
@@ -531,14 +514,12 @@ final class EditorModelCollectionsTests: XCTestCase {
             "args": .array([.string("/Users/d/server.js")]),
             "env": .object(["TOKEN": .string("sk-live"), "REGION": .string("us")]),
         ])), renamedFrom: nil, in: "Team"))
-        let folder = rig.h.dir.file("share")
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let intent = PublishIntent(
             shareValues: ["svc": ["REGION"]],
             pathMarks: ["svc": [JSONPointer(["args", "0"]): .init(name: "server_path", hint: "your clone, then dist/index.js",
                                                                   value: "/Users/d/server.js")]],
             hints: ["svc": ["TOKEN": "acme.example ▸ API tokens"]])
-        XCTAssertNil(state.startPublishing("Team", to: folder.path, intent: intent))
+        try rig.h.publish(state, "Team", intent: intent, folder: "share")
 
         let editor = rig.editor("svc", in: "Team")
         XCTAssertTrue(editor.hasPublishedHints)
@@ -647,13 +628,11 @@ final class EditorModelCollectionsTests: XCTestCase {
             "command": .string("node"),
             "args": .array([.string("/Users/d/server.js")]),
         ])), renamedFrom: nil, in: "Team"))
-        let folder = rig.h.dir.file("share")
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let intent = PublishIntent(
             shareValues: [:],
             pathMarks: ["svc": [JSONPointer(["args", "0"]): .init(name: "server_path", hint: "your clone", value: "/Users/d/server.js")]],
             hints: [:])
-        XCTAssertNil(state.startPublishing("Team", to: folder.path, intent: intent))
+        try rig.h.publish(state, "Team", intent: intent, folder: "share")
 
         let editor = rig.editor("svc", in: "Team")
         XCTAssertEqual(editor.publishedHint(arg: 0), "your clone")
@@ -674,11 +653,8 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertNil(state.createCollection(named: "Team"))
         XCTAssertNil(state.upsert(name: "svc", entry: MCPEntry(config: rig.local("node", args)), renamedFrom: nil, in: "Team"))
         let index = try XCTUnwrap(args.firstIndex(of: serverPath))
-        let folder = rig.h.dir.file("share")
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        XCTAssertNil(state.startPublishing("Team", to: folder.path, intent: PublishIntent(
-            shareValues: [:], pathMarks: ["svc": mark(at: index, value: serverPath)], hints: [:])))
-        return folder.appendingPathComponent("team.json")
+        return try rig.h.publish(state, "Team", intent: PublishIntent(
+            shareValues: [:], pathMarks: ["svc": mark(at: index, value: serverPath)], hints: [:]), folder: "share")
     }
 
     private func mark(at index: Int, value: String) -> [JSONPointer: PublishIntent.PathMark] {
@@ -851,10 +827,8 @@ final class EditorModelCollectionsTests: XCTestCase {
         let state = rig.state
         try publishTeam(rig, args: [serverPath])
         XCTAssertNil(state.createCollection(named: "Mirror"))   // a copy of Team, and now active
-        let folder = rig.h.dir.file("share2")
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        XCTAssertNil(state.startPublishing("Mirror", to: folder.path, intent: PublishIntent(
-            shareValues: [:], pathMarks: ["svc": mark(at: 0, value: serverPath)], hints: [:])))
+        try rig.h.publish(state, "Mirror", intent: PublishIntent(
+            shareValues: [:], pathMarks: ["svc": mark(at: 0, value: serverPath)], hints: [:]), folder: "share2")
 
         let editor = rig.editor("svc", in: "Team")
         XCTAssertEqual(editor.propagateTargets, ["Mirror"])

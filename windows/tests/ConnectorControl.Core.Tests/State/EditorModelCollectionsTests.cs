@@ -16,10 +16,7 @@ public class EditorModelCollectionsTests
     /// </summary>
     private static void SubscribeToDataTeam(EditorRig rig)
     {
-        var path = rig.H.Dir.File(Path.Combine("shared", "data-team.json"));
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, CollectionDocumentSamples.DataTeam.Serialize());
-        Assert.Null(rig.State.Subscribe(path, null));
+        rig.H.Subscribe(rig.State, CollectionDocumentSamples.DataTeam, Path.Combine("shared", "data-team.json"));
     }
 
     private static EnvRow EnvRow(EditorModel editor, string name) =>
@@ -208,11 +205,9 @@ public class EditorModelCollectionsTests
                 new Dictionary<string, string?> { ["client_secret"] = "the billing console" },
                 new Dictionary<string, JsonValue>()),
         };
-        var path = rig.H.Dir.File(Path.Combine("shared", "data-team.json"));
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors).Serialize());
         var state = rig.State;
-        Assert.Null(state.Subscribe(path, null));
+        rig.H.Subscribe(state, new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors),
+            Path.Combine("shared", "data-team.json"));
 
         using var notion = rig.Editor("notion", "Data team");
         // The --header flags take it out of the remote form.
@@ -287,10 +282,8 @@ public class EditorModelCollectionsTests
             Assert.False(imported.IsReadOnly);
         }
 
-        var folder = rig.H.Dir.File("share");
-        Directory.CreateDirectory(folder);
         Assert.Null(state.CreateCollection("Team"));
-        Assert.Null(state.StartPublishing("Team", folder, PublishIntent.None));
+        var folder = Path.GetDirectoryName(rig.H.Publish(state, "Team", folder: "share"))!;
         using var published = rig.Editor("scoutbook", "Team");
         Assert.Equal(new EditorModel.HeaderState.Published(folder), published.Header);
         Assert.Equal($"Published to {folder} — saving updates the file your team reads. Secrets stay here.",
@@ -305,10 +298,8 @@ public class EditorModelCollectionsTests
     public void ThePropagateLabelAgreesWithHowManyTwinsThereAre()
     {
         using var rig = new EditorRig();
-        var state = rig.State;
-        Assert.Null(state.CreateCollection("Backup"));   // a copy of Default
-        Assert.Null(state.CreateCollection("Spare"));    // a copy of Backup
-        state.SwitchCollection("Default");
+        rig.Twin("Backup");
+        rig.Twin("Spare");
         using var editor = rig.Editor("scoutbook", "Default");
         Assert.Equal("Also apply this change to Backup, Spare, which have an identical scoutbook", editor.PropagateMessage);
     }
@@ -318,10 +309,8 @@ public class EditorModelCollectionsTests
     {
         using var rig = new EditorRig();
         var state = rig.State;
-        // A copy of Default, and now active.
-        Assert.Null(state.CreateCollection("Backup"));
-        state.SetEnabled("scoutbook", false);
-        state.SwitchCollection("Default");
+        rig.Twin("Backup");
+        state.SetEnabled("scoutbook", false, "Backup");
 
         using var editor = rig.Editor("scoutbook", "Default");
         Assert.Equal(["Backup"], editor.PropagateTargets);
@@ -347,8 +336,7 @@ public class EditorModelCollectionsTests
     {
         using var rig = new EditorRig();
         var state = rig.State;
-        Assert.Null(state.CreateCollection("Backup"));
-        state.SwitchCollection("Default");
+        rig.Twin("Backup");
         var twin = state.Store.Collections["Backup"].Mcps["scoutbook"].Config;
 
         using var editor = rig.Editor("scoutbook", "Default");
@@ -363,8 +351,7 @@ public class EditorModelCollectionsTests
     {
         using var rig = new EditorRig();
         var state = rig.State;
-        Assert.Null(state.CreateCollection("Backup"));
-        state.SwitchCollection("Default");
+        rig.Twin("Backup");
 
         using var editor = rig.Editor("scoutbook", "Default");
         Assert.Equal(["Backup"], editor.PropagateTargets);
@@ -389,8 +376,7 @@ public class EditorModelCollectionsTests
         using var rig = new EditorRig();
         var state = rig.State;
         // Edit the inactive side and propagate inward: the twin Claude runs is the one that moves.
-        Assert.Null(state.CreateCollection("Spare"));
-        state.SwitchCollection("Default");
+        rig.Twin("Spare");
         var appliedBefore = rig.H.Settings.LastApplyDate;
 
         using var editor = rig.Editor("scoutbook", "Spare");
@@ -418,8 +404,7 @@ public class EditorModelCollectionsTests
     {
         using var rig = new EditorRig();
         var state = rig.State;
-        Assert.Null(state.CreateCollection("Backup"));
-        state.SwitchCollection("Default");
+        rig.Twin("Backup");
 
         using var editor = rig.Editor("scoutbook", "Default");
         editor.Propagate = true;
@@ -437,8 +422,7 @@ public class EditorModelCollectionsTests
     {
         using var rig = new EditorRig();
         var state = rig.State;
-        Assert.Null(state.CreateCollection("Backup"));
-        state.SwitchCollection("Default");
+        rig.Twin("Backup");
         // "Backup" already has something called "scouts", so the rename cannot land there.
         var occupant = new McpEntry(AppStateHarness.Remote("https://scouts.example/mcp"));
         Assert.Null(state.Upsert("scouts", occupant, null, "Backup"));
@@ -669,8 +653,6 @@ public class EditorModelCollectionsTests
             ("args", JsonValue.Array([JsonValue.String("/Users/d/server.js")])),
             ("env", JsonValue.Object(("TOKEN", JsonValue.String("sk-live")), ("REGION", JsonValue.String("us")))))),
             null, "Team"));
-        var folder = rig.H.Dir.File("share");
-        Directory.CreateDirectory(folder);
         var pointer = new JsonPointer(["args", "0"]);
         var intent = new PublishIntent(
             [new("svc", new HashSet<string>(["REGION"], StringComparer.Ordinal))],
@@ -682,7 +664,7 @@ public class EditorModelCollectionsTests
             {
                 ["TOKEN"] = "acme.example ▸ API tokens",
             })]);
-        Assert.Null(state.StartPublishing("Team", folder, intent));
+        rig.H.Publish(state, "Team", intent, "share");
 
         using var editor = rig.Editor("svc", "Team");
         Assert.True(editor.HasPublishedHints);
@@ -839,8 +821,6 @@ public class EditorModelCollectionsTests
         Assert.Null(state.Upsert("svc", new McpEntry(JsonValue.Object(
             ("command", JsonValue.String("node")),
             ("args", JsonValue.Array([JsonValue.String("/Users/d/server.js")])))), null, "Team"));
-        var folder = rig.H.Dir.File("share");
-        Directory.CreateDirectory(folder);
         var intent = new PublishIntent(
             [],
             [new("svc", new Dictionary<JsonPointer, PublishIntent.PathMark>
@@ -848,7 +828,7 @@ public class EditorModelCollectionsTests
                 [new JsonPointer(["args", "0"])] = new("server_path", "your clone", "/Users/d/server.js"),
             })],
             []);
-        Assert.Null(state.StartPublishing("Team", folder, intent));
+        rig.H.Publish(state, "Team", intent, "share");
 
         using var editor = rig.Editor("svc", "Team");
         Assert.Equal("your clone", editor.PublishedHintForArg(0));
@@ -877,11 +857,8 @@ public class EditorModelCollectionsTests
         var state = rig.State;
         Assert.Null(state.CreateCollection("Team"));
         Assert.Null(state.Upsert("svc", new McpEntry(rig.Local("node", args)), null, "Team"));
-        var folder = rig.H.Dir.File("share");
-        Directory.CreateDirectory(folder);
-        Assert.Null(state.StartPublishing("Team", folder, new PublishIntent(
-            [], [new("svc", MarkAt(Array.IndexOf(args, ServerPath), ServerPath))], [])));
-        return Path.Combine(folder, "team.json");
+        return rig.H.Publish(state, "Team", new PublishIntent(
+            [], [new("svc", MarkAt(Array.IndexOf(args, ServerPath), ServerPath))], []), "share");
     }
 
     private static IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark>? Marks(
@@ -1086,10 +1063,8 @@ public class EditorModelCollectionsTests
         var state = rig.State;
         PublishTeam(rig, ServerPath);
         Assert.Null(state.CreateCollection("Mirror"));   // a copy of Team, and now active
-        var folder = rig.H.Dir.File("share2");
-        Directory.CreateDirectory(folder);
-        Assert.Null(state.StartPublishing("Mirror", folder, new PublishIntent(
-            [], [new("svc", MarkAt(0, ServerPath))], [])));
+        rig.H.Publish(state, "Mirror", new PublishIntent(
+            [], [new("svc", MarkAt(0, ServerPath))], []), "share2");
 
         using var editor = rig.Editor("svc", "Team");
         Assert.Equal(["Mirror"], editor.PropagateTargets);

@@ -49,8 +49,7 @@ public class AppStateWatcherTests
     public void StoreWatcherAdoptsAnExternalStoreAndAnnouncesTheRestart()
     {
         using var h = new AppStateHarness();
-        h.Claude.IsRunning = true;
-        h.Claude.LaunchDate = h.Now.AddHours(-1);
+        h.ClaudeRunningSince(1);
         using var state = h.Create();
         Thread.Sleep(WatcherSettle);
         var synced = h.StoreOnDisk();

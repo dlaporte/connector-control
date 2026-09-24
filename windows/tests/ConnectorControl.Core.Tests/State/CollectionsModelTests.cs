@@ -25,21 +25,6 @@ public class CollectionsModelTests
         IEnumerable<KeyValuePair<string, CollectionsLocalCache.PublishBinding>>? published = null) =>
         new(synced ?? [], published ?? []);
 
-    /// <summary>
-    /// Writes both collection files where the app reads them, then reloads so the state picks them
-    /// up — the shape a subscribe or a publish would leave behind.
-    /// </summary>
-    private static void Seed(AppStateHarness h, AppState state, CollectionsFile file, CollectionsLocalCache? cache = null)
-    {
-        file.Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
-        (cache ?? Cache()).Save(state.Service.Paths.CollectionsCachePath);
-        state.Reload();
-    }
-
-    private static McpEntry Local(string command, params string[] args) =>
-        new(JsonValue.Object(
-            ("command", JsonValue.String(command)),
-            ("args", JsonValue.Array(args.Select(JsonValue.String)))));
 
     /// <summary>
     /// Leaves a refusal in LastError without moving the window: the store refuses an empty name
@@ -68,9 +53,9 @@ public class CollectionsModelTests
         var file = File_(("Shared", Published("shared")), ("Team", Synced("team.json")));
         var cache = Cache([new("Team", Bound("/shared/team.json"))],
                           [new("Shared", new CollectionsLocalCache.PublishBinding("/tmp/share", null))]);
-        Seed(h, state, file, cache);
+        h.Seed(state, file, cache);
 
-        using var model = new CollectionsModel(state, h.Dialogs);
+        var model = h.CollectionsModel(state);
         Assert.Equal(["Default", "Shared", "Team"], model.Items.Select(i => i.Name));   // the chip menu's order
         Assert.Equal(["Default", "Shared", "Team"], model.Items.Select(i => i.Id));
         Assert.Equal([CollectionKind.Local, CollectionKind.Local, CollectionKind.Synced], model.Items.Select(i => i.Kind));
@@ -87,7 +72,7 @@ public class CollectionsModelTests
         Assert.True(repaints > 0);
 
         // The binding gone, the sidecar still names the file: the item says it is not located.
-        Seed(h, state, file, Cache(published: cache.Published));
+        h.Seed(state, file, Cache(published: cache.Published));
         Assert.Equal([true, true, false], model.Items.Select(i => i.IsLocated));
         Assert.False(state.IsLocated("Team"));
         Assert.True(state.IsLocated("Default"));
@@ -112,9 +97,9 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
-        Assert.Null(state.Upsert("\uFF5E", Local("uvx"), null));
-        Assert.Null(state.Upsert("\U0001F600", Local("uvx"), null));
-        using var model = new CollectionsModel(state, h.Dialogs);
+        Assert.Null(state.Upsert("\uFF5E", AppStateHarness.LocalConnector("uvx"), null));
+        Assert.Null(state.Upsert("\U0001F600", AppStateHarness.LocalConnector("uvx"), null));
+        var model = h.CollectionsModel(state);
         Assert.Equal(["\U0001F600", "\uFF5E"], model.Rows.Select(r => r.Name));
         model.SetChecked("\uFF5E", true);
         model.SetChecked("\U0001F600", true);
@@ -130,15 +115,14 @@ public class CollectionsModelTests
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
         Assert.Null(state.Upsert("github", new McpEntry(AppStateHarness.Remote("https://github.example/mcp")), null, "Team"));
-        Assert.Null(state.Upsert("Ledger", Local("/usr/local/bin/node", "index.js"), null, "Team"));
+        Assert.Null(state.Upsert("Ledger", AppStateHarness.LocalConnector("/usr/local/bin/node", "index.js"), null, "Team"));
         Assert.Null(state.Upsert("jira", new McpEntry(JsonValue.Object(
             ("command", JsonValue.String("npx")),
             ("env", JsonValue.Object(("JIRA_TOKEN", JsonValue.String(Placeholder.Marker("JIRA_TOKEN"))))))), null, "Team"));
-        Assert.Null(state.Upsert("notes", Local("uvx"), null, "Default"));
-        Seed(h, state, File_(("Team", Synced("team.json"))), Cache([new("Team", Bound("/shared/team.json"))]));
+        Assert.Null(state.Upsert("notes", AppStateHarness.LocalConnector("uvx"), null, "Default"));
+        h.MakeSynced(state, "Team", "/shared/team.json");
 
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Team";
+        var model = h.CollectionsModel(state, "Team");
         // Uppercase first: ordinal, the order the flyout lists the same connectors in.
         Assert.Equal(["Ledger", "github", "jira"], model.Rows.Select(r => r.Name));
         Assert.Equal(["Ledger", "github", "jira"], model.Rows.Select(r => r.Id));
@@ -200,14 +184,14 @@ public class CollectionsModelTests
 
     [Fact]
     public void TargetShowsOnlyTheHostOfARemoteConnectorWithAHeader() =>
-        AssertTarget(Local("npx", "-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"),
+        AssertTarget(AppStateHarness.LocalConnector("npx", "-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"),
             "h.example", "abc");
 
     [Fact]
     public void TargetShortensAScopedPackageAndTheHomeFolder()
     {
         Assert.Equal("npx …/server-filesystem ~/Documents",
-            CollectionsModel.TargetOf(Local("npx", "-y", "@modelcontextprotocol/server-filesystem", "/Users/x/Documents").Config, "/Users/x"));
+            CollectionsModel.TargetOf(AppStateHarness.LocalConnector("npx", "-y", "@modelcontextprotocol/server-filesystem", "/Users/x/Documents").Config, "/Users/x"));
     }
 
     /// <summary>
@@ -218,58 +202,58 @@ public class CollectionsModelTests
     public void TargetShortensAWindowsHomeFolder()
     {
         Assert.Equal(@"node ~\srv\index.js …/pkg@1.2 ~\a.js",
-            CollectionsModel.TargetOf(Local("node", @"C:\Users\x\srv\index.js", "@scope/pkg@1.2", @"c:\users\X\a.js").Config,
+            CollectionsModel.TargetOf(AppStateHarness.LocalConnector("node", @"C:\Users\x\srv\index.js", "@scope/pkg@1.2", @"c:\users\X\a.js").Config,
                 @"C:\Users\x"));
     }
 
     [Fact]
     public void TargetShowsAUrlArgumentsSchemeAndHostOnly() =>
-        AssertTarget(Local("tool", "https://me:pw@h.example:8443/x?token=t#frag"), "tool https://h.example:8443", "pw");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "https://me:pw@h.example:8443/x?token=t#frag"), "tool https://h.example:8443", "pw");
 
     [Fact]
     public void TargetLeavesOutASlackWebhooksPath() =>
-        AssertTarget(Local("tool", "https://hooks.slack.com/services/T000/B000/XXXXsecret"), "tool https://hooks.slack.com", "XXXXsecret");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "https://hooks.slack.com/services/T000/B000/XXXXsecret"), "tool https://hooks.slack.com", "XXXXsecret");
 
     [Fact]
     public void TargetLeavesOutFlagsAndTheirValues() =>
-        AssertTarget(Local("/usr/local/bin/tool", "--api-key", "abc", "--port", "80", "--token=abc"), "tool", "abc");
+        AssertTarget(AppStateHarness.LocalConnector("/usr/local/bin/tool", "--api-key", "abc", "--port", "80", "--token=abc"), "tool", "abc");
 
     [Fact]
     public void TargetLeavesOutAHeaderFlag() =>
-        AssertTarget(Local("tool", "-H", "X-Api-Key: abc", "https://h.example/x"), "tool https://h.example", "abc");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "-H", "X-Api-Key: abc", "https://h.example/x"), "tool https://h.example", "abc");
 
     [Fact]
     public void TargetLeavesOutAnEnvironmentAssignment() =>
-        AssertTarget(Local("docker", "run", "-i", "--rm", "-e", "GITHUB_TOKEN=abc", "ghcr.io/github/github-mcp-server"),
+        AssertTarget(AppStateHarness.LocalConnector("docker", "run", "-i", "--rm", "-e", "GITHUB_TOKEN=abc", "ghcr.io/github/github-mcp-server"),
             "docker ghcr.io/github/github-mcp-server", "abc");
 
     [Fact]
     public void TargetLeavesOutAShellString()
     {
-        AssertTarget(Local("sh", "-c", "TOKEN=abc node srv.js"), "sh", "abc");
-        AssertTarget(Local("sh", "-c", "curl -H 'Authorization: Bearer abc' https://h.example/x"), "sh", "abc");
+        AssertTarget(AppStateHarness.LocalConnector("sh", "-c", "TOKEN=abc node srv.js"), "sh", "abc");
+        AssertTarget(AppStateHarness.LocalConnector("sh", "-c", "curl -H 'Authorization: Bearer abc' https://h.example/x"), "sh", "abc");
     }
 
     [Fact]
-    public void TargetLeavesOutAnAttachedShortFlagValue() => AssertTarget(Local("mysql-mcp", "-pSECRET"), "mysql-mcp", "SECRET");
+    public void TargetLeavesOutAnAttachedShortFlagValue() => AssertTarget(AppStateHarness.LocalConnector("mysql-mcp", "-pSECRET"), "mysql-mcp", "SECRET");
 
     [Fact]
-    public void TargetLeavesOutAShortPositionalSecret() => AssertTarget(Local("tool", "hunter2"), "tool", "hunter2");
+    public void TargetLeavesOutAShortPositionalSecret() => AssertTarget(AppStateHarness.LocalConnector("tool", "hunter2"), "tool", "hunter2");
 
     [Fact]
-    public void TargetLeavesOutAnUnprefixedKey() => AssertTarget(Local("tool", "sk_live_abc123"), "tool", "sk_live");
+    public void TargetLeavesOutAnUnprefixedKey() => AssertTarget(AppStateHarness.LocalConnector("tool", "sk_live_abc123"), "tool", "sk_live");
 
     [Fact]
-    public void TargetLeavesOutAConnectionString() => AssertTarget(Local("tool", "Server=h;Password=x"), "tool", "Password=x");
+    public void TargetLeavesOutAConnectionString() => AssertTarget(AppStateHarness.LocalConnector("tool", "Server=h;Password=x"), "tool", "Password=x");
 
     [Fact]
-    public void TargetLeavesOutInlineJson() => AssertTarget(Local("tool", "--config", """{"apiKey":"abc"}"""), "tool", "abc");
+    public void TargetLeavesOutInlineJson() => AssertTarget(AppStateHarness.LocalConnector("tool", "--config", """{"apiKey":"abc"}"""), "tool", "abc");
 
     [Fact]
     public void TargetLeavesOutTheValueOfASecretNamedFlagWhateverItsCase()
     {
-        AssertTarget(Local("tool", "--token", "x.y"), "tool", "x.y");
-        AssertTarget(Local("tool", "--TOKEN", "abc.def"), "tool", "abc.def");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "--token", "x.y"), "tool", "x.y");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "--TOKEN", "abc.def"), "tool", "abc.def");
     }
 
     /// <summary>
@@ -279,12 +263,12 @@ public class CollectionsModelTests
     [Fact]
     public void TargetSplitsACommandLineWrittenAsOneString()
     {
-        AssertTarget(Local("cmd", "/c", "npx -y @acme/server --api-key hunter2"), "npx …/server", "hunter2");
+        AssertTarget(AppStateHarness.LocalConnector("cmd", "/c", "npx -y @acme/server --api-key hunter2"), "npx …/server", "hunter2");
         AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("npx -y server --token hunter2")))), "npx", "hunter2");
         AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("tool --token a.b")))), "tool", "a.b");
         const string quoted = "npx -y mcp-remote https://h.example/mcp --header \"Authorization: Bearer abc\"";
-        AssertTarget(Local("cmd", "/c", quoted), "h.example", "abc");
-        Assert.DoesNotContain("Bearer", CollectionsModel.TargetOf(Local("cmd", "/c", quoted).Config, "/Users/x"));
+        AssertTarget(AppStateHarness.LocalConnector("cmd", "/c", quoted), "h.example", "abc");
+        Assert.DoesNotContain("Bearer", CollectionsModel.TargetOf(AppStateHarness.LocalConnector("cmd", "/c", quoted).Config, "/Users/x"));
     }
 
     /// <summary>
@@ -295,8 +279,8 @@ public class CollectionsModelTests
     [Fact]
     public void TargetLeavesOutAQuotedArgumentInACommandLine()
     {
-        AssertTarget(Local("cmd", "/c", "tool --header \"X-Key: abc.def extra\""), "tool", "abc.def");
-        AssertTarget(Local("cmd", "/c", "npx -y @acme/server --config '{\"k\":\"v.w\"}'"), "npx …/server", "v.w");
+        AssertTarget(AppStateHarness.LocalConnector("cmd", "/c", "tool --header \"X-Key: abc.def extra\""), "tool", "abc.def");
+        AssertTarget(AppStateHarness.LocalConnector("cmd", "/c", "npx -y @acme/server --config '{\"k\":\"v.w\"}'"), "npx …/server", "v.w");
         AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("tool \"abc.def extra")))), "tool", "abc.def");
         AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("\"hunter.2 x\" srv.js")))), "srv.js", "hunter");
     }
@@ -324,13 +308,13 @@ public class CollectionsModelTests
     [Fact]
     public void TargetNamesALauncherUnderProgramFiles()
     {
-        AssertTarget(Local(@"C:\Program Files\nodejs\node.exe", "index.js"), "node index.js", "Program");
-        AssertTarget(Local(@"""C:\Program Files\nodejs\node.exe""", "index.js"), "node index.js", "Program");
-        AssertTarget(Local(@"C:\Program Files\nodejs\npx.cmd", "-y", "mcp-remote", "https://h.example/mcp"), "h.example", "npx");
-        AssertTarget(Local("/opt/bin/tool --password hunter.2x", "srv.js"), "srv.js", "hunter.2x");
-        AssertTarget(Local(@"C:\Program Files (x86)\Tool\tool.exe", "index.js"), "tool index.js", "Program");
+        AssertTarget(AppStateHarness.LocalConnector(@"C:\Program Files\nodejs\node.exe", "index.js"), "node index.js", "Program");
+        AssertTarget(AppStateHarness.LocalConnector(@"""C:\Program Files\nodejs\node.exe""", "index.js"), "node index.js", "Program");
+        AssertTarget(AppStateHarness.LocalConnector(@"C:\Program Files\nodejs\npx.cmd", "-y", "mcp-remote", "https://h.example/mcp"), "h.example", "npx");
+        AssertTarget(AppStateHarness.LocalConnector("/opt/bin/tool --password hunter.2x", "srv.js"), "srv.js", "hunter.2x");
+        AssertTarget(AppStateHarness.LocalConnector(@"C:\Program Files (x86)\Tool\tool.exe", "index.js"), "tool index.js", "Program");
         // Plain words packed after a Unix path do not cost it its launcher.
-        AssertTarget(Local("/usr/bin/tool srv"), "tool", "srv");
+        AssertTarget(AppStateHarness.LocalConnector("/usr/bin/tool srv"), "tool", "srv");
     }
 
     /// <summary>
@@ -340,9 +324,9 @@ public class CollectionsModelTests
     [Fact]
     public void TargetNamesNoLauncherForAPathCommandWithAPackedArgument()
     {
-        AssertTarget(Local("cmd", "/c", @"C:\tools\notify.exe https://hooks.slack.com/services/T000/B000/XXXXsecret"), "", "XXXXsecret");
-        AssertTarget(Local("/usr/local/bin/mcp --api-key abc/hunter.2x"), "", "hunter.2x");
-        AssertTarget(Local(@"C:\x\tool.exe --token ab\cd.ef"), "", "cd.ef");
+        AssertTarget(AppStateHarness.LocalConnector("cmd", "/c", @"C:\tools\notify.exe https://hooks.slack.com/services/T000/B000/XXXXsecret"), "", "XXXXsecret");
+        AssertTarget(AppStateHarness.LocalConnector("/usr/local/bin/mcp --api-key abc/hunter.2x"), "", "hunter.2x");
+        AssertTarget(AppStateHarness.LocalConnector(@"C:\x\tool.exe --token ab\cd.ef"), "", "cd.ef");
     }
 
     /// <summary>
@@ -352,8 +336,8 @@ public class CollectionsModelTests
     [Fact]
     public void TargetLeavesOutTheFirstArgumentAfterASecretNamedFlagInTheCommand()
     {
-        AssertTarget(Local("/opt/bin/tool --password", "hunter.2x"), "", "hunter.2x");
-        AssertTarget(Local("tool --token", "abc.def"), "tool", "abc.def");
+        AssertTarget(AppStateHarness.LocalConnector("/opt/bin/tool --password", "hunter.2x"), "", "hunter.2x");
+        AssertTarget(AppStateHarness.LocalConnector("tool --token", "abc.def"), "tool", "abc.def");
     }
 
     /// <summary>
@@ -363,9 +347,9 @@ public class CollectionsModelTests
     [Fact]
     public void TargetReadsAQuotedFlagPackedIntoAPathCommand()
     {
-        AssertTarget(Local(@"/opt/bin/tool ""--password""", "hunter.2x"), "", "hunter.2x");
-        AssertTarget(Local(@"C:\x\tool.exe ""--token"" ab\cd.ef"), "", "cd.ef");
-        AssertTarget(Local(@"/opt/bin/tool --to""ken""", "hunter.2x"), "", "hunter.2x");
+        AssertTarget(AppStateHarness.LocalConnector(@"/opt/bin/tool ""--password""", "hunter.2x"), "", "hunter.2x");
+        AssertTarget(AppStateHarness.LocalConnector(@"C:\x\tool.exe ""--token"" ab\cd.ef"), "", "cd.ef");
+        AssertTarget(AppStateHarness.LocalConnector(@"/opt/bin/tool --to""ken""", "hunter.2x"), "", "hunter.2x");
     }
 
     /// <summary>
@@ -375,8 +359,8 @@ public class CollectionsModelTests
     [Fact]
     public void TargetNamesNoLauncherForAPathCommandWithASwitchOrAnAssignment()
     {
-        AssertTarget(Local(@"C:\x\tool.exe /key ab\cd.ef"), "", "cd.ef");
-        AssertTarget(Local("/opt/bin/tool key=ab/cd.ef"), "", "cd.ef");
+        AssertTarget(AppStateHarness.LocalConnector(@"C:\x\tool.exe /key ab\cd.ef"), "", "cd.ef");
+        AssertTarget(AppStateHarness.LocalConnector("/opt/bin/tool key=ab/cd.ef"), "", "cd.ef");
     }
 
     /// <summary>
@@ -386,13 +370,13 @@ public class CollectionsModelTests
     [Fact]
     public void TargetRefusesAUrlWhoseUserinfoHoldsADelimiter()
     {
-        AssertTarget(Local("tool", "postgres://admin:hunter2#x@db.local/app"), "tool", "hunter2");
-        AssertTarget(Local("tool", "https://apikey:sk_live_abc/x@api.example.com"), "tool", "sk_live");
-        AssertTarget(Local("tool", "https://sk_live_abc/x@h"), "tool", "sk_live");
-        AssertTarget(Local("tool", "sk-proj-abc123://x"), "tool", "abc123");
-        AssertTarget(Local("tool", "mongodb+srv://u:p@cluster.example.net/db"), "tool mongodb+srv://cluster.example.net", "u:p");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "postgres://admin:hunter2#x@db.local/app"), "tool", "hunter2");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "https://apikey:sk_live_abc/x@api.example.com"), "tool", "sk_live");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "https://sk_live_abc/x@h"), "tool", "sk_live");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "sk-proj-abc123://x"), "tool", "abc123");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "mongodb+srv://u:p@cluster.example.net/db"), "tool mongodb+srv://cluster.example.net", "u:p");
         // The remote decoder accepts this URL, and its host is still checked.
-        AssertTarget(Local("npx", "-y", "mcp-remote", "https://token123/x@h.example/mcp"), CollectionsModel.RemoteType, "token123");
+        AssertTarget(AppStateHarness.LocalConnector("npx", "-y", "mcp-remote", "https://token123/x@h.example/mcp"), CollectionsModel.RemoteType, "token123");
     }
 
     /// <summary>
@@ -402,9 +386,9 @@ public class CollectionsModelTests
     [Fact]
     public void TargetLeavesOutARandomTokenEvenWithASlash()
     {
-        AssertTarget(Local("tool", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"), "tool", "wJalr");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"), "tool", "wJalr");
         Assert.Equal("tool ~/Documents ghcr.io/github/github-mcp-server ./build/v2Server",
-            CollectionsModel.TargetOf(Local("tool", "/Users/x/Documents", "ghcr.io/github/github-mcp-server", "./build/v2Server").Config,
+            CollectionsModel.TargetOf(AppStateHarness.LocalConnector("tool", "/Users/x/Documents", "ghcr.io/github/github-mcp-server", "./build/v2Server").Config,
                 "/Users/x"));
     }
 
@@ -412,41 +396,41 @@ public class CollectionsModelTests
     [Fact]
     public void TargetLeavesOutAWindowsSwitchesValue()
     {
-        AssertTarget(Local("tool", "/p:Hunter2", "/token:abc", "/x:secret"), "tool", "secret");
-        AssertTarget(Local("tool", @"C:\Users\x\Docs"), @"tool C:\Users\x\Docs", "secret");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "/p:Hunter2", "/token:abc", "/x:secret"), "tool", "secret");
+        AssertTarget(AppStateHarness.LocalConnector("tool", @"C:\Users\x\Docs"), @"tool C:\Users\x\Docs", "secret");
     }
 
     /// <summary>A secret shaped like a package still vanishes when a flag named for a secret precedes it.</summary>
     [Fact]
     public void TargetLeavesOutWhateverFollowsASecretNamedFlag() =>
-        AssertTarget(Local("tool", "--password", "s3cr3t-pass", "--pass", "./x.key", "index.js"), "tool index.js", "s3cr3t");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "--password", "s3cr3t-pass", "--pass", "./x.key", "index.js"), "tool index.js", "s3cr3t");
 
     [Fact]
-    public void TargetLeavesOutAPathCarryingAnAssignment() => AssertTarget(Local("tool", "/usr/bin/env TOKEN=abc"), "tool", "abc");
+    public void TargetLeavesOutAPathCarryingAnAssignment() => AssertTarget(AppStateHarness.LocalConnector("tool", "/usr/bin/env TOKEN=abc"), "tool", "abc");
 
     [Fact]
     public void TargetLeavesOutACredentialShapedArtefact() =>
-        AssertTarget(Local("tool", "sk-abc.def", "ghp_0123456789abcdef0123456789abcdef.js"), "tool", "abc");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "sk-abc.def", "ghp_0123456789abcdef0123456789abcdef.js"), "tool", "abc");
 
     [Fact]
     public void TargetShowsTheServerAPackageRunnerNames()
     {
-        Assert.Equal("uvx mcp-server-fetch", CollectionsModel.TargetOf(Local("uvx", "mcp-server-fetch").Config, "/Users/x"));
-        Assert.Equal("python mcp_server.py", CollectionsModel.TargetOf(Local("python", "mcp_server.py").Config, "/Users/x"));
+        Assert.Equal("uvx mcp-server-fetch", CollectionsModel.TargetOf(AppStateHarness.LocalConnector("uvx", "mcp-server-fetch").Config, "/Users/x"));
+        Assert.Equal("python mcp_server.py", CollectionsModel.TargetOf(AppStateHarness.LocalConnector("python", "mcp_server.py").Config, "/Users/x"));
     }
 
     /// <summary>A bare hyphenated word anywhere but the server slot is as likely a password as a package.</summary>
     [Fact]
     public void TargetLeavesOutABareHyphenatedWordOutsideTheServerSlot()
     {
-        AssertTarget(Local("tool", "hunter-2"), "tool", "hunter-2");
-        AssertTarget(Local("tool", "-p", "s3cr3t-pass"), "tool", "s3cr3t");
-        AssertTarget(Local("tool", "correct-horse-battery-staple"), "tool", "horse");
-        AssertTarget(Local("uvx", "--from", "x", "my-server", "extra-word"), "uvx", "extra-word");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "hunter-2"), "tool", "hunter-2");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "-p", "s3cr3t-pass"), "tool", "s3cr3t");
+        AssertTarget(AppStateHarness.LocalConnector("tool", "correct-horse-battery-staple"), "tool", "horse");
+        AssertTarget(AppStateHarness.LocalConnector("uvx", "--from", "x", "my-server", "extra-word"), "uvx", "extra-word");
     }
 
     [Fact]
-    public void TargetLeavesOutThePwFlagsValue() => AssertTarget(Local("tool", "--pw", "a.b"), "tool", "a.b");
+    public void TargetLeavesOutThePwFlagsValue() => AssertTarget(AppStateHarness.LocalConnector("tool", "--pw", "a.b"), "tool", "a.b");
 
     /// <summary>
     /// The server slot is the first positional argument, whatever it holds: a bare word there is
@@ -456,7 +440,7 @@ public class CollectionsModelTests
     public void TargetTrustsOnlyTheFirstPositionalAfterAPackageRunner()
     {
         Assert.Equal("npx hunter-2 …/pkg",
-            CollectionsModel.TargetOf(Local("npx", "-y", "hunter-2", "@scope/pkg", "other-word").Config, "/Users/x"));
+            CollectionsModel.TargetOf(AppStateHarness.LocalConnector("npx", "-y", "hunter-2", "@scope/pkg", "other-word").Config, "/Users/x"));
     }
 
     /// <summary>
@@ -467,11 +451,11 @@ public class CollectionsModelTests
     public void TargetUnwrapsCmdAndAWindowsLaunchersExtension()
     {
         Assert.Equal(@"npx …/server-filesystem ~\Docs",
-            CollectionsModel.TargetOf(Local("cmd", "/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", @"C:\Users\x\Docs").Config,
+            CollectionsModel.TargetOf(AppStateHarness.LocalConnector("cmd", "/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", @"C:\Users\x\Docs").Config,
                 @"C:\Users\x"));
-        Assert.Equal("npx mcp-server-fetch", CollectionsModel.TargetOf(Local("npx.cmd", "-y", "mcp-server-fetch").Config, "/Users/x"));
-        AssertTarget(Local("cmd", "/c", "tool", "--token", "abc"), "tool", "abc");
-        AssertTarget(Local("CMD.EXE", "/K", "npx", "-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"),
+        Assert.Equal("npx mcp-server-fetch", CollectionsModel.TargetOf(AppStateHarness.LocalConnector("npx.cmd", "-y", "mcp-server-fetch").Config, "/Users/x"));
+        AssertTarget(AppStateHarness.LocalConnector("cmd", "/c", "tool", "--token", "abc"), "tool", "abc");
+        AssertTarget(AppStateHarness.LocalConnector("CMD.EXE", "/K", "npx", "-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"),
             "h.example", "abc");
     }
 
@@ -482,8 +466,8 @@ public class CollectionsModelTests
     [Fact]
     public void TargetLeavesOutALauncherThatCouldBeASecret()
     {
-        AssertTarget(Local("TOKEN=abc node", "srv.js"), "srv.js", "abc");
-        AssertTarget(Local("ghp_0123456789abcdef0123456789abcdef", "srv.js"), "srv.js", "ghp_");
+        AssertTarget(AppStateHarness.LocalConnector("TOKEN=abc node", "srv.js"), "srv.js", "abc");
+        AssertTarget(AppStateHarness.LocalConnector("ghp_0123456789abcdef0123456789abcdef", "srv.js"), "srv.js", "ghp_");
     }
 
     /// <summary>
@@ -505,8 +489,7 @@ public class CollectionsModelTests
             }.Select(JsonValue.String))),
             ("env", JsonValue.Object(("API_KEY", JsonValue.String("envsecret"))))));
         Assert.Null(state.Upsert("leaky", entry, null, "Default"));
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Default";
+        var model = h.CollectionsModel(state, "Default");
         var target = Assert.Single(model.Rows, r => r.Name == "leaky").Target;
         Assert.Equal("tool", target);
         foreach (var secret in secrets.Append("envsecret"))
@@ -528,9 +511,9 @@ public class CollectionsModelTests
         var file = File_(("Shared", Published("shared")), ("Team", Synced("team.json")));
         var located = Cache([new("Team", Bound("/shared/team.json"))],
                             [new("Shared", new CollectionsLocalCache.PublishBinding("/tmp/share", null))]);
-        Seed(h, state, file, located);
+        h.Seed(state, file, located);
 
-        using var model = new CollectionsModel(state, h.Dialogs);
+        var model = h.CollectionsModel(state);
         Assert.Equal("Default", model.Selected);   // the selection starts on the active collection
         Assert.Empty(model.CheckedNames);          // nothing is ticked yet
         model.SetChecked("aws-mcp", true);
@@ -550,7 +533,7 @@ public class CollectionsModelTests
         Assert.True(model.CanDelete);
 
         // Nothing to refresh until the file is found on this machine.
-        Seed(h, state, file, Cache(published: located.Published));
+        h.Seed(state, file, Cache(published: located.Published));
         Assert.False(model.CanRefresh);
 
         // With the second local collection gone, the last one cannot be deleted.
@@ -563,7 +546,7 @@ public class CollectionsModelTests
         // Nor can the last collection of any kind: the store always has an active one, so a lone
         // synced collection is no more deletable than a lone local one.
         Assert.Null(state.DeleteCollection("Team"));
-        Seed(h, state, File_(("Default", Synced("default.json"))),
+        h.Seed(state, File_(("Default", Synced("default.json"))),
             Cache([new("Default", Bound("/shared/default.json"))]));
         Assert.Equal(["Default"], state.CollectionNames);
         Assert.True(state.IsSynced("Default"));
@@ -584,9 +567,8 @@ public class CollectionsModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
-        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Default";
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Default"));
+        var model = h.CollectionsModel(state, "Default");
 
         void LeavesNoError(string verb, Action action)
         {
@@ -613,7 +595,7 @@ public class CollectionsModelTests
         LeavesNoError("CopyCheckedIntoNewCollection, cancelled", () => model.CopyCheckedIntoNewCollection());
         Assert.Equal(["alpha"], model.CheckedNames);   // nothing was copied, so the ticks stay
 
-        Seed(h, state, File_(("Team", Synced("team.json"))));
+        h.MakeSynced(state, "Team");
         model.Selected = "Team";
         LeavesNoError("MakeLocalCopy, cancelled", model.MakeLocalCopy);
         Assert.Equal(["Default", "Team"], state.CollectionNames);   // no prompt that was cancelled made anything
@@ -625,7 +607,7 @@ public class CollectionsModelTests
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Work"));
-        using var model = new CollectionsModel(state, h.Dialogs);
+        var model = h.CollectionsModel(state);
         Assert.Equal("Work", model.Selected);
 
         // A cancelled prompt does nothing at all.
@@ -679,10 +661,9 @@ public class CollectionsModelTests
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
         state.SwitchCollection("Default");
-        Seed(h, state, File_(("Team", Synced("team.json"))), Cache([new("Team", Bound("/shared/team.json"))]));
+        h.MakeSynced(state, "Team", "/shared/team.json");
         Assert.True(state.IsSynced("Team"));
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Team";
+        var model = h.CollectionsModel(state, "Team");
 
         // Declined: the collection is still synced, and the earlier error does not come back.
         // The reassurance lives in the question now that the button no longer carries it.
@@ -716,9 +697,9 @@ public class CollectionsModelTests
         Assert.Null(state.CreateCollection("Team"));
         state.SwitchCollection("Default");
         // Synced, but not located on this machine: nothing to refresh.
-        Seed(h, state, File_(("Team", Synced("team.json"))));
+        h.MakeSynced(state, "Team");
         Assert.True(state.IsSynced("Team"));
-        using var model = new CollectionsModel(state, h.Dialogs);
+        var model = h.CollectionsModel(state);
 
         model.Selected = "Default";
         PresetError(model, h);
@@ -757,8 +738,7 @@ public class CollectionsModelTests
         Assert.True(File.Exists(sharedFile));
         Assert.True(File.Exists(consultingFile));
 
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Shared";
+        var model = h.CollectionsModel(state, "Shared");
         h.Dialogs.ConfirmAnswers.Enqueue(true);    // delete the collection
         h.Dialogs.ConfirmAnswers.Enqueue(false);   // keep the document
         model.Delete();
@@ -796,8 +776,7 @@ public class CollectionsModelTests
         var file = Path.Combine(folder, "shared.json");
         Assert.True(File.Exists(file));
 
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Shared";
+        var model = h.CollectionsModel(state, "Shared");
         // The folder that refused the write would refuse the delete, so Remove is not offered.
         state.PublishError = new CollectionPublishError("Shared", "the folder is read-only");
         model.StopPublishing();
@@ -832,9 +811,9 @@ public class CollectionsModelTests
         var file = File_(("Shared", Published("shared")), ("Team", Synced("team.json")));
         var located = Cache([new("Team", Bound("/shared/team.json"))],
                             [new("Shared", new CollectionsLocalCache.PublishBinding("/Acme/mcp", null))]);
-        Seed(h, state, file, located);
+        h.Seed(state, file, located);
 
-        using var model = new CollectionsModel(state, h.Dialogs);
+        var model = h.CollectionsModel(state);
         Assert.Equal(CollectionsModel.LocalDetail(3) + CollectionsModel.ActiveSuffix, model.DetailLine);
 
         model.Selected = "Shared";
@@ -849,13 +828,13 @@ public class CollectionsModelTests
         Assert.Equal(CollectionsModel.SyncedDetail("/shared/team.json", "team.json couldn’t be read"), model.DetailLine);
 
         // Not located: there is nothing to say about the file except that it is missing.
-        Seed(h, state, file, Cache(published: located.Published));
+        h.Seed(state, file, Cache(published: located.Published));
         Assert.Equal(CollectionsModel.UnlocatedDetail, model.DetailLine);
         Assert.False(model.CanRefresh);
 
         // A synced entry that records no file name either — a hand-edited or foreign collections
         // file. Nothing asks to be located, but there is still no document to name or to read.
-        Seed(h, state, File_(("Shared", Published("shared")), ("Team", new CollectionsFile.Entry(CollectionKind.Synced))),
+        h.Seed(state, File_(("Shared", Published("shared")), ("Team", new CollectionsFile.Entry(CollectionKind.Synced))),
             Cache(published: located.Published));
         Assert.True(state.IsLocated("Team"));   // nothing is waiting to be pointed at
         Assert.Equal(CollectionsModel.UnlocatedDetail, model.DetailLine);
@@ -873,7 +852,7 @@ public class CollectionsModelTests
         Assert.Null(state.CreateCollection("Work"));
         Assert.Null(state.CreateCollection("Spare"));
         state.SwitchCollection("Default");
-        using var model = new CollectionsModel(state, h.Dialogs);
+        var model = h.CollectionsModel(state);
 
         model.Selected = "Work";
         Assert.Equal("Work", model.Selected);
@@ -907,7 +886,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        using var model = new CollectionsModel(state, h.Dialogs);
+        var model = h.CollectionsModel(state);
         PresetError(model, h);
         File.Delete(h.MasterStorePath);
 
@@ -928,7 +907,7 @@ public class CollectionsModelTests
         Assert.Null(state.CreateCollection("Team"));
         state.SwitchCollection("Default");
         Directory.CreateDirectory(folder);
-        Seed(h, state, File_(("Team", Synced("team.json")), ("Default", Published("default"))),
+        h.Seed(state, File_(("Team", Synced("team.json")), ("Default", Published("default"))),
              Cache(published: [new("Default", new CollectionsLocalCache.PublishBinding(folder, null))]));
     }
 
@@ -939,7 +918,7 @@ public class CollectionsModelTests
         using var state = h.Create();
         var folder = h.Dir.File("pub");
         TwoBanners(h, state, folder);
-        using var model = new CollectionsModel(state, h.Dialogs);
+        var model = h.CollectionsModel(state);
 
         // Team's file is missing, but the window is showing Default: the strip says nothing.
         Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), state.CollectionBanner);
@@ -986,11 +965,10 @@ public class CollectionsModelTests
         TwoBanners(h, state, first);
         var second = h.Dir.File("second");
         Directory.CreateDirectory(second);
-        using var model = new CollectionsModel(state, h.Dialogs);
+        var model = h.CollectionsModel(state);
 
         // The window is showing Default, which the locate banner is not about.
-        var document = h.Dir.File("team.json");
-        System.IO.File.WriteAllBytes(document, CollectionDocumentSamples.DataTeam.Serialize());
+        var document = h.WriteDocument(CollectionDocumentSamples.DataTeam, "team.json");
         Assert.Null(model.LocateSource(document));
         Assert.Null(state.SourceBinding("Team"));
 
@@ -1029,8 +1007,8 @@ public class CollectionsModelTests
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
         state.SwitchCollection("Default");
-        Seed(h, state, File_(("Team", Synced("team.json"))), Cache([new("Team", Bound("/Acme/mcp/team.json"))]));
-        using var model = new CollectionsModel(state, h.Dialogs);
+        h.MakeSynced(state, "Team", "/Acme/mcp/team.json");
+        var model = h.CollectionsModel(state);
 
         var team = model.Items.Single(i => i.Name == "Team");
         Assert.Equal("/Acme/mcp/team.json", team.Source);
@@ -1046,7 +1024,7 @@ public class CollectionsModelTests
 
         // Synced but never found: the sidecar's file name is what the chain can still name, the
         // same fallback the flyout's chip takes, so the two never disagree about one collection.
-        Seed(h, state, File_(("Team", Synced("team.json"))));
+        h.MakeSynced(state, "Team");
         var unlocated = model.Items.Single(i => i.Name == "Team");
         Assert.False(unlocated.IsLocated);
         Assert.Equal("team.json", unlocated.Source);
@@ -1062,8 +1040,7 @@ public class CollectionsModelTests
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Work"));
         state.SwitchCollection("Default");
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.SetChecked("aws-mcp", true);
+        var model = h.CollectionsModel(state, null, "aws-mcp");
         var raised = new List<string?>();
         model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
 
@@ -1098,8 +1075,7 @@ public class CollectionsModelTests
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Spare"));
         state.SwitchCollection("Default");
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Spare";
+        var model = h.CollectionsModel(state, "Spare");
 
         Assert.Null(state.RenameCollection("Spare", "Spare Parts"));
         Assert.Equal("Default", model.Selected);
@@ -1115,8 +1091,7 @@ public class CollectionsModelTests
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Spare"));
         state.SwitchCollection("Default");
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Spare";
+        var model = h.CollectionsModel(state, "Spare");
         Assert.Equal("Spare", model.Selected);
 
         // Renamed away elsewhere: the window falls back to the active collection.
@@ -1142,7 +1117,7 @@ public class CollectionsModelTests
         Assert.Null(state.CreateCollection("Work"));
         Assert.Null(state.Upsert("extra", new McpEntry(AppStateHarness.Remote("https://extra.example/mcp")), null, "Work"));
         state.SwitchCollection("Default");
-        using var model = new CollectionsModel(state, h.Dialogs);
+        var model = h.CollectionsModel(state);
         var items = model.Items;
         var rows = model.Rows;
         var raised = new List<string?>();
@@ -1179,8 +1154,7 @@ public class CollectionsModelTests
         Directory.CreateDirectory(folder);
         Assert.Null(state.CreateCollection("Shared"));
         Assert.Null(state.StartPublishing("Shared", folder, PublishIntent.None));
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Shared";
+        var model = h.CollectionsModel(state, "Shared");
 
         var moved = AppState.PathMarkMovedError("ledger");
         state.PublishError = new CollectionPublishError("Shared", moved, PublishErrorKind.BlockedForReview);
@@ -1214,9 +1188,9 @@ public class CollectionsModelTests
         // dropped, and missing from CopyDestinations for not existing rather than disabled for
         // being synced.
         Assert.Null(state.CreateCollection("Team"));
-        Seed(h, state, File_(("Team", Synced("team.json"))));
+        h.MakeSynced(state, "Team");
         Assert.True(state.IsSynced("Team"));
-        using var model = new CollectionsModel(state, h.Dialogs);
+        var model = h.CollectionsModel(state);
 
         model.Selected = "Default";
         // Not Default, which is the source, and not Team, which is synced.
@@ -1236,9 +1210,9 @@ public class CollectionsModelTests
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Other"));
         Assert.Null(state.CreateCollection("Team"));
-        Seed(h, state, File_(("Team", Synced("team.json"))));
+        h.MakeSynced(state, "Team");
         Assert.True(state.IsSynced("Team"));
-        using var model = new CollectionsModel(state, h.Dialogs);
+        var model = h.CollectionsModel(state);
 
         model.Selected = "Default";
         // Not Default, which is the source; Team is there, but cannot take copies.
@@ -1257,8 +1231,8 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
-        using var model = new CollectionsModel(state, h.Dialogs);
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Default"));
+        var model = h.CollectionsModel(state);
 
         model.Selected = "Default";
         Assert.False(model.CanRemoveChecked);   // nothing ticked yet
@@ -1279,13 +1253,11 @@ public class CollectionsModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
-        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Team"));
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Team";
-        model.SetChecked("alpha", true);
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Team"));
+        var model = h.CollectionsModel(state, "Team", "alpha");
         Assert.True(model.CanRemoveChecked);   // still local, and something is ticked
 
-        Seed(h, state, File_(("Team", Synced("team.json"))));
+        h.MakeSynced(state, "Team");
         Assert.True(state.IsSynced("Team"));
         Assert.Equal(["alpha"], model.CheckedNames);   // reload does not clear the ticks
         Assert.False(model.CanRemoveChecked);   // the guard, not an empty tick set, is what changed
@@ -1302,10 +1274,9 @@ public class CollectionsModelTests
         using var state = h.Create();
         foreach (var name in new[] { "alpha", "beta" })
         {
-            Assert.Null(state.Upsert(name, Local("/bin/" + name), null, "Default"));
+            Assert.Null(state.Upsert(name, AppStateHarness.LocalConnector("/bin/" + name), null, "Default"));
         }
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Default";
+        var model = h.CollectionsModel(state, "Default");
 
         // Declined: nothing goes, and the earlier error does not come back.
         PresetError(model, h);
@@ -1340,14 +1311,14 @@ public class CollectionsModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Work"));
-        Assert.Null(state.Upsert("gamma", Local("/bin/gamma"), null, "Work"));
+        Assert.Null(state.Upsert("gamma", AppStateHarness.LocalConnector("/bin/gamma"), null, "Work"));
         state.SwitchCollection("Default");
-        using var model = new CollectionsModel(state, h.Dialogs);
+        var model = h.CollectionsModel(state);
         h.Dialogs.NextConfirm = true;
 
         // An enabled connector in the active collection that has not been applied yet: an apply
         // from the inactive leg below would write it, so that leg can catch an unconditional one.
-        Assert.Null(state.Upsert("delta", Local("/bin/delta"), null, "Default"));
+        Assert.Null(state.Upsert("delta", AppStateHarness.LocalConnector("/bin/delta"), null, "Default"));
         Assert.True(state.Store.Collections["Default"].Mcps["delta"].Enabled);
         Assert.False(h.ClaudeServers().ContainsKey("delta"));   // upserted, not applied
 
@@ -1385,10 +1356,8 @@ public class CollectionsModelTests
         // "alpha 2" instead, leaving the original untouched and this test green for the wrong
         // reason.
         Assert.Null(state.CreateCollection("Spare"));
-        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Default";
-        model.SetChecked("alpha", true);
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Default"));
+        var model = h.CollectionsModel(state, "Default", "alpha");
 
         PresetError(model, h);
         var before = h.ClaudeServers();
@@ -1414,11 +1383,9 @@ public class CollectionsModelTests
         // Created first, for the same reason as the success test above, and so seeding the
         // sidecar afterwards has something in the master list to annotate (CollectionsFile.Reconciled).
         Assert.Null(state.CreateCollection("Team"));
-        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
-        Seed(h, state, File_(("Team", Synced("team.json"))));
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Default";
-        model.SetChecked("alpha", true);
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Default"));
+        h.MakeSynced(state, "Team");
+        var model = h.CollectionsModel(state, "Default", "alpha");
         PresetError(model, h);
 
         Assert.False(model.CopyChecked("Default"));   // the source is not a target
@@ -1435,8 +1402,7 @@ public class CollectionsModelTests
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Spare"));
         var before = state.Store.Collections["Spare"];
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Default";
+        var model = h.CollectionsModel(state, "Default");
 
         Assert.False(model.CopyChecked("Spare"));   // nothing ticked, so there is nothing to copy
         Assert.Equal(before, state.Store.Collections["Spare"]);   // and nothing about Spare changed
@@ -1451,13 +1417,10 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
-        Assert.Null(state.Upsert("beta", Local("/bin/beta"), null, "Default"));
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Default"));
+        Assert.Null(state.Upsert("beta", AppStateHarness.LocalConnector("/bin/beta"), null, "Default"));
         Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("aws-mcp"));
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Default";
-        model.SetChecked("alpha", true);
-        model.SetChecked("beta", true);
+        var model = h.CollectionsModel(state, "Default", "alpha", "beta");
         PresetError(model, h);
 
         var before = h.ClaudeServers();
@@ -1481,10 +1444,8 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Default";
-        model.SetChecked("alpha", true);
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Default"));
+        var model = h.CollectionsModel(state, "Default", "alpha");
 
         h.Dialogs.NextPromptAnswer = null;
         Assert.False(model.CopyCheckedIntoNewCollection());
@@ -1503,11 +1464,9 @@ public class CollectionsModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Work"));
-        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Default"));
         state.SwitchCollection("Default");
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Default";
-        model.SetChecked("alpha", true);
+        var model = h.CollectionsModel(state, "Default", "alpha");
 
         h.Dialogs.NextPromptAnswer = "Work";
         Assert.False(model.CopyCheckedIntoNewCollection());
@@ -1528,17 +1487,13 @@ public class CollectionsModelTests
         state.SwitchCollection("Default");
         foreach (var name in new[] { "zeta", "alpha", "beta" })
         {
-            Assert.Null(state.Upsert(name, Local("/bin/" + name), null, "Default"));
+            Assert.Null(state.Upsert(name, AppStateHarness.LocalConnector("/bin/" + name), null, "Default"));
         }
         foreach (var name in new[] { "zeta", "alpha" })
         {
-            Assert.Null(state.Upsert(name, Local("/bin/other"), null, "Spare"));
+            Assert.Null(state.Upsert(name, AppStateHarness.LocalConnector("/bin/other"), null, "Spare"));
         }
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Default";
-        model.SetChecked("zeta", true);
-        model.SetChecked("beta", true);
-        model.SetChecked("alpha", true);
+        var model = h.CollectionsModel(state, "Default", "zeta", "beta", "alpha");
 
         Assert.Equal(["alpha", "zeta"], model.CheckedNamesClashing("Spare"));   // beta is not in Spare
         model.SetChecked("alpha", false);
@@ -1560,10 +1515,9 @@ public class CollectionsModelTests
         var file = File_(("Shared", Published("shared")), ("Team", Synced("team.json")));
         var cache = Cache([new("Team", Bound("/shared/team.json"))],
                           [new("Shared", new CollectionsLocalCache.PublishBinding("/tmp/share", null))]);
-        Seed(h, state, file, cache);
+        h.Seed(state, file, cache);
 
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Default";
+        var model = h.CollectionsModel(state, "Default");
         Assert.Equal([CollectionsModel.Pill.Active], model.Pills);
 
         model.Selected = "Shared";
@@ -1630,8 +1584,7 @@ public class CollectionsModelTests
         // A second local collection, so the common case is not also the last-collection case.
         Assert.Null(state.CreateCollection("Work"));
         state.SwitchCollection("Default");
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Default";
+        var model = h.CollectionsModel(state, "Default");
         Assert.Equal(
             [
                 new CollectionsModel.MenuEntry.Rename(), new CollectionsModel.MenuEntry.Duplicate(), new CollectionsModel.MenuEntry.Separator(),
@@ -1652,8 +1605,7 @@ public class CollectionsModelTests
         Assert.Null(state.StartPublishing("Shared", folder, PublishIntent.None));
         state.SwitchCollection("Default");   // Shared stays, now not the active collection
 
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Shared";
+        var model = h.CollectionsModel(state, "Shared");
         Assert.Equal(
             [
                 new CollectionsModel.MenuEntry.MakeActive(), new CollectionsModel.MenuEntry.Separator(),
@@ -1672,13 +1624,11 @@ public class CollectionsModelTests
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
         state.SwitchCollection("Default");
-        Seed(h, state, File_(("Team", Synced("team.json"))));
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Team";
+        h.MakeSynced(state, "Team");
+        var model = h.CollectionsModel(state, "Team");
 
         // Located via a real file, the same flow the banner strip's Locate button drives.
-        var document = h.Dir.File("team.json");
-        System.IO.File.WriteAllBytes(document, CollectionDocumentSamples.DataTeam.Serialize());
+        var document = h.WriteDocument(CollectionDocumentSamples.DataTeam, "team.json");
         Assert.Null(model.LocateSource(document));
         Assert.True(state.IsLocated("Team"));
 
@@ -1704,9 +1654,8 @@ public class CollectionsModelTests
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
         state.SwitchCollection("Default");
-        Seed(h, state, File_(("Team", Synced("team.json"))));
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Team";
+        h.MakeSynced(state, "Team");
+        var model = h.CollectionsModel(state, "Team");
 
         Assert.False(state.IsLocated("Team"));
         Assert.Null(model.SourceFilePath);
@@ -1721,7 +1670,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
-        using var model = new CollectionsModel(state, h.Dialogs);
+        var model = h.CollectionsModel(state);
         // Only "Default" exists.
         Assert.False(model.CanDelete);
         Assert.Contains(model.CollectionMenu, e => e is CollectionsModel.MenuEntry.Delete { Enabled: false });
@@ -1735,11 +1684,10 @@ public class CollectionsModelTests
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
-        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Team"));
-        Assert.Null(state.Upsert("beta", Local("/bin/beta"), null, "Team"));
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Team"));
+        Assert.Null(state.Upsert("beta", AppStateHarness.LocalConnector("/bin/beta"), null, "Team"));
         state.SwitchCollection("Default");
-        using var model = new CollectionsModel(state, h.Dialogs);
-        model.Selected = "Team";
+        var model = h.CollectionsModel(state, "Team");
 
         // Cancelled: nothing changes.
         h.Dialogs.NextPromptAnswer = null;
@@ -1772,13 +1720,13 @@ public class CollectionsModelTests
         Assert.Null(state.CreateCollection("Shared"));
         Assert.Null(state.CreateCollection("Team"));
         state.SwitchCollection("Default");
-        Seed(h, state, File_(("Team", Synced("team.json"))));
+        h.MakeSynced(state, "Team");
 
         var folder = h.Dir.File("share");
         Directory.CreateDirectory(folder);
         Assert.Null(state.StartPublishing("Shared", folder, PublishIntent.None));
 
-        using var model = new CollectionsModel(state, h.Dialogs);
+        var model = h.CollectionsModel(state);
 
         model.Selected = "Shared";
         var published = model.PublishedFilePath;
@@ -1790,8 +1738,7 @@ public class CollectionsModelTests
 
         model.Selected = "Team";
         Assert.Null(model.SourceFilePath);   // not located yet
-        var document = h.Dir.File("team.json");
-        System.IO.File.WriteAllBytes(document, CollectionDocumentSamples.DataTeam.Serialize());
+        var document = h.WriteDocument(CollectionDocumentSamples.DataTeam, "team.json");
         Assert.Null(model.LocateSource(document));
         Assert.Equal(state.SourceLocation("Team"), model.SourceFilePath);
         Assert.Equal(document, model.SourceFilePath);
@@ -1806,8 +1753,8 @@ public class CollectionsModelTests
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
         state.SwitchCollection("Default");
-        Seed(h, state, File_(("Team", Synced("team.json"))));
-        using var model = new CollectionsModel(state, h.Dialogs);
+        h.MakeSynced(state, "Team");
+        var model = h.CollectionsModel(state);
 
         model.Selected = "Default";
         Assert.True(model.CanAddConnector);

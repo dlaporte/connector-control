@@ -1,4 +1,5 @@
 import Foundation
+import XCTest
 import ConnectorControlCore
 @testable import ConnectorControlState
 
@@ -24,6 +25,14 @@ final class EditorRig {
         }
         for (key, value) in extra { object[key] = value }
         return .object(object)
+    }
+
+    /// A copy of the active collection named `name`, left inactive: each of its connectors is an
+    /// identical twin of the active collection's.
+    func twin(_ name: String, file: StaticString = #filePath, line: UInt = #line) {
+        let active = state.activeCollection
+        XCTAssertNil(state.createCollection(named: name), file: file, line: line)
+        state.switchCollection(to: active)
     }
 
     func editor(_ target: EditTarget) -> EditorModel {

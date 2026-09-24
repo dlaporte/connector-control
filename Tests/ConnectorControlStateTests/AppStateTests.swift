@@ -51,8 +51,7 @@ final class AppStateTests: XCTestCase {
     func testRestartRequiredFollowsClaudeLaunchTime() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         state.setEnabled("aws-mcp", false)
         XCTAssertTrue(state.needsClaudeRestart)
 
@@ -70,8 +69,7 @@ final class AppStateTests: XCTestCase {
         let h = AppStateHarness()
         defer { h.dispose() }
         h.settings.lastApplyDate = h.now
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         let state = h.create()
         XCTAssertTrue(state.needsClaudeRestart)
     }

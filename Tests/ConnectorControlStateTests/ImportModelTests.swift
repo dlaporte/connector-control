@@ -8,16 +8,10 @@ import ConnectorControlTestSupport
 /// what the count follows, and what a document this app cannot read leaves on screen.
 @MainActor
 final class ImportModelTests: XCTestCase {
-    private func write(_ doc: CollectionDocument, at url: URL) throws {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try doc.serialized().write(to: url)
-    }
-
     func testRowsShowCollisionsAndTheCountFollowsChoices() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("shared/data-team.json")
-        try write(CollectionDocumentSamples.dataTeam, at: url)
+        let url = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "shared/data-team.json")
         // One of the document's four connectors is already in the target, under the same name.
         XCTAssertNil(state.upsert(name: "github", entry: MCPEntry(enabled: true, config: AppStateHarness.remote("https://x/")),
                                   renamedFrom: nil))
@@ -63,8 +57,7 @@ final class ImportModelTests: XCTestCase {
     func testAnExcludedRowShowsItsReasonStaysOutOfTheCountAndIsSkipped() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("shared/risky.json")
-        try write(riskyHeaderDocument, at: url)
+        let url = try h.writeDocument(riskyHeaderDocument, named: "shared/risky.json")
 
         let model = ImportModel(state: state, path: url.path)
         XCTAssertEqual(model.rows.map(\.name), ["bad", "good"])
@@ -98,8 +91,7 @@ final class ImportModelTests: XCTestCase {
     func testSyncModeDefaultsTheNameAndSuffixesATakenOne() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("shared/data-team.json")
-        try write(CollectionDocumentSamples.dataTeam, at: url)
+        let url = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "shared/data-team.json")
 
         let first = ImportModel(state: state, path: url.path)
         XCTAssertEqual(first.syncName, "Data team", "the document's own name is the default")
@@ -154,8 +146,7 @@ final class ImportModelTests: XCTestCase {
     func testARowsCautionIsTheSentenceAConnectorAlreadyCarries() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("data-team.json")
-        try write(CollectionDocumentSamples.dataTeam, at: url)
+        let url = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "data-team.json")
         let model = ImportModel(state: state, path: url.path)
 
         // The document's own needs, sorted, in the wording the window and the editor use.
@@ -178,8 +169,7 @@ final class ImportModelTests: XCTestCase {
     func testEachRowCarriesItsOwnBadge() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("data-team.json")
-        try write(CollectionDocumentSamples.dataTeam, at: url)
+        let url = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "data-team.json")
         // One of the document's four connectors is already in the target, under the same name.
         XCTAssertNil(state.upsert(name: "github", entry: MCPEntry(config: AppStateHarness.remote("https://x/")),
                                   renamedFrom: nil))
@@ -211,8 +201,7 @@ final class ImportModelTests: XCTestCase {
     func testARowsNeedsFollowTheConfigRatherThanTheAlphabet() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("two.json")
-        try write(twoNeedsDocument, at: url)
+        let url = try h.writeDocument(twoNeedsDocument, named: "two.json")
         let model = ImportModel(state: state, path: url.path)
 
         let pair = try XCTUnwrap(model.rows.first { $0.name == "pair" })
@@ -226,8 +215,7 @@ final class ImportModelTests: XCTestCase {
     func testATickedRowSetToSkipIsNotCounted() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("shared/data-team.json")
-        try write(CollectionDocumentSamples.dataTeam, at: url)
+        let url = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "shared/data-team.json")
         XCTAssertNil(state.upsert(name: "github", entry: MCPEntry(config: AppStateHarness.remote("https://x/")),
                                   renamedFrom: nil))
 

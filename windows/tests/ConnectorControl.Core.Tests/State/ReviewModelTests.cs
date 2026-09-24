@@ -10,11 +10,6 @@ namespace ConnectorControl.Core.Tests.State;
 /// </summary>
 public class ReviewModelTests
 {
-    private static void WriteDocument(CollectionDocument doc, string path)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, doc.Serialize());
-    }
 
     /// <summary>Subscribes to the sample, then publishes a version of it with github gone and
     /// dbt's arguments changed, and reads it into a pending update. Every read here goes through
@@ -22,9 +17,7 @@ public class ReviewModelTests
     /// AppStateCollectionsTests proves the watcher delivers the change.</summary>
     private static void Pending(AppStateHarness h, AppState state)
     {
-        var path = h.Dir.File("data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, null));
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam);
         var sample = CollectionDocumentSamples.DataTeam;
         var connectors = new Dictionary<string, CollectionDocument.Connector>(sample.Connectors, StringComparer.Ordinal);
         connectors.Remove("github");
@@ -32,7 +25,7 @@ public class ReviewModelTests
         connectors["dbt"] = new CollectionDocument.Connector(
             new CollectionDocument.Launcher.Local("npx", ["-y", "@dbt/mcp@2"], CollectionPlatform.Mac),
             dbt.Env, dbt.Needs, dbt.Additional);
-        WriteDocument(new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors), path);
+        AppStateHarness.WriteDocumentAt(new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors), path);
         state.RecomputePending();
         Assert.True(state.PendingUpdates.ContainsKey("Data team"));
     }
@@ -74,15 +67,13 @@ public class ReviewModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, null));
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam);
         var sample = CollectionDocumentSamples.DataTeam;
         var connectors = new Dictionary<string, CollectionDocument.Connector>(sample.Connectors, StringComparer.Ordinal)
         {
             ["jira"] = new(new CollectionDocument.Launcher.Remote("https://mcp.jira.example/", CollectionDocument.Auth.Auto, "mcp-remote", [])),
         };
-        WriteDocument(new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors), path);
+        AppStateHarness.WriteDocumentAt(new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors), path);
         state.RecomputePending();
         Assert.True(state.PendingUpdates.ContainsKey("Data team"));
 
@@ -115,7 +106,7 @@ public class ReviewModelTests
             new CollectionDocument.Launcher.Local("npx", ["-y", "@dbt/mcp@3"], CollectionPlatform.Mac),
             dbt.Env, dbt.Needs, dbt.Additional);
         var path = h.Dir.File("data-team.json");
-        WriteDocument(new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors), path);
+        AppStateHarness.WriteDocumentAt(new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors), path);
         state.RecomputePending();
         Assert.Equal(["github", "notion"], state.PendingUpdates["Data team"].Removed);
 
@@ -139,9 +130,7 @@ public class ReviewModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, null));
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam);
 
         var model = new ReviewModel(state, "Data team");
         Assert.Empty(model.Rows);

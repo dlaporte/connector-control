@@ -302,9 +302,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testAHalfWrittenSidecarIsNeverOverwrittenByASave() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
         let sidecar = h.storeDir.appendingPathComponent(CollectionsFile.fileName)
         let cacheURL = state.service.paths.collectionsCacheURL
         let bindings = try Data(contentsOf: cacheURL)
@@ -332,9 +330,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testASidecarChangedElsewhereIsRewrittenWhenOurBytesReturn() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let url = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
         let sidecar = h.storeDir.appendingPathComponent(CollectionsFile.fileName)
 
         // Another machine writes the same collection under a different file name.
@@ -353,9 +349,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testASidecarSaveFailureSetsTheErrorAndStopsTheChain() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
         let sidecar = h.storeDir.appendingPathComponent(CollectionsFile.fileName)
         let cacheURL = state.service.paths.collectionsCacheURL
         let bindings = try Data(contentsOf: cacheURL)
@@ -465,11 +459,6 @@ final class AppStateCollectionsTests: XCTestCase {
 
     // MARK: - Synced collections
 
-    /// The bytes an author's machine would have written, at a path this machine can read.
-    private func writeDocument(_ doc: CollectionDocument, at url: URL) throws {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try doc.serialized().write(to: url)
-    }
 
     /// One local connector, authored on `platform`, so a test can pin what a launcher from the
     /// other platform (or a directory token) does without carrying the four-connector sample.
@@ -491,9 +480,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testSubscribeCreatesADisabledReadOnlyMirror() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let url = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
         XCTAssertEqual(state.kind(of: "Data team"), .synced)
         let mcps = try XCTUnwrap(state.store.collections["Data team"]).mcps
         XCTAssertEqual(mcps.count, 4)
@@ -511,7 +498,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let url = h.dir.file("data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        try h.writeDocument(CollectionDocumentSamples.dataTeam, at: url)
         XCTAssertNil(state.subscribe(documentAt: url.path, as: "Analytics"), "the caller's name beats the document's")
         XCTAssertEqual(state.kind(of: "Analytics"), .synced)
 
@@ -543,7 +530,7 @@ final class AppStateCollectionsTests: XCTestCase {
                 slug: "data-team", origin: "6f1c4a2e-1b8d-4b0e-9f0a-3c2d7e8a91e2", intent: .none)),
         ]))
         let url = h.dir.file("data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        try h.writeDocument(CollectionDocumentSamples.dataTeam, at: url)
         XCTAssertEqual(state.subscribe(documentAt: url.path, as: nil), AppState.ownCollectionError)
         XCTAssertEqual(state.collectionNames, ["Default"])
     }
@@ -551,9 +538,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testASourceChangeBecomesAPendingUpdateThatApplyLandsWithFilledValuesKept() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let url = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
         // The user fills the token and turns dbt on.
         state.switchCollection(to: "Data team")
         var dbt = try XCTUnwrap(state.store.collections["Data team"]?.mcps["dbt"])
@@ -564,7 +549,7 @@ final class AppStateCollectionsTests: XCTestCase {
 
         // The author changes dbt's args and removes github. This test alone waits for the real
         // source watcher to deliver it; the others read the source through recomputePending.
-        try writeDocument(changedSample(), at: url)
+        try h.writeDocument(changedSample(), at: url)
         try TempDir.bumpModificationDate(of: url)
         XCTAssertTrue(h.ui.pumpUntil({ state.pendingUpdates["Data team"] != nil }, timeout: 8))
         XCTAssertEqual(state.pendingUpdates["Data team"]?.summary(), "removes github; changes dbt")
@@ -588,9 +573,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testAnUnreadableSourceIsTransientUntilRefreshedByHand() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("t.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: "T"))
+        let url = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam, at: "t.json", as: "T")
         try Data("{half".utf8).write(to: url)
         state.recomputePending()   // the source watcher's own read, without waiting on the watcher
         XCTAssertTrue(state.sourceErrors.isEmpty, "the first failure schedules a retry instead of reporting")
@@ -603,7 +586,7 @@ final class AppStateCollectionsTests: XCTestCase {
 
         // The half-written file lands in full: the next read clears the error and the collection
         // is back to having nothing to say.
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        try h.writeDocument(CollectionDocumentSamples.dataTeam, at: url)
         state.refreshSource(for: "T")
         XCTAssertTrue(state.sourceErrors.isEmpty)
         XCTAssertTrue(state.pendingUpdates.isEmpty)
@@ -614,7 +597,7 @@ final class AppStateCollectionsTests: XCTestCase {
         defer { h.dispose() }
         // The document travels inside the store's own folder, as a shared master list does.
         let inStore = h.storeDir.appendingPathComponent("shared/data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: inStore)
+        try h.writeDocument(CollectionDocumentSamples.dataTeam, at: inStore)
         XCTAssertNil(state.subscribe(documentAt: inStore.path, as: nil))
         XCTAssertEqual(state.collectionsFile.collections["Data team"]?.relativeToStore, "shared/data-team.json")
 
@@ -625,7 +608,7 @@ final class AppStateCollectionsTests: XCTestCase {
 
         // A document somewhere the relative path cannot reach is pointed at by hand.
         let elsewhere = h.dir.file("elsewhere/data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: elsewhere)
+        try h.writeDocument(CollectionDocumentSamples.dataTeam, at: elsewhere)
         XCTAssertNil(state.locateSource(for: "Data team", path: elsewhere.path))
         XCTAssertEqual(state.sourceBinding(of: "Data team")?.path, elsewhere.path)
         XCTAssertEqual(state.watchedSourceCollections, ["Data team"])
@@ -639,9 +622,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testStopSyncingKeepsContentAndDropsTheBinding() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let url = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
         let before = try XCTUnwrap(state.store.collections["Data team"]).mcps
 
         state.stopSyncing("Data team")
@@ -655,7 +636,7 @@ final class AppStateCollectionsTests: XCTestCase {
                        "an unfilled marker is still text in the config, so the row still says so")
 
         // The author's next change reaches nobody: there is no binding left to read it through.
-        try writeDocument(changedSample(), at: url)
+        try h.writeDocument(changedSample(), at: url)
         state.recomputePending()
         XCTAssertTrue(state.pendingUpdates.isEmpty)
     }
@@ -663,9 +644,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testDeletingASyncedCollectionLeavesTheFileAlone() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let url = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
 
         XCTAssertNil(state.deleteCollection(named: "Data team"))
         XCTAssertEqual(state.collectionNames, ["Default"])
@@ -677,9 +656,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testTheDirectoryTokenExpandsAgainstTheBoundFolderWhenApplied() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("tools/servers.json")
-        try writeDocument(oneLocalConnector("x", command: "node", args: ["\(Placeholder.directoryToken)/srv.js"]), at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let url = try h.subscribe(state, to: oneLocalConnector("x", command: "node", args: ["\(Placeholder.directoryToken)/srv.js"]), at: "tools/servers.json")
         state.switchCollection(to: "Tools")
         state.setEnabled("x", true)
 
@@ -699,12 +676,10 @@ final class AppStateCollectionsTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let other: CollectionPlatform = CollectionPlatform.current == .mac ? .windows : .mac
-        let url = h.dir.file("tools.json")
-        try writeDocument(oneLocalConnector("x", command: "node", args: ["srv.js"], platform: other), at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let url = try h.subscribe(state, to: oneLocalConnector("x", command: "node", args: ["srv.js"], platform: other), at: "tools.json")
         XCTAssertEqual(state.connectorCaution("x", in: "Tools"), AppState.authoredElsewhereCaution)
 
-        try writeDocument(oneLocalConnector("x", command: "node", args: ["srv.js"]), at: url)
+        try h.writeDocument(oneLocalConnector("x", command: "node", args: ["srv.js"]), at: url)
         state.refreshSource(for: "Tools")
         XCTAssertNil(state.connectorCaution("x", in: "Tools"), "a launcher from this platform needs no warning")
     }
@@ -712,9 +687,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testAnUnchangedSourceIsNotReRenderedButPendingIsReDerived() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
         state.switchCollection(to: "Data team")
         let renders = state.sourceRenders
 
@@ -726,12 +699,12 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.sourceRenders, renders, "the same bytes are never decoded twice")
 
         // Another machine applies the source, and its master list arrives here.
-        var store = try h.storeOnDisk()
-        let rendered = try XCTUnwrap(state.pendingDocument(for: "Data team"))
-        let applied = CollectionApply.apply(rendered: rendered, current: store.collections["Data team"]?.mcps ?? [:],
-                                            previousNeeds: state.collectionsFile.collections["Data team"]?.needs ?? [:])
-        store.collections["Data team"] = Collection(mcps: applied.entries)
-        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        try h.editStoreOnDisk { store in
+            let rendered = try XCTUnwrap(state.pendingDocument(for: "Data team"))
+            let applied = CollectionApply.apply(rendered: rendered, current: store.collections["Data team"]?.mcps ?? [:],
+                                                previousNeeds: state.collectionsFile.collections["Data team"]?.needs ?? [:])
+            store.collections["Data team"] = Collection(mcps: applied.entries)
+        }
         state.reload()
         XCTAssertTrue(state.pendingUpdates.isEmpty, "the list already matches the document; the banner must not outlive it")
         XCTAssertEqual(state.sourceRenders, renders, "and re-deriving it still costs no decode")
@@ -743,9 +716,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testARenameDuringTheBackoffKeepsRetrying() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("t.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: "T"))
+        let url = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam, at: "t.json", as: "T")
         try Data("{half".utf8).write(to: url)
         state.recomputePending()   // the source watcher's own read, without waiting on the watcher
         XCTAssertFalse(h.delays.pending.isEmpty)
@@ -760,9 +731,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testTheRetryChainReportsOnlyTheThirdFailure() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("t.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: "T"))
+        let url = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam, at: "t.json", as: "T")
         try Data("{half".utf8).write(to: url)
         state.recomputePending()   // the source watcher's own read, without waiting on the watcher
         XCTAssertFalse(h.delays.pending.isEmpty)
@@ -779,7 +748,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertTrue(h.delays.pending.isEmpty, "the backoff gives up after the third retry")
         XCTAssertNotNil(state.sourceErrors["T"])
 
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        try h.writeDocument(CollectionDocumentSamples.dataTeam, at: url)
         state.refreshSource(for: "T")
         XCTAssertTrue(state.sourceErrors.isEmpty)
     }
@@ -789,13 +758,13 @@ final class AppStateCollectionsTests: XCTestCase {
         defer { h.dispose() }
         let url = h.dir.file("data-team.json")
         let first = h.create()
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        try h.writeDocument(CollectionDocumentSamples.dataTeam, at: url)
         XCTAssertNil(first.subscribe(documentAt: url.path, as: nil))
         first.dispose()
 
         var doc = CollectionDocumentSamples.dataTeam
         doc.connectors["github"] = nil
-        try writeDocument(doc, at: url)
+        try h.writeDocument(doc, at: url)
         h.notifier.clearSent()
 
         let second = h.create()
@@ -808,13 +777,11 @@ final class AppStateCollectionsTests: XCTestCase {
     func testApplyingAnInactiveCollectionLeavesClaudesConfigAlone() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let url = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
         XCTAssertEqual(state.activeCollection, "Default")
         let before = try h.claudeServers()
 
-        try writeDocument(changedSample(), at: url)
+        try h.writeDocument(changedSample(), at: url)
         state.recomputePending()   // the source watcher's own read, without waiting on the watcher
         XCTAssertNotNil(state.pendingUpdates["Data team"])
 
@@ -827,9 +794,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testLocateAppliesTheExpandedPathAtOnce() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("tools/servers.json")
-        try writeDocument(oneLocalConnector("x", command: "node", args: ["\(Placeholder.directoryToken)/srv.js"]), at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let url = try h.subscribe(state, to: oneLocalConnector("x", command: "node", args: ["\(Placeholder.directoryToken)/srv.js"]), at: "tools/servers.json")
         // A machine that has the collection but not the file yet: the bindings never travel.
         try FileManager.default.removeItem(at: state.service.paths.collectionsCacheURL)
         state.reload()
@@ -849,9 +814,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testStopSyncingBakesTheExpandedPathIn() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("tools/servers.json")
-        try writeDocument(oneLocalConnector("x", command: "node", args: ["\(Placeholder.directoryToken)/srv.js"]), at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let url = try h.subscribe(state, to: oneLocalConnector("x", command: "node", args: ["\(Placeholder.directoryToken)/srv.js"]), at: "tools/servers.json")
         state.switchCollection(to: "Tools")
         state.setEnabled("x", true)
         let expanded = url.deletingLastPathComponent().path + "/srv.js"
@@ -944,9 +907,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testASyncedCollectionCannotBePublished() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
         let folder = try publishFolder(h)
 
         // A synced collection has an author elsewhere, and nothing in the window offers Publish
@@ -973,7 +934,7 @@ final class AppStateCollectionsTests: XCTestCase {
 
         let folder = try publishFolder(h)
         let fileName = Slug.make(state.activeCollection) + ".json"
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: folder.appendingPathComponent(fileName))
+        try h.writeDocument(CollectionDocumentSamples.dataTeam, at: folder.appendingPathComponent(fileName))
         XCTAssertEqual(state.startPublishing(state.activeCollection, to: folder.path, intent: .none),
                        AppState.publishSlugTakenError(fileName))
         XCTAssertFalse(state.isPublished(state.activeCollection), "a refused publish records nothing")
@@ -1107,9 +1068,9 @@ final class AppStateCollectionsTests: XCTestCase {
         let file = folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json")
 
         // The author's other machine added a connector to the shared master list.
-        var store = try h.storeOnDisk()
-        store.collections[store.activeCollection]?.mcps["elsewhere"] = newConnector("z")
-        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        try h.editStoreOnDisk { store in
+            store.collections[store.activeCollection]?.mcps["elsewhere"] = newConnector("z")
+        }
         state.reload(trigger: .externalStoreAdoption)
         XCTAssertNotNil(try CollectionDocument.decode(try Data(contentsOf: file)).connectors["elsewhere"],
                         "the publishing machine carries another machine's change to the team")
@@ -1240,10 +1201,10 @@ final class AppStateCollectionsTests: XCTestCase {
 
         // An older app renamed it on another machine: the master list arrives, the record does
         // not follow, and the path would otherwise travel under the new name as written.
-        var store = try h.storeOnDisk()
-        let entry = try XCTUnwrap(store.collections[store.activeCollection]?.mcps.removeValue(forKey: "ledger"))
-        store.collections[store.activeCollection]?.mcps["books"] = entry
-        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        try h.editStoreOnDisk { store in
+            let entry = try XCTUnwrap(store.collections[store.activeCollection]?.mcps.removeValue(forKey: "ledger"))
+            store.collections[store.activeCollection]?.mcps["books"] = entry
+        }
         state.reload(trigger: .externalStoreAdoption)
         XCTAssertEqual(state.publishError?.message, AppState.pathMarkMovedError("ledger"))
         XCTAssertEqual(try Data(contentsOf: file), before)
@@ -1297,11 +1258,11 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertFalse(try jsonFile(file, contains: markedPath))
 
         // Its master list follows, without the row: nothing left to keep back.
-        var store = try h.storeOnDisk()
-        store.collections[store.activeCollection]?.mcps["ledger"] = MCPEntry(config: .object([
-            "command": .string("node"), "args": .array([.string("--quiet")]),
-        ]))
-        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        try h.editStoreOnDisk { store in
+            store.collections[store.activeCollection]?.mcps["ledger"] = MCPEntry(config: .object([
+                "command": .string("node"), "args": .array([.string("--quiet")]),
+            ]))
+        }
         state.reload(trigger: .externalStoreAdoption)
         XCTAssertNil(state.publishError)
         XCTAssertEqual(try ledgerArgs(in: file), ["--quiet"])
@@ -1334,9 +1295,9 @@ final class AppStateCollectionsTests: XCTestCase {
         record.intent = record.intent.movingConnector("ledger", to: nil)
         sidecar.collections[first.activeCollection]?.publish = record
         first.dispose()
-        var store = try h.storeOnDisk()
-        store.collections[store.activeCollection]?.mcps.removeValue(forKey: "ledger")
-        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        try h.editStoreOnDisk { store in
+            store.collections[store.activeCollection]?.mcps.removeValue(forKey: "ledger")
+        }
         try sidecar.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
 
         let relaunched = h.create()
@@ -1411,10 +1372,10 @@ final class AppStateCollectionsTests: XCTestCase {
         record.intent = record.intent.movingConnector("ledger", to: "books")
         sidecar.collections[first.activeCollection]?.publish = record
         first.dispose()
-        var store = try h.storeOnDisk()
-        let entry = try XCTUnwrap(store.collections[store.activeCollection]?.mcps.removeValue(forKey: "ledger"))
-        store.collections[store.activeCollection]?.mcps["books"] = entry
-        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        try h.editStoreOnDisk { store in
+            let entry = try XCTUnwrap(store.collections[store.activeCollection]?.mcps.removeValue(forKey: "ledger"))
+            store.collections[store.activeCollection]?.mcps["books"] = entry
+        }
         try sidecar.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
 
         let relaunched = h.create()
@@ -1528,9 +1489,9 @@ final class AppStateCollectionsTests: XCTestCase {
         let (team, teamFolder, clientsDoc) = try twoPublishedCollections(h, first)
         XCTAssertEqual(first.collectionsCache.lastAppliedCollection, team, "every apply records what Claude's file holds")
         first.dispose()
-        var store = try h.storeOnDisk()
-        store.activeCollection = "Clients"
-        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        try h.editStoreOnDisk { store in
+            store.activeCollection = "Clients"
+        }
 
         let relaunched = h.create()
         defer { relaunched.dispose() }
@@ -1629,9 +1590,9 @@ final class AppStateCollectionsTests: XCTestCase {
         first.remove(names: ["a"], in: "Second")
         first.switchCollection(to: team)
         first.dispose()
-        var store = try h.storeOnDisk()
-        store.activeCollection = "Second"
-        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        try h.editStoreOnDisk { store in
+            store.activeCollection = "Second"
+        }
         var servers = try h.claudeServers()
         servers["installer"] = .object(["command": .string("node"), "args": .array([.string("/opt/installer/srv.js")])])
         try h.writeClaudeServers(servers.map { ($0.key, $0.value) })
@@ -1662,10 +1623,10 @@ final class AppStateCollectionsTests: XCTestCase {
         var cache = CollectionsLocalCache.load(from: cacheURL)
         cache.lastAppliedCollection = "Second"
         try cache.save(to: cacheURL, staging: nil)
-        var store = try h.storeOnDisk()
-        store.collections.removeValue(forKey: "Second")
-        store.activeCollection = home
-        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        try h.editStoreOnDisk { store in
+            store.collections.removeValue(forKey: "Second")
+            store.activeCollection = home
+        }
         var servers = try h.claudeServers()
         servers["installer"] = .object(["command": .string("node"), "args": .array([.string("/opt/installer/srv.js")])])
         try h.writeClaudeServers(servers.map { ($0.key, $0.value) })
@@ -1692,10 +1653,10 @@ final class AppStateCollectionsTests: XCTestCase {
         first.dispose()
         // The other machine deletes Team. Claude's file still holds what Team rendered, and one
         // connector an installer wrote beside it while the app was off.
-        var store = try h.storeOnDisk()
-        store.collections.removeValue(forKey: "Team")
-        store.activeCollection = home
-        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        try h.editStoreOnDisk { store in
+            store.collections.removeValue(forKey: "Team")
+            store.activeCollection = home
+        }
         var servers = try h.claudeServers()
         servers["installer"] = .object(["command": .string("node"), "args": .array([.string("/opt/installer/srv.js")])])
         try h.writeClaudeServers(servers.map { ($0.key, $0.value) })
@@ -1735,10 +1696,10 @@ final class AppStateCollectionsTests: XCTestCase {
 
         // The other machine deletes Team while this one is off, so nothing here records its marks
         // any more: the store, the sidecar and the binding all arrive without it.
-        var store = try h.storeOnDisk()
-        store.collections.removeValue(forKey: "Team")
-        store.activeCollection = "Default"
-        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        try h.editStoreOnDisk { store in
+            store.collections.removeValue(forKey: "Team")
+            store.activeCollection = "Default"
+        }
         var after = CollectionsFile.load(from: h.storeDir.appendingPathComponent(CollectionsFile.fileName))
         after.collections.removeValue(forKey: "Team")
         try after.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
@@ -1903,10 +1864,10 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertTrue(state.keptBack(for: home).values.contains(markedPath), "the mark is known before the delete")
 
         // The other machine deletes Team: the master list and the sidecar arrive without it.
-        var store = try h.storeOnDisk()
-        store.collections.removeValue(forKey: "Team")
-        store.activeCollection = home
-        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        try h.editStoreOnDisk { store in
+            store.collections.removeValue(forKey: "Team")
+            store.activeCollection = home
+        }
         var file = state.collectionsFile
         file.collections.removeValue(forKey: "Team")
         try file.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
@@ -1984,10 +1945,10 @@ final class AppStateCollectionsTests: XCTestCase {
         defer { h.dispose() }
         let folder = try publishThenDeleteTeam(h, state)
         // The other machine makes a collection called Team again, and the store syncs here.
-        var store = try h.storeOnDisk()
-        XCTAssertNil(store.addCollection(named: "Team", copyingCurrent: false))
-        store.activeCollection = state.activeCollection
-        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        try h.editStoreOnDisk { store in
+            XCTAssertNil(store.addCollection(named: "Team", copyingCurrent: false))
+            store.activeCollection = state.activeCollection
+        }
         state.reload()
         XCTAssertNotNil(state.store.collections["Team"], "Team arrived")
         let kept = state.keptBack(for: "Team")
@@ -2349,9 +2310,9 @@ final class AppStateCollectionsTests: XCTestCase {
         let first = h.create()
         let (document, folder) = try publishTokenConnector(h, first)
         first.dispose()
-        var store = try h.storeOnDisk()
-        store.collections[store.activeCollection]?.mcps.removeValue(forKey: "x")
-        try MasterStoreIO.save(store, to: h.masterStoreURL)
+        try h.editStoreOnDisk { store in
+            store.collections[store.activeCollection]?.mcps.removeValue(forKey: "x")
+        }
 
         let before = try Data(contentsOf: document)
         let relaunched = h.create()
@@ -2630,7 +2591,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let url = h.dir.file("shared/data-team.json")
-        try writeDocument(importableDocument, at: url)
+        try h.writeDocument(importableDocument, at: url)
 
         XCTAssertNil(state.importCopies(documentAt: url.path, into: "Default", choices: [:]))
         let mcps = try XCTUnwrap(state.store.collections["Default"]).mcps
@@ -2659,7 +2620,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let url = h.dir.file("shared/data-team.json")
-        try writeDocument(importableDocument, at: url)
+        try h.writeDocument(importableDocument, at: url)
         XCTAssertNil(state.importCopies(documentAt: url.path, into: "Default", choices: [:]))
 
         // The user fills the token and turns dbt on.
@@ -2672,7 +2633,7 @@ final class AppStateCollectionsTests: XCTestCase {
         h.now = h.now.addingTimeInterval(24 * 60 * 60)
         var doc = importableDocument
         doc.connectors["dbt"]?.launcher = .local(.init(command: "npx", args: ["-y", "@dbt/mcp@2"], platform: .current))
-        try writeDocument(doc, at: url)
+        try h.writeDocument(doc, at: url)
         XCTAssertNil(state.importCopies(documentAt: url.path, into: "Default",
                                         choices: ["dbt": .replace, "github": .keepBoth, "notion": .skip, "ledger": .skip]))
         let mcps = try XCTUnwrap(state.store.collections["Default"]).mcps
@@ -2697,9 +2658,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testMakeLocalCopyIntoALocalCollection() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("shared/data-team.json")
-        try writeDocument(importableDocument, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let url = try h.subscribe(state, to: importableDocument, at: "shared/data-team.json")
         XCTAssertNil(state.createCollection(named: "Personal"))
 
         XCTAssertNil(state.makeLocalCopy(of: ["dbt", "ledger"], from: "Data team", into: "Personal"))
@@ -2726,9 +2685,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testMakeLocalCopyOfAWholeSyncedCollection() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("shared/data-team.json")
-        try writeDocument(importableDocument, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let url = try h.subscribe(state, to: importableDocument, at: "shared/data-team.json")
 
         XCTAssertNil(state.makeLocalCopyOfCollection("Data team", named: "Data team copy"))
         XCTAssertEqual(state.kind(of: "Data team copy"), .local)

@@ -8,23 +8,17 @@ import ConnectorControlTestSupport
 /// one button that lets the change reach Claude.
 @MainActor
 final class ReviewModelTests: XCTestCase {
-    private func writeDocument(_ doc: CollectionDocument, at url: URL) throws {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try doc.serialized().write(to: url)
-    }
 
     /// Subscribes to the sample, then publishes a version of it with github gone and dbt's
     /// arguments changed, and reads it into a pending update. Every read here goes through
     /// `recomputePending`, the source watcher's own read, rather than waiting on the watcher:
     /// AppStateCollectionsTests proves the watcher delivers the change.
     private func pending(_ h: AppStateHarness, _ state: AppState) throws -> URL {
-        let url = h.dir.file("data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let url = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
         var doc = CollectionDocumentSamples.dataTeam
         doc.connectors["github"] = nil
         doc.connectors["dbt"]?.launcher = .local(.init(command: "npx", args: ["-y", "@dbt/mcp@2"], platform: .mac))
-        try writeDocument(doc, at: url)
+        try h.writeDocument(doc, at: url)
         state.recomputePending()
         XCTAssertNotNil(state.pendingUpdates["Data team"])
         return url
@@ -61,13 +55,11 @@ final class ReviewModelTests: XCTestCase {
     func testAnAddedConnectorHasNoBeforeSide() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        let url = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
         var doc = CollectionDocumentSamples.dataTeam
         doc.connectors["jira"] = .init(launcher: .remote(.init(url: "https://mcp.jira.example/", auth: .automatic,
                                                                package: "mcp-remote", extraArgs: [])))
-        try writeDocument(doc, at: url)
+        try h.writeDocument(doc, at: url)
         state.recomputePending()
         XCTAssertNotNil(state.pendingUpdates["Data team"])
 
@@ -93,7 +85,7 @@ final class ReviewModelTests: XCTestCase {
         doc.connectors["github"] = nil
         doc.connectors["notion"] = nil
         doc.connectors["dbt"]?.launcher = .local(.init(command: "npx", args: ["-y", "@dbt/mcp@3"], platform: .mac))
-        try writeDocument(doc, at: url)
+        try h.writeDocument(doc, at: url)
         state.recomputePending()
         XCTAssertEqual(state.pendingUpdates["Data team"]?.removed, ["github", "notion"])
 
@@ -114,9 +106,7 @@ final class ReviewModelTests: XCTestCase {
     func testACollectionWithNothingPendingHasNoRows() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let url = h.dir.file("data-team.json")
-        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
-        XCTAssertNil(state.subscribe(documentAt: url.path, as: nil))
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
 
         let model = ReviewModel(state: state, collection: "Data team")
         XCTAssertTrue(model.rows.isEmpty)

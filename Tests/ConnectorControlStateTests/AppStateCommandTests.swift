@@ -70,8 +70,7 @@ final class AppStateCommandTests: XCTestCase {
         defer { h.dispose() }
         h.settings.confirmBeforeRestart = false
         h.settings.lastApplyDate = h.now
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         let state = h.create()
         XCTAssertTrue(state.needsClaudeRestart)
         h.claude.restartResult = "Claude didn’t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again."
@@ -91,8 +90,7 @@ final class AppStateCommandTests: XCTestCase {
         defer { h.dispose() }
         h.settings.confirmBeforeRestart = false
         h.settings.lastApplyDate = h.now
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         let state = h.create()
         state.lastError = "old banner"
         h.claude.onRestart = { h.claude.launchDate = h.now.addingTimeInterval(1) }
@@ -108,8 +106,7 @@ final class AppStateCommandTests: XCTestCase {
         h.notifier.activateRestart()   // stale click: nothing pending
         XCTAssertEqual(h.claude.restartCalls, 0)
 
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         state.setEnabled("aws-mcp", false)
         XCTAssertTrue(state.needsClaudeRestart)
         h.notifier.activateRestart()
@@ -120,8 +117,7 @@ final class AppStateCommandTests: XCTestCase {
     func testDisposeUnsubscribesTheNotificationRestartAction() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         state.setEnabled("aws-mcp", false)
         XCTAssertTrue(state.needsClaudeRestart)   // a pending restart, so activateRestart would act if still wired up
         state.dispose()
@@ -134,8 +130,7 @@ final class AppStateCommandTests: XCTestCase {
         defer { h.dispose() }
         h.settings.confirmBeforeRestart = false
         h.settings.lastApplyDate = h.now
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         let state = h.create()
         state.restartClaude()
         h.ui.pump()

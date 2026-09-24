@@ -8,9 +8,6 @@ import ConnectorControlTestSupport
 /// and what `perform()` does with the answers.
 @MainActor
 final class CopyModelTests: XCTestCase {
-    private func local(_ command: String, _ args: [String] = []) -> MCPEntry {
-        MCPEntry(config: .object(["command": .string(command), "args": .array(args.map(JSONValue.string))]))
-    }
 
     /// Rows mirror the ticks in their display order, and `clashes` follows
     /// `checkedNamesClashing(in:)` exactly: a clash defaults to `.keepBoth` and carries no badge,
@@ -23,10 +20,10 @@ final class CopyModelTests: XCTestCase {
         // along with it and change what clashes below.
         XCTAssertNil(state.addEmptyCollection(named: "Spare"))
         for name in ["zeta", "alpha", "beta"] {
-            XCTAssertNil(state.upsert(name: name, entry: local("/bin/" + name), renamedFrom: nil, in: "Default"))
+            XCTAssertNil(state.upsert(name: name, entry: AppStateHarness.localConnector("/bin/" + name), renamedFrom: nil, in: "Default"))
         }
         for name in ["zeta", "alpha"] {
-            XCTAssertNil(state.upsert(name: name, entry: local("/bin/other"), renamedFrom: nil, in: "Spare"))
+            XCTAssertNil(state.upsert(name: name, entry: AppStateHarness.localConnector("/bin/other"), renamedFrom: nil, in: "Spare"))
         }
         let collections = CollectionsModel(state: state, dialogs: h.dialogs)
         defer { collections.dispose() }
@@ -52,8 +49,8 @@ final class CopyModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.addEmptyCollection(named: "Spare"))
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha", ["new"]), renamedFrom: nil, in: "Default"))
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/old"), renamedFrom: nil, in: "Spare"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha", ["new"]), renamedFrom: nil, in: "Default"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/old"), renamedFrom: nil, in: "Spare"))
         let collections = CollectionsModel(state: state, dialogs: h.dialogs)
         defer { collections.dispose() }
         collections.selected = "Default"
@@ -62,7 +59,7 @@ final class CopyModelTests: XCTestCase {
         let model = CopyModel(collections: collections, destination: "Spare")
         model.rows[0].choice = .replace
         XCTAssertTrue(model.perform())
-        XCTAssertEqual(state.store.collections["Spare"]?.mcps["alpha"]?.config, local("/bin/alpha", ["new"]).config,
+        XCTAssertEqual(state.store.collections["Spare"]?.mcps["alpha"]?.config, AppStateHarness.localConnector("/bin/alpha", ["new"]).config,
                        "the incoming copy replaced the one that was there")
         XCTAssertEqual(collections.checkedNames, [], "the ticks went with it")
     }
@@ -75,15 +72,15 @@ final class CopyModelTests: XCTestCase {
         defer { h.dispose() }
         XCTAssertNil(state.addEmptyCollection(named: "Spare"))
         XCTAssertNil(state.addEmptyCollection(named: "Work"))
-        XCTAssertNil(state.upsert(name: "scoutbook", entry: local("/bin/scoutbook"), renamedFrom: nil, in: "Spare"))
-        XCTAssertNil(state.upsert(name: "scoutbook", entry: local("/bin/old"), renamedFrom: nil, in: "Work"))
+        XCTAssertNil(state.upsert(name: "scoutbook", entry: AppStateHarness.localConnector("/bin/scoutbook"), renamedFrom: nil, in: "Spare"))
+        XCTAssertNil(state.upsert(name: "scoutbook", entry: AppStateHarness.localConnector("/bin/old"), renamedFrom: nil, in: "Work"))
         let collections = CollectionsModel(state: state, dialogs: h.dialogs)
         defer { collections.dispose() }
         collections.selected = "Spare"
 
         // An enabled connector in the active collection that has not been applied yet: an apply
         // from the inactive leg would write it, so that leg can catch an unconditional one.
-        XCTAssertNil(state.upsert(name: "delta", entry: local("/bin/delta"), renamedFrom: nil, in: "Default"))
+        XCTAssertNil(state.upsert(name: "delta", entry: AppStateHarness.localConnector("/bin/delta"), renamedFrom: nil, in: "Default"))
         XCTAssertNil(try h.claudeServers()["delta"], "upserted, not applied")
 
         // Inactive destination: the copy lands, but Claude's config is untouched.
@@ -92,7 +89,7 @@ final class CopyModelTests: XCTestCase {
         let inactive = CopyModel(collections: collections, destination: "Work")
         inactive.rows[0].choice = .replace
         XCTAssertTrue(inactive.perform())
-        XCTAssertEqual(state.store.collections["Work"]?.mcps["scoutbook"]?.config, local("/bin/scoutbook").config)
+        XCTAssertEqual(state.store.collections["Work"]?.mcps["scoutbook"]?.config, AppStateHarness.localConnector("/bin/scoutbook").config)
         XCTAssertEqual(try h.claudeServers(), before, "Work is not active, so nothing Claude runs has changed")
 
         // Active destination: the enabled scoutbook Claude runs is replaced by a copy that is off.
@@ -112,9 +109,9 @@ final class CopyModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.addEmptyCollection(named: "Spare"))
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha", ["new"]), renamedFrom: nil, in: "Default"))
-        XCTAssertNil(state.upsert(name: "beta", entry: local("/bin/beta"), renamedFrom: nil, in: "Default"))
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/old"), renamedFrom: nil, in: "Spare"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha", ["new"]), renamedFrom: nil, in: "Default"))
+        XCTAssertNil(state.upsert(name: "beta", entry: AppStateHarness.localConnector("/bin/beta"), renamedFrom: nil, in: "Default"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/old"), renamedFrom: nil, in: "Spare"))
         let collections = CollectionsModel(state: state, dialogs: h.dialogs)
         defer { collections.dispose() }
         collections.selected = "Default"
@@ -124,7 +121,7 @@ final class CopyModelTests: XCTestCase {
         let model = CopyModel(collections: collections, destination: "Spare")
         model.rows[model.rows.firstIndex { $0.name == "alpha" }!].choice = .skip
         XCTAssertTrue(model.perform())
-        XCTAssertEqual(state.store.collections["Spare"]?.mcps["alpha"]?.config, local("/bin/old").config,
+        XCTAssertEqual(state.store.collections["Spare"]?.mcps["alpha"]?.config, AppStateHarness.localConnector("/bin/old").config,
                        "untouched: still the entry that was already in Spare")
         XCTAssertNotNil(state.store.collections["Spare"]?.mcps["beta"], "the non-clashing row still copied")
     }
@@ -134,8 +131,8 @@ final class CopyModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.addEmptyCollection(named: "Spare"))
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/old"), renamedFrom: nil, in: "Spare"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/old"), renamedFrom: nil, in: "Spare"))
         let collections = CollectionsModel(state: state, dialogs: h.dialogs)
         defer { collections.dispose() }
         collections.selected = "Default"

@@ -10,10 +10,6 @@ namespace ConnectorControl.Core.Tests.State;
 /// </summary>
 public class CopyModelTests
 {
-    private static McpEntry Local(string command, params string[] args) =>
-        new(JsonValue.Object(
-            ("command", JsonValue.String(command)),
-            ("args", JsonValue.Array(args.Select(JsonValue.String)))));
 
     /// <summary>
     /// Rows mirror the ticks in their display order, and Clashes follows CheckedNamesClashing
@@ -31,11 +27,11 @@ public class CopyModelTests
         Assert.Null(state.AddEmptyCollection("Spare"));
         foreach (var name in new[] { "zeta", "alpha", "beta" })
         {
-            Assert.Null(state.Upsert(name, Local("/bin/" + name), null, "Default"));
+            Assert.Null(state.Upsert(name, AppStateHarness.LocalConnector("/bin/" + name), null, "Default"));
         }
         foreach (var name in new[] { "zeta", "alpha" })
         {
-            Assert.Null(state.Upsert(name, Local("/bin/other"), null, "Spare"));
+            Assert.Null(state.Upsert(name, AppStateHarness.LocalConnector("/bin/other"), null, "Spare"));
         }
         using var collections = new CollectionsModel(state, h.Dialogs);
         collections.Selected = "Default";
@@ -63,8 +59,8 @@ public class CopyModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.AddEmptyCollection("Spare"));
-        Assert.Null(state.Upsert("alpha", Local("/bin/alpha", "new"), null, "Default"));
-        Assert.Null(state.Upsert("alpha", Local("/bin/old"), null, "Spare"));
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha", "new"), null, "Default"));
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/old"), null, "Spare"));
         using var collections = new CollectionsModel(state, h.Dialogs);
         collections.Selected = "Default";
         collections.SetChecked("alpha", true);
@@ -73,7 +69,7 @@ public class CopyModelTests
         model.Rows[0].Choice = ImportChoice.Replace;
         Assert.True(model.Perform());
         // The incoming copy replaced the one that was there.
-        Assert.Equal(Local("/bin/alpha", "new").Config, state.Store.Collections["Spare"].Mcps["alpha"].Config);
+        Assert.Equal(AppStateHarness.LocalConnector("/bin/alpha", "new").Config, state.Store.Collections["Spare"].Mcps["alpha"].Config);
         Assert.Empty(collections.CheckedNames);   // the ticks went with it
     }
 
@@ -89,14 +85,14 @@ public class CopyModelTests
         using var state = h.Create();
         Assert.Null(state.AddEmptyCollection("Spare"));
         Assert.Null(state.AddEmptyCollection("Work"));
-        Assert.Null(state.Upsert("scoutbook", Local("/bin/scoutbook"), null, "Spare"));
-        Assert.Null(state.Upsert("scoutbook", Local("/bin/old"), null, "Work"));
+        Assert.Null(state.Upsert("scoutbook", AppStateHarness.LocalConnector("/bin/scoutbook"), null, "Spare"));
+        Assert.Null(state.Upsert("scoutbook", AppStateHarness.LocalConnector("/bin/old"), null, "Work"));
         using var collections = new CollectionsModel(state, h.Dialogs);
         collections.Selected = "Spare";
 
         // An enabled connector in the active collection that has not been applied yet: an apply
         // from the inactive leg would write it, so that leg can catch an unconditional one.
-        Assert.Null(state.Upsert("delta", Local("/bin/delta"), null, "Default"));
+        Assert.Null(state.Upsert("delta", AppStateHarness.LocalConnector("/bin/delta"), null, "Default"));
         Assert.False(h.ClaudeServers().ContainsKey("delta"));   // upserted, not applied
 
         // Inactive destination: the copy lands, but Claude's config is untouched.
@@ -105,7 +101,7 @@ public class CopyModelTests
         var inactive = new CopyModel(collections, "Work");
         inactive.Rows[0].Choice = ImportChoice.Replace;
         Assert.True(inactive.Perform());
-        Assert.Equal(Local("/bin/scoutbook").Config, state.Store.Collections["Work"].Mcps["scoutbook"].Config);
+        Assert.Equal(AppStateHarness.LocalConnector("/bin/scoutbook").Config, state.Store.Collections["Work"].Mcps["scoutbook"].Config);
         Assert.Equal(before, h.ClaudeServers());   // Work is not active, so nothing Claude runs has changed
 
         // Active destination: the enabled scoutbook Claude runs is replaced by a copy that is off.
@@ -129,9 +125,9 @@ public class CopyModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.AddEmptyCollection("Spare"));
-        Assert.Null(state.Upsert("alpha", Local("/bin/alpha", "new"), null, "Default"));
-        Assert.Null(state.Upsert("beta", Local("/bin/beta"), null, "Default"));
-        Assert.Null(state.Upsert("alpha", Local("/bin/old"), null, "Spare"));
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha", "new"), null, "Default"));
+        Assert.Null(state.Upsert("beta", AppStateHarness.LocalConnector("/bin/beta"), null, "Default"));
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/old"), null, "Spare"));
         using var collections = new CollectionsModel(state, h.Dialogs);
         collections.Selected = "Default";
         collections.SetChecked("alpha", true);
@@ -141,7 +137,7 @@ public class CopyModelTests
         model.Rows.Single(r => r.Name == "alpha").Choice = ImportChoice.Skip;
         Assert.True(model.Perform());
         // Untouched: still the entry that was already in Spare.
-        Assert.Equal(Local("/bin/old").Config, state.Store.Collections["Spare"].Mcps["alpha"].Config);
+        Assert.Equal(AppStateHarness.LocalConnector("/bin/old").Config, state.Store.Collections["Spare"].Mcps["alpha"].Config);
         Assert.True(state.Store.Collections["Spare"].Mcps.ContainsKey("beta"));   // the non-clashing row still copied
     }
 
@@ -152,8 +148,8 @@ public class CopyModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.AddEmptyCollection("Spare"));
-        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
-        Assert.Null(state.Upsert("alpha", Local("/bin/old"), null, "Spare"));
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Default"));
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/old"), null, "Spare"));
         using var collections = new CollectionsModel(state, h.Dialogs);
         collections.Selected = "Default";
         collections.SetChecked("alpha", true);

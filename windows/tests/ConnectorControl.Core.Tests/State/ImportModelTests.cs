@@ -10,19 +10,12 @@ namespace ConnectorControl.Core.Tests.State;
 /// </summary>
 public class ImportModelTests
 {
-    private static void Write(CollectionDocument doc, string path)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, doc.Serialize());
-    }
-
     [Fact]
     public void RowsShowCollisionsAndTheCountFollowsChoices()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
-        Write(CollectionDocumentSamples.DataTeam, path);
+        var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, Path.Combine("shared", "data-team.json"));
         // One of the document's four connectors is already in the target, under the same name.
         Assert.Null(state.Upsert("github", new McpEntry(true, AppStateHarness.Remote("https://x/")), null));
 
@@ -93,8 +86,7 @@ public class ImportModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = Path.Combine(h.Dir.File("shared"), "risky.json");
-        Write(RiskyHeaderDocument(), path);
+        var path = h.WriteDocument(RiskyHeaderDocument(), Path.Combine("shared", "risky.json"));
 
         var model = new ImportModel(state, path);
         Assert.Equal(["bad", "good"], model.Rows.Select(r => r.Name));
@@ -131,8 +123,7 @@ public class ImportModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
-        Write(CollectionDocumentSamples.DataTeam, path);
+        var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, Path.Combine("shared", "data-team.json"));
 
         var first = new ImportModel(state, path);
         Assert.Equal("Data team", first.SyncName);   // the document's own name is the default
@@ -195,8 +186,7 @@ public class ImportModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("data-team.json");
-        Write(CollectionDocumentSamples.DataTeam, path);
+        var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, "data-team.json");
         var model = new ImportModel(state, path);
 
         // The document's own needs, sorted, in the wording the window and the editor use.
@@ -221,8 +211,7 @@ public class ImportModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("data-team.json");
-        Write(CollectionDocumentSamples.DataTeam, path);
+        var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, "data-team.json");
         // One of the document's four connectors is already in the target, under the same name.
         Assert.Null(state.Upsert("github", new McpEntry(AppStateHarness.Remote("https://x/")), null));
 
@@ -256,8 +245,7 @@ public class ImportModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("two.json");
-        Write(TwoNeedsDocument(), path);
+        var path = h.WriteDocument(TwoNeedsDocument(), "two.json");
         var model = new ImportModel(state, path);
 
         var pair = model.Rows.Single(r => r.Name == "pair");
@@ -274,8 +262,7 @@ public class ImportModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
-        Write(CollectionDocumentSamples.DataTeam, path);
+        var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, Path.Combine("shared", "data-team.json"));
         Assert.Null(state.Upsert("github", new McpEntry(AppStateHarness.Remote("https://x/")), null));
 
         var model = new ImportModel(state, path);
@@ -309,8 +296,7 @@ public class ImportModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var good = Path.Combine(h.Dir.File("shared"), "data-team.json");
-        Write(CollectionDocumentSamples.DataTeam, good);
+        var good = h.WriteDocument(CollectionDocumentSamples.DataTeam, Path.Combine("shared", "data-team.json"));
         Assert.False(new ImportModel(state, good).HasLoadError);
 
         var half = h.Dir.File("half.json");
@@ -336,8 +322,7 @@ public class ImportModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
-        Write(CollectionDocumentSamples.DataTeam, path);
+        var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, Path.Combine("shared", "data-team.json"));
         Assert.Null(state.Upsert("github", new McpEntry(AppStateHarness.Remote("https://x/")), null));
 
         var model = new ImportModel(state, path);
@@ -380,8 +365,7 @@ public class ImportModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
-        Write(CollectionDocumentSamples.DataTeam, path);
+        var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, Path.Combine("shared", "data-team.json"));
         var model = new ImportModel(state, path);
         var raised = new List<string>();
         model.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");

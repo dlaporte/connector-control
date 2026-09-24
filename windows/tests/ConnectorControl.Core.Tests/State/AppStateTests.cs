@@ -59,8 +59,7 @@ public class AppStateTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        h.Claude.IsRunning = true;
-        h.Claude.LaunchDate = h.Now.AddHours(-1);
+        h.ClaudeRunningSince(1);
         state.SetEnabled("aws-mcp", false);
         Assert.True(state.NeedsClaudeRestart);
 
@@ -79,8 +78,7 @@ public class AppStateTests
     {
         using var h = new AppStateHarness();
         h.Settings.LastApplyDate = h.Now;
-        h.Claude.IsRunning = true;
-        h.Claude.LaunchDate = h.Now.AddHours(-1);
+        h.ClaudeRunningSince(1);
         using var state = h.Create();
         Assert.True(state.NeedsClaudeRestart);
     }

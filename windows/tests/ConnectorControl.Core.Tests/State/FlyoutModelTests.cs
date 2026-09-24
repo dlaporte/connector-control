@@ -111,9 +111,7 @@ public class FlyoutModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
-        new CollectionsFile([Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json"))])
-            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
-        state.Reload();
+        h.MakeSynced(state, "Team");
         using var flyout = new FlyoutModel(state, h.Settings);
         state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
         {
@@ -131,19 +129,8 @@ public class FlyoutModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
-        new CollectionsFile([
-            Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json")),
-            Sidecar("Default", new CollectionsFile.Entry(
-                CollectionKind.Local, publish: new CollectionsFile.PublishRecord("default", "origin", PublishIntent.None))),
-        ]).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
-        // A folder that exists and can be written: a binding pointing at one that cannot would
-        // raise a real publish failure on the reload below, ahead of the banner under test.
-        var folder = h.Dir.File("pub");
-        Directory.CreateDirectory(folder);
-        new CollectionsLocalCache([], [new KeyValuePair<string, CollectionsLocalCache.PublishBinding>(
-            "Default", new CollectionsLocalCache.PublishBinding(folder, null))])
-            .Save(state.Service.Paths.CollectionsCachePath);
-        state.Reload();
+        h.MakeSynced(state, "Team");
+        var folder = Path.GetDirectoryName(h.Publish(state, "Default"))!;
         using var flyout = new FlyoutModel(state, h.Settings);
 
         Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
@@ -175,8 +162,7 @@ public class FlyoutModelTests
     public void FooterPrefersRetryOverRestart()
     {
         using var h = new AppStateHarness();
-        h.Claude.IsRunning = true;
-        h.Claude.LaunchDate = h.Now.AddHours(-1);
+        h.ClaudeRunningSince(1);
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal(FooterKind.Hidden, flyout.Footer);
@@ -206,8 +192,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         h.Settings.ConfirmBeforeRestart = false;
-        h.Claude.IsRunning = true;
-        h.Claude.LaunchDate = h.Now.AddHours(-1);
+        h.ClaudeRunningSince(1);
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
         state.SetEnabled("aws-mcp", false);
@@ -390,9 +375,7 @@ public class FlyoutModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
-        new CollectionsFile([Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json"))])
-            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
-        state.Reload();
+        h.MakeSynced(state, "Team");
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal("Synced from team.json", flyout.SourceTooltip);
     }
@@ -405,9 +388,7 @@ public class FlyoutModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
-        new CollectionsFile([Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json"))])
-            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
-        state.Reload();
+        h.MakeSynced(state, "Team");
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
 
@@ -433,15 +414,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        new CollectionsFile([Sidecar("Default", new CollectionsFile.Entry(
-            CollectionKind.Local, publish: new CollectionsFile.PublishRecord("default", "origin", PublishIntent.None)))])
-            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
-        var first = h.Dir.File("first");
-        Directory.CreateDirectory(first);
-        new CollectionsLocalCache([], [new KeyValuePair<string, CollectionsLocalCache.PublishBinding>(
-            "Default", new CollectionsLocalCache.PublishBinding(first, null))])
-            .Save(state.Service.Paths.CollectionsCachePath);
-        state.Reload();
+        h.Publish(state, "Default", folder: "first");
         using var flyout = new FlyoutModel(state, h.Settings);
 
         state.PublishError = new CollectionPublishError("Default", "the folder is read-only");
@@ -469,17 +442,8 @@ public class FlyoutModelTests
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
         state.SwitchCollection("Default");
-        new CollectionsFile([
-            Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json")),
-            Sidecar("Default", new CollectionsFile.Entry(
-                CollectionKind.Local, publish: new CollectionsFile.PublishRecord("default", "origin", PublishIntent.None))),
-        ]).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
-        var folder = h.Dir.File("pub");
-        Directory.CreateDirectory(folder);
-        new CollectionsLocalCache([], [new KeyValuePair<string, CollectionsLocalCache.PublishBinding>(
-            "Default", new CollectionsLocalCache.PublishBinding(folder, null))])
-            .Save(state.Service.Paths.CollectionsCachePath);
-        state.Reload();
+        h.MakeSynced(state, "Team");
+        var folder = Path.GetDirectoryName(h.Publish(state, "Default"))!;
         using var flyout = new FlyoutModel(state, h.Settings);
 
         // The locate banner has one button, so there is no second one to show or to press.
@@ -507,9 +471,7 @@ public class FlyoutModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
-        new CollectionsFile([Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json"))])
-            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
-        state.Reload();
+        h.MakeSynced(state, "Team");
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Null(state.TakeCollectionsWindowRequest());
 
@@ -533,9 +495,7 @@ public class FlyoutModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         Assert.Null(state.CreateCollection("Team"));
-        new CollectionsFile([Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json"))])
-            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
-        state.Reload();
+        h.MakeSynced(state, "Team");
         using var flyout = new FlyoutModel(state, h.Settings);
 
         // No news: the row is the name, and the chain is the one image the Mac can draw.
@@ -629,15 +589,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        new CollectionsFile([Sidecar("Default", new CollectionsFile.Entry(
-            CollectionKind.Local, publish: new CollectionsFile.PublishRecord("default", "origin", PublishIntent.None)))])
-            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
-        var folder = h.Dir.File("pub");
-        Directory.CreateDirectory(folder);
-        new CollectionsLocalCache([], [new KeyValuePair<string, CollectionsLocalCache.PublishBinding>(
-            "Default", new CollectionsLocalCache.PublishBinding(folder, null))])
-            .Save(state.Service.Paths.CollectionsCachePath);
-        state.Reload();
+        var folder = Path.GetDirectoryName(h.Publish(state, "Default"))!;
         using var flyout = new FlyoutModel(state, h.Settings);
 
         // A failed write keeps today's banner exactly: another folder is an answer to it.

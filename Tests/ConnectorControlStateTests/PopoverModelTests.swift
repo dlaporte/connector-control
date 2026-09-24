@@ -104,9 +104,7 @@ final class PopoverModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
-        try CollectionsFile(collections: ["Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json")])
-            .save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
-        state.reload()
+        try h.makeSynced(state, "Team")
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         state.pendingUpdates = ["Team": CollectionDiff(added: ["jira"], removed: [], changed: [])]
@@ -120,18 +118,8 @@ final class PopoverModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
-        try CollectionsFile(collections: [
-            "Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json"),
-            "Default": CollectionsFile.Entry(
-                kind: .local, publish: CollectionsFile.PublishRecord(slug: "default", origin: "origin", intent: .none)),
-        ]).save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
-        // A folder that exists and can be written: a binding pointing at one that cannot would
-        // raise a real publish failure on the reload below, ahead of the banner under test.
-        let folder = h.dir.file("pub")
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        try CollectionsLocalCache(synced: [:], published: ["Default": .init(folder: folder.path, lastWrittenHash: nil)])
-            .save(to: state.service.paths.collectionsCacheURL, staging: nil)
-        state.reload()
+        try h.makeSynced(state, "Team")
+        let folder = try h.publish(state, "Default").deletingLastPathComponent()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
 
@@ -159,8 +147,7 @@ final class PopoverModelTests: XCTestCase {
     func testFooterPrefersRetryOverRestart() throws {
         let h = AppStateHarness()
         defer { h.dispose() }
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
@@ -190,8 +177,7 @@ final class PopoverModelTests: XCTestCase {
         let h = AppStateHarness()
         defer { h.dispose() }
         h.settings.confirmBeforeRestart = false
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         let state = h.create()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
@@ -333,9 +319,7 @@ final class PopoverModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
-        try CollectionsFile(collections: ["Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json")])
-            .save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
-        state.reload()
+        try h.makeSynced(state, "Team")
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertEqual(popover.sourceTooltip, "Synced from team.json")
@@ -347,9 +331,7 @@ final class PopoverModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
-        try CollectionsFile(collections: ["Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json")])
-            .save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
-        state.reload()
+        try h.makeSynced(state, "Team")
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertEqual(popover.collectionBanner, .locate(collection: "Team", fileName: "team.json"))
@@ -374,15 +356,7 @@ final class PopoverModelTests: XCTestCase {
     func testTheFailedPublishBannerRepointsTheCollectionItNames() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        try CollectionsFile(collections: [
-            "Default": CollectionsFile.Entry(
-                kind: .local, publish: CollectionsFile.PublishRecord(slug: "default", origin: "origin", intent: .none)),
-        ]).save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
-        let first = h.dir.file("first")
-        try FileManager.default.createDirectory(at: first, withIntermediateDirectories: true)
-        try CollectionsLocalCache(synced: [:], published: ["Default": .init(folder: first.path, lastWrittenHash: nil)])
-            .save(to: state.service.paths.collectionsCacheURL, staging: nil)
-        state.reload()
+        try h.publish(state, "Default", folder: "first")
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
 
@@ -409,16 +383,8 @@ final class PopoverModelTests: XCTestCase {
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
         state.switchCollection(to: "Default")
-        try CollectionsFile(collections: [
-            "Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json"),
-            "Default": CollectionsFile.Entry(
-                kind: .local, publish: CollectionsFile.PublishRecord(slug: "default", origin: "origin", intent: .none)),
-        ]).save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
-        let folder = h.dir.file("pub")
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        try CollectionsLocalCache(synced: [:], published: ["Default": .init(folder: folder.path, lastWrittenHash: nil)])
-            .save(to: state.service.paths.collectionsCacheURL, staging: nil)
-        state.reload()
+        try h.makeSynced(state, "Team")
+        let folder = try h.publish(state, "Default").deletingLastPathComponent()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
 
@@ -442,9 +408,7 @@ final class PopoverModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
-        try CollectionsFile(collections: ["Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json")])
-            .save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
-        state.reload()
+        try h.makeSynced(state, "Team")
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         XCTAssertNil(state.takeCollectionsWindowRequest())
@@ -464,9 +428,7 @@ final class PopoverModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Team"))
-        try CollectionsFile(collections: ["Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json")])
-            .save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
-        state.reload()
+        try h.makeSynced(state, "Team")
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
 
@@ -556,15 +518,7 @@ final class PopoverModelTests: XCTestCase {
     func testABlockedPublishOpensThePublishSheetInsteadOfAFolder() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        try CollectionsFile(collections: [
-            "Default": CollectionsFile.Entry(
-                kind: .local, publish: CollectionsFile.PublishRecord(slug: "default", origin: "origin", intent: .none)),
-        ]).save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
-        let folder = h.dir.file("pub")
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        try CollectionsLocalCache(synced: [:], published: ["Default": .init(folder: folder.path, lastWrittenHash: nil)])
-            .save(to: state.service.paths.collectionsCacheURL, staging: nil)
-        state.reload()
+        let folder = try h.publish(state, "Default").deletingLastPathComponent()
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
 

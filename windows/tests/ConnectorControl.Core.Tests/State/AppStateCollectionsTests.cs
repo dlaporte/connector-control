@@ -346,9 +346,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, null));
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam);
         var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
         var cachePath = state.Service.Paths.CollectionsCachePath;
         var bindings = File.ReadAllBytes(cachePath);
@@ -378,9 +376,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, null));
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam);
         var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
 
         // Another machine writes the same collection under a different file name.
@@ -401,9 +397,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, null));
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam);
         var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
         var cachePath = state.Service.Paths.CollectionsCachePath;
         var bindings = File.ReadAllBytes(cachePath);
@@ -534,12 +528,6 @@ public class AppStateCollectionsTests
     /// through RecomputePending, the watcher's own non-manual read.</summary>
     private static readonly TimeSpan WatcherSettle = TimeSpan.FromMilliseconds(300);
 
-    /// <summary>The bytes an author's machine would have written, at a path this machine can read.</summary>
-    private static void WriteDocument(CollectionDocument doc, string path)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, doc.Serialize());
-    }
 
     /// <summary>One local connector, authored on <paramref name="platform"/>, so a test can pin
     /// what a launcher from the other platform (or a directory token) does without carrying the
@@ -570,9 +558,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, null));
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam);
         Assert.Equal(CollectionKind.Synced, state.KindOf("Data team"));
         var mcps = state.Store.Collections["Data team"].Mcps;
         Assert.Equal(4, mcps.Count);
@@ -591,9 +577,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, "Analytics"));   // the caller's name beats the document's
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam, "data-team.json", "Analytics");   // the caller's name beats the document's
         Assert.Equal(CollectionKind.Synced, state.KindOf("Analytics"));
 
         Assert.NotNull(state.Subscribe(h.Dir.File("gone.json"), null));
@@ -622,7 +606,7 @@ public class AppStateCollectionsTests
         Seed(h, state, File_(("Default", new CollectionsFile.Entry(CollectionKind.Local,
             publish: new CollectionsFile.PublishRecord("data-team", "6f1c4a2e-1b8d-4b0e-9f0a-3c2d7e8a91e2", PublishIntent.None)))));
         var path = h.Dir.File("data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        AppStateHarness.WriteDocumentAt(CollectionDocumentSamples.DataTeam, path);
         Assert.Equal(AppState.OwnCollectionError, state.Subscribe(path, null));
         Assert.Equal(["Default"], state.CollectionNames);
     }
@@ -632,9 +616,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, null));
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam);
         Thread.Sleep(WatcherSettle);   // this test proves the watcher delivers the change, so it waits for it to arm
         // The user fills the token and turns dbt on.
         state.SwitchCollection("Data team");
@@ -644,7 +626,7 @@ public class AppStateCollectionsTests
         Assert.Null(state.Upsert("dbt", dbt, "dbt"));
         Assert.Empty(state.PendingUpdates);   // a filled marker is not a change to the collection
 
-        WriteDocument(ChangedSample(), path);
+        AppStateHarness.WriteDocumentAt(ChangedSample(), path);
         TempDir.BumpModificationTime(path);
         Assert.True(h.Ui.PumpUntil(() => state.PendingUpdates.ContainsKey("Data team"), Wait));
         Assert.Equal("removes github; changes dbt", state.PendingUpdates["Data team"].Summary());
@@ -669,9 +651,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("t.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, "T"));
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam, "t.json", "T");
         File.WriteAllText(path, "{half");
         state.RecomputePending();   // the source watcher's own read, without waiting on the watcher
         Assert.Empty(state.SourceErrors);   // the first failure schedules a retry instead of reporting
@@ -684,7 +664,7 @@ public class AppStateCollectionsTests
 
         // The half-written file lands in full: the next read clears the error and the collection
         // is back to having nothing to say.
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        AppStateHarness.WriteDocumentAt(CollectionDocumentSamples.DataTeam, path);
         state.RefreshSource("T");
         Assert.Empty(state.SourceErrors);
         Assert.Empty(state.PendingUpdates);
@@ -697,7 +677,7 @@ public class AppStateCollectionsTests
         using var state = h.Create();
         // The document travels inside the store's own folder, as a shared master list does.
         var inStore = Path.Combine(h.StoreDir, "shared", "data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, inStore);
+        AppStateHarness.WriteDocumentAt(CollectionDocumentSamples.DataTeam, inStore);
         Assert.Null(state.Subscribe(inStore, null));
         Assert.Equal("shared/data-team.json", state.CollectionsFile.Collections["Data team"].RelativeToStore);
 
@@ -708,7 +688,7 @@ public class AppStateCollectionsTests
 
         // A document somewhere the relative path cannot reach is pointed at by hand.
         var elsewhere = h.Dir.File(Path.Combine("elsewhere", "data-team.json"));
-        WriteDocument(CollectionDocumentSamples.DataTeam, elsewhere);
+        AppStateHarness.WriteDocumentAt(CollectionDocumentSamples.DataTeam, elsewhere);
         Assert.Null(state.LocateSource("Data team", elsewhere));
         Assert.Equal(elsewhere, state.SourceBinding("Data team")?.Path);
         Assert.Equal(["Data team"], state.WatchedSourceCollections);
@@ -724,9 +704,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, null));
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam);
         var before = new Dictionary<string, McpEntry>(state.Store.Collections["Data team"].Mcps, StringComparer.Ordinal);
 
         state.StopSyncing("Data team");
@@ -741,7 +719,7 @@ public class AppStateCollectionsTests
         Assert.Equal(AppState.NeedsValueCaution("server_path"), state.ConnectorCaution("ledger", "Data team"));
 
         // The author's next change reaches nobody: there is no binding left to read it through.
-        WriteDocument(ChangedSample(), path);
+        AppStateHarness.WriteDocumentAt(ChangedSample(), path);
         state.RecomputePending();
         Assert.Empty(state.PendingUpdates);
     }
@@ -751,9 +729,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, null));
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam);
 
         Assert.Null(state.DeleteCollection("Data team"));
         Assert.Equal(["Default"], state.CollectionNames);
@@ -767,9 +743,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File(Path.Combine("tools", "servers.json"));
-        WriteDocument(OneLocalConnector("x", "node", [$"{Placeholder.DirectoryToken}/srv.js"]), path);
-        Assert.Null(state.Subscribe(path, null));
+        var path = h.Subscribe(state, OneLocalConnector("x", "node", [$"{Placeholder.DirectoryToken}/srv.js"]), Path.Combine("tools", "servers.json"));
         state.SwitchCollection("Tools");
         state.SetEnabled("x", true);
 
@@ -792,12 +766,10 @@ public class AppStateCollectionsTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var other = CollectionPlatforms.Current == CollectionPlatform.Mac ? CollectionPlatform.Windows : CollectionPlatform.Mac;
-        var path = h.Dir.File("tools.json");
-        WriteDocument(OneLocalConnector("x", "node", ["srv.js"], other), path);
-        Assert.Null(state.Subscribe(path, null));
+        var path = h.Subscribe(state, OneLocalConnector("x", "node", ["srv.js"], other), "tools.json");
         Assert.Equal(AppState.AuthoredElsewhereCaution, state.ConnectorCaution("x", "Tools"));
 
-        WriteDocument(OneLocalConnector("x", "node", ["srv.js"]), path);
+        AppStateHarness.WriteDocumentAt(OneLocalConnector("x", "node", ["srv.js"]), path);
         state.RefreshSource("Tools");
         Assert.Null(state.ConnectorCaution("x", "Tools"));   // a launcher from this platform needs no warning
     }
@@ -807,9 +779,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, null));
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam);
         state.SwitchCollection("Data team");
         var renders = state.SourceRenders;
 
@@ -821,12 +791,13 @@ public class AppStateCollectionsTests
         Assert.Equal(renders, state.SourceRenders);   // the same bytes are never decoded twice
 
         // Another machine applies the source, and its master list arrives here.
-        var store = h.StoreOnDisk();
-        var rendered = state.PendingDocument("Data team")!;
-        var applied = CollectionApply.Apply(rendered, store.Collections["Data team"].Mcps,
-            state.CollectionsFile.Collections["Data team"].Needs);
-        store.Collections["Data team"] = new Collection(applied.Entries);
-        MasterStoreIO.Save(store, h.MasterStorePath);
+        h.EditStoreOnDisk(store =>
+        {
+            var rendered = state.PendingDocument("Data team")!;
+            var applied = CollectionApply.Apply(rendered, store.Collections["Data team"].Mcps,
+                state.CollectionsFile.Collections["Data team"].Needs);
+            store.Collections["Data team"] = new Collection(applied.Entries);
+        });
         state.Reload();
         // The list already matches the document; the banner must not outlive it.
         Assert.Empty(state.PendingUpdates);
@@ -843,9 +814,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("t.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, "T"));
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam, "t.json", "T");
         File.WriteAllText(path, "{half");
         state.RecomputePending();   // the source watcher's own read, without waiting on the watcher
         Assert.NotEmpty(h.Delays.Pending);
@@ -865,9 +834,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("t.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, "T"));
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam, "t.json", "T");
         File.WriteAllText(path, "{half");
         state.RecomputePending();   // the source watcher's own read, without waiting on the watcher
         Assert.NotEmpty(h.Delays.Pending);
@@ -884,7 +851,7 @@ public class AppStateCollectionsTests
         Assert.Empty(h.Delays.Pending);   // the backoff gives up after the third retry
         Assert.NotNull(state.SourceErrors["T"]);
 
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        AppStateHarness.WriteDocumentAt(CollectionDocumentSamples.DataTeam, path);
         state.RefreshSource("T");
         Assert.Empty(state.SourceErrors);
     }
@@ -896,14 +863,14 @@ public class AppStateCollectionsTests
         var path = h.Dir.File("data-team.json");
         using (var first = h.Create())
         {
-            WriteDocument(CollectionDocumentSamples.DataTeam, path);
+            AppStateHarness.WriteDocumentAt(CollectionDocumentSamples.DataTeam, path);
             Assert.Null(first.Subscribe(path, null));
         }
 
         var sample = CollectionDocumentSamples.DataTeam;
         var connectors = new Dictionary<string, CollectionDocument.Connector>(sample.Connectors, StringComparer.Ordinal);
         connectors.Remove("github");
-        WriteDocument(new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors), path);
+        AppStateHarness.WriteDocumentAt(new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors), path);
         h.Notifier.Sent.Clear();
 
         using var second = h.Create();
@@ -918,13 +885,11 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, null));
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam);
         Assert.Equal("Default", state.ActiveCollection);
         var before = h.ClaudeServers();
 
-        WriteDocument(ChangedSample(), path);
+        AppStateHarness.WriteDocumentAt(ChangedSample(), path);
         state.RecomputePending();   // the source watcher's own read, without waiting on the watcher
         Assert.True(state.PendingUpdates.ContainsKey("Data team"));
 
@@ -940,9 +905,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File(Path.Combine("tools", "servers.json"));
-        WriteDocument(OneLocalConnector("x", "node", [$"{Placeholder.DirectoryToken}/srv.js"]), path);
-        Assert.Null(state.Subscribe(path, null));
+        var path = h.Subscribe(state, OneLocalConnector("x", "node", [$"{Placeholder.DirectoryToken}/srv.js"]), Path.Combine("tools", "servers.json"));
         // A machine that has the collection but not the file yet: the bindings never travel.
         File.Delete(state.Service.Paths.CollectionsCachePath);
         state.Reload();
@@ -965,9 +928,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File(Path.Combine("tools", "servers.json"));
-        WriteDocument(OneLocalConnector("x", "node", [$"{Placeholder.DirectoryToken}/srv.js"]), path);
-        Assert.Null(state.Subscribe(path, null));
+        var path = h.Subscribe(state, OneLocalConnector("x", "node", [$"{Placeholder.DirectoryToken}/srv.js"]), Path.Combine("tools", "servers.json"));
         state.SwitchCollection("Tools");
         state.SetEnabled("x", true);
         var argument = JsonPointer.Parse("/args/0")!;
@@ -991,7 +952,7 @@ public class AppStateCollectionsTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var path = h.Dir.File("risky.json");
-        WriteDocument(new CollectionDocument("Risky", null, "o-risky", "2026-09-21T14:02:11Z",
+        AppStateHarness.WriteDocumentAt(new CollectionDocument("Risky", null, "o-risky", "2026-09-21T14:02:11Z",
             new Dictionary<string, CollectionDocument.Connector>
             {
                 ["bad"] = new(new CollectionDocument.Launcher.Remote("https://h/mcp&calc", CollectionDocument.Auth.Auto, "mcp-remote", [])),
@@ -1090,9 +1051,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var path = h.Dir.File("data-team.json");
-        WriteDocument(CollectionDocumentSamples.DataTeam, path);
-        Assert.Null(state.Subscribe(path, null));
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam);
         var folder = PublishFolder(h);
 
         // A synced collection has an author elsewhere, and nothing in the window offers Publish
@@ -1121,7 +1080,7 @@ public class AppStateCollectionsTests
 
         var folder = PublishFolder(h);
         var fileName = Slug.Make(state.ActiveCollection) + ".json";
-        WriteDocument(CollectionDocumentSamples.DataTeam, Path.Combine(folder, fileName));
+        AppStateHarness.WriteDocumentAt(CollectionDocumentSamples.DataTeam, Path.Combine(folder, fileName));
         Assert.Equal(AppState.PublishSlugTakenError(fileName),
             state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
         Assert.False(state.IsPublished(state.ActiveCollection));   // a refused publish records nothing
@@ -1272,9 +1231,10 @@ public class AppStateCollectionsTests
         var file = Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
 
         // The author's other machine added a connector to the shared master list.
-        var store = h.StoreOnDisk();
-        store.Collections[store.ActiveCollection].Mcps["elsewhere"] = NewConnector("z");
-        MasterStoreIO.Save(store, h.MasterStorePath);
+        h.EditStoreOnDisk(store =>
+        {
+            store.Collections[store.ActiveCollection].Mcps["elsewhere"] = NewConnector("z");
+        });
         state.Reload(ReloadTrigger.ExternalStoreAdoption);
         // The publishing machine carries another machine's change to the team.
         Assert.Contains("elsewhere", CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors.Keys);
@@ -1425,11 +1385,12 @@ public class AppStateCollectionsTests
 
         // An older app renamed it on another machine: the master list arrives, the record does not
         // follow, and the path would otherwise travel under the new name as written.
-        var store = h.StoreOnDisk();
-        var mcps = store.Collections[store.ActiveCollection].Mcps;
-        mcps["books"] = mcps["ledger"];
-        mcps.Remove("ledger");
-        MasterStoreIO.Save(store, h.MasterStorePath);
+        h.EditStoreOnDisk(store =>
+        {
+            var mcps = store.Collections[store.ActiveCollection].Mcps;
+            mcps["books"] = mcps["ledger"];
+            mcps.Remove("ledger");
+        });
         state.Reload(ReloadTrigger.ExternalStoreAdoption);
         Assert.Equal(AppState.PathMarkMovedError("ledger"), state.PublishError?.Message);
         Assert.Equal(before, File.ReadAllBytes(file));
@@ -1493,9 +1454,10 @@ public class AppStateCollectionsTests
         Assert.False(JsonText.FileContains(file, MarkedPath));
 
         // Its master list follows, without the row: nothing left to keep back.
-        var store = h.StoreOnDisk();
-        store.Collections[store.ActiveCollection].Mcps["ledger"] = new McpEntry(NodeWith("--quiet"));
-        MasterStoreIO.Save(store, h.MasterStorePath);
+        h.EditStoreOnDisk(store =>
+        {
+            store.Collections[store.ActiveCollection].Mcps["ledger"] = new McpEntry(NodeWith("--quiet"));
+        });
         state.Reload(ReloadTrigger.ExternalStoreAdoption);
         Assert.Null(state.PublishError);
         Assert.Equal(["--quiet"], LedgerArgs(file));
@@ -1542,9 +1504,10 @@ public class AppStateCollectionsTests
                 : p));
         }
         var before = File.ReadAllBytes(file);
-        var store = h.StoreOnDisk();
-        store.Collections[store.ActiveCollection].Mcps.Remove("ledger");
-        MasterStoreIO.Save(store, h.MasterStorePath);
+        h.EditStoreOnDisk(store =>
+        {
+            store.Collections[store.ActiveCollection].Mcps.Remove("ledger");
+        });
         sidecar.Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
 
         using var relaunched = h.Create();
@@ -1655,11 +1618,12 @@ public class AppStateCollectionsTests
                 : p));
         }
         var before = File.ReadAllBytes(file);
-        var store = h.StoreOnDisk();
-        var mcps = store.Collections[store.ActiveCollection].Mcps;
-        mcps["books"] = mcps["ledger"];
-        mcps.Remove("ledger");
-        MasterStoreIO.Save(store, h.MasterStorePath);
+        h.EditStoreOnDisk(store =>
+        {
+            var mcps = store.Collections[store.ActiveCollection].Mcps;
+            mcps["books"] = mcps["ledger"];
+            mcps.Remove("ledger");
+        });
         sidecar.Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
 
         using var relaunched = h.Create();
@@ -1793,9 +1757,10 @@ public class AppStateCollectionsTests
             // Every apply records what Claude's file holds.
             Assert.Equal(team, first.CollectionsCache.LastAppliedCollection);
         }
-        var store = h.StoreOnDisk();
-        store.ActiveCollection = "Clients";
-        MasterStoreIO.Save(store, h.MasterStorePath);
+        h.EditStoreOnDisk(store =>
+        {
+            store.ActiveCollection = "Clients";
+        });
 
         using var relaunched = h.Create();
         Assert.False(relaunched.Store.Collections["Clients"].Mcps.ContainsKey("ledger"));
@@ -1908,9 +1873,10 @@ public class AppStateCollectionsTests
             first.Remove(["a"], "Second");
             first.SwitchCollection(team);
         }
-        var store = h.StoreOnDisk();
-        store.ActiveCollection = "Second";
-        MasterStoreIO.Save(store, h.MasterStorePath);
+        h.EditStoreOnDisk(store =>
+        {
+            store.ActiveCollection = "Second";
+        });
         var servers = new Dictionary<string, JsonValue>(h.ClaudeServers(), StringComparer.Ordinal)
         {
             ["installer"] = NodeWith("/opt/installer/srv.js"),
@@ -1951,10 +1917,11 @@ public class AppStateCollectionsTests
         // keeps them by mutating the record in place. A record with no names at all is the state
         // Ingestible now takes nothing in for.
         new CollectionsLocalCache(cache.Synced, cache.Published, cache.Kept, "Second", cache.LastAppliedNames).Save(cachePath);
-        var store = h.StoreOnDisk();
-        store.Collections.Remove("Second");
-        store.ActiveCollection = home;
-        MasterStoreIO.Save(store, h.MasterStorePath);
+        h.EditStoreOnDisk(store =>
+        {
+            store.Collections.Remove("Second");
+            store.ActiveCollection = home;
+        });
         var servers = new Dictionary<string, JsonValue>(h.ClaudeServers(), StringComparer.Ordinal)
         {
             ["installer"] = NodeWith("/opt/installer/srv.js"),
@@ -1988,10 +1955,11 @@ public class AppStateCollectionsTests
         }
         // The other machine deletes Team. Claude's file still holds what Team rendered, and one
         // connector an installer wrote beside it while the app was off.
-        var store = h.StoreOnDisk();
-        store.Collections.Remove("Team");
-        store.ActiveCollection = home;
-        MasterStoreIO.Save(store, h.MasterStorePath);
+        h.EditStoreOnDisk(store =>
+        {
+            store.Collections.Remove("Team");
+            store.ActiveCollection = home;
+        });
         var servers = new Dictionary<string, JsonValue>(h.ClaudeServers(), StringComparer.Ordinal)
         {
             ["installer"] = NodeWith("/opt/installer/srv.js"),
@@ -2035,10 +2003,11 @@ public class AppStateCollectionsTests
 
         // The other machine deletes Team while this one is off, so nothing here records its marks any
         // more: the store, the sidecar and the binding all arrive without it.
-        var store = h.StoreOnDisk();
-        store.Collections.Remove("Team");
-        store.ActiveCollection = "Default";
-        MasterStoreIO.Save(store, h.MasterStorePath);
+        h.EditStoreOnDisk(store =>
+        {
+            store.Collections.Remove("Team");
+            store.ActiveCollection = "Default";
+        });
         var file = CollectionsFile.Load(Path.Combine(h.StoreDir, CollectionsFile.FileName));
         new CollectionsFile(file.Collections.Where(p => p.Key != "Team")
             .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal))
@@ -2221,10 +2190,11 @@ public class AppStateCollectionsTests
         Assert.Contains(MarkedPath, state.KeptBack(home).Values);   // the mark is known before the delete
 
         // The other machine deletes Team: the master list and the sidecar arrive without it.
-        var store = h.StoreOnDisk();
-        store.Collections.Remove("Team");
-        store.ActiveCollection = home;
-        MasterStoreIO.Save(store, h.MasterStorePath);
+        h.EditStoreOnDisk(store =>
+        {
+            store.Collections.Remove("Team");
+            store.ActiveCollection = home;
+        });
         new CollectionsFile(state.CollectionsFile.Collections.Where(p => p.Key != "Team")
             .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal))
             .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
@@ -2310,10 +2280,11 @@ public class AppStateCollectionsTests
         using var state = h.Create();
         var folder = PublishThenDeleteTeam(h, state);
         // The other machine makes a collection called Team again, and the store syncs here.
-        var store = h.StoreOnDisk();
-        Assert.Null(store.AddCollection("Team", copyingCurrent: false));
-        store.ActiveCollection = state.ActiveCollection;
-        MasterStoreIO.Save(store, h.MasterStorePath);
+        h.EditStoreOnDisk(store =>
+        {
+            Assert.Null(store.AddCollection("Team", copyingCurrent: false));
+            store.ActiveCollection = state.ActiveCollection;
+        });
         state.Reload();
         Assert.True(state.Store.Collections.ContainsKey("Team"));   // Team arrived
         var kept = state.KeptBack("Team");
@@ -2713,9 +2684,10 @@ public class AppStateCollectionsTests
         {
             (document, folder) = PublishTokenConnector(h, first);
         }
-        var store = h.StoreOnDisk();
-        store.Collections[store.ActiveCollection].Mcps.Remove("x");
-        MasterStoreIO.Save(store, h.MasterStorePath);
+        h.EditStoreOnDisk(store =>
+        {
+            store.Collections[store.ActiveCollection].Mcps.Remove("x");
+        });
 
         var before = File.ReadAllBytes(document);
         using var relaunched = h.Create();
@@ -3033,7 +3005,7 @@ public class AppStateCollectionsTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
-        WriteDocument(ImportableDocument(), path);
+        AppStateHarness.WriteDocumentAt(ImportableDocument(), path);
 
         Assert.Null(state.ImportCopies(path, "Default", Choices()));
         var mcps = state.Store.Collections["Default"].Mcps;
@@ -3068,7 +3040,7 @@ public class AppStateCollectionsTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
-        WriteDocument(ImportableDocument(), path);
+        AppStateHarness.WriteDocumentAt(ImportableDocument(), path);
         Assert.Null(state.ImportCopies(path, "Default", Choices()));
 
         // The user fills the token and turns dbt on.
@@ -3087,7 +3059,7 @@ public class AppStateCollectionsTests
         connectors["dbt"] = new CollectionDocument.Connector(
             new CollectionDocument.Launcher.Local("npx", ["-y", "@dbt/mcp@2"], CollectionPlatforms.Current),
             authored.Env, authored.Needs, authored.Additional);
-        WriteDocument(new CollectionDocument(next.Name, next.Author, next.Origin, next.Exported, connectors), path);
+        AppStateHarness.WriteDocumentAt(new CollectionDocument(next.Name, next.Author, next.Origin, next.Exported, connectors), path);
 
         Assert.Null(state.ImportCopies(path, "Default", Choices(
             ("dbt", ImportChoice.Replace), ("github", ImportChoice.KeepBoth),
@@ -3119,7 +3091,7 @@ public class AppStateCollectionsTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
-        WriteDocument(ImportableDocument(), path);
+        AppStateHarness.WriteDocumentAt(ImportableDocument(), path);
         Assert.Null(state.Subscribe(path, null));
         Assert.Null(state.CreateCollection("Personal"));
 
@@ -3150,7 +3122,7 @@ public class AppStateCollectionsTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
-        WriteDocument(ImportableDocument(), path);
+        AppStateHarness.WriteDocumentAt(ImportableDocument(), path);
         Assert.Null(state.Subscribe(path, null));
 
         Assert.Null(state.MakeLocalCopyOfCollection("Data team", "Data team copy"));

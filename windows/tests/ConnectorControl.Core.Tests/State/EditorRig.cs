@@ -34,6 +34,15 @@ internal sealed class EditorRig : IDisposable
         return JsonValue.Object(props.ToArray());
     }
 
+    /// <summary>A copy of the active collection named <paramref name="name"/>, left inactive: each
+    /// of its connectors is an identical twin of the active collection's.</summary>
+    public void Twin(string name)
+    {
+        var active = State.ActiveCollection;
+        Assert.Null(State.CreateCollection(name));
+        State.SwitchCollection(active);
+    }
+
     public EditorModel Editor(EditTarget target) => new(State, target, H.Dialogs, RemoteLaunchStyle.CmdNpx);
 
     /// <summary>

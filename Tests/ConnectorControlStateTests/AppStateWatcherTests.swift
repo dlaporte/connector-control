@@ -44,8 +44,7 @@ final class AppStateWatcherTests: XCTestCase {
     func testStoreWatcherAdoptsAnExternalStoreAndAnnouncesTheRestart() throws {
         let h = AppStateHarness()
         defer { h.dispose() }
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         let state = h.create()
         var synced = try h.storeOnDisk()
         synced.mcps["scoutbook"]?.enabled = false
