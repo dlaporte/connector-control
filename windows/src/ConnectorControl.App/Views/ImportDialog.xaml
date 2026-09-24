@@ -82,6 +82,8 @@
           </Style>
         </Border.Style>
         <StackPanel>
+          <!-- The two headers are the platform's radio buttons, which the arrow keys move between;
+               the Mac sheet's cards are buttons, which they do not. -->
           <RadioButton x:Name="CopiesMode" GroupName="ImportMode" FontWeight="Medium"
                        IsChecked="{Binding ImportMode, Converter={StaticResource EnumToBool}, ConverterParameter=AddToCollection, Mode=TwoWay}" />
           <TextBlock Text="{x:Static state:ImportModel.AddModeDetail}" Style="{StaticResource CaptionText}" Margin="20,2,0,0" />

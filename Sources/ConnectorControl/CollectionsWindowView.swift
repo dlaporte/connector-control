@@ -400,7 +400,9 @@ struct CollectionsWindowView: View {
     /// A connector's row. A click anywhere but the tick slot opens its editor, as Return does on a
     /// focused row; Space ticks it, and Up and Down move between rows. The Windows rows behave the
     /// same, as a list of buttons. The row takes a light fill under the pointer, the Mac's hover
-    /// for a clickable row, and no pointing hand, which a Mac list row never shows.
+    /// for a clickable row, and no pointing hand, which a Mac list row never shows. The focused
+    /// row draws the system focus ring whenever it has focus; the Windows row draws its focus
+    /// rectangle only once the keyboard is in use, which is each platform's own rule.
     private var rows: some View {
         ScrollViewReader { proxy in
             List(model.rows) { row in
@@ -636,7 +638,10 @@ struct CollectionsWindowView: View {
 
     /// Puts a sheet up, replacing whatever is already there. SwiftUI will not swap one item for
     /// another: the open sheet has to be dismissed first, and the new one presented after it has
-    /// gone — not one turn later, which is shorter than the dismissal itself.
+    /// gone — not one turn later, which is shorter than the dismissal itself. A platform
+    /// difference, not a drift: these sheets are window-modal and the popover stays live beside
+    /// them, so a request can arrive over one; the Windows dialogs are app-modal, so none can,
+    /// and that window has nothing to replace.
     private func show(_ next: Sheet) {
         guard sheet != nil else { sheet = next; return }
         pendingSheet = next

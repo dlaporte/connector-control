@@ -103,7 +103,8 @@
     <!-- A connector row: a button the width of the list, with no chrome until the pointer is over
          it, when it takes the Fluent list item's hover fill; the Mac row takes its own light
          fill. The arrow stays the arrow, as a list row's does. Its focus visual is the theme's,
-         which WPF draws only once the keyboard is in use. -->
+         which WPF draws only once the keyboard is in use; the Mac draws its focus ring whenever
+         the row has focus, which is each platform's own rule. -->
     <Style x:Key="ConnectorRow" TargetType="Button">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
@@ -127,6 +128,8 @@
       </Setter>
     </Style>
   </Window.Resources>
+  <!-- The native title bar stays, the platform's idiom here; the Mac scene hides its bar and is one
+       surface, which is that platform's (ConnectorControlApp.swift). -->
   <!-- Two panes: the collections, and the selected one. Everything done to a collection is in the
        sidebar's plus or the header's More, and everything done to its connectors is in the list
        header's Add or the selection bar. -->

@@ -63,7 +63,8 @@ struct ImportSheetView: View {
 
     /// One of the two exclusive cards. Only the header is a button: the picker, the ticks and the
     /// name field inside a card are controls of their own, and a button wrapping them would
-    /// swallow their clicks. The card's own contents arrive knowing whether it is the chosen one,
+    /// swallow their clicks. The Windows dialog's headers are the platform's radio buttons, which
+    /// the arrow keys move between; these are buttons, which they do not. The card's own contents arrive knowing whether it is the chosen one,
     /// so each card decides for itself what it shows when it is not.
     private func card<Content: View>(_ mode: ImportModel.Mode, _ title: String,
                                      @ViewBuilder content: @escaping (Bool) -> Content) -> some View {
