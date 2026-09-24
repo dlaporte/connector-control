@@ -2,6 +2,7 @@ import XCTest
 import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/ReconcilerTests.cs
 final class ReconcilerTests: XCTestCase {
     private let configA = JSONValue.object(["command": .string("a")])
     private let configB = JSONValue.object(["command": .string("b")])

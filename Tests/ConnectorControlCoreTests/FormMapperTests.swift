@@ -2,6 +2,7 @@ import XCTest
 import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/FormMapperTests.cs
 final class FormMapperTests: XCTestCase {
     func testCleanLocalConfigIsLossless() {
         let analysis = FormMapper.analyze(.object([

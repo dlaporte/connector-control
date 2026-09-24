@@ -3,6 +3,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/EditorModelViewSwitchTests.swift</summary>
 public class EditorModelViewSwitchTests
 {
     private const string Url = "https://scoutbook.example.com/mcp";

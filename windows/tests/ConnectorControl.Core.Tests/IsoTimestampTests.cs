@@ -1,6 +1,6 @@
 namespace ConnectorControl.Core.Tests;
 
-/// <summary>Tests/ConnectorControlCoreTests/IsoTimestampTests.swift</summary>
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/IsoTimestampTests.swift</summary>
 public class IsoTimestampTests
 {
     [Fact]

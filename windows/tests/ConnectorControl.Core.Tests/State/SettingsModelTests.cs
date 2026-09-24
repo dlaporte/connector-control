@@ -4,6 +4,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/SettingsModelTests.swift</summary>
 public class SettingsModelTests
 {
     private sealed class Rig : IDisposable

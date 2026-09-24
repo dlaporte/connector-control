@@ -2,6 +2,7 @@ import XCTest
 import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/ClaudeConfigIOTests.cs
 final class ClaudeConfigIOTests: XCTestCase {
     var tempDir: TempDir!
     var dir: URL!

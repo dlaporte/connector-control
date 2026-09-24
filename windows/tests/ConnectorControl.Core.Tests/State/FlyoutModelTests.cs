@@ -3,6 +3,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/PopoverModelTests.swift</summary>
 public class FlyoutModelTests
 {
     [Fact]
@@ -310,6 +311,8 @@ public class FlyoutModelTests
         Assert.Equal(FlyoutModel.ToolWarningGlyph, FlyoutModel.CautionGlyph);   // one glyph, two names
     }
 
+    /// <summary>C#-only: the Mac popover's banner is lastError alone; a store that is not private
+    /// and a settings save that failed are Windows banners.</summary>
     [Fact]
     public void ANotPrivateStoreShowsInTheBannerUntilAnErrorTakesPrecedence()
     {
@@ -324,6 +327,7 @@ public class FlyoutModelTests
         Assert.Equal("apply failed", flyout.ErrorMessage);
     }
 
+    /// <summary>C#-only, as the test above is.</summary>
     [Fact]
     public void ASettingsSaveFailureShowsInTheBannerBelowLastErrorAndStoreNotPrivate()
     {
@@ -467,32 +471,6 @@ public class FlyoutModelTests
     }
 
     [Fact]
-    public void TheCollectionsWindowRequestsRoundTripThroughAppState()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
-        new CollectionsFile([Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json"))])
-            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
-        state.Reload();
-        using var flyout = new FlyoutModel(state, h.Settings);
-        Assert.Null(state.TakeCollectionsWindowRequest());
-
-        // The review request comes from the banner, and the locate banner is not one.
-        Assert.False(flyout.CollectionBannerAction());
-        Assert.Null(state.CollectionsWindowRequest);
-
-        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
-        {
-            ["Team"] = new CollectionDiff(["jira"], [], []),
-        };
-        Assert.True(flyout.CollectionBannerAction());
-        Assert.Equal(new CollectionsWindowRequest.Review("Team"), state.CollectionsWindowRequest);
-        Assert.Equal(new CollectionsWindowRequest.Review("Team"), state.TakeCollectionsWindowRequest());
-        Assert.Null(state.CollectionsWindowRequest);   // the window takes the request once
-        Assert.Null(state.TakeCollectionsWindowRequest());
-    }
-    [Fact]
     public void OnlyTheFailedPublishBannerOffersStopPublishing()
     {
         using var h = new AppStateHarness();
@@ -530,6 +508,32 @@ public class FlyoutModelTests
         Assert.Null(state.PublishError);
         // The document in the folder stays: a folder this machine cannot reach is not one to delete from.
         Assert.True(System.IO.File.Exists(Path.Combine(folder, "default.json")));
+    }
+    [Fact]
+    public void TheCollectionsWindowRequestsRoundTripThroughAppState()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        new CollectionsFile([Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json"))])
+            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        state.Reload();
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.Null(state.TakeCollectionsWindowRequest());
+
+        // The review request comes from the banner, and the locate banner is not one.
+        Assert.False(flyout.CollectionBannerAction());
+        Assert.Null(state.CollectionsWindowRequest);
+
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
+        {
+            ["Team"] = new CollectionDiff(["jira"], [], []),
+        };
+        Assert.True(flyout.CollectionBannerAction());
+        Assert.Equal(new CollectionsWindowRequest.Review("Team"), state.CollectionsWindowRequest);
+        Assert.Equal(new CollectionsWindowRequest.Review("Team"), state.TakeCollectionsWindowRequest());
+        Assert.Null(state.CollectionsWindowRequest);   // the window takes the request once
+        Assert.Null(state.TakeCollectionsWindowRequest());
     }
     [Fact]
     public void AMenuRowSpellsOutWhatItsSingleImageCannotShow()

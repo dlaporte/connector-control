@@ -4,9 +4,9 @@ using ConnectorControl.Core.Tests.TestSupport;
 namespace ConnectorControl.Core.Tests.State;
 
 /// <summary>
-/// Tests/ConnectorControlStateTests/EditorModelCollectionsTests.swift. The editor once it knows
-/// which collection it is editing: the four header states, a synced connector's read-only form
-/// with its placeholders still live, and the propagate line.
+/// Mirror: Tests/ConnectorControlStateTests/EditorModelCollectionsTests.swift.
+/// The editor once it knows which collection it is editing: the four header states, a synced
+/// connector's read-only form with its placeholders still live, and the propagate line.
 /// </summary>
 public class EditorModelCollectionsTests
 {

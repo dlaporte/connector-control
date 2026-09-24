@@ -3,6 +3,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/RestoreModelTests.swift</summary>
 public class RestoreModelTests
 {
     [Fact]

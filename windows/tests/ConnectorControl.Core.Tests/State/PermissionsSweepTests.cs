@@ -4,6 +4,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/PermissionsSweepTests.swift</summary>
 public class PermissionsSweepTests : IDisposable
 {
     private readonly TempDir dir = new("acl");
@@ -31,6 +32,8 @@ public class PermissionsSweepTests : IDisposable
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(nestedFile));
     }
 
+    /// <summary>C#-only, as is the test after it: the version bookkeeping alone, which runs on any
+    /// OS; the Mac pins it inside SweepsEveryFileAndDirectoryOnceAndSetsTheFlag.</summary>
     [Fact]
     public void ACompletedSweepRecordsCurrentVersion()
     {
@@ -93,7 +96,8 @@ public class PermissionsSweepTests : IDisposable
     /// itself) is refused outright — not even mcps.json inside it is touched. The refusal is
     /// per directory, by exact match: the app's own backups directory, which the path rule keeps
     /// under LocalAppData rather than under the chosen folder, is still repaired, and so is the
-    /// default store location, which sits one level below LocalAppData.
+    /// default store location, which sits one level below LocalAppData. C#-only, as are the next
+    /// two tests: the Mac has no list of protected folders.
     /// </summary>
     [Fact]
     [SupportedOSPlatform("windows")]
@@ -149,6 +153,15 @@ public class PermissionsSweepTests : IDisposable
     }
 
     [Fact]
+    public void MissingDirectoriesAreToleratedAndStillMarkTheSweepDone()
+    {
+        var paths = new AppPaths(dir.File("claude.json"), dir.File("never-created"));
+        var settings = new FakeSettings();
+        Assert.True(PermissionsSweep.RunOnce(settings, paths));
+        Assert.Equal(PermissionsSweep.CurrentVersion, settings.SweepVersion);
+    }
+
+    [Fact]
     public void StoreFileNamesAreTheAppsOwn()
     {
         Assert.True(PermissionsSweep.IsStoreFile("mcps.json"));
@@ -163,14 +176,5 @@ public class PermissionsSweepTests : IDisposable
     {
         Assert.True(PermissionsSweep.IsStoreFile("collections.json"));
         Assert.False(PermissionsSweep.IsStoreFile("collections-local.json"));
-    }
-
-    [Fact]
-    public void MissingDirectoriesAreToleratedAndStillMarkTheSweepDone()
-    {
-        var paths = new AppPaths(dir.File("claude.json"), dir.File("never-created"));
-        var settings = new FakeSettings();
-        Assert.True(PermissionsSweep.RunOnce(settings, paths));
-        Assert.Equal(PermissionsSweep.CurrentVersion, settings.SweepVersion);
     }
 }

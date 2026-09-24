@@ -4,9 +4,9 @@ using ConnectorControl.Core.Tests.TestSupport;
 namespace ConnectorControl.Core.Tests.State;
 
 /// <summary>
-/// Tests/ConnectorControlStateTests/CopyModelTests.swift. The copy clash sheet: what its rows say
-/// about the ticked connectors a destination already holds, and what Perform() does with the
-/// answers.
+/// Mirror: Tests/ConnectorControlStateTests/CopyModelTests.swift.
+/// The copy clash sheet: what its rows say about the ticked connectors a destination already holds,
+/// and what Perform() does with the answers.
 /// </summary>
 public class CopyModelTests
 {

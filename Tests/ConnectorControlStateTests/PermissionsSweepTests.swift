@@ -3,6 +3,7 @@ import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/PermissionsSweepTests.cs
 @MainActor
 final class PermissionsSweepTests: XCTestCase {
     private func mode(_ url: URL) throws -> Int {
@@ -77,6 +78,10 @@ final class PermissionsSweepTests: XCTestCase {
         XCTAssertEqual(try mode(backup), 0o600)
     }
 
+    /// Swift-only, as are the three tests after the next: the Mac sweeps in two
+    /// passes (POSIX modes, then ACLs), each with its own version, where Windows
+    /// has one ACL pass.
+    ///
     /// An install that already swept modes under the old two-flag scheme
     /// (recorded here as sweepVersion == 1) gets only the ACL pass on its next
     /// launch, and lands at sweepVersion == PermissionsSweep.currentVersion.
@@ -119,7 +124,8 @@ final class PermissionsSweepTests: XCTestCase {
     /// ACL changes even for the owner — unlike a write-blocked parent
     /// directory, which only stops new entries, not metadata changes on an
     /// existing one) plus an entirely missing backups directory: every
-    /// attempted repair fails, so the version may not advance.
+    /// attempted repair fails, so the version may not advance. Windows has no
+    /// such flag: an owner can always rewrite its own file's DACL.
     func testASweepThatAchievedNothingIsNotDone() throws {
         let dir = TempDir(prefix: "sweep")
         defer { dir.dispose() }
@@ -144,7 +150,8 @@ final class PermissionsSweepTests: XCTestCase {
 
     /// Existing, empty directories: there is nothing to repair inside them, but
     /// chmod/ACL-strip on the (empty) directories themselves succeeds, so the
-    /// sweep is done.
+    /// sweep is done. The Windows counterpart, NothingToAttemptStillMarksTheSweepDone,
+    /// gets there through its protected folders, which the Mac does not have.
     func testASweepWithNothingToDoIsDone() throws {
         let dir = TempDir(prefix: "sweep")
         defer { dir.dispose() }
@@ -183,6 +190,14 @@ final class PermissionsSweepTests: XCTestCase {
         XCTAssertTrue(PermissionsSweep.runOnce(settings: settings, paths: paths))
         XCTAssertEqual(settings.sweepVersion, PermissionsSweep.currentVersion,
                        "a clean run with the real repairs completes both passes")
+    }
+
+    func testStoreFileNamesAreTheAppsOwn() {
+        XCTAssertTrue(PermissionsSweep.isStoreFile("mcps.json"))
+        XCTAssertTrue(PermissionsSweep.isStoreFile("mcps.corrupt.2026-09-10T00-00-00-000Z.json"))
+        XCTAssertFalse(PermissionsSweep.isStoreFile("mcps.json.bak"))
+        XCTAssertFalse(PermissionsSweep.isStoreFile("settings.json"))
+        XCTAssertFalse(PermissionsSweep.isStoreFile("notes.txt"))
     }
 
     func testTheCollectionsSidecarIsAStoreFile() {

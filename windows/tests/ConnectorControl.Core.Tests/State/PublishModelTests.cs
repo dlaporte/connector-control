@@ -4,9 +4,9 @@ using ConnectorControl.Core.Tests.TestSupport;
 namespace ConnectorControl.Core.Tests.State;
 
 /// <summary>
-/// Tests/ConnectorControlStateTests/PublishModelTests.swift. The Publish/Export sheet: which rows
-/// the collection produces, what ticking them says in the intent, and what the preview and the
-/// warnings show for it.
+/// Mirror: Tests/ConnectorControlStateTests/PublishModelTests.swift.
+/// The Publish/Export sheet: which rows the collection produces, what ticking them says in the
+/// intent, and what the preview and the warnings show for it.
 /// </summary>
 public class PublishModelTests
 {
@@ -789,30 +789,6 @@ public class PublishModelTests
         Assert.Contains("/Users/d/x.js", model.Preview, StringComparison.Ordinal);
     }
     [Fact]
-    public void TheFooterNamesTheFileAndTheOriginOnceThereIsOne()
-    {
-        using var h = new AppStateHarness();
-        using var state = Started(h);
-        var collection = state.ActiveCollection;
-        var before = new PublishModel(state, collection);
-
-        // Nothing published yet, so there is no origin to show and the footer is the name alone.
-        Assert.Equal("", before.OriginShort);
-        Assert.Equal(before.FileName, before.FooterSentence);
-
-        Assert.Null(state.StartPublishing(collection, PublishFolder(h), PublishIntent.None));
-        var origin = state.CollectionsFile.Collections[collection].Publish!.Origin;
-        // A GUID, which is what the eight characters are cut from.
-        Assert.Equal(36, origin.Length);
-
-        var after = new PublishModel(state, collection);
-        Assert.Equal(origin[..8], after.OriginShort);
-        Assert.Equal(PublishModel.FooterLine(after.FileName, after.OriginShort), after.FooterSentence);
-        Assert.Equal($"{after.FileName} · {after.OriginShort}", after.FooterSentence);
-        // The document an export writes carries that same origin, so both sheets show one thing.
-        Assert.Equal(origin, state.ExportDocument(collection, PublishIntent.None).Origin);
-    }
-    [Fact]
     public void EachSectionKnowsWhetherItHasAnythingToShow()
     {
         using var h = new AppStateHarness();
@@ -860,6 +836,30 @@ public class PublishModelTests
         Assert.Equal("Export “Data team”", PublishModel.ExportTitle("Data team"));
     }
 
+    [Fact]
+    public void TheFooterNamesTheFileAndTheOriginOnceThereIsOne()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var collection = state.ActiveCollection;
+        var before = new PublishModel(state, collection);
+
+        // Nothing published yet, so there is no origin to show and the footer is the name alone.
+        Assert.Equal("", before.OriginShort);
+        Assert.Equal(before.FileName, before.FooterSentence);
+
+        Assert.Null(state.StartPublishing(collection, PublishFolder(h), PublishIntent.None));
+        var origin = state.CollectionsFile.Collections[collection].Publish!.Origin;
+        // A GUID, which is what the eight characters are cut from.
+        Assert.Equal(36, origin.Length);
+
+        var after = new PublishModel(state, collection);
+        Assert.Equal(origin[..8], after.OriginShort);
+        Assert.Equal(PublishModel.FooterLine(after.FileName, after.OriginShort), after.FooterSentence);
+        Assert.Equal($"{after.FileName} · {after.OriginShort}", after.FooterSentence);
+        // The document an export writes carries that same origin, so both sheets show one thing.
+        Assert.Equal(origin, state.ExportDocument(collection, PublishIntent.None).Origin);
+    }
     /// <summary>
     /// The Mac has no mirror of this: its rows are structs inside @Published arrays, so editing
     /// one publishes the array. Here the rows are objects the sheet edits in place, and this is

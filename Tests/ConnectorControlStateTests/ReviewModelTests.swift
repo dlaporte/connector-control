@@ -3,9 +3,9 @@ import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/ReviewModelTests.cs. The Review & Apply sheet
-/// over a real subscription: a document on disk, a change to it, and the one button that lets
-/// the change reach Claude.
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/ReviewModelTests.cs.
+/// The Review & Apply sheet over a real subscription: a document on disk, a change to it, and the
+/// one button that lets the change reach Claude.
 @MainActor
 final class ReviewModelTests: XCTestCase {
     private func writeDocument(_ doc: CollectionDocument, at url: URL) throws {

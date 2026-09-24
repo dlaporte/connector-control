@@ -3,7 +3,7 @@ import XCTest
 import ConnectorControlCore
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/SettingsModelTests.cs, with
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/SettingsModelTests.cs, with
 /// the Mac's Claude tab (an app path, not an install kind / config path /
 /// launch target) and Sparkle behind the Updater seam.
 @MainActor

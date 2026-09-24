@@ -4,6 +4,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/AppStateTests.swift</summary>
 public class AppStateTests
 {
     private static readonly string[] Fixture = ["aws-mcp", "scoutbook", "service-now"];

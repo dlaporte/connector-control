@@ -3,6 +3,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
 
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/ToolProbeTests.swift</summary>
 public class ToolProbeTests : IDisposable
 {
     private const string PathExt = ToolProbe.DefaultPathExt;

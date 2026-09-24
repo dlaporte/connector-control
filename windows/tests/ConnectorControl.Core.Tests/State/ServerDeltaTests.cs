@@ -3,6 +3,7 @@ using ConnectorControl.Core.State;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/ServerDeltaTests.swift</summary>
 public class ServerDeltaTests
 {
     private static JsonValue Server(string command) => JsonValue.Object(("command", JsonValue.String(command)));

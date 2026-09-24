@@ -1,7 +1,7 @@
 import XCTest
 @testable import ConnectorControlCore
 
-/// windows/tests/ConnectorControl.Core.Tests/IsoTimestampTests.cs
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/IsoTimestampTests.cs
 final class IsoTimestampTests: XCTestCase {
     func testAnInstantIsWrittenAsISO8601UTCToTheSecond() {
         XCTAssertEqual(IsoTimestamp.string(from: Date(timeIntervalSince1970: 1_789_999_331)), "2026-09-21T14:02:11Z")

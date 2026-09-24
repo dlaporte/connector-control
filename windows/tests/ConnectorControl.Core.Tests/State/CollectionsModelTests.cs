@@ -4,9 +4,9 @@ using ConnectorControl.Core.Tests.TestSupport;
 namespace ConnectorControl.Core.Tests.State;
 
 /// <summary>
-/// Tests/ConnectorControlStateTests/CollectionsModelTests.swift. The two panes of the Collections
-/// window: the collections as items, the selected one's connectors as rows, the toolbar's
-/// enablement, and the actions that go through the dialog seam.
+/// Mirror: Tests/ConnectorControlStateTests/CollectionsModelTests.swift.
+/// The two panes of the Collections window: the collections as items, the selected one's connectors
+/// as rows, the ⋯ menu's enablement, and the actions that go through the dialog seam.
 /// </summary>
 public class CollectionsModelTests
 {
@@ -515,10 +515,10 @@ public class CollectionsModelTests
         }
     }
 
-    // MARK: toolbar
+    // MARK: the ⋯ menu's enablement
 
     [Fact]
-    public void ToolbarEnablementFollowsTheSelection()
+    public void CollectionMenuEnablementFollowsTheSelection()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -819,32 +819,6 @@ public class CollectionsModelTests
                      h.Dialogs.Confirms.Select(c => c.Message));
     }
 
-    // MARK: toggles
-
-    /// <summary>
-    /// The window has no switch of its own any more; the toggle in a named collection is
-    /// AppState's, kept here because nothing else pins it.
-    /// </summary>
-    [Fact]
-    public void SetEnabledInAnInactiveCollectionLeavesClaudesConfigAlone()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        Assert.Null(state.CreateCollection("Work"));
-        state.SwitchCollection("Default");
-
-        state.SetEnabled("aws-mcp", false, "Work");
-        Assert.False(state.Store.Collections["Work"].Mcps["aws-mcp"].Enabled);
-        Assert.False(h.StoreOnDisk().Collections["Work"].Mcps["aws-mcp"].Enabled);
-        Assert.True(state.Store.Collections["Default"].Mcps["aws-mcp"].Enabled);
-        // Claude runs the active collection, which did not change.
-        Assert.True(h.ClaudeServers().ContainsKey("aws-mcp"));
-
-        // The same toggle in the active collection does reach Claude.
-        state.SetEnabled("aws-mcp", false, "Default");
-        Assert.False(h.ClaudeServers().ContainsKey("aws-mcp"));
-    }
-
     // MARK: detail line
 
     [Fact]
@@ -972,7 +946,7 @@ public class CollectionsModelTests
         Assert.Null(model.Banner);
         Assert.Null(model.BannerText);
         Assert.Null(model.BannerButton);
-        Assert.False(model.HasBanner);
+        Assert.False(model.HasBanner);   // C#-only: the XAML binds this bool; the Mac view switches on Banner itself
         Assert.False(model.BannerAction());
 
         model.Selected = "Team";
@@ -1358,7 +1332,7 @@ public class CollectionsModelTests
 
     /// <summary>
     /// Remove(names, collection) persists but never applies on its own; the caller applies only
-    /// when the collection losing rows is the active one — the same rule SetEnabled follows.
+    /// when the collection losing rows is the active one — the same rule AppState.SetEnabled follows.
     /// </summary>
     [Fact]
     public void RemoveCheckedAppliesOnlyWhenTheActiveCollectionLosesRows()

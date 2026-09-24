@@ -4,7 +4,7 @@ import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/FlyoutModelTests.cs. Rows are
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/FlyoutModelTests.cs. Rows are
 /// value types identified by name, so "the same row object" becomes "the row
 /// with that name".
 @MainActor
@@ -238,7 +238,8 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertTrue(popover.rows.allSatisfy(\.enabled))   // the glyph never touched the switch
     }
 
-    /// macOS only: a launcher only the login shell can see.
+    /// Swift-only: a launcher only the login shell can see is a macOS case; an app
+    /// started from Explorer gets the same PATH a shell does.
     func testRowsCarryTheShellOnlyWarning() {
         let h = AppStateHarness()
         defer { h.dispose() }

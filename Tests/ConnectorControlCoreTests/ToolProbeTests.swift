@@ -2,6 +2,7 @@ import XCTest
 import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/ToolProbeTests.cs
 final class ToolProbeTests: XCTestCase {
     private var tempDir: TempDir!
     private var dir: URL!

@@ -2,6 +2,7 @@ import XCTest
 import ConnectorControlCore
 @testable import ConnectorControlState
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/ServerDeltaTests.cs
 final class ServerDeltaTests: XCTestCase {
     private func server(_ command: String) -> JSONValue { .object(["command": .string(command)]) }
 

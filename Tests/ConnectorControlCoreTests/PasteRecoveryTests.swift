@@ -2,6 +2,7 @@ import XCTest
 import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/PasteRecoveryTests.cs
 final class PasteRecoveryTests: XCTestCase {
     private func command(_ v: JSONValue?) -> String? {
         guard case .object(let o)? = v, case .string(let s)? = o["command"] else { return nil }

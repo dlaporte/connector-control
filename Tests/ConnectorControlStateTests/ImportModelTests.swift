@@ -3,9 +3,9 @@ import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/ImportModelTests.cs. The Import sheet: what
-/// the rows say about one document against the collection it would land in, what the count
-/// follows, and what a document this app cannot read leaves on screen.
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/ImportModelTests.cs.
+/// The Import sheet: what the rows say about one document against the collection it would land in,
+/// what the count follows, and what a document this app cannot read leaves on screen.
 @MainActor
 final class ImportModelTests: XCTestCase {
     private func write(_ doc: CollectionDocument, at url: URL) throws {

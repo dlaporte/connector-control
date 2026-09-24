@@ -3,7 +3,7 @@ import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/AppStateWatcherTests.cs
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/AppStateWatcherTests.cs
 /// against the real DispatchSource watchers. `touchWatchedFiles()`/
 /// `TempDir.bumpModificationDate` keep an external write's mtime distinct
 /// from the file the harness (or a prior write in the same test) just wrote,

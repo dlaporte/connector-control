@@ -2,6 +2,7 @@ using ConnectorControl.Core.State;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/PathContextTests.swift</summary>
 public class PathContextTests
 {
     [Fact]

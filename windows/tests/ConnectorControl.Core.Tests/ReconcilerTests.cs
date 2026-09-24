@@ -1,5 +1,6 @@
 namespace ConnectorControl.Core.Tests;
 
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/ReconcilerTests.swift</summary>
 public class ReconcilerTests
 {
     private static readonly JsonValue ConfigA = JsonValue.Object(("command", JsonValue.String("a")));
@@ -123,6 +124,8 @@ public class ReconcilerTests
         Assert.False(outcome.StoreChanged);
     }
 
+    /// <summary>C#-only: MasterStore is a class here, so Reconcile could edit its argument; a Swift
+    /// struct is copied on the way in.</summary>
     [Fact]
     public void InputStoreIsNeverMutated()
     {

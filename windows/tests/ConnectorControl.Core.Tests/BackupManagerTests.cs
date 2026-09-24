@@ -3,6 +3,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
 
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/BackupManagerTests.swift</summary>
 public class BackupManagerTests : IDisposable
 {
     private const string Series = "claude_desktop_config";

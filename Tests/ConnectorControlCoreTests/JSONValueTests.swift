@@ -1,6 +1,7 @@
 import XCTest
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/JsonValueTests.cs
 final class JSONValueTests: XCTestCase {
     func testParseAndSerializeRoundTrip() throws {
         let json = #"{"a": 1, "b": "two", "c": [true, null, 2.5], "d": {"e": []}}"#

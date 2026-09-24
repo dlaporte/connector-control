@@ -5,12 +5,13 @@ using ConnectorControl.Core.Tests.TestSupport;
 namespace ConnectorControl.Core.Tests.State;
 
 /// <summary>
-/// Tests/ConnectorControlStateTests/AppStateCollectionsTests.swift. The sidecar, the
+/// Mirror: Tests/ConnectorControlStateTests/AppStateCollectionsTests.swift. The sidecar, the
 /// machine-local cache and the named collection actions, against the real on-disk layout the
 /// harness builds.
 ///
-/// Nothing subscribes or publishes yet, so a synced or published collection is set up the way
-/// those flows will leave it — the two files on disk — and read back through a real reload.
+/// Where a test needs a synced or published collection without subscribing or publishing, it is
+/// set up the way those flows leave it — the two files on disk — and read back through a real
+/// reload.
 /// </summary>
 public class AppStateCollectionsTests
 {
@@ -144,6 +145,28 @@ public class AppStateCollectionsTests
         Assert.Null(state.DeleteCollection("Team"));
         Assert.Equal(["Default"], state.CollectionNames);
         Assert.Equal(AppState.LastLocalCollectionError, state.DeleteCollection(state.ActiveCollection));
+    }
+
+    /// <summary>Enabling a connector in a named collection: the flyout's switch reaches the active
+    /// one through the same verb.</summary>
+    [Fact]
+    public void SetEnabledInAnInactiveCollectionLeavesClaudesConfigAlone()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Work"));
+        state.SwitchCollection("Default");
+
+        state.SetEnabled("aws-mcp", false, "Work");
+        Assert.False(state.Store.Collections["Work"].Mcps["aws-mcp"].Enabled);
+        Assert.False(h.StoreOnDisk().Collections["Work"].Mcps["aws-mcp"].Enabled);
+        Assert.True(state.Store.Collections["Default"].Mcps["aws-mcp"].Enabled);
+        // Claude runs the active collection, which did not change.
+        Assert.True(h.ClaudeServers().ContainsKey("aws-mcp"));
+
+        // The same call on the active collection does reach Claude.
+        state.SetEnabled("aws-mcp", false, "Default");
+        Assert.False(h.ClaudeServers().ContainsKey("aws-mcp"));
     }
 
     [Fact]
@@ -591,7 +614,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        // What the publishing task will leave behind: a local collection whose document carries
+        // What publishing leaves behind: a local collection whose document carries
         // this origin. Reading it back in would make the app its own author.
         Seed(h, state, File_(("Default", new CollectionsFile.Entry(CollectionKind.Local,
             publish: new CollectionsFile.PublishRecord("data-team", "6f1c4a2e-1b8d-4b0e-9f0a-3c2d7e8a91e2", PublishIntent.None)))));
@@ -615,7 +638,6 @@ public class AppStateCollectionsTests
         var token = JsonPointer.Parse("/env/DBT_TOKEN")!;
         var dbt = state.Store.Collections["Data team"].Mcps["dbt"];
         dbt = dbt with { Config = dbt.Config.Replacing(token, JsonValue.String("tok"))!, Enabled = true };
-        // Task 6 gives Upsert a collection argument; until then the edit lands in the active one.
         Assert.Null(state.Upsert("dbt", dbt, "dbt"));
         Assert.Empty(state.PendingUpdates);   // a filled marker is not a change to the collection
 
@@ -1077,7 +1099,7 @@ public class AppStateCollectionsTests
         var folder = PublishFolder(h);
 
         // A synced collection has an author elsewhere, and nothing in the window offers Publish
-        // for one — the toolbar swaps it for Refresh and Make Local Copy. The refusal is the same
+        // for one — its ⋯ menu has Refresh and Make Local Copy instead. The refusal is the same
         // silence LocateSource gives a collection that is not synced.
         Assert.Null(state.StartPublishing("Data team", folder, PublishIntent.None));
         Assert.False(state.IsPublished("Data team"));
@@ -1854,6 +1876,167 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// A connector an installer wrote straight into Claude's config while the app was off, and the
+    /// other machine switched collections meanwhile: the collection that was applied keeps its own,
+    /// and the new name still comes in to the collection now active.
+    /// </summary>
+    [Fact]
+    public void ALaunchAfterTheActiveCollectionChangedStillTakesInWhatIsNew()
+    {
+        using var h = new AppStateHarness();
+        string team;
+        using (var first = h.Create())
+        {
+            team = first.ActiveCollection;
+            Assert.Null(first.Upsert("a", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("a")))), null));
+            Assert.Null(first.CreateCollection("Second"));
+            first.Remove(["a"], "Second");
+            first.SwitchCollection(team);
+        }
+        var store = h.StoreOnDisk();
+        store.ActiveCollection = "Second";
+        MasterStoreIO.Save(store, h.MasterStorePath);
+        var servers = new Dictionary<string, JsonValue>(h.ClaudeServers(), StringComparer.Ordinal)
+        {
+            ["installer"] = NodeWith("/opt/installer/srv.js"),
+        };
+        h.WriteClaudeServers(servers.Select(p => (p.Key, p.Value)).ToArray());
+
+        using var relaunched = h.Create();
+        // The hand-added connector came in, and Claude still runs it.
+        Assert.True(relaunched.Store.Collections["Second"].Mcps.ContainsKey("installer"));
+        Assert.True(h.ClaudeServers().ContainsKey("installer"));
+        // What the applied collection renders stays there.
+        Assert.False(relaunched.Store.Collections["Second"].Mcps.ContainsKey("a"));
+        Assert.False(relaunched.Store.Collections[team].Mcps.ContainsKey("installer"));
+    }
+
+    /// <summary>
+    /// The collection Claude's file was last applied from has been deleted meanwhile, here or on the
+    /// other machine. It renders nothing to leave alone, so the names the last apply wrote stand in
+    /// for its render: those stay where they are and everything else comes in, which keeps the
+    /// connector an installer wrote into the file.
+    /// </summary>
+    [Fact]
+    public void ALaunchIngestKeepsWhatIsNewWhenTheCollectionItAppliedIsGone()
+    {
+        using var h = new AppStateHarness();
+        string home;
+        using (var first = h.Create())
+        {
+            home = first.ActiveCollection;
+            Assert.Null(first.CreateCollection("Second"));
+            first.SwitchCollection(home);
+        }
+        // The record names the collection Claude's file came from. The store syncs and this machine's
+        // cache does not, so the collection can be gone from one and named by the other.
+        var cachePath = Path.Combine(h.StoreDir, CollectionsLocalCache.FileName);
+        var cache = CollectionsLocalCache.Load(cachePath);
+        // Only which collection is faked: the names that apply wrote are kept, as the Swift mirror
+        // keeps them by mutating the record in place. A record with no names at all is the state
+        // Ingestible now takes nothing in for.
+        new CollectionsLocalCache(cache.Synced, cache.Published, cache.Kept, "Second", cache.LastAppliedNames).Save(cachePath);
+        var store = h.StoreOnDisk();
+        store.Collections.Remove("Second");
+        store.ActiveCollection = home;
+        MasterStoreIO.Save(store, h.MasterStorePath);
+        var servers = new Dictionary<string, JsonValue>(h.ClaudeServers(), StringComparer.Ordinal)
+        {
+            ["installer"] = NodeWith("/opt/installer/srv.js"),
+        };
+        h.WriteClaudeServers(servers.Select(p => (p.Key, p.Value)).ToArray());
+
+        using var relaunched = h.Create();
+        // The hand-added connector came in, and Claude still runs it.
+        Assert.True(relaunched.Store.Collections[home].Mcps.ContainsKey("installer"));
+        Assert.True(h.ClaudeServers().ContainsKey("installer"));
+    }
+
+    /// <summary>
+    /// The same launch for a user who publishes nothing: what the collection that is gone rendered is
+    /// not poured into the active one, which is the whole reason the names are recorded.
+    /// </summary>
+    [Fact]
+    public void ALaunchIngestLeavesTheDeletedCollectionsOwnConnectorsAlone()
+    {
+        using var h = new AppStateHarness();
+        string home;
+        List<string> before;
+        using (var first = h.Create())
+        {
+            home = first.ActiveCollection;
+            Assert.Null(first.CreateCollection("Team"));   // Team is active, so Claude's file holds Team
+            Assert.Null(first.Upsert("t1", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("t1")))), null, "Team"));
+            first.Apply();   // Claude's file now holds t1, and the record says Team wrote it
+            Assert.True(h.ClaudeServers().ContainsKey("t1"));
+            before = first.Store.Collections[home].Mcps.Keys.Order(StringComparer.Ordinal).ToList();
+        }
+        // The other machine deletes Team. Claude's file still holds what Team rendered, and one
+        // connector an installer wrote beside it while the app was off.
+        var store = h.StoreOnDisk();
+        store.Collections.Remove("Team");
+        store.ActiveCollection = home;
+        MasterStoreIO.Save(store, h.MasterStorePath);
+        var servers = new Dictionary<string, JsonValue>(h.ClaudeServers(), StringComparer.Ordinal)
+        {
+            ["installer"] = NodeWith("/opt/installer/srv.js"),
+        };
+        h.WriteClaudeServers(servers.Select(p => (p.Key, p.Value)).ToArray());
+
+        using var relaunched = h.Create();
+        // Team's own connectors stayed out, and the new one came in.
+        Assert.Equal(before.Append("installer").Order(StringComparer.Ordinal),
+                     relaunched.Store.Collections[home].Mcps.Keys.Order(StringComparer.Ordinal));
+        Assert.False(relaunched.Store.Collections[home].Mcps.ContainsKey("t1"));
+    }
+
+    /// <summary>
+    /// The same launch where this machine publishes: the collection that is gone was published from
+    /// the author's other machine with a path marked, so its connector reaching the collection
+    /// published here would send that path as written. It is not taken in, and nothing is written.
+    /// </summary>
+    [Fact]
+    public void ALaunchIngestDoesNotPublishADeletedCollectionsMarkedPath()
+    {
+        using var h = new AppStateHarness();
+        string document;
+        using (var first = h.Create())
+        {
+            Assert.Null(first.CreateCollection("Team"));   // Team is active, so Claude's file holds Team
+            Assert.Null(first.Upsert("ledger", new McpEntry(true, NodeWith(MarkedPath)), null, "Team"));
+            first.Apply();
+            // Team is published from the author's other machine: the sidecar carries the mark and its value.
+            var all = first.CollectionsFile.Collections.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+            all["Team"] = new CollectionsFile.Entry(CollectionKind.Local, publish: new CollectionsFile.PublishRecord(
+                "team", "team-origin", new PublishIntent([],
+                    [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark> { [ArgPointer(0)] = new("server_path", null, MarkedPath) })],
+                    [])));
+            new CollectionsFile(all).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+            first.Reload();
+            var folder = PublishFolder(h, "pubDefault");
+            Assert.Null(first.StartPublishing("Default", folder, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
+            document = Path.Combine(folder, Slug.Make("Default") + ".json");
+        }
+
+        // The other machine deletes Team while this one is off, so nothing here records its marks any
+        // more: the store, the sidecar and the binding all arrive without it.
+        var store = h.StoreOnDisk();
+        store.Collections.Remove("Team");
+        store.ActiveCollection = "Default";
+        MasterStoreIO.Save(store, h.MasterStorePath);
+        var file = CollectionsFile.Load(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        new CollectionsFile(file.Collections.Where(p => p.Key != "Team")
+            .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal))
+            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+
+        using var relaunched = h.Create();
+        // The deleted collection's own connector is not poured into the collection this machine publishes.
+        Assert.False(relaunched.Store.Collections["Default"].Mcps.ContainsKey("ledger"));
+        Assert.Null(relaunched.PublishError);
+        Assert.False(JsonText.FileContains(document, MarkedPath));
+    }
+
+    /// <summary>
     /// Renaming a collection carries what names it outside the store: the record of what Claude's
     /// file holds, and every backup taken from it, which still restores into it under the new name.
     /// </summary>
@@ -2368,167 +2551,6 @@ public class AppStateCollectionsTests
         Assert.Equal(AppState.KeptPathCarriedError("ledger", FieldName.Argument(1)), state.PublishError?.Message);
         Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
         Assert.Equal(before, File.ReadAllBytes(document));
-        Assert.False(JsonText.FileContains(document, MarkedPath));
-    }
-
-    /// <summary>
-    /// A connector an installer wrote straight into Claude's config while the app was off, and the
-    /// other machine switched collections meanwhile: the collection that was applied keeps its own,
-    /// and the new name still comes in to the collection now active.
-    /// </summary>
-    [Fact]
-    public void ALaunchAfterTheActiveCollectionChangedStillTakesInWhatIsNew()
-    {
-        using var h = new AppStateHarness();
-        string team;
-        using (var first = h.Create())
-        {
-            team = first.ActiveCollection;
-            Assert.Null(first.Upsert("a", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("a")))), null));
-            Assert.Null(first.CreateCollection("Second"));
-            first.Remove(["a"], "Second");
-            first.SwitchCollection(team);
-        }
-        var store = h.StoreOnDisk();
-        store.ActiveCollection = "Second";
-        MasterStoreIO.Save(store, h.MasterStorePath);
-        var servers = new Dictionary<string, JsonValue>(h.ClaudeServers(), StringComparer.Ordinal)
-        {
-            ["installer"] = NodeWith("/opt/installer/srv.js"),
-        };
-        h.WriteClaudeServers(servers.Select(p => (p.Key, p.Value)).ToArray());
-
-        using var relaunched = h.Create();
-        // The hand-added connector came in, and Claude still runs it.
-        Assert.True(relaunched.Store.Collections["Second"].Mcps.ContainsKey("installer"));
-        Assert.True(h.ClaudeServers().ContainsKey("installer"));
-        // What the applied collection renders stays there.
-        Assert.False(relaunched.Store.Collections["Second"].Mcps.ContainsKey("a"));
-        Assert.False(relaunched.Store.Collections[team].Mcps.ContainsKey("installer"));
-    }
-
-    /// <summary>
-    /// The collection Claude's file was last applied from has been deleted meanwhile, here or on the
-    /// other machine. It renders nothing to leave alone, so the names the last apply wrote stand in
-    /// for its render: those stay where they are and everything else comes in, which keeps the
-    /// connector an installer wrote into the file.
-    /// </summary>
-    [Fact]
-    public void ALaunchIngestKeepsWhatIsNewWhenTheCollectionItAppliedIsGone()
-    {
-        using var h = new AppStateHarness();
-        string home;
-        using (var first = h.Create())
-        {
-            home = first.ActiveCollection;
-            Assert.Null(first.CreateCollection("Second"));
-            first.SwitchCollection(home);
-        }
-        // The record names the collection Claude's file came from. The store syncs and this machine's
-        // cache does not, so the collection can be gone from one and named by the other.
-        var cachePath = Path.Combine(h.StoreDir, CollectionsLocalCache.FileName);
-        var cache = CollectionsLocalCache.Load(cachePath);
-        // Only which collection is faked: the names that apply wrote are kept, as the Swift mirror
-        // keeps them by mutating the record in place. A record with no names at all is the state
-        // Ingestible now takes nothing in for.
-        new CollectionsLocalCache(cache.Synced, cache.Published, cache.Kept, "Second", cache.LastAppliedNames).Save(cachePath);
-        var store = h.StoreOnDisk();
-        store.Collections.Remove("Second");
-        store.ActiveCollection = home;
-        MasterStoreIO.Save(store, h.MasterStorePath);
-        var servers = new Dictionary<string, JsonValue>(h.ClaudeServers(), StringComparer.Ordinal)
-        {
-            ["installer"] = NodeWith("/opt/installer/srv.js"),
-        };
-        h.WriteClaudeServers(servers.Select(p => (p.Key, p.Value)).ToArray());
-
-        using var relaunched = h.Create();
-        // The hand-added connector came in, and Claude still runs it.
-        Assert.True(relaunched.Store.Collections[home].Mcps.ContainsKey("installer"));
-        Assert.True(h.ClaudeServers().ContainsKey("installer"));
-    }
-
-    /// <summary>
-    /// The same launch for a user who publishes nothing: what the collection that is gone rendered is
-    /// not poured into the active one, which is the whole reason the names are recorded.
-    /// </summary>
-    [Fact]
-    public void ALaunchIngestLeavesTheDeletedCollectionsOwnConnectorsAlone()
-    {
-        using var h = new AppStateHarness();
-        string home;
-        List<string> before;
-        using (var first = h.Create())
-        {
-            home = first.ActiveCollection;
-            Assert.Null(first.CreateCollection("Team"));   // Team is active, so Claude's file holds Team
-            Assert.Null(first.Upsert("t1", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("t1")))), null, "Team"));
-            first.Apply();   // Claude's file now holds t1, and the record says Team wrote it
-            Assert.True(h.ClaudeServers().ContainsKey("t1"));
-            before = first.Store.Collections[home].Mcps.Keys.Order(StringComparer.Ordinal).ToList();
-        }
-        // The other machine deletes Team. Claude's file still holds what Team rendered, and one
-        // connector an installer wrote beside it while the app was off.
-        var store = h.StoreOnDisk();
-        store.Collections.Remove("Team");
-        store.ActiveCollection = home;
-        MasterStoreIO.Save(store, h.MasterStorePath);
-        var servers = new Dictionary<string, JsonValue>(h.ClaudeServers(), StringComparer.Ordinal)
-        {
-            ["installer"] = NodeWith("/opt/installer/srv.js"),
-        };
-        h.WriteClaudeServers(servers.Select(p => (p.Key, p.Value)).ToArray());
-
-        using var relaunched = h.Create();
-        // Team's own connectors stayed out, and the new one came in.
-        Assert.Equal(before.Append("installer").Order(StringComparer.Ordinal),
-                     relaunched.Store.Collections[home].Mcps.Keys.Order(StringComparer.Ordinal));
-        Assert.False(relaunched.Store.Collections[home].Mcps.ContainsKey("t1"));
-    }
-
-    /// <summary>
-    /// The same launch where this machine publishes: the collection that is gone was published from
-    /// the author's other machine with a path marked, so its connector reaching the collection
-    /// published here would send that path as written. It is not taken in, and nothing is written.
-    /// </summary>
-    [Fact]
-    public void ALaunchIngestDoesNotPublishADeletedCollectionsMarkedPath()
-    {
-        using var h = new AppStateHarness();
-        string document;
-        using (var first = h.Create())
-        {
-            Assert.Null(first.CreateCollection("Team"));   // Team is active, so Claude's file holds Team
-            Assert.Null(first.Upsert("ledger", new McpEntry(true, NodeWith(MarkedPath)), null, "Team"));
-            first.Apply();
-            // Team is published from the author's other machine: the sidecar carries the mark and its value.
-            var all = first.CollectionsFile.Collections.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
-            all["Team"] = new CollectionsFile.Entry(CollectionKind.Local, publish: new CollectionsFile.PublishRecord(
-                "team", "team-origin", new PublishIntent([],
-                    [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark> { [ArgPointer(0)] = new("server_path", null, MarkedPath) })],
-                    [])));
-            new CollectionsFile(all).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
-            first.Reload();
-            var folder = PublishFolder(h, "pubDefault");
-            Assert.Null(first.StartPublishing("Default", folder, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
-            document = Path.Combine(folder, Slug.Make("Default") + ".json");
-        }
-
-        // The other machine deletes Team while this one is off, so nothing here records its marks any
-        // more: the store, the sidecar and the binding all arrive without it.
-        var store = h.StoreOnDisk();
-        store.Collections.Remove("Team");
-        store.ActiveCollection = "Default";
-        MasterStoreIO.Save(store, h.MasterStorePath);
-        var file = CollectionsFile.Load(Path.Combine(h.StoreDir, CollectionsFile.FileName));
-        new CollectionsFile(file.Collections.Where(p => p.Key != "Team")
-            .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal))
-            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
-
-        using var relaunched = h.Create();
-        // The deleted collection's own connector is not poured into the collection this machine publishes.
-        Assert.False(relaunched.Store.Collections["Default"].Mcps.ContainsKey("ledger"));
-        Assert.Null(relaunched.PublishError);
         Assert.False(JsonText.FileContains(document, MarkedPath));
     }
 

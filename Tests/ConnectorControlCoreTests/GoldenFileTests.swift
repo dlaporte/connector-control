@@ -2,6 +2,8 @@ import XCTest
 import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/GoldenFileTests.cs
+///
 /// The golden files under Tests/Fixtures/golden are Apple Foundation's output for
 /// each input, produced by the REAL Core module. The Windows test suite asserts
 /// its writer reproduces them byte for byte.

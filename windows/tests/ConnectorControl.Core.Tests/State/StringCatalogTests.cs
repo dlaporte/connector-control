@@ -8,11 +8,12 @@ using JsonTextValue = System.Text.Json.Nodes.JsonValue;
 namespace ConnectorControl.Core.Tests.State;
 
 /// <summary>
+/// Mirror: Tests/ConnectorControlStateTests/StringCatalogTests.swift
+///
 /// Guards every user-facing string this app and the Mac app are meant to carry
 /// byte-for-byte, against the shared fixture both suites read:
-/// Tests/Fixtures/strings.json. Tests/ConnectorControlStateTests/StringCatalogTests.swift
-/// is this test's mirror; a wording change on either side that the other side
-/// does not also make fails exactly one of the two suites.
+/// Tests/Fixtures/strings.json. A wording change on either side that the other
+/// side does not also make fails exactly one of the two suites.
 /// </summary>
 public class StringCatalogTests
 {

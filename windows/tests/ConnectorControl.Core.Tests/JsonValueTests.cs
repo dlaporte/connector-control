@@ -2,7 +2,8 @@ using System.Text.Json;
 
 namespace ConnectorControl.Core.Tests;
 
-/// <summary>Port of JSONValueTests.swift (serialization-dependent cases live in AppleJsonWriterTests).</summary>
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/JSONValueTests.swift
+/// (serialization-dependent cases live in AppleJsonWriterTests).</summary>
 public class JsonValueTests
 {
     [Fact]

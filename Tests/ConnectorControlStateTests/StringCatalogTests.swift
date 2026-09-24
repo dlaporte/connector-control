@@ -3,11 +3,12 @@ import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/StringCatalogTests.cs
+///
 /// Guards every user-facing string this app and the Windows port are meant to
 /// carry byte-for-byte, against the shared fixture both suites read:
-/// `Tests/Fixtures/strings.json`. windows/tests/ConnectorControl.Core.Tests/State/StringCatalogTests.cs
-/// is this test's mirror; a wording change on either side that the other
-/// side does not also make fails exactly one of the two suites.
+/// `Tests/Fixtures/strings.json`. A wording change on either side that the
+/// other side does not also make fails exactly one of the two suites.
 @MainActor
 final class StringCatalogTests: XCTestCase {
     /// One fixture entry's Mac-side resolution: either fully resolved text,

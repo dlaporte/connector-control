@@ -2,6 +2,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
 
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/ClaudeConfigIOTests.swift</summary>
 public class ClaudeConfigIOTests : IDisposable
 {
     private readonly TempDir dir = new("claude");

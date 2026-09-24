@@ -1,5 +1,6 @@
 namespace ConnectorControl.Core.Tests;
 
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/PasteRecoveryTests.swift</summary>
 public class PasteRecoveryTests
 {
     private static string? Command(JsonValue? v) => v?["command"] is { Kind: JsonKind.String } s ? s.StringValue : null;

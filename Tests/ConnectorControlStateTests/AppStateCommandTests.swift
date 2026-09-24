@@ -2,7 +2,7 @@ import XCTest
 import ConnectorControlCore
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/AppStateCommandTests.cs. The
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/AppStateCommandTests.cs. The
 /// restart completion is posted to the marshal queue, so every restart test
 /// pumps once where the C# awaited and pumped.
 @MainActor

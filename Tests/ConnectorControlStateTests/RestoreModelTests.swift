@@ -2,7 +2,7 @@ import XCTest
 import ConnectorControlCore
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/RestoreModelTests.cs; the
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/RestoreModelTests.cs; the
 /// confirmation is a sheet (pending state + the button's method).
 @MainActor
 final class RestoreModelTests: XCTestCase {

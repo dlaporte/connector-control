@@ -4,9 +4,9 @@ using ConnectorControl.Core.Tests.TestSupport;
 namespace ConnectorControl.Core.Tests.State;
 
 /// <summary>
-/// Tests/ConnectorControlStateTests/ImportModelTests.swift. The Import sheet: what the rows say
-/// about one document against the collection it would land in, what the count follows, and what a
-/// document this app cannot read leaves on screen.
+/// Mirror: Tests/ConnectorControlStateTests/ImportModelTests.swift.
+/// The Import sheet: what the rows say about one document against the collection it would land in,
+/// what the count follows, and what a document this app cannot read leaves on screen.
 /// </summary>
 public class ImportModelTests
 {

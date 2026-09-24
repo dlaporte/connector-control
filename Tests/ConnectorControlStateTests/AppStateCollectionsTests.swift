@@ -3,12 +3,13 @@ import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/AppStateCollectionsTests.cs. The sidecar, the
-/// machine-local cache and the named collection actions, against the real on-disk layout the
-/// harness builds.
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/AppStateCollectionsTests.cs.
+/// The sidecar, the machine-local cache and the named collection actions, against the real on-disk
+/// layout the harness builds.
 ///
-/// Nothing subscribes or publishes yet, so a synced or published collection is set up the way
-/// those flows will leave it — the two files on disk — and read back through a real reload.
+/// Where a test needs a synced or published collection without subscribing or publishing, it is
+/// set up the way those flows leave it — the two files on disk — and read back through a real
+/// reload.
 @MainActor
 final class AppStateCollectionsTests: XCTestCase {
     private let emptyCache = CollectionsLocalCache(synced: [:], published: [:])
@@ -129,6 +130,25 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.deleteCollection(named: "Team"))
         XCTAssertEqual(state.collectionNames, ["Default"])
         XCTAssertEqual(state.deleteCollection(named: state.activeCollection), AppState.lastLocalCollectionError)
+    }
+
+    /// Enabling a connector in a named collection: the popover's switch reaches the active one
+    /// through the same verb.
+    func testSetEnabledInAnInactiveCollectionLeavesClaudesConfigAlone() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Work"))
+        state.switchCollection(to: "Default")
+
+        state.setEnabled("aws-mcp", false, in: "Work")
+        XCTAssertEqual(state.store.collections["Work"]?.mcps["aws-mcp"]?.enabled, false)
+        XCTAssertEqual(try h.storeOnDisk().collections["Work"]?.mcps["aws-mcp"]?.enabled, false)
+        XCTAssertEqual(state.store.collections["Default"]?.mcps["aws-mcp"]?.enabled, true)
+        XCTAssertNotNil(try h.claudeServers()["aws-mcp"], "Claude runs the active collection, which did not change")
+
+        // The same call on the active collection does reach Claude.
+        state.setEnabled("aws-mcp", false, in: "Default")
+        XCTAssertNil(try h.claudeServers()["aws-mcp"])
     }
 
     func testCreateCopiesTheActiveCollectionAndReportsItsErrors() {
@@ -516,7 +536,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testSubscribingToYourOwnPublishedCollectionIsRefused() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        // What the publishing task will leave behind: a local collection whose document carries
+        // What publishing leaves behind: a local collection whose document carries
         // this origin. Reading it back in would make the app its own author.
         try seed(h, state, file: CollectionsFile(collections: [
             "Default": CollectionsFile.Entry(kind: .local, publish: CollectionsFile.PublishRecord(
@@ -539,7 +559,6 @@ final class AppStateCollectionsTests: XCTestCase {
         var dbt = try XCTUnwrap(state.store.collections["Data team"]?.mcps["dbt"])
         dbt.config = dbt.config.replacing(at: JSONPointer(["env", "DBT_TOKEN"]), with: .string("tok"))!
         dbt.enabled = true
-        // Task 6 gives upsert a collection argument; until then the edit lands in the active one.
         XCTAssertNil(state.upsert(name: "dbt", entry: dbt, renamedFrom: "dbt"))
         XCTAssertTrue(state.pendingUpdates.isEmpty, "a filled marker is not a change to the collection")
 
@@ -931,7 +950,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let folder = try publishFolder(h)
 
         // A synced collection has an author elsewhere, and nothing in the window offers Publish
-        // for one — the toolbar swaps it for Refresh and Make Local Copy. The refusal is the
+        // for one — its ⋯ menu has Refresh and Make Local Copy instead. The refusal is the
         // same silence locateSource gives a collection that is not synced.
         XCTAssertNil(state.startPublishing("Data team", to: folder.path, intent: .none))
         XCTAssertFalse(state.isPublished("Data team"))

@@ -4,9 +4,9 @@ import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/CollectionsModelTests.cs. The two panes of the
-/// Collections window: the collections as items, the selected one's connectors as rows, the
-/// toolbar's enablement, and the actions that go through the dialog seam.
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/CollectionsModelTests.cs.
+/// The two panes of the Collections window: the collections as items, the selected one's connectors
+/// as rows, the ⋯ menu's enablement, and the actions that go through the dialog seam.
 @MainActor
 final class CollectionsModelTests: XCTestCase {
     private func synced(fileName: String) -> CollectionsFile.Entry {
@@ -432,9 +432,9 @@ final class CollectionsModelTests: XCTestCase {
         for secret in secrets + ["envsecret"] { XCTAssertFalse(target.contains(secret), secret) }
     }
 
-    // MARK: - Toolbar
+    // MARK: - The ⋯ menu's enablement
 
-    func testToolbarEnablementFollowsTheSelection() throws {
+    func testCollectionMenuEnablementFollowsTheSelection() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createCollection(named: "Shared"))
@@ -718,27 +718,6 @@ final class CollectionsModelTests: XCTestCase {
         model.stopPublishing()
         XCTAssertEqual(h.dialogs.confirms.map(\.message),
                        [CollectionsModel.deletePublishedFileQuestion("consulting.json")])
-    }
-
-    // MARK: - Toggles
-
-    /// The window has no switch of its own any more; the toggle in a named collection is
-    /// AppState's, kept here because nothing else pins it.
-    func testSetEnabledInAnInactiveCollectionLeavesClaudesConfigAlone() throws {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Work"))
-        state.switchCollection(to: "Default")
-
-        state.setEnabled("aws-mcp", false, in: "Work")
-        XCTAssertEqual(state.store.collections["Work"]?.mcps["aws-mcp"]?.enabled, false)
-        XCTAssertEqual(try h.storeOnDisk().collections["Work"]?.mcps["aws-mcp"]?.enabled, false)
-        XCTAssertEqual(state.store.collections["Default"]?.mcps["aws-mcp"]?.enabled, true)
-        XCTAssertNotNil(try h.claudeServers()["aws-mcp"], "Claude runs the active collection, which did not change")
-
-        // The same toggle in the active collection does reach Claude.
-        state.setEnabled("aws-mcp", false, in: "Default")
-        XCTAssertNil(try h.claudeServers()["aws-mcp"])
     }
 
     // MARK: - Detail line
@@ -1128,7 +1107,7 @@ final class CollectionsModelTests: XCTestCase {
     }
 
     /// The kind guard specifically, not just an empty tick set: `selected` clears the ticks on
-    /// every switch (`CollectionsModel.swift` around 204-205), so a leg that ticks a row and only
+    /// every switch (in its setter), so a leg that ticks a row and only
     /// then switches to the synced collection would find the predicate false regardless of the
     /// `isSynced` term — the empty tick set alone would explain it. Reload does not clear ticks,
     /// so ticking first and letting the *same* collection turn synced underneath is the one path
@@ -1184,7 +1163,7 @@ final class CollectionsModelTests: XCTestCase {
     }
 
     /// `remove(names:in:)` persists but never applies on its own; the caller applies only when
-    /// the collection losing rows is the active one — the same rule `setEnabled` follows.
+    /// the collection losing rows is the active one — the same rule `AppState.setEnabled` follows.
     func testRemoveCheckedAppliesOnlyWhenTheActiveCollectionLosesRows() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

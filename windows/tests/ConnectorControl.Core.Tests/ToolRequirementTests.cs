@@ -1,5 +1,6 @@
 namespace ConnectorControl.Core.Tests;
 
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/ToolRequirementTests.swift</summary>
 public class ToolRequirementTests
 {
     [Theory]

@@ -2,6 +2,7 @@ import XCTest
 import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/BackupManagerTests.cs
 final class BackupManagerTests: XCTestCase {
     var tempDir: TempDir!
     var dir: URL!

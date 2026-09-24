@@ -4,7 +4,7 @@ import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/PublishModelTests.cs. The Publish/Export
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/PublishModelTests.cs. The Publish/Export
 /// sheet: which rows the collection produces, what ticking them says in the intent, and what the
 /// preview and the warnings show for it.
 @MainActor

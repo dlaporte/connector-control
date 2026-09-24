@@ -3,9 +3,9 @@ import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/CopyModelTests.cs. The copy clash sheet: what
-/// its rows say about the ticked connectors a destination already holds, and what `perform()`
-/// does with the answers.
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/CopyModelTests.cs.
+/// The copy clash sheet: what its rows say about the ticked connectors a destination already holds,
+/// and what `perform()` does with the answers.
 @MainActor
 final class CopyModelTests: XCTestCase {
     private func local(_ command: String, _ args: [String] = []) -> MCPEntry {

@@ -2,6 +2,8 @@ import XCTest
 import ConnectorControlCore
 @testable import ConnectorControlState
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/EditorModelToolNoteTests.cs
+///
 /// windows/tests/ConnectorControl.Core.Tests/State/EditorModelTests.cs — the
 /// tool-probing/ToolNote slice.
 @MainActor

@@ -4,9 +4,9 @@ using ConnectorControl.Core.Tests.TestSupport;
 namespace ConnectorControl.Core.Tests.State;
 
 /// <summary>
-/// Tests/ConnectorControlStateTests/ReviewModelTests.swift. The Review &amp; Apply sheet over a
-/// real subscription: a document on disk, a change to it, and the one button that lets the
-/// change reach Claude.
+/// Mirror: Tests/ConnectorControlStateTests/ReviewModelTests.swift.
+/// The Review &amp; Apply sheet over a real subscription: a document on disk, a change to it, and
+/// the one button that lets the change reach Claude.
 /// </summary>
 public class ReviewModelTests
 {

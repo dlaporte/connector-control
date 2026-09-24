@@ -3,9 +3,9 @@ import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/EditorModelCollectionsTests.cs. The editor
-/// once it knows which collection it is editing: the four header states, a synced connector's
-/// read-only form with its placeholders still live, and the propagate line.
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/EditorModelCollectionsTests.cs.
+/// The editor once it knows which collection it is editing: the four header states, a synced
+/// connector's read-only form with its placeholders still live, and the propagate line.
 @MainActor
 final class EditorModelCollectionsTests: XCTestCase {
     /// Subscribes the rig's state to the sample document on disk, so "Data team" is a real

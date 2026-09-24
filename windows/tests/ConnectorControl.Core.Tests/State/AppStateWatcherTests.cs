@@ -5,6 +5,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/AppStateWatcherTests.swift</summary>
 public class AppStateWatcherTests
 {
     private static readonly TimeSpan Wait = TimeSpan.FromSeconds(8);
