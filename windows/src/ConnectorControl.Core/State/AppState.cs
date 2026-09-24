@@ -220,7 +220,11 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>Collection → why its source could not be read, after repeated failures or a manual refresh.</summary>
     public IReadOnlyDictionary<string, string> SourceErrors { get => sourceErrors; internal set => Set(ref sourceErrors, value); }
 
-    /// <summary>The last publish that failed, with the reason. Cleared by a write that succeeds.</summary>
+    /// <summary>
+    /// The last publish that did not land, with the reason and its kind. Cleared by a write that
+    /// succeeds. The kind is what separates a failed write, answered by another folder, from a
+    /// publish blocked for the author's review, answered by the Publish dialog.
+    /// </summary>
     public CollectionPublishError? PublishError { get => publishError; internal set => Set(ref publishError, value); }
 
     /// <summary>
@@ -1212,8 +1216,8 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Copies the active collection under a new name and makes it active, as the chip menu's
-    /// New Collection has always done. null on success, else the message to show.
+    /// Copies the active collection under a new name and makes it active, as New Collection in the
+    /// Collections window does. null on success, else the message to show.
     /// </summary>
     public string? CreateCollection(string name)
     {
@@ -2768,7 +2772,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// tell it from a failed write.
     /// </summary>
     internal static PublishErrorKind PublishErrorKindOf(Exception error) =>
-        // Every refusal of the intent is answered by the author in the Publish sheet.
+        // Every refusal of the intent is answered by the author in the Publish dialog.
         error is PublishIntentException
             ? PublishErrorKind.BlockedForReview
             : PublishErrorKind.WriteFailed;
@@ -2805,9 +2809,10 @@ public sealed class AppState : ObservableObject, IDisposable
     /// What this machine keeps back from <paramref name="collection"/>'s document. <c>Folders</c> are
     /// the collection's own: every folder this machine has published it into, which
     /// <c>${COLLECTION_DIR}</c> stands for, and none of them is ever released. <c>Values</c> are
-    /// everything else, less the paths the author released for this collection — every path on any of its lists of marked paths, and every other folder
-    /// it binds: another collection's publish folders, the folders of collections that have since
-    /// left the store, and each synced collection's located folder. The lists are not the
+    /// everything else, less the paths the author released for this collection — every path on any
+    /// of its lists of marked paths, and every other folder it binds: another collection's publish
+    /// folders, the folders of collections that have since left the store, and each synced
+    /// collection's located folder. The lists are not the
     /// collection's own alone: Claude's file carries whichever collection was last applied, and a
     /// connector reaches another collection by a copy, an ingest or a restore with its paths intact.
     /// </summary>

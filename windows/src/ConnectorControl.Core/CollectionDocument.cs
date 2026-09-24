@@ -28,8 +28,12 @@ public sealed class CollectionDocumentException(string message) : Exception(mess
     /// <summary>Set only by <see cref="NewerFormat"/>: the version the document claims.</summary>
     public int? NewerFormatVersion { get; private init; }
 
+    /// <summary>
+    /// The message is for a log, never the user: what they read is <c>AppState.NewerDocumentError</c>,
+    /// which owns the sentence, as Swift's <c>CollectionDocumentError.newerFormat</c> carries no text.
+    /// </summary>
     public static CollectionDocumentException NewerFormat(int version) =>
-        new("This collection was made by a newer Connector Control.") { NewerFormatVersion = version };
+        new($"format version {version}") { NewerFormatVersion = version };
 
     /// <summary>
     /// What is wrong, as it stands: <c>AppState.SourceUnreadableError</c> puts the message after the

@@ -849,8 +849,8 @@ public final class AppState: ObservableObject {
         return collectionsWindowRequest
     }
 
-    /// Copies the active collection under a new name and makes it active, as the chip menu's
-    /// New Collection has always done. nil on success, else the message to show.
+    /// Copies the active collection under a new name and makes it active, as New Collection in the
+    /// Collections window does. nil on success, else the message to show.
     public func createCollection(named name: String) -> String? {
         if let error = store.addCollection(named: name, copyingCurrent: true) { return error }
         persistStore()
