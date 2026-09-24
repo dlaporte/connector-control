@@ -1,0 +1,87 @@
+{
+  "activeProfile" : "Work",
+  "profiles" : {
+    "Default" : {
+      "mcps" : {
+        "aws-mcp" : {
+          "config" : {
+            "args" : [
+              "-y",
+              "mcp-remote",
+              "https:\/\/aws-mcp.us-east-1.api.aws\/mcp"
+            ],
+            "command" : "npx"
+          },
+          "enabled" : true,
+          "lastEditView" : "form"
+        },
+        "scoutbook" : {
+          "config" : {
+            "args" : [
+              "-y",
+              "mcp-remote",
+              "https:\/\/scoutbook.example.com\/mcp"
+            ],
+            "command" : "npx"
+          },
+          "enabled" : false,
+          "lastEditView" : "form"
+        },
+        "service-now" : {
+          "config" : {
+            "args" : [
+              "-y",
+              "mcp-remote",
+              "https:\/\/snow.example.com\/mcp"
+            ],
+            "command" : "npx"
+          },
+          "enabled" : true,
+          "lastEditView" : "form"
+        }
+      }
+    },
+    "Work" : {
+      "mcps" : {
+        "jira" : {
+          "config" : {
+            "args" : [
+              "-y",
+              "mcp-remote",
+              "https:\/\/jira.example.com\/mcp"
+            ],
+            "command" : "npx"
+          },
+          "enabled" : true,
+          "lastEditView" : "json"
+        },
+        "ledger" : {
+          "config" : {
+            "args" : [
+              "\/Users\/someone\/ledger\/dist\/index.js"
+            ],
+            "command" : "node",
+            "env" : {
+              "LOG_LEVEL" : "info"
+            }
+          },
+          "enabled" : false,
+          "lastEditView" : "form"
+        },
+        "scoutbook" : {
+          "config" : {
+            "args" : [
+              "-y",
+              "mcp-remote",
+              "https:\/\/scoutbook.example.com\/mcp"
+            ],
+            "command" : "npx"
+          },
+          "enabled" : true,
+          "lastEditView" : "form"
+        }
+      }
+    }
+  },
+  "version" : 2
+}
