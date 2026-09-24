@@ -629,8 +629,8 @@ public class AppStateCollectionsTests
         AppStateHarness.WriteDocumentAt(ChangedSample(), path);
         TempDir.BumpModificationTime(path);
         Assert.True(h.Ui.PumpUntil(() => state.PendingUpdates.ContainsKey("Data team"), Wait));
-        Assert.Equal("removes github; changes dbt", state.PendingUpdates["Data team"].Summary());
-        Assert.Equal(AppState.CollectionUpdateNotificationBody("Data team", "removes github; changes dbt"), h.Notifier.Sent[^1].Body);
+        Assert.Equal("deletes github; changes dbt", state.PendingUpdates["Data team"].Summary());
+        Assert.Equal(AppState.CollectionUpdateNotificationBody("Data team", "deletes github; changes dbt"), h.Notifier.Sent[^1].Body);
         var announced = h.Notifier.Sent.Count;
         state.RecomputePending();
         Assert.Equal(announced, h.Notifier.Sent.Count);   // one document, one announcement
@@ -874,7 +874,7 @@ public class AppStateCollectionsTests
         h.Notifier.Sent.Clear();
 
         using var second = h.Create();
-        Assert.Equal("removes github", second.PendingUpdates["Data team"].Summary());
+        Assert.Equal("deletes github", second.PendingUpdates["Data team"].Summary());
         Assert.Empty(h.Notifier.Sent);   // the banner already says it; a launch is not news
         second.Reload();
         Assert.Empty(h.Notifier.Sent);   // and the reload behind it must not announce it either
@@ -1369,7 +1369,7 @@ public class AppStateCollectionsTests
         Assert.Equal(MarkedPath, Assert.Single(intent.PathMarks["books"]).Value.Value);
         Assert.Equal(["server_path"], CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors["books"].Needs.Keys);
 
-        state.Remove(["books"]);
+        state.Delete(["books"]);
         // A connector added later under the same name was never ticked.
         Assert.False(state.CollectionsFile.Collections[state.ActiveCollection].Publish!.Intent.PathMarks.ContainsKey("books"));
         Assert.Null(state.PublishError);
@@ -1658,7 +1658,7 @@ public class AppStateCollectionsTests
             Assert.Equal(AppState.KeptPathCarriedError(name, field), state.PublishError?.Message);
             Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
             Assert.Equal(before, File.ReadAllBytes(file));
-            state.Remove([name]);
+            state.Delete([name]);
             // With it gone there is nothing left to keep back.
             Assert.Null(state.PublishError);
         }
@@ -1731,8 +1731,8 @@ public class AppStateCollectionsTests
             [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark> { [ArgPointer(0)] = new("server_path", null, MarkedPath) })],
             []), new HashSet<string>([MarkedPath], StringComparer.Ordinal)));
         Assert.Null(s.CreateCollection("Clients"));
-        s.Remove(["ledger"], "Clients");
-        s.Remove(["x"], "Clients");
+        s.Delete(["ledger"], "Clients");
+        s.Delete(["x"], "Clients");
         Assert.Null(s.Upsert("crm", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("crm-mcp")))), null, "Clients"));
         var clients = PublishFolder(h, "pubClients");
         Assert.Null(s.StartPublishing("Clients", clients, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
@@ -1870,7 +1870,7 @@ public class AppStateCollectionsTests
             team = first.ActiveCollection;
             Assert.Null(first.Upsert("a", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("a")))), null));
             Assert.Null(first.CreateCollection("Second"));
-            first.Remove(["a"], "Second");
+            first.Delete(["a"], "Second");
             first.SwitchCollection(team);
         }
         h.EditStoreOnDisk(store =>
@@ -2640,7 +2640,7 @@ public class AppStateCollectionsTests
         // copy to keep, and rewriting what came in could rewrite a genuine edit. The folder is then
         // kept back from the document, for the author to answer in Publish….
         var before = File.ReadAllBytes(document);
-        state.Remove(["x"]);
+        state.Delete(["x"]);
         Assert.NotEqual(before, File.ReadAllBytes(document));
         var withoutX = File.ReadAllBytes(document);
         state.RestoreClaudeConfig(backup);
@@ -2941,14 +2941,14 @@ public class AppStateCollectionsTests
                 ("args", JsonValue.Array([JsonValue.String("--path"), JsonValue.String(written)])))), null));
             Assert.Equal(AppState.PublishFolderCarriedError("py", FieldName.Argument(2)), state.PublishError?.Message);
             Assert.False(JsonText.FileContains(file, bound));
-            state.Remove(["py"]);
+            state.Delete(["py"]);
         }
         foreach (var other in new[] { $"{bound}.bak", $"{bound}_old/x", $"{bound}é/x" })
         {
             Assert.Null(state.Upsert("py", new McpEntry(JsonValue.Object(("command", JsonValue.String("python3")),
                 ("args", JsonValue.Array([JsonValue.String("--path"), JsonValue.String(other)])))), null));
             Assert.Null(state.PublishError);
-            state.Remove(["py"]);
+            state.Delete(["py"]);
         }
     }
 
@@ -3198,7 +3198,7 @@ public class AppStateCollectionsTests
         }
         var before = BackupCount(h, "mcps");
 
-        state.Remove(["alpha", "gamma"], "Default");
+        state.Delete(["alpha", "gamma"], "Default");
 
         Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("alpha"));
         Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("gamma"));
@@ -3229,7 +3229,7 @@ public class AppStateCollectionsTests
             [new("alpha", Mark("alpha")), new("beta", Mark("beta")), new("gamma", Mark("gamma"))],
             [])));
 
-        state.Remove(["alpha", "gamma"], "Default");
+        state.Delete(["alpha", "gamma"], "Default");
 
         Assert.Equal(new PublishIntent([new("beta", A())], [new("beta", Mark("beta"))], []),
             state.CollectionsFile.Collections["Default"].Publish?.Intent);
@@ -3247,11 +3247,11 @@ public class AppStateCollectionsTests
             ("command", JsonValue.String("/bin/alpha")))), null, "Default"));
         var before = BackupCount(h, "mcps");
 
-        state.Remove([], "Default");
+        state.Delete([], "Default");
         // Nothing to do, nothing written.
         Assert.Equal(before, BackupCount(h, "mcps"));
 
-        state.Remove(["nosuch"], "Default");
+        state.Delete(["nosuch"], "Default");
         // A name it never held is skipped, and skipping it writes nothing either.
         Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("alpha"));
         Assert.Equal(before, BackupCount(h, "mcps"));

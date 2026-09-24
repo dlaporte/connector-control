@@ -59,7 +59,7 @@ public class FlyoutModelTests
         state.SetEnabled("aws-mcp", false);
         Assert.False(row.Enabled);
         Assert.True(repaints > 0, "an AppState change is raised to the view");
-        state.Remove(["scoutbook"]);
+        state.Delete(["scoutbook"]);
         Assert.Equal(["aws-mcp", "service-now"], flyout.Rows.Select(r => r.Name).ToArray());
         Assert.Null(state.Upsert("alpha", new McpEntry(AppStateHarness.Remote("https://alpha.example/mcp")), null));
         Assert.Equal(["alpha", "aws-mcp", "service-now"], flyout.Rows.Select(r => r.Name).ToArray());
@@ -142,7 +142,7 @@ public class FlyoutModelTests
         {
             ["Team"] = new CollectionDiff(["jira"], ["confluence"], []),
         };
-        Assert.Equal("Team changed at its source: adds jira; removes confluence.", flyout.CollectionBannerText);
+        Assert.Equal("Team changed at its source: adds jira; deletes confluence.", flyout.CollectionBannerText);
         Assert.Equal("Review & Apply", flyout.CollectionBannerButton);
 
         state.PublishError = new CollectionPublishError("Default", "the folder is read-only");

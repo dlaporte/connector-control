@@ -93,8 +93,8 @@ final class StringCatalogTests: XCTestCase {
         "CollectionsModel.deleteNextActiveSentence": ["X"],
         "CollectionsModel.deletePublishedFileQuestion": ["X"],
         "CollectionsModel.editLabel": ["X"],
-        "CollectionsModel.removeCheckedMessage.many": ["3"],
-        "CollectionsModel.removeCheckedMessage.one": ["X"],
+        "CollectionsModel.deleteCheckedMessage.many": ["3"],
+        "CollectionsModel.deleteCheckedMessage.one": ["X"],
         "CollectionsModel.selectedCount": ["3"],
         "CollectionsModel.stopSyncingMessage": ["X"],
         "ConfigService.corruptStoreNote": ["X"],
@@ -110,7 +110,7 @@ final class StringCatalogTests: XCTestCase {
         "EditorModel.propagateLabel": ["X", "Y"],
         "EditorModel.propagateLabelMany": ["X", "Y"],
         "EditorModel.publishedNote": ["X"],
-        "EditorModel.removedOutsideMessage": ["X"],
+        "EditorModel.deletedOutsideMessage": ["X"],
         "FieldName.argument": ["1"],
         "FieldName.document": ["X"],
         "FieldName.envValue": ["X"],
@@ -261,11 +261,11 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.readOnlyNote"] = CollectionsModel.readOnlyNote
         actual["CollectionsModel.refreshButton"] = CollectionsModel.refreshButton
         actual["CollectionsModel.remoteType"] = CollectionsModel.remoteType
-        actual["CollectionsModel.removeCheckedButton"] = CollectionsModel.removeCheckedButton
-        actual["CollectionsModel.removeCheckedInformative"] = CollectionsModel.removeCheckedInformative
-        actual["CollectionsModel.removeCheckedMessage.many"] = CollectionsModel.removeCheckedMessage(["X", "Y", "Z"])
-        actual["CollectionsModel.removeCheckedMessage.one"] = CollectionsModel.removeCheckedMessage(["X"])
-        actual["CollectionsModel.removeFileButton"] = CollectionsModel.removeFileButton
+        actual["CollectionsModel.deleteCheckedButton"] = CollectionsModel.deleteCheckedButton
+        actual["CollectionsModel.deleteCheckedInformative"] = CollectionsModel.deleteCheckedInformative
+        actual["CollectionsModel.deleteCheckedMessage.many"] = CollectionsModel.deleteCheckedMessage(["X", "Y", "Z"])
+        actual["CollectionsModel.deleteCheckedMessage.one"] = CollectionsModel.deleteCheckedMessage(["X"])
+        actual["CollectionsModel.deleteFileButton"] = CollectionsModel.deleteFileButton
         actual["CollectionsModel.renameAction"] = CollectionsModel.renameAction
         actual["CollectionsModel.selectedCount"] = CollectionsModel.selectedCount(3)
         actual["CollectionsModel.showPublishedFileAction"] = CollectionsModel.showPublishedFileAction
@@ -344,10 +344,10 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.publishedNote"] = EditorModel.publishedNote("X")
         actual["EditorModel.remoteFooter"] = EditorModel.remoteFooter
         actual["EditorModel.remoteTypeTitle"] = EditorModel.remoteTypeTitle
-        actual["EditorModel.removeArgumentLabel"] = EditorModel.removeArgumentLabel
-        actual["EditorModel.removeVariableLabel"] = EditorModel.removeVariableLabel
-        actual["EditorModel.removedOutsideDetail"] = EditorModel.removedOutsideDetail
-        actual["EditorModel.removedOutsideMessage"] = EditorModel.removedOutsideMessage("X")
+        actual["EditorModel.deleteArgumentLabel"] = EditorModel.deleteArgumentLabel
+        actual["EditorModel.deleteVariableLabel"] = EditorModel.deleteVariableLabel
+        actual["EditorModel.deletedOutsideDetail"] = EditorModel.deletedOutsideDetail
+        actual["EditorModel.deletedOutsideMessage"] = EditorModel.deletedOutsideMessage("X")
         actual["EditorModel.saveAnywayButton"] = EditorModel.saveAnywayButton
         actual["EditorModel.saveButton"] = EditorModel.saveButton
         actual["EditorModel.scopesLabel"] = EditorModel.scopesLabel
@@ -479,7 +479,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ReviewModel.cancelButton"] = ReviewModel.cancelButton
         actual["ReviewModel.changedLabel"] = ReviewModel.changedLabel
         actual["ReviewModel.refreshButton"] = ReviewModel.refreshButton
-        actual["ReviewModel.removedLabel"] = ReviewModel.removedLabel
+        actual["ReviewModel.deletedLabel"] = ReviewModel.deletedLabel
         actual["ReviewModel.sourceMovedMessage"] = ReviewModel.sourceMovedMessage
         actual["ReviewModel.title"] = ReviewModel.title("X")
 

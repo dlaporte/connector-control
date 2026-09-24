@@ -640,8 +640,8 @@ public class CollectionsWindowTests
             Assert.Equal(CollectionsModel.CopyToButton, window.CopyToButton.Content);
             // Export carries no count: the bar says it already.
             Assert.Equal(CollectionsModel.ExportCheckedButton, window.ExportCheckedButton.Content);
-            Assert.Equal(CollectionsModel.RemoveCheckedButton, window.RemoveCheckedButton.Content);
-            Assert.Equal(Visibility.Visible, window.RemoveCheckedButton.Visibility);
+            Assert.Equal(CollectionsModel.DeleteCheckedButton, window.DeleteCheckedButton.Content);
+            Assert.Equal(Visibility.Visible, window.DeleteCheckedButton.Visibility);
 
             // What the bar's Export then exports is the ticked connectors, into the file name the
             // collection's slug makes — the subset changes what travels, not what it is called.
@@ -657,11 +657,11 @@ public class CollectionsWindowTests
             Tick(window, second, false);
             Assert.Equal(CollectionsModel.SelectedCount(1), window.SelectedCountText.Text);
 
-            // Remove asks first, and removes what is ticked.
+            // Remove asks first, and deletes what is ticked.
             h.Dialogs.NextConfirm = true;
-            Click(window.RemoveCheckedButton);
+            Click(window.DeleteCheckedButton);
             Layout(window);
-            Assert.Equal(CollectionsModel.RemoveCheckedMessage([first]), h.Dialogs.Confirms[0].Message);
+            Assert.Equal(CollectionsModel.DeleteCheckedMessage([first]), h.Dialogs.Confirms[0].Message);
             Assert.DoesNotContain(first, window.Model.Rows.Select(r => r.Name));
             Assert.Contains(second, window.Model.Rows.Select(r => r.Name));
             Assert.Empty(window.Model.CheckedNames);

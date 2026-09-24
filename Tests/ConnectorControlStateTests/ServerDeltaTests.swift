@@ -14,7 +14,7 @@ final class ServerDeltaTests: XCTestCase {
         XCTAssertEqual(delta.removed, ["a"])
         XCTAssertEqual(delta.changed, ["c"])
         XCTAssertFalse(delta.isEmpty)
-        XCTAssertEqual(delta.summary(), "adds d; removes a; changes c")
+        XCTAssertEqual(delta.summary(), "adds d; deletes a; changes c")
     }
 
     func testIdenticalSetsAreEmpty() {

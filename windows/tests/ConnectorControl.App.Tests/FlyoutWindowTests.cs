@@ -364,7 +364,7 @@ public class FlyoutWindowTests
         {
             Assert.Equal(Visibility.Visible, window.CollectionBannerStrip.Visibility);
             Assert.Equal(model.CollectionBannerText, window.CollectionBannerMessage.Text);
-            Assert.Contains("removes github", window.CollectionBannerMessage.Text);
+            Assert.Contains("deletes github", window.CollectionBannerMessage.Text);
             Assert.Equal(FlyoutModel.ReviewAndApplyButton, window.CollectionBannerButton.Content);
             // One answer, so no second button; the chip repeats the news beside the name.
             Assert.Equal(Visibility.Collapsed, window.CollectionBannerSecondary.Visibility);

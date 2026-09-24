@@ -545,9 +545,9 @@ struct CollectionsWindowView: View {
     // MARK: - Selection bar
 
     /// Idle, an empty strip that keeps its height, so ticking a row cannot move the list; with
-    /// rows ticked, what can be done to them. Remove sits apart at the far end, so a hand moving
+    /// rows ticked, what can be done to them. Delete sits apart at the far end, so a hand moving
     /// from the safe pair cannot land on it, and is absent where the rows are not the user's to
-    /// remove.
+    /// delete.
     private var selectionBar: some View {
         VStack(spacing: 0) {
             Divider()
@@ -572,8 +572,8 @@ struct CollectionsWindowView: View {
                     .fixedSize()
                     Button(CollectionsModel.exportCheckedButton) { show(.export(exportModel())) }
                     Spacer(minLength: 16)
-                    if model.canRemoveChecked {
-                        Button(CollectionsModel.removeCheckedButton) { act { model.removeChecked() } }
+                    if model.canDeleteChecked {
+                        Button(CollectionsModel.deleteCheckedButton) { act { model.deleteChecked() } }
                     }
                 }
             }

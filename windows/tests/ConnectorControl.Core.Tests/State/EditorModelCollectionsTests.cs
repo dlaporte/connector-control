@@ -118,11 +118,11 @@ public class EditorModelCollectionsTests
         SubscribeToDataTeam(rig);
         var state = rig.State;
         using var editor = rig.Editor("dbt", "Data team");
-        state.Remove(["dbt"], "Data team");
+        state.Delete(["dbt"], "Data team");
         EnvRow(editor, "DBT_TOKEN").Value = "dbt_pat_123";
 
         Assert.False(editor.Save());
-        Assert.Equal(EditorModel.RemovedOutsideMessage("dbt"), editor.ValidationError);
+        Assert.Equal(EditorModel.DeletedOutsideMessage("dbt"), editor.ValidationError);
         // No Save Anyway: it would add the author's connector back.
         Assert.Empty(rig.H.Dialogs.Confirms);
         Assert.False(state.Store.Collections["Data team"].Mcps.ContainsKey("dbt"));
@@ -682,7 +682,7 @@ public class EditorModelCollectionsTests
         Assert.Equal("your clone, then dist/index.js", editor.PublishedHintForArg(0));
         Assert.Null(editor.PublishedHintForArg(7));
 
-        // A published collection's editor adds and removes arguments freely, and the record
+        // A published collection's editor adds and deletes arguments freely, and the record
         // keys the hint by where the marker sat, so the answer follows the row rather than the
         // position it happens to hold now.
         editor.Args.Insert(0, new ArgRow("--quiet"));

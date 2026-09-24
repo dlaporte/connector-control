@@ -48,21 +48,21 @@ public partial class EditorWindow : Window
 
     private void OnAddArg(object sender, RoutedEventArgs e) => Model.AddArg();
 
-    private void OnRemoveArg(object sender, RoutedEventArgs e)
+    private void OnDeleteArg(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is ArgRow row)
         {
-            Model.RemoveArg(row);
+            Model.DeleteArg(row);
         }
     }
 
     private void OnAddEnv(object sender, RoutedEventArgs e) => Model.AddEnvRow();
 
-    private void OnRemoveEnv(object sender, RoutedEventArgs e)
+    private void OnDeleteEnv(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is EnvRow row)
         {
-            Model.RemoveEnvRow(row);
+            Model.DeleteEnvRow(row);
         }
     }
 

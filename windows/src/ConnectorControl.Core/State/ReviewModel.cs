@@ -17,7 +17,7 @@ public sealed class ReviewModel : ObservableObject
     public const string CancelButton = "Cancel";
     public const string RefreshButton = "Refresh";
     public const string AddedLabel = "Added";
-    public const string RemovedLabel = "Removed";
+    public const string DeletedLabel = "Deleted";
     public const string ChangedLabel = "Changed";
     public const string SourceMovedMessage = "The file changed while this was open. Review it again.";
 
@@ -40,7 +40,7 @@ public sealed class ReviewModel : ObservableObject
     public static string KindLabel(Kind kind) => kind switch
     {
         Kind.Added => AddedLabel,
-        Kind.Removed => RemovedLabel,
+        Kind.Removed => DeletedLabel,
         Kind.Changed => ChangedLabel,
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };

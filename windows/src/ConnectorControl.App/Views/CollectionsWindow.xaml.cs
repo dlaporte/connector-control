@@ -362,7 +362,7 @@ public partial class CollectionsWindow : Window
         }
     }
 
-    private void OnRemoveChecked(object sender, RoutedEventArgs e) => Act(Model.RemoveChecked);
+    private void OnDeleteChecked(object sender, RoutedEventArgs e) => Act(Model.DeleteChecked);
 
     // MARK: menus
 

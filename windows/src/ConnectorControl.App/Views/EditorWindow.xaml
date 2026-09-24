@@ -465,8 +465,8 @@
                             </TextBlock.Text>
                           </TextBlock>
                         </StackPanel>
-                        <Button x:Name="RemoveArgButton" Grid.Column="1" Style="{StaticResource IconButton}" Content="&#xE711;" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnRemoveArg"
-                                ToolTip="{x:Static state:EditorModel.RemoveArgumentLabel}" AutomationProperties.Name="{x:Static state:EditorModel.RemoveArgumentLabel}"
+                        <Button x:Name="DeleteArgButton" Grid.Column="1" Style="{StaticResource IconButton}" Content="&#xE711;" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnDeleteArg"
+                                ToolTip="{x:Static state:EditorModel.DeleteArgumentLabel}" AutomationProperties.Name="{x:Static state:EditorModel.DeleteArgumentLabel}"
                                 IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
                       </Grid>
                     </DataTemplate>
@@ -613,8 +613,8 @@
                               </Style>
                             </Button.Style>
                           </Button>
-                          <Button x:Name="RemoveEnvButton" Style="{StaticResource IconButton}" Content="&#xE711;" Click="OnRemoveEnv"
-                                  ToolTip="{x:Static state:EditorModel.RemoveVariableLabel}" AutomationProperties.Name="{x:Static state:EditorModel.RemoveVariableLabel}"
+                          <Button x:Name="DeleteEnvButton" Style="{StaticResource IconButton}" Content="&#xE711;" Click="OnDeleteEnv"
+                                  ToolTip="{x:Static state:EditorModel.DeleteVariableLabel}" AutomationProperties.Name="{x:Static state:EditorModel.DeleteVariableLabel}"
                                   IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
                         </StackPanel>
                       </Grid>

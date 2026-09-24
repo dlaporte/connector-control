@@ -21,7 +21,7 @@ public class ServerDeltaTests
         Assert.Equal(["a"], delta.Removed);
         Assert.Equal(["c"], delta.Changed);
         Assert.False(delta.IsEmpty);
-        Assert.Equal("adds d; removes a; changes c", delta.Summary());
+        Assert.Equal("adds d; deletes a; changes c", delta.Summary());
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public class ServerDeltaTests
         Assert.Equal("restartClaude", Notifications.RestartAction);
         Assert.Equal(TimeSpan.FromSeconds(3), AppState.RestartRecheckDelay);
         Assert.Equal(
-            "The connector list changed outside Connector Control — Claude's config now adds evil; removes fs. Restart Claude to pick it up.",
+            "The connector list changed outside Connector Control — Claude's config now adds evil; deletes fs. Restart Claude to pick it up.",
             AppState.ConnectorListChangedBody(new ServerDelta(["evil"], ["fs"], []), restartRequired: true));
         Assert.Equal(
             "The connector list changed outside Connector Control — Claude's config was regenerated. Claude will use it the next time it starts.",

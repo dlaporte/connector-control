@@ -210,13 +210,13 @@ struct EditorWindowView: View {
                         .font(.system(.body, design: .monospaced))
                         .disabled(model.isReadOnly && !asks)
                 }
-                Button { model.removeArg(id: row.id) } label: {
+                Button { model.deleteArg(id: row.id) } label: {
                     Image(systemName: "xmark.circle")
                 }
                 .buttonStyle(.plain)
                 .disabled(model.isReadOnly)
-                .help(EditorModel.removeArgumentLabel)
-                .accessibilityLabel(EditorModel.removeArgumentLabel)
+                .help(EditorModel.deleteArgumentLabel)
+                .accessibilityLabel(EditorModel.deleteArgumentLabel)
             }
         }
         Button(EditorModel.addArgumentTitle) { model.addArg() }
@@ -279,13 +279,13 @@ struct EditorWindowView: View {
                             .buttonStyle(.plain)
                             .help(reveal)
                             .accessibilityLabel(reveal)
-                            Button { model.removeEnvRow(id: row.id) } label: {
+                            Button { model.deleteEnvRow(id: row.id) } label: {
                                 Image(systemName: "xmark.circle")
                             }
                             .buttonStyle(.plain)
                             .disabled(model.isReadOnly)
-                            .help(EditorModel.removeVariableLabel)
-                            .accessibilityLabel(EditorModel.removeVariableLabel)
+                            .help(EditorModel.deleteVariableLabel)
+                            .accessibilityLabel(EditorModel.deleteVariableLabel)
                         }
                     }
                 }

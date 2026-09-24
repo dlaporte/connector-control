@@ -46,8 +46,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// <summary>The icon buttons' names: the eye beside a value, and the × after an argument or a variable.</summary>
     public const string ShowValueLabel = "Show value";
     public const string HideValueLabel = "Hide value";
-    public const string RemoveArgumentLabel = "Remove argument";
-    public const string RemoveVariableLabel = "Remove variable";
+    public const string DeleteArgumentLabel = "Delete argument";
+    public const string DeleteVariableLabel = "Delete variable";
     /// <summary>The form's labels, prompts and buttons, as both editors show them.</summary>
     public const string FormTab = "Form";
     public const string JsonTab = "JSON";
@@ -76,7 +76,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public const string ScopesLabel = "Scopes (optional)";
     public const string ScopesPrompt = "space separated";
     public const string ChangedOutsideDetail = "Saving will overwrite that change with this editor's version.";
-    public const string RemovedOutsideDetail = "Saving will add it back.";
+    public const string DeletedOutsideDetail = "Saving will add it back.";
     public const string WhatCanIChange = "What can I change?";
     public const string WhatCanIChangeAnswer = "Fill in the highlighted values and switch it on or off. Everything else follows the source; make a local copy to change it.";
     public const string NeedsValue = "needs your value";
@@ -99,7 +99,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public static string DuplicateEnvError(string name) => $"Duplicate environment variable name: {name}";
     public static string ChangedOutsideMessage(string name) => $"“{name}” changed outside this editor.";
-    public static string RemovedOutsideMessage(string name) => $"“{name}” was removed outside this editor.";
+    public static string DeletedOutsideMessage(string name) => $"“{name}” was deleted outside this editor.";
 
     /// <summary>The Mac's static and an instance property of the same name can coexist there; C# forbids that, so the instance property below calls this.</summary>
     public static string AdditionalTitleFor(int count, IEnumerable<string> keys) =>
@@ -959,7 +959,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public void AddArg() => Args.Add(new ArgRow(""));
 
-    public void RemoveArg(ArgRow row) => Args.Remove(row);
+    public void DeleteArg(ArgRow row) => Args.Remove(row);
 
     /// <summary>A fresh row's value is shown in clear — the user is typing it, not inspecting a stored secret.</summary>
     public void AddEnvRow()
@@ -970,7 +970,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         FocusEnvRowRequested?.Invoke(row);
     }
 
-    public void RemoveEnvRow(EnvRow row)
+    public void DeleteEnvRow(EnvRow row)
     {
         EnvRows.Remove(row);
         Raise(nameof(HasEnvRows));
@@ -1413,11 +1413,11 @@ public sealed class EditorModel : ObservableObject, IDisposable
                 // nothing is written. Reopening the editor picks up the author's current config.
                 if (readOnly)
                 {
-                    ValidationError = missing ? RemovedOutsideMessage(Target.Name) : ChangedOutsideMessage(Target.Name);
+                    ValidationError = missing ? DeletedOutsideMessage(Target.Name) : ChangedOutsideMessage(Target.Name);
                     return false;
                 }
-                var message = missing ? RemovedOutsideMessage(Target.Name) : ChangedOutsideMessage(Target.Name);
-                var detail = missing ? RemovedOutsideDetail : ChangedOutsideDetail;
+                var message = missing ? DeletedOutsideMessage(Target.Name) : ChangedOutsideMessage(Target.Name);
+                var detail = missing ? DeletedOutsideDetail : ChangedOutsideDetail;
                 if (!dialogs.Confirm(message, detail, SaveAnywayButton))
                 {
                     return false;

@@ -99,8 +99,8 @@ public class StringCatalogTests
         ["CollectionsModel.deleteNextActiveSentence"] = ["X"],
         ["CollectionsModel.deletePublishedFileQuestion"] = ["X"],
         ["CollectionsModel.editLabel"] = ["X"],
-        ["CollectionsModel.removeCheckedMessage.many"] = ["3"],
-        ["CollectionsModel.removeCheckedMessage.one"] = ["X"],
+        ["CollectionsModel.deleteCheckedMessage.many"] = ["3"],
+        ["CollectionsModel.deleteCheckedMessage.one"] = ["X"],
         ["CollectionsModel.selectedCount"] = ["3"],
         ["CollectionsModel.stopSyncingMessage"] = ["X"],
         ["ConfigService.corruptStoreNote"] = ["X"],
@@ -117,7 +117,7 @@ public class StringCatalogTests
         ["EditorModel.propagateLabel"] = ["X", "Y"],
         ["EditorModel.propagateLabelMany"] = ["X", "Y"],
         ["EditorModel.publishedNote"] = ["X"],
-        ["EditorModel.removedOutsideMessage"] = ["X"],
+        ["EditorModel.deletedOutsideMessage"] = ["X"],
         ["FlyoutModel.settingsNotSavedCaution"] = ["X"],
         ["FieldName.argument"] = ["1"],
         ["FieldName.document"] = ["X"],
@@ -272,11 +272,11 @@ public class StringCatalogTests
         actual["CollectionsModel.readOnlyNote"] = CollectionsModel.ReadOnlyNote;
         actual["CollectionsModel.refreshButton"] = CollectionsModel.RefreshButton;
         actual["CollectionsModel.remoteType"] = CollectionsModel.RemoteType;
-        actual["CollectionsModel.removeCheckedButton"] = CollectionsModel.RemoveCheckedButton;
-        actual["CollectionsModel.removeCheckedInformative"] = CollectionsModel.RemoveCheckedInformative;
-        actual["CollectionsModel.removeCheckedMessage.many"] = CollectionsModel.RemoveCheckedMessage(["X", "Y", "Z"]);
-        actual["CollectionsModel.removeCheckedMessage.one"] = CollectionsModel.RemoveCheckedMessage(["X"]);
-        actual["CollectionsModel.removeFileButton"] = CollectionsModel.RemoveFileButton;
+        actual["CollectionsModel.deleteCheckedButton"] = CollectionsModel.DeleteCheckedButton;
+        actual["CollectionsModel.deleteCheckedInformative"] = CollectionsModel.DeleteCheckedInformative;
+        actual["CollectionsModel.deleteCheckedMessage.many"] = CollectionsModel.DeleteCheckedMessage(["X", "Y", "Z"]);
+        actual["CollectionsModel.deleteCheckedMessage.one"] = CollectionsModel.DeleteCheckedMessage(["X"]);
+        actual["CollectionsModel.deleteFileButton"] = CollectionsModel.DeleteFileButton;
         actual["CollectionsModel.renameAction"] = CollectionsModel.RenameAction;
         actual["CollectionsModel.selectedCount"] = CollectionsModel.SelectedCount(3);
         actual["CollectionsModel.showPublishedFileAction"] = CollectionsModel.ShowPublishedFileAction;
@@ -368,10 +368,10 @@ public class StringCatalogTests
         actual["EditorModel.publishedNote"] = EditorModel.PublishedNote("X");
         actual["EditorModel.remoteFooter"] = EditorModel.RemoteFooter;
         actual["EditorModel.remoteTypeTitle"] = EditorModel.RemoteTypeTitle;
-        actual["EditorModel.removeArgumentLabel"] = EditorModel.RemoveArgumentLabel;
-        actual["EditorModel.removeVariableLabel"] = EditorModel.RemoveVariableLabel;
-        actual["EditorModel.removedOutsideDetail"] = EditorModel.RemovedOutsideDetail;
-        actual["EditorModel.removedOutsideMessage"] = EditorModel.RemovedOutsideMessage("X");
+        actual["EditorModel.deleteArgumentLabel"] = EditorModel.DeleteArgumentLabel;
+        actual["EditorModel.deleteVariableLabel"] = EditorModel.DeleteVariableLabel;
+        actual["EditorModel.deletedOutsideDetail"] = EditorModel.DeletedOutsideDetail;
+        actual["EditorModel.deletedOutsideMessage"] = EditorModel.DeletedOutsideMessage("X");
         actual["EditorModel.saveAnywayButton"] = EditorModel.SaveAnywayButton;
         actual["EditorModel.saveButton"] = EditorModel.SaveButton;
         actual["EditorModel.scopesLabel"] = EditorModel.ScopesLabel;
@@ -514,7 +514,7 @@ public class StringCatalogTests
         actual["ReviewModel.cancelButton"] = ReviewModel.CancelButton;
         actual["ReviewModel.changedLabel"] = ReviewModel.ChangedLabel;
         actual["ReviewModel.refreshButton"] = ReviewModel.RefreshButton;
-        actual["ReviewModel.removedLabel"] = ReviewModel.RemovedLabel;
+        actual["ReviewModel.deletedLabel"] = ReviewModel.DeletedLabel;
         actual["ReviewModel.sourceMovedMessage"] = ReviewModel.SourceMovedMessage;
         actual["ReviewModel.title"] = ReviewModel.Title("X");
 

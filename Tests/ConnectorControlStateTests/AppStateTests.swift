@@ -113,7 +113,7 @@ final class AppStateTests: XCTestCase {
     func testRemovePersistsButDoesNotApply() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        state.remove(names: ["aws-mcp"])
+        state.delete(names: ["aws-mcp"])
         XCTAssertNil(try h.storeOnDisk().mcps["aws-mcp"])
         XCTAssertNotNil(try h.claudeServers()["aws-mcp"])
         XCTAssertTrue(state.isDirty)
@@ -133,7 +133,7 @@ final class AppStateTests: XCTestCase {
     func testPendingRemovalIsRegeneratedQuietlyOnReload() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        state.remove(names: ["aws-mcp"])
+        state.delete(names: ["aws-mcp"])
         state.reload()
         XCTAssertNil(try h.claudeServers()["aws-mcp"])     // regenerated from the store
         XCTAssertNil(state.store.mcps["aws-mcp"])          // not resurrected: it matched the baseline
@@ -174,7 +174,7 @@ final class AppStateTests: XCTestCase {
     func testExternalEditThatMatchesTheStoreOnlyAnnouncesTheChange() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        state.remove(names: ["aws-mcp"])   // pending removal: store and file now differ
+        state.delete(names: ["aws-mcp"])   // pending removal: store and file now differ
         try h.writeClaudeServers([      // someone writes exactly what the store would render
             ("scoutbook", try XCTUnwrap(state.store.mcps["scoutbook"]).config),
             ("service-now", try XCTUnwrap(state.store.mcps["service-now"]).config),
@@ -356,7 +356,7 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(Notifications.restartAction, "restartClaude")
         XCTAssertEqual(
             AppState.connectorListChangedBody(ServerDelta(added: ["evil"], removed: ["fs"]), restartRequired: true),
-            "The connector list changed outside Connector Control — Claude's config now adds evil; removes fs. Restart Claude to pick it up.")
+            "The connector list changed outside Connector Control — Claude's config now adds evil; deletes fs. Restart Claude to pick it up.")
         XCTAssertEqual(
             AppState.connectorListChangedBody(ServerDelta(changed: ["aws-mcp"]), restartRequired: false),
             "The connector list changed outside Connector Control — Claude's config now changes aws-mcp. Claude will use it the next time it starts.")

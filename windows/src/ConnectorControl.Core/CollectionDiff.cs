@@ -53,7 +53,7 @@ public sealed record CollectionDiff(IReadOnlyList<string> Added, IReadOnlyList<s
     }
 
     /// <summary>
-    /// "adds a, b; removes c; changes d" — same shape as <c>ServerDelta.Summary</c>, kept as its
+    /// "adds a, b; deletes c; changes d" — same shape as <c>ServerDelta.Summary</c>, kept as its
     /// own copy here since this type lives beside the document Core builds, not the state layer.
     /// </summary>
     public string Summary(int limit = 4)
@@ -65,7 +65,7 @@ public sealed record CollectionDiff(IReadOnlyList<string> Added, IReadOnlyList<s
         }
         if (Removed.Count > 0)
         {
-            parts.Add("removes " + List(Removed, limit));
+            parts.Add("deletes " + List(Removed, limit));
         }
         if (Changed.Count > 0)
         {

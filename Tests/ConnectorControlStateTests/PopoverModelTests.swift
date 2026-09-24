@@ -57,7 +57,7 @@ final class PopoverModelTests: XCTestCase {
         state.setEnabled("aws-mcp", false)
         XCTAssertEqual(popover.rows.first { $0.name == "aws-mcp" }?.enabled, false)
         XCTAssertGreaterThan(repaints, 0, "an AppState change is republished to the view")
-        state.remove(names: ["scoutbook"])
+        state.delete(names: ["scoutbook"])
         XCTAssertEqual(popover.rows.map(\.name), ["aws-mcp", "service-now"])
         XCTAssertNil(state.upsert(name: "alpha", entry: MCPEntry(config: AppStateHarness.remote("https://alpha.example/mcp")), renamedFrom: nil))
         XCTAssertEqual(popover.rows.map(\.name), ["alpha", "aws-mcp", "service-now"])
@@ -129,7 +129,7 @@ final class PopoverModelTests: XCTestCase {
 
         let diff = CollectionDiff(added: ["jira"], removed: ["confluence"], changed: [])
         state.pendingUpdates = ["Team": diff]
-        XCTAssertEqual(popover.collectionBannerText, "Team changed at its source: adds jira; removes confluence.")
+        XCTAssertEqual(popover.collectionBannerText, "Team changed at its source: adds jira; deletes confluence.")
         XCTAssertEqual(popover.collectionBannerButton, "Review & Apply")
 
         state.publishError = CollectionPublishError(collection: "Default", message: "the folder is read-only")

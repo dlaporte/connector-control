@@ -350,16 +350,16 @@
       </ScrollViewer>
 
       <!-- The selection bar. Idle, an empty strip; with rows ticked, what can be done to them.
-           Remove sits apart at the far end, so a hand moving from the safe pair cannot land on it,
-           and is absent where the rows are not the user's to remove. One fixed height, idle or
+           Delete sits apart at the far end, so a hand moving from the safe pair cannot land on it,
+           and is absent where the rows are not the user's to delete. One fixed height, idle or
            ticked, so ticking a row cannot move the list. -->
       <Border x:Name="SelectionBar" Grid.Row="3" Margin="0,8,0,0" Height="{StaticResource SelectionBarHeight}" BorderThickness="0,1,0,0"
               BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
         <Grid>
           <DockPanel x:Name="TickedBar" VerticalAlignment="Center" Visibility="Collapsed">
-            <Button x:Name="RemoveCheckedButton" DockPanel.Dock="Right" Padding="10,4" Margin="16,0,0,0"
-                    Content="{x:Static state:CollectionsModel.RemoveCheckedButton}"
-                    Visibility="{Binding CanRemoveChecked, Converter={StaticResource Vis}}" Click="OnRemoveChecked" />
+            <Button x:Name="DeleteCheckedButton" DockPanel.Dock="Right" Padding="10,4" Margin="16,0,0,0"
+                    Content="{x:Static state:CollectionsModel.DeleteCheckedButton}"
+                    Visibility="{Binding CanDeleteChecked, Converter={StaticResource Vis}}" Click="OnDeleteChecked" />
             <StackPanel Orientation="Horizontal">
               <TextBlock x:Name="SelectedCountText" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0" />
               <Button x:Name="CopyToButton" Padding="10,4" Margin="0,0,6,0"

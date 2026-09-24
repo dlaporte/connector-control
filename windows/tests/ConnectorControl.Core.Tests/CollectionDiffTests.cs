@@ -54,7 +54,7 @@ public class CollectionDiffTests
         Assert.Equal(["atlas", "datadog", "\U0001F600", "\uFF5E"], diff.Added);
         Assert.Equal(["box", "confluence"], diff.Removed);
         Assert.Equal(["asana", "dbt"], diff.Changed);
-        Assert.Equal("adds atlas, datadog, \U0001F600, \uFF5E; removes box, confluence; changes asana, dbt", diff.Summary());
+        Assert.Equal("adds atlas, datadog, \U0001F600, \uFF5E; deletes box, confluence; changes asana, dbt", diff.Summary());
     }
 
     [Fact]

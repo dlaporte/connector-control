@@ -33,7 +33,7 @@ final class CollectionDiffTests: XCTestCase {
         XCTAssertEqual(diff.added, ["atlas", "datadog", "\u{1F600}", "\u{FF5E}"])
         XCTAssertEqual(diff.removed, ["box", "confluence"])
         XCTAssertEqual(diff.changed, ["asana", "dbt"])
-        XCTAssertEqual(diff.summary(), "adds atlas, datadog, \u{1F600}, \u{FF5E}; removes box, confluence; changes asana, dbt")
+        XCTAssertEqual(diff.summary(), "adds atlas, datadog, \u{1F600}, \u{FF5E}; deletes box, confluence; changes asana, dbt")
     }
 
     func testApplyCarriesAFilledValueToTheMarkersNewPlace() {

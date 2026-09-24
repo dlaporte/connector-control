@@ -135,12 +135,12 @@ final class EditorModelCollectionsTests: XCTestCase {
         try subscribeToDataTeam(rig)
         let state = rig.state
         let editor = rig.editor("dbt", in: "Data team")
-        state.remove(names: ["dbt"], in: "Data team")
+        state.delete(names: ["dbt"], in: "Data team")
         let token = try envRow(editor, "DBT_TOKEN")
         editor.envRows[try XCTUnwrap(editor.envRows.firstIndex(of: token))].value = "dbt_pat_123"
 
         XCTAssertFalse(editor.save())
-        XCTAssertEqual(editor.validationError, EditorModel.removedOutsideMessage("dbt"))
+        XCTAssertEqual(editor.validationError, EditorModel.deletedOutsideMessage("dbt"))
         XCTAssertEqual(rig.h.dialogs.confirms, [], "no Save Anyway: it would add the author's connector back")
         XCTAssertNil(state.store.collections["Data team"]?.mcps["dbt"])
     }
@@ -540,7 +540,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertEqual(editor.publishedHint(arg: 0), "your clone, then dist/index.js")
         XCTAssertNil(editor.publishedHint(arg: 7))
 
-        // A published collection's editor adds and removes arguments freely, and the record
+        // A published collection's editor adds and deletes arguments freely, and the record
         // keys the hint by where the marker sat, so the answer follows the row rather than the
         // position it happens to hold now.
         editor.args.insert(ArgRow(value: "--quiet"), at: 0)

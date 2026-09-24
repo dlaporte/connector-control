@@ -35,9 +35,9 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public const string UpdateAvailableStatus = "update available";
     /// <summary>
     /// The two answers to the published-document question. Keep is the default, on Return and on
-    /// Escape: a file the team reads is not something to remove by pressing a key.
+    /// Escape: a file the team reads is not something to delete by pressing a key.
     /// </summary>
-    public const string RemoveFileButton = "Remove";
+    public const string DeleteFileButton = "Delete";
     public const string KeepFileButton = "Keep";
     public const string RemoteType = "remote";
     /// <summary>The sidebar's double-click, and the same action in its context menu.</summary>
@@ -54,7 +54,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     public const string CopyToButton = "Copy to";
     public const string ExportCheckedButton = "Export";
-    public const string RemoveCheckedButton = "Remove";
+    public const string DeleteCheckedButton = "Delete";
 
     /// <summary>The bar's own tally, e.g. "2 selected".</summary>
     public static string SelectedCount(int n) => $"{n} selected";
@@ -64,15 +64,15 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// removal of one row deserves the same specificity the editor's own Remove used to give it,
     /// and a removal of several would only get longer for naming them all.
     /// </summary>
-    public static string RemoveCheckedMessage(IReadOnlyList<string> names) =>
-        names.Count == 1 ? $"Remove “{names[0]}”?" : $"Remove {names.Count} connectors?";
+    public static string DeleteCheckedMessage(IReadOnlyList<string> names) =>
+        names.Count == 1 ? $"Delete “{names[0]}”?" : $"Delete {names.Count} connectors?";
 
     /// <summary>
     /// Lifted from the editor's Remove confirmation, which the list now replaces: the sentence —
     /// the most useful thing in that confirmation — survives here unchanged. Delete Collection's
     /// confirmation ends with it too.
     /// </summary>
-    public const string RemoveCheckedInformative = "A copy remains in Backups.";
+    public const string DeleteCheckedInformative = "A copy remains in Backups.";
 
     /// <summary>
     /// The sidebar's chain glyph, or null when there is no chain to explain: a local collection
@@ -88,7 +88,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>The idle selection bar's tally, e.g. "14 connectors".</summary>
     public static string ConnectorTally(int n) => n == 1 ? $"{n} connector" : $"{n} connectors";
 
-    public static string DeletePublishedFileQuestion(string fileName) => $"Also remove {fileName} from the folder?";
+    public static string DeletePublishedFileQuestion(string fileName) => $"Also delete {fileName} from the folder?";
 
     // The Delete Collection confirmation's informative text, one sentence per fact, in the order
     // DeleteInformative joins them. The count leads, so a reader who skimmed the title still
@@ -252,7 +252,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         Raise(nameof(BannerText));
         Raise(nameof(BannerButton));
         Raise(nameof(HasBanner));
-        Raise(nameof(CanRemoveChecked));
+        Raise(nameof(CanDeleteChecked));
         Raise(nameof(Pills));
         Raise(nameof(CanAddConnector));
         Raise(nameof(AddConnectorTooltipText));
@@ -761,7 +761,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         }
     }
 
-    public bool CanRemoveChecked => !state.IsSynced(SelectedCollection) && CheckedNames.Count > 0;
+    public bool CanDeleteChecked => !state.IsSynced(SelectedCollection) && CheckedNames.Count > 0;
 
     /// <summary>Refresh reads the bound document, so it needs one this machine can name.</summary>
     public bool CanRefresh => LocatedSource(SelectedCollection) is not null;
@@ -1069,7 +1069,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             checkedNames.Remove(name);
         }
         RefreshRows();
-        Raise(nameof(CanRemoveChecked));
+        Raise(nameof(CanDeleteChecked));
     }
 
     /// <summary>
@@ -1185,14 +1185,14 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     {
         checkedNames.ExceptWith(names);
         RefreshRows();
-        Raise(nameof(CanRemoveChecked));
+        Raise(nameof(CanDeleteChecked));
     }
 
     /// <summary>
-    /// The selection bar's Remove: asks first, names the connector when there is one and the
+    /// The selection bar's Delete: asks first, names the connector when there is one and the
     /// count when there are more, and always says a copy remains in Backups.
     /// </summary>
-    public void RemoveChecked()
+    public void DeleteChecked()
     {
         var names = CheckedNames;
         if (names.Count == 0)
@@ -1200,12 +1200,12 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             LastError = null;
             return;
         }
-        if (!dialogs.Confirm(RemoveCheckedMessage(names), RemoveCheckedInformative, RemoveCheckedButton, destructive: true))
+        if (!dialogs.Confirm(DeleteCheckedMessage(names), DeleteCheckedInformative, DeleteCheckedButton, destructive: true))
         {
             LastError = null;
             return;
         }
-        state.Remove(names, SelectedCollection);
+        state.Delete(names, SelectedCollection);
         // Remove(names, collection) persists but does not apply, as its single-name sibling does not.
         if (SelectedCollection == state.ActiveCollection)
         {
@@ -1276,7 +1276,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             sentences.Add(DeleteSourceSentence);
         }
-        sentences.Add(RemoveCheckedInformative);
+        sentences.Add(DeleteCheckedInformative);
         return string.Join(" ", sentences);
     }
 
@@ -1292,7 +1292,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         // Nothing on this machine writes the document when there is no binding for it, so there is
         // no file here to offer to remove. Nor is there anything to ask while the last write
         // failed: the folder that refused it would refuse the delete too, so the question would be
-        // one whose Remove cannot be honoured. The banner's own Stop Publishing says the same by
+        // one whose Delete cannot be honoured. The banner's own Stop Publishing says the same by
         // passing false outright.
         // Only a failed write puts the folder out of reach. A publish blocked for review never
         // touched it, so its document can still be removed and the question still stands.
@@ -1391,9 +1391,9 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             ? CollectionDocument.FileName(record.Slug)
             : null;
 
-    /// <summary>Keep is the answer Return and Escape both give; Remove, the destructive one, takes a click.</summary>
+    /// <summary>Keep is the answer Return and Escape both give; Delete, the destructive one, takes a click.</summary>
     private bool AskAboutPublishedFile(string fileName) =>
-        dialogs.Confirm(DeletePublishedFileQuestion(fileName), null, RemoveFileButton, KeepFileButton, destructive: true,
+        dialogs.Confirm(DeletePublishedFileQuestion(fileName), null, DeleteFileButton, KeepFileButton, destructive: true,
                         cancelIsDefault: true);
 
     private bool Report(string? error)

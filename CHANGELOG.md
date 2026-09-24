@@ -21,7 +21,7 @@ bullet once the section is about to ship.
   connector was switched on or off in the meantime, rather than opening a second editor for
   it, as on Windows.
 - Escape answers "Keep" when stopping publishing or deleting a published collection asks
-  whether to remove its file, as it does on Windows; before, Escape did nothing there.
+  whether to delete its file, as it does on Windows; before, Escape did nothing there.
 - Escape cancels every sheet in the Collections window, and the connector editor, as their
   Cancel buttons do.
 
@@ -45,9 +45,14 @@ bullet once the section is about to ship.
 
 ### Both platforms
 
-- In "Also remove <file> from the folder?", asked by Stop Publishing and by Delete of a
-  published collection, Return and Escape both answer Keep. Remove, shown as the
-  destructive answer, needs a click; before, Return removed the file.
+- "Delete" is the one word for deleting: the selection bar's button and its question
+  ("Delete “<name>”?", "Delete 3 connectors?"), the published-file question and its
+  button, the editor's Delete argument and Delete variable, "was deleted outside this
+  editor", the Review sheet's **Deleted** group and the "deletes …" in a change summary
+  all say Delete where they said Remove.
+- In "Also delete <file> from the folder?", asked by Stop Publishing and by Delete of a
+  published collection, Return and Escape both answer Keep. Delete, shown as the
+  destructive answer, needs a click; before, Return deleted the file.
 - In the Collections window, clicking a connector's row opens its editor, and the
   pencil at the end of the row is gone, so what the connector runs has the room. A click
   on or beside a row's tick ticks it instead. The rows highlight under the pointer, and
@@ -66,7 +71,7 @@ bullet once the section is about to ship.
   arrived.
 - A subscribed collection is read-only apart from your secrets, your paths and which
   connectors are on: its rows show a lock, the editor opens locked and says what you can
-  change, and Add Connector is disabled. If the author changes or removes a connector
+  change, and Add Connector is disabled. If the author changes or deletes a connector
   while its editor is open, Save refuses and says which, rather than write the old
   version back. Make Local Copy takes the whole collection into one of your own.
 - A change at a subscribed collection's source arrives for review: Review & Apply shows the
@@ -82,7 +87,7 @@ bullet once the section is about to ship.
   synced drive and rewrites it whenever what the collection runs changes; turning a
   connector on or off never republishes. Publishing Settings changes what a published
   collection shares. Deleting a published collection, or Stop Publishing in the
-  Collections window, asks whether to remove the document too; Keep is the default.
+  Collections window, asks whether to delete the document too; Keep is the default.
 - The Publish sheet lists every environment value, which travels as a hint unless you
   tick share value, and every argument that looks like a path on this machine, which
   travels as written unless you tick it to become a placeholder. The token, header value
@@ -96,7 +101,7 @@ bullet once the section is about to ship.
   `${COLLECTION_DIR}` answers it by rewriting the connector.
 - A publish that fails says so on the collection banner, with Choose Folder and Stop
   Publishing, and pressing Publish again retries the write at once. A path marked for
-  others to supply survives added, removed or reordered arguments, an in-place
+  others to supply survives added, deleted or reordered arguments, an in-place
   correction and a connector rename; if the app can no longer place it, or the document
   would carry a kept-back path or the publish folder in another connector, publishing
   stops rather than write it, the document already in the folder is left as it was, and
@@ -126,9 +131,9 @@ bullet once the section is about to ship.
   already holds can replace the one there, land beside it as `<name> 2`, which is the
   default, or be left out. Replacing a connector in the active collection applies at
   once. Export writes the ticked connectors as a document.
-- Remove takes out any number of ticked connectors at once. It asks first, naming the
+- Delete takes out any number of ticked connectors at once. It asks first, naming the
   connector or the count, and says a copy remains in Backups; the connector editor no
-  longer has a Remove button.
+  longer has a Delete button of its own.
 - Duplicate copies a whole local collection into a new one, every connector switched off
   and marked with where it came from.
 - The popover (Mac) and flyout (Windows) now only run the active collection: they switch

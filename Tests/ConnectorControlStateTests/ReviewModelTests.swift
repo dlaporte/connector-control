@@ -31,7 +31,7 @@ final class ReviewModelTests: XCTestCase {
 
         let model = ReviewModel(state: state, collection: "Data team")
         XCTAssertEqual(model.title, "Update to Data team")
-        XCTAssertEqual(model.summary, "removes github; changes dbt")
+        XCTAssertEqual(model.summary, "deletes github; changes dbt")
         XCTAssertEqual(model.rows.map(\.name), ["github", "dbt"], "added, then removed, then changed")
         XCTAssertEqual(model.rows.map(\.kind), [.removed, .changed])
         XCTAssertEqual(model.rows.map(\.id), ["github", "dbt"])
@@ -115,9 +115,9 @@ final class ReviewModelTests: XCTestCase {
     }
     func testTheKindsGroupTheListInTheOrderTheSummaryReads() {
         XCTAssertEqual(ReviewModel.kinds, [.added, .removed, .changed])
-        XCTAssertEqual(ReviewModel.kinds.map(ReviewModel.kindLabel), ["Added", "Removed", "Changed"])
+        XCTAssertEqual(ReviewModel.kinds.map(ReviewModel.kindLabel), ["Added", "Deleted", "Changed"])
         XCTAssertEqual(ReviewModel.kindLabel(.added), ReviewModel.addedLabel)
-        XCTAssertEqual(ReviewModel.kindLabel(.removed), ReviewModel.removedLabel)
+        XCTAssertEqual(ReviewModel.kindLabel(.removed), ReviewModel.deletedLabel)
         XCTAssertEqual(ReviewModel.kindLabel(.changed), ReviewModel.changedLabel)
     }
     func testTheSheetOwnsItsFooterButtons() {

@@ -23,11 +23,11 @@ public struct ServerDelta: Equatable, Sendable {
 
     public var isEmpty: Bool { added.isEmpty && removed.isEmpty && changed.isEmpty }
 
-    /// "adds a, b; removes c; changes d" — at most `limit` names per part, then "and N more".
+    /// "adds a, b; deletes c; changes d" — at most `limit` names per part, then "and N more".
     public func summary(limit: Int = 4) -> String {
         var parts: [String] = []
         if !added.isEmpty { parts.append("adds " + ServerDelta.list(added, limit: limit)) }
-        if !removed.isEmpty { parts.append("removes " + ServerDelta.list(removed, limit: limit)) }
+        if !removed.isEmpty { parts.append("deletes " + ServerDelta.list(removed, limit: limit)) }
         if !changed.isEmpty { parts.append("changes " + ServerDelta.list(changed, limit: limit)) }
         return parts.joined(separator: "; ")
     }

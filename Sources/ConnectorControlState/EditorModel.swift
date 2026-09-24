@@ -37,8 +37,8 @@ public final class EditorModel: ObservableObject {
     /// The icon buttons' names: the eye beside a value, and the × after an argument or a variable.
     public static let showValueLabel = "Show value"
     public static let hideValueLabel = "Hide value"
-    public static let removeArgumentLabel = "Remove argument"
-    public static let removeVariableLabel = "Remove variable"
+    public static let deleteArgumentLabel = "Delete argument"
+    public static let deleteVariableLabel = "Delete variable"
     /// The form's labels, prompts and buttons, as both editors show them.
     public static let formTab = "Form"
     public static let jsonTab = "JSON"
@@ -74,7 +74,7 @@ public final class EditorModel: ObservableObject {
     public static let windowGroupTitle = "Connector Editor"
     public static let noTargetMessage = "Choose a connector from the menu bar popover."
     public static let changedOutsideDetail = "Saving will overwrite that change with this editor's version."
-    public static let removedOutsideDetail = "Saving will add it back."
+    public static let deletedOutsideDetail = "Saving will add it back."
     public static let whatCanIChange = "What can I change?"
     public static let whatCanIChangeAnswer = "Fill in the highlighted values and switch it on or off. Everything else follows the source; make a local copy to change it."
     public static let needsValue = "needs your value"
@@ -103,7 +103,7 @@ public final class EditorModel: ObservableObject {
 
     public static func changedOutsideMessage(_ name: String) -> String { "“\(name)” changed outside this editor." }
 
-    public static func removedOutsideMessage(_ name: String) -> String { "“\(name)” was removed outside this editor." }
+    public static func deletedOutsideMessage(_ name: String) -> String { "“\(name)” was deleted outside this editor." }
 
     public static func additionalTitle(count: Int, keys: [String]) -> String { "\(count) field(s) not editable here: \(keys.joined(separator: ", ")) — switch to JSON to edit" }
 
@@ -603,7 +603,7 @@ public final class EditorModel: ObservableObject {
 
     public func addArg() { args.append(ArgRow(value: "")) }
 
-    public func removeArg(id: UUID) { args.removeAll { $0.id == id } }
+    public func deleteArg(id: UUID) { args.removeAll { $0.id == id } }
 
     /// A fresh row's value is shown in clear — the user is typing it, not
     /// inspecting a stored secret. Returns the row the view should focus.
@@ -614,7 +614,7 @@ public final class EditorModel: ObservableObject {
         return row.id
     }
 
-    public func removeEnvRow(id: UUID) { envRows.removeAll { $0.id == id } }
+    public func deleteEnvRow(id: UUID) { envRows.removeAll { $0.id == id } }
 
     public func toggleReveal(id: UUID) {
         guard let index = envRows.firstIndex(where: { $0.id == id }) else { return }
@@ -939,14 +939,14 @@ public final class EditorModel: ObservableObject {
                 // nothing is written. Reopening the editor picks up the author's current config.
                 if readOnly {
                     validationError = missing
-                        ? EditorModel.removedOutsideMessage(target.name)
+                        ? EditorModel.deletedOutsideMessage(target.name)
                         : EditorModel.changedOutsideMessage(target.name)
                     return false
                 }
                 let message = missing
-                    ? EditorModel.removedOutsideMessage(target.name)
+                    ? EditorModel.deletedOutsideMessage(target.name)
                     : EditorModel.changedOutsideMessage(target.name)
-                let detail = missing ? EditorModel.removedOutsideDetail : EditorModel.changedOutsideDetail
+                let detail = missing ? EditorModel.deletedOutsideDetail : EditorModel.changedOutsideDetail
                 guard dialogs.confirm(message: message, informative: detail, primary: EditorModel.saveAnywayButton) else {
                     return false
                 }

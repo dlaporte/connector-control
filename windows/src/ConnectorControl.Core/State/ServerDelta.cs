@@ -18,7 +18,7 @@ public sealed record ServerDelta(IReadOnlyList<string> Added, IReadOnlyList<stri
 
     public bool IsEmpty => Added.Count == 0 && Removed.Count == 0 && Changed.Count == 0;
 
-    /// <summary>"adds a, b; removes c; changes d" — at most <paramref name="limit"/> names per part, then "and N more".</summary>
+    /// <summary>"adds a, b; deletes c; changes d" — at most <paramref name="limit"/> names per part, then "and N more".</summary>
     public string Summary(int limit = 4)
     {
         var parts = new List<string>();
@@ -28,7 +28,7 @@ public sealed record ServerDelta(IReadOnlyList<string> Added, IReadOnlyList<stri
         }
         if (Removed.Count > 0)
         {
-            parts.Add("removes " + List(Removed, limit));
+            parts.Add("deletes " + List(Removed, limit));
         }
         if (Changed.Count > 0)
         {

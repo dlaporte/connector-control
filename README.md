@@ -154,7 +154,7 @@ Escape cancels any of these sheets, and the connector editor, as its
   collection, make that collection active first.
 - **The selection bar** along the bottom is empty while nothing is ticked.
   Tick rows and it reads "2 selected", with **Copy to**, **Export** and,
-  apart at the far end, **Remove**. The rows of a subscribed collection
+  apart at the far end, **Delete**. The rows of a subscribed collection
   can't be ticked.
 
 The column after the name says what the connector runs: a remote
@@ -181,9 +181,9 @@ Copy sheet asks about each clash: **Replace**, **Keep both**, which lands the
 copy as `<name> 2` and is the default, or **Skip**; the rest are listed as
 "new · arrives off". Replacing a connector in the active collection applies
 at once. **Export** opens the
-Export sheet on the ticked rows. **Remove** asks first — "Remove
-“<name>”?", or "Remove 3 connectors?" — adding "A copy remains in Backups.";
-removing from the active collection applies at once.
+Export sheet on the ticked rows. **Delete** asks first — "Delete
+“<name>”?", or "Delete 3 connectors?" — adding "A copy remains in Backups.";
+deleting from the active collection applies at once.
 
 <p align="center">
   <img src="docs/screenshots/mac-collections-window.png" width="620" alt="The Collections window on macOS: collections in the sidebar with a chain on the subscribed one; the selected collection's name with its pills and a more menu; its connectors with ticks, names, what each one runs and edit pencils; and the selection bar along the bottom.">
@@ -295,14 +295,14 @@ What is the author's: names, commands, arguments, URLs and auth. They open
 locked in the editor under a grey line reading "Synced from <name> ·
 read-only", with a **What can I change?** link that spells out the rule.
 What is yours: the values the document asks this machine for, and which
-connectors are on. If the author changes or removes a connector while its
+connectors are on. If the author changes or deletes a connector while its
 editor is open, **Save** refuses — "“<name>” changed outside this editor."
-or "“<name>” was removed outside this editor." — rather than write the old
+or "“<name>” was deleted outside this editor." — rather than write the old
 version back; reopen the editor to fill in your values again.
 
 When the author changes the file the collection says so — "Data team changed
-at its source: adds jira; removes confluence." — with **Review & Apply**.
-The review sheet groups what would land under **Added**, **Removed** and
+at its source: adds jira; deletes confluence." — with **Review & Apply**.
+The review sheet groups what would land under **Added**, **Deleted** and
 **Changed**, with the JSON either side of every change, and nothing lands
 until you press **Apply**. Added connectors arrive switched off, and your
 filled values follow their placeholder even if the author moved it to
@@ -360,7 +360,8 @@ machines that follow it, including the one that publishes it.
 #### Worth knowing
 
 - **Stop Publishing** — and deleting a published collection — asks "Also
-  remove <file> from the folder?", and keeping it is the default. Stop
+  delete <file> from the folder?", and keeping it is the default: Return
+  and Escape both keep it, and deleting it takes a click on **Delete**. Stop
   Publishing from the failed-write banner, or while the last write is
   failing, keeps the file without asking. Once the file is kept, publishing
   that collection into the same folder again is refused with "<file>
@@ -369,7 +370,7 @@ machines that follow it, including the one that publishes it.
   never writes over a document it cannot vouch for. Delete the file from the
   folder, then publish again.
 - A path you mark in the Publish sheet is remembered together with the text it
-  had, so it stays a placeholder when you add, remove or reorder arguments
+  had, so it stays a placeholder when you add, delete or reorder arguments
   around it, correct it in place in the editor's form, or rename the
   connector. If it changes somewhere the app cannot follow — the JSON view,
   a hand edit, or an older version of the app on any machine — and the app
@@ -437,7 +438,7 @@ automatically instead, and a **Check for Updates** button.
 
 #### Uninstalling
 
-Quit the app, then remove:
+Quit the app, then delete:
 
     /Applications/Connector Control.app
     ~/Library/Application Support/Connector Control/   # master list + backups
@@ -516,7 +517,7 @@ profile, so backups stay on the machine that made them):
 %APPDATA%\Claude\claude_desktop_config.json   ← generated output, as above
 ```
 
-Every change (toggle, edit, add, remove, restore) writes the master list and
+Every change (toggle, edit, add, delete, restore) writes the master list and
 regenerates the `mcpServers` section of Claude's config — atomically, after
 backing both up. Backups are named by the millisecond they were taken; two
 taken in the same one are numbered, and still list, restore and prune
@@ -562,7 +563,7 @@ changes live (the file is watched). Notes:
 - Connector env vars (API keys!) sync too. Use a private repo, or keep
   secrets out of synced connectors.
 - A change that arrives through the synced folder is written into Claude's
-  config and announced by name — which connectors it added, removed or
+  config and announced by name — which connectors it added, deleted or
   changed — whether or not Claude is running at the time. Every connector
   is a command Claude runs, so treat write access to the synced folder as
   you would treat access to the machines that follow it.

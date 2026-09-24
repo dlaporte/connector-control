@@ -547,14 +547,14 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.upsert(name: "dbt", entry: dbt, renamedFrom: "dbt"))
         XCTAssertTrue(state.pendingUpdates.isEmpty, "a filled marker is not a change to the collection")
 
-        // The author changes dbt's args and removes github. This test alone waits for the real
+        // The author changes dbt's args and deletes github. This test alone waits for the real
         // source watcher to deliver it; the others read the source through recomputePending.
         try h.writeDocument(changedSample(), at: url)
         try TempDir.bumpModificationDate(of: url)
         XCTAssertTrue(h.ui.pumpUntil({ state.pendingUpdates["Data team"] != nil }, timeout: 8))
-        XCTAssertEqual(state.pendingUpdates["Data team"]?.summary(), "removes github; changes dbt")
+        XCTAssertEqual(state.pendingUpdates["Data team"]?.summary(), "deletes github; changes dbt")
         XCTAssertEqual(h.notifier.sent.last?.body,
-                       AppState.collectionUpdateNotificationBody("Data team", "removes github; changes dbt"))
+                       AppState.collectionUpdateNotificationBody("Data team", "deletes github; changes dbt"))
         let announced = h.notifier.sent.count
         state.recomputePending()
         XCTAssertEqual(h.notifier.sent.count, announced, "one document, one announcement")
@@ -768,7 +768,7 @@ final class AppStateCollectionsTests: XCTestCase {
         h.notifier.clearSent()
 
         let second = h.create()
-        XCTAssertEqual(second.pendingUpdates["Data team"]?.summary(), "removes github")
+        XCTAssertEqual(second.pendingUpdates["Data team"]?.summary(), "deletes github")
         XCTAssertTrue(h.notifier.sent.isEmpty, "the banner already says it; a launch is not news")
         second.reload()
         XCTAssertTrue(h.notifier.sent.isEmpty, "and the reload behind it must not announce it either")
@@ -1187,7 +1187,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let document = try CollectionDocument.decode(try Data(contentsOf: file))
         XCTAssertEqual(document.connectors["books"]?.needs.keys.sorted(), ["server_path"])
 
-        state.remove(names: ["books"])
+        state.delete(names: ["books"])
         XCTAssertNil(state.collectionsFile.collections[state.activeCollection]?.publish?.intent.pathMarks["books"],
                      "a connector added later under the same name was never ticked")
         XCTAssertNil(state.publishError)
@@ -1404,7 +1404,7 @@ final class AppStateCollectionsTests: XCTestCase {
             XCTAssertEqual(state.publishError?.message, AppState.keptPathCarriedError(carrier.name, carrier.field), carrier.name)
             XCTAssertEqual(state.publishError?.kind, .blockedForReview, carrier.name)
             XCTAssertEqual(try Data(contentsOf: file), before, carrier.name)
-            state.remove(names: [carrier.name])
+            state.delete(names: [carrier.name])
             XCTAssertNil(state.publishError, "with it gone there is nothing left to keep back")
         }
     }
@@ -1468,8 +1468,8 @@ final class AppStateCollectionsTests: XCTestCase {
             shareValues: [:], pathMarks: ["ledger": [JSONPointer(["args", "0"]): .init(name: "server_path", hint: nil, value: markedPath)]],
             hints: [:]), reviewedValues: [markedPath]))
         XCTAssertNil(s.createCollection(named: "Clients"))
-        s.remove(names: ["ledger"], in: "Clients")
-        s.remove(names: ["x"], in: "Clients")
+        s.delete(names: ["ledger"], in: "Clients")
+        s.delete(names: ["x"], in: "Clients")
         XCTAssertNil(s.upsert(name: "crm", entry: MCPEntry(enabled: true, config: .object(["command": .string("crm-mcp")])),
                               renamedFrom: nil, in: "Clients"))
         let clients = try publishFolder(h, "pubClients")
@@ -1587,7 +1587,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(first.upsert(name: "a", entry: MCPEntry(enabled: true, config: .object(["command": .string("a")])),
                                   renamedFrom: nil))
         XCTAssertNil(first.createCollection(named: "Second"))
-        first.remove(names: ["a"], in: "Second")
+        first.delete(names: ["a"], in: "Second")
         first.switchCollection(to: team)
         first.dispose()
         try h.editStoreOnDisk { store in
@@ -2273,7 +2273,7 @@ final class AppStateCollectionsTests: XCTestCase {
         // copy to keep, and rewriting what came in could rewrite a genuine edit. The folder is then
         // kept back from the document, for the author to answer in Publish….
         let before = try Data(contentsOf: document)
-        state.remove(names: ["x"])
+        state.delete(names: ["x"])
         XCTAssertNotEqual(try Data(contentsOf: document), before)
         let withoutX = try Data(contentsOf: document)
         try state.restoreClaudeConfig(from: backup)
@@ -2540,13 +2540,13 @@ final class AppStateCollectionsTests: XCTestCase {
                 "command": .string("python3"), "args": .array([.string("--path"), .string(written)])])), renamedFrom: nil))
             XCTAssertEqual(state.publishError?.message, AppState.publishFolderCarriedError("py", FieldName.argument(2)), written)
             XCTAssertFalse(try jsonFile(file, contains: bound), written)
-            state.remove(names: ["py"])
+            state.delete(names: ["py"])
         }
         for other in ["\(bound).bak", "\(bound)_old/x", "\(bound)é/x"] {
             XCTAssertNil(state.upsert(name: "py", entry: MCPEntry(config: .object([
                 "command": .string("python3"), "args": .array([.string("--path"), .string(other)])])), renamedFrom: nil))
             XCTAssertNil(state.publishError, other)
-            state.remove(names: ["py"])
+            state.delete(names: ["py"])
         }
     }
 
@@ -2752,7 +2752,7 @@ final class AppStateCollectionsTests: XCTestCase {
         }
         let before = try backupCount(h, series: "mcps")
 
-        state.remove(names: ["alpha", "gamma"], in: "Default")
+        state.delete(names: ["alpha", "gamma"], in: "Default")
 
         XCTAssertNil(state.store.collections["Default"]?.mcps["alpha"], "alpha went")
         XCTAssertNil(state.store.collections["Default"]?.mcps["gamma"], "and gamma")
@@ -2779,7 +2779,7 @@ final class AppStateCollectionsTests: XCTestCase {
             shareValues: ["alpha": ["A"], "beta": ["A"], "gamma": ["A"]],
             pathMarks: ["alpha": mark("alpha"), "beta": mark("beta"), "gamma": mark("gamma")], hints: [:])))
 
-        state.remove(names: ["alpha", "gamma"], in: "Default")
+        state.delete(names: ["alpha", "gamma"], in: "Default")
 
         XCTAssertEqual(state.collectionsFile.collections["Default"]?.publish?.intent,
                        PublishIntent(shareValues: ["beta": ["A"]], pathMarks: ["beta": mark("beta")], hints: [:]))
@@ -2796,10 +2796,10 @@ final class AppStateCollectionsTests: XCTestCase {
         ])), renamedFrom: nil, in: "Default"))
         let before = try backupCount(h, series: "mcps")
 
-        state.remove(names: [], in: "Default")
+        state.delete(names: [], in: "Default")
         XCTAssertEqual(try backupCount(h, series: "mcps"), before, "nothing to do, nothing written")
 
-        state.remove(names: ["nosuch"], in: "Default")
+        state.delete(names: ["nosuch"], in: "Default")
         XCTAssertNotNil(state.store.collections["Default"]?.mcps["alpha"], "a name it never held is skipped")
         XCTAssertEqual(try backupCount(h, series: "mcps"), before, "and skipping it writes nothing either")
     }

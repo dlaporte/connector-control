@@ -755,14 +755,14 @@ public final class AppState: ObservableObject {
         return nil
     }
 
-    /// Removes connectors and persists them as one write, and no more: a caller removing from the
-    /// active collection applies at the call site, as `CollectionsModel.removeChecked` does. Names
-    /// the collection does not hold are skipped, and removing nothing writes nothing.
+    /// Deletes connectors and persists them as one write, and no more: a caller deleting from the
+    /// active collection applies at the call site, as `CollectionsModel.deleteChecked` does. Names
+    /// the collection does not hold are skipped, and deleting nothing writes nothing.
     ///
     /// Whatever the publish record said about a connector goes with it: a connector added later
     /// under the same name was never ticked, and a mark left behind would refuse every publish as
     /// a path that had moved.
-    public func remove(names: [String], in collection: String? = nil) {
+    public func delete(names: [String], in collection: String? = nil) {
         let target = collection ?? activeCollection
         var removed = false
         for name in names where store.collections[target]?.mcps[name] != nil {

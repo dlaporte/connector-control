@@ -39,7 +39,7 @@ public class ReviewModelTests
 
         var model = new ReviewModel(state, "Data team");
         Assert.Equal("Update to Data team", model.SheetTitle);
-        Assert.Equal("removes github; changes dbt", model.Summary);
+        Assert.Equal("deletes github; changes dbt", model.Summary);
         // Added, then removed, then changed.
         Assert.Equal(["github", "dbt"], model.Rows.Select(r => r.Name));
         Assert.Equal([ReviewModel.Kind.Removed, ReviewModel.Kind.Changed], model.Rows.Select(r => r.Kind));
@@ -141,9 +141,9 @@ public class ReviewModelTests
     public void TheKindsGroupTheListInTheOrderTheSummaryReads()
     {
         Assert.Equal([ReviewModel.Kind.Added, ReviewModel.Kind.Removed, ReviewModel.Kind.Changed], ReviewModel.Kinds);
-        Assert.Equal(["Added", "Removed", "Changed"], ReviewModel.Kinds.Select(ReviewModel.KindLabel));
+        Assert.Equal(["Added", "Deleted", "Changed"], ReviewModel.Kinds.Select(ReviewModel.KindLabel));
         Assert.Equal(ReviewModel.AddedLabel, ReviewModel.KindLabel(ReviewModel.Kind.Added));
-        Assert.Equal(ReviewModel.RemovedLabel, ReviewModel.KindLabel(ReviewModel.Kind.Removed));
+        Assert.Equal(ReviewModel.DeletedLabel, ReviewModel.KindLabel(ReviewModel.Kind.Removed));
         Assert.Equal(ReviewModel.ChangedLabel, ReviewModel.KindLabel(ReviewModel.Kind.Changed));
     }
     [Fact]

@@ -1013,15 +1013,15 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Removes connectors and persists them as one write, and no more: a caller removing from the
-    /// active collection applies at the call site, as <c>CollectionsModel.RemoveChecked</c> does.
-    /// Names the collection does not hold are skipped, and removing nothing writes nothing.
+    /// Deletes connectors and persists them as one write, and no more: a caller deleting from the
+    /// active collection applies at the call site, as <c>CollectionsModel.DeleteChecked</c> does.
+    /// Names the collection does not hold are skipped, and deleting nothing writes nothing.
     ///
     /// Whatever the publish record said about a connector goes with it: a connector added later
     /// under the same name was never ticked, and a mark left behind would refuse every publish as
     /// a path that had moved.
     /// </summary>
-    public void Remove(IReadOnlyList<string> names, string? collection = null)
+    public void Delete(IReadOnlyList<string> names, string? collection = null)
     {
         var target = collection ?? ActiveCollection;
         if (!Store.Collections.TryGetValue(target, out var held))

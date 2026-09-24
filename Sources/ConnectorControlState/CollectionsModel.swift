@@ -30,8 +30,8 @@ public final class CollectionsModel: ObservableObject {
     /// what is true of the file, not how long ago it last changed.
     public static let updateAvailableStatus = "update available"
     /// The two answers to the published-document question. Keep is the default, on Return and on
-    /// Escape: a file the team reads is not something to remove by pressing a key.
-    public static let removeFileButton = "Remove"
+    /// Escape: a file the team reads is not something to delete by pressing a key.
+    public static let deleteFileButton = "Delete"
     public static let keepFileButton = "Keep"
     public static let remoteType = "remote"
     /// The sidebar's double-click, and the same action in its context menu.
@@ -45,7 +45,7 @@ public final class CollectionsModel: ObservableObject {
 
     public static let copyToButton = "Copy to"
     public static let exportCheckedButton = "Export"
-    public static let removeCheckedButton = "Remove"
+    public static let deleteCheckedButton = "Delete"
 
     /// The bar's own tally, e.g. "2 selected".
     public static func selectedCount(_ n: Int) -> String { "\(n) selected" }
@@ -53,14 +53,14 @@ public final class CollectionsModel: ObservableObject {
     /// Names the connector when there is exactly one ticked, and states the count otherwise: a
     /// removal of one row deserves the same specificity the editor's own Remove used to give it,
     /// and a removal of several would only get longer for naming them all.
-    public static func removeCheckedMessage(_ names: [String]) -> String {
-        names.count == 1 ? "Remove “\(names[0])”?" : "Remove \(names.count) connectors?"
+    public static func deleteCheckedMessage(_ names: [String]) -> String {
+        names.count == 1 ? "Delete “\(names[0])”?" : "Delete \(names.count) connectors?"
     }
 
     /// Lifted from the editor's Remove confirmation, which the list now replaces: the sentence —
     /// the most useful thing in that confirmation — survives here unchanged. Delete Collection's
     /// confirmation ends with it too.
-    public static let removeCheckedInformative = "A copy remains in Backups."
+    public static let deleteCheckedInformative = "A copy remains in Backups."
 
     /// The sidebar's chain glyph, or nil when there is no chain to explain: a local collection
     /// has no source, and a synced one whose file is still to be found has no path to name. The
@@ -76,7 +76,7 @@ public final class CollectionsModel: ObservableObject {
     /// The idle selection bar's tally, e.g. "14 connectors".
     public static func connectorTally(_ n: Int) -> String { n == 1 ? "\(n) connector" : "\(n) connectors" }
 
-    public static func deletePublishedFileQuestion(_ fileName: String) -> String { "Also remove \(fileName) from the folder?" }
+    public static func deletePublishedFileQuestion(_ fileName: String) -> String { "Also delete \(fileName) from the folder?" }
 
     // The Delete Collection confirmation's informative text, one sentence per fact, in the order
     // `deleteInformative(for:)` joins them. The count leads, so a reader who skimmed the title
@@ -618,7 +618,7 @@ public final class CollectionsModel: ObservableObject {
         }
     }
 
-    public var canRemoveChecked: Bool { !state.isSynced(selectedCollection) && !checkedNames.isEmpty }
+    public var canDeleteChecked: Bool { !state.isSynced(selectedCollection) && !checkedNames.isEmpty }
 
     /// Refresh reads the bound document, so it needs one this machine can name.
     public var canRefresh: Bool { locatedSource(of: selectedCollection) != nil }
@@ -893,22 +893,22 @@ public final class CollectionsModel: ObservableObject {
         checkedNames_.subtract(names)
     }
 
-    /// The selection bar's Remove: asks first, names the connector when there is one and the
+    /// The selection bar's Delete: asks first, names the connector when there is one and the
     /// count when there are more, and always says a copy remains in Backups.
-    public func removeChecked() {
+    public func deleteChecked() {
         let names = checkedNames
         guard !names.isEmpty else {
             lastError = nil
             return
         }
-        guard dialogs.confirm(message: CollectionsModel.removeCheckedMessage(names),
-                              informative: CollectionsModel.removeCheckedInformative,
-                              primary: CollectionsModel.removeCheckedButton, destructive: true) else {
+        guard dialogs.confirm(message: CollectionsModel.deleteCheckedMessage(names),
+                              informative: CollectionsModel.deleteCheckedInformative,
+                              primary: CollectionsModel.deleteCheckedButton, destructive: true) else {
             lastError = nil
             return
         }
-        state.remove(names: names, in: selectedCollection)
-        // remove(names:in:) persists but does not apply, as its single-name sibling does not.
+        state.delete(names: names, in: selectedCollection)
+        // delete(names:in:) persists but does not apply, as its single-name sibling does not.
         if selectedCollection == state.activeCollection { state.applyInteractively() }
         uncheck(names)
         lastError = nil
@@ -958,7 +958,7 @@ public final class CollectionsModel: ObservableObject {
             sentences.append(Self.deleteNextActiveSentence(next))
         }
         if state.isSynced(collection) { sentences.append(Self.deleteSourceSentence) }
-        sentences.append(Self.removeCheckedInformative)
+        sentences.append(Self.deleteCheckedInformative)
         return sentences.joined(separator: " ")
     }
 
@@ -972,7 +972,7 @@ public final class CollectionsModel: ObservableObject {
         // Nothing on this machine writes the document when there is no binding for it, so there
         // is no file here to offer to remove. Nor is there anything to ask while the last write
         // failed: the folder that refused it would refuse the delete too, so the question would
-        // be one whose Remove cannot be honoured. The banner's own Stop Publishing says the same
+        // be one whose Delete cannot be honoured. The banner's own Stop Publishing says the same
         // by passing false outright.
         // Only a failed write puts the folder out of reach. A publish blocked for review never
         // touched it, so its document can still be removed and the question still stands.
@@ -1052,10 +1052,10 @@ public final class CollectionsModel: ObservableObject {
         return CollectionDocument.fileName(slug: record.slug)
     }
 
-    /// Keep is the answer Return and Escape both give; Remove, the destructive one, takes a click.
+    /// Keep is the answer Return and Escape both give; Delete, the destructive one, takes a click.
     private func askAboutPublishedFile(_ fileName: String) -> Bool {
         dialogs.confirm(message: CollectionsModel.deletePublishedFileQuestion(fileName), informative: nil,
-                        primary: CollectionsModel.removeFileButton, cancel: CollectionsModel.keepFileButton,
+                        primary: CollectionsModel.deleteFileButton, cancel: CollectionsModel.keepFileButton,
                         destructive: true, cancelIsDefault: true)
     }
 

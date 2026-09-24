@@ -512,7 +512,7 @@ final class CollectionsModelTests: XCTestCase {
         leavesNoError("stopPublishing of a collection that does not publish") { model.stopPublishing() }
         leavesNoError("copyChecked with nothing ticked") { model.copyChecked(into: "Team") }
         leavesNoError("copyCheckedIntoNewCollection with nothing ticked") { model.copyCheckedIntoNewCollection() }
-        leavesNoError("removeChecked with nothing ticked") { model.removeChecked() }
+        leavesNoError("deleteChecked with nothing ticked") { model.deleteChecked() }
 
         model.setChecked("alpha", true)
         leavesNoError("copyChecked into a collection it does not offer") { model.copyChecked(into: "Default") }
@@ -659,7 +659,7 @@ final class CollectionsModelTests: XCTestCase {
                        [AppState.deleteCollectionMessage("Shared"),
                         CollectionsModel.deletePublishedFileQuestion("shared.json")])
         let fileQuestion = try XCTUnwrap(h.dialogs.confirms.last)
-        XCTAssertEqual(fileQuestion.primary, CollectionsModel.removeFileButton)
+        XCTAssertEqual(fileQuestion.primary, CollectionsModel.deleteFileButton)
         XCTAssertEqual(fileQuestion.cancel, CollectionsModel.keepFileButton)
         // Removing a file the team reads is never what Return does: Keep is the default, and
         // Remove, a click away, is marked as the destructive answer.
@@ -769,9 +769,9 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.connectorCount, CollectionsModel.connectorTally(3))
 
         let names = model.rows.map(\.name)
-        state.remove(names: Array(names.dropFirst()))
+        state.delete(names: Array(names.dropFirst()))
         XCTAssertEqual(model.connectorCount, CollectionsModel.connectorTally(1))
-        state.remove(names: [names[0]])
+        state.delete(names: [names[0]])
         XCTAssertEqual(model.connectorCount, CollectionsModel.connectorTally(0))
     }
 
@@ -1136,9 +1136,9 @@ final class CollectionsModelTests: XCTestCase {
         let model = h.collectionsModel(state)
 
         model.selected = "Default"
-        XCTAssertFalse(model.canRemoveChecked, "nothing ticked yet")
+        XCTAssertFalse(model.canDeleteChecked, "nothing ticked yet")
         model.setChecked("alpha", true)
-        XCTAssertTrue(model.canRemoveChecked)
+        XCTAssertTrue(model.canDeleteChecked)
     }
 
     /// The kind guard specifically, not just an empty tick set: `selected` clears the ticks on
@@ -1153,12 +1153,12 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNil(state.createCollection(named: "Team"))
         XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Team"))
         let model = h.collectionsModel(state, selecting: "Team", ticking: ["alpha"])
-        XCTAssertTrue(model.canRemoveChecked, "still local, and something is ticked")
+        XCTAssertTrue(model.canDeleteChecked, "still local, and something is ticked")
 
         try h.makeSynced(state, "Team")
         XCTAssertTrue(state.isSynced("Team"))
         XCTAssertEqual(model.checkedNames, ["alpha"], "reload does not clear the ticks")
-        XCTAssertFalse(model.canRemoveChecked, "the guard, not an empty tick set, is what changed")
+        XCTAssertFalse(model.canDeleteChecked, "the guard, not an empty tick set, is what changed")
     }
 
     /// Removing the ticked rows asks first, names the connector when there is one and the count
@@ -1175,18 +1175,18 @@ final class CollectionsModelTests: XCTestCase {
         presetError(model, h)
         model.setChecked("alpha", true)
         h.dialogs.nextConfirm = false
-        model.removeChecked()
+        model.deleteChecked()
         XCTAssertNil(model.lastError, "a declined confirmation clears the last error")
         XCTAssertNotNil(state.store.collections["Default"]?.mcps["alpha"], "declined, so alpha stays")
         XCTAssertNotNil(state.store.collections["Default"]?.mcps["beta"])
-        XCTAssertEqual(h.dialogs.confirms.last?.informative, CollectionsModel.removeCheckedInformative)
+        XCTAssertEqual(h.dialogs.confirms.last?.informative, CollectionsModel.deleteCheckedInformative)
         XCTAssertEqual(h.dialogs.confirms.last?.destructive, true)
         XCTAssertTrue(h.dialogs.confirms.last?.message.contains("alpha") ?? false, "one connector is named")
 
         // Accepted, two ticked: the count is stated and the ticks are dropped.
         h.dialogs.nextConfirm = true
         model.setChecked("beta", true)
-        model.removeChecked()
+        model.deleteChecked()
         XCTAssertNil(state.store.collections["Default"]?.mcps["alpha"], "both ticked rows went")
         XCTAssertNil(state.store.collections["Default"]?.mcps["beta"])
         XCTAssertTrue(h.dialogs.confirms.last?.message.contains("2") ?? false, "several are counted")
@@ -1215,7 +1215,7 @@ final class CollectionsModelTests: XCTestCase {
         let before = try h.claudeServers()
         model.selected = "Work"
         model.setChecked("gamma", true)
-        model.removeChecked()
+        model.deleteChecked()
         XCTAssertNil(state.store.collections["Work"]?.mcps["gamma"], "removed from the store")
         XCTAssertEqual(try h.claudeServers(), before, "Work was never active, so nothing Claude runs has changed")
         XCTAssertNil(try h.claudeServers()["delta"], "no apply ran, so the pending connector is still unwritten")
@@ -1224,13 +1224,13 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNotNil(before["aws-mcp"], "there before, so its absence below is the apply's doing")
         model.selected = "Default"
         model.setChecked("aws-mcp", true)
-        model.removeChecked()
+        model.deleteChecked()
         XCTAssertNil(state.store.collections["Default"]?.mcps["aws-mcp"])
         XCTAssertNil(try h.claudeServers()["aws-mcp"], "the active collection changed, so Claude's config follows")
     }
 
     /// The copy lands in the target, disabled, and the ticks go with it — the same clearing
-    /// `removeChecked` does on success. Every copy arrives disabled, so this never applies.
+    /// `deleteChecked` does on success. Every copy arrives disabled, so this never applies.
     func testCopyCheckedCopiesIntoTheTargetClearsTicksAndDoesNotApply() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

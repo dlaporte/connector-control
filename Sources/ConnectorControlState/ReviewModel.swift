@@ -15,7 +15,7 @@ public final class ReviewModel: ObservableObject {
     public static let cancelButton = "Cancel"
     public static let refreshButton = "Refresh"
     public static let addedLabel = "Added"
-    public static let removedLabel = "Removed"
+    public static let deletedLabel = "Deleted"
     public static let changedLabel = "Changed"
     public static let sourceMovedMessage = "The file changed while this was open. Review it again."
 
@@ -31,7 +31,7 @@ public final class ReviewModel: ObservableObject {
     public static func kindLabel(_ kind: Kind) -> String {
         switch kind {
         case .added: return addedLabel
-        case .removed: return removedLabel
+        case .removed: return deletedLabel
         case .changed: return changedLabel
         }
     }

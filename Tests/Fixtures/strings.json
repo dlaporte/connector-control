@@ -138,6 +138,14 @@
   },
   "CollectionsModel.copyToButton": "Copy to",
   "CollectionsModel.deleteAction": "Delete",
+  "CollectionsModel.deleteCheckedButton": "Delete",
+  "CollectionsModel.deleteCheckedInformative": "A copy remains in Backups.",
+  "CollectionsModel.deleteCheckedMessage.many": {
+    "format": "Delete {0} connectors?"
+  },
+  "CollectionsModel.deleteCheckedMessage.one": {
+    "format": "Delete “{0}”?"
+  },
   "CollectionsModel.deleteConnectorsSentence.many": {
     "format": "Its {0} connectors are deleted with it."
   },
@@ -146,11 +154,12 @@
     "format": "Its {0} connector is deleted with it."
   },
   "CollectionsModel.deleteCopiesSentence": "Copies in other collections are not affected.",
+  "CollectionsModel.deleteFileButton": "Delete",
   "CollectionsModel.deleteNextActiveSentence": {
     "format": "“{0}” becomes the active collection."
   },
   "CollectionsModel.deletePublishedFileQuestion": {
-    "format": "Also remove {0} from the folder?"
+    "format": "Also delete {0} from the folder?"
   },
   "CollectionsModel.deleteSourceSentence": "The source file is not changed.",
   "CollectionsModel.documentFilter": {
@@ -176,15 +185,6 @@
   "CollectionsModel.readOnlyNote": "read-only",
   "CollectionsModel.refreshButton": "Refresh",
   "CollectionsModel.remoteType": "remote",
-  "CollectionsModel.removeCheckedButton": "Remove",
-  "CollectionsModel.removeCheckedInformative": "A copy remains in Backups.",
-  "CollectionsModel.removeCheckedMessage.many": {
-    "format": "Remove {0} connectors?"
-  },
-  "CollectionsModel.removeCheckedMessage.one": {
-    "format": "Remove “{0}”?"
-  },
-  "CollectionsModel.removeFileButton": "Remove",
   "CollectionsModel.renameAction": "Rename",
   "CollectionsModel.selectedCount": {
     "format": "{0} selected"
@@ -251,6 +251,12 @@
   "EditorModel.commandError": "Command must not be empty.",
   "EditorModel.commandLabel": "Command",
   "EditorModel.commandPrompt": "npx",
+  "EditorModel.deleteArgumentLabel": "Delete argument",
+  "EditorModel.deleteVariableLabel": "Delete variable",
+  "EditorModel.deletedOutsideDetail": "Saving will add it back.",
+  "EditorModel.deletedOutsideMessage": {
+    "format": "“{0}” was deleted outside this editor."
+  },
   "EditorModel.duplicateEnvError": {
     "format": "Duplicate environment variable name: {0}"
   },
@@ -297,12 +303,6 @@
   },
   "EditorModel.remoteFooter": "Runs via npx mcp-remote — managed for you.",
   "EditorModel.remoteTypeTitle": "Remote",
-  "EditorModel.removeArgumentLabel": "Remove argument",
-  "EditorModel.removeVariableLabel": "Remove variable",
-  "EditorModel.removedOutsideDetail": "Saving will add it back.",
-  "EditorModel.removedOutsideMessage": {
-    "format": "“{0}” was removed outside this editor."
-  },
   "EditorModel.saveAnywayButton": "Save Anyway",
   "EditorModel.saveButton": "Save",
   "EditorModel.scopesLabel": "Scopes (optional)",
@@ -485,8 +485,8 @@
   "ReviewModel.applyButton": "Apply",
   "ReviewModel.cancelButton": "Cancel",
   "ReviewModel.changedLabel": "Changed",
+  "ReviewModel.deletedLabel": "Deleted",
   "ReviewModel.refreshButton": "Refresh",
-  "ReviewModel.removedLabel": "Removed",
   "ReviewModel.sourceMovedMessage": "The file changed while this was open. Review it again.",
   "ReviewModel.title": {
     "format": "Update to {0}"

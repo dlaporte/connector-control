@@ -605,7 +605,7 @@ public class CollectionsModelTests
         LeavesNoError("StopPublishing of a collection that does not publish", model.StopPublishing);
         LeavesNoError("CopyChecked with nothing ticked", () => model.CopyChecked("Team"));
         LeavesNoError("CopyCheckedIntoNewCollection with nothing ticked", () => model.CopyCheckedIntoNewCollection());
-        LeavesNoError("RemoveChecked with nothing ticked", model.RemoveChecked);
+        LeavesNoError("DeleteChecked with nothing ticked", model.DeleteChecked);
 
         model.SetChecked("alpha", true);
         LeavesNoError("CopyChecked into a collection it does not offer", () => model.CopyChecked("Default"));
@@ -763,7 +763,7 @@ public class CollectionsModelTests
             [AppState.DeleteCollectionMessage("Shared"), CollectionsModel.DeletePublishedFileQuestion("shared.json")],
             h.Dialogs.Confirms.Select(c => c.Message));
         var fileQuestion = h.Dialogs.Confirms[^1];
-        Assert.Equal(CollectionsModel.RemoveFileButton, fileQuestion.Primary);
+        Assert.Equal(CollectionsModel.DeleteFileButton, fileQuestion.Primary);
         Assert.Equal(CollectionsModel.KeepFileButton, fileQuestion.Cancel);
         // Removing a file the team reads is never what Return does: Keep is the default, and
         // Remove, a click away, is marked as the destructive answer.
@@ -887,9 +887,9 @@ public class CollectionsModelTests
         Assert.Equal(CollectionsModel.ConnectorTally(3), model.ConnectorCount);
 
         var names = model.Rows.Select(r => r.Name).ToList();
-        state.Remove(names.Skip(1).ToList());
+        state.Delete(names.Skip(1).ToList());
         Assert.Equal(CollectionsModel.ConnectorTally(1), model.ConnectorCount);
-        state.Remove([names[0]]);
+        state.Delete([names[0]]);
         Assert.Equal(CollectionsModel.ConnectorTally(0), model.ConnectorCount);
     }
 
@@ -1331,9 +1331,9 @@ public class CollectionsModelTests
         var model = h.CollectionsModel(state);
 
         model.Selected = "Default";
-        Assert.False(model.CanRemoveChecked);   // nothing ticked yet
+        Assert.False(model.CanDeleteChecked);   // nothing ticked yet
         model.SetChecked("alpha", true);
-        Assert.True(model.CanRemoveChecked);
+        Assert.True(model.CanDeleteChecked);
     }
 
     /// <summary>
@@ -1351,12 +1351,12 @@ public class CollectionsModelTests
         Assert.Null(state.CreateCollection("Team"));
         Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Team"));
         var model = h.CollectionsModel(state, "Team", "alpha");
-        Assert.True(model.CanRemoveChecked);   // still local, and something is ticked
+        Assert.True(model.CanDeleteChecked);   // still local, and something is ticked
 
         h.MakeSynced(state, "Team");
         Assert.True(state.IsSynced("Team"));
         Assert.Equal(["alpha"], model.CheckedNames);   // reload does not clear the ticks
-        Assert.False(model.CanRemoveChecked);   // the guard, not an empty tick set, is what changed
+        Assert.False(model.CanDeleteChecked);   // the guard, not an empty tick set, is what changed
     }
 
     /// <summary>
@@ -1378,18 +1378,18 @@ public class CollectionsModelTests
         PresetError(model, h);
         model.SetChecked("alpha", true);
         h.Dialogs.NextConfirm = false;
-        model.RemoveChecked();
+        model.DeleteChecked();
         Assert.Null(model.LastError);   // a declined confirmation clears the last error
         Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("alpha"));    // declined, so alpha stays
         Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("beta"));
-        Assert.Equal(CollectionsModel.RemoveCheckedInformative, h.Dialogs.Confirms[^1].Informative);
+        Assert.Equal(CollectionsModel.DeleteCheckedInformative, h.Dialogs.Confirms[^1].Informative);
         Assert.True(h.Dialogs.Confirms[^1].Destructive);
         Assert.Contains("alpha", h.Dialogs.Confirms[^1].Message);   // one connector is named
 
         // Accepted, two ticked: the count is stated and the ticks are dropped.
         h.Dialogs.NextConfirm = true;
         model.SetChecked("beta", true);
-        model.RemoveChecked();
+        model.DeleteChecked();
         Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("alpha"));   // both ticked rows went
         Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("beta"));
         Assert.Contains("2", h.Dialogs.Confirms[^1].Message);   // several are counted
@@ -1422,7 +1422,7 @@ public class CollectionsModelTests
         var before = h.ClaudeServers();
         model.Selected = "Work";
         model.SetChecked("gamma", true);
-        model.RemoveChecked();
+        model.DeleteChecked();
         Assert.False(state.Store.Collections["Work"].Mcps.ContainsKey("gamma"));   // removed from the store
         // Work was never active, so nothing Claude runs has changed.
         Assert.True(DictionaryEquality.Equal(before, h.ClaudeServers()));
@@ -1432,14 +1432,14 @@ public class CollectionsModelTests
         Assert.True(before.ContainsKey("aws-mcp"));   // there before, so its absence below is the apply's doing
         model.Selected = "Default";
         model.SetChecked("aws-mcp", true);
-        model.RemoveChecked();
+        model.DeleteChecked();
         Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("aws-mcp"));
         Assert.False(h.ClaudeServers().ContainsKey("aws-mcp"));   // the active collection changed, so Claude's config follows
     }
 
     /// <summary>
     /// The copy lands in the target, disabled, and the ticks go with it — the same clearing
-    /// RemoveChecked does on success. Every copy arrives disabled, so this never applies.
+    /// DeleteChecked does on success. Every copy arrives disabled, so this never applies.
     /// </summary>
     [Fact]
     public void CopyCheckedCopiesIntoTheTargetClearsTicksAndDoesNotApply()
