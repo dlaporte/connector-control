@@ -55,7 +55,7 @@ public class FlyoutModelTests
         var row = flyout.Rows.Single(r => r.Name == "aws-mcp");
         state.SetEnabled("aws-mcp", false);
         Assert.False(row.Enabled);
-        state.Remove("scoutbook");
+        state.Remove(["scoutbook"]);
         Assert.Equal(["aws-mcp", "service-now"], flyout.Rows.Select(r => r.Name).ToArray());
         state.Upsert("alpha", new McpEntry(AppStateHarness.Remote("https://alpha.example/mcp")), null);
         Assert.Equal(["alpha", "aws-mcp", "service-now"], flyout.Rows.Select(r => r.Name).ToArray());

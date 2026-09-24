@@ -120,7 +120,7 @@ public class CollectionTests : IDisposable
     public void RenameActiveCollection()
     {
         var store = MasterStore.Empty();
-        Assert.Null(store.RenameActiveCollection("Main"));
+        Assert.Null(store.RenameCollection(store.ActiveCollection, "Main"));
         Assert.Equal("Main", store.ActiveCollection);
         Assert.Equal(["Main"], store.Collections.Keys.ToArray());
     }
@@ -129,21 +129,22 @@ public class CollectionTests : IDisposable
     public void RenameActiveCollectionRejectsCollision()
     {
         var store = new MasterStore(2, "Work", [new("Work", new Collection()), new("Personal", new Collection())]);
-        Assert.Equal("A collection named “Personal” already exists.", store.RenameActiveCollection("Personal"));
+        Assert.Equal("A collection named “Personal” already exists.", store.RenameCollection(store.ActiveCollection, "Personal"));
         Assert.Equal("Work", store.ActiveCollection);
     }
 
     [Fact]
     public void RenameActiveCollectionRejectsEmptyName()
     {
-        Assert.NotNull(MasterStore.Empty().RenameActiveCollection("  "));
+        var store = MasterStore.Empty();
+        Assert.NotNull(store.RenameCollection(store.ActiveCollection, "  "));
     }
 
     [Fact]
     public void DeleteActiveCollectionSwitchesToFirstRemaining()
     {
         var store = new MasterStore(2, "Work", [new("Work", new Collection()), new("Alpha", new Collection()), new("Zeta", new Collection())]);
-        Assert.Null(store.DeleteActiveCollection());
+        Assert.Null(store.DeleteCollection(store.ActiveCollection));
         Assert.Equal("Alpha", store.ActiveCollection);
         Assert.False(store.Collections.ContainsKey("Work"));
     }
@@ -152,7 +153,7 @@ public class CollectionTests : IDisposable
     public void DeleteActiveCollectionRejectsLastCollection()
     {
         var store = MasterStore.Empty();
-        Assert.Equal("Can’t delete the last collection.", store.DeleteActiveCollection());
+        Assert.Equal("Can’t delete the last collection.", store.DeleteCollection(store.ActiveCollection));
         Assert.Single(store.Collections);
     }
 
@@ -179,7 +180,7 @@ public class CollectionTests : IDisposable
         var duplicate = store.AddCollection("Default", false)!;
         Assert.Equal('“', duplicate[duplicate.IndexOf("Default", StringComparison.Ordinal) - 1]);
         Assert.Equal('”', duplicate[duplicate.IndexOf("Default", StringComparison.Ordinal) + "Default".Length]);
-        Assert.Contains('’', store.DeleteActiveCollection()!);
+        Assert.Contains('’', store.DeleteCollection(store.ActiveCollection)!);
     }
 
     [Fact]

@@ -382,8 +382,6 @@ public struct CollectionDocument: Equatable, Sendable {
 
     public enum EnvValue: Equatable, Sendable { case hint(String?), value(String) }
 
-    public var fileName: String { Slug.make(name) + "." + Self.fileExtension }
-
     // MARK: Encode
 
     public func encode() -> JSONValue {

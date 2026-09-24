@@ -1003,30 +1003,13 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Removes and persists; the caller applies (both happen in one turn). Whatever the publish
-    /// record said about the connector goes with it: a connector added later under the same name
-    /// was never ticked, and a mark left behind would refuse every publish as a path that had
-    /// moved.
-    /// </summary>
-    public void Remove(string name, string? collection = null)
-    {
-        var target = collection ?? ActiveCollection;
-        // A collection that isn't there has nothing to remove — and must not be brought into
-        // being by the attempt, which is what Swift's optional chain gives for free.
-        if (Store.Collections.TryGetValue(target, out var held))
-        {
-            held.Mcps.Remove(name);
-        }
-        EditPublishIntent(target, intent => intent.MovingConnector(name, null));
-        PersistStore();
-        RaiseAll();
-    }
-
-    /// <summary>
-    /// Removes several connectors as one write; the caller applies. A loop over
-    /// <see cref="Remove(string, string?)"/> would rotate a backup, recompute the pending updates
-    /// and republish once per connector, and announce each store change to every open window.
+    /// Removes connectors and persists them as one write, and no more: a caller removing from the
+    /// active collection applies at the call site, as <c>CollectionsModel.RemoveChecked</c> does.
     /// Names the collection does not hold are skipped, and removing nothing writes nothing.
+    ///
+    /// Whatever the publish record said about a connector goes with it: a connector added later
+    /// under the same name was never ticked, and a mark left behind would refuse every publish as
+    /// a path that had moved.
     /// </summary>
     public void Remove(IReadOnlyList<string> names, string? collection = null)
     {
@@ -1043,8 +1026,6 @@ public sealed class AppState : ObservableObject, IDisposable
                 continue;
             }
             held.Mcps.Remove(name);
-            // As in the single-name case: a mark left behind would refuse every later publish as
-            // a path that had moved.
             EditPublishIntent(target, intent => intent.MovingConnector(name, null));
             removed = true;
         }
@@ -1952,7 +1933,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// null on success.
     /// </para>
     /// </summary>
-    public string? ImportCopies(string path, string collection, IReadOnlyDictionary<string, ImportChoice> choices, string date)
+    public string? ImportCopies(string path, string collection, IReadOnlyDictionary<string, ImportChoice> choices)
     {
         // A name that is not a collection is silently ignored, as switching to one is.
         if (!Store.Collections.TryGetValue(collection, out var target))
@@ -1973,6 +1954,7 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         var directory = Path.GetDirectoryName(full) ?? full;
         var rendered = document.Render();
+        var date = Today;
         var entry = CollectionsFile.Collections.GetValueOrDefault(collection) ?? CollectionsFile.Entry.Local;
         var provenance = new Dictionary<string, CollectionsFile.Provenance>(entry.Provenance, StringComparer.Ordinal);
         var landed = false;

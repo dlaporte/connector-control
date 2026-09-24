@@ -206,7 +206,7 @@ public final class ImportModel: ObservableObject {
             for row in rows {
                 choices[row.name] = row.include && row.excludedReason == nil ? row.choice : .skip
             }
-            return state.importCopies(documentAt: path, into: targetCollection, choices: choices, date: state.today)
+            return state.importCopies(documentAt: path, into: targetCollection, choices: choices)
         case .keepInSync:
             return state.subscribe(documentAt: path, as: syncName)
         }

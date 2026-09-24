@@ -226,7 +226,7 @@ final class EditorModelSaveTests: XCTestCase {
         defer { rig.dispose() }
         let state = rig.state
         let editor = rig.editor(.existing(name: "scoutbook", entry: try XCTUnwrap(state.store.mcps["scoutbook"])))
-        state.remove(name: "scoutbook")
+        state.remove(names: ["scoutbook"])
         XCTAssertTrue(editor.save())
         XCTAssertEqual(rig.h.dialogs.confirms[0], FakeDialogs.ConfirmCall(
             message: "“scoutbook” was removed outside this editor.",

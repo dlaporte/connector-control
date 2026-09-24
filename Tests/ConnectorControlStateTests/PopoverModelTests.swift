@@ -57,7 +57,7 @@ final class PopoverModelTests: XCTestCase {
         state.setEnabled("aws-mcp", false)
         XCTAssertEqual(popover.rows.first { $0.name == "aws-mcp" }?.enabled, false)
         XCTAssertGreaterThan(repaints, 0, "an AppState change is republished to the view")
-        state.remove(name: "scoutbook")
+        state.remove(names: ["scoutbook"])
         XCTAssertEqual(popover.rows.map(\.name), ["aws-mcp", "service-now"])
         XCTAssertNil(state.upsert(name: "alpha", entry: MCPEntry(config: AppStateHarness.remote("https://alpha.example/mcp")), renamedFrom: nil))
         XCTAssertEqual(popover.rows.map(\.name), ["alpha", "aws-mcp", "service-now"])

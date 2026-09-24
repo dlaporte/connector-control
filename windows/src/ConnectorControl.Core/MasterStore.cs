@@ -109,8 +109,6 @@ public sealed class MasterStore : IEquatable<MasterStore>
         return null;
     }
 
-    public string? RenameActiveCollection(string name) => RenameCollection(ActiveCollection, name);
-
     /// <summary>
     /// null on success, else a user-facing error message. Refuses to delete the last remaining
     /// collection. Deleting the active collection hands the sorted-first remaining collection
@@ -133,8 +131,6 @@ public sealed class MasterStore : IEquatable<MasterStore>
         }
         return null;
     }
-
-    public string? DeleteActiveCollection() => DeleteCollection(ActiveCollection);
 
     /// <summary>The one wording for a name no collection has, shared by switch, rename and delete.</summary>
     private static string NoCollectionError(string name) => $"No collection named “{name}”.";

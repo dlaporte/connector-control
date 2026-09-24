@@ -39,12 +39,6 @@ public class CollectionDocumentTests
     }
 
     [Fact]
-    public void FileNameIsTheSlug()
-    {
-        Assert.Equal("data-team.json", Sample.FileName);
-    }
-
-    [Fact]
     public void RenderProducesThisPlatformsLaunchersWithMarkers()
     {
         var rendered = Sample.Render();

@@ -98,7 +98,7 @@ public class ConfigServiceTests : IDisposable
     {
         var store = service.LoadAndReconcile().Store;
         store.Mcps["aws-mcp"] = store.Mcps["aws-mcp"] with { Enabled = false };
-        service.Apply(store);
+        service.Apply(store.EnabledServers);
         Assert.Equal(Set(["scoutbook", "service-now"]), Set(ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath).Keys));
         var root = JsonValue.Parse(File.ReadAllBytes(paths.ClaudeConfigPath));
         Assert.NotNull(root["preferences"]);
@@ -144,7 +144,7 @@ public class ConfigServiceTests : IDisposable
         var result = service.LoadAndReconcile();
         Assert.Equal(3, result.Store.Mcps.Count);
         Assert.NotEqual(result.Store.EnabledServers, result.ClaudeServers);   // divergence visible to the caller
-        service.Apply(store);
+        service.Apply(store.EnabledServers);
         Assert.Equal(3, ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath).Count);
     }
 
@@ -188,7 +188,7 @@ public class ConfigServiceTests : IDisposable
     {
         var store = service.LoadAndReconcile().Store;
         store.Mcps["aws-mcp"] = store.Mcps["aws-mcp"] with { Enabled = false };
-        service.Apply(store);
+        service.Apply(store.EnabledServers);
         var backup = service.Backups.Backups("claude_desktop_config")[0];
         service.RestoreClaudeConfig(backup, store);
         Assert.Equal(3, ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath).Count);
@@ -199,7 +199,7 @@ public class ConfigServiceTests : IDisposable
     {
         var store = service.LoadAndReconcile().Store;
         store.Mcps["aws-mcp"] = store.Mcps["aws-mcp"] with { Enabled = false };
-        service.Apply(store);
+        service.Apply(store.EnabledServers);
         var backup = service.Backups.Backups("claude_desktop_config")[0];
         service.RestoreClaudeConfig(backup, store);
         var persisted = MasterStoreIO.Load(paths.MasterStorePath).Store;
@@ -285,7 +285,7 @@ public class ConfigServiceTests : IDisposable
     public void RestoreReturnsRestoredServers()
     {
         var store = service.LoadAndReconcile().Store;
-        service.Apply(store);
+        service.Apply(store.EnabledServers);
         var backup = service.Backups.Backups("claude_desktop_config")[0];
         var servers = service.RestoreClaudeConfig(backup, store);
         Assert.Equal(ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath), servers);

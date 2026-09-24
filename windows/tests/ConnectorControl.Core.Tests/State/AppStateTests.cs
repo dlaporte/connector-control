@@ -130,7 +130,7 @@ public class AppStateTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        state.Remove("aws-mcp");
+        state.Remove(["aws-mcp"]);
         Assert.False(h.StoreOnDisk().Mcps.ContainsKey("aws-mcp"));
         Assert.True(h.ClaudeServers().ContainsKey("aws-mcp"));
         Assert.True(state.IsDirty);
@@ -154,7 +154,7 @@ public class AppStateTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        state.Remove("aws-mcp");
+        state.Remove(["aws-mcp"]);
         state.Reload();
         Assert.False(h.ClaudeServers().ContainsKey("aws-mcp"));   // regenerated from the store
         Assert.False(state.Store.Mcps.ContainsKey("aws-mcp"));    // not resurrected: it matched the baseline
@@ -200,7 +200,7 @@ public class AppStateTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        state.Remove("aws-mcp");   // pending removal: store and file now differ
+        state.Remove(["aws-mcp"]);   // pending removal: store and file now differ
         h.WriteClaudeServers(      // someone writes exactly what the store would render
             ("scoutbook", state.Store.Mcps["scoutbook"].Config),
             ("service-now", state.Store.Mcps["service-now"].Config));

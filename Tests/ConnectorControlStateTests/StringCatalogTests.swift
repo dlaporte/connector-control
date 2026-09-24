@@ -367,7 +367,7 @@ final class StringCatalogTests: XCTestCase {
         var duplicateStore = MasterStore(activeCollection: "X", collections: ["X": Collection()])
         actual["MasterStore.duplicateCollectionNameError"] = duplicateStore.addCollection(named: "X", copyingCurrent: false)
         var deleteLastStore = MasterStore.empty
-        actual["MasterStore.deleteLastCollectionError"] = deleteLastStore.deleteActiveCollection()
+        actual["MasterStore.deleteLastCollectionError"] = deleteLastStore.deleteCollection(named: deleteLastStore.activeCollection)
         var unknownCollectionStore = MasterStore.empty
         actual["MasterStore.unknownCollectionError"] = unknownCollectionStore.switchCollection(to: "X")
 

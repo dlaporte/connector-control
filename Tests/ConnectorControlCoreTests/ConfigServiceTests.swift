@@ -91,7 +91,7 @@ final class ConfigServiceTests: XCTestCase {
     func testApplyWritesEnabledSubsetWithBackups() throws {
         var store = try service.loadAndReconcile().store
         store.mcps["aws-mcp"]?.enabled = false
-        try service.apply(store)
+        try service.apply(servers: store.enabledServers)
         XCTAssertEqual(Set(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL).keys),
                        ["scoutbook", "service-now"])
         // non-MCP keys survived
@@ -134,7 +134,7 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertNotEqual(result.claudeServers, result.store.enabledServers,
                           "divergence must be visible to the caller for regeneration")
         // restore: apply the store puts them back, preserving the stub's keys
-        try service.apply(store)
+        try service.apply(servers: store.enabledServers)
         XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL).count, 3)
     }
 
@@ -165,7 +165,7 @@ final class ConfigServiceTests: XCTestCase {
     func testRestoreClaudeConfigFromBackup() throws {
         var store = try service.loadAndReconcile().store
         store.mcps["aws-mcp"]?.enabled = false
-        try service.apply(store)  // creates a backup of the 3-server file
+        try service.apply(servers: store.enabledServers)  // creates a backup of the 3-server file
         let backup = try XCTUnwrap(
             try service.backups.backups(series: "claude_desktop_config").first)
         try service.restoreClaudeConfig(from: backup, mergedWith: store)
@@ -175,7 +175,7 @@ final class ConfigServiceTests: XCTestCase {
     func testRestoreClaudeConfigAdoptsSnapshotIntoStore() throws {
         var store = try service.loadAndReconcile().store
         store.mcps["aws-mcp"]?.enabled = false
-        try service.apply(store)  // backup captures the original 3-server file
+        try service.apply(servers: store.enabledServers)  // backup captures the original 3-server file
         let backup = try XCTUnwrap(
             try service.backups.backups(series: "claude_desktop_config").first)
         try service.restoreClaudeConfig(from: backup, mergedWith: store)
@@ -279,7 +279,7 @@ final class ConfigServiceTests: XCTestCase {
 
     func testRestoreReturnsRestoredServers() throws {
         let store = try service.loadAndReconcile().store
-        try service.apply(store)
+        try service.apply(servers: store.enabledServers)
         let backup = try XCTUnwrap(
             try service.backups.backups(series: "claude_desktop_config").first)
         let servers = try service.restoreClaudeConfig(from: backup, mergedWith: store)

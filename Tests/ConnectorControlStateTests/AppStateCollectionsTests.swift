@@ -1205,7 +1205,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let document = try CollectionDocument.decode(try Data(contentsOf: file))
         XCTAssertEqual(document.connectors["books"]?.needs.keys.sorted(), ["server_path"])
 
-        state.remove(name: "books")
+        state.remove(names: ["books"])
         XCTAssertNil(state.collectionsFile.collections[state.activeCollection]?.publish?.intent.pathMarks["books"],
                      "a connector added later under the same name was never ticked")
         XCTAssertNil(state.publishError)
@@ -1407,7 +1407,7 @@ final class AppStateCollectionsTests: XCTestCase {
             XCTAssertEqual(state.publishError?.message, AppState.keptPathCarriedError(carrier.name, carrier.field), carrier.name)
             XCTAssertEqual(state.publishError?.kind, .blockedForReview, carrier.name)
             XCTAssertEqual(try Data(contentsOf: file), before, carrier.name)
-            state.remove(name: carrier.name)
+            state.remove(names: [carrier.name])
             XCTAssertNil(state.publishError, "with it gone there is nothing left to keep back")
         }
     }
@@ -1471,8 +1471,8 @@ final class AppStateCollectionsTests: XCTestCase {
             shareValues: [:], pathMarks: ["ledger": [JSONPointer(["args", "0"]): .init(name: "server_path", hint: nil, value: markedPath)]],
             hints: [:]), reviewedValues: [markedPath]))
         XCTAssertNil(s.createCollection(named: "Clients"))
-        s.remove(name: "ledger", in: "Clients")
-        s.remove(name: "x", in: "Clients")
+        s.remove(names: ["ledger"], in: "Clients")
+        s.remove(names: ["x"], in: "Clients")
         XCTAssertNil(s.upsert(name: "crm", entry: MCPEntry(enabled: true, config: .object(["command": .string("crm-mcp")])),
                               renamedFrom: nil, in: "Clients"))
         let clients = try publishFolder(h, "pubClients")
@@ -1590,7 +1590,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(first.upsert(name: "a", entry: MCPEntry(enabled: true, config: .object(["command": .string("a")])),
                                   renamedFrom: nil))
         XCTAssertNil(first.createCollection(named: "Second"))
-        first.remove(name: "a", in: "Second")
+        first.remove(names: ["a"], in: "Second")
         first.switchCollection(to: team)
         first.dispose()
         var store = try h.storeOnDisk()
@@ -2276,7 +2276,7 @@ final class AppStateCollectionsTests: XCTestCase {
         // copy to keep, and rewriting what came in could rewrite a genuine edit. The folder is then
         // kept back from the document, for the author to answer in Publish….
         let before = try Data(contentsOf: document)
-        state.remove(name: "x")
+        state.remove(names: ["x"])
         XCTAssertNotEqual(try Data(contentsOf: document), before)
         let withoutX = try Data(contentsOf: document)
         try state.restoreClaudeConfig(from: backup)
@@ -2519,13 +2519,13 @@ final class AppStateCollectionsTests: XCTestCase {
                 "command": .string("python3"), "args": .array([.string("--path"), .string(written)])])), renamedFrom: nil))
             XCTAssertEqual(state.publishError?.message, AppState.publishFolderCarriedError("py", FieldName.argument(2)), written)
             XCTAssertFalse(try jsonFile(file, contains: bound), written)
-            state.remove(name: "py")
+            state.remove(names: ["py"])
         }
         for other in ["\(bound).bak", "\(bound)_old/x", "\(bound)é/x"] {
             XCTAssertNil(state.upsert(name: "py", entry: MCPEntry(config: .object([
                 "command": .string("python3"), "args": .array([.string("--path"), .string(other)])])), renamedFrom: nil))
             XCTAssertNil(state.publishError, other)
-            state.remove(name: "py")
+            state.remove(names: ["py"])
         }
     }
 
@@ -2572,7 +2572,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let url = h.dir.file("shared/data-team.json")
         try writeDocument(importableDocument, at: url)
 
-        XCTAssertNil(state.importCopies(documentAt: url.path, into: "Default", choices: [:], date: "2026-09-21"))
+        XCTAssertNil(state.importCopies(documentAt: url.path, into: "Default", choices: [:]))
         let mcps = try XCTUnwrap(state.store.collections["Default"]).mcps
         XCTAssertEqual(mcps.keys.sorted(), ["aws-mcp", "dbt", "github", "ledger", "notion", "scoutbook", "service-now"])
         for name in ["dbt", "github", "ledger", "notion"] {
@@ -2587,11 +2587,11 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertTrue(state.collectionsCache.synced.isEmpty)
         XCTAssertTrue(state.pendingUpdates.isEmpty)
         XCTAssertEqual(state.collectionsFile.collections["Default"]?.provenance["dbt"],
-                       CollectionsFile.Provenance(from: "Data team", author: "Acme Data Platform", date: "2026-09-21"))
+                       CollectionsFile.Provenance(from: "Data team", author: "Acme Data Platform", date: state.today))
         XCTAssertEqual(state.connectorCaution("dbt", in: "Default"), AppState.needsValueCaution("DBT_TOKEN"))
         XCTAssertEqual(try h.claudeServers().keys.sorted(), ["aws-mcp", "scoutbook", "service-now"],
                        "nothing that arrives off reaches Claude")
-        XCTAssertEqual(state.importCopies(documentAt: url.path, into: "Nowhere", choices: [:], date: "2026-09-21"), nil,
+        XCTAssertEqual(state.importCopies(documentAt: url.path, into: "Nowhere", choices: [:]), nil,
                        "a collection that does not exist is a no-op, as switching to one is")
     }
 
@@ -2600,7 +2600,7 @@ final class AppStateCollectionsTests: XCTestCase {
         defer { h.dispose() }
         let url = h.dir.file("shared/data-team.json")
         try writeDocument(importableDocument, at: url)
-        XCTAssertNil(state.importCopies(documentAt: url.path, into: "Default", choices: [:], date: "2026-09-21"))
+        XCTAssertNil(state.importCopies(documentAt: url.path, into: "Default", choices: [:]))
 
         // The user fills the token and turns dbt on.
         var dbt = try XCTUnwrap(state.store.collections["Default"]?.mcps["dbt"])
@@ -2608,13 +2608,13 @@ final class AppStateCollectionsTests: XCTestCase {
         dbt.enabled = true
         XCTAssertNil(state.upsert(name: "dbt", entry: dbt, renamedFrom: "dbt"))
 
-        // The author ships a new dbt, and the same document is imported again.
+        // A day later the author ships a new dbt, and the same document is imported again.
+        h.now = h.now.addingTimeInterval(24 * 60 * 60)
         var doc = importableDocument
         doc.connectors["dbt"]?.launcher = .local(.init(command: "npx", args: ["-y", "@dbt/mcp@2"], platform: .current))
         try writeDocument(doc, at: url)
         XCTAssertNil(state.importCopies(documentAt: url.path, into: "Default",
-                                        choices: ["dbt": .replace, "github": .keepBoth, "notion": .skip, "ledger": .skip],
-                                        date: "2026-09-22"))
+                                        choices: ["dbt": .replace, "github": .keepBoth, "notion": .skip, "ledger": .skip]))
         let mcps = try XCTUnwrap(state.store.collections["Default"]).mcps
         XCTAssertEqual(mcps["dbt"]?.config.value(at: JSONPointer(["args", "1"])), .string("@dbt/mcp@2"))
         XCTAssertEqual(mcps["dbt"]?.config.value(at: JSONPointer(["env", "DBT_TOKEN"])), .string("tok"),
@@ -2623,15 +2623,14 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNotNil(mcps["github 2"], "Keep both lands beside what is already there")
         XCTAssertEqual(mcps["github 2"]?.enabled, false)
         XCTAssertEqual(mcps.keys.filter { $0.hasPrefix("notion") }.sorted(), ["notion"], "Skip leaves it alone")
-        XCTAssertEqual(state.collectionsFile.collections["Default"]?.provenance["dbt"]?.date, "2026-09-22")
+        XCTAssertEqual(state.collectionsFile.collections["Default"]?.provenance["dbt"]?.date, "2026-09-05")
         XCTAssertEqual(state.collectionsFile.collections["Default"]?.provenance["github 2"]?.from, "Data team")
         XCTAssertEqual(try h.claudeServers()["dbt"]?.value(at: JSONPointer(["args", "1"])), .string("@dbt/mcp@2"),
                        "a replaced connector that was on reaches Claude")
 
         // A third import with Keep both again numbers on from the highest suffix taken.
         XCTAssertNil(state.importCopies(documentAt: url.path, into: "Default",
-                                        choices: ["github": .keepBoth, "dbt": .skip, "notion": .skip, "ledger": .skip],
-                                        date: "2026-09-23"))
+                                        choices: ["github": .keepBoth, "dbt": .skip, "notion": .skip, "ledger": .skip]))
         XCTAssertNotNil(state.store.collections["Default"]?.mcps["github 3"])
     }
 

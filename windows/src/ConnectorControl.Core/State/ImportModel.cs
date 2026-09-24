@@ -283,7 +283,7 @@ public sealed class ImportModel : ObservableObject
         {
             choices[row.Name] = row.Include && row.ExcludedReason is null ? row.Choice : ImportChoice.Skip;
         }
-        return state.ImportCopies(Path, TargetCollection, choices, state.Today);
+        return state.ImportCopies(Path, TargetCollection, choices);
     }
 
     /// <summary>

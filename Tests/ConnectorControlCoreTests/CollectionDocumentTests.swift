@@ -32,10 +32,6 @@ final class CollectionDocumentTests: XCTestCase {
         }
     }
 
-    func testFileNameIsTheSlug() {
-        XCTAssertEqual(Self.sample.fileName, "data-team.json")
-    }
-
     func testRenderProducesThisPlatformsLaunchersWithMarkers() throws {
         let rendered = Self.sample.render()
         XCTAssertTrue(rendered.excluded.isEmpty)

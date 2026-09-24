@@ -750,29 +750,18 @@ public final class AppState: ObservableObject {
         return nil
     }
 
-    /// Removes and persists, and no more: a caller removing from the active collection applies
-    /// at the call site, as `CollectionsModel.removeChecked` does after `remove(names:in:)`.
-    /// Whatever the publish record said about the connector goes with it: a connector added later
-    /// under the same name was never ticked, and a mark left behind would refuse every publish
-    /// as a path that had moved.
-    public func remove(name: String, in collection: String? = nil) {
-        let target = collection ?? activeCollection
-        store.collections[target]?.mcps.removeValue(forKey: name)
-        editPublishIntent(of: target) { $0 = $0.movingConnector(name, to: nil) }
-        persistStore()
-    }
-
-    /// Removes several connectors as one write; the caller applies. A loop over `remove(name:in:)`
-    /// would rotate a backup, recompute the pending updates and republish once per connector, and
-    /// announce each store change to every open window. Names the collection does not hold are
-    /// skipped, and removing nothing writes nothing.
+    /// Removes connectors and persists them as one write, and no more: a caller removing from the
+    /// active collection applies at the call site, as `CollectionsModel.removeChecked` does. Names
+    /// the collection does not hold are skipped, and removing nothing writes nothing.
+    ///
+    /// Whatever the publish record said about a connector goes with it: a connector added later
+    /// under the same name was never ticked, and a mark left behind would refuse every publish as
+    /// a path that had moved.
     public func remove(names: [String], in collection: String? = nil) {
         let target = collection ?? activeCollection
         var removed = false
         for name in names where store.collections[target]?.mcps[name] != nil {
             store.collections[target]?.mcps.removeValue(forKey: name)
-            // As in the single-name case: a mark left behind would refuse every later publish as
-            // a path that had moved.
             editPublishIntent(of: target) { $0 = $0.movingConnector(name, to: nil) }
             removed = true
         }
@@ -1294,7 +1283,7 @@ public final class AppState: ObservableObject {
     /// Replace keeps the values the user filled in, Keep both lands a suffixed copy beside it,
     /// Skip leaves it alone. A name the target does not hold is simply added. nil on success.
     public func importCopies(documentAt path: String, into collection: String,
-                             choices: [String: ImportChoice], date: String) -> String? {
+                             choices: [String: ImportChoice]) -> String? {
         // A name that is not a collection is silently ignored, as switching to one is.
         guard store.collections[collection] != nil else { return nil }
         // Copies belong where the user owns what they hold. A synced collection answers to its
@@ -1305,6 +1294,7 @@ public final class AppState: ObservableObject {
         guard let document = decoded else { return failure }
         let directory = url.deletingLastPathComponent().path
         let rendered = document.render()
+        let date = today
         var entry = collectionsFile.collections[collection] ?? .local
         var landed = false
         // Sorted so two connectors that want the same suffixed name always get the same one.

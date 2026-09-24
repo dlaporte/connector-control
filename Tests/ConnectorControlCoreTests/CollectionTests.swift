@@ -68,7 +68,7 @@ final class CollectionTests: XCTestCase {
 
     func testRenameActiveCollection() {
         var store = MasterStore.empty
-        let error = store.renameActiveCollection(to: "Main")
+        let error = store.renameCollection(store.activeCollection, to: "Main")
         XCTAssertNil(error)
         XCTAssertEqual(store.activeCollection, "Main")
         XCTAssertEqual(Array(store.collections.keys), ["Main"])
@@ -78,20 +78,20 @@ final class CollectionTests: XCTestCase {
         var store = MasterStore(
             activeCollection: "Work",
             collections: ["Work": Collection(), "Personal": Collection()])
-        XCTAssertEqual(store.renameActiveCollection(to: "Personal"), "A collection named “Personal” already exists.")
+        XCTAssertEqual(store.renameCollection(store.activeCollection, to: "Personal"), "A collection named “Personal” already exists.")
         XCTAssertEqual(store.activeCollection, "Work", "unchanged on error")
     }
 
     func testRenameActiveCollectionRejectsEmptyName() {
         var store = MasterStore.empty
-        XCTAssertNotNil(store.renameActiveCollection(to: "  "))
+        XCTAssertNotNil(store.renameCollection(store.activeCollection, to: "  "))
     }
 
     func testDeleteActiveCollectionSwitchesToFirstRemaining() {
         var store = MasterStore(
             activeCollection: "Work",
             collections: ["Work": Collection(), "Alpha": Collection(), "Zeta": Collection()])
-        let error = store.deleteActiveCollection()
+        let error = store.deleteCollection(named: store.activeCollection)
         XCTAssertNil(error)
         XCTAssertEqual(store.activeCollection, "Alpha")
         XCTAssertNil(store.collections["Work"])
@@ -99,7 +99,7 @@ final class CollectionTests: XCTestCase {
 
     func testDeleteActiveCollectionRejectsLastCollection() {
         var store = MasterStore.empty
-        XCTAssertEqual(store.deleteActiveCollection(), "Can’t delete the last collection.")
+        XCTAssertEqual(store.deleteCollection(named: store.activeCollection), "Can’t delete the last collection.")
         XCTAssertEqual(store.collections.count, 1)
     }
 
@@ -124,6 +124,6 @@ final class CollectionTests: XCTestCase {
         let duplicate = store.addCollection(named: "Default", copyingCurrent: false)!
         XCTAssertEqual(duplicate[duplicate.index(before: duplicate.range(of: "Default")!.lowerBound)], "“")
         XCTAssertEqual(duplicate[duplicate.range(of: "Default")!.upperBound], "”")
-        XCTAssertTrue(store.deleteActiveCollection()!.contains("’"))
+        XCTAssertTrue(store.deleteCollection(named: store.activeCollection)!.contains("’"))
     }
 }

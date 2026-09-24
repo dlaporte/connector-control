@@ -174,9 +174,6 @@ public sealed class ConfigService
         }
     }
 
-    /// <summary>The active collection's enabled subset — see <see cref="Apply(IReadOnlyDictionary{string,JsonValue},string?)"/>.</summary>
-    public void Apply(MasterStore store) => Apply(store.EnabledServers);
-
     /// <summary>The sidecar beside the master list; a missing or unreadable file loads as empty (see <see cref="CollectionsFile.Load"/>).</summary>
     public CollectionsFile LoadCollections() => CollectionsFile.Load(Paths.CollectionsFilePath);
 

@@ -397,7 +397,7 @@ public class StringCatalogTests
             [new KeyValuePair<string, Collection>("X", new Collection())]);
         actual["MasterStore.duplicateCollectionNameError"] = duplicateStore.AddCollection("X", false)!;
         var deleteLastStore = MasterStore.Empty();
-        actual["MasterStore.deleteLastCollectionError"] = deleteLastStore.DeleteActiveCollection()!;
+        actual["MasterStore.deleteLastCollectionError"] = deleteLastStore.DeleteCollection(deleteLastStore.ActiveCollection)!;
         var unknownCollectionStore = MasterStore.Empty();
         actual["MasterStore.unknownCollectionError"] = unknownCollectionStore.SwitchCollection("X")!;
 

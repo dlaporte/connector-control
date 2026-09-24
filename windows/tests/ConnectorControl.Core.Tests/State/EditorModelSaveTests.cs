@@ -232,7 +232,7 @@ public class EditorModelSaveTests
     {
         using var rig = new EditorRig();
         var editor = rig.Editor(EditTarget.Existing("scoutbook", rig.State.Store.Mcps["scoutbook"]));
-        rig.State.Remove("scoutbook");
+        rig.State.Remove(["scoutbook"]);
         Assert.True(editor.Save());
         Assert.Equal(new FakeDialogs.ConfirmCall("“scoutbook” was removed outside this editor.", "Saving will add it back.", "Save Anyway", "Cancel", false), rig.H.Dialogs.Confirms[0]);
         Assert.True(rig.State.Store.Mcps["scoutbook"].Enabled);   // a re-added entry takes the editor's snapshot enabled state

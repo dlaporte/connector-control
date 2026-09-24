@@ -512,8 +512,6 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         Connectors = new Dictionary<string, Connector>(connectors, StringComparer.Ordinal);
     }
 
-    public string FileName => Slug.Make(Name) + "." + FileExtension;
-
     public sealed class Connector : IEquatable<Connector>
     {
         public Launcher Launcher { get; }

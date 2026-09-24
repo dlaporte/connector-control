@@ -88,10 +88,6 @@ public struct MasterStore: Equatable, Codable, Sendable {
         return nil
     }
 
-    public mutating func renameActiveCollection(to name: String) -> String? {
-        renameCollection(activeCollection, to: name)
-    }
-
     /// nil on success, else a user-facing error message. Refuses to delete the
     /// last remaining collection. Deleting the active collection hands the
     /// sorted-first remaining collection the active spot.
@@ -101,10 +97,6 @@ public struct MasterStore: Equatable, Codable, Sendable {
         collections.removeValue(forKey: name)
         if activeCollection == name { activeCollection = collections.keys.min() ?? "Default" }
         return nil
-    }
-
-    public mutating func deleteActiveCollection() -> String? {
-        deleteCollection(named: activeCollection)
     }
 
     /// The one wording for a name no collection has, shared by switch, rename and delete.

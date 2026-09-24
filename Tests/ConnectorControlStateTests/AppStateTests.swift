@@ -115,7 +115,7 @@ final class AppStateTests: XCTestCase {
     func testRemovePersistsButDoesNotApply() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        state.remove(name: "aws-mcp")
+        state.remove(names: ["aws-mcp"])
         XCTAssertNil(try h.storeOnDisk().mcps["aws-mcp"])
         XCTAssertNotNil(try h.claudeServers()["aws-mcp"])
         XCTAssertTrue(state.isDirty)
@@ -135,7 +135,7 @@ final class AppStateTests: XCTestCase {
     func testPendingRemovalIsRegeneratedQuietlyOnReload() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        state.remove(name: "aws-mcp")
+        state.remove(names: ["aws-mcp"])
         state.reload()
         XCTAssertNil(try h.claudeServers()["aws-mcp"])     // regenerated from the store
         XCTAssertNil(state.store.mcps["aws-mcp"])          // not resurrected: it matched the baseline
@@ -176,7 +176,7 @@ final class AppStateTests: XCTestCase {
     func testExternalEditThatMatchesTheStoreOnlyAnnouncesTheChange() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        state.remove(name: "aws-mcp")   // pending removal: store and file now differ
+        state.remove(names: ["aws-mcp"])   // pending removal: store and file now differ
         try h.writeClaudeServers([      // someone writes exactly what the store would render
             ("scoutbook", try XCTUnwrap(state.store.mcps["scoutbook"]).config),
             ("service-now", try XCTUnwrap(state.store.mcps["service-now"]).config),

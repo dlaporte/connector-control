@@ -1391,7 +1391,7 @@ public class AppStateCollectionsTests
         Assert.Equal(MarkedPath, Assert.Single(intent.PathMarks["books"]).Value.Value);
         Assert.Equal(["server_path"], CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors["books"].Needs.Keys);
 
-        state.Remove("books");
+        state.Remove(["books"]);
         // A connector added later under the same name was never ticked.
         Assert.False(state.CollectionsFile.Collections[state.ActiveCollection].Publish!.Intent.PathMarks.ContainsKey("books"));
         Assert.Null(state.PublishError);
@@ -1658,7 +1658,7 @@ public class AppStateCollectionsTests
             Assert.Equal(AppState.KeptPathCarriedError(name, field), state.PublishError?.Message);
             Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
             Assert.Equal(before, File.ReadAllBytes(file));
-            state.Remove(name);
+            state.Remove([name]);
             // With it gone there is nothing left to keep back.
             Assert.Null(state.PublishError);
         }
@@ -1731,8 +1731,8 @@ public class AppStateCollectionsTests
             [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark> { [ArgPointer(0)] = new("server_path", null, MarkedPath) })],
             []), new HashSet<string>([MarkedPath], StringComparer.Ordinal)));
         Assert.Null(s.CreateCollection("Clients"));
-        s.Remove("ledger", "Clients");
-        s.Remove("x", "Clients");
+        s.Remove(["ledger"], "Clients");
+        s.Remove(["x"], "Clients");
         Assert.Null(s.Upsert("crm", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("crm-mcp")))), null, "Clients"));
         var clients = PublishFolder(h, "pubClients");
         Assert.Null(s.StartPublishing("Clients", clients, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
@@ -2387,7 +2387,7 @@ public class AppStateCollectionsTests
             team = first.ActiveCollection;
             Assert.Null(first.Upsert("a", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("a")))), null));
             Assert.Null(first.CreateCollection("Second"));
-            first.Remove("a", "Second");
+            first.Remove(["a"], "Second");
             first.SwitchCollection(team);
         }
         var store = h.StoreOnDisk();
@@ -2633,7 +2633,7 @@ public class AppStateCollectionsTests
         // copy to keep, and rewriting what came in could rewrite a genuine edit. The folder is then
         // kept back from the document, for the author to answer in Publish….
         var before = File.ReadAllBytes(document);
-        state.Remove("x");
+        state.Remove(["x"]);
         Assert.NotEqual(before, File.ReadAllBytes(document));
         var withoutX = File.ReadAllBytes(document);
         state.RestoreClaudeConfig(backup);
@@ -2904,14 +2904,14 @@ public class AppStateCollectionsTests
                 ("args", JsonValue.Array([JsonValue.String("--path"), JsonValue.String(written)])))), null));
             Assert.Equal(AppState.PublishFolderCarriedError("py", FieldName.Argument(2)), state.PublishError?.Message);
             Assert.False(JsonText.FileContains(file, bound));
-            state.Remove("py");
+            state.Remove(["py"]);
         }
         foreach (var other in new[] { $"{bound}.bak", $"{bound}_old/x", $"{bound}é/x" })
         {
             Assert.Null(state.Upsert("py", new McpEntry(JsonValue.Object(("command", JsonValue.String("python3")),
                 ("args", JsonValue.Array([JsonValue.String("--path"), JsonValue.String(other)])))), null));
             Assert.Null(state.PublishError);
-            state.Remove("py");
+            state.Remove(["py"]);
         }
     }
 
@@ -2970,7 +2970,7 @@ public class AppStateCollectionsTests
         var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
         WriteDocument(ImportableDocument(), path);
 
-        Assert.Null(state.ImportCopies(path, "Default", Choices(), "2026-09-21"));
+        Assert.Null(state.ImportCopies(path, "Default", Choices()));
         var mcps = state.Store.Collections["Default"].Mcps;
         Assert.Equal(["aws-mcp", "dbt", "github", "ledger", "notion", "scoutbook", "service-now"],
             AppStateHarness.Keys(mcps.Keys));
@@ -2988,13 +2988,13 @@ public class AppStateCollectionsTests
         Assert.Equal(CollectionKind.Local, state.KindOf("Default"));
         Assert.Empty(state.CollectionsCache.Synced);
         Assert.Empty(state.PendingUpdates);
-        Assert.Equal(new CollectionsFile.Provenance("Data team", "Acme Data Platform", "2026-09-21"),
+        Assert.Equal(new CollectionsFile.Provenance("Data team", "Acme Data Platform", state.Today),
             state.CollectionsFile.Collections["Default"].Provenance["dbt"]);
         Assert.Equal(AppState.NeedsValueCaution("DBT_TOKEN"), state.ConnectorCaution("dbt", "Default"));
         // Nothing that arrives off reaches Claude.
         Assert.Equal(["aws-mcp", "scoutbook", "service-now"], AppStateHarness.Keys(h.ClaudeServers().Keys));
         // A collection that does not exist is a no-op, as switching to one is.
-        Assert.Null(state.ImportCopies(path, "Nowhere", Choices(), "2026-09-21"));
+        Assert.Null(state.ImportCopies(path, "Nowhere", Choices()));
     }
 
     [Fact]
@@ -3004,7 +3004,7 @@ public class AppStateCollectionsTests
         using var state = h.Create();
         var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
         WriteDocument(ImportableDocument(), path);
-        Assert.Null(state.ImportCopies(path, "Default", Choices(), "2026-09-21"));
+        Assert.Null(state.ImportCopies(path, "Default", Choices()));
 
         // The user fills the token and turns dbt on.
         var dbt = state.Store.Collections["Default"].Mcps["dbt"];
@@ -3014,7 +3014,8 @@ public class AppStateCollectionsTests
             Config = dbt.Config.Replacing(JsonPointer.Parse("/env/DBT_TOKEN")!, JsonValue.String("tok"))!,
         }, "dbt"));
 
-        // The author ships a new dbt, and the same document is imported again.
+        // A day later the author ships a new dbt, and the same document is imported again.
+        h.Now = h.Now.AddDays(1);
         var next = ImportableDocument();
         var connectors = new Dictionary<string, CollectionDocument.Connector>(next.Connectors, StringComparer.Ordinal);
         var authored = connectors["dbt"];
@@ -3025,7 +3026,7 @@ public class AppStateCollectionsTests
 
         Assert.Null(state.ImportCopies(path, "Default", Choices(
             ("dbt", ImportChoice.Replace), ("github", ImportChoice.KeepBoth),
-            ("notion", ImportChoice.Skip), ("ledger", ImportChoice.Skip)), "2026-09-22"));
+            ("notion", ImportChoice.Skip), ("ledger", ImportChoice.Skip))));
         var mcps = state.Store.Collections["Default"].Mcps;
         Assert.Equal(JsonValue.String("@dbt/mcp@2"), mcps["dbt"].Config.ValueAt(JsonPointer.Parse("/args/1")!));
         // Replace keeps what the user filled in, and a connector that was on stays on.
@@ -3035,7 +3036,7 @@ public class AppStateCollectionsTests
         Assert.True(mcps.ContainsKey("github 2"));
         Assert.False(mcps["github 2"].Enabled);
         Assert.Equal(["notion"], AppStateHarness.Keys(mcps.Keys.Where(k => k.StartsWith("notion", StringComparison.Ordinal))));
-        Assert.Equal("2026-09-22", state.CollectionsFile.Collections["Default"].Provenance["dbt"].Date);
+        Assert.Equal("2026-09-05", state.CollectionsFile.Collections["Default"].Provenance["dbt"].Date);
         Assert.Equal("Data team", state.CollectionsFile.Collections["Default"].Provenance["github 2"].From);
         // A replaced connector that was on reaches Claude.
         Assert.Equal(JsonValue.String("@dbt/mcp@2"), h.ClaudeServers()["dbt"].ValueAt(JsonPointer.Parse("/args/1")!));
@@ -3043,7 +3044,7 @@ public class AppStateCollectionsTests
         // A third import with Keep both again numbers on from the highest suffix taken.
         Assert.Null(state.ImportCopies(path, "Default", Choices(
             ("github", ImportChoice.KeepBoth), ("dbt", ImportChoice.Skip),
-            ("notion", ImportChoice.Skip), ("ledger", ImportChoice.Skip)), "2026-09-23"));
+            ("notion", ImportChoice.Skip), ("ledger", ImportChoice.Skip))));
         Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("github 3"));
     }
 

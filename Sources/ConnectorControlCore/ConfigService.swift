@@ -142,11 +142,6 @@ public struct ConfigService: Sendable {
         try? BackupCollections.record(collection, for: backup, in: paths.backupsDirURL, staging: paths.stagingDirURL)
     }
 
-    /// The active collection's enabled subset — see `apply(servers:)`.
-    public func apply(_ store: MasterStore) throws {
-        try apply(servers: store.enabledServers)
-    }
-
     /// The sidecar beside the master list; a missing or unreadable file loads as empty (see
     /// `CollectionsFile.load`), so there is nothing else for this method to handle.
     public func loadCollections() -> CollectionsFile {
