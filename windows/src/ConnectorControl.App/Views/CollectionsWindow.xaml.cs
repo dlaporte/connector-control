@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.Core.State;
 
@@ -26,7 +27,6 @@ namespace ConnectorControl.App.Views;
 public partial class CollectionsWindow : Window
 {
     private readonly AppState state;
-    private readonly WindowRegistry windows;
     private readonly IDialogs dialogs;
     private readonly PropertyChangedEventHandler onModelChanged;
     private readonly PropertyChangedEventHandler onStateChanged;
@@ -50,8 +50,8 @@ public partial class CollectionsWindow : Window
     {
         InitializeComponent();
         this.state = state;
-        this.windows = windows;
         this.dialogs = dialogs;
+        OpenEditor = windows.OpenEditor;
         Model = new CollectionsModel(state, dialogs);
         DataContext = Model;
         onModelChanged = (_, _) => Refresh();
@@ -124,6 +124,13 @@ public partial class CollectionsWindow : Window
         CopyDialog.Show);
 
     internal Presenters Surfaces { get; set; } = Live;
+
+    /// <summary>
+    /// Where a connector's editor opens: the registry, which brings a connector's editor forward
+    /// when it is already open rather than opening a second. Overridable for the same reason as
+    /// <see cref="Surfaces"/>: a test reads what would have opened.
+    /// </summary>
+    internal Action<EditTarget> OpenEditor { get; set; }
 
     /// <summary>
     /// The one caption built from a value rather than bound — the selection bar's ticked count, a
@@ -294,9 +301,9 @@ public partial class CollectionsWindow : Window
     // MARK: connector list header
 
     /// <summary>
-    /// A new connector in the collection on show, through the same editor the pencil opens.
+    /// A new connector in the collection on show, through the same editor a row opens.
     /// </summary>
-    private void OnAddConnector(object sender, RoutedEventArgs e) => windows.OpenEditor(Model.NewConnectorTarget());
+    private void OnAddConnector(object sender, RoutedEventArgs e) => OpenEditor(Model.NewConnectorTarget());
 
     // MARK: selection bar
 
@@ -437,12 +444,118 @@ public partial class CollectionsWindow : Window
         }
     }
 
-    private void OnEdit(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// A click on a row, anywhere but its tick slot: the connector's editor, read-only on a synced
+    /// collection. One click, one open; a double-click asks twice for the same connector, and the
+    /// registry brings the editor already open forward.
+    /// </summary>
+    private void OnRowClicked(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { DataContext: CollectionsModel.Row row })
         {
-            windows.OpenEditor(Model.EditTargetFor(row.Name));
+            OpenEditor(Model.EditTargetFor(row.Name));
         }
+    }
+
+    /// <summary>
+    /// The keys on a focused row, the Mac row's own: Return opens the editor, Space ticks the row
+    /// rather than clicking it, which is the checkbox's convention and keeps ticking reachable
+    /// from the keyboard, and Up and Down move to the row above or below, stopping at either end.
+    /// </summary>
+    private void OnRowKey(object sender, KeyEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: CollectionsModel.Row row })
+        {
+            return;
+        }
+        switch (e.Key)
+        {
+            case Key.Enter:
+                OpenEditor(Model.EditTargetFor(row.Name));
+                break;
+            case Key.Space:
+                Model.ToggleChecked(row.Name);
+                break;
+            case Key.Up:
+            case Key.Down:
+                if (Model.Neighbour(row.Name, e.Key == Key.Up ? -1 : 1) is { } next
+                    && RowList.ItemContainerGenerator.ContainerFromItem(Model.Rows.Single(r => r.Name == next)) is DependencyObject container
+                    && RowBodyIn(container) is { } body)
+                {
+                    FocusRow(body);
+                }
+                break;
+            default:
+                return;
+        }
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// The tick slot takes the press for itself, so the row under it never becomes a pressed
+    /// button and cannot open the editor. It focuses the row, as a click on the Mac row does.
+    /// </summary>
+    private void OnTickSlotDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is DependencyObject slot && FindAncestor<Button>(slot) is { } body)
+        {
+            FocusRow(body);
+        }
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// A click anywhere in the slot ticks the row, whether or not it landed on the box. On a
+    /// read-only row the slot holds the lock, and the model leaves the row as it is.
+    /// </summary>
+    private void OnTickSlotUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: CollectionsModel.Row row })
+        {
+            Model.ToggleChecked(row.Name);
+        }
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// The row takes focus, scrolled into view. Logical focus first: Focus() moves it only when it
+    /// can take the keyboard's too, and the logical one is where the keyboard returns when this
+    /// window is next active.
+    /// </summary>
+    private static void FocusRow(Button body)
+    {
+        FocusManager.SetFocusedElement(FocusManager.GetFocusScope(body), body);
+        body.Focus();
+        body.BringIntoView();
+    }
+
+    private static Button? RowBodyIn(DependencyObject container)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(container); i++)
+        {
+            var child = VisualTreeHelper.GetChild(container, i);
+            if (child is Button { Name: "RowBody" } body)
+            {
+                return body;
+            }
+            if (RowBodyIn(child) is { } found)
+            {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    private static T? FindAncestor<T>(DependencyObject start) where T : DependencyObject
+    {
+        for (var node = VisualTreeHelper.GetParent(start); node is not null; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is T found)
+            {
+                return found;
+            }
+        }
+        return null;
     }
 
     // MARK: banner strip
@@ -605,8 +718,8 @@ public sealed class CollectionSourceTooltipConverter : OneWayConverter<Collectio
 }
 
 /// <summary>
-/// One row's pencil, which names the connector it edits, from <see cref="CollectionsModel.EditLabel"/>;
-/// this exists only because XAML cannot call a method.
+/// One connector row's spoken name, which says it opens that connector's editor, from
+/// <see cref="CollectionsModel.EditLabel"/>; this exists only because XAML cannot call a method.
 /// </summary>
 public sealed class EditLabelConverter : OneWayConverter<string>
 {

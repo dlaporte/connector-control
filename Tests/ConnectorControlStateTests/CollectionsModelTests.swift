@@ -132,8 +132,25 @@ final class CollectionsModelTests: XCTestCase {
         model.setChecked("notes", false)
         XCTAssertEqual(model.exportIntentForChecked(), [])
 
-        // The pencil opens the row in the collection the window is showing, not the active one.
+        // Space flips a local row's tick both ways, and does nothing on a read-only one.
+        model.toggleChecked("notes")
+        XCTAssertEqual(model.checkedNames, ["notes"])
+        model.toggleChecked("notes")
+        XCTAssertEqual(model.checkedNames, [])
+        model.toggleChecked("absent")
+        XCTAssertEqual(model.checkedNames, [])
+
         model.selected = "Team"
+        model.toggleChecked("github")
+        XCTAssertTrue(model.rows.allSatisfy { !$0.checked })
+        // Up and Down walk the rows in the order they are shown, and stop at either end.
+        XCTAssertEqual(model.neighbour(of: "Ledger", by: 1), "github")
+        XCTAssertEqual(model.neighbour(of: "jira", by: -1), "github")
+        XCTAssertNil(model.neighbour(of: "Ledger", by: -1))
+        XCTAssertNil(model.neighbour(of: "jira", by: 1))
+        XCTAssertNil(model.neighbour(of: "absent", by: 1))
+
+        // A click or Return opens the row in the collection the window is showing, not the active one.
         let target = model.editTarget(for: "jira")
         XCTAssertEqual(target.collection, "Team")
         XCTAssertEqual(target.name, "jira")

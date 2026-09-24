@@ -11,7 +11,7 @@ struct CollectionsWindowView: View {
     static let windowID = "collections"
 
     /// Wide enough for the longest collection name the sidebar is likely to hold without taking
-    /// width the rows need for a target column and the pencil.
+    /// width the rows need for their target column.
     private static let sidebarWidth: CGFloat = 200
     /// The most the name column takes, however long the longest name: past it the name is cut and
     /// the target keeps the room it needs to say anything.
@@ -20,6 +20,12 @@ struct CollectionsWindowView: View {
     private static let selectionBarHeight: CGFloat = 30
     /// The `⋯` and the `+` under it share one column, centred on each other.
     private static let headerButtonWidth: CGFloat = 20
+    /// A row's leading slot, which holds the tick or the lock: the box and 8 pt either side, so a
+    /// click that lands near the box ticks it rather than opening the editor. The Windows rows
+    /// keep the same margin around their larger box.
+    private static let tickSlotWidth: CGFloat = 30
+    /// A connector row's height, all of which answers a click.
+    private static let rowHeight: CGFloat = 30
 
     @StateObject private var model: CollectionsModel
     /// The popover's request travels through AppState, not the model, so this window observes
@@ -41,6 +47,10 @@ struct CollectionsWindowView: View {
     @State private var shownError: String?
     /// The longest name cell in the list, so every target starts at the same x.
     @State private var nameWidth: CGFloat = 0
+    /// The row the pointer is over, which takes the hover fill that says a row can be clicked.
+    @State private var hoveredRow: String?
+    /// The row that has keyboard focus, for Return, Space and the arrows.
+    @FocusState private var focusedRow: String?
 
     /// The model asks through AppState's dialogs, as the editor does: they are the app's one
     /// AlertDialogs.
@@ -387,65 +397,132 @@ struct CollectionsWindowView: View {
         .accessibilityLabel(model.addConnectorTooltipText)
     }
 
+    /// A connector's row. A click anywhere but the tick slot opens its editor, as Return does on a
+    /// focused row; Space ticks it, and Up and Down move between rows. The Windows rows behave the
+    /// same, as a list of buttons. The row takes a light fill under the pointer, the Mac's hover
+    /// for a clickable row, and no pointing hand, which a Mac list row never shows.
     private var rows: some View {
-        List(model.rows) { row in
-            HStack(spacing: 8) {
-                // One leading slot for both marks, so ticking a row cannot shift its name and a
-                // synced collection's rows line up with a local one's.
-                ZStack(alignment: .leading) {
-                    if row.isLocked {
-                        LockMark(label: CollectionsModel.lockedGlyphTooltip)
-                    } else {
-                        Toggle("", isOn: checkedBinding(row))
-                            .toggleStyle(.checkbox)
-                            .labelsHidden()
-                            .accessibilityLabel(row.name)
+        ScrollViewReader { proxy in
+            List(model.rows) { row in
+                HStack(spacing: 0) {
+                    tickSlot(row)
+                    HStack(spacing: 8) {
+                        nameCell(row)
+                            .frame(width: nameWidth, alignment: .leading)
+                        // What the connector runs, often a path: elided in the middle, as the
+                        // connector count is. The Windows rows cut the tail, since WPF has no
+                        // middle ellipsis.
+                        Text(row.target)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    // One tap, one open: a double-click opens the same connector twice, and the
+                    // editor's window group brings the one already open forward.
+                    .onTapGesture {
+                        focusedRow = row.name
+                        openEditor(row.name)
                     }
                 }
-                .frame(width: 18, alignment: .leading)
-                nameCell(row)
-                    .frame(width: nameWidth, alignment: .leading)
-                // What the connector runs, often a path: elided in the middle, as the connector
-                // count is. The Windows rows cut the tail, since WPF has no middle ellipsis.
-                Text(row.target)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Button {
-                    openWindow(id: EditTarget.editorWindowID, value: model.editTarget(for: row.name))
-                } label: {
-                    Image(systemName: "pencil")
-                        .imageScale(.medium)
-                        .foregroundStyle(.secondary)
+                // The row's full height answers a click: the list's own cell insets would leave
+                // a dead band above and below, so the row sets its height itself.
+                .frame(minHeight: CollectionsWindowView.rowHeight)
+                .background {
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(hoveredRow == row.name ? Color.primary.opacity(0.06) : .clear)
                 }
-                .buttonStyle(.accessoryBar)
-                .help(CollectionsModel.editLabel(for: row.name))
+                .listRowInsets(EdgeInsets())
+                .onHover { inside in
+                    if inside {
+                        hoveredRow = row.name
+                    } else if hoveredRow == row.name {
+                        hoveredRow = nil
+                    }
+                }
+                .focusable()
+                .focused($focusedRow, equals: row.name)
+                .onKeyPress(.return) {
+                    openEditor(row.name)
+                    return .handled
+                }
+                .onKeyPress(.space) {
+                    model.toggleChecked(row.name)
+                    return .handled
+                }
+                .onKeyPress(.upArrow) { move(from: row.name, by: -1, proxy) }
+                .onKeyPress(.downArrow) { move(from: row.name, by: 1, proxy) }
+                // Named for what it does, as the Windows row is: the tick inside it keeps the
+                // connector's own name.
+                .accessibilityElement(children: .contain)
                 .accessibilityLabel(CollectionsModel.editLabel(for: row.name))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { openEditor(row.name) }
             }
-            .padding(.vertical, 2)
-        }
-        // The rows are the tall half of the window: the list takes what is left after the header,
-        // the banner and the list's own title, and scrolls inside it.
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Every row's name cell measured at its natural width, off screen rows included, since
-        // the list lays out only the rows it shows.
-        .background(alignment: .topLeading) {
-            ZStack(alignment: .topLeading) {
-                ForEach(model.rows) { row in
-                    nameCell(row)
-                        .fixedSize()
-                        .background(GeometryReader { proxy in
-                            Color.clear.preference(key: NameWidthKey.self, value: proxy.size.width)
-                        })
+            // The rows are the tall half of the window: the list takes what is left after the
+            // header, the banner and the list's own title, and scrolls inside it.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Every row's name cell measured at its natural width, off screen rows included,
+            // since the list lays out only the rows it shows.
+            .background(alignment: .topLeading) {
+                ZStack(alignment: .topLeading) {
+                    ForEach(model.rows) { row in
+                        nameCell(row)
+                            .fixedSize()
+                            .background(GeometryReader { geometry in
+                                Color.clear.preference(key: NameWidthKey.self, value: geometry.size.width)
+                            })
+                    }
                 }
+                .hidden()
             }
-            .hidden()
+            .onPreferenceChange(NameWidthKey.self) { width in
+                nameWidth = min(width, CollectionsWindowView.maxNameWidth)
+            }
         }
-        .onPreferenceChange(NameWidthKey.self) { width in
-            nameWidth = min(width, CollectionsWindowView.maxNameWidth)
+    }
+
+    /// The tick, or on a read-only row the lock, in one slot the full height of the row. The
+    /// slot answers a click, not the box: a click that lands just beside the box still ticks, and
+    /// cannot open the editor. On a read-only row a click here does nothing at all, so the part
+    /// of a row that opens the editor is the same on every collection. The box keeps its own
+    /// spoken name and action, and stays out of the key loop: the row is what takes focus, and
+    /// its Space is the tick.
+    private func tickSlot(_ row: CollectionsModel.Row) -> some View {
+        ZStack {
+            if row.isLocked {
+                LockMark(label: CollectionsModel.lockedGlyphTooltip)
+            } else {
+                Toggle("", isOn: checkedBinding(row))
+                    .toggleStyle(.checkbox)
+                    .labelsHidden()
+                    .focusable(false)
+                    .allowsHitTesting(false)
+                    .accessibilityLabel(row.name)
+            }
         }
+        .frame(width: CollectionsWindowView.tickSlotWidth)
+        .frame(maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !row.isLocked { model.toggleChecked(row.name) }
+        }
+    }
+
+    private func openEditor(_ connector: String) {
+        openWindow(id: EditTarget.editorWindowID, value: model.editTarget(for: connector))
+    }
+
+    /// Focus to the row above or below, scrolled into view first: the list makes only the rows
+    /// it shows, and focus cannot land on one it has not made. Past either end the key stays put.
+    private func move(from connector: String, by offset: Int, _ proxy: ScrollViewProxy) -> KeyPress.Result {
+        guard let next = model.neighbour(of: connector, by: offset) else { return .handled }
+        proxy.scrollTo(next)
+        Task { @MainActor in focusedRow = next }
+        return .handled
     }
 
     /// The name and its caution mark, measured and laid out as one: the column is as wide as the
@@ -456,8 +533,8 @@ struct CollectionsWindowView: View {
                 .fontWeight(.medium)
                 .lineLimit(1)
             if let caution = row.caution {
-                // Advisory only: the pencil stays live, and the tooltip sends the user to the
-                // editor's full note.
+                // Advisory only: the row still opens the editor, and the tooltip sends the user
+                // to the editor's full note.
                 CautionMark(caution)
             }
         }

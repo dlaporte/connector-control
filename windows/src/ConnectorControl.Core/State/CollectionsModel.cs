@@ -1073,9 +1073,33 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// The pencil: the same connector in two collections is two windows, so the target carries the
-    /// collection this window is showing. The Mac calls this <c>editTarget(for:)</c>; here the
-    /// returned type already owns that name.
+    /// Space on a focused row: the tick flips, as a click beside it does. A read-only row has no
+    /// tick, so the key does nothing there, as a click on its lock does nothing.
+    /// </summary>
+    public void ToggleChecked(string name)
+    {
+        if (Rows.FirstOrDefault(r => r.Name == name) is not { IsLocked: false } row)
+        {
+            return;
+        }
+        SetChecked(name, !row.Checked);
+    }
+
+    /// <summary>
+    /// Up and Down on a focused row: the row <paramref name="offset"/> places away, in the order
+    /// the list shows, or null past either end, where the key stays put rather than wrapping round.
+    /// </summary>
+    public string? Neighbour(string name, int offset)
+    {
+        var names = Rows.Select(r => r.Name).ToList();
+        var index = names.IndexOf(name);
+        return index < 0 || index + offset < 0 || index + offset >= names.Count ? null : names[index + offset];
+    }
+
+    /// <summary>
+    /// What a click on a row, or Return on it, opens: the same connector in two collections is two
+    /// windows, so the target carries the collection this window is showing. The Mac calls this
+    /// <c>editTarget(for:)</c>; here the returned type already owns that name.
     /// </summary>
     public EditTarget EditTargetFor(string row)
     {

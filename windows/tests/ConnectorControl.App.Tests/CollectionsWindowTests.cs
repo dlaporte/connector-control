@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Automation;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Threading;
 using ConnectorControl.App.Services;
 using ConnectorControl.Core;
@@ -51,6 +52,9 @@ public class CollectionsWindowTests
 
         public List<CopyModel> Copies { get; } = [];
 
+        /// <summary>Every editor the window asked for, in order: a row, Return or the header's plus.</summary>
+        public List<EditTarget> Editors { get; } = [];
+
         public CollectionsWindow.Presenters Presenters => new(
             _ => { DocumentAsks++; return Document; },
             _ => { FolderAsks++; return Folder; },
@@ -83,6 +87,7 @@ public class CollectionsWindowTests
             var window = new CollectionsWindow(state, registry, h.Dialogs) { ShowActivated = false };
             var recorder = new Recorder();
             window.Surfaces = recorder.Presenters;
+            window.OpenEditor = recorder.Editors.Add;
             var closed = false;
             window.Closed += (_, _) => closed = true;
             try
@@ -191,6 +196,29 @@ public class CollectionsWindowTests
     private static void Click(MenuItem item) => item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, item));
 
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+
+    /// <summary>
+    /// A key pressed on a row as the keyboard delivers it, tunnelling first, then the rebuilt rows'
+    /// pass. The window may be hidden, but it has been shown, so it still has its source.
+    /// </summary>
+    private static void Press(CollectionsWindow window, UIElement target, Key key)
+    {
+        var source = PresentationSource.FromVisual(target)!;
+        target.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, key) { RoutedEvent = Keyboard.PreviewKeyDownEvent });
+        Layout(window);
+    }
+
+    /// <summary>
+    /// A left button pressed and released over an element, raised as the mouse raises them: the
+    /// bubbling MouseDown and MouseUp, which each element on the way cracks into its own
+    /// MouseLeftButtonDown and MouseLeftButtonUp.
+    /// </summary>
+    private static void MouseClick(CollectionsWindow window, UIElement target)
+    {
+        target.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.MouseDownEvent });
+        target.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.MouseUpEvent });
+        Layout(window);
+    }
 
     /// <summary>Ticks or unticks one row the way a click does, then gives the rebuilt rows their pass.</summary>
     private static void Tick(CollectionsWindow window, string connector, bool on)
@@ -580,10 +608,6 @@ public class CollectionsWindowTests
             var first = window.Model.Rows[0].Name;
             var second = window.Model.Rows[1].Name;
             Assert.Equal(Visibility.Visible, InRow<CheckBox>(window, first, "RowTick").Visibility);
-            // The pencil names the connector it edits, to the eye and to a screen reader.
-            var pencil = InRow<Button>(window, first, "RowEdit");
-            Assert.Equal(CollectionsModel.EditLabel(first), pencil.ToolTip);
-            Assert.Equal(CollectionsModel.EditLabel(first), AutomationProperties.GetName(pencil));
 
             Tick(window, first, true);
             Tick(window, second, true);
@@ -619,6 +643,113 @@ public class CollectionsWindowTests
             Assert.Empty(window.Model.CheckedNames);
             Assert.Equal(Visibility.Collapsed, window.TickedBar.Visibility);
         });
+    }
+
+    [Fact]
+    public void ClickingARowOpensItsEditor()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Showing(h, state, (window, recorder) =>
+        {
+            var first = window.Model.Rows[0].Name;
+            var body = InRow<Button>(window, first, "RowBody");
+            // The row says what a click on it does, and to which connector; the tick inside it
+            // keeps the connector's own name.
+            Assert.Equal(CollectionsModel.EditLabel(first), AutomationProperties.GetName(body));
+            Assert.Equal(first, AutomationProperties.GetName(InRow<CheckBox>(window, first, "RowTick")));
+
+            Click(body);
+            var target = Assert.Single(recorder.Editors);
+            Assert.Equal(window.Model.EditTargetFor(first).Id, target.Id);
+            Assert.Equal(window.Model.Selected, target.Collection);
+            // A click opens; it does not tick.
+            Assert.Empty(window.Model.CheckedNames);
+        });
+    }
+
+    [Fact]
+    public void AClickInTheTickSlotTicksAndDoesNotOpen()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Showing(h, state, (window, recorder) =>
+        {
+            var first = window.Model.Rows[0].Name;
+            var slot = InRow<Border>(window, first, "RowTickSlot");
+            var box = InRow<CheckBox>(window, first, "RowTick");
+            // The slot is the row's full height and 8 px wider than the box on either side, so a
+            // click that lands beside the box still ticks it.
+            Assert.Equal(InRow<Button>(window, first, "RowBody").ActualHeight, slot.ActualHeight);
+            Assert.Equal(new Thickness(8, 0, 8, 0), slot.Padding);
+            Assert.Equal(20 + 16, slot.ActualWidth);
+            // The box itself takes no clicks and no focus: the slot and the row do.
+            Assert.False(box.IsHitTestVisible);
+            Assert.False(box.Focusable);
+
+            MouseClick(window, slot);
+            Assert.Equal([first], window.Model.CheckedNames);
+            Assert.True(InRow<CheckBox>(window, first, "RowTick").IsChecked);
+            Assert.Empty(recorder.Editors);
+            MouseClick(window, InRow<Border>(window, first, "RowTickSlot"));
+            Assert.Empty(window.Model.CheckedNames);
+            Assert.Empty(recorder.Editors);
+        });
+    }
+
+    [Fact]
+    public void ReturnOpensSpaceTicksAndTheArrowsMoveBetweenRows()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Showing(h, state, (window, recorder) =>
+        {
+            var first = window.Model.Rows[0].Name;
+            var second = window.Model.Rows[1].Name;
+            Assert.Equal(KeyboardNavigationMode.Once, KeyboardNavigation.GetTabNavigation(window.RowList));
+
+            Press(window, InRow<Button>(window, first, "RowBody"), Key.Enter);
+            Assert.Equal([window.Model.EditTargetFor(first).Id], recorder.Editors.Select(t => t.Id));
+
+            // Space is the tick's, not the button's: it ticks, and opens nothing.
+            Press(window, InRow<Button>(window, first, "RowBody"), Key.Space);
+            Assert.Equal([first], window.Model.CheckedNames);
+            Press(window, InRow<Button>(window, first, "RowBody"), Key.Space);
+            Assert.Empty(window.Model.CheckedNames);
+            Assert.Single(recorder.Editors);
+
+            // Down moves to the next row, and Up at the top stays put.
+            Press(window, InRow<Button>(window, first, "RowBody"), Key.Down);
+            Assert.Same(InRow<Button>(window, second, "RowBody"), FocusManager.GetFocusedElement(window));
+            Press(window, InRow<Button>(window, second, "RowBody"), Key.Up);
+            Assert.Same(InRow<Button>(window, first, "RowBody"), FocusManager.GetFocusedElement(window));
+            Press(window, InRow<Button>(window, first, "RowBody"), Key.Up);
+            Assert.Same(InRow<Button>(window, first, "RowBody"), FocusManager.GetFocusedElement(window));
+        });
+    }
+
+    [Fact]
+    public void ASubscribedRowOpensReadOnlyAndItsLockSlotDoesNothing()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        SubscribeToDataTeam(h, state);
+        Showing(h, state, (window, recorder) =>
+        {
+            var first = window.Model.Rows[0].Name;
+            // The lock sits in the tick's slot, and a click there neither ticks nor opens.
+            MouseClick(window, InRow<Border>(window, first, "RowTickSlot"));
+            Press(window, InRow<Button>(window, first, "RowBody"), Key.Space);
+            Assert.Empty(window.Model.CheckedNames);
+            Assert.Empty(recorder.Editors);
+
+            // The rest of the row opens the editor as on any collection, read-only.
+            Click(InRow<Button>(window, first, "RowBody"));
+            var target = Assert.Single(recorder.Editors);
+            Assert.Equal("Data team", target.Collection);
+            using var editor = new EditorModel(state, target, h.Dialogs, RemoteLaunchStyle.CmdNpx);
+            Assert.True(editor.IsReadOnly);
+        }, select: "Data team");
     }
 
     [Fact]

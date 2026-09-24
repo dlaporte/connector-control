@@ -35,6 +35,11 @@ bullet once the section is about to ship.
 
 ### Both platforms
 
+- In the Collections window, clicking a connector's row opens its editor, and the
+  pencil at the end of the row is gone, so what the connector runs has the room. A click
+  on or beside a row's tick ticks it instead. The rows highlight under the pointer, and
+  from the keyboard the arrow keys move between them, Return opens the editor and Space
+  ticks.
 - Profiles are now collections. Every profile you had is a collection with the same name
   and connectors, and the master list file is unchanged.
 - Export writes a collection, or the connectors you tick, as a document. Import brings

@@ -149,8 +149,25 @@ public class CollectionsModelTests
         model.SetChecked("notes", false);
         Assert.Empty(model.ExportIntentForChecked());
 
-        // The pencil opens the row in the collection the window is showing, not the active one.
+        // Space flips a local row's tick both ways, and does nothing on a read-only one.
+        model.ToggleChecked("notes");
+        Assert.Equal(["notes"], model.CheckedNames);
+        model.ToggleChecked("notes");
+        Assert.Empty(model.CheckedNames);
+        model.ToggleChecked("absent");
+        Assert.Empty(model.CheckedNames);
+
         model.Selected = "Team";
+        model.ToggleChecked("github");
+        Assert.All(model.Rows, r => Assert.False(r.Checked));
+        // Up and Down walk the rows in the order they are shown, and stop at either end.
+        Assert.Equal("github", model.Neighbour("Ledger", 1));
+        Assert.Equal("github", model.Neighbour("jira", -1));
+        Assert.Null(model.Neighbour("Ledger", -1));
+        Assert.Null(model.Neighbour("jira", 1));
+        Assert.Null(model.Neighbour("absent", 1));
+
+        // A click or Return opens the row in the collection the window is showing, not the active one.
         var target = model.EditTargetFor("jira");
         Assert.Equal("Team", target.Collection);
         Assert.Equal("jira", target.Name);

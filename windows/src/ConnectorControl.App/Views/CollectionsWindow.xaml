@@ -18,7 +18,7 @@
     <views:CollectionSourceTooltipConverter x:Key="SourceTooltip" />
     <!-- A header pill's words, which the model answers from the pill itself. -->
     <views:CollectionPillTitleConverter x:Key="PillTitle" />
-    <!-- The pencil's words, which name the connector it edits. -->
+    <!-- A connector row's spoken name, which says what a click on it does and to which connector. -->
     <views:EditLabelConverter x:Key="EditLabel" />
     <!-- The collection's own name in the sidebar: bold while it is the active one, dimmed while
          its document has never been found on this machine — still usable, just not in step. -->
@@ -65,6 +65,9 @@
          place, so the two never both occupy the leading slot. -->
     <Style x:Key="RowTickStyle" TargetType="CheckBox">
       <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Padding" Value="0" />
       <Style.Triggers>
         <DataTrigger Binding="{Binding IsLocked}" Value="True">
           <Setter Property="Visibility" Value="Collapsed" />
@@ -74,6 +77,7 @@
     <!-- The lock leading a read-only row. The model's sentence is what a screen reader says and
          what the pointer uncovers. -->
     <Style x:Key="RowLock" TargetType="TextBlock" BasedOn="{StaticResource LockMark}">
+      <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="ToolTip" Value="{x:Static state:CollectionsModel.LockedGlyphTooltip}" />
       <Setter Property="AutomationProperties.Name" Value="{x:Static state:CollectionsModel.LockedGlyphTooltip}" />
       <Setter Property="Visibility" Value="Collapsed" />
@@ -83,8 +87,8 @@
         </DataTrigger>
       </Style.Triggers>
     </Style>
-    <!-- One row's caution glyph, advisory only: the pencil stays live, and the tooltip sends the
-         user to the editor's full note. -->
+    <!-- One row's caution glyph, advisory only: the row still opens the editor, and the tooltip
+         sends the user to the editor's full note. -->
     <Style x:Key="RowCaution" TargetType="TextBlock" BasedOn="{StaticResource CautionText}">
       <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
       <Setter Property="Text" Value="{x:Static state:FlyoutModel.ToolWarningGlyph}" />
@@ -95,6 +99,32 @@
           <Setter Property="Visibility" Value="Collapsed" />
         </DataTrigger>
       </Style.Triggers>
+    </Style>
+    <!-- A connector row: a button the width of the list, with no chrome until the pointer is over
+         it, when it takes the Fluent list item's hover fill; the Mac row takes its own light
+         fill. The arrow stays the arrow, as a list row's does. Its focus visual is the theme's,
+         which WPF draws only once the keyboard is in use. -->
+    <Style x:Key="ConnectorRow" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="4" MinHeight="30">
+              <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Root" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
   </Window.Resources>
   <!-- Two panes: the collections, and the selected one. Everything done to a collection is in the
@@ -260,44 +290,57 @@
       <!-- The rows are the tall half of the window: they take what is left and scroll in it. One
            size scope over every row, so the name column is as wide as the longest name cell —
            capped, so a very long name trims and the target keeps room to say anything — and
-           every target starts at the same x. -->
+           every target starts at the same x. The list is one stop for Tab, which returns to the
+           row it left, and the arrows move between its rows, as on the Mac. -->
       <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-        <ItemsControl x:Name="RowList" ItemsSource="{Binding Rows}" Grid.IsSharedSizeScope="True">
+        <ItemsControl x:Name="RowList" ItemsSource="{Binding Rows}" Grid.IsSharedSizeScope="True"
+                      KeyboardNavigation.TabNavigation="Once">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Grid Margin="0,5">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="20" />
-                  <ColumnDefinition Width="Auto" MaxWidth="240" SharedSizeGroup="Name" />
-                  <ColumnDefinition Width="*" />
-                  <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <!-- One leading slot for both marks, so ticking a row cannot shift its name and
-                     a synced collection's rows line up with a local one's. -->
-                <CheckBox x:Name="RowTick" Style="{StaticResource RowTickStyle}"
-                          AutomationProperties.Name="{Binding Name}"
-                          IsChecked="{Binding Checked, Mode=OneWay}" Click="OnRowTicked" />
-                <TextBlock x:Name="RowLockGlyph" Style="{StaticResource RowLock}" />
-                <!-- The name and its caution mark, measured and laid out as one: the column is as
-                     wide as the longest of these, so a mark cannot push its row's target out of
-                     line. The panel sizes to its content, so the mark follows the name, and a name
-                     past the cap trims rather than pushing the mark out. -->
-                <DockPanel Grid.Column="1" HorizontalAlignment="Left" Margin="4,0,10,0">
-                  <TextBlock x:Name="RowCautionGlyph" DockPanel.Dock="Right" Style="{StaticResource RowCaution}"
-                             ToolTip="{Binding Caution}" AutomationProperties.Name="{Binding Caution}" />
-                  <TextBlock x:Name="RowNameText" Text="{Binding Name}" FontWeight="Medium"
-                             TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                </DockPanel>
-                <!-- What the connector runs, never a secret: the model masks it. Trimmed at the
-                     end, as this window's connector count is, since WPF has no middle ellipsis; the
-                     Mac rows elide the middle. -->
-                <TextBlock x:Name="RowTargetText" Grid.Column="2" Text="{Binding Target}"
-                           Style="{StaticResource CaptionText}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                           VerticalAlignment="Center" Margin="0,0,10,0" />
-                <Button x:Name="RowEdit" Grid.Column="3" Style="{StaticResource IconButton}" Content="&#xE70F;"
-                        ToolTip="{Binding Name, Converter={StaticResource EditLabel}}"
-                        AutomationProperties.Name="{Binding Name, Converter={StaticResource EditLabel}}" Click="OnEdit" />
-              </Grid>
+              <!-- A click anywhere but the tick slot opens the connector's editor, as Return does
+                   on a focused row, and Space ticks it: CollectionsWindow.OnRowKey. -->
+              <Button x:Name="RowBody" Style="{StaticResource ConnectorRow}"
+                      AutomationProperties.Name="{Binding Name, Converter={StaticResource EditLabel}}"
+                      Click="OnRowClicked" PreviewKeyDown="OnRowKey">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" MaxWidth="240" SharedSizeGroup="Name" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <!-- One leading slot for both marks, the full height of the row and 8 px wider
+                       than the box on either side, so a click that lands near the box ticks it
+                       and never opens the editor, and a synced collection's rows line up with a
+                       local one's. On a read-only row a click here does nothing at all. The box
+                       keeps its own spoken name and Toggle, and stays out of the key loop: the
+                       row is what takes focus, and its Space is the tick. -->
+                  <Border x:Name="RowTickSlot" Background="Transparent" Padding="8,0"
+                          MouseLeftButtonDown="OnTickSlotDown" MouseLeftButtonUp="OnTickSlotUp">
+                    <Grid Width="20">
+                      <CheckBox x:Name="RowTick" Style="{StaticResource RowTickStyle}"
+                                AutomationProperties.Name="{Binding Name}" IsHitTestVisible="False" Focusable="False"
+                                IsChecked="{Binding Checked, Mode=OneWay}" Click="OnRowTicked" />
+                      <TextBlock x:Name="RowLockGlyph" Style="{StaticResource RowLock}" />
+                    </Grid>
+                  </Border>
+                  <!-- The name and its caution mark, measured and laid out as one: the column is
+                       as wide as the longest of these, so a mark cannot push its row's target out
+                       of line. The panel sizes to its content, so the mark follows the name, and a
+                       name past the cap trims rather than pushing the mark out. -->
+                  <DockPanel Grid.Column="1" HorizontalAlignment="Left" Margin="0,0,10,0">
+                    <TextBlock x:Name="RowCautionGlyph" DockPanel.Dock="Right" Style="{StaticResource RowCaution}"
+                               ToolTip="{Binding Caution}" AutomationProperties.Name="{Binding Caution}" />
+                    <TextBlock x:Name="RowNameText" Text="{Binding Name}" FontWeight="Medium"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  </DockPanel>
+                  <!-- What the connector runs, never a secret: the model masks it. Trimmed at the
+                       end, as this window's connector count is, since WPF has no middle ellipsis;
+                       the Mac rows elide the middle. -->
+                  <TextBlock x:Name="RowTargetText" Grid.Column="2" Text="{Binding Target}"
+                             Style="{StaticResource CaptionText}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                             VerticalAlignment="Center" Margin="0,0,10,0" />
+                </Grid>
+              </Button>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>

@@ -144,12 +144,14 @@ Escape cancels any of these sheets, and the connector editor, as its
   count (tooltip "Add Connector"). It opens the editor on a new connector in
   this collection. Each row has a tick — a lock on a subscribed collection —
   then the connector's name, a caution glyph when something needs your
-  attention, what the connector runs, and a pencil (tooltip "Edit") that
-  opens its editor. Names line up in a column as wide as the longest of
-  them, up to a cap past which a long name is cut. There is no switch here
-  and no right-click menu: whether a connector is on is the popover's or
-  flyout's business, so to switch a connector in another collection, make
-  that collection active first.
+  attention, and what the connector runs. Click a row anywhere but its tick
+  to open its editor (read-only on a subscribed collection); a click on or
+  near the tick ticks it. From the keyboard, the arrow keys move between
+  rows, Return opens the editor and Space ticks. Names line up in a column
+  as wide as the longest of them, up to a cap past which a long name is cut.
+  There is no switch here and no right-click menu: whether a connector is on
+  is the popover's or flyout's business, so to switch a connector in another
+  collection, make that collection active first.
 - **The selection bar** along the bottom is empty while nothing is ticked.
   Tick rows and it reads "2 selected", with **Copy to**, **Export** and,
   apart at the far end, **Remove**. The rows of a subscribed collection

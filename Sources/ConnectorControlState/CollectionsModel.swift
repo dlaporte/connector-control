@@ -811,8 +811,23 @@ public final class CollectionsModel: ObservableObject {
         if on { checkedNames_.insert(name) } else { checkedNames_.remove(name) }
     }
 
-    /// The pencil: the same connector in two collections is two windows, so the target carries
-    /// the collection this window is showing.
+    /// Space on a focused row: the tick flips, as a click beside it does. A read-only row has no
+    /// tick, so the key does nothing there, as a click on its lock does nothing.
+    public func toggleChecked(_ name: String) {
+        guard let row = rows.first(where: { $0.name == name }), !row.isLocked else { return }
+        setChecked(name, !row.checked)
+    }
+
+    /// Up and Down on a focused row: the row `offset` places away, in the order the list shows,
+    /// or nil past either end, where the key stays put rather than wrapping round.
+    public func neighbour(of name: String, by offset: Int) -> String? {
+        let names = rows.map(\.name)
+        guard let index = names.firstIndex(of: name), names.indices.contains(index + offset) else { return nil }
+        return names[index + offset]
+    }
+
+    /// What a click on a row, or Return on it, opens: the same connector in two collections is
+    /// two windows, so the target carries the collection this window is showing.
     public func editTarget(for row: String) -> EditTarget {
         let collection = selectedCollection
         let entry = state.store.collections[collection]?.mcps[row] ?? MCPEntry(config: .object([:]))
