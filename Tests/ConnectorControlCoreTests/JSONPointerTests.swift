@@ -21,6 +21,11 @@ final class JSONPointerTests: XCTestCase {
         XCTAssertEqual(config.value(at: try XCTUnwrap(JSONPointer(string: "/env/B~1C"))), .string("2"))
         XCTAssertNil(config.value(at: try XCTUnwrap(JSONPointer(string: "/args/7"))))
         XCTAssertNil(config.value(at: try XCTUnwrap(JSONPointer(string: "/command/x"))))
+        // An index is digits and nothing else.
+        for segment in [" 1", "1 ", "+1", "-0", ""] {
+            XCTAssertNil(config.value(at: JSONPointer(["args", segment])), segment)
+            XCTAssertNil(config.replacing(at: JSONPointer(["args", segment]), with: .string("x")), segment)
+        }
     }
     func testReplacesALeafAndLeavesTheRestAlone() throws {
         let replaced = try XCTUnwrap(config.replacing(at: try XCTUnwrap(JSONPointer(string: "/args/1")), with: .string("x.js")))

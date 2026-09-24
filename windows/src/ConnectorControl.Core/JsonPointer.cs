@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 
 namespace ConnectorControl.Core;
 
@@ -29,6 +30,13 @@ public sealed record JsonPointer(ImmutableArray<string> Segments)
         string.Concat(Segments.Select(s => "/" + s.Replace("~", "~0").Replace("/", "~1")));
 
     public JsonPointer Appending(string segment) => new(Segments.Add(segment));
+
+    /// <summary>
+    /// A segment read as an array index the way RFC 6901 writes one: ASCII digits and nothing
+    /// else, so neither a sign nor a space makes " 1" or "+1" an index — whatever the culture.
+    /// </summary>
+    internal static int? ArrayIndex(string segment) =>
+        int.TryParse(segment, NumberStyles.None, CultureInfo.InvariantCulture, out var index) ? index : null;
 
     public bool Equals(JsonPointer? other) => other is not null && Segments.SequenceEqual(other.Segments, StringComparer.Ordinal);
 
@@ -61,7 +69,7 @@ public static class JsonPointerAccess
                     current = next;
                     break;
                 case JsonKind.Array:
-                    if (!int.TryParse(segment, out var index) || index < 0 || index >= current.ArrayItems.Length)
+                    if (JsonPointer.ArrayIndex(segment) is not { } index || index >= current.ArrayItems.Length)
                     {
                         return null;
                     }
@@ -90,7 +98,7 @@ public static class JsonPointerAccess
                 var replacedChild = child?.Replacing(rest, newValue);
                 return replacedChild is null ? null : value.With(first, replacedChild);
             case JsonKind.Array:
-                if (!int.TryParse(first, out var index) || index < 0 || index >= value.ArrayItems.Length)
+                if (JsonPointer.ArrayIndex(first) is not { } index || index >= value.ArrayItems.Length)
                 {
                     return null;
                 }

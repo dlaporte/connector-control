@@ -23,6 +23,7 @@ public static class CredentialHeuristics
         {
             return false;
         }
+        // By general category: a letter is L*, a digit is a decimal digit (Nd), as the Mac reads them.
         return value.Any(char.IsLetter) && value.Any(char.IsDigit);
     }
 }

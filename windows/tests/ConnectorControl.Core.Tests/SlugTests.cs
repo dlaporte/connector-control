@@ -17,4 +17,11 @@ public class SlugTests
         Assert.Equal("collection", Slug.Make("---"));
         Assert.Equal("collection", Slug.Make(""));
     }
+
+    /// <summary>C#-only half of a known difference (see <see cref="Slug.Make"/>): the Swift test pins the other half.</summary>
+    [Fact]
+    public void ALetterWhoseLowercaseExpandsSlugsAsWindowsLowersIt()
+    {
+        Assert.Equal("stanbul", Slug.Make("\u0130stanbul"));
+    }
 }

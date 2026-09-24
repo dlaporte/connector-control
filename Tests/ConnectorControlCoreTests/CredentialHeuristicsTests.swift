@@ -18,5 +18,7 @@ final class CredentialHeuristicsTests: XCTestCase {
         XCTAssertFalse(CredentialHeuristics.looksLikeCredential("https://example.com/mcp"))
         XCTAssertFalse(CredentialHeuristics.looksLikeCredential("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
         XCTAssertFalse(CredentialHeuristics.looksLikeCredential("${CC_NEEDS:token}"))
+        // A digit is a decimal digit: a superscript or a vulgar fraction is not one.
+        XCTAssertFalse(CredentialHeuristics.looksLikeCredential("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\u{B2}\u{BD}"))
     }
 }

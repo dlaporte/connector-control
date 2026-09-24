@@ -12,6 +12,10 @@ public static class Slug
     {
         var sb = new StringBuilder();
         var pendingHyphen = false;
+        // The invariant lowercase leaves "İ" as it is, so "İstanbul" slugs as "stanbul", where the
+        // Mac, lowering the whole string, expands it to "i" and a combining dot and writes
+        // "i-stanbul". Harmless: the slug is fixed once, in the sidecar, by whichever machine
+        // publishes first, and never derived again.
         foreach (var ch in name.ToLowerInvariant())
         {
             var isAlnum = (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9');

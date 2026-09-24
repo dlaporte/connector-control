@@ -19,6 +19,13 @@ public struct JSONPointer: Equatable, Hashable, Sendable, CustomStringConvertibl
     }
 
     public func appending(_ segment: String) -> JSONPointer { JSONPointer(segments + [segment]) }
+
+    /// A segment read as an array index the way RFC 6901 writes one: ASCII digits and nothing
+    /// else, so neither a sign nor a space makes " 1" or "+1" an index.
+    static func arrayIndex(_ segment: String) -> Int? {
+        guard !segment.isEmpty, segment.utf8.allSatisfy({ (0x30...0x39).contains($0) }) else { return nil }
+        return Int(segment)
+    }
 }
 
 public extension JSONValue {
@@ -30,7 +37,7 @@ public extension JSONValue {
                 guard let next = object[segment] else { return nil }
                 current = next
             case .array(let array):
-                guard let index = Int(segment), array.indices.contains(index) else { return nil }
+                guard let index = JSONPointer.arrayIndex(segment), array.indices.contains(index) else { return nil }
                 current = array[index]
             default:
                 return nil
@@ -50,7 +57,7 @@ public extension JSONValue {
             object[first] = replaced
             return .object(object)
         case .array(var array):
-            guard let index = Int(first), array.indices.contains(index),
+            guard let index = JSONPointer.arrayIndex(first), array.indices.contains(index),
                   let replaced = array[index].replacing(at: rest, with: newValue) else { return nil }
             array[index] = replaced
             return .array(array)

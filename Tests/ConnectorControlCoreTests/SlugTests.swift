@@ -12,4 +12,8 @@ final class SlugTests: XCTestCase {
         XCTAssertEqual(Slug.make("---"), "collection")
         XCTAssertEqual(Slug.make(""), "collection")
     }
+    /// Swift-only half of a known difference (see `Slug.make`): the C# test pins the other half.
+    func testALetterWhoseLowercaseExpandsSlugsAsTheMacLowercasesIt() {
+        XCTAssertEqual(Slug.make("\u{130}stanbul"), "i-stanbul")
+    }
 }

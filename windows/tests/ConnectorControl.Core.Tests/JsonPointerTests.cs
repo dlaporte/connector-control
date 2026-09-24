@@ -25,6 +25,12 @@ public class JsonPointerTests
         Assert.Equal(JsonValue.String("2"), Config.ValueAt(JsonPointer.Parse("/env/B~1C")!));
         Assert.Null(Config.ValueAt(JsonPointer.Parse("/args/7")!));
         Assert.Null(Config.ValueAt(JsonPointer.Parse("/command/x")!));
+        // An index is digits and nothing else.
+        foreach (var segment in new[] { " 1", "1 ", "+1", "-0", "" })
+        {
+            Assert.Null(Config.ValueAt(new JsonPointer(["args", segment])));
+            Assert.Null(Config.Replacing(new JsonPointer(["args", segment]), JsonValue.String("x")));
+        }
     }
 
     [Fact]

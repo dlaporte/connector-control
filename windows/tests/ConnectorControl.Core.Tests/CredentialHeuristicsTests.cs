@@ -23,5 +23,7 @@ public class CredentialHeuristicsTests
         Assert.False(CredentialHeuristics.LooksLikeCredential("https://example.com/mcp"));
         Assert.False(CredentialHeuristics.LooksLikeCredential("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
         Assert.False(CredentialHeuristics.LooksLikeCredential("${CC_NEEDS:token}"));
+        // A digit is a decimal digit: a superscript or a vulgar fraction is not one.
+        Assert.False(CredentialHeuristics.LooksLikeCredential("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\u00B2\u00BD"));
     }
 }
