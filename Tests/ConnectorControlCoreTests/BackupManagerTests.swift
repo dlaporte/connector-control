@@ -144,6 +144,36 @@ final class BackupManagerTests: XCTestCase {
         XCTAssertEqual(try manager.backups(series: "claude_desktop_config").count, 2)
     }
 
+    /// Two backups in the same millisecond: the second takes the `-2` name and is the newer, for
+    /// the listing, for dedup's newest-snapshot comparison and for prune's keep-newest.
+    func testSameMillisecondBackupsListNewestFirstAndPruneTheOldest() throws {
+        let limited = BackupManager(backupsDir: dir.appendingPathComponent("backups"), keepCount: 2)
+        let now = Date(timeIntervalSince1970: 1_752_600_000.123)
+        for (content, at) in [("v0", now.addingTimeInterval(-1)), ("v1", now), ("v2", now)] {
+            try Data(content.utf8).write(to: source)
+            try limited.backUp(fileAt: source, series: "claude_desktop_config", now: at)
+        }
+        let kept = try limited.backups(series: "claude_desktop_config")
+        XCTAssertEqual(try kept.map { try String(contentsOf: $0, encoding: .utf8) }, ["v2", "v1"],
+                       "newest first, and the oldest is the one pruned")
+        XCTAssertEqual(kept.first?.lastPathComponent, "claude_desktop_config.\(BackupTimestamp.string(from: now))-2.json")
+        XCTAssertEqual(try limited.backUp(fileAt: source, series: "claude_desktop_config", now: now), kept.first,
+                       "an unchanged file dedups against the -2 backup, the newest")
+        XCTAssertEqual(try limited.backups(series: "claude_desktop_config"), kept)
+    }
+
+    /// The counter compares as a number: the tenth backup of a millisecond is newer than the second.
+    func testASameMillisecondCounterComparesAsANumber() throws {
+        let roomy = BackupManager(backupsDir: dir.appendingPathComponent("backups"), keepCount: 20)
+        let now = Date(timeIntervalSince1970: 1_752_600_000.123)
+        for i in 0..<11 {
+            try Data("v\(i)".utf8).write(to: source)
+            try roomy.backUp(fileAt: source, series: "claude_desktop_config", now: now)
+        }
+        XCTAssertEqual(try roomy.backups(series: "claude_desktop_config").map { try String(contentsOf: $0, encoding: .utf8) },
+                       (0..<11).reversed().map { "v\($0)" })
+    }
+
     func testBackupsArePrivate() throws {
         let made = try XCTUnwrap(manager.backUp(fileAt: source, series: "mcps"))
         let mode = try XCTUnwrap(FileManager.default

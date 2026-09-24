@@ -86,14 +86,32 @@ public struct BackupManager: Sendable {
                 $0.lastPathComponent.hasPrefix("\(series).")
                     && !$0.lastPathComponent.contains(".original.")
             }
-            .sorted { $0.lastPathComponent > $1.lastPathComponent }
+            .sorted(by: BackupManager.newestFirst)
+    }
+
+    /// Newest first: by stamp, then by the counter a same-millisecond backup takes, a name without
+    /// one being the first of its millisecond. Sorting the names as text would not do: `-` sorts
+    /// before `.`, so `<stamp>-2.json` would list below `<stamp>.json`, and `-10` below `-2`.
+    static func newestFirst(_ a: URL, _ b: URL) -> Bool {
+        let x = order(of: a.lastPathComponent), y = order(of: b.lastPathComponent)
+        return x.stamp != y.stamp ? y.stamp.ordinallyPrecedes(x.stamp) : x.counter > y.counter
+    }
+
+    /// A backup name's stamp and counter: `<series>.<stamp>.json` is counter 1, and
+    /// `<series>.<stamp>-<n>.json` counter n. The stamp ends in `Z`, so the counter is what follows it.
+    private static func order(of name: String) -> (stamp: String, counter: Int) {
+        let base = name.hasSuffix(".json") ? String(name.dropLast(".json".count)) : name
+        guard let z = base.lastIndex(of: "Z") else { return (base, 1) }
+        let rest = base[base.index(after: z)...]
+        guard rest.hasPrefix("-"), let counter = Int(rest.dropFirst()) else { return (base, 1) }
+        return (String(base[...z]), counter)
     }
 
     /// `listing` is the caller's own pre-write directory read plus the file it just
     /// wrote — sorted the same way `backups(series:)` would — so pruning does not
     /// re-list a directory `backUp` already just listed.
     private func prune(series: String, listing: [URL]) {
-        let all = listing.sorted { $0.lastPathComponent > $1.lastPathComponent }
+        let all = listing.sorted(by: BackupManager.newestFirst)
         for stale in all.dropFirst(keepCount) {
             // Best-effort: a locked or read-only stale backup must not fail the
             // user's save; the next rotation retries.

@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace ConnectorControl.Core;
 
 /// <summary>
@@ -84,8 +86,42 @@ public sealed class BackupManager
                 return name.StartsWith(prefix, StringComparison.Ordinal)
                     && !name.Contains(".original.", StringComparison.Ordinal);
             })
-            .OrderByDescending(Path.GetFileName, StringComparer.Ordinal)
+            .Order(Comparer<string>.Create(NewestFirst))
             .ToList();
+    }
+
+    /// <summary>
+    /// Newest first: by stamp, then by the counter a same-millisecond backup takes, a name without
+    /// one being the first of its millisecond. Sorting the names as text would not do: <c>-</c> sorts
+    /// before <c>.</c>, so <c>&lt;stamp&gt;-2.json</c> would list below <c>&lt;stamp&gt;.json</c>, and
+    /// <c>-10</c> below <c>-2</c>. A comparison, where Swift's <c>sorted</c> takes a predicate.
+    /// </summary>
+    internal static int NewestFirst(string a, string b)
+    {
+        var x = Order(Path.GetFileName(a));
+        var y = Order(Path.GetFileName(b));
+        return x.Stamp != y.Stamp ? string.CompareOrdinal(y.Stamp, x.Stamp) : y.Counter.CompareTo(x.Counter);
+    }
+
+    /// <summary>
+    /// A backup name's stamp and counter: <c>&lt;series&gt;.&lt;stamp&gt;.json</c> is counter 1, and
+    /// <c>&lt;series&gt;.&lt;stamp&gt;-&lt;n&gt;.json</c> counter n. The stamp ends in <c>Z</c>, so the
+    /// counter is what follows it.
+    /// </summary>
+    private static (string Stamp, int Counter) Order(string name)
+    {
+        var @base = name.EndsWith(".json", StringComparison.Ordinal) ? name[..^".json".Length] : name;
+        var z = @base.LastIndexOf('Z');
+        if (z < 0)
+        {
+            return (@base, 1);
+        }
+        var rest = @base[(z + 1)..];
+        if (!rest.StartsWith('-') || !int.TryParse(rest[1..], NumberStyles.None, CultureInfo.InvariantCulture, out var counter))
+        {
+            return (@base, 1);
+        }
+        return (@base[..(z + 1)], counter);
     }
 
     private void Prune(string series)

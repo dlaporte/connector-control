@@ -71,9 +71,13 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(try service.backups.backups(series: "claude_desktop_config").count, 1,
                        "the record is not listed as a backup")
         try service.apply(servers: [:])
-        XCTAssertEqual(try service.backups.backups(series: "claude_desktop_config").count, 2)
-        XCTAssertNil(BackupCollections.collection(of: try XCTUnwrap(try service.backups.backups(series: "claude_desktop_config").first),
-                                                  in: paths.backupsDirURL), "an apply that names no collection records none")
+        let after = try service.backups.backups(series: "claude_desktop_config")
+        XCTAssertEqual(after.count, 2)
+        // The second backup is the one the first listing lacks, which holds whichever millisecond
+        // the two applies land in.
+        let second = try XCTUnwrap(after.first { $0 != backup })
+        XCTAssertNil(BackupCollections.collection(of: second, in: paths.backupsDirURL),
+                     "an apply that names no collection records none")
         XCTAssertNil(BackupCollections.collection(of: dir.appendingPathComponent(backup.lastPathComponent), in: paths.backupsDirURL),
                      "a file of the same name elsewhere is not the backup")
     }

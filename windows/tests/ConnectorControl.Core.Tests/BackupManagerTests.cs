@@ -129,6 +129,43 @@ public class BackupManagerTests : IDisposable
         Assert.Equal(2, manager.Backups(Series).Count);
     }
 
+    /// <summary>
+    /// Two backups in the same millisecond: the second takes the <c>-2</c> name and is the newer, for
+    /// the listing, for dedup's newest-snapshot comparison and for prune's keep-newest.
+    /// </summary>
+    [Fact]
+    public void SameMillisecondBackupsListNewestFirstAndPruneTheOldest()
+    {
+        var limited = new BackupManager(dir.File("backups"), keepCount: 2);
+        var now = At(1_752_600_000.123);
+        foreach (var (content, at) in new[] { ("v0", now.AddSeconds(-1)), ("v1", now), ("v2", now) })
+        {
+            File.WriteAllText(source, content);
+            limited.BackUp(source, Series, at);
+        }
+        var kept = limited.Backups(Series);
+        // Newest first, and the oldest is the one pruned.
+        Assert.Equal(["v2", "v1"], kept.Select(File.ReadAllText));
+        Assert.Equal($"claude_desktop_config.{BackupTimestamp.From(now)}-2.json", Path.GetFileName(kept[0]));
+        // An unchanged file dedups against the -2 backup, the newest.
+        Assert.Equal(kept[0], limited.BackUp(source, Series, now));
+        Assert.Equal(kept, limited.Backups(Series));
+    }
+
+    /// <summary>The counter compares as a number: the tenth backup of a millisecond is newer than the second.</summary>
+    [Fact]
+    public void ASameMillisecondCounterComparesAsANumber()
+    {
+        var roomy = new BackupManager(dir.File("backups"), keepCount: 20);
+        var now = At(1_752_600_000.123);
+        for (var i = 0; i < 11; i++)
+        {
+            File.WriteAllText(source, $"v{i}");
+            roomy.BackUp(source, Series, now);
+        }
+        Assert.Equal(Enumerable.Range(0, 11).Reverse().Select(i => $"v{i}"), roomy.Backups(Series).Select(File.ReadAllText));
+    }
+
     [Fact]
     [SupportedOSPlatform("windows")]
     public void BackupsArePrivate()

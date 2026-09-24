@@ -76,9 +76,13 @@ public class ConfigServiceTests : IDisposable
         // The backup itself stays a byte copy of Claude's file.
         Assert.Equal(System.Text.Encoding.UTF8.GetBytes(Fixtures.RealisticClaudeConfig), File.ReadAllBytes(backup));
         service.Apply(new Dictionary<string, JsonValue>());
-        Assert.Equal(2, service.Backups.Backups("claude_desktop_config").Count);
+        var after = service.Backups.Backups("claude_desktop_config");
+        Assert.Equal(2, after.Count);
+        // The second backup is the one the first listing lacks, which holds whichever millisecond
+        // the two applies land in.
+        var second = Assert.Single(after, p => p != backup);
         // An apply that names no collection records none.
-        Assert.Null(BackupCollections.CollectionOf(service.Backups.Backups("claude_desktop_config")[0], paths.BackupsDir));
+        Assert.Null(BackupCollections.CollectionOf(second, paths.BackupsDir));
         // A file of the same name elsewhere is not the backup.
         Assert.Null(BackupCollections.CollectionOf(dir.File(Path.GetFileName(backup)), paths.BackupsDir));
     }
