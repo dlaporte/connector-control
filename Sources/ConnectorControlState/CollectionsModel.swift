@@ -580,6 +580,10 @@ public final class CollectionsModel: ObservableObject {
     /// The Locate button's file, for the collection the window is showing. nil on success, else
     /// the message; also nil when the strip is not asking for a file, so a picker left open past
     /// the news it belonged to cannot point anything anywhere.
+    ///
+    /// This and `choosePublishFolder` return their message rather than `report` it, unlike every
+    /// other verb here: they are the popover's banner verbs of the same names, and the two
+    /// surfaces keep the one shape.
     public func locateSource(_ path: String) -> String? {
         guard case .locate(let collection, _) = banner else { return nil }
         return state.locateSource(for: collection, path: path)
@@ -731,7 +735,8 @@ public final class CollectionsModel: ObservableObject {
     @discardableResult
     public func duplicate() -> Bool {
         let collection = selectedCollection
-        guard let typed = dialogs.promptForName(title: AppState.newCollectionTitle, initial: "") else {
+        guard !state.isSynced(collection),
+              let typed = dialogs.promptForName(title: AppState.newCollectionTitle, initial: "") else {
             lastError = nil
             return false
         }
@@ -832,7 +837,7 @@ public final class CollectionsModel: ObservableObject {
             return false
         }
         guard report(state.addEmptyCollection(named: typed)) else { return false }
-        return copy(names, into: typed.trimmingCharacters(in: .whitespaces), choices: [:])
+        return copy(names, into: MasterStore.collectionName(typed), choices: [:])
     }
 
     /// The ticked connectors whose names `collection` already holds: the ones a copy there needs an
@@ -847,8 +852,14 @@ public final class CollectionsModel: ObservableObject {
         guard report(state.makeLocalCopy(of: names, from: selectedCollection, into: collection, choices: choices)) else {
             return false
         }
-        for name in names { setChecked(name, false) }
+        uncheck(names)
         return true
+    }
+
+    /// The ticks on `names` cleared in one go, as a copy or a removal leaves them.
+    private func uncheck(_ names: [String]) {
+        objectWillChange.send()
+        checkedNames_.subtract(names)
     }
 
     /// The selection bar's Remove: asks first, names the connector when there is one and the
@@ -868,31 +879,21 @@ public final class CollectionsModel: ObservableObject {
         state.remove(names: names, in: selectedCollection)
         // remove(names:in:) persists but does not apply, as its single-name sibling does not.
         if selectedCollection == state.activeCollection { state.applyInteractively() }
-        for name in names { setChecked(name, false) }
+        uncheck(names)
         lastError = nil
     }
 
     // MARK: - Collection actions
 
     public func create() {
-        guard let typed = dialogs.promptForName(title: AppState.newCollectionTitle, initial: "") else {
-            lastError = nil
-            return
-        }
-        guard report(state.createCollection(named: typed)) else { return }
-        retarget(to: typed.trimmingCharacters(in: .whitespaces))
+        askNameThenRetarget(title: AppState.newCollectionTitle, initial: "") { state.createCollection(named: $0) }
     }
 
     public func rename() {
         let collection = selectedCollection
-        guard let typed = dialogs.promptForName(title: AppState.renameCollectionTitle, initial: collection) else {
-            lastError = nil
-            return
+        askNameThenRetarget(title: AppState.renameCollectionTitle, initial: collection) {
+            state.renameCollection(collection, to: $0)
         }
-        guard report(state.renameCollection(collection, to: typed)) else { return }
-        // The store trimmed the name the same way; following it keeps the window on the
-        // collection the user just renamed rather than dropping back to the active one.
-        retarget(to: typed.trimmingCharacters(in: .whitespaces))
     }
 
     public func delete() {
@@ -940,31 +941,38 @@ public final class CollectionsModel: ObservableObject {
     /// nothing to warn about. It still asks, because the question is where the reassurance that
     /// nothing is lost is said; the button no longer carries it.
     public func stopSyncing() {
-        guard dialogs.confirm(message: CollectionsModel.stopSyncingMessage(selectedCollection),
+        let collection = selectedCollection
+        guard state.isSynced(collection),
+              dialogs.confirm(message: CollectionsModel.stopSyncingMessage(collection),
                               informative: CollectionsModel.stopSyncingInformative,
                               primary: CollectionsModel.stopSyncingAction, destructive: false) else {
             lastError = nil
             return
         }
-        state.stopSyncing(selectedCollection)
+        state.stopSyncing(collection)
         lastError = nil
     }
 
     public func refresh() {
-        state.refreshSource(for: selectedCollection)
+        let collection = selectedCollection
+        guard canRefresh else {
+            lastError = nil
+            return
+        }
+        state.refreshSource(for: collection)
         lastError = nil
     }
 
     /// The whole synced collection again as a local one the user can edit.
     public func makeLocalCopy() {
         let collection = selectedCollection
-        guard state.isSynced(collection),
-              let typed = dialogs.promptForName(title: AppState.newCollectionTitle, initial: collection) else {
+        guard state.isSynced(collection) else {
             lastError = nil
             return
         }
-        guard report(state.makeLocalCopyOfCollection(collection, named: typed)) else { return }
-        retarget(to: typed.trimmingCharacters(in: .whitespaces))
+        askNameThenRetarget(title: AppState.newCollectionTitle, initial: collection) {
+            state.makeLocalCopyOfCollection(collection, named: $0)
+        }
     }
 
     public func switchTo(_ name: String) {
@@ -973,6 +981,19 @@ public final class CollectionsModel: ObservableObject {
     }
 
     // MARK: - Helpers
+
+    /// New Collection, Rename and Make Local Copy: asks for a name, hands it to `verb`, and on
+    /// success moves the window to the collection the store now keeps under it, rather than
+    /// dropping back to the active one. A cancelled prompt clears `lastError`, and a refusal is
+    /// reported.
+    private func askNameThenRetarget(title: String, initial: String, _ verb: (String) -> String?) {
+        guard let typed = dialogs.promptForName(title: title, initial: initial) else {
+            lastError = nil
+            return
+        }
+        guard report(verb(typed)) else { return }
+        retarget(to: MasterStore.collectionName(typed))
+    }
 
     /// The document this machine writes for `collection`, or nil when nothing here publishes it.
     private func publishedFileName(of collection: String) -> String? {

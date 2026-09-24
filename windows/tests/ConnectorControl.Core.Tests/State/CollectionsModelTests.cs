@@ -684,6 +684,43 @@ public class CollectionsModelTests
         Assert.Equal(2, h.Dialogs.Confirms.Count);
     }
 
+    /// <summary>
+    /// Stop Syncing, Refresh and Duplicate guard their own preconditions, as Make Local Copy and
+    /// Stop Publishing do: out of turn, each does nothing, asks nothing, and clears the last error.
+    /// </summary>
+    [Fact]
+    public void VerbsOutOfTurnDoNothingAndAskNothing()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        state.SwitchCollection("Default");
+        // Synced, but not located on this machine: nothing to refresh.
+        Seed(h, state, File_(("Team", Synced("team.json"))));
+        Assert.True(state.IsSynced("Team"));
+        using var model = new CollectionsModel(state, h.Dialogs);
+
+        model.Selected = "Default";
+        PresetError(model, h);
+        model.StopSyncing();
+        Assert.Empty(h.Dialogs.Confirms);   // a local collection has nothing to stop syncing
+        Assert.Null(model.LastError);
+
+        model.Selected = "Team";
+        Assert.False(model.CanRefresh);
+        PresetError(model, h);
+        model.Refresh();
+        Assert.False(state.SourceErrors.ContainsKey("Team"));   // no read was attempted
+        Assert.Null(model.LastError);
+
+        PresetError(model, h);
+        var prompted = h.Dialogs.Prompts.Count;
+        Assert.False(model.Duplicate());   // a synced collection offers Make Local Copy instead
+        Assert.Equal(prompted, h.Dialogs.Prompts.Count);   // no name is asked for
+        Assert.Equal(["Default", "Team"], state.CollectionNames);
+        Assert.Null(model.LastError);
+    }
+
     [Fact]
     public void DeletingAPublishedCollectionAsksAboutTheFile()
     {

@@ -65,12 +65,19 @@ public sealed class MasterStore : IEquatable<MasterStore>
     public int EnabledCount => Mcps.Count(p => p.Value.Enabled);
 
     /// <summary>
+    /// The name a collection is kept under for the one typed: spaces trimmed from both ends.
+    /// Adding and renaming both apply it, so a caller that follows the collection it just named
+    /// asks here rather than trimming again.
+    /// </summary>
+    public static string CollectionName(string typed) => typed.TrimSpaces();
+
+    /// <summary>
     /// null on success, else a user-facing error message. The new collection becomes the active
     /// one unless <paramref name="activating"/> is false.
     /// </summary>
     public string? AddCollection(string name, bool copyingCurrent, bool activating = true)
     {
-        var trimmed = name.TrimSpaces();
+        var trimmed = CollectionName(name);
         if (trimmed.Length == 0)
         {
             return "Name must not be empty.";
@@ -94,7 +101,7 @@ public sealed class MasterStore : IEquatable<MasterStore>
         {
             return NoCollectionError(name);
         }
-        var trimmed = newName.TrimSpaces();
+        var trimmed = CollectionName(newName);
         if (trimmed.Length == 0)
         {
             return "Name must not be empty.";

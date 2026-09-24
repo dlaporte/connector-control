@@ -597,6 +597,40 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(h.dialogs.confirms.count, 2)
     }
 
+    /// Stop Syncing, Refresh and Duplicate guard their own preconditions, as Make Local Copy and
+    /// Stop Publishing do: out of turn, each does nothing, asks nothing, and clears the last error.
+    func testVerbsOutOfTurnDoNothingAndAskNothing() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        state.switchCollection(to: "Default")
+        // Synced, but not located on this machine: nothing to refresh.
+        try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
+        XCTAssertTrue(state.isSynced("Team"))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+
+        model.selected = "Default"
+        presetError(model, h)
+        model.stopSyncing()
+        XCTAssertEqual(h.dialogs.confirms, [], "a local collection has nothing to stop syncing")
+        XCTAssertNil(model.lastError)
+
+        model.selected = "Team"
+        XCTAssertFalse(model.canRefresh)
+        presetError(model, h)
+        model.refresh()
+        XCTAssertNil(state.sourceErrors["Team"], "no read was attempted")
+        XCTAssertNil(model.lastError)
+
+        presetError(model, h)
+        let prompted = h.dialogs.prompts.count
+        XCTAssertFalse(model.duplicate(), "a synced collection offers Make Local Copy instead")
+        XCTAssertEqual(h.dialogs.prompts.count, prompted, "no name is asked for")
+        XCTAssertEqual(state.collectionNames, ["Default", "Team"])
+        XCTAssertNil(model.lastError)
+    }
+
     func testDeletingAPublishedCollectionAsksAboutTheFile() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }

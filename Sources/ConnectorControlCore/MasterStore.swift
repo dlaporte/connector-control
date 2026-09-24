@@ -61,10 +61,15 @@ public struct MasterStore: Equatable, Codable, Sendable {
         self.collections = collections
     }
 
+    /// The name a collection is kept under for the one typed: spaces trimmed from both ends.
+    /// Adding and renaming both apply it, so a caller that follows the collection it just named
+    /// asks here rather than trimming again.
+    public static func collectionName(_ typed: String) -> String { typed.trimmingCharacters(in: .whitespaces) }
+
     /// nil on success, else a user-facing error message. The new collection becomes the active
     /// one unless `activating` is false.
     public mutating func addCollection(named name: String, copyingCurrent: Bool, activating: Bool = true) -> String? {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        let trimmed = Self.collectionName(name)
         guard !trimmed.isEmpty else { return "Name must not be empty." }
         guard collections[trimmed] == nil else {
             return "A collection named \u{201C}\(trimmed)\u{201D} already exists."
@@ -78,7 +83,7 @@ public struct MasterStore: Equatable, Codable, Sendable {
     /// collection keeps it active under its new name.
     public mutating func renameCollection(_ name: String, to newName: String) -> String? {
         guard collections[name] != nil else { return Self.noCollectionError(name) }
-        let trimmed = newName.trimmingCharacters(in: .whitespaces)
+        let trimmed = Self.collectionName(newName)
         guard !trimmed.isEmpty else { return "Name must not be empty." }
         if trimmed != name, collections[trimmed] != nil {
             return "A collection named \u{201C}\(trimmed)\u{201D} already exists."

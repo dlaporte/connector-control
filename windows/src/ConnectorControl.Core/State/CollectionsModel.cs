@@ -716,6 +716,10 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// The Locate button's file, for the collection the window is showing. Null on success, else
     /// the message; also null when the strip is not asking for a file, so a dialog left open past
     /// the news it belonged to cannot point anything anywhere.
+    ///
+    /// This and <see cref="ChoosePublishFolder"/> return their message rather than
+    /// <see cref="Report"/> it, unlike every other verb here: they are the flyout's banner verbs of
+    /// the same names, and the two surfaces keep the one shape.
     /// </summary>
     public string? LocateSource(string path) =>
         Banner is CollectionBanner.Locate locate ? state.LocateSource(locate.Collection, path) : null;
@@ -959,7 +963,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public bool Duplicate()
     {
         var collection = SelectedCollection;
-        if (dialogs.PromptForName(AppState.NewCollectionTitle, "") is not { } typed)
+        if (state.IsSynced(collection) || dialogs.PromptForName(AppState.NewCollectionTitle, "") is not { } typed)
         {
             LastError = null;
             return false;
@@ -1105,7 +1109,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             return false;
         }
-        return Copy(names, typed.TrimSpaces(), null);
+        return Copy(names, MasterStore.CollectionName(typed), null);
     }
 
     /// <summary>
@@ -1127,11 +1131,16 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             return false;
         }
-        foreach (var name in names)
-        {
-            SetChecked(name, false);
-        }
+        Uncheck(names);
         return true;
+    }
+
+    /// <summary>The ticks on the names cleared in one go, as a copy or a removal leaves them.</summary>
+    private void Uncheck(IEnumerable<string> names)
+    {
+        checkedNames.ExceptWith(names);
+        RefreshRows();
+        Raise(nameof(CanRemoveChecked));
     }
 
     /// <summary>
@@ -1157,42 +1166,20 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             state.ApplyInteractively();
         }
-        foreach (var name in names)
-        {
-            SetChecked(name, false);
-        }
+        Uncheck(names);
         LastError = null;
     }
 
     // MARK: collection actions
 
-    public void Create()
-    {
-        if (dialogs.PromptForName(AppState.NewCollectionTitle, "") is not { } typed)
-        {
-            LastError = null;
-            return;
-        }
-        if (Report(state.CreateCollection(typed)))
-        {
-            Retarget(typed.TrimSpaces());
-        }
-    }
+    public void Create() =>
+        AskNameThenRetarget(AppState.NewCollectionTitle, "", typed => state.CreateCollection(typed));
 
     public void Rename()
     {
         var collection = SelectedCollection;
-        if (dialogs.PromptForName(AppState.RenameCollectionTitle, collection) is not { } typed)
-        {
-            LastError = null;
-            return;
-        }
-        // The store trimmed the name the same way; following it keeps the window on the collection
-        // the user just renamed rather than dropping back to the active one.
-        if (Report(state.RenameCollection(collection, typed)))
-        {
-            Retarget(typed.TrimSpaces());
-        }
+        AskNameThenRetarget(AppState.RenameCollectionTitle, collection,
+            typed => state.RenameCollection(collection, typed));
     }
 
     public void Delete()
@@ -1254,18 +1241,26 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// </summary>
     public void StopSyncing()
     {
-        if (!dialogs.Confirm(StopSyncingMessage(SelectedCollection), StopSyncingInformative, StopSyncingAction, destructive: false))
+        var collection = SelectedCollection;
+        if (!state.IsSynced(collection)
+            || !dialogs.Confirm(StopSyncingMessage(collection), StopSyncingInformative, StopSyncingAction, destructive: false))
         {
             LastError = null;
             return;
         }
-        state.StopSyncing(SelectedCollection);
+        state.StopSyncing(collection);
         LastError = null;
     }
 
     public void Refresh()
     {
-        state.RefreshSource(SelectedCollection);
+        var collection = SelectedCollection;
+        if (!CanRefresh)
+        {
+            LastError = null;
+            return;
+        }
+        state.RefreshSource(collection);
         LastError = null;
     }
 
@@ -1273,15 +1268,13 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public void MakeLocalCopy()
     {
         var collection = SelectedCollection;
-        if (!state.IsSynced(collection) || dialogs.PromptForName(AppState.NewCollectionTitle, collection) is not { } typed)
+        if (!state.IsSynced(collection))
         {
             LastError = null;
             return;
         }
-        if (Report(state.MakeLocalCopyOfCollection(collection, typed)))
-        {
-            Retarget(typed.TrimSpaces());
-        }
+        AskNameThenRetarget(AppState.NewCollectionTitle, collection,
+            typed => state.MakeLocalCopyOfCollection(collection, typed));
     }
 
     public void SwitchTo(string name)
@@ -1291,6 +1284,25 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     }
 
     // MARK: helpers
+
+    /// <summary>
+    /// New Collection, Rename and Make Local Copy: asks for a name, hands it to the verb, and on
+    /// success moves the window to the collection the store now keeps under it, rather than
+    /// dropping back to the active one. A cancelled prompt clears <see cref="LastError"/>, and a
+    /// refusal is reported.
+    /// </summary>
+    private void AskNameThenRetarget(string title, string initial, Func<string, string?> verb)
+    {
+        if (dialogs.PromptForName(title, initial) is not { } typed)
+        {
+            LastError = null;
+            return;
+        }
+        if (Report(verb(typed)))
+        {
+            Retarget(MasterStore.CollectionName(typed));
+        }
+    }
 
     /// <summary>The document this machine writes for the collection, or null when nothing here publishes it.</summary>
     private string? PublishedFileName(string collection) =>
