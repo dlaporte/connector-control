@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using ConnectorControl.Core.State;
-using Microsoft.Win32;
 
 namespace ConnectorControl.App.Views;
 
@@ -49,10 +48,9 @@ public partial class PublishDialog : DialogWindow
 
     private void OnChooseFolder(object sender, RoutedEventArgs e)
     {
-        var picker = new OpenFolderDialog { Title = "Choose", Multiselect = false };
-        if (picker.ShowDialog(this) == true)
+        if (Pickers.Folder(this) is { } folder)
         {
-            Model.Folder = picker.FolderName;
+            Model.Folder = folder;
             ShowFailure(FailureText, null);
         }
     }
@@ -101,12 +99,11 @@ public partial class PublishDialog : DialogWindow
         string? path = null;
         if (Model.SheetMode == PublishModel.Mode.Export)
         {
-            var picker = new SaveFileDialog { FileName = Model.FileName, Filter = "Collection (*.json)|*.json" };
-            if (picker.ShowDialog(this) != true)
+            path = Pickers.SaveCollection(this, Model.FileName);
+            if (path is null)
             {
                 return;
             }
-            path = picker.FileName;
         }
         Finish(Model.Finish(path));
     }

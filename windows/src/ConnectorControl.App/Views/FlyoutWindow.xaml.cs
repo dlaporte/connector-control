@@ -10,7 +10,6 @@ using System.Windows.Threading;
 using ConnectorControl.Core.State;
 using H.NotifyIcon.Core;
 using H.NotifyIcon.Interop;
-using Microsoft.Win32;
 using DrawingPoint = System.Drawing.Point;
 // Named rather than imported: System.Windows.Shapes.Path would collide with System.IO.Path.
 using Ellipse = System.Windows.Shapes.Ellipse;
@@ -55,7 +54,7 @@ public partial class FlyoutWindow : Window
         Func<string?> ChooseFolder,
         Action<string> Inform);
 
-    internal static Presenters Live { get; } = new(PickDocument, PickFolder, Tell);
+    internal static Presenters Live { get; } = new(() => Pickers.Document(null), () => Pickers.Folder(null), Tell);
 
     internal Presenters Surfaces { get; set; } = Live;
 
@@ -342,20 +341,6 @@ public partial class FlyoutWindow : Window
         {
             Surfaces.Inform(failure);
         }
-    }
-
-    /// <summary>The Collections window's picker, for the document a collection asks to be pointed at.</summary>
-    private static string? PickDocument()
-    {
-        var picker = new OpenFileDialog { Title = "Choose", Filter = "Collection (*.json)|*.json", Multiselect = false };
-        return picker.ShowDialog() == true ? picker.FileName : null;
-    }
-
-    /// <summary>Settings ▸ Storage's picker, for the folder a failed publish asks to be pointed at.</summary>
-    private static string? PickFolder()
-    {
-        var picker = new OpenFolderDialog { Title = "Choose", Multiselect = false };
-        return picker.ShowDialog() == true ? picker.FolderName : null;
     }
 
     /// <summary>

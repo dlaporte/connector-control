@@ -9,7 +9,6 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
 using ConnectorControl.Core.State;
-using Microsoft.Win32;
 
 namespace ConnectorControl.App.Views;
 
@@ -110,8 +109,8 @@ public partial class CollectionsWindow : Window
         Func<Window, CopyModel, Func<string?>, bool> ShowCopy);
 
     internal static Presenters Live { get; } = new(
-        PickDocument,
-        PickFolder,
+        Pickers.Document,
+        Pickers.Folder,
         (owner, model) => ImportDialog.Show(owner, model),
         (owner, model) => ReviewDialog.Show(owner, model),
         (owner, model) => PublishDialog.Show(owner, model),
@@ -575,19 +574,6 @@ public partial class CollectionsWindow : Window
     {
         Model.Selected = collection;
         Surfaces.ShowReview(this, new ReviewModel(state, collection));
-    }
-
-    private static string? PickDocument(Window owner)
-    {
-        var picker = new OpenFileDialog { Title = "Choose", Filter = "Collection (*.json)|*.json", Multiselect = false };
-        return picker.ShowDialog(owner) == true ? picker.FileName : null;
-    }
-
-    /// <summary>Settings ▸ Storage's picker, for the folder a failed publish asks to be pointed at.</summary>
-    private static string? PickFolder(Window owner)
-    {
-        var picker = new OpenFolderDialog { Title = "Choose", Multiselect = false };
-        return picker.ShowDialog(owner) == true ? picker.FolderName : null;
     }
 
     // MARK: refusals
