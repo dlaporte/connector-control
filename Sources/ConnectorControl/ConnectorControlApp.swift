@@ -36,7 +36,7 @@ struct ConnectorControlApp: App {
         // Which collection it shows is its own selection; what the popover wants of it travels
         // through AppState.
         Window(CollectionsModel.windowTitle, id: CollectionsWindowView.windowID) {
-            CollectionsWindowView(state: state, dialogs: services.dialogs)
+            CollectionsWindowView(state: state)
         }
         .defaultSize(width: 760, height: 520)
         .windowResizability(.contentMinSize)

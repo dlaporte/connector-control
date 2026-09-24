@@ -293,6 +293,9 @@ struct EditSheetView: View {
         }
         Button(EditorModel.addVariableTitle) {
             let id = model.addEnvRow()
+            // The new row's field does not exist until the next layout, so focus waits a turn.
+            // EditorModel.cs raises FocusEnvRowRequested instead, and the Windows editor defers
+            // the focus to Loaded: a returned id is the SwiftUI idiom, an event the WPF one.
             DispatchQueue.main.async { envFocus = id }
         }
         .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)

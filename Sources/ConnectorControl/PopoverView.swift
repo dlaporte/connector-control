@@ -77,13 +77,12 @@ struct PopoverView: View {
             HStack(spacing: 4) {
                 Text(model.activeCollection)
                 if model.activeCollectionIsSynced {
-                    let chain = Image(systemName: "link")
-                        .imageScale(.small)
-                        .help(model.sourceTooltip ?? "")
-                    // A glyph on its own reads as nothing; it speaks its tooltip when the model
-                    // has a source to name, and keeps SF Symbols' own label when it has none.
+                    let chain = Image(systemName: "link").imageScale(.small)
+                    // A glyph on its own reads as nothing; it shows and speaks its tooltip when
+                    // the model has a source to name, and keeps SF Symbols' own label when it has
+                    // none, with no empty tooltip.
                     if let source = model.sourceTooltip {
-                        chain.accessibilityLabel(source)
+                        chain.help(source).accessibilityLabel(source)
                     } else {
                         chain
                     }
@@ -113,7 +112,7 @@ struct PopoverView: View {
                     Text(PopoverModel.menuTitle(for: item))
                 }
             }
-            .help(PopoverModel.menuTooltip(for: item) ?? "")
+            .help(ifAny: PopoverModel.menuTooltip(for: item))
         }
         Divider()
         Button(PopoverModel.manageTitle) { openCollections() }

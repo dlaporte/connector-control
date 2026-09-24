@@ -40,9 +40,11 @@ struct CollectionsWindowView: View {
     /// The longest name cell in the list, so every target starts at the same x.
     @State private var nameWidth: CGFloat = 0
 
-    init(state: AppState, dialogs: Dialogs) {
+    /// The model asks through AppState's dialogs, as the editor does: they are the app's one
+    /// AlertDialogs.
+    init(state: AppState) {
         self.state = state
-        _model = StateObject(wrappedValue: CollectionsModel(state: state, dialogs: dialogs))
+        _model = StateObject(wrappedValue: CollectionsModel(state: state, dialogs: state.dialogs))
     }
 
     /// Which sheet is up, holding the model it was opened with. The model is made once, when the
@@ -459,7 +461,7 @@ struct CollectionsWindowView: View {
                                 if !destination.isEnabled { Text(CollectionsModel.readOnlyNote) }
                             }
                             .disabled(!destination.isEnabled)
-                            .help(destination.isEnabled ? "" : CollectionsModel.readOnlyNote)
+                            .help(ifAny: destination.isEnabled ? nil : CollectionsModel.readOnlyNote)
                         }
                         if !model.copyDestinations.isEmpty { Divider() }
                         Button(CollectionsModel.newButton) { act { model.copyCheckedIntoNewCollection() } }
