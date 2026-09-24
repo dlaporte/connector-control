@@ -35,6 +35,10 @@ struct ImportSheetView: View {
         // Wide enough for a row's badge and its Replace picker beside the name, and growable from
         // there, so a long skipped-reason can be read in full. Same width as the Windows dialog.
         .frame(minWidth: 620, idealWidth: 620, maxWidth: .infinity)
+        // Another mode is another question: what the last Import said no longer answers it. On a
+        // change of mode only, as the Windows dialog clears it, so choosing the card already
+        // chosen leaves the line alone.
+        .onChange(of: model.mode) { _, _ in failure = nil }
     }
 
     // MARK: source
@@ -67,7 +71,6 @@ struct ImportSheetView: View {
         return VStack(alignment: .leading, spacing: 6) {
             Button {
                 model.mode = mode
-                failure = nil
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: selected ? "largecircle.filled.circle" : "circle")
