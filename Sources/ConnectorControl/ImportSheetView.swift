@@ -20,21 +20,13 @@ struct ImportSheetView: View {
             if let loadError = model.loadError {
                 // A document this app cannot read offers nothing to choose between: the modes,
                 // the rows and Import all go, and Cancel is the only way out.
-                Text(loadError)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
+                FailureLine(loadError)
             } else {
                 copiesCard
                 syncCard
             }
 
-            if let failure {
-                Text(failure)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            if let failure { FailureLine(failure) }
 
             Divider()
             footer
@@ -171,19 +163,9 @@ struct ImportSheetView: View {
     /// Unticking a collision and choosing Skip in the picker mean the same thing, so a row that
     /// is not coming across says so instead of offering the choice.
     @ViewBuilder private func badge(for row: Binding<ImportModel.Row>) -> some View {
-        if row.wrappedValue.present, row.wrappedValue.include {
+        if row.wrappedValue.showsPicker {
             HStack(spacing: 6) {
-                Picker("", selection: row.choice) {
-                    ForEach(ImportModel.collisionChoices, id: \.self) { choice in
-                        Text(ImportModel.choiceTitle(choice)).tag(choice)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .fixedSize()
-                // Not the row's name: the tick beside it already answers to that, and a screen
-                // reader would announce the two controls identically.
-                .accessibilityLabel(ImportModel.collisionPickerLabel(row.wrappedValue.name))
+                CollisionPicker(choice: row.choice, connector: row.wrappedValue.name)
                 if row.wrappedValue.choice == .replace {
                     caption(ImportModel.replaceKeepsValues)
                 }
@@ -211,14 +193,38 @@ struct ImportSheetView: View {
             Spacer()
             Button(ImportModel.cancelButton) { onDone() }
                 .keyboardShortcut(.cancelAction)
-            Button(ImportModel.importButton(model.importCount)) { perform() }
-                .keyboardShortcut(.defaultAction)
-                .disabled(!model.canImport)
+            // Gone rather than dimmed on a document this app cannot read, as the Windows dialog
+            // collapses it: there is nothing to import, and Cancel is the only way out.
+            if model.loadError == nil {
+                Button(ImportModel.importButton(model.importCount)) { perform() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!model.canImport)
+            }
         }
     }
 
     private func perform() {
         failure = model.perform()
         if failure == nil { onDone() }
+    }
+}
+
+/// How one clashing connector lands: the Import sheet's picker, which the Copy sheet asks with too.
+struct CollisionPicker: View {
+    @Binding var choice: ImportChoice
+    let connector: String
+
+    var body: some View {
+        Picker("", selection: $choice) {
+            ForEach(ImportModel.collisionChoices, id: \.self) { choice in
+                Text(ImportModel.choiceTitle(choice)).tag(choice)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .fixedSize()
+        // Not the row's name: the tick beside it on the Import sheet already answers to that,
+        // and a screen reader would announce the two controls identically.
+        .accessibilityLabel(ImportModel.collisionPickerLabel(connector))
     }
 }

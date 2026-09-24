@@ -68,12 +68,7 @@ struct PublishSheetView: View {
                 .frame(maxHeight: 72)
             }
 
-            if let failure {
-                Text(failure)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            if let failure { FailureLine(failure) }
 
             Divider()
             footer

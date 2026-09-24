@@ -24,12 +24,7 @@ struct CopySheetView: View {
             }
             .frame(maxHeight: 220)
 
-            if let failure {
-                Text(failure)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            if let failure { FailureLine(failure) }
 
             Divider()
             footer
@@ -50,20 +45,12 @@ struct CopySheetView: View {
         }
     }
 
-    /// A clash shows the Import sheet's picker; a clean arrival shows its badge, which a clashing
-    /// row leaves empty for the picker to answer instead.
+    /// A clash shows the Import sheet's picker; a clean arrival shows its badge. The row says
+    /// which, not the badge's text.
     @ViewBuilder private func outcome(for row: Binding<CopyModel.Row>) -> some View {
-        if row.wrappedValue.clashes {
-            Picker("", selection: row.choice) {
-                ForEach(ImportModel.collisionChoices, id: \.self) { choice in
-                    Text(ImportModel.choiceTitle(choice)).tag(choice)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .fixedSize()
-            .accessibilityLabel(ImportModel.collisionPickerLabel(row.wrappedValue.name))
-        } else if !row.wrappedValue.badge.isEmpty {
+        if row.wrappedValue.showsPicker {
+            CollisionPicker(choice: row.choice, connector: row.wrappedValue.name)
+        } else {
             Text(row.wrappedValue.badge)
                 .font(.caption)
                 .foregroundStyle(.secondary)

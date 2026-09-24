@@ -57,10 +57,7 @@ struct EditSheetView: View {
             if model.view == .form { formBody } else { jsonBody }
 
             if let error = model.validationError {
-                Text(error)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
+                FailureLine(error)
                     .padding(.horizontal, 16)
                     .padding(.top, 6)
             }
