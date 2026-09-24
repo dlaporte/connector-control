@@ -96,7 +96,7 @@ public struct MasterStore: Equatable, Codable, Sendable {
         guard collections[name] != nil else { return Self.noCollectionError(name) }
         guard collections.count > 1 else { return "Can\u{2019}t delete the last collection." }
         collections.removeValue(forKey: name)
-        if activeCollection == name { activeCollection = collections.keys.min() ?? "Default" }
+        if activeCollection == name { activeCollection = collections.keys.min { $0.ordinallyPrecedes($1) } ?? "Default" }
         return nil
     }
 

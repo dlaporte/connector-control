@@ -267,9 +267,9 @@ public final class AppState: ObservableObject {
         sourceBinding(of: collection)?.path.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }
     }
 
-    public var sortedNames: [String] { store.mcps.keys.sorted() }
+    public var sortedNames: [String] { store.mcps.keys.sorted { $0.ordinallyPrecedes($1) } }
 
-    public var collectionNames: [String] { store.collections.keys.sorted() }
+    public var collectionNames: [String] { store.collections.keys.sorted { $0.ordinallyPrecedes($1) } }
 
     public var activeCollection: String { store.activeCollection }
 
@@ -1138,7 +1138,7 @@ public final class AppState: ObservableObject {
     /// Every bound synced collection's pending update, re-derived from its document and the
     /// store as it stands now: pending is derived, never stored as a fact.
     func recomputePending() {
-        for name in collectionsFile.collections.keys.sorted()
+        for name in collectionsFile.collections.keys.sorted(by: { $0.ordinallyPrecedes($1) })
         where collectionsFile.collections[name]?.kind == .synced && collectionsCache.synced[name]?.path != nil {
             readSource(for: name, manual: false)
         }
@@ -1299,7 +1299,7 @@ public final class AppState: ObservableObject {
         var entry = collectionsFile.collections[collection] ?? .local
         var landed = false
         // Sorted so two connectors that want the same suffixed name always get the same one.
-        for name in rendered.connectors.keys.sorted() {
+        for name in rendered.connectors.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
             guard let connector = rendered.connectors[name] else { continue }
             let present = store.collections[collection]?.mcps[name] != nil
             // A collision with nothing said about it is left alone: an import must never
@@ -1354,7 +1354,7 @@ public final class AppState: ObservableObject {
         let date = today
         var entry = collectionsFile.collections[target] ?? .local
         var landed = false
-        for name in connectors.sorted() {
+        for name in connectors.sorted(by: { $0.ordinallyPrecedes($1) }) {
             guard let held = store.collections[source]?.mcps[name] else { continue }
             if choices[name] == .skip { continue }
             // Replace keeps the target's own key, so the connector that subscribers and Claude
@@ -1819,7 +1819,7 @@ public final class AppState: ObservableObject {
     func publishIfChanged(forcing forced: String? = nil) {
         guard !collectionsCache.published.isEmpty else { return }
         var cacheChanged = false
-        for collection in collectionsCache.published.keys.sorted() {
+        for collection in collectionsCache.published.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
             guard let binding = collectionsCache.published[collection],
                   let record = collectionsFile.collections[collection]?.publish else { continue }
             do {
@@ -1897,13 +1897,13 @@ public final class AppState: ObservableObject {
         if let diff = pendingUpdates[activeCollection] {
             return .updateAvailable(collection: activeCollection, summary: diff.summary())
         }
-        if let name = pendingUpdates.keys.min(), let diff = pendingUpdates[name] {
+        if let name = pendingUpdates.keys.min(by: { $0.ordinallyPrecedes($1) }), let diff = pendingUpdates[name] {
             return .updateAvailable(collection: name, summary: diff.summary())
         }
         if let fileName = unlocatedFileName(of: activeCollection) {
             return .locate(collection: activeCollection, fileName: fileName)
         }
-        for name in collectionsFile.collections.keys.sorted() {
+        for name in collectionsFile.collections.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
             if let fileName = unlocatedFileName(of: name) { return .locate(collection: name, fileName: fileName) }
         }
         return nil

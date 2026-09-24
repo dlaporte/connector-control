@@ -753,7 +753,7 @@ public struct CollectionDocument: Equatable, Sendable {
             }
         }
         if case .object(let env)? = object["env"] {
-            for name in sharedEnv.sorted() {
+            for name in sharedEnv.sorted(by: { $0.ordinallyPrecedes($1) }) {
                 guard case .string(let value)? = env[name], CredentialHeuristics.looksLikeCredential(value) else { continue }
                 warnings.append("env.\(name) looks like a credential")
             }

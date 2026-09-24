@@ -35,19 +35,26 @@ public class CollectionDiffTests
     [Fact]
     public void AddedRemovedAndChangedAreNamedAndSorted()
     {
+        var other = JsonValue.Object(("command", JsonValue.String("x")));
+        var none = new Dictionary<string, RenderedNeed>();
+        var changedDbt = DbtRendered.Replacing(new JsonPointer(["args", "1"]), JsonValue.String("@dbt/mcp@2"))!;
         var current = new Dictionary<string, McpEntry>
         {
             ["dbt"] = new(false, DbtFilled),
-            ["confluence"] = new(JsonValue.Object(("command", JsonValue.String("x")))),
+            ["asana"] = new(other),
+            ["confluence"] = new(other),
+            ["box"] = new(other),
         };
-        var changedDbt = DbtRendered.Replacing(new JsonPointer(["args", "1"]), JsonValue.String("@dbt/mcp@2"))!;
         var diff = CollectionDiff.Pending(
-            Rendered([("dbt", changedDbt, TokenNeed), ("datadog", JsonValue.Object(("command", JsonValue.String("d"))), new Dictionary<string, RenderedNeed>())]),
+            Rendered([
+                ("dbt", changedDbt, TokenNeed), ("asana", JsonValue.Object(("command", JsonValue.String("a"))), none),
+                ("\uFF5E", other, none), ("datadog", other, none), ("\U0001F600", other, none), ("atlas", other, none),
+            ]),
             current);
-        Assert.Equal(["datadog"], diff.Added);
-        Assert.Equal(["confluence"], diff.Removed);
-        Assert.Equal(["dbt"], diff.Changed);
-        Assert.Equal("adds datadog; removes confluence; changes dbt", diff.Summary());
+        Assert.Equal(["atlas", "datadog", "\U0001F600", "\uFF5E"], diff.Added);
+        Assert.Equal(["box", "confluence"], diff.Removed);
+        Assert.Equal(["asana", "dbt"], diff.Changed);
+        Assert.Equal("adds atlas, datadog, \U0001F600, \uFF5E; removes box, confluence; changes asana, dbt", diff.Summary());
     }
 
     [Fact]
@@ -128,13 +135,14 @@ public class CollectionDiffTests
         var newConfig = JsonValue.Object(
             ("command", JsonValue.String("c")),
             ("args", JsonValue.Array([JsonValue.String("${CC_NEEDS:a}-${CC_NEEDS:b}")])));
-        var needs = new Dictionary<string, RenderedNeed>
-        {
-            ["a"] = new(null, new JsonPointer(["args", "0"])),
-            ["b"] = new(null, new JsonPointer(["args", "0"])),
-        };
+        // Built afresh each pass, "b" first, so no one iteration order can make the test pass.
         for (var i = 0; i < 10; i++)
         {
+            var needs = new Dictionary<string, RenderedNeed>
+            {
+                ["b"] = new(null, new JsonPointer(["args", "0"])),
+                ["a"] = new(null, new JsonPointer(["args", "0"])),
+            };
             var result = CollectionApply.Apply(Rendered([("multi", newConfig, needs)]), current, previous);
             Assert.Equal(JsonValue.String("alpha"), result.Entries["multi"].Config.ValueAt(new JsonPointer(["args", "0"])));
         }

@@ -18,16 +18,22 @@ final class CollectionDiffTests: XCTestCase {
         XCTAssertTrue(diff.isEmpty)
     }
 
+    /// Two names or more in each list, none of them given in order. The last two added sort alike
+    /// on both platforms only ordinally: U+1F600 is a surrogate pair in UTF-16 and comes before
+    /// U+FF5E there, where Swift's own `<` puts it after.
     func testAddedRemovedAndChangedAreNamedAndSorted() {
-        let current = ["dbt": MCPEntry(enabled: false, config: dbtFilled),
-                       "confluence": MCPEntry(config: .object(["command": .string("x")]))]
-        var changedDbt = dbtRendered
-        changedDbt = changedDbt.replacing(at: JSONPointer(["args", "1"]), with: .string("@dbt/mcp@2"))!
-        let diff = CollectionDiff.pending(rendered: rendered(["dbt": (changedDbt, tokenNeed), "datadog": (.object(["command": .string("d")]), [:])]), current: current)
-        XCTAssertEqual(diff.added, ["datadog"])
-        XCTAssertEqual(diff.removed, ["confluence"])
-        XCTAssertEqual(diff.changed, ["dbt"])
-        XCTAssertEqual(diff.summary(), "adds datadog; removes confluence; changes dbt")
+        let other: JSONValue = .object(["command": .string("x")])
+        let changedDbt = dbtRendered.replacing(at: JSONPointer(["args", "1"]), with: .string("@dbt/mcp@2"))!
+        let current = ["dbt": MCPEntry(enabled: false, config: dbtFilled), "asana": MCPEntry(config: other),
+                       "confluence": MCPEntry(config: other), "box": MCPEntry(config: other)]
+        let diff = CollectionDiff.pending(rendered: rendered([
+            "dbt": (changedDbt, tokenNeed), "asana": (.object(["command": .string("a")]), [:]),
+            "\u{FF5E}": (other, [:]), "datadog": (other, [:]), "\u{1F600}": (other, [:]), "atlas": (other, [:]),
+        ]), current: current)
+        XCTAssertEqual(diff.added, ["atlas", "datadog", "\u{1F600}", "\u{FF5E}"])
+        XCTAssertEqual(diff.removed, ["box", "confluence"])
+        XCTAssertEqual(diff.changed, ["asana", "dbt"])
+        XCTAssertEqual(diff.summary(), "adds atlas, datadog, \u{1F600}, \u{FF5E}; removes box, confluence; changes asana, dbt")
     }
 
     func testApplyCarriesAFilledValueToTheMarkersNewPlace() {
@@ -71,11 +77,12 @@ final class CollectionDiffTests: XCTestCase {
         let current = ["multi": MCPEntry(enabled: true, config: .object(["command": .string("c"),
                                                                          "args": .array([.string("alpha"), .string("beta")])]))]
         let newConfig: JSONValue = .object(["command": .string("c"), "args": .array([.string("${CC_NEEDS:a}-${CC_NEEDS:b}")])])
-        let needs: [String: RenderedNeed] = [
-            "a": RenderedNeed(hint: nil, pointer: JSONPointer(["args", "0"])),
-            "b": RenderedNeed(hint: nil, pointer: JSONPointer(["args", "0"])),
-        ]
+        // Built afresh each pass, "b" first, so no one iteration order can make the test pass.
         for _ in 0..<10 {
+            let needs: [String: RenderedNeed] = [
+                "b": RenderedNeed(hint: nil, pointer: JSONPointer(["args", "0"])),
+                "a": RenderedNeed(hint: nil, pointer: JSONPointer(["args", "0"])),
+            ]
             let result = CollectionApply.apply(rendered: rendered(["multi": (newConfig, needs)]), current: current, previousNeeds: previous)
             XCTAssertEqual(result.entries["multi"]?.config.value(at: JSONPointer(["args", "0"])), .string("alpha"))
         }

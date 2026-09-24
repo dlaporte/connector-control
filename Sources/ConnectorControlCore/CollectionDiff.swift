@@ -23,9 +23,9 @@ public struct CollectionDiff: Equatable, Sendable {
         for name in renderedNames.intersection(currentNames) {
             if !matches(rendered: rendered.connectors[name]!.config, current: current[name]!.config) { changed.append(name) }
         }
-        return CollectionDiff(added: renderedNames.subtracting(currentNames).sorted(),
-                              removed: currentNames.subtracting(renderedNames).sorted(),
-                              changed: changed.sorted())
+        return CollectionDiff(added: renderedNames.subtracting(currentNames).sorted { $0.ordinallyPrecedes($1) },
+                              removed: currentNames.subtracting(renderedNames).sorted { $0.ordinallyPrecedes($1) },
+                              changed: changed.sorted { $0.ordinallyPrecedes($1) })
     }
 
     /// Equal after every marker-bearing leaf of `rendered` is replaced by whatever string
@@ -80,7 +80,7 @@ public enum CollectionApply {
             // (e.g. "${CC_NEEDS:a}-${CC_NEEDS:b}"); a leaf with two markers carries the
             // alphabetically first filled value; Publish assigns unique names, so this is a
             // tie-break, not a feature.
-            for needName in connector.needs.keys.sorted() {
+            for needName in connector.needs.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
                 let need = connector.needs[needName]!
                 connectorNeeds[needName] = CollectionsFile.Need(hint: need.hint, pointer: need.pointer)
                 // A value the user filled in under this name stays filled, wherever the marker

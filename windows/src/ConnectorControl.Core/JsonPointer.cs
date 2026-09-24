@@ -104,8 +104,6 @@ public static class JsonPointerAccess
     /// <summary>Every string leaf with its pointer, depth first, object keys in ordinal order (which is how ObjectProperties is already sorted), so two platforms walking the same value produce the same list.</summary>
     public static IReadOnlyList<(JsonPointer Pointer, string Value)> StringLeaves(this JsonValue value)
     {
-        // "out" is a reserved word in C#, so the accumulator here is named "leaves" (the Swift
-        // side can use `out` because it is not reserved there).
         var leaves = new List<(JsonPointer, string)>();
         Walk(value, new JsonPointer(ImmutableArray<string>.Empty), leaves);
         return leaves;

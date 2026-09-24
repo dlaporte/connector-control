@@ -258,7 +258,7 @@ extension CollectionsFile.PublishRecord {
             "slug": .string(slug),
             "origin": .string(origin),
             // Sorted: a set has no order of its own, and the file must not churn between saves.
-            "shareValues": .object(intent.shareValues.mapValues { .array($0.sorted().map(JSONValue.string)) }),
+            "shareValues": .object(intent.shareValues.mapValues { .array($0.sorted { $0.ordinallyPrecedes($1) }.map(JSONValue.string)) }),
             "paths": .object(paths),
             "hints": .object(intent.hints.mapValues { .object($0.mapValues(JSONValue.string)) }),
         ])
