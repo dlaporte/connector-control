@@ -358,10 +358,11 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
                 (command, commandArgs) = SplitCommandLine(inner, commandArgs);
             }
         }
+        var runner = LauncherName(command).ToLowerInvariant();
         // Read through the unwrapping and the launcher's extension, so the same bridge is a remote
         // connector however it is spelled, and on both platforms. The decoder's URL is checked
         // like any other: it vouches for a URL, not for a host free of userinfo.
-        if (LauncherName(command).ToLowerInvariant() == "npx"
+        if (runner == "npx"
             && RemotePattern.Decode(JsonValue.Object(
                 ("command", JsonValue.String("npx")),
                 ("args", JsonValue.Array(commandArgs.Select(JsonValue.String))))) is { } remote)
@@ -371,7 +372,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         // The slot where a package runner names the server it fetches: the one place a bare
         // hyphenated word is a package rather than, as likely, a password. It can land on the
         // value of a flag named for a secret, which the first check below drops before it counts.
-        var serverSlot = PackageRunners.Contains(LauncherName(command).ToLowerInvariant())
+        var serverSlot = PackageRunners.Contains(runner)
             ? commandArgs.FindIndex(a => !a.StartsWith('-')) : -1;
         var args = commandArgs.Select((arg, index) =>
             index > 0 && IsSecretNamedFlag(commandArgs[index - 1]) ? null : Shown(arg, home, index == serverSlot));
@@ -394,8 +395,9 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// with <c>-</c> or <c>/</c> or holds <c>:</c> (which covers <c>://</c>), <c>=</c> or a quote.
     /// Otherwise that last component could be the tail of a packed argument, and the launcher is
     /// omitted. The packed words are never shown, but a flag named for a secret at their end,
-    /// read with its quotes removed as a shell would pass it, still guards <c>args[0]</c>. A path-shaped raw secret that passes these checks
-    /// (<c>C:\x\tool.exe abc\cd.ef</c>) is accepted: residual 2 in the B1 report.
+    /// read with its quotes removed as a shell would pass it, still guards <c>args[0]</c>. A
+    /// path-shaped raw secret that passes these checks (<c>C:\x\tool.exe abc\cd.ef</c>) is
+    /// accepted: residual 2 in the B1 report.
     /// </summary>
     private static (string, List<string>) SplitCommandLine(string text, IEnumerable<string> args)
     {
@@ -508,7 +510,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             {
                 return null;
             }
-            var root = home.EndsWith('/') || home.EndsWith('\\') ? home[..^1] : home;
+            var root = TrimmingOneTrailingSeparator(home);
             // Case-insensitive, as both platforms' default file systems are.
             if (root.Length == 0 || !arg.StartsWith(root, StringComparison.OrdinalIgnoreCase))
             {
@@ -534,6 +536,10 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         }
         return arg;
     }
+
+    /// <summary><paramref name="path"/> without one trailing separator of either kind.</summary>
+    private static string TrimmingOneTrailingSeparator(string path) =>
+        path.EndsWith('/') || path.EndsWith('\\') ? path[..^1] : path;
 
     /// <summary>
     /// A random token rather than a name: with its slashes removed, at least 20 characters, with

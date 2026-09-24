@@ -714,7 +714,26 @@ public sealed class EditorModel : ObservableObject, IDisposable
         // before the window opened still shows its hint beside the argument it stands for.
         var marks = state.CollectionsFile.Collections.GetValueOrDefault(CollectionName)?.Publish?.Intent
             .PathMarks.GetValueOrDefault(Target.Name);
-        return marks is null ? null : PublishIntent.PlacePathMarks(marks, openedArgs).Placed.GetValueOrDefault(published)?.Hint;
+        return marks is null ? null : PlacedOnOpen(marks).GetValueOrDefault(published)?.Hint;
+    }
+
+    /// <summary>
+    /// The last marks placed on the opened arguments, and where they went. The view asks for a
+    /// hint once per row on every render, and the placement changes only with the record. Kept by
+    /// reference, where the Mac compares values: a publish record's dictionaries are replaced
+    /// whole, never edited in place.
+    /// </summary>
+    private (IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> Marks, IReadOnlyDictionary<int, PublishIntent.PathMark> Placed)? lastPlacement;
+
+    private IReadOnlyDictionary<int, PublishIntent.PathMark> PlacedOnOpen(IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> marks)
+    {
+        if (lastPlacement is { } last && ReferenceEquals(last.Marks, marks))
+        {
+            return last.Placed;
+        }
+        var placed = PublishIntent.PlacePathMarks(marks, openedArgs).Placed;
+        lastPlacement = (marks, placed);
+        return placed;
     }
 
     /// <summary>
@@ -1396,8 +1415,12 @@ public sealed class EditorModel : ObservableObject, IDisposable
         if (Target.IsNew || IsReadOnly || !argRowsFollowOpen
             || state.CollectionsFile.Collections.GetValueOrDefault(collection)?.Publish?.Intent.PathMarks
                    .GetValueOrDefault(Target.Name) is not { Count: > 0 } marks
-            || RemotePattern.Decode(config) is not null
-            || !FormMapper.Analyze(config).Model.Args.SequenceEqual(Args.Select(row => row.Value), StringComparer.Ordinal))
+            || RemotePattern.Decode(config) is not null)
+        {
+            return null;
+        }
+        var model = FormMapper.Analyze(config).Model;
+        if (!model.Args.SequenceEqual(Args.Select(row => row.Value), StringComparer.Ordinal))
         {
             return null;
         }
@@ -1410,7 +1433,6 @@ public sealed class EditorModel : ObservableObject, IDisposable
         // same path typed back in a new row, or moved into the command or an environment value, is
         // still the path the author marked: the record is left for publishing to place by value, or
         // to refuse.
-        var model = FormMapper.Analyze(config).Model;
         var saved = model.Args.Append(model.Command).Concat(model.Env.Values).ToHashSet(StringComparer.Ordinal);
         var surviving = Args.Where(openArgIndexByRow.ContainsKey).Select(row => openArgIndexByRow[row]).ToHashSet();
         if (placement.Placed.Keys.Any(opened => !surviving.Contains(opened) && saved.Contains(openedArgs[opened])))

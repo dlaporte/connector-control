@@ -442,7 +442,18 @@ public final class EditorModel: ObservableObject {
         guard state.collectionsCache.published[collectionName] != nil, args.indices.contains(index),
               let published = openArgIndexByRow[args[index].id] else { return nil }
         let marks = state.collectionsFile.collections[collectionName]?.publish?.intent.pathMarks[target.name] ?? [:]
-        return PublishIntent.placePathMarks(marks, in: openedArgs).placed[published]?.hint
+        return placedOnOpen(marks)[published]?.hint
+    }
+
+    /// The last marks placed on the opened arguments, and where they went. The view asks for a
+    /// hint once per row on every render, and the placement changes only with the record.
+    private var lastPlacement: (marks: [JSONPointer: PublishIntent.PathMark], placed: [Int: PublishIntent.PathMark])?
+
+    private func placedOnOpen(_ marks: [JSONPointer: PublishIntent.PathMark]) -> [Int: PublishIntent.PathMark] {
+        if let last = lastPlacement, last.marks == marks { return last.placed }
+        let placed = PublishIntent.placePathMarks(marks, in: openedArgs).placed
+        lastPlacement = (marks, placed)
+        return placed
     }
 
     /// Whether this connector has any author's hint to show at all, so the view can leave the
@@ -908,15 +919,15 @@ public final class EditorModel: ObservableObject {
     private func followedPathMarks(in collection: String, saving config: JSONValue) -> [JSONPointer: PublishIntent.PathMark]? {
         guard !target.isNew, !isReadOnly, argRowsFollowOpen,
               let marks = state.collectionsFile.collections[collection]?.publish?.intent.pathMarks[target.name],
-              !marks.isEmpty, RemotePattern.decode(config) == nil,
-              FormMapper.analyze(config).model.args == args.map(\.value) else { return nil }
+              !marks.isEmpty, RemotePattern.decode(config) == nil else { return nil }
+        let model = FormMapper.analyze(config).model
+        guard model.args == args.map(\.value) else { return nil }
         let placement = PublishIntent.placePathMarks(marks, in: openedArgs)
         guard placement.unresolved.isEmpty else { return nil }
         // A deleted row takes its mark with it only when its text is gone from the save too. The
         // same path typed back in a new row, or moved into the command or an environment value,
         // is still the path the author marked: the record is left for publishing to place by
         // value, or to refuse.
-        let model = FormMapper.analyze(config).model
         let saved = Set(model.args + [model.command] + Array(model.env.values))
         for (opened, _) in placement.placed where !args.contains(where: { openArgIndexByRow[$0.id] == opened }) {
             if saved.contains(openedArgs[opened]) { return nil }

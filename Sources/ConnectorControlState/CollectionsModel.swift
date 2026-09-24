@@ -301,17 +301,18 @@ public final class CollectionsModel: ObservableObject {
                 (command, commandArgs) = splitCommandLine(inner, commandArgs)
             }
         }
+        let runner = launcherName(command).lowercased()
         // Read through the unwrapping and the launcher's extension, so the same bridge is a remote
         // connector however it is spelled, and on both platforms. The decoder's URL is checked
         // like any other: it vouches for a URL, not for a host free of userinfo.
-        if launcherName(command).lowercased() == "npx",
+        if runner == "npx",
            let remote = RemotePattern.decode(.object(["command": .string("npx"), "args": .array(commandArgs.map(JSONValue.string))])) {
             return urlOrigin(remote.url)?.host ?? remoteType
         }
         // The slot where a package runner names the server it fetches: the one place a bare
         // hyphenated word is a package rather than, as likely, a password. It can land on the
         // value of a flag named for a secret, which the first check below drops before it counts.
-        let serverSlot = packageRunners.contains(launcherName(command).lowercased())
+        let serverSlot = packageRunners.contains(runner)
             ? commandArgs.firstIndex { !startsWith($0, "-") } : nil
         let args = commandArgs.enumerated().compactMap { index, arg -> String? in
             if index > 0, isSecretNamedFlag(commandArgs[index - 1]) { return nil }
@@ -412,8 +413,7 @@ public final class CollectionsModel: ObservableObject {
             // A colon anywhere but a drive letter's is a Windows switch's value, `/p:secret`.
             let colonIsDrive = isDriveRoot(arg) && !arg.dropFirst(2).contains(":")
             guard !arg.contains("="), !arg.contains(":") || colonIsDrive else { return nil }
-            let root = home.unicodeScalars.last.map { $0 == "/" || $0 == "\\" } == true
-                ? String(String.UnicodeScalarView(home.unicodeScalars.dropLast())) : home
+            let root = trimmingOneTrailingSeparator(home)
             // Case-insensitive, as both platforms' default file systems are.
             guard !root.isEmpty, let prefix = arg.range(of: root, options: [.anchored, .caseInsensitive]) else { return arg }
             let remainder = String(arg[prefix.upperBound...])
@@ -428,6 +428,12 @@ public final class CollectionsModel: ObservableObject {
             if !name.isEmpty, !name.contains("/") { return "…/" + name }
         }
         return arg
+    }
+
+    /// `path` without one trailing separator of either kind.
+    private static func trimmingOneTrailingSeparator(_ path: String) -> String {
+        guard let last = path.unicodeScalars.last, last == "/" || last == "\\" else { return path }
+        return String(String.UnicodeScalarView(path.unicodeScalars.dropLast()))
     }
 
     /// A random token rather than a name: with its slashes removed, at least 20 characters, with
