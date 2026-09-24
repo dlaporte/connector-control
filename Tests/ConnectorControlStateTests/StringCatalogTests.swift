@@ -88,6 +88,9 @@ final class StringCatalogTests: XCTestCase {
         "ClaudeSignature.uninspectableMessage": ["X"],
         "CollectionsModel.connectorTally.many": ["3"],
         "CollectionsModel.connectorTally.one": ["1"],
+        "CollectionsModel.deleteConnectorsSentence.many": ["3"],
+        "CollectionsModel.deleteConnectorsSentence.one": ["1"],
+        "CollectionsModel.deleteNextActiveSentence": ["X"],
         "CollectionsModel.deletePublishedFileQuestion": ["X"],
         "CollectionsModel.editLabel": ["X"],
         "CollectionsModel.removeCheckedMessage.many": ["3"],
@@ -233,7 +236,13 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.connectorTally.one"] = CollectionsModel.connectorTally(1)
         actual["CollectionsModel.copyToButton"] = CollectionsModel.copyToButton
         actual["CollectionsModel.deleteAction"] = CollectionsModel.deleteAction
+        actual["CollectionsModel.deleteConnectorsSentence.many"] = CollectionsModel.deleteConnectorsSentence(3)
+        actual["CollectionsModel.deleteConnectorsSentence.none"] = CollectionsModel.deleteConnectorsSentence(0)
+        actual["CollectionsModel.deleteConnectorsSentence.one"] = CollectionsModel.deleteConnectorsSentence(1)
+        actual["CollectionsModel.deleteCopiesSentence"] = CollectionsModel.deleteCopiesSentence
+        actual["CollectionsModel.deleteNextActiveSentence"] = CollectionsModel.deleteNextActiveSentence("X")
         actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.deletePublishedFileQuestion("X")
+        actual["CollectionsModel.deleteSourceSentence"] = CollectionsModel.deleteSourceSentence
         actual["CollectionsModel.duplicateAction"] = CollectionsModel.duplicateAction
         actual["CollectionsModel.editLabel"] = CollectionsModel.editLabel(for: "X")
         actual["CollectionsModel.exportAllAction"] = CollectionsModel.exportAllAction

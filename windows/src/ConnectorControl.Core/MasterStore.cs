@@ -137,13 +137,22 @@ public sealed class MasterStore : IEquatable<MasterStore>
         {
             return "Can’t delete the last collection.";
         }
+        var successor = ActiveAfterDeleting(name);
         Collections.Remove(name);
         if (ActiveCollection == name)
         {
-            ActiveCollection = Collections.Keys.Order(StringComparer.Ordinal).First();
+            ActiveCollection = successor ?? "Default";
         }
         return null;
     }
+
+    /// <summary>
+    /// The collection that takes the active spot if <paramref name="name"/> is deleted: the
+    /// sorted-first of the rest, or null when none remain. The one rule, so the Delete
+    /// confirmation that names it cannot disagree with the delete that picks it.
+    /// </summary>
+    public string? ActiveAfterDeleting(string name) =>
+        Collections.Keys.Where(k => k != name).Order(StringComparer.Ordinal).FirstOrDefault();
 
     /// <summary>The one wording for a name no collection has, shared by switch, rename and delete.</summary>
     private static string NoCollectionError(string name) => $"No collection named “{name}”.";

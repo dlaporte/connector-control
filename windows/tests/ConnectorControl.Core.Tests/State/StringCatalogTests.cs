@@ -94,6 +94,9 @@ public class StringCatalogTests
         ["ClaudeSignature.notFoundMessage"] = ["X"],
         ["CollectionsModel.connectorTally.many"] = ["3"],
         ["CollectionsModel.connectorTally.one"] = ["1"],
+        ["CollectionsModel.deleteConnectorsSentence.many"] = ["3"],
+        ["CollectionsModel.deleteConnectorsSentence.one"] = ["1"],
+        ["CollectionsModel.deleteNextActiveSentence"] = ["X"],
         ["CollectionsModel.deletePublishedFileQuestion"] = ["X"],
         ["CollectionsModel.editLabel"] = ["X"],
         ["CollectionsModel.removeCheckedMessage.many"] = ["3"],
@@ -243,7 +246,13 @@ public class StringCatalogTests
         actual["CollectionsModel.connectorTally.one"] = CollectionsModel.ConnectorTally(1);
         actual["CollectionsModel.copyToButton"] = CollectionsModel.CopyToButton;
         actual["CollectionsModel.deleteAction"] = CollectionsModel.DeleteAction;
+        actual["CollectionsModel.deleteConnectorsSentence.many"] = CollectionsModel.DeleteConnectorsSentence(3);
+        actual["CollectionsModel.deleteConnectorsSentence.none"] = CollectionsModel.DeleteConnectorsSentence(0);
+        actual["CollectionsModel.deleteConnectorsSentence.one"] = CollectionsModel.DeleteConnectorsSentence(1);
+        actual["CollectionsModel.deleteCopiesSentence"] = CollectionsModel.DeleteCopiesSentence;
+        actual["CollectionsModel.deleteNextActiveSentence"] = CollectionsModel.DeleteNextActiveSentence("X");
         actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.DeletePublishedFileQuestion("X");
+        actual["CollectionsModel.deleteSourceSentence"] = CollectionsModel.DeleteSourceSentence;
         actual["CollectionsModel.documentFilter"] = CollectionsModel.DocumentFilter;
         actual["CollectionsModel.duplicateAction"] = CollectionsModel.DuplicateAction;
         actual["CollectionsModel.editLabel"] = CollectionsModel.EditLabel("X");

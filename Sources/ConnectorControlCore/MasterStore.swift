@@ -100,9 +100,17 @@ public struct MasterStore: Equatable, Codable, Sendable {
     public mutating func deleteCollection(named name: String) -> String? {
         guard collections[name] != nil else { return Self.noCollectionError(name) }
         guard collections.count > 1 else { return "Can\u{2019}t delete the last collection." }
+        let successor = activeAfterDeleting(name)
         collections.removeValue(forKey: name)
-        if activeCollection == name { activeCollection = collections.keys.min { $0.ordinallyPrecedes($1) } ?? "Default" }
+        if activeCollection == name { activeCollection = successor ?? "Default" }
         return nil
+    }
+
+    /// The collection that takes the active spot if `name` is deleted: the sorted-first of the
+    /// rest, or nil when none remain. The one rule, so the Delete confirmation that names it
+    /// cannot disagree with the delete that picks it.
+    public func activeAfterDeleting(_ name: String) -> String? {
+        collections.keys.filter { $0 != name }.min { $0.ordinallyPrecedes($1) }
     }
 
     /// The one wording for a name no collection has, shared by switch, rename and delete.

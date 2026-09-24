@@ -58,7 +58,8 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// Lifted from the editor's Remove confirmation, which the list now replaces: the sentence —
-    /// the most useful thing in that confirmation — survives here unchanged.
+    /// the most useful thing in that confirmation — survives here unchanged. Delete Collection's
+    /// confirmation ends with it too.
     public static let removeCheckedInformative = "A copy remains in Backups."
 
     /// The sidebar's chain glyph, or nil when there is no chain to explain: a local collection
@@ -76,6 +77,23 @@ public final class CollectionsModel: ObservableObject {
     public static func connectorTally(_ n: Int) -> String { n == 1 ? "\(n) connector" : "\(n) connectors" }
 
     public static func deletePublishedFileQuestion(_ fileName: String) -> String { "Also remove \(fileName) from the folder?" }
+
+    // The Delete Collection confirmation's informative text, one sentence per fact, in the order
+    // `deleteInformative(for:)` joins them. The count leads, so a reader who skimmed the title
+    // still learns the connectors go too.
+    public static func deleteConnectorsSentence(_ n: Int) -> String {
+        switch n {
+        case 0: "It has no connectors."
+        case 1: "Its \(n) connector is deleted with it."
+        default: "Its \(n) connectors are deleted with it."
+        }
+    }
+
+    public static let deleteCopiesSentence = "Copies in other collections are not affected."
+
+    public static func deleteNextActiveSentence(_ collection: String) -> String { "“\(collection)” becomes the active collection." }
+
+    public static let deleteSourceSentence = "The source file is not changed."
 
     /// One collection in the left pane. A published collection carries no mark of its own there:
     /// publishing is what the header's pill says, not a sidebar glyph.
@@ -896,7 +914,8 @@ public final class CollectionsModel: ObservableObject {
 
     public func delete() {
         let collection = selectedCollection
-        guard dialogs.confirm(message: AppState.deleteCollectionMessage(collection), informative: nil,
+        guard dialogs.confirm(message: AppState.deleteCollectionMessage(collection),
+                              informative: deleteInformative(for: collection),
                               primary: AppState.deleteButton, destructive: true) else {
             lastError = nil
             return
@@ -911,6 +930,21 @@ public final class CollectionsModel: ObservableObject {
         }
         guard report(state.deleteCollection(named: collection)) else { return }
         selected = nil   // back to the active collection
+    }
+
+    /// What Delete takes with the collection and what it leaves: its connectors (copies elsewhere
+    /// stay), the collection that becomes active if this one is, a synced source it never
+    /// touches, and the backup the store keeps before it saves.
+    public func deleteInformative(for collection: String) -> String {
+        let count = state.store.collections[collection]?.mcps.count ?? 0
+        var sentences = [Self.deleteConnectorsSentence(count)]
+        if count > 0 { sentences.append(Self.deleteCopiesSentence) }
+        if collection == state.activeCollection, let next = state.store.activeAfterDeleting(collection) {
+            sentences.append(Self.deleteNextActiveSentence(next))
+        }
+        if state.isSynced(collection) { sentences.append(Self.deleteSourceSentence) }
+        sentences.append(Self.removeCheckedInformative)
+        return sentences.joined(separator: " ")
     }
 
     /// Stop Publishing: the collection stays, and only the document in the folder is in question.

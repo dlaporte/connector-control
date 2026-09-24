@@ -659,6 +659,50 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertTrue(state.collectionNames.contains("Consulting"), "Stop Publishing keeps the collection")
     }
 
+    /// The Delete confirmation says what goes with the collection before the button is pressed:
+    /// its connectors, which collection becomes active, that a synced source is left alone, and
+    /// that a copy remains in Backups.
+    func testDeleteConfirmationSaysWhatGoesWithTheCollection() throws {
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        for name in ["Empty", "One", "Shared", "Team", "Two"] { XCTAssertNil(state.createCollection(named: name)) }
+        for (connector, collection) in [("alpha", "One"), ("alpha", "Team"), ("alpha", "Two"), ("beta", "Two")] {
+            XCTAssertNil(state.upsert(name: connector, entry: AppStateHarness.localConnector("/bin/" + connector),
+                                      renamedFrom: nil, in: collection))
+        }
+        try h.makeSynced(state, "Team", boundTo: "/shared/team.json")
+        try h.publish(state, "Shared")
+        state.switchCollection(to: "Two")
+        let model = h.collectionsModel(state)
+
+        func informative(_ collection: String) -> String? {
+            model.selected = collection
+            h.dialogs.nextConfirm = false
+            model.delete()
+            return h.dialogs.confirms.last?.informative
+        }
+        XCTAssertEqual(informative("Empty"), "It has no connectors. A copy remains in Backups.")
+        XCTAssertEqual(informative("One"),
+                       "Its 1 connector is deleted with it. Copies in other collections are not affected. "
+                       + "A copy remains in Backups.")
+        XCTAssertEqual(informative("Two"),
+                       "Its 2 connectors are deleted with it. Copies in other collections are not affected. "
+                       + "“Default” becomes the active collection. A copy remains in Backups.")
+        XCTAssertEqual(informative("Team"),
+                       "Its 1 connector is deleted with it. Copies in other collections are not affected. "
+                       + "The source file is not changed. A copy remains in Backups.")
+        XCTAssertEqual(informative("Shared"), "It has no connectors. A copy remains in Backups.",
+                       "publishing adds nothing here: the file has its own question")
+        XCTAssertEqual(state.collectionNames, ["Default", "Empty", "One", "Shared", "Team", "Two"], "every one declined")
+
+        // Accepted: the collection the confirmation named is the one that becomes active.
+        model.selected = "Two"
+        h.dialogs.nextConfirm = true
+        model.delete()
+        XCTAssertEqual(state.activeCollection, "Default")
+        XCTAssertNotNil(state.store.collections["One"]?.mcps["alpha"], "a copy in another collection stays")
+    }
+
     func testAFailedPublishIsStoppedWithoutAskingAboutTheFile() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }

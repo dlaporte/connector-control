@@ -69,7 +69,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// Lifted from the editor's Remove confirmation, which the list now replaces: the sentence —
-    /// the most useful thing in that confirmation — survives here unchanged.
+    /// the most useful thing in that confirmation — survives here unchanged. Delete Collection's
+    /// confirmation ends with it too.
     /// </summary>
     public const string RemoveCheckedInformative = "A copy remains in Backups.";
 
@@ -88,6 +89,22 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public static string ConnectorTally(int n) => n == 1 ? $"{n} connector" : $"{n} connectors";
 
     public static string DeletePublishedFileQuestion(string fileName) => $"Also remove {fileName} from the folder?";
+
+    // The Delete Collection confirmation's informative text, one sentence per fact, in the order
+    // DeleteInformative joins them. The count leads, so a reader who skimmed the title still
+    // learns the connectors go too.
+    public static string DeleteConnectorsSentence(int n) => n switch
+    {
+        0 => "It has no connectors.",
+        1 => $"Its {n} connector is deleted with it.",
+        _ => $"Its {n} connectors are deleted with it.",
+    };
+
+    public const string DeleteCopiesSentence = "Copies in other collections are not affected.";
+
+    public static string DeleteNextActiveSentence(string collection) => $"“{collection}” becomes the active collection.";
+
+    public const string DeleteSourceSentence = "The source file is not changed.";
 
     /// <summary>
     /// One collection in the left pane. A published collection carries no mark of its own there:
@@ -1189,7 +1206,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public void Delete()
     {
         var collection = SelectedCollection;
-        if (!dialogs.Confirm(AppState.DeleteCollectionMessage(collection), null, AppState.DeleteButton, destructive: true))
+        if (!dialogs.Confirm(AppState.DeleteCollectionMessage(collection), DeleteInformative(collection),
+                             AppState.DeleteButton, destructive: true))
         {
             LastError = null;
             return;
@@ -1211,6 +1229,31 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             Selected = null;   // back to the active collection
         }
+    }
+
+    /// <summary>
+    /// What Delete takes with the collection and what it leaves: its connectors (copies elsewhere
+    /// stay), the collection that becomes active if this one is, a synced source it never
+    /// touches, and the backup the store keeps before it saves.
+    /// </summary>
+    public string DeleteInformative(string collection)
+    {
+        var count = state.Store.Collections.TryGetValue(collection, out var held) ? held.Mcps.Count : 0;
+        var sentences = new List<string> { DeleteConnectorsSentence(count) };
+        if (count > 0)
+        {
+            sentences.Add(DeleteCopiesSentence);
+        }
+        if (collection == state.ActiveCollection && state.Store.ActiveAfterDeleting(collection) is { } next)
+        {
+            sentences.Add(DeleteNextActiveSentence(next));
+        }
+        if (state.IsSynced(collection))
+        {
+            sentences.Add(DeleteSourceSentence);
+        }
+        sentences.Add(RemoveCheckedInformative);
+        return string.Join(" ", sentences);
     }
 
     /// <summary>Stop Publishing: the collection stays, and only the document in the folder is in question.</summary>

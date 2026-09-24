@@ -764,6 +764,55 @@ public class CollectionsModelTests
         Assert.Contains("Consulting", state.CollectionNames);
     }
 
+    /// <summary>
+    /// The Delete confirmation says what goes with the collection before the button is pressed:
+    /// its connectors, which collection becomes active, that a synced source is left alone, and
+    /// that a copy remains in Backups.
+    /// </summary>
+    [Fact]
+    public void DeleteConfirmationSaysWhatGoesWithTheCollection()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        foreach (var name in new[] { "Empty", "One", "Shared", "Team", "Two" })
+        {
+            Assert.Null(state.CreateCollection(name));
+        }
+        foreach (var (connector, collection) in new[] { ("alpha", "One"), ("alpha", "Team"), ("alpha", "Two"), ("beta", "Two") })
+        {
+            Assert.Null(state.Upsert(connector, AppStateHarness.LocalConnector("/bin/" + connector), null, collection));
+        }
+        h.MakeSynced(state, "Team", "/shared/team.json");
+        h.Publish(state, "Shared");
+        state.SwitchCollection("Two");
+        var model = h.CollectionsModel(state);
+
+        string? Informative(string collection)
+        {
+            model.Selected = collection;
+            h.Dialogs.NextConfirm = false;
+            model.Delete();
+            return h.Dialogs.Confirms[^1].Informative;
+        }
+        Assert.Equal("It has no connectors. A copy remains in Backups.", Informative("Empty"));
+        Assert.Equal("Its 1 connector is deleted with it. Copies in other collections are not affected. "
+                     + "A copy remains in Backups.", Informative("One"));
+        Assert.Equal("Its 2 connectors are deleted with it. Copies in other collections are not affected. "
+                     + "“Default” becomes the active collection. A copy remains in Backups.", Informative("Two"));
+        Assert.Equal("Its 1 connector is deleted with it. Copies in other collections are not affected. "
+                     + "The source file is not changed. A copy remains in Backups.", Informative("Team"));
+        // Publishing adds nothing here: the file has its own question.
+        Assert.Equal("It has no connectors. A copy remains in Backups.", Informative("Shared"));
+        Assert.Equal(["Default", "Empty", "One", "Shared", "Team", "Two"], state.CollectionNames);   // every one declined
+
+        // Accepted: the collection the confirmation named is the one that becomes active.
+        model.Selected = "Two";
+        h.Dialogs.NextConfirm = true;
+        model.Delete();
+        Assert.Equal("Default", state.ActiveCollection);
+        Assert.True(state.Store.Collections["One"].Mcps.ContainsKey("alpha"));   // a copy in another collection stays
+    }
+
     [Fact]
     public void AFailedPublishIsStoppedWithoutAskingAboutTheFile()
     {

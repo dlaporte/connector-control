@@ -108,6 +108,8 @@ public class CollectionTests
     public void DeleteActiveCollectionSwitchesToFirstRemaining()
     {
         var store = new MasterStore(2, "Work", [new("Work", new Collection()), new("Alpha", new Collection()), new("Zeta", new Collection())]);
+        Assert.Equal("Alpha", store.ActiveAfterDeleting("Work"));   // the confirmation names what the delete picks
+        Assert.Equal("Work", store.ActiveAfterDeleting("Alpha"));   // the name being deleted is never its own successor
         Assert.Null(store.DeleteCollection(store.ActiveCollection));
         Assert.Equal("Alpha", store.ActiveCollection);
         Assert.False(store.Collections.ContainsKey("Work"));
@@ -117,6 +119,7 @@ public class CollectionTests
     public void DeleteActiveCollectionRejectsLastCollection()
     {
         var store = MasterStore.Empty();
+        Assert.Null(store.ActiveAfterDeleting(store.ActiveCollection));   // nothing remains to take the active spot
         Assert.Equal("Can’t delete the last collection.", store.DeleteCollection(store.ActiveCollection));
         Assert.Single(store.Collections);
     }

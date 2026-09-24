@@ -99,6 +99,8 @@ final class CollectionTests: XCTestCase {
         var store = MasterStore(
             activeCollection: "Work",
             collections: ["Work": Collection(), "Alpha": Collection(), "Zeta": Collection()])
+        XCTAssertEqual(store.activeAfterDeleting("Work"), "Alpha", "the confirmation names what the delete picks")
+        XCTAssertEqual(store.activeAfterDeleting("Alpha"), "Work", "the name being deleted is never its own successor")
         let error = store.deleteCollection(named: store.activeCollection)
         XCTAssertNil(error)
         XCTAssertEqual(store.activeCollection, "Alpha")
@@ -107,6 +109,7 @@ final class CollectionTests: XCTestCase {
 
     func testDeleteActiveCollectionRejectsLastCollection() {
         var store = MasterStore.empty
+        XCTAssertNil(store.activeAfterDeleting(store.activeCollection), "nothing remains to take the active spot")
         XCTAssertEqual(store.deleteCollection(named: store.activeCollection), "Can’t delete the last collection.")
         XCTAssertEqual(store.collections.count, 1)
     }

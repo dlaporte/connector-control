@@ -138,9 +138,21 @@
   },
   "CollectionsModel.copyToButton": "Copy to",
   "CollectionsModel.deleteAction": "Delete",
+  "CollectionsModel.deleteConnectorsSentence.many": {
+    "format": "Its {0} connectors are deleted with it."
+  },
+  "CollectionsModel.deleteConnectorsSentence.none": "It has no connectors.",
+  "CollectionsModel.deleteConnectorsSentence.one": {
+    "format": "Its {0} connector is deleted with it."
+  },
+  "CollectionsModel.deleteCopiesSentence": "Copies in other collections are not affected.",
+  "CollectionsModel.deleteNextActiveSentence": {
+    "format": "“{0}” becomes the active collection."
+  },
   "CollectionsModel.deletePublishedFileQuestion": {
     "format": "Also remove {0} from the folder?"
   },
+  "CollectionsModel.deleteSourceSentence": "The source file is not changed.",
   "CollectionsModel.documentFilter": {
     "win": "Collection (*.json)|*.json"
   },
