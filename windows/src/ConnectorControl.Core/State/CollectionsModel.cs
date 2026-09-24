@@ -43,7 +43,10 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public const string RemoveFileButton = "Remove";
     public const string KeepFileButton = "Keep";
     public const string RemoteType = "remote";
-    /// <summary>The row's pencil, which names no connector: the row it sits on is the answer.</summary>
+    /// <summary>
+    /// The row's pencil as the Windows window still shows it. Retired on the Mac for
+    /// <see cref="EditLabel"/>; it goes here too once the window's pencil reads that.
+    /// </summary>
     public const string EditTooltip = "Edit";
     /// <summary>The sidebar's double-click, and the same action in its context menu.</summary>
     public const string MakeActiveAction = "Make Active";
@@ -896,6 +899,12 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public const string ExportAllAction = "Export All";
     public const string ShowPublishedFileAction = "Show Published File";
     public const string ShowSourceFileAction = "Show Source File";
+
+    /// <summary>
+    /// The row's pencil, as its tooltip and its spoken name. It names the connector, so a screen
+    /// reader moving down the list hears which one each pencil edits rather than "Edit" each time.
+    /// </summary>
+    public static string EditLabel(string connector) => $"Edit “{connector}”";
 
     public static string Title(MenuEntry entry) => entry switch
     {

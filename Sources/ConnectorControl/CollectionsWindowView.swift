@@ -386,8 +386,8 @@ struct CollectionsWindowView: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.accessoryBar)
-                .help(CollectionsModel.editTooltip)
-                .accessibilityLabel(CollectionsModel.editTooltip)
+                .help(CollectionsModel.editLabel(for: row.name))
+                .accessibilityLabel(CollectionsModel.editLabel(for: row.name))
             }
             .padding(.vertical, 2)
         }

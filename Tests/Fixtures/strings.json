@@ -141,7 +141,12 @@
     "win": "Collection (*.json)|*.json"
   },
   "CollectionsModel.duplicateAction": "Duplicate",
-  "CollectionsModel.editTooltip": "Edit",
+  "CollectionsModel.editLabel": {
+    "format": "Edit “{0}”"
+  },
+  "CollectionsModel.editTooltip": {
+    "win": "Edit"
+  },
   "CollectionsModel.exportAllAction": "Export All",
   "CollectionsModel.exportCheckedButton": "Export",
   "CollectionsModel.importButton": "Import",
@@ -247,6 +252,7 @@
   "EditorModel.envNamelessError": "An environment variable value is missing its name.",
   "EditorModel.headerNameError": "Enter a header name.",
   "EditorModel.headerValueError": "Enter a header value.",
+  "EditorModel.hideValueLabel": "Hide value",
   "EditorModel.importedNote": {
     "format": "Imported from “{0}” on {1}. Edits stay here."
   },
@@ -273,11 +279,14 @@
     "format": "Published to {0} — saving updates the file your team reads. Secrets stay here."
   },
   "EditorModel.remoteFooter": "Runs via npx mcp-remote — managed for you.",
+  "EditorModel.removeArgumentLabel": "Remove argument",
+  "EditorModel.removeVariableLabel": "Remove variable",
   "EditorModel.removedOutsideDetail": "Saving will add it back.",
   "EditorModel.removedOutsideMessage": {
     "format": "“{0}” was removed outside this editor."
   },
   "EditorModel.saveAnywayButton": "Save Anyway",
+  "EditorModel.showValueLabel": "Show value",
   "EditorModel.stayInJSONButton": "Stay in JSON",
   "EditorModel.switchAnywayButton": "Switch Anyway",
   "EditorModel.urlHint": "Enter a valid http(s) URL, e.g. https://example.com/mcp",

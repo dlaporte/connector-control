@@ -51,6 +51,7 @@ struct PopoverView: View {
                 }
                 .buttonStyle(.accessoryBar)
                 .help(PopoverModel.settingsTooltip)
+                .accessibilityLabel(PopoverModel.settingsTooltip)
                 Button {
                     model.quit()
                 } label: {
@@ -58,6 +59,7 @@ struct PopoverView: View {
                 }
                 .buttonStyle(.accessoryBar)
                 .help(PopoverModel.quitTooltip)
+                .accessibilityLabel(PopoverModel.quitTooltip)
             }
         }
         .padding(.horizontal, 12)

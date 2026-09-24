@@ -215,6 +215,8 @@ struct EditSheetView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(model.isReadOnly)
+                .help(EditorModel.removeArgumentLabel)
+                .accessibilityLabel(EditorModel.removeArgumentLabel)
             }
         }
         Button(EditorModel.addArgumentTitle) { model.addArg() }
@@ -270,14 +272,20 @@ struct EditSheetView: View {
                             .textFieldStyle(.roundedBorder)
                         }
                         HStack(spacing: 6) {
+                            let reveal = row.revealed ? EditorModel.hideValueLabel : EditorModel.showValueLabel
                             Button { model.toggleReveal(id: row.id) } label: {
                                 Image(systemName: "eye")
-                            }.buttonStyle(.plain)
+                            }
+                            .buttonStyle(.plain)
+                            .help(reveal)
+                            .accessibilityLabel(reveal)
                             Button { model.removeEnvRow(id: row.id) } label: {
                                 Image(systemName: "xmark.circle")
                             }
                             .buttonStyle(.plain)
                             .disabled(model.isReadOnly)
+                            .help(EditorModel.removeVariableLabel)
+                            .accessibilityLabel(EditorModel.removeVariableLabel)
                         }
                     }
                 }

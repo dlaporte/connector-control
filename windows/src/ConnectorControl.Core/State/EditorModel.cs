@@ -43,6 +43,11 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public const string SaveAnywayButton = "Save Anyway";
     public const string AddArgumentTitle = "＋ Add argument";
     public const string AddVariableTitle = "＋ Add variable";
+    /// <summary>The icon buttons' names: the eye beside a value, and the × after an argument or a variable.</summary>
+    public const string ShowValueLabel = "Show value";
+    public const string HideValueLabel = "Hide value";
+    public const string RemoveArgumentLabel = "Remove argument";
+    public const string RemoveVariableLabel = "Remove variable";
     public const string ChangedOutsideDetail = "Saving will overwrite that change with this editor's version.";
     public const string RemovedOutsideDetail = "Saving will add it back.";
     public const string WhatCanIChange = "What can I change?";

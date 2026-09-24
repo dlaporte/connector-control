@@ -34,6 +34,11 @@ public final class EditorModel: ObservableObject {
     public static let saveAnywayButton = "Save Anyway"
     public static let addArgumentTitle = "＋ Add argument"
     public static let addVariableTitle = "＋ Add variable"
+    /// The icon buttons' names: the eye beside a value, and the × after an argument or a variable.
+    public static let showValueLabel = "Show value"
+    public static let hideValueLabel = "Hide value"
+    public static let removeArgumentLabel = "Remove argument"
+    public static let removeVariableLabel = "Remove variable"
     public static let changedOutsideDetail = "Saving will overwrite that change with this editor's version."
     public static let removedOutsideDetail = "Saving will add it back."
     public static let whatCanIChange = "What can I change?"

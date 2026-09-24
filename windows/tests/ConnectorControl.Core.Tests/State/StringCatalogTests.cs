@@ -92,6 +92,7 @@ public class StringCatalogTests
         ["ClaudePublisher.subjectNoOrganizationError"] = ["X", "Y"],
         ["ClaudeSignature.notFoundMessage"] = ["X"],
         ["CollectionsModel.deletePublishedFileQuestion"] = ["X"],
+        ["CollectionsModel.editLabel"] = ["X"],
         ["CollectionsModel.localDetail"] = ["3"],
         ["CollectionsModel.publishedDetail"] = ["X"],
         ["CollectionsModel.removeCheckedMessage.many"] = ["3"],
@@ -245,6 +246,7 @@ public class StringCatalogTests
         actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.DeletePublishedFileQuestion("X");
         actual["CollectionsModel.documentFilter"] = CollectionsModel.DocumentFilter;
         actual["CollectionsModel.duplicateAction"] = CollectionsModel.DuplicateAction;
+        actual["CollectionsModel.editLabel"] = CollectionsModel.EditLabel("X");
         actual["CollectionsModel.editTooltip"] = CollectionsModel.EditTooltip;
         actual["CollectionsModel.exportAllAction"] = CollectionsModel.ExportAllAction;
         actual["CollectionsModel.exportCheckedButton"] = CollectionsModel.ExportCheckedButton;
@@ -331,6 +333,7 @@ public class StringCatalogTests
         actual["EditorModel.envNamelessError"] = EditorModel.EnvNamelessError;
         actual["EditorModel.headerNameError"] = EditorModel.HeaderNameError;
         actual["EditorModel.headerValueError"] = EditorModel.HeaderValueError;
+        actual["EditorModel.hideValueLabel"] = EditorModel.HideValueLabel;
         actual["EditorModel.importedNote"] = EditorModel.ImportedNote("X", "Y");
         actual["EditorModel.invalidURLError"] = EditorModel.InvalidUrlError;
         actual["EditorModel.jsonTip"] = EditorModel.JsonTip;
@@ -344,9 +347,12 @@ public class StringCatalogTests
         actual["EditorModel.propagateLabelMany"] = EditorModel.PropagateLabelMany("X", "Y");
         actual["EditorModel.publishedNote"] = EditorModel.PublishedNote("X");
         actual["EditorModel.remoteFooter"] = EditorModel.RemoteFooter;
+        actual["EditorModel.removeArgumentLabel"] = EditorModel.RemoveArgumentLabel;
+        actual["EditorModel.removeVariableLabel"] = EditorModel.RemoveVariableLabel;
         actual["EditorModel.removedOutsideDetail"] = EditorModel.RemovedOutsideDetail;
         actual["EditorModel.removedOutsideMessage"] = EditorModel.RemovedOutsideMessage("X");
         actual["EditorModel.saveAnywayButton"] = EditorModel.SaveAnywayButton;
+        actual["EditorModel.showValueLabel"] = EditorModel.ShowValueLabel;
         actual["EditorModel.stayInJSONButton"] = EditorModel.StayInJsonButton;
         actual["EditorModel.switchAnywayButton"] = EditorModel.SwitchAnywayButton;
         actual["EditorModel.urlHint"] = EditorModel.UrlHint;

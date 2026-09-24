@@ -13,6 +13,8 @@ struct MCPRow: View {
                 .toggleStyle(.switch)
                 .controlSize(.small)
                 .labelsHidden()
+                // The name beside it is a separate element; the switch has to say whose it is.
+                .accessibilityLabel(row.name)
             if row.isLocked {
                 // Only ever on screen while the collection is synced; the switch beside it is
                 // still live.

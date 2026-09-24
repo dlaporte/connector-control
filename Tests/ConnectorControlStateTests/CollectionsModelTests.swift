@@ -930,8 +930,9 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: second.appendingPathComponent("default.json").path),
                       "the document lands in the folder just chosen")
     }
+
     func testTheWindowsGlyphsAndActionsCarryTheirOwnWords() {
-        XCTAssertEqual(CollectionsModel.editTooltip, "Edit")
+        XCTAssertEqual(CollectionsModel.editLabel(for: "notion"), "Edit “notion”")
         XCTAssertEqual(CollectionsModel.makeActiveAction, "Make Active")
         XCTAssertEqual(CollectionsModel.lockedGlyphTooltip, "Read-only: synced from the collection's author")
     }

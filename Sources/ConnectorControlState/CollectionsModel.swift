@@ -37,8 +37,6 @@ public final class CollectionsModel: ObservableObject {
     public static let removeFileButton = "Remove"
     public static let keepFileButton = "Keep"
     public static let remoteType = "remote"
-    /// The row's pencil, which names no connector: the row it sits on is the answer.
-    public static let editTooltip = "Edit"
     /// The sidebar's double-click, and the same action in its context menu.
     public static let makeActiveAction = "Make Active"
     /// The lock at the head of a synced collection's row, and on the popover's rows too, which
@@ -685,6 +683,10 @@ public final class CollectionsModel: ObservableObject {
     public static let exportAllAction = "Export All"
     public static let showPublishedFileAction = "Show Published File"
     public static let showSourceFileAction = "Show Source File"
+
+    /// The row's pencil, as its tooltip and its spoken name. It names the connector, so a screen
+    /// reader moving down the list hears which one each pencil edits rather than "Edit" each time.
+    public static func editLabel(for connector: String) -> String { "Edit “\(connector)”" }
 
     public static func title(for entry: MenuEntry) -> String {
         switch entry {

@@ -86,6 +86,7 @@ final class StringCatalogTests: XCTestCase {
         "ClaudeSignature.refusalMessage": ["X", "Y"],
         "ClaudeSignature.uninspectableMessage": ["X"],
         "CollectionsModel.deletePublishedFileQuestion": ["X"],
+        "CollectionsModel.editLabel": ["X"],
         "CollectionsModel.localDetail": ["3"],
         "CollectionsModel.publishedDetail": ["X"],
         "CollectionsModel.removeCheckedMessage.many": ["3"],
@@ -234,7 +235,7 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.deleteAction"] = CollectionsModel.deleteAction
         actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.deletePublishedFileQuestion("X")
         actual["CollectionsModel.duplicateAction"] = CollectionsModel.duplicateAction
-        actual["CollectionsModel.editTooltip"] = CollectionsModel.editTooltip
+        actual["CollectionsModel.editLabel"] = CollectionsModel.editLabel(for: "X")
         actual["CollectionsModel.exportAllAction"] = CollectionsModel.exportAllAction
         actual["CollectionsModel.exportCheckedButton"] = CollectionsModel.exportCheckedButton
         actual["CollectionsModel.importButton"] = CollectionsModel.importButton
@@ -306,6 +307,7 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.envNamelessError"] = EditorModel.envNamelessError
         actual["EditorModel.headerNameError"] = EditorModel.headerNameError
         actual["EditorModel.headerValueError"] = EditorModel.headerValueError
+        actual["EditorModel.hideValueLabel"] = EditorModel.hideValueLabel
         actual["EditorModel.importedNote"] = EditorModel.importedNote("X", "Y")
         actual["EditorModel.invalidURLError"] = EditorModel.invalidURLError
         actual["EditorModel.jsonTip"] = EditorModel.jsonTip
@@ -319,9 +321,12 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.propagateLabelMany"] = EditorModel.propagateLabelMany("X", "Y")
         actual["EditorModel.publishedNote"] = EditorModel.publishedNote("X")
         actual["EditorModel.remoteFooter"] = EditorModel.remoteFooter
+        actual["EditorModel.removeArgumentLabel"] = EditorModel.removeArgumentLabel
+        actual["EditorModel.removeVariableLabel"] = EditorModel.removeVariableLabel
         actual["EditorModel.removedOutsideDetail"] = EditorModel.removedOutsideDetail
         actual["EditorModel.removedOutsideMessage"] = EditorModel.removedOutsideMessage("X")
         actual["EditorModel.saveAnywayButton"] = EditorModel.saveAnywayButton
+        actual["EditorModel.showValueLabel"] = EditorModel.showValueLabel
         actual["EditorModel.stayInJSONButton"] = EditorModel.stayInJSONButton
         actual["EditorModel.switchAnywayButton"] = EditorModel.switchAnywayButton
         actual["EditorModel.urlHint"] = EditorModel.urlHint

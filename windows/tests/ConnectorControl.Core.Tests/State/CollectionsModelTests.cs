@@ -1039,10 +1039,12 @@ public class CollectionsModelTests
         // The document lands in the folder just chosen.
         Assert.True(System.IO.File.Exists(Path.Combine(second, "default.json")));
     }
+
     [Fact]
     public void TheWindowsGlyphsAndActionsCarryTheirOwnWords()
     {
         Assert.Equal("Edit", CollectionsModel.EditTooltip);
+        Assert.Equal("Edit “notion”", CollectionsModel.EditLabel("notion"));
         Assert.Equal("Make Active", CollectionsModel.MakeActiveAction);
         Assert.Equal("Read-only: synced from the collection's author", CollectionsModel.LockedGlyphTooltip);
     }
