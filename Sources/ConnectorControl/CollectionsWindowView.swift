@@ -18,6 +18,8 @@ struct CollectionsWindowView: View {
     private static let maxNameWidth: CGFloat = 240
     /// The selection bar's height, the same idle or ticked, so ticking a row cannot move the list.
     private static let selectionBarHeight: CGFloat = 30
+    /// The `⋯` and the `+` under it share one column, centred on each other.
+    private static let headerButtonWidth: CGFloat = 20
 
     @StateObject private var model: CollectionsModel
     /// The popover's request travels through AppState, not the model, so this window observes
@@ -237,7 +239,6 @@ struct CollectionsWindowView: View {
             VStack(alignment: .leading, spacing: 8) {
                 header
                 if let text = model.bannerText { banner(text) }
-                connectorsHeader
                 rows
             }
             .padding([.horizontal, .top], 12)
@@ -248,27 +249,43 @@ struct CollectionsWindowView: View {
     }
 
     /// The collection's name, the pills that mark it as other than an ordinary local one, and the
-    /// `⋯` that holds everything done to the collection itself. Nothing else goes in this line.
+    /// `⋯` that holds everything done to the collection itself; under the name, how many
+    /// connectors it holds, and under the `⋯`, the `+` that adds one.
     private var header: some View {
-        HStack(spacing: 8) {
-            Text(model.selected ?? "")
-                .font(.title3.weight(.semibold))
-                .lineLimit(1)
-                .truncationMode(.middle)
-            ForEach(model.pills, id: \.self) { pill in
-                pillView(pill)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 8) {
+                Text(model.selected ?? "")
+                    .font(.title3.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                ForEach(model.pills, id: \.self) { pill in
+                    pillView(pill)
+                }
+                Spacer(minLength: 8)
+                Menu {
+                    collectionMenu
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .frame(width: CollectionsWindowView.headerButtonWidth)
+                .help(CollectionsModel.moreActionsLabel)
+                .accessibilityLabel(CollectionsModel.moreActionsLabel)
             }
-            Spacer(minLength: 8)
-            Menu {
-                collectionMenu
-            } label: {
-                Image(systemName: "ellipsis.circle")
+            HStack(spacing: 8) {
+                // A source failure in this line can name a raw path, so a window too narrow for
+                // one elides its middle and keeps the file name at its end. The Windows window
+                // cuts the tail instead: WPF has no middle ellipsis.
+                Text(model.connectorCount)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 8)
+                addConnectorButton
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help(CollectionsModel.moreActionsLabel)
-            .accessibilityLabel(CollectionsModel.moreActionsLabel)
         }
     }
 
@@ -355,25 +372,19 @@ struct CollectionsWindowView: View {
     }
 
     /// The `+` that adds a connector here — dimmed on a synced collection, whose tooltip then says
-    /// where additions go instead. The count is the selection bar's, below the rows.
-    private var connectorsHeader: some View {
-        HStack(spacing: 6) {
-            Spacer(minLength: 0)
-            Button {
-                openWindow(id: EditTarget.editorWindowID, value: model.newConnectorTarget())
-            } label: {
-                Image(systemName: "plus")
-            }
-            .buttonStyle(.accessoryBar)
-            .disabled(!model.canAddConnector)
-            .help(model.addConnectorTooltipText)
-            .accessibilityLabel(model.addConnectorTooltipText)
+    /// where additions go instead. Borderless, as the `⋯` above it is: an accessory-bar button
+    /// gives up its height when disabled, and the count would move on a synced collection.
+    private var addConnectorButton: some View {
+        Button {
+            openWindow(id: EditTarget.editorWindowID, value: model.newConnectorTarget())
+        } label: {
+            Image(systemName: "plus")
         }
-        .font(.callout)
-        // The height the row had with its title, so the rows sit where they did. A disabled
-        // accessory-bar button gives its height up to the list below, which the title used to
-        // hold open; without this the rows would jump up on a synced collection.
-        .frame(minHeight: 18)
+        .buttonStyle(.borderless)
+        .frame(width: CollectionsWindowView.headerButtonWidth)
+        .disabled(!model.canAddConnector)
+        .help(model.addConnectorTooltipText)
+        .accessibilityLabel(model.addConnectorTooltipText)
     }
 
     private var rows: some View {
@@ -454,22 +465,15 @@ struct CollectionsWindowView: View {
 
     // MARK: - Selection bar
 
-    /// Idle, how many connectors the collection holds; with rows ticked, what can be done to
-    /// them. Remove sits apart at the far end, so a hand moving from the safe pair cannot
-    /// land on it, and is absent where the rows are not the user's to remove.
+    /// Idle, an empty strip that keeps its height, so ticking a row cannot move the list; with
+    /// rows ticked, what can be done to them. Remove sits apart at the far end, so a hand moving
+    /// from the safe pair cannot land on it, and is absent where the rows are not the user's to
+    /// remove.
     private var selectionBar: some View {
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 10) {
                 if model.checkedNames.isEmpty {
-                    // A source failure in this line can name a raw path, so a window too narrow
-                    // for one elides its middle and keeps the file name at its end. The Windows
-                    // window cuts the tail instead: WPF has no middle ellipsis.
-                    Text(model.connectorCount)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
                     Spacer(minLength: 0)
                 } else {
                     Text(CollectionsModel.selectedCount(model.checkedNames.count))

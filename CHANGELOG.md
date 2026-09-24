@@ -87,27 +87,27 @@ bullet once the section is about to ship.
   in it sits on what it acts on. The sidebar's + offers New Collection, Import ("Adds
   copies you own") and Subscribe ("Stays in sync, read-only"). The header shows the
   collection's name, an Active, Published or Subscribed pill where one applies, and a ⋯
-  menu listing only what applies to that collection: Make Active, Rename, Duplicate or
-  Make Local Copy, Start Publishing or Publishing Settings and Stop Publishing, Show
-  Published File or Show Source File, Refresh, Stop Syncing, Export All and Delete. The
-  connector list's + adds a connector, and each row's pencil opens its editor.
-  Double-clicking a collection in the sidebar makes it active; double-clicking the active
-  one does nothing.
+  menu. Under the name it counts the collection's connectors, "14 connectors", and adds
+  why a subscribed collection's source could not be read when that is so. The ⋯ lists
+  only what applies to that collection: Make Active, Rename, Duplicate or Make Local
+  Copy, Start Publishing or Publishing Settings and Stop Publishing, Show Published File
+  or Show Source File, Refresh, Stop Syncing, Export All and Delete. The + beside the
+  count, under the ⋯, adds a connector, and each row's pencil opens its editor.
+  Double-clicking a collection in the sidebar makes it active; double-clicking the
+  active one does nothing.
 - A change that alters nothing Claude runs, such as renaming or deleting a collection
   other than the active one, leaves Claude's config alone and raises no Restart Required.
 - Each row says what its connector runs: a remote connector's host, or a local one's
   program, paths, URLs and package names. The column leaves out the values of flags named
   for secrets, `KEY=value` words, a URL's user and query, random-looking strings and
   anything it does not recognise. It is a best-effort mask, not a guarantee.
-- The bar at the foot of the window counts the collection's connectors, "14 connectors",
-  and adds why a subscribed collection's source could not be read when that is so.
-  Ticking rows turns it into a selection bar. Copy to copies the ticked connectors into
-  another local collection, or into a new one it asks you to name; a subscribed
-  collection is listed but cannot take copies. The copies arrive switched off and record
-  where they came from, and a name the destination already holds can replace the one
-  there, land beside it as `<name> 2`, which is the default, or be left out. Replacing a
-  connector in the active collection applies at once. Export writes the ticked connectors
-  as a document.
+- Ticking rows fills the empty bar at the foot of the window with a selection bar. Copy
+  to copies the ticked connectors into another local collection, or into a new one it
+  asks you to name; a subscribed collection is listed but cannot take copies. The copies
+  arrive switched off and record where they came from, and a name the destination
+  already holds can replace the one there, land beside it as `<name> 2`, which is the
+  default, or be left out. Replacing a connector in the active collection applies at
+  once. Export writes the ticked connectors as a document.
 - Remove takes out any number of ticked connectors at once. It asks first, naming the
   connector or the count, and says a copy remains in Backups; the connector editor no
   longer has a Remove button.

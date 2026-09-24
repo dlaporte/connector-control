@@ -127,14 +127,13 @@ public partial class CollectionsWindow : Window
 
     /// <summary>
     /// The one caption built from a value rather than bound — the selection bar's ticked count, a
-    /// format — and which half of the bar shows, which follows that same count. Everything else
-    /// on this window is a binding the model raises.
+    /// format — and whether the bar shows its actions, which follows that same count. Everything
+    /// else on this window is a binding the model raises.
     /// </summary>
     private void Refresh()
     {
         var ticked = Model.CheckedNames.Count;
         SelectedCountText.Text = CollectionsModel.SelectedCount(ticked);
-        ConnectorCountText.Visibility = ticked == 0 ? Visibility.Visible : Visibility.Collapsed;
         TickedBar.Visibility = ticked == 0 ? Visibility.Collapsed : Visibility.Visible;
         if (!selectionResyncQueued)
         {

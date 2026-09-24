@@ -236,7 +236,7 @@ public class CollectionsWindowTests
                 Assert.Equal(item.Name, AutomationProperties.GetName(container));
             }
 
-            // The header names the collection; the connector count is the model's, in the idle bar.
+            // The header names the collection, and under the name is the model's connector count.
             Assert.Equal("Default", window.SelectedNameText.Text);
             Assert.Equal(window.Model.ConnectorCount, window.ConnectorCountText.Text);
             Assert.Equal(Visibility.Collapsed, window.BannerStrip.Visibility);
@@ -513,7 +513,7 @@ public class CollectionsWindowTests
     }
 
     [Fact]
-    public void TheListHeadersAddIsDisabledForASyncedCollection()
+    public void TheHeadersAddIsDisabledForASyncedCollection()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -524,8 +524,12 @@ public class CollectionsWindowTests
             Assert.True(window.AddConnectorButton.IsEnabled);
             Assert.Equal(CollectionsModel.AddConnectorTooltip, window.AddConnectorButton.ToolTip);
             Assert.Equal(CollectionsModel.AddConnectorTooltip, AutomationProperties.GetName(window.AddConnectorButton));
-            // The plus is all the list header holds: the count is the selection bar's.
-            Assert.Equal([window.AddConnectorButton], window.ConnectorsHeader.Children.Cast<UIElement>());
+            // The plus shares the header's second line with the count, and sits under the More.
+            Assert.Equal([window.AddConnectorButton, window.ConnectorCountText],
+                window.ConnectorsHeader.Children.Cast<UIElement>());
+            Assert.Equal(Dock.Right, DockPanel.GetDock(window.AddConnectorButton));
+            Assert.Equal(window.MoreButton.ActualWidth, window.AddConnectorButton.ActualWidth);
+            var height = window.ConnectorsHeader.ActualHeight;
 
             // The same button on a synced collection is dead, and its tooltip says where
             // additions go instead.
@@ -534,29 +538,35 @@ public class CollectionsWindowTests
             Assert.False(window.AddConnectorButton.IsEnabled);
             Assert.Equal(CollectionsModel.AddConnectorDisabledTooltip, window.AddConnectorButton.ToolTip);
             Assert.Equal(CollectionsModel.AddConnectorDisabledTooltip, AutomationProperties.GetName(window.AddConnectorButton));
+            // A dead plus holds the line open as a live one does, so the rows do not move.
+            Assert.Equal(height, window.ConnectorsHeader.ActualHeight);
         });
     }
 
     [Fact]
-    public void TheSelectionBarShowsTheConnectorCountWhenNothingIsTicked()
+    public void TheSelectionBarIsEmptyWhenNothingIsTicked()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
         Showing(h, state, (window, _) =>
         {
+            // Idle, the bar is an empty strip: the count is the header's, under the name.
             Assert.Empty(window.Model.CheckedNames);
-            Assert.Equal(Visibility.Visible, window.ConnectorCountText.Visibility);
-            Assert.Equal(CollectionsModel.ConnectorTally(window.Model.Rows.Count), window.ConnectorCountText.Text);
             Assert.Equal(Visibility.Collapsed, window.TickedBar.Visibility);
+            Assert.Equal([window.TickedBar], ((Grid)window.SelectionBar.Child).Children.Cast<UIElement>());
+            Assert.Equal(CollectionsModel.ConnectorTally(window.Model.Rows.Count), window.ConnectorCountText.Text);
+            var height = window.SelectionBar.ActualHeight;
 
-            // A tick swaps the line for the actions, and the last untick swaps it back.
+            // A tick fills the strip with the actions, and the last untick empties it again. The
+            // count stays in the header throughout, and the strip keeps its height.
             var first = window.Model.Rows[0].Name;
             Tick(window, first, true);
-            Assert.Equal(Visibility.Collapsed, window.ConnectorCountText.Visibility);
             Assert.Equal(Visibility.Visible, window.TickedBar.Visibility);
-            Tick(window, first, false);
             Assert.Equal(Visibility.Visible, window.ConnectorCountText.Visibility);
+            Assert.Equal(height, window.SelectionBar.ActualHeight);
+            Tick(window, first, false);
             Assert.Equal(Visibility.Collapsed, window.TickedBar.Visibility);
+            Assert.Equal(height, window.SelectionBar.ActualHeight);
         });
     }
 

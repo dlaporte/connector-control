@@ -192,38 +192,54 @@
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
-        <RowDefinition Height="Auto" />
         <RowDefinition Height="*" />
         <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
 
-      <!-- The collection's name, the pills that mark it as other than an ordinary local one, and
-           the More that holds everything done to the collection itself. Nothing else goes in this
-           line. The inner panel sizes to its content, so the pills follow the name, and a name
-           too long for the line trims rather than pushing them out. -->
-      <DockPanel Margin="0,0,0,8">
-        <Button x:Name="MoreButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE712;"
-                ToolTip="{x:Static state:CollectionsModel.MoreActionsLabel}"
-                AutomationProperties.Name="{x:Static state:CollectionsModel.MoreActionsLabel}" Click="OnMore" />
-        <DockPanel HorizontalAlignment="Left">
-          <ItemsControl x:Name="PillList" DockPanel.Dock="Right" ItemsSource="{Binding Pills}" VerticalAlignment="Center">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate>
-                <StackPanel Orientation="Horizontal" />
-              </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <Border x:Name="PillBorder" Style="{StaticResource Pill}">
-                  <TextBlock x:Name="PillText" FontSize="12" Text="{Binding Converter={StaticResource PillTitle}}" />
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-          <TextBlock x:Name="SelectedNameText" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"
-                     TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Text="{Binding Selected}" />
+      <!-- The header: two lines that read as one block. -->
+      <StackPanel Margin="0,0,0,8">
+        <!-- The collection's name, the pills that mark it as other than an ordinary local one, and
+             the More that holds everything done to the collection itself. Nothing else goes in this
+             line. The inner panel sizes to its content, so the pills follow the name, and a name
+             too long for the line trims rather than pushing them out. -->
+        <DockPanel Margin="0,0,0,2">
+          <Button x:Name="MoreButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE712;"
+                  ToolTip="{x:Static state:CollectionsModel.MoreActionsLabel}"
+                  AutomationProperties.Name="{x:Static state:CollectionsModel.MoreActionsLabel}" Click="OnMore" />
+          <DockPanel HorizontalAlignment="Left">
+            <ItemsControl x:Name="PillList" DockPanel.Dock="Right" ItemsSource="{Binding Pills}" VerticalAlignment="Center">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border x:Name="PillBorder" Style="{StaticResource Pill}">
+                    <TextBlock x:Name="PillText" FontSize="12" Text="{Binding Converter={StaticResource PillTitle}}" />
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock x:Name="SelectedNameText" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"
+                       TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Text="{Binding Selected}" />
+          </DockPanel>
         </DockPanel>
-      </DockPanel>
+
+        <!-- Under the name, how many connectors the collection holds; under the More, the plus that
+             adds one — dimmed on a synced collection, whose tooltip then says where additions go
+             instead. The plus is shorter than the More, so the two lines sit close. A source failure
+             in the count can name a raw path. WPF has no middle ellipsis, so a pane too narrow for
+             one loses its tail; the Mac window elides the middle and keeps the file name. -->
+        <DockPanel x:Name="ConnectorsHeader">
+          <Button x:Name="AddConnectorButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;"
+                  Height="22" IsEnabled="{Binding CanAddConnector}" ToolTip="{Binding AddConnectorTooltipText}"
+                  AutomationProperties.Name="{Binding AddConnectorTooltipText}"
+                  ToolTipService.ShowOnDisabled="True" Click="OnAddConnector" />
+          <TextBlock x:Name="ConnectorCountText" Style="{StaticResource CaptionText}" VerticalAlignment="Center"
+                     TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Text="{Binding ConnectorCount}" />
+        </DockPanel>
+      </StackPanel>
 
       <!-- One strip, one button: Stop Publishing is in the header's More already, which is the
            second button the flyout's failed-publish banner needs and this one does not. -->
@@ -241,20 +257,11 @@
         </Grid>
       </Border>
 
-      <!-- The plus that adds a connector here — dimmed on a synced collection, whose tooltip then
-           says where additions go instead. The count is the selection bar's, below the rows. -->
-      <DockPanel x:Name="ConnectorsHeader" Grid.Row="2" Margin="0,0,0,4" LastChildFill="False">
-        <Button x:Name="AddConnectorButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;"
-                IsEnabled="{Binding CanAddConnector}" ToolTip="{Binding AddConnectorTooltipText}"
-                AutomationProperties.Name="{Binding AddConnectorTooltipText}"
-                ToolTipService.ShowOnDisabled="True" Click="OnAddConnector" />
-      </DockPanel>
-
       <!-- The rows are the tall half of the window: they take what is left and scroll in it. One
            size scope over every row, so the name column is as wide as the longest name cell —
            capped, so a very long name trims and the target keeps room to say anything — and
            every target starts at the same x. -->
-      <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+      <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
         <ItemsControl x:Name="RowList" ItemsSource="{Binding Rows}" Grid.IsSharedSizeScope="True">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
@@ -296,18 +303,13 @@
         </ItemsControl>
       </ScrollViewer>
 
-      <!-- The selection bar. Idle, how many connectors the collection holds; with rows ticked,
-           what can be done to them. Remove sits apart at the far end, so a hand moving from
-           the safe pair cannot land on it, and is absent where the rows are not the user's to
-           remove. One fixed height, idle or ticked, so ticking a row cannot move the list. -->
-      <Border Grid.Row="4" Margin="0,8,0,0" Height="{StaticResource SelectionBarHeight}" BorderThickness="0,1,0,0"
+      <!-- The selection bar. Idle, an empty strip; with rows ticked, what can be done to them.
+           Remove sits apart at the far end, so a hand moving from the safe pair cannot land on it,
+           and is absent where the rows are not the user's to remove. One fixed height, idle or
+           ticked, so ticking a row cannot move the list. -->
+      <Border x:Name="SelectionBar" Grid.Row="3" Margin="0,8,0,0" Height="{StaticResource SelectionBarHeight}" BorderThickness="0,1,0,0"
               BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
         <Grid>
-          <!-- A source failure in this line can name a raw path. WPF has no middle ellipsis, so a
-               pane too narrow for one loses its tail; the Mac window elides the middle and keeps
-               the file name. -->
-          <TextBlock x:Name="ConnectorCountText" Style="{StaticResource CaptionText}" VerticalAlignment="Center"
-                     TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Text="{Binding ConnectorCount}" />
           <DockPanel x:Name="TickedBar" VerticalAlignment="Center" Visibility="Collapsed">
             <Button x:Name="RemoveCheckedButton" DockPanel.Dock="Right" Padding="10,4" Margin="16,0,0,0"
                     Content="{x:Static state:CollectionsModel.RemoveCheckedButton}"

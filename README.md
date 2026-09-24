@@ -126,7 +126,10 @@ Escape cancels any of these sheets, and the connector editor, as its
 - **The header** carries the selected collection's name, its pills — a green
   **Active** on the collection Claude is running, then **Published** or
   **Subscribed**, never both — and a **⋯** (tooltip "More") holding
-  everything done to the collection itself. The menu lists only what
+  everything done to the collection itself. Under the name, the header
+  counts the collection's connectors — "5 connectors". On a subscribed
+  collection whose source couldn't be read, the reason follows the count: "5
+  connectors · data-team.json couldn’t be read: …". The menu lists only what
   applies: **Make Active** first, on a collection that is not active;
   **Rename**; **Duplicate**, or **Make Local Copy** on a subscribed
   collection; **Start Publishing**, or once it publishes **Publishing
@@ -137,22 +140,20 @@ Escape cancels any of these sheets, and the connector editor, as its
   **Delete**, which asks first. Duplicate and Make Local Copy both copy the
   whole collection into a new local one, every connector switched off and
   marked with where it came from.
-- **The connector list** has a **+** above it (tooltip "Add Connector") that
-  opens the editor on a new connector in this collection. Each row has a
-  tick — a lock on a subscribed collection — then the connector's name, a
-  caution glyph when something needs your attention, what the connector
-  runs, and a pencil (tooltip "Edit") that opens its editor. Names line up
-  in a column as wide as the longest of them, up to a cap past which a long
-  name is cut. There is no switch here and no right-click menu: whether a
-  connector is on is the popover's or flyout's business, so to switch a
-  connector in another collection, make that collection active first.
-- **The selection bar** along the bottom counts the collection's connectors
-  while nothing is ticked — "5 connectors". On a subscribed collection whose
-  source couldn't be read, the reason follows the count: "5 connectors ·
-  data-team.json couldn’t be read: …". The pills, the banner and the ⋯ menu
-  say the rest. Tick rows and it reads "2 selected", with **Copy to**,
-  **Export** and, apart at the far end, **Remove**. The rows of a subscribed
-  collection can't be ticked.
+- **The connector list** has its **+** under the header's ⋯, beside the
+  count (tooltip "Add Connector"). It opens the editor on a new connector in
+  this collection. Each row has a tick — a lock on a subscribed collection —
+  then the connector's name, a caution glyph when something needs your
+  attention, what the connector runs, and a pencil (tooltip "Edit") that
+  opens its editor. Names line up in a column as wide as the longest of
+  them, up to a cap past which a long name is cut. There is no switch here
+  and no right-click menu: whether a connector is on is the popover's or
+  flyout's business, so to switch a connector in another collection, make
+  that collection active first.
+- **The selection bar** along the bottom is empty while nothing is ticked.
+  Tick rows and it reads "2 selected", with **Copy to**, **Export** and,
+  apart at the far end, **Remove**. The rows of a subscribed collection
+  can't be ticked.
 
 The column after the name says what the connector runs: a remote
 connector's host, or a local one's program with its paths, URLs and package
