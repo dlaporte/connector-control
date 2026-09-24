@@ -917,6 +917,17 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     };
 
     /// <summary>
+    /// Whether an entry can be chosen. Only ExportAll and Delete ever arrive dimmed, and they
+    /// carry the answer; every other entry the menu lists applies.
+    /// </summary>
+    public static bool IsEnabled(MenuEntry entry) => entry switch
+    {
+        MenuEntry.ExportAll exportAll => exportAll.Enabled,
+        MenuEntry.Delete delete => delete.Enabled,
+        _ => true,
+    };
+
+    /// <summary>
     /// Lists what applies rather than dimming what does not, with one exception: ExportAll is
     /// always present, greyed out on a synced collection, since exporting a read-only mirror is
     /// refused for a reason worth stating rather than a button worth hiding.

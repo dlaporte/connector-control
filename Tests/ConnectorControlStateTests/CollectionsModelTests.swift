@@ -1429,6 +1429,19 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(CollectionsModel.title(for: .separator), "")
     }
 
+    /// The two entries the model dims say so themselves; every other entry it lists applies.
+    func testOnlyExportAllAndDeleteCanArriveDimmed() {
+        XCTAssertFalse(CollectionsModel.isEnabled(.exportAll(enabled: false)))
+        XCTAssertTrue(CollectionsModel.isEnabled(.exportAll(enabled: true)))
+        XCTAssertFalse(CollectionsModel.isEnabled(.delete(enabled: false)))
+        XCTAssertTrue(CollectionsModel.isEnabled(.delete(enabled: true)))
+        for entry: CollectionsModel.MenuEntry in [.makeActive, .rename, .duplicate, .startPublishing,
+                                                  .publishingSettings, .stopPublishing, .showPublishedFile,
+                                                  .makeLocalCopy, .refresh, .showSourceFile, .stopSyncing] {
+            XCTAssertTrue(CollectionsModel.isEnabled(entry), "\(entry)")
+        }
+    }
+
     func testCollectionMenuForLocalActiveUnpublished() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

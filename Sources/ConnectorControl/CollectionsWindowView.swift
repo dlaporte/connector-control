@@ -273,29 +273,18 @@ struct CollectionsWindowView: View {
     @ViewBuilder private var collectionMenu: some View {
         // By position: the separators repeat, so the entries cannot identify themselves.
         ForEach(Array(model.collectionMenu.enumerated()), id: \.offset) { _, entry in
-            switch entry {
-            case .separator:
+            if entry == .separator {
                 Divider()
-            case .exportAll(let enabled):
-                menuButton(entry) {
-                    show(.export(PublishModel(state: state, collection: model.selected ?? "", connectors: nil)))
-                }
-                .disabled(!enabled)
-            case .delete(let enabled):
-                menuButton(entry) { act { model.delete() } }
-                    .disabled(!enabled)
-            default:
-                menuButton(entry) { run(entry) }
+            } else {
+                Button(CollectionsModel.title(for: entry)) { run(entry) }
+                    .disabled(!CollectionsModel.isEnabled(entry))
             }
         }
     }
 
-    private func menuButton(_ entry: CollectionsModel.MenuEntry, _ action: @escaping () -> Void) -> some View {
-        Button(CollectionsModel.title(for: entry), action: action)
-    }
-
-    /// The menu entries that take no argument of their own. Both publish entries open the same
-    /// sheet: a published collection's is its settings.
+    /// Every entry, as the Windows window's Run takes them. Both publish entries open the same
+    /// sheet: a published collection's is its settings. Export All writes the whole collection,
+    /// so its sheet takes no subset.
     private func run(_ entry: CollectionsModel.MenuEntry) {
         switch entry {
         case .makeActive:
@@ -305,7 +294,11 @@ struct CollectionsWindowView: View {
         case .duplicate:
             act { model.duplicate() }
         case .startPublishing, .publishingSettings:
-            show(.publish(publishModel()))
+            if let collection = model.selected { show(.publish(publishModel(for: collection))) }
+        case .exportAll:
+            if let collection = model.selected { show(.export(publishModel(for: collection))) }
+        case .delete:
+            act { model.delete() }
         case .stopPublishing:
             act { model.stopPublishing() }
         case .showPublishedFile:
@@ -318,7 +311,7 @@ struct CollectionsWindowView: View {
             act { model.refresh() }
         case .stopSyncing:
             act { model.stopSyncing() }
-        case .exportAll, .delete, .separator:
+        case .separator:
             break
         }
     }
@@ -530,8 +523,10 @@ struct CollectionsWindowView: View {
         return sheetModel
     }
 
-    private func publishModel() -> PublishModel {
-        PublishModel(state: state, collection: model.selected ?? "")
+    /// The Publish sheet's model, which is the Export All sheet's too: both take the whole
+    /// collection.
+    private func publishModel(for collection: String) -> PublishModel {
+        PublishModel(state: state, collection: collection)
     }
 
     /// The Export sheet writes only what is ticked, which is what the selection bar's count says.
@@ -578,7 +573,7 @@ struct CollectionsWindowView: View {
         case .publish(let collection):
             // A publish the app stopped for review: the sheet is where the author answers it.
             model.selected = collection
-            show(.publish(PublishModel(state: state, collection: collection)))
+            show(.publish(publishModel(for: collection)))
         case nil:
             break
         }
@@ -602,9 +597,7 @@ struct CollectionsWindowView: View {
         case .publishBlocked:
             // Stopped for review, not for a folder: choosing another folder would only move the
             // failure there, so the answer is the Publish sheet.
-            if let collection = model.selected {
-                show(.publish(PublishModel(state: state, collection: collection)))
-            }
+            if let collection = model.selected { show(.publish(publishModel(for: collection))) }
         case .updateAvailable, nil:
             break
         }

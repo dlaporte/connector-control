@@ -1627,6 +1627,26 @@ public class CollectionsModelTests
         Assert.Equal("", CollectionsModel.Title(new CollectionsModel.MenuEntry.Separator()));
     }
 
+    /// <summary>The two entries the model dims say so themselves; every other entry it lists applies.</summary>
+    [Fact]
+    public void OnlyExportAllAndDeleteCanArriveDimmed()
+    {
+        Assert.False(CollectionsModel.IsEnabled(new CollectionsModel.MenuEntry.ExportAll(false)));
+        Assert.True(CollectionsModel.IsEnabled(new CollectionsModel.MenuEntry.ExportAll(true)));
+        Assert.False(CollectionsModel.IsEnabled(new CollectionsModel.MenuEntry.Delete(false)));
+        Assert.True(CollectionsModel.IsEnabled(new CollectionsModel.MenuEntry.Delete(true)));
+        CollectionsModel.MenuEntry[] rest =
+        [
+            new CollectionsModel.MenuEntry.MakeActive(), new CollectionsModel.MenuEntry.Rename(),
+            new CollectionsModel.MenuEntry.Duplicate(), new CollectionsModel.MenuEntry.StartPublishing(),
+            new CollectionsModel.MenuEntry.PublishingSettings(), new CollectionsModel.MenuEntry.StopPublishing(),
+            new CollectionsModel.MenuEntry.ShowPublishedFile(), new CollectionsModel.MenuEntry.MakeLocalCopy(),
+            new CollectionsModel.MenuEntry.Refresh(), new CollectionsModel.MenuEntry.ShowSourceFile(),
+            new CollectionsModel.MenuEntry.StopSyncing(),
+        ];
+        Assert.All(rest, entry => Assert.True(CollectionsModel.IsEnabled(entry)));
+    }
+
     [Fact]
     public void CollectionMenuForLocalActiveUnpublished()
     {

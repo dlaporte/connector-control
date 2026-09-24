@@ -705,6 +705,15 @@ public final class CollectionsModel: ObservableObject {
         }
     }
 
+    /// Whether an entry can be chosen. Only `exportAll` and `delete` ever arrive dimmed, and they
+    /// carry the answer; every other entry the menu lists applies.
+    public static func isEnabled(_ entry: MenuEntry) -> Bool {
+        switch entry {
+        case .exportAll(let enabled), .delete(let enabled): return enabled
+        default: return true
+        }
+    }
+
     /// Lists what applies rather than dimming what does not, with one exception: `exportAll` is
     /// always present, greyed out on a synced collection, since exporting a read-only mirror is
     /// refused for a reason worth stating rather than a button worth hiding.
