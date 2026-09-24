@@ -22,7 +22,15 @@ public partial class ImportDialog : DialogWindow
         Model = model;
         DataContext = model;
         Title = ImportModel.Title;
-        onModelChanged = (_, _) => Refresh();
+        onModelChanged = (_, e) =>
+        {
+            // Another mode is another question: what the last Import said no longer answers it.
+            if (ObservableObject.Affects(e, nameof(ImportModel.ImportMode)))
+            {
+                ShowFailure(FailureText, null);
+            }
+            Refresh();
+        };
         Model.PropertyChanged += onModelChanged;
         Closed += (_, _) => Model.PropertyChanged -= onModelChanged;
         Refresh();
@@ -60,11 +68,9 @@ public partial class ImportDialog : DialogWindow
     private void OnImport(object sender, RoutedEventArgs e)
     {
         // The model answers with the reason it could not land, or null. A failure stays on the
-        // sheet the user is looking at; the model publishes no property for it, so neither does
-        // this line's visibility.
+        // sheet the user is looking at.
         var failure = Model.Perform();
-        FailureText.Text = failure ?? string.Empty;
-        FailureText.Visibility = failure is null ? Visibility.Collapsed : Visibility.Visible;
+        ShowFailure(FailureText, failure);
         if (failure is null)
         {
             Accepted = true;

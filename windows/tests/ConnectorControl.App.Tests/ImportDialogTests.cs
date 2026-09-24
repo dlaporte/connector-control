@@ -201,6 +201,47 @@ public class ImportDialogTests
         });
     }
 
+    /// <summary>
+    /// A failed Import leaves its reason on the sheet, and switching mode takes it away: the other
+    /// mode is another question, as it is on the Mac.
+    /// </summary>
+    [Fact]
+    public void SwitchingModeClearsTheLastFailure()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        Write(CollectionDocumentSamples.DataTeam, path);
+        WpfApp.Invoke(() =>
+        {
+            var model = new ImportModel(state, path);
+            var window = Shown(model);
+            try
+            {
+                // A collection of that name is already here, so subscribing under it is refused.
+                window.SyncMode.IsChecked = true;
+                window.SyncNameBox.Text = state.ActiveCollection;
+                Layout(window);
+                Click(window.ImportButton);
+                Layout(window);
+                Assert.True(window.IsVisible);
+                Assert.Equal(Visibility.Visible, window.FailureText.Visibility);
+                Assert.False(string.IsNullOrEmpty(window.FailureText.Text));
+
+                window.CopiesMode.IsChecked = true;
+                Layout(window);
+
+                Assert.Equal(ImportModel.Mode.AddToCollection, model.ImportMode);
+                Assert.Equal(Visibility.Collapsed, window.FailureText.Visibility);
+                Assert.Equal(string.Empty, window.FailureText.Text);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
     [Fact]
     public void ANewerDocumentShowsTheLoadError()
     {

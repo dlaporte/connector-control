@@ -1,11 +1,13 @@
 using System.Windows;
+using System.Windows.Controls;
 
 namespace ConnectorControl.App.Views;
 
 /// <summary>
-/// What ConfirmDialog, NamePromptDialog, UpdateDialog and RestoreDialog have in common: a fixed,
-/// non-resizable, taskbar-hidden modal that sizes to its content and shares the same background,
-/// plus the two bits of code-behind machinery every one of them otherwise wrote out itself.
+/// What every modal dialog here has in common — Confirm, NamePrompt, Update, Restore, and the
+/// Collections window's Copy, Import, Publish and Review: a fixed, non-resizable, taskbar-hidden
+/// modal that sizes to its content and shares the same background, plus the bits of code-behind
+/// machinery each of them would otherwise write out itself.
 /// </summary>
 public abstract class DialogWindow : Window
 {
@@ -24,6 +26,17 @@ public abstract class DialogWindow : Window
     /// </summary>
     protected void CloseWhenModelAsks(Action<Action> subscribe) =>
         subscribe(() => Dispatcher.BeginInvoke(new Action(Close)));
+
+    /// <summary>
+    /// The red line a dialog's verb answers on: the reason it could not act, shown, or null, which
+    /// clears whatever an earlier answer left there. The models hand the message back rather than
+    /// publishing a property for it, so neither does the line's visibility.
+    /// </summary>
+    protected static void ShowFailure(TextBlock line, string? failure)
+    {
+        line.Text = failure ?? string.Empty;
+        line.Visibility = failure is null ? Visibility.Collapsed : Visibility.Visible;
+    }
 
     /// <summary>
     /// Shows <paramref name="dialog"/> via <see cref="WpfDialogs.Present"/> (owned and centered on

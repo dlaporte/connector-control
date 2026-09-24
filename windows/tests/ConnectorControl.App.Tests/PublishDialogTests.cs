@@ -93,6 +93,45 @@ public class PublishDialogTests
         Assert.Null(state.Upsert("c", new McpEntry(true, moved), "c"));
     }
 
+    /// <summary>
+    /// A Release the model refuses — the path is this machine's publish folder, copied where a
+    /// ticked row already marks it — hands back the entry's note, and the failure line says it, as
+    /// the Mac sheet's does. Choosing a folder afterwards clears it.
+    /// </summary>
+    [Fact]
+    public void ARefusedReleaseSaysWhyOnTheFailureLine()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var folder = h.Dir.File("pub");
+        Directory.CreateDirectory(folder);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var bound = state.CollectionsCache.Published[state.ActiveCollection].Folder;
+        Assert.Null(state.Upsert("tool", new McpEntry(true, JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String(bound), JsonValue.String(bound)])))), null));
+        WpfApp.Invoke(() =>
+        {
+            var model = new PublishModel(state, state.ActiveCollection);
+            model.PathRows.First(row => row.Connector == "tool").Marked = true;
+            Publishing(model, window =>
+            {
+                Layout(window);
+                var kept = Assert.Single(model.KeptPaths);
+                Assert.Equal(PublishModel.KeptPathKind.Path, kept.Kind);
+                Assert.Equal(Visibility.Collapsed, window.FailureText.Visibility);
+
+                Press(RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue"));
+                Layout(window);
+
+                Assert.Equal(PublishModel.PublishFolderNote("tool", FieldName.Argument(2)), window.FailureText.Text);
+                Assert.Equal(Visibility.Visible, window.FailureText.Visibility);
+                // The refused release changed nothing, so the entry still holds the sheet.
+                Assert.Single(window.KeptList.Items);
+            });
+        });
+    }
+
     [Fact]
     public void SharingAValueRemovesItsHintField()
     {

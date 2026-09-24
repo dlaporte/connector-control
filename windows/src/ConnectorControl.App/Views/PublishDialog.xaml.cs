@@ -53,7 +53,7 @@ public partial class PublishDialog : DialogWindow
         if (picker.ShowDialog(this) == true)
         {
             Model.Folder = picker.FolderName;
-            ShowFailure(null);
+            ShowFailure(FailureText, null);
         }
     }
 
@@ -66,12 +66,16 @@ public partial class PublishDialog : DialogWindow
         }
     }
 
-    /// <summary>Each kept path's line is bound to that path, whose value is all the model needs.</summary>
+    /// <summary>
+    /// Each kept path's line is bound to that path, whose value is all the model needs. A refused
+    /// release answers with the entry's note, which the failure line then says; one that goes
+    /// through clears whatever an earlier answer left there.
+    /// </summary>
     private void OnReleaseValue(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is PublishModel.KeptPath kept)
         {
-            Model.ReleaseKeptPath(kept.Value);
+            ShowFailure(FailureText, Model.ReleaseKeptPath(kept.Value));
         }
     }
 
@@ -84,7 +88,7 @@ public partial class PublishDialog : DialogWindow
     {
         if (((FrameworkElement)sender).DataContext is PublishModel.KeptPath kept)
         {
-            ShowFailure(Model.UseDirectoryToken(kept));
+            ShowFailure(FailureText, Model.UseDirectoryToken(kept));
         }
     }
 
@@ -113,18 +117,12 @@ public partial class PublishDialog : DialogWindow
     /// </summary>
     private void Finish(string? failure)
     {
-        ShowFailure(failure);
+        ShowFailure(FailureText, failure);
         if (failure is null)
         {
             Accepted = true;
             Close();
         }
-    }
-
-    private void ShowFailure(string? failure)
-    {
-        FailureText.Text = failure ?? string.Empty;
-        FailureText.Visibility = failure is null ? Visibility.Collapsed : Visibility.Visible;
     }
 }
 

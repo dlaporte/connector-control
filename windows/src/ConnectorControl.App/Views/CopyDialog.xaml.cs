@@ -48,8 +48,7 @@ public partial class CopyDialog : DialogWindow
     {
         var landed = Model.Perform();
         var failure = landed ? null : refusal();
-        FailureText.Text = failure ?? string.Empty;
-        FailureText.Visibility = failure is null ? Visibility.Collapsed : Visibility.Visible;
+        ShowFailure(FailureText, failure);
         if (failure is null)
         {
             Accepted = landed;

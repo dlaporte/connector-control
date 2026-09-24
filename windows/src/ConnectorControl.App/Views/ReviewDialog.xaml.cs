@@ -57,7 +57,7 @@ public partial class ReviewDialog : DialogWindow
     private void OnRefresh(object sender, RoutedEventArgs e)
     {
         Model.Refresh();
-        ShowFailure(null);
+        ShowFailure(FailureText, null);
     }
 
     private void OnApply(object sender, RoutedEventArgs e)
@@ -65,22 +65,12 @@ public partial class ReviewDialog : DialogWindow
         var failure = Model.Apply();
         // A document that changed under the sheet already has the caution line above the footer,
         // carrying this very sentence and the Refresh button that answers it; it is not said twice.
-        ShowFailure(Model.SourceMoved ? null : failure);
+        ShowFailure(FailureText, Model.SourceMoved ? null : failure);
         if (failure is null)
         {
             Accepted = true;
             Close();
         }
-    }
-
-    /// <summary>
-    /// What Apply answered. The model publishes no property for it — it hands the message back, as
-    /// the Import sheet's Perform does — so neither does this line's visibility.
-    /// </summary>
-    private void ShowFailure(string? failure)
-    {
-        FailureText.Text = failure ?? string.Empty;
-        FailureText.Visibility = failure is null ? Visibility.Collapsed : Visibility.Visible;
     }
 }
 
