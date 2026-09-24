@@ -107,10 +107,11 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertEqual(try rig.h.claudeServers()["dbt"], saved.config, "the filled value reaches Claude")
     }
 
-    /// The author's update lands under an open read-only editor. Save takes the same conflict
-    /// question any save does; declined, nothing moves, and taken, the filled value goes onto the
-    /// author's new config rather than putting back the one the window opened on.
-    func testAReadOnlySaveAfterTheAuthorsChangeKeepsTheChange() throws {
+    /// The author's update lands under an open read-only editor. Save reports the conflict and
+    /// writes nothing: no Save Anyway, whose detail would be untrue here, and no write-back of the
+    /// config the window opened on. The value typed in the stale editor is not carried over;
+    /// reopening the editor shows the author's current config.
+    func testAReadOnlySaveAfterTheAuthorsChangeIsRefused() throws {
         let rig = EditorRig()
         defer { rig.dispose() }
         try subscribeToDataTeam(rig)
@@ -123,23 +124,15 @@ final class EditorModelCollectionsTests: XCTestCase {
         let token = try envRow(editor, "DBT_TOKEN")
         editor.envRows[try XCTUnwrap(editor.envRows.firstIndex(of: token))].value = "dbt_pat_123"
 
-        rig.h.dialogs.nextConfirm = false
         XCTAssertFalse(editor.save())
-        XCTAssertEqual(rig.h.dialogs.confirms, [FakeDialogs.ConfirmCall(
-            message: EditorModel.changedOutsideMessage("dbt"), informative: EditorModel.changedOutsideDetail,
-            primary: EditorModel.saveAnywayButton, cancel: "Cancel", destructive: false)])
-        XCTAssertEqual(state.store.collections["Data team"]?.mcps["dbt"]?.config, changed)
-
-        rig.h.dialogs.nextConfirm = true
-        XCTAssertTrue(editor.save())
-        XCTAssertEqual(state.store.collections["Data team"]?.mcps["dbt"]?.config,
-                       changed.replacing(at: JSONPointer(["env", "DBT_TOKEN"]), with: .string("dbt_pat_123")),
-                       "the author's region stays, and only the asked-for value moves")
+        XCTAssertEqual(editor.validationError, EditorModel.changedOutsideMessage("dbt"))
+        XCTAssertEqual(rig.h.dialogs.confirms, [], "no Save Anyway: its detail would be untrue here")
+        XCTAssertEqual(state.store.collections["Data team"]?.mcps["dbt"]?.config, changed,
+                       "the author's change stands, and nothing typed in the stale editor lands")
     }
 
-    /// The author removed the connector under an open read-only editor. There is nothing of this
-    /// machine's to put back, so Save says so and writes nothing, rather than offering to add the
-    /// author's connector back.
+    /// The author removed the connector under an open read-only editor. Save reports the conflict
+    /// and writes nothing, rather than offering to add the author's connector back.
     func testAReadOnlySaveAfterTheAuthorRemovedTheConnectorDoesNotResurrectIt() throws {
         let rig = EditorRig()
         defer { rig.dispose() }

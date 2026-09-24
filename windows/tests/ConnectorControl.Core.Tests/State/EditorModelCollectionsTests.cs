@@ -85,12 +85,13 @@ public class EditorModelCollectionsTests
     }
 
     /// <summary>
-    /// The author's update lands under an open read-only editor. Save takes the same conflict
-    /// question any save does; declined, nothing moves, and taken, the filled value goes onto the
-    /// author's new config rather than putting back the one the window opened on.
+    /// The author's update lands under an open read-only editor. Save reports the conflict and
+    /// writes nothing: no Save Anyway, whose detail would be untrue here, and no write-back of the
+    /// config the window opened on. The value typed in the stale editor is not carried over;
+    /// reopening the editor shows the author's current config.
     /// </summary>
     [Fact]
-    public void AReadOnlySaveAfterTheAuthorsChangeKeepsTheChange()
+    public void AReadOnlySaveAfterTheAuthorsChangeIsRefused()
     {
         using var rig = new EditorRig();
         SubscribeToDataTeam(rig);
@@ -101,23 +102,17 @@ public class EditorModelCollectionsTests
         Assert.Null(state.Upsert("dbt", new McpEntry(opened.Enabled, changed), "dbt", "Data team"));
         EnvRow(editor, "DBT_TOKEN").Value = "dbt_pat_123";
 
-        rig.H.Dialogs.NextConfirm = false;
         Assert.False(editor.Save());
-        Assert.Equal([new FakeDialogs.ConfirmCall(EditorModel.ChangedOutsideMessage("dbt"), EditorModel.ChangedOutsideDetail,
-            EditorModel.SaveAnywayButton, "Cancel", false)], rig.H.Dialogs.Confirms);
+        Assert.Equal(EditorModel.ChangedOutsideMessage("dbt"), editor.ValidationError);
+        // No Save Anyway: its detail would be untrue here.
+        Assert.Empty(rig.H.Dialogs.Confirms);
+        // The author's change stands, and nothing typed in the stale editor lands.
         Assert.Equal(changed, state.Store.Collections["Data team"].Mcps["dbt"].Config);
-
-        rig.H.Dialogs.NextConfirm = true;
-        Assert.True(editor.Save());
-        // The author's region stays, and only the asked-for value moves.
-        Assert.Equal(changed.Replacing(new JsonPointer(["env", "DBT_TOKEN"]), JsonValue.String("dbt_pat_123")),
-            state.Store.Collections["Data team"].Mcps["dbt"].Config);
     }
 
     /// <summary>
-    /// The author removed the connector under an open read-only editor. There is nothing of this
-    /// machine's to put back, so Save says so and writes nothing, rather than offering to add the
-    /// author's connector back.
+    /// The author removed the connector under an open read-only editor. Save reports the conflict
+    /// and writes nothing, rather than offering to add the author's connector back.
     /// </summary>
     [Fact]
     public void AReadOnlySaveAfterTheAuthorRemovedTheConnectorDoesNotResurrectIt()
