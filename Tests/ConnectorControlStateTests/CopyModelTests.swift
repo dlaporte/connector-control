@@ -44,6 +44,7 @@ final class CopyModelTests: XCTestCase {
         XCTAssertEqual(model.rows.map(\.clashes), [true, false, true])
         XCTAssertEqual(model.rows.map(\.choice), [.keepBoth, .keepBoth, .keepBoth], "keepBoth by default, clash or not")
         XCTAssertEqual(model.rows.map(\.badge), ["", ImportModel.newBadge, ""])
+        XCTAssertEqual(model.rows.map(\.showsPicker), [true, false, true], "every clash asks")
     }
 
     func testARowThatDoesNotClashIsBadgedNew() throws {

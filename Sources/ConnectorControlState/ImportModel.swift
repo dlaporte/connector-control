@@ -97,6 +97,12 @@ public final class ImportModel: ObservableObject {
         /// one string instead of choosing between a constant and a factory.
         public let badge: String
 
+        /// Whether the row shows the collision picker rather than its badge: a name the target
+        /// holds, coming across. Unticking a collision and choosing Skip mean the same, so an
+        /// unticked one shows its badge instead. A collision preselects Replace, should it be
+        /// ticked; the Copy sheet's rows preselect Keep both.
+        public var showsPicker: Bool { present && include }
+
         public init(name: String, include: Bool, present: Bool, choice: ImportChoice,
                     excludedReason: String?, needs: [String], needsCaution: String?, badge: String) {
             self.id = name

@@ -13,7 +13,7 @@ public sealed class CopyModel : ObservableObject
 {
     /// <summary>
     /// One ticked connector against the destination. A clash needs a choice; a clean arrival
-    /// needs only its badge, which is why a clashing row carries none — its picker says enough.
+    /// needs only its badge. <see cref="Row.ShowsPicker"/> is what tells the two apart, not the badge.
     /// </summary>
     public sealed class Row(string name, bool clashes, ImportChoice choice, string badge) : ObservableObject
     {
@@ -33,10 +33,17 @@ public sealed class CopyModel : ObservableObject
         public ImportChoice Choice { get => choice; set => Set(ref choice, value); }
 
         /// <summary>
-        /// What a clean row says about itself; empty for a clashing one, whose picker is the
-        /// row's answer instead of a badge.
+        /// What a clean row says about itself. Empty for a clashing one, which never shows it:
+        /// its picker is the row's answer.
         /// </summary>
         public string Badge { get; } = badge;
+
+        /// <summary>
+        /// Whether the row shows the collision picker rather than its badge: every clash does,
+        /// since a copy has no tick to take it out. The Import dialog's rows answer the same
+        /// question for themselves.
+        /// </summary>
+        public bool ShowsPicker => Clashes;
     }
 
     public static string Title(string destination) => $"Copy to “{destination}”";

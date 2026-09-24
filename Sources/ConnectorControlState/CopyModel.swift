@@ -12,7 +12,7 @@ import ConnectorControlCore
 @MainActor
 public final class CopyModel: ObservableObject {
     /// One ticked connector against the destination. A clash needs a choice; a clean arrival
-    /// needs only its badge, which is why a clashing row carries none — its picker says enough.
+    /// needs only its badge. `showsPicker` is what tells the two apart, not the badge.
     public struct Row: Identifiable, Equatable, Sendable {
         public let id: String
         public let name: String
@@ -22,9 +22,14 @@ public final class CopyModel: ObservableObject {
         /// collision nothing is said about, so silence here lands the copy beside the original
         /// rather than losing it.
         public var choice: ImportChoice
-        /// What a clean row says about itself; empty for a clashing one, whose picker is the row's
-        /// answer instead of a badge.
+        /// What a clean row says about itself. Empty for a clashing one, which never shows it:
+        /// its picker is the row's answer.
         public let badge: String
+
+        /// Whether the row shows the collision picker rather than its badge: every clash does,
+        /// since a copy has no tick to take it out. The Import sheet's rows answer the same
+        /// question for themselves.
+        public var showsPicker: Bool { clashes }
 
         public init(name: String, clashes: Bool, choice: ImportChoice, badge: String) {
             self.id = name

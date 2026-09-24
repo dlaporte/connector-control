@@ -39,6 +39,14 @@ public class ImportModelTests
         Assert.Equal([true, false, true, true], model.Rows.Select(r => r.Include));
         Assert.Equal([ImportChoice.Add, ImportChoice.Replace, ImportChoice.Add, ImportChoice.Add],
             model.Rows.Select(r => r.Choice));
+        // An unticked collision shows its badge.
+        Assert.Equal([false, false, false, false], model.Rows.Select(r => r.ShowsPicker));
+        var raised = new List<string?>();
+        model.Rows[1].PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        model.Rows[1].Include = true;
+        Assert.True(model.Rows[1].ShowsPicker);   // a collision coming across asks what to do
+        Assert.Contains(nameof(ImportModel.Row.ShowsPicker), raised);
+        model.Rows[1].Include = false;
         Assert.Equal(["server_path"], model.Rows.Single(r => r.Name == "ledger").Needs);
         // Nothing in the sample trips the cmd guard.
         Assert.All(model.Rows, row => Assert.Null(row.ExcludedReason));

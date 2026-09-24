@@ -32,6 +32,10 @@ final class ImportModelTests: XCTestCase {
         XCTAssertEqual(model.rows.map(\.present), [false, true, false, false])
         XCTAssertEqual(model.rows.map(\.include), [true, false, true, true], "what is already there is not imported by default")
         XCTAssertEqual(model.rows.map(\.choice), [.add, .replace, .add, .add])
+        XCTAssertEqual(model.rows.map(\.showsPicker), [false, false, false, false], "an unticked collision shows its badge")
+        model.rows[1].include = true
+        XCTAssertTrue(model.rows[1].showsPicker, "a collision coming across asks what to do")
+        model.rows[1].include = false
         XCTAssertEqual(model.rows.first { $0.name == "ledger" }?.needs, ["server_path"])
         XCTAssertTrue(model.rows.allSatisfy { $0.excludedReason == nil }, "a Mac excludes nothing")
         XCTAssertEqual(model.importCount, 3)

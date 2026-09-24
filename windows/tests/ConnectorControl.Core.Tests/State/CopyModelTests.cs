@@ -53,6 +53,7 @@ public class CopyModelTests
         Assert.Equal([ImportChoice.KeepBoth, ImportChoice.KeepBoth, ImportChoice.KeepBoth],
             model.Rows.Select(r => r.Choice));   // keepBoth by default, clash or not
         Assert.Equal(["", ImportModel.NewBadge, ""], model.Rows.Select(r => r.Badge));
+        Assert.Equal([true, false, true], model.Rows.Select(r => r.ShowsPicker));   // every clash asks
     }
 
     [Fact]

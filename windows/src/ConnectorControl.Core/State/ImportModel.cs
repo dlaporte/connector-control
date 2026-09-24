@@ -107,7 +107,17 @@ public sealed class ImportModel : ObservableObject
 
         public string Id { get; } = name;
         public string Name { get; } = name;
-        public bool Include { get => include; set => Set(ref include, value); }
+        public bool Include
+        {
+            get => include;
+            set
+            {
+                if (Set(ref include, value))
+                {
+                    Raise(nameof(ShowsPicker));
+                }
+            }
+        }
         public bool Present { get; } = present;
         public ImportChoice Choice { get => choice; set => Set(ref choice, value); }
         public string? ExcludedReason { get; } = excludedReason;
@@ -126,6 +136,14 @@ public sealed class ImportModel : ObservableObject
         /// binds one string instead of needing a converter over the skipped-badge factory.
         /// </summary>
         public string Badge { get; } = badge;
+
+        /// <summary>
+        /// Whether the row shows the collision picker rather than its badge: a name the target
+        /// holds, coming across. Unticking a collision and choosing Skip mean the same, so an
+        /// unticked one shows its badge instead. A collision preselects Replace, should it be
+        /// ticked; the Copy dialog's rows preselect Keep both.
+        /// </summary>
+        public bool ShowsPicker => Present && Include;
     }
 
     private readonly AppState state;
