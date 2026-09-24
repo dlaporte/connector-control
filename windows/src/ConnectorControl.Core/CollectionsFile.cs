@@ -48,27 +48,43 @@ public sealed record CollectionsFile
 
     public override int GetHashCode() => DictionaryEquality.Hash(Collections);
 
+    /// <remarks>
+    /// Every property is <c>init</c>, so a change to one field is <c>entry with { … }</c> — the one
+    /// field assigned in place, as Swift mutates it — rather than a rebuild that has to name every
+    /// other one. The dictionaries copy what they are given, ordinally, however they are set.
+    /// </remarks>
     public sealed record Entry
     {
-        public CollectionKind Kind { get; }
+        private readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, Need>> needs;
+        private readonly IReadOnlyDictionary<string, Provenance> provenance;
+
+        public CollectionKind Kind { get; init; }
 
         /// <summary>Synced: the document's file name.</summary>
-        public string? FileName { get; }
+        public string? FileName { get; init; }
 
         /// <summary>Synced: the document's path relative to the store dir, when it lies inside that tree.</summary>
-        public string? RelativeToStore { get; }
+        public string? RelativeToStore { get; init; }
 
         /// <summary>Synced: the document's origin.</summary>
-        public string? Origin { get; }
+        public string? Origin { get; init; }
 
         /// <summary>Synced: connector → placeholder name → what the last Apply asked for.</summary>
-        public IReadOnlyDictionary<string, IReadOnlyDictionary<string, Need>> Needs { get; }
+        public IReadOnlyDictionary<string, IReadOnlyDictionary<string, Need>> Needs
+        {
+            get => needs;
+            init => needs = new Dictionary<string, IReadOnlyDictionary<string, Need>>(value, StringComparer.Ordinal);
+        }
 
         /// <summary>Local: what publishing this collection fixed.</summary>
-        public PublishRecord? Publish { get; }
+        public PublishRecord? Publish { get; init; }
 
         /// <summary>Local: connector → where an imported copy came from.</summary>
-        public IReadOnlyDictionary<string, Provenance> Provenance { get; }
+        public IReadOnlyDictionary<string, Provenance> Provenance
+        {
+            get => provenance;
+            init => provenance = new Dictionary<string, Provenance>(value, StringComparer.Ordinal);
+        }
 
         public Entry(
             CollectionKind kind,
@@ -83,13 +99,9 @@ public sealed record CollectionsFile
             FileName = fileName;
             RelativeToStore = relativeToStore;
             Origin = origin;
-            Needs = needs is null
-                ? new Dictionary<string, IReadOnlyDictionary<string, Need>>(StringComparer.Ordinal)
-                : new Dictionary<string, IReadOnlyDictionary<string, Need>>(needs, StringComparer.Ordinal);
+            this.needs = new Dictionary<string, IReadOnlyDictionary<string, Need>>(needs ?? [], StringComparer.Ordinal);
             Publish = publish;
-            Provenance = provenance is null
-                ? new Dictionary<string, Provenance>(StringComparer.Ordinal)
-                : new Dictionary<string, Provenance>(provenance, StringComparer.Ordinal);
+            this.provenance = new Dictionary<string, Provenance>(provenance ?? [], StringComparer.Ordinal);
         }
 
         /// <summary>An ordinary local collection: the entry the file leaves out entirely.</summary>

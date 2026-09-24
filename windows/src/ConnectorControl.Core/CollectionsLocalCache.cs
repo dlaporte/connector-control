@@ -8,13 +8,32 @@ namespace ConnectorControl.Core;
 ///
 /// Mirror: Sources/ConnectorControlCore/CollectionsLocalCache.swift
 /// </summary>
+/// <remarks>
+/// Every property is <c>init</c>, so a change to one field is <c>cache with { … }</c> — the one
+/// field assigned in place, as Swift mutates it — rather than a rebuild that has to name every
+/// other one. The collections copy what they are given, ordinally, however they are set.
+/// </remarks>
 public sealed record CollectionsLocalCache
 {
     public const string FileName = "collections-local.json";
     public const int FormatVersion = 1;
 
-    public IReadOnlyDictionary<string, SyncedBinding> Synced { get; }
-    public IReadOnlyDictionary<string, PublishBinding> Published { get; }
+    private readonly IReadOnlyDictionary<string, SyncedBinding> synced;
+    private readonly IReadOnlyDictionary<string, PublishBinding> published;
+    private readonly IReadOnlyDictionary<string, KeptRecord> kept;
+    private readonly IReadOnlySet<string>? lastAppliedNames;
+
+    public IReadOnlyDictionary<string, SyncedBinding> Synced
+    {
+        get => synced;
+        init => synced = new Dictionary<string, SyncedBinding>(value, StringComparer.Ordinal);
+    }
+
+    public IReadOnlyDictionary<string, PublishBinding> Published
+    {
+        get => published;
+        init => published = new Dictionary<string, PublishBinding>(value, StringComparer.Ordinal);
+    }
 
     /// <summary>
     /// What a collection's publish binding left behind when publishing stopped: this machine's
@@ -23,7 +42,11 @@ public sealed record CollectionsLocalCache
     /// where it is that collection's own; what a collection that has since left the store left
     /// under the name stays beside the binding, since its folders are not the new one's to take.
     /// </summary>
-    public IReadOnlyDictionary<string, KeptRecord> Kept { get; }
+    public IReadOnlyDictionary<string, KeptRecord> Kept
+    {
+        get => kept;
+        init => kept = new Dictionary<string, KeptRecord>(value, StringComparer.Ordinal);
+    }
 
     /// <summary>
     /// The collection Claude's config was last written from on this machine. Claude's file holds
@@ -38,7 +61,11 @@ public sealed record CollectionsLocalCache
     /// once the collection itself is gone — deleted here, or on another machine, which leaves
     /// nothing else behind. null until the first apply that records them.
     /// </summary>
-    public IReadOnlySet<string>? LastAppliedNames { get; init; }
+    public IReadOnlySet<string>? LastAppliedNames
+    {
+        get => lastAppliedNames;
+        init => lastAppliedNames = value is null ? null : new HashSet<string>(value, StringComparer.Ordinal);
+    }
 
     public CollectionsLocalCache(
         IEnumerable<KeyValuePair<string, SyncedBinding>> synced,
@@ -47,13 +74,11 @@ public sealed record CollectionsLocalCache
         string? lastAppliedCollection = null,
         IEnumerable<string>? lastAppliedNames = null)
     {
-        Synced = new Dictionary<string, SyncedBinding>(synced, StringComparer.Ordinal);
-        Published = new Dictionary<string, PublishBinding>(published, StringComparer.Ordinal);
-        Kept = kept is null
-            ? new Dictionary<string, KeptRecord>(StringComparer.Ordinal)
-            : new Dictionary<string, KeptRecord>(kept, StringComparer.Ordinal);
+        this.synced = new Dictionary<string, SyncedBinding>(synced, StringComparer.Ordinal);
+        this.published = new Dictionary<string, PublishBinding>(published, StringComparer.Ordinal);
+        this.kept = new Dictionary<string, KeptRecord>(kept ?? [], StringComparer.Ordinal);
         LastAppliedCollection = lastAppliedCollection;
-        LastAppliedNames = lastAppliedNames is null ? null : new HashSet<string>(lastAppliedNames, StringComparer.Ordinal);
+        this.lastAppliedNames = lastAppliedNames is null ? null : new HashSet<string>(lastAppliedNames, StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -540,11 +565,11 @@ public sealed record CollectionsLocalCache
                 remembered[name] = record;
             }
         }
-        return new CollectionsLocalCache(
-            Synced.Where(p => file.KindOf(p.Key) == CollectionKind.Synced),
-            vouched,
-            remembered,
-            LastAppliedCollection,
-            LastAppliedNames);
+        return this with
+        {
+            Synced = Synced.Where(p => file.KindOf(p.Key) == CollectionKind.Synced).ToDictionary(StringComparer.Ordinal),
+            Published = vouched,
+            Kept = remembered,
+        };
     }
 }

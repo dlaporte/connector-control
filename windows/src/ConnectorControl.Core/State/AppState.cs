@@ -1059,9 +1059,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return;
         }
-        SetSidecarEntry(collection, new CollectionsFile.Entry(
-            entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs,
-            new CollectionsFile.PublishRecord(record.Slug, record.Origin, intent), entry.Provenance));
+        SetSidecarEntry(collection, entry with { Publish = record with { Intent = intent } });
     }
 
     /// <summary>
@@ -1256,11 +1254,13 @@ public sealed class AppState : ObservableObject, IDisposable
             // Claude's file and its backups name the collection they were applied from, and the
             // rename carries both. A backup record that fails to follow restores as refused, the
             // name it holds being gone, never into the wrong collection.
-            CollectionsCache = new CollectionsLocalCache(
-                Moved(CollectionsCache.Synced, name, trimmed), Moved(CollectionsCache.Published, name, trimmed),
-                kept,
-                CollectionsCache.LastAppliedCollection == name ? trimmed : CollectionsCache.LastAppliedCollection,
-                CollectionsCache.LastAppliedNames);
+            CollectionsCache = CollectionsCache with
+            {
+                Synced = Moved(CollectionsCache.Synced, name, trimmed),
+                Published = Moved(CollectionsCache.Published, name, trimmed),
+                Kept = kept,
+                LastAppliedCollection = CollectionsCache.LastAppliedCollection == name ? trimmed : CollectionsCache.LastAppliedCollection,
+            };
             try
             {
                 BackupCollections.Rename(name, trimmed, Service.Paths.BackupsDir);
@@ -1306,9 +1306,7 @@ public sealed class AppState : ObservableObject, IDisposable
             return error;
         }
         CollectionsFile = new CollectionsFile(Without(CollectionsFile.Collections, name));
-        CollectionsCache = new CollectionsLocalCache(
-            Without(CollectionsCache.Synced, name), CollectionsCache.Published, CollectionsCache.Kept,
-            CollectionsCache.LastAppliedCollection, CollectionsCache.LastAppliedNames);
+        CollectionsCache = CollectionsCache with { Synced = Without(CollectionsCache.Synced, name) };
         // Deleting a collection is not the author's word that the paths it kept back may travel: the
         // connector that carried one is still in another collection, or comes back by an import, a
         // copy or an ingest. What Stop Publishing remembers, this remembers too.
@@ -1364,22 +1362,16 @@ public sealed class AppState : ObservableObject, IDisposable
             : With(CollectionsFile.Collections, collection, entry));
 
     private void SetBinding(string collection, CollectionsLocalCache.SyncedBinding? binding) =>
-        CollectionsCache = new CollectionsLocalCache(
-            binding is null ? Without(CollectionsCache.Synced, collection) : With(CollectionsCache.Synced, collection, binding),
-            CollectionsCache.Published,
-            CollectionsCache.Kept,
-            CollectionsCache.LastAppliedCollection,
-            CollectionsCache.LastAppliedNames);
+        CollectionsCache = CollectionsCache with
+        {
+            Synced = binding is null ? Without(CollectionsCache.Synced, collection) : With(CollectionsCache.Synced, collection, binding),
+        };
 
     private void SetPublishBinding(string collection, CollectionsLocalCache.PublishBinding? binding) =>
-        CollectionsCache = new CollectionsLocalCache(
-            CollectionsCache.Synced,
-            binding is null
-                ? Without(CollectionsCache.Published, collection)
-                : With(CollectionsCache.Published, collection, binding),
-            CollectionsCache.Kept,
-            CollectionsCache.LastAppliedCollection,
-            CollectionsCache.LastAppliedNames);
+        CollectionsCache = CollectionsCache with
+        {
+            Published = binding is null ? Without(CollectionsCache.Published, collection) : With(CollectionsCache.Published, collection, binding),
+        };
 
     /// <summary>
     /// Whether a kept record filed under <paramref name="name"/> belongs to
@@ -1432,14 +1424,10 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>What a stopped publish left behind, set or dropped for one collection.</summary>
     private void SetKeptRecord(string collection, CollectionsLocalCache.KeptRecord? record) =>
-        CollectionsCache = new CollectionsLocalCache(
-            CollectionsCache.Synced,
-            CollectionsCache.Published,
-            record is null
-                ? Without(CollectionsCache.Kept, collection)
-                : With(CollectionsCache.Kept, collection, record),
-            CollectionsCache.LastAppliedCollection,
-            CollectionsCache.LastAppliedNames);
+        CollectionsCache = CollectionsCache with
+        {
+            Kept = record is null ? Without(CollectionsCache.Kept, collection) : With(CollectionsCache.Kept, collection, record),
+        };
 
     private static Dictionary<string, TValue> With<TValue>(IReadOnlyDictionary<string, TValue> source, string name, TValue value)
     {
@@ -1625,9 +1613,10 @@ public sealed class AppState : ObservableObject, IDisposable
         // relativeToStore is only ever set, never cleared: where the document sits relative to
         // the store is a fact every machine shares, and this one finding it elsewhere does not
         // make it untrue.
-        SetSidecarEntry(collection, new CollectionsFile.Entry(
-            entry.Kind, Path.GetFileName(full), RelativeToStore(full) ?? entry.RelativeToStore,
-            entry.Origin, entry.Needs, entry.Publish, entry.Provenance));
+        SetSidecarEntry(collection, entry with
+        {
+            FileName = Path.GetFileName(full), RelativeToStore = RelativeToStore(full) ?? entry.RelativeToStore,
+        });
         sourceFailures.Remove(collection);
         sourceRetryScheduled.Remove(collection);
         SetSourceError(collection, null);
@@ -1669,8 +1658,7 @@ public sealed class AppState : ObservableObject, IDisposable
         var entry = CollectionsFile.Collections.GetValueOrDefault(collection) ?? CollectionsFile.Entry.Local;
         var result = CollectionApply.Apply(source.Rendered, current, entry.Needs);
         Store.Collections[collection] = new Collection(result.Entries);
-        SetSidecarEntry(collection, new CollectionsFile.Entry(
-            entry.Kind, entry.FileName, entry.RelativeToStore, source.Origin, result.Needs, entry.Publish, entry.Provenance));
+        SetSidecarEntry(collection, entry with { Origin = source.Origin, Needs = result.Needs });
         SetBinding(collection, new CollectionsLocalCache.SyncedBinding(
             SourceBinding(collection)?.Path, source.Hash, source.Rendered.Excluded));
         // Cleared BEFORE the save: PersistStore re-derives what is pending from the document and
@@ -2014,8 +2002,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return null;
         }
-        SetSidecarEntry(collection, new CollectionsFile.Entry(
-            entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs, entry.Publish, provenance));
+        SetSidecarEntry(collection, entry with { Provenance = provenance });
         PersistStore();
         // Everything imported arrives off, so only a Replace over a connector that was already on
         // can change what Claude runs — and the dirty check spares the write when it doesn't.
@@ -2080,8 +2067,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return null;
         }
-        SetSidecarEntry(target, new CollectionsFile.Entry(
-            entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs, entry.Publish, provenance));
+        SetSidecarEntry(target, entry with { Provenance = provenance });
         PersistStore();
         // Every copy arrives off, so only a Replace over a connector that was already on can
         // change what Claude runs — and the dirty check spares the write when it doesn't.
@@ -2236,9 +2222,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return PublishSlugTakenError(fileName);
         }
-        SetSidecarEntry(collection, new CollectionsFile.Entry(
-            entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs,
-            new CollectionsFile.PublishRecord(slug, origin, intent), entry.Provenance));
+        SetSidecarEntry(collection, entry with { Publish = new CollectionsFile.PublishRecord(slug, origin, intent) });
         var previous = CollectionsCache.Published.GetValueOrDefault(collection);
         // Publishing again takes back what stopping left behind: the lists are this machine's memory
         // of what must not travel, and they outlive the binding. The folders, though, are this
@@ -2343,9 +2327,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             SetPublishBinding(collection, changed);
         }
-        SetSidecarEntry(collection, new CollectionsFile.Entry(
-            entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin, entry.Needs,
-            new CollectionsFile.PublishRecord(record.Slug, record.Origin, intent), entry.Provenance));
+        SetSidecarEntry(collection, entry with { Publish = record with { Intent = intent } });
         PersistStore();
         RaiseAll();
         return PublishFailure(collection);
@@ -2362,8 +2344,7 @@ public sealed class AppState : ObservableObject, IDisposable
             return;
         }
         var folder = CollectionsCache.Published.GetValueOrDefault(collection)?.Folder;
-        var stripped = new CollectionsFile.Entry(entry.Kind, entry.FileName, entry.RelativeToStore, entry.Origin,
-                                                 entry.Needs, null, entry.Provenance);
+        var stripped = entry with { Publish = null };
         // An entry with nothing left to say is no entry at all, which is how the sidecar writes it
         // and how the next load reads it back.
         SetSidecarEntry(collection, stripped.Equals(CollectionsFile.Entry.Local) ? null : stripped);
@@ -2749,9 +2730,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return;
         }
-        CollectionsCache = new CollectionsLocalCache(synced, CollectionsCache.Published, CollectionsCache.Kept,
-                                                     CollectionsCache.LastAppliedCollection,
-                                                     CollectionsCache.LastAppliedNames);
+        CollectionsCache = CollectionsCache with { Synced = synced };
         try
         {
             CollectionsCache.Save(Service.Paths.CollectionsCachePath);

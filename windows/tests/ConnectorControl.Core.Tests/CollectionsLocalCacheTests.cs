@@ -30,6 +30,29 @@ public sealed class CollectionsLocalCacheTests : IDisposable
         Assert.Equal(new CollectionsLocalCache([], []), CollectionsLocalCache.Load(dir.File("missing.json")));
     }
 
+    /// <summary>
+    /// C#-only: a Swift struct copies on assignment, so there is no <c>with</c> to hand it a
+    /// dictionary that compares keys some other way.
+    /// </summary>
+    [Fact]
+    public void AWithKeepsKeysOrdinal()
+    {
+        var folded = new Dictionary<string, CollectionsLocalCache.SyncedBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Team"] = new("/t.json", null, null),
+        };
+        var cache = Sample with { Synced = folded };
+        Assert.False(cache.Synced.ContainsKey("team"));
+        var entry = CollectionsFile.Entry.Local with
+        {
+            Provenance = new Dictionary<string, CollectionsFile.Provenance>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["dbt"] = new("Data team", null, "2026-09-21"),
+            },
+        };
+        Assert.False(entry.Provenance.ContainsKey("DBT"));
+    }
+
     [Fact]
     public void ReconcilePrunesBindingsWhoseCollectionChangedKind()
     {
