@@ -44,7 +44,9 @@
          in, and both platforms read the same sentence. -->
     <TextBlock Text="{x:Static state:ImportModel.Title}" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,12" />
 
-    <!-- The file the sheet was opened with, and what that file says about itself. -->
+    <!-- The file the sheet was opened with, and what that file says about itself. A long path
+         loses its tail, since WPF has no middle ellipsis; the Mac sheet elides the middle and
+         keeps the file name. -->
     <TextBlock Text="{Binding Path}" FontFamily="{StaticResource MonoFont}" FontSize="12"
                TextTrimming="CharacterEllipsis" />
     <TextBlock Text="{Binding SourceSentence}" Style="{StaticResource CaptionText}" Margin="0,2,0,0" />

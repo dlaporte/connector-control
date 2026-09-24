@@ -90,6 +90,8 @@ struct PublishSheetView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 if let folder = model.folder, !folder.isEmpty {
+                    // Elided in the middle, as the footer is; the Windows dialog cuts the tail of
+                    // both, since WPF has no middle ellipsis.
                     Text(folder)
                         .font(.system(.caption, design: .monospaced))
                         .lineLimit(1)

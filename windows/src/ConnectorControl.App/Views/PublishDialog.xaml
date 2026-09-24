@@ -16,6 +16,8 @@
          Export needs no folder, so the code-behind collapses the whole row in that mode. -->
     <StackPanel x:Name="FolderRow" Margin="0,0,0,12">
       <StackPanel Orientation="Horizontal">
+        <!-- Trimmed at the end, as the footer is, since WPF has no middle ellipsis; the Mac sheet
+             elides the middle of both. -->
         <TextBlock x:Name="FolderText" Text="{Binding Folder}" FontFamily="{StaticResource MonoFont}" FontSize="12"
                    MaxWidth="420" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,8,0" />
         <Button x:Name="ChooseFolderButton" Content="{x:Static state:PublishModel.ChooseFolderButton}" MinWidth="120" Click="OnChooseFolder" />

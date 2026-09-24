@@ -287,7 +287,8 @@
                              TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                 </DockPanel>
                 <!-- What the connector runs, never a secret: the model masks it. Trimmed at the
-                     end, as this window's detail line is. -->
+                     end, as this window's detail line is, since WPF has no middle ellipsis; the
+                     Mac rows elide the middle. -->
                 <TextBlock x:Name="RowTargetText" Grid.Column="2" Text="{Binding Target}"
                            Style="{StaticResource CaptionText}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                            VerticalAlignment="Center" Margin="0,0,10,0" />
@@ -307,7 +308,8 @@
       <Border Grid.Row="4" Margin="0,8,0,0" Height="44" BorderThickness="0,1,0,0"
               BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
         <Grid>
-          <!-- Paths in this line are raw, so a pane too narrow for one loses its tail. -->
+          <!-- Paths in this line are raw. WPF has no middle ellipsis, so a pane too narrow for one
+               loses its tail; the Mac window elides the middle and keeps the file name. -->
           <TextBlock x:Name="DetailText" Style="{StaticResource CaptionText}" VerticalAlignment="Center"
                      TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Text="{Binding DetailLine}" />
           <DockPanel x:Name="TickedBar" VerticalAlignment="Center" Visibility="Collapsed">

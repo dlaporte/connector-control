@@ -500,9 +500,9 @@ public partial class CollectionsWindow : Window
                 }
                 break;
             case CollectionBanner.PublishBlocked:
-                // Stopped for review, not for a folder: another folder would re-bind the collection,
-                // write nothing there and leave the old folder's document behind. The Publish
-                // dialog is where the author answers it.
+                // Stopped for review, not for a folder: another folder would be refused with the
+                // same reason, so the answer is the Publish dialog, where the author reviews what
+                // it carries.
                 PublishSelected();
                 break;
         }

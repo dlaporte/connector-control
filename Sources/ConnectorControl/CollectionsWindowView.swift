@@ -372,6 +372,8 @@ struct CollectionsWindowView: View {
                 .frame(width: 18, alignment: .leading)
                 nameCell(row)
                     .frame(width: nameWidth, alignment: .leading)
+                // What the connector runs, often a path: elided in the middle, as the detail line
+                // is. The Windows rows cut the tail, since WPF has no middle ellipsis.
                 Text(row.target)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -439,7 +441,8 @@ struct CollectionsWindowView: View {
             HStack(spacing: 10) {
                 if model.checkedNames.isEmpty {
                     // Paths in this line are raw, so a window too narrow for one elides its middle
-                    // rather than losing its end.
+                    // and keeps the file name at its end. The Windows window cuts the tail
+                    // instead: WPF has no middle ellipsis.
                     Text(model.detailLine)
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -580,8 +583,8 @@ struct CollectionsWindowView: View {
         case .publishFailed:
             if let folder = FilePanels.chooseFolder() { shownError = model.choosePublishFolder(folder) }
         case .publishBlocked:
-            // Stopped for review, not for a folder: choosing another folder would only move the
-            // failure there, so the answer is the Publish sheet.
+            // Stopped for review, not for a folder: another folder would be refused with the same
+            // reason, so the answer is the Publish sheet, where the author reviews what it carries.
             if let collection = model.selected { show(.publish(publishModel(for: collection))) }
         case .updateAvailable, nil:
             break

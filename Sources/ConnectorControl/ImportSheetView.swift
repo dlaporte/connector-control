@@ -39,7 +39,9 @@ struct ImportSheetView: View {
 
     // MARK: source
 
-    /// The file the sheet was opened with, and what that file says about itself.
+    /// The file the sheet was opened with, and what that file says about itself. A long path is
+    /// elided in the middle, keeping the file name; the Windows dialog cuts the tail, since WPF
+    /// has no middle ellipsis.
     @ViewBuilder private var source: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(model.path)

@@ -28,7 +28,8 @@ struct ReviewSheetView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            // A cap, not a height: a one-connector update is a short sheet, as it is on Windows.
+            // A cap, not a height: a one-connector update is a short sheet. The Windows dialog's
+            // cap is 380 rather than this 320.
             .frame(maxHeight: 320)
 
             if model.sourceMoved { moved }
