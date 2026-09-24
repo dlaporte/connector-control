@@ -64,8 +64,11 @@ public sealed class MasterStore : IEquatable<MasterStore>
     /// <summary>How many connectors are enabled, without building the config dictionary <see cref="EnabledServers"/> does.</summary>
     public int EnabledCount => Mcps.Count(p => p.Value.Enabled);
 
-    /// <summary>null on success, else a user-facing error message.</summary>
-    public string? AddCollection(string name, bool copyingCurrent)
+    /// <summary>
+    /// null on success, else a user-facing error message. The new collection becomes the active
+    /// one unless <paramref name="activating"/> is false.
+    /// </summary>
+    public string? AddCollection(string name, bool copyingCurrent, bool activating = true)
     {
         var trimmed = name.TrimSpaces();
         if (trimmed.Length == 0)
@@ -77,7 +80,10 @@ public sealed class MasterStore : IEquatable<MasterStore>
             return $"A collection named “{trimmed}” already exists.";
         }
         Collections[trimmed] = copyingCurrent ? new Collection(Mcps) : new Collection();
-        ActiveCollection = trimmed;
+        if (activating)
+        {
+            ActiveCollection = trimmed;
+        }
         return null;
     }
 

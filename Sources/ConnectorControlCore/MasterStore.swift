@@ -61,15 +61,16 @@ public struct MasterStore: Equatable, Codable, Sendable {
         self.collections = collections
     }
 
-    /// nil on success, else a user-facing error message.
-    public mutating func addCollection(named name: String, copyingCurrent: Bool) -> String? {
+    /// nil on success, else a user-facing error message. The new collection becomes the active
+    /// one unless `activating` is false.
+    public mutating func addCollection(named name: String, copyingCurrent: Bool, activating: Bool = true) -> String? {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return "Name must not be empty." }
         guard collections[trimmed] == nil else {
             return "A collection named \u{201C}\(trimmed)\u{201D} already exists."
         }
         collections[trimmed] = copyingCurrent ? Collection(mcps: mcps) : Collection()
-        activeCollection = trimmed
+        if activating { activeCollection = trimmed }
         return nil
     }
 

@@ -105,6 +105,15 @@ public class CollectionTests : IDisposable
     }
 
     [Fact]
+    public void AddCollectionWithoutActivatingLeavesTheActiveOne()
+    {
+        var store = new MasterStore(new Dictionary<string, McpEntry> { ["a"] = Entry("https://a.example/mcp") });
+        Assert.Null(store.AddCollection("Fresh", copyingCurrent: false, activating: false));
+        Assert.Empty(store.Collections["Fresh"].Mcps);
+        Assert.Equal("Default", store.ActiveCollection);
+    }
+
+    [Fact]
     public void AddCollectionRejectsEmptyName()
     {
         Assert.Equal("Name must not be empty.", MasterStore.Empty().AddCollection("   ", false));

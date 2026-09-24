@@ -55,6 +55,13 @@ final class CollectionTests: XCTestCase {
         XCTAssertEqual(store.collections["Fresh"]?.mcps, [:])
     }
 
+    func testAddCollectionWithoutActivatingLeavesTheActiveOne() {
+        var store = MasterStore.single(["a": entry("https://a.example/mcp")])
+        XCTAssertNil(store.addCollection(named: "Fresh", copyingCurrent: false, activating: false))
+        XCTAssertEqual(store.collections["Fresh"]?.mcps, [:])
+        XCTAssertEqual(store.activeCollection, "Default")
+    }
+
     func testAddCollectionRejectsEmptyName() {
         var store = MasterStore.empty
         XCTAssertEqual(store.addCollection(named: "   ", copyingCurrent: false), "Name must not be empty.")

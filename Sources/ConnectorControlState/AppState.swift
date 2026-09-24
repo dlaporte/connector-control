@@ -255,11 +255,16 @@ public final class AppState: ObservableObject {
     /// and the tools shipped beside it live, the same folder a subscriber's copy resolves against.
     /// A collection published from another machine, or not at all, has none on this one.
     func collectionDirectory(of collection: String) -> String? {
-        if isSynced(collection) {
-            return sourceBinding(of: collection)?.path.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }
-        }
+        if isSynced(collection) { return sourceFolder(of: collection) }
         guard isPublished(collection) else { return nil }
         return collectionsCache.published[collection]?.folder
+    }
+
+    /// The folder a synced collection's bound document sits in, or nil while it is not located.
+    /// `${COLLECTION_DIR}`, Stop Syncing, a copy and the paths kept back all read it from here, so
+    /// they agree on it to the character.
+    private func sourceFolder(of collection: String) -> String? {
+        sourceBinding(of: collection)?.path.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }
     }
 
     public var sortedNames: [String] { store.mcps.keys.sorted() }
@@ -1016,9 +1021,7 @@ public final class AppState: ObservableObject {
         }
         let requested = requestedName?.trimmingCharacters(in: .whitespaces) ?? ""
         let name = requested.isEmpty ? document.name : requested
-        let active = store.activeCollection
-        if let error = store.addCollection(named: name, copyingCurrent: false) { return error }
-        store.activeCollection = active
+        if let error = store.addCollection(named: name, copyingCurrent: false, activating: false) { return error }
         let rendered = document.render()
         let result = CollectionApply.apply(rendered: rendered, current: [:], previousNeeds: [:])
         store.collections[name] = Collection(mcps: result.entries)
@@ -1105,8 +1108,7 @@ public final class AppState: ObservableObject {
         // A local collection has no document, so the folder it resolved to is written into the
         // configs once, exactly as an imported copy expands it — otherwise a path that worked a
         // second ago would become the literal token, with nothing left to explain it.
-        if let path = collectionsCache.synced[collection]?.path {
-            let directory = URL(fileURLWithPath: path).deletingLastPathComponent().path
+        if let directory = sourceFolder(of: collection) {
             for (name, entry) in store.collections[collection]?.mcps ?? [:]
             where Placeholder.usesDirectoryToken(entry.config) {
                 store.collections[collection]?.mcps[name]?.config =
@@ -1379,9 +1381,7 @@ public final class AppState: ObservableObject {
     /// is off, so switching would empty Claude's config. nil on success, else the message.
     public func makeLocalCopyOfCollection(_ source: String, named newName: String) -> String? {
         guard let held = store.collections[source] else { return nil }
-        let active = store.activeCollection
-        if let error = store.addCollection(named: newName, copyingCurrent: false) { return error }
-        store.activeCollection = active
+        if let error = store.addCollection(named: newName, copyingCurrent: false, activating: false) { return error }
         let name = newName.trimmingCharacters(in: .whitespaces)
         let date = today
         var entries: [String: MCPEntry] = [:]
@@ -1401,9 +1401,7 @@ public final class AppState: ObservableObject {
     /// alone. It does not become the active collection: switching to an empty one would empty
     /// Claude's config, so nothing is applied either. nil on success, else the message.
     public func addEmptyCollection(named name: String) -> String? {
-        let active = store.activeCollection
-        if let error = store.addCollection(named: name, copyingCurrent: false) { return error }
-        store.activeCollection = active
+        if let error = store.addCollection(named: name, copyingCurrent: false, activating: false) { return error }
         persistStore()
         return nil
     }
@@ -1414,9 +1412,8 @@ public final class AppState: ObservableObject {
     /// what Stop Syncing bakes in for the same reason. `${CC_NEEDS:…}` markers stay as they are:
     /// a copy asks the user for the same values the original did.
     private func copiedConfig(_ config: JSONValue, from source: String) -> JSONValue {
-        guard Placeholder.usesDirectoryToken(config), let path = sourceBinding(of: source)?.path else { return config }
-        return Placeholder.expandDirectoryToken(
-            in: config, directory: URL(fileURLWithPath: path).deletingLastPathComponent().path)
+        guard Placeholder.usesDirectoryToken(config), let directory = sourceFolder(of: source) else { return config }
+        return Placeholder.expandDirectoryToken(in: config, directory: directory)
     }
 
     /// `name`, or "name 2", "name 3", … — the first one no connector in `collection` is called.
@@ -1734,8 +1731,8 @@ public final class AppState: ObservableObject {
                 values.formUnion(remembered.publishedFolders)
             }
         }
-        for (name, binding) in collectionsCache.synced where isSynced(name) {
-            if let path = binding.path { values.insert(URL(fileURLWithPath: path).deletingLastPathComponent().path) }
+        for name in collectionsCache.synced.keys where isSynced(name) {
+            if let folder = sourceFolder(of: name) { values.insert(folder) }
         }
         let letGo = AppState.released(collectionsCache.published[collection]?.releasedValues
                                         ?? collectionsCache.kept[collection]?.releasedValues ?? [],
@@ -1797,8 +1794,7 @@ public final class AppState: ObservableObject {
             }
         }
         for name in collectionsCache.synced.keys.sorted(by: { $0.ordinallyPrecedes($1) }) where isSynced(name) {
-            guard let path = collectionsCache.synced[name]?.path else { continue }
-            if KeptValue.nfc(URL(fileURLWithPath: path).deletingLastPathComponent().path) == wanted { return name }
+            if let folderOf = sourceFolder(of: name), KeptValue.nfc(folderOf) == wanted { return name }
         }
         return nil
     }

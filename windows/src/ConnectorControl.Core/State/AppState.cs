@@ -271,12 +271,18 @@ public sealed class AppState : ObservableObject, IDisposable
     {
         if (IsSynced(collection))
         {
-            return SourceBinding(collection)?.Path is { } path
-                ? Path.GetDirectoryName(Path.GetFullPath(path)) ?? path
-                : null;
+            return SourceFolder(collection);
         }
         return IsPublished(collection) ? CollectionsCache.Published.GetValueOrDefault(collection)?.Folder : null;
     }
+
+    /// <summary>
+    /// The folder a synced collection's bound document sits in, or null while it is not located.
+    /// <c>${COLLECTION_DIR}</c>, Stop Syncing, a copy and the paths kept back all read it from here,
+    /// so they agree on it to the character.
+    /// </summary>
+    private string? SourceFolder(string collection) =>
+        SourceBinding(collection)?.Path is { } path ? Path.GetDirectoryName(Path.GetFullPath(path)) : null;
 
     public IReadOnlyList<string> SortedNames => Store.Mcps.Keys.Order(StringComparer.Ordinal).ToList();
 
@@ -1579,12 +1585,10 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         var requested = requestedName?.TrimSpaces() ?? string.Empty;
         var name = requested.Length == 0 ? document.Name : requested;
-        var active = Store.ActiveCollection;
-        if (Store.AddCollection(name, copyingCurrent: false) is { } error)
+        if (Store.AddCollection(name, copyingCurrent: false, activating: false) is { } error)
         {
             return error;
         }
-        Store.ActiveCollection = active;
         var rendered = document.Render();
         var result = CollectionApply.Apply(rendered, new Dictionary<string, McpEntry>(StringComparer.Ordinal), EmptyNeedsByConnector);
         Store.Collections[name] = new Collection(result.Entries);
@@ -1700,9 +1704,8 @@ public sealed class AppState : ObservableObject, IDisposable
         // local collection has no document, so the folder it resolved to is written into the
         // configs once, exactly as an imported copy expands it — otherwise a path that worked a
         // second ago would become the literal token, with nothing left to explain it.
-        if (SourceBinding(collection)?.Path is { } bound && Store.Collections.TryGetValue(collection, out var held))
+        if (SourceFolder(collection) is { } directory && Store.Collections.TryGetValue(collection, out var held))
         {
-            var directory = Path.GetDirectoryName(Path.GetFullPath(bound)) ?? bound;
             foreach (var (name, entry) in held.Mcps.ToList())
             {
                 if (Placeholder.UsesDirectoryToken(entry.Config))
@@ -2099,12 +2102,10 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return null;
         }
-        var active = Store.ActiveCollection;
-        if (Store.AddCollection(newName, copyingCurrent: false) is { } error)
+        if (Store.AddCollection(newName, copyingCurrent: false, activating: false) is { } error)
         {
             return error;
         }
-        Store.ActiveCollection = active;
         var name = newName.TrimSpaces();
         var date = Today;
         var entries = new Dictionary<string, McpEntry>(StringComparer.Ordinal);
@@ -2128,12 +2129,10 @@ public sealed class AppState : ObservableObject, IDisposable
     /// </summary>
     public string? AddEmptyCollection(string name)
     {
-        var active = Store.ActiveCollection;
-        if (Store.AddCollection(name, copyingCurrent: false) is { } error)
+        if (Store.AddCollection(name, copyingCurrent: false, activating: false) is { } error)
         {
             return error;
         }
-        Store.ActiveCollection = active;
         PersistStore();
         RaiseAll();
         return null;
@@ -2148,11 +2147,11 @@ public sealed class AppState : ObservableObject, IDisposable
     /// </summary>
     private JsonValue CopiedConfig(JsonValue config, string source)
     {
-        if (!Placeholder.UsesDirectoryToken(config) || SourceBinding(source)?.Path is not { } bound)
+        if (!Placeholder.UsesDirectoryToken(config) || SourceFolder(source) is not { } directory)
         {
             return config;
         }
-        return Placeholder.ExpandDirectoryToken(config, Path.GetDirectoryName(Path.GetFullPath(bound)) ?? bound);
+        return Placeholder.ExpandDirectoryToken(config, directory);
     }
 
     /// <summary>
@@ -2879,9 +2878,9 @@ public sealed class AppState : ObservableObject, IDisposable
                 values.UnionWith(remembered.PublishedFolders);
             }
         }
-        foreach (var (name, binding) in CollectionsCache.Synced)
+        foreach (var name in CollectionsCache.Synced.Keys)
         {
-            if (IsSynced(name) && binding.Path is { } path && Path.GetDirectoryName(path) is { Length: > 0 } folder)
+            if (IsSynced(name) && SourceFolder(name) is { } folder)
             {
                 values.Add(folder);
             }
@@ -2924,8 +2923,7 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         foreach (var name in CollectionsCache.Synced.Keys.Order(StringComparer.Ordinal))
         {
-            if (IsSynced(name) && CollectionsCache.Synced[name].Path is { } path
-                && Path.GetDirectoryName(path) is { Length: > 0 } folderOf && KeptValue.Nfc(folderOf) == wanted)
+            if (IsSynced(name) && SourceFolder(name) is { } folderOf && KeptValue.Nfc(folderOf) == wanted)
             {
                 return name;
             }
