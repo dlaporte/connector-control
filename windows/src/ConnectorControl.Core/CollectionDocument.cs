@@ -39,7 +39,18 @@ public sealed class CollectionDocumentException(string message) : Exception(mess
 }
 
 /// <summary>
-/// A path the author marked on <see cref="Connector"/> can no longer be found where it was
+/// Why a document was not produced from a publish intent. Every refusal derives from it, so a
+/// caller catches or tests them all at once and a new reason is added in one place.
+///
+/// Mirror: <c>PublishIntentError</c> in Sources/ConnectorControlCore/CollectionDocument.swift
+/// </summary>
+public abstract class PublishIntentException(string message, string connector) : Exception(message)
+{
+    public string Connector { get; } = connector;
+}
+
+/// <summary>
+/// A path the author marked on <see cref="PublishIntentException.Connector"/> can no longer be found where it was
 /// marked. The argument it stood for may be anywhere, so no document is written rather than one
 /// that might carry that path as written. What the user reads is
 /// <c>AppState.PathMarkMovedError</c>, which <c>AppState.Friendly</c> gives for this.
@@ -47,29 +58,24 @@ public sealed class CollectionDocumentException(string message) : Exception(mess
 /// Mirror: <c>PublishIntentError.pathMarkMoved</c> in Sources/ConnectorControlCore/CollectionDocument.swift
 /// </summary>
 public sealed class PathMarkMovedException(string connector)
-    : Exception($"a path mark on \"{connector}\" no longer finds its argument")
-{
-    public string Connector { get; } = connector;
-}
+    : PublishIntentException($"a path mark on \"{connector}\" no longer finds its argument", connector);
 
 /// <summary>
-/// <see cref="Connector"/> carries, as written in <see cref="Field"/>, a folder this machine publishes
+/// <see cref="PublishIntentException.Connector"/> carries, as written in <see cref="Field"/>, a folder this machine publishes
 /// the collection into, now or before. It is the author's own folder, and a subscriber's copy stands
 /// for it with the token. What the user reads is <c>AppState.PublishFolderCarriedError</c>.
 ///
 /// Mirror: <c>PublishIntentError.publishFolderCarried</c> in Sources/ConnectorControlCore/CollectionDocument.swift
 /// </summary>
 public sealed class PublishFolderCarriedException(string connector, string field)
-    : Exception($"\"{connector}\" carries the publish folder as written in {field}")
+    : PublishIntentException($"\"{connector}\" carries the publish folder as written in {field}", connector)
 {
-    public string Connector { get; } = connector;
-
     /// <summary>Its place in the connector's document form, e.g. <c>local.command</c>.</summary>
     public string Field { get; } = field;
 }
 
 /// <summary>
-/// <see cref="Connector"/> carries, as written in <see cref="Field"/>, a path this machine keeps
+/// <see cref="PublishIntentException.Connector"/> carries, as written in <see cref="Field"/>, a path this machine keeps
 /// back: a copy of a path marked in it, a path on one of this machine's lists of marked paths, or a
 /// folder this machine binds another collection to. What the user reads is
 /// <c>AppState.KeptPathCarriedError</c>.
@@ -77,10 +83,8 @@ public sealed class PublishFolderCarriedException(string connector, string field
 /// Mirror: <c>PublishIntentError.keptPathCarried</c> in Sources/ConnectorControlCore/CollectionDocument.swift
 /// </summary>
 public sealed class KeptPathCarriedException(string connector, string field)
-    : Exception($"\"{connector}\" carries a kept-back path in {field}")
+    : PublishIntentException($"\"{connector}\" carries a kept-back path in {field}", connector)
 {
-    public string Connector { get; } = connector;
-
     /// <summary>Its place in the connector's document form, e.g. <c>local.args[1]</c> or <c>additional.cwd</c>.</summary>
     public string Field { get; } = field;
 }

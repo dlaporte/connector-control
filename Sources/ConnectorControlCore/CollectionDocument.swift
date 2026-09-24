@@ -14,7 +14,9 @@ public enum CollectionDocumentError: Error, Equatable {
 
 /// Why a document was not produced from a publish intent.
 ///
-/// Mirror: `PathMarkMovedException` in windows/src/ConnectorControl.Core/CollectionDocument.cs
+/// Mirror: `PublishIntentException` in windows/src/ConnectorControl.Core/CollectionDocument.cs, one
+/// subclass per case: `PathMarkMovedException`, `PublishFolderCarriedException` and
+/// `KeptPathCarriedException`.
 public enum PublishIntentError: Error, Equatable {
     /// A path the author marked on this connector can no longer be found where it was marked.
     /// The argument it stood for may be anywhere, so no document is written rather than one that

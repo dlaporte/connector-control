@@ -1654,12 +1654,12 @@ public final class AppState: ObservableObject {
     }
 
     /// Which way a caught publish error did not land. A mark that has moved stops the write for
-    /// the author to review, so another folder is no answer to it; anything else is a write that
-    /// failed. A new reason to block a publish for review belongs here, so the banner can tell it
+    /// the author to review, so another folder is no answer to it, and so does a path this machine
+    /// keeps back or its own publish folder; anything else is a write that failed. A new reason to
+    /// block a publish for review is a new `PublishIntentError` case, so the banner can tell it
     /// from a failed write.
     static func publishErrorKind(of error: Error) -> PublishErrorKind {
-        // Every refusal of the intent — a moved mark, a kept-back path, this machine's own folder —
-        // is answered by the author in the Publish sheet.
+        // Every refusal of the intent is answered by the author in the Publish sheet.
         if error is PublishIntentError { return .blockedForReview }
         return .writeFailed
     }

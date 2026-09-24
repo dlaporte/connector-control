@@ -495,7 +495,7 @@ public sealed class PublishModel : ObservableObject
                     found.AddRange(document.Findings(folders).Select(f => new KeptPath(
                         f.Value, f.Connector, f.Field, KeptPathKind.Folder)));
                 }
-                catch (Exception refused) when (refused is PathMarkMovedException or KeptPathCarriedException)
+                catch (PublishIntentException)
                 {
                     found.Clear();
                 }
@@ -739,7 +739,7 @@ public sealed class PublishModel : ObservableObject
             {
                 return state.ExportDocument(Collection, Intent, Connectors).Encode().EditorText();
             }
-            catch (Exception refused) when (refused is PathMarkMovedException or KeptPathCarriedException)
+            catch (PublishIntentException refused)
             {
                 return AppState.Friendly(refused);
             }

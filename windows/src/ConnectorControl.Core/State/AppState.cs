@@ -2448,7 +2448,7 @@ public sealed class AppState : ObservableObject, IDisposable
             return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException
-                                   or PathMarkMovedException or PublishFolderCarriedException or KeptPathCarriedException)
+                                   or PublishIntentException)
         {
             return Friendly(ex);
         }
@@ -2532,7 +2532,7 @@ public sealed class AppState : ObservableObject, IDisposable
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException
-                                       or PathMarkMovedException or PublishFolderCarriedException or KeptPathCarriedException)
+                                       or PublishIntentException)
             {
                 // The recorded hash is left as it was, so the next change tries this write again.
                 // A mark that has moved lands here too, before anything is written: the document
@@ -2764,10 +2764,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// Which way a caught publish error did not land. A mark that has moved stops the write for the
     /// author to review, so another folder is no answer to it, and so does a path this machine
     /// keeps back or its own publish folder; anything else is a write that failed. A new reason to
-    /// block a publish for review belongs here, so the banner can tell it from a failed write.
+    /// block a publish for review is a new <see cref="PublishIntentException"/>, so the banner can
+    /// tell it from a failed write.
     /// </summary>
     internal static PublishErrorKind PublishErrorKindOf(Exception error) =>
-        error is PathMarkMovedException or PublishFolderCarriedException or KeptPathCarriedException
+        // Every refusal of the intent is answered by the author in the Publish sheet.
+        error is PublishIntentException
             ? PublishErrorKind.BlockedForReview
             : PublishErrorKind.WriteFailed;
 
