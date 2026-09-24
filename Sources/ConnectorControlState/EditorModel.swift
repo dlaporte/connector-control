@@ -785,15 +785,19 @@ public final class EditorModel: ObservableObject {
 
     // MARK: - Save
 
-    /// The config this window opened on, with the `${CC_NEEDS:…}` leaves — and only those —
-    /// carrying whatever the form now holds at the same JSON pointers. Anything else the fields
-    /// have been talked into saying is dropped on the floor, which is the whole point: the
-    /// author owns every other byte, and the next refresh would overwrite it anyway.
-    private func placeholdersFilledIn() -> JSONValue {
+    /// `base` with the `${CC_NEEDS:…}` leaves — and only those — carrying whatever the form now
+    /// holds at the same JSON pointers. Anything else the fields have been talked into saying is
+    /// dropped on the floor, which is the whole point: the author owns every other byte, and the
+    /// next refresh would overwrite it anyway.
+    ///
+    /// `base` is the config the window opened on, or the author's newer one when it changed under
+    /// the window. Then only a marker still reading as it did at open, in the same place, is
+    /// filled: a value typed beside the old config must not land where the author moved things.
+    private func placeholdersFilledIn(onto base: JSONValue) -> JSONValue {
         let original = target.entry.config
         let candidate = view == .json ? (PasteRecovery.recover(jsonText)?.config ?? original) : currentFormConfig()
-        var result = original
-        for (pointer, _) in Placeholder.markers(in: original) {
+        var result = base
+        for (pointer, _) in Placeholder.markers(in: base) where base.value(at: pointer) == original.value(at: pointer) {
             guard case .string(let filled)? = candidate.value(at: pointer) else { continue }
             result = result.replacing(at: pointer, with: .string(filled)) ?? result
         }
@@ -804,11 +808,11 @@ public final class EditorModel: ObservableObject {
     public func save() -> Bool {
         validationError = nil
         let readOnly = isReadOnly
-        let config: JSONValue
+        var config: JSONValue
         if readOnly {
             // Nothing a read-only window can change can be invalid: the author's own save
             // validated everything else, and a placeholder takes any text at all.
-            config = placeholdersFilledIn()
+            config = placeholdersFilledIn(onto: target.entry.config)
         } else if view == .json {
             guard let effective = effectiveJSONConfig() else { return false }
             config = effective
@@ -858,6 +862,12 @@ public final class EditorModel: ObservableObject {
             current = state.store.collections[collection]?.mcps[target.name]
             if current?.config != target.entry.config {
                 let missing = current == nil
+                // A read-only window owns nothing to put back: Save Anyway would resurrect the
+                // author's connector, so the conflict is reported and nothing is written.
+                if missing, readOnly {
+                    validationError = EditorModel.removedOutsideMessage(target.name)
+                    return false
+                }
                 let message = missing
                     ? EditorModel.removedOutsideMessage(target.name)
                     : EditorModel.changedOutsideMessage(target.name)
@@ -865,6 +875,9 @@ public final class EditorModel: ObservableObject {
                 guard dialogs.confirm(message: message, informative: detail, primary: EditorModel.saveAnywayButton) else {
                     return false
                 }
+                // The editor's version of a read-only connector is only its filled values, so
+                // they go onto the author's change rather than the config the window opened on.
+                if readOnly, let current { config = placeholdersFilledIn(onto: current.config) }
             }
         }
         // The name and the remembered view are the author's too, so a read-only save leaves

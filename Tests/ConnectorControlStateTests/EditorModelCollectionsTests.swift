@@ -107,6 +107,55 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertEqual(try rig.h.claudeServers()["dbt"], saved.config, "the filled value reaches Claude")
     }
 
+    /// The author's update lands under an open read-only editor. Save takes the same conflict
+    /// question any save does; declined, nothing moves, and taken, the filled value goes onto the
+    /// author's new config rather than putting back the one the window opened on.
+    func testAReadOnlySaveAfterTheAuthorsChangeKeepsTheChange() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        try subscribeToDataTeam(rig)
+        let state = rig.state
+        let editor = rig.editor("dbt", in: "Data team")
+        let opened = try XCTUnwrap(state.store.collections["Data team"]?.mcps["dbt"])
+        let changed = try XCTUnwrap(opened.config.replacing(at: JSONPointer(["env", "DBT_REGION"]), with: .string("ap")))
+        XCTAssertNil(state.upsert(name: "dbt", entry: MCPEntry(enabled: opened.enabled, config: changed),
+                                  renamedFrom: "dbt", in: "Data team"))
+        let token = try envRow(editor, "DBT_TOKEN")
+        editor.envRows[try XCTUnwrap(editor.envRows.firstIndex(of: token))].value = "dbt_pat_123"
+
+        rig.h.dialogs.nextConfirm = false
+        XCTAssertFalse(editor.save())
+        XCTAssertEqual(rig.h.dialogs.confirms, [FakeDialogs.ConfirmCall(
+            message: EditorModel.changedOutsideMessage("dbt"), informative: EditorModel.changedOutsideDetail,
+            primary: EditorModel.saveAnywayButton, cancel: "Cancel", destructive: false)])
+        XCTAssertEqual(state.store.collections["Data team"]?.mcps["dbt"]?.config, changed)
+
+        rig.h.dialogs.nextConfirm = true
+        XCTAssertTrue(editor.save())
+        XCTAssertEqual(state.store.collections["Data team"]?.mcps["dbt"]?.config,
+                       changed.replacing(at: JSONPointer(["env", "DBT_TOKEN"]), with: .string("dbt_pat_123")),
+                       "the author's region stays, and only the asked-for value moves")
+    }
+
+    /// The author removed the connector under an open read-only editor. There is nothing of this
+    /// machine's to put back, so Save says so and writes nothing, rather than offering to add the
+    /// author's connector back.
+    func testAReadOnlySaveAfterTheAuthorRemovedTheConnectorDoesNotResurrectIt() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        try subscribeToDataTeam(rig)
+        let state = rig.state
+        let editor = rig.editor("dbt", in: "Data team")
+        state.remove(names: ["dbt"], in: "Data team")
+        let token = try envRow(editor, "DBT_TOKEN")
+        editor.envRows[try XCTUnwrap(editor.envRows.firstIndex(of: token))].value = "dbt_pat_123"
+
+        XCTAssertFalse(editor.save())
+        XCTAssertEqual(editor.validationError, EditorModel.removedOutsideMessage("dbt"))
+        XCTAssertEqual(rig.h.dialogs.confirms, [], "no Save Anyway: it would add the author's connector back")
+        XCTAssertNil(state.store.collections["Data team"]?.mcps["dbt"])
+    }
+
     func testASyncedSaveInAnInactiveCollectionPersistsWithoutTouchingClaude() throws {
         let rig = EditorRig()
         defer { rig.dispose() }

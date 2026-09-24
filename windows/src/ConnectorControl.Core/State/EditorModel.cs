@@ -1241,20 +1241,29 @@ public sealed class EditorModel : ObservableObject, IDisposable
     // MARK: save
 
     /// <summary>
-    /// The config this window opened on, with the <c>${CC_NEEDS:…}</c> leaves — and only those —
+    /// <paramref name="baseConfig"/> with the <c>${CC_NEEDS:…}</c> leaves — and only those —
     /// carrying whatever the form now holds at the same JSON pointers. Anything else the fields
     /// have been talked into saying is dropped on the floor, which is the whole point: the author
     /// owns every other byte, and the next refresh would overwrite it anyway.
+    /// <para>
+    /// The base is the config the window opened on, or the author's newer one when it changed
+    /// under the window. Then only a marker still reading as it did at open, in the same place, is
+    /// filled: a value typed beside the old config must not land where the author moved things.
+    /// </para>
     /// </summary>
-    private JsonValue PlaceholdersFilledIn()
+    private JsonValue PlaceholdersFilledIn(JsonValue baseConfig)
     {
         var original = Target.Entry.Config;
         var candidate = view == EditView.Json
             ? PasteRecovery.Recover(jsonText)?.Config ?? original
             : CurrentFormConfig();
-        var result = original;
-        foreach (var (pointer, _) in Placeholder.MarkersIn(original))
+        var result = baseConfig;
+        foreach (var (pointer, _) in Placeholder.MarkersIn(baseConfig))
         {
+            if (baseConfig.ValueAt(pointer) != original.ValueAt(pointer))
+            {
+                continue;
+            }
             if (candidate.ValueAt(pointer) is { Kind: JsonKind.String } filled)
             {
                 result = result.Replacing(pointer, filled) ?? result;
@@ -1273,7 +1282,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         {
             // Nothing a read-only window can change can be invalid: the author's own save
             // validated everything else, and a placeholder takes any text at all.
-            config = PlaceholdersFilledIn();
+            config = PlaceholdersFilledIn(Target.Entry.Config);
         }
         else if (view == EditView.Json)
         {
@@ -1343,11 +1352,24 @@ public sealed class EditorModel : ObservableObject, IDisposable
             if (current?.Config != Target.Entry.Config)
             {
                 var missing = current is null;
+                // A read-only window owns nothing to put back: Save Anyway would resurrect the
+                // author's connector, so the conflict is reported and nothing is written.
+                if (missing && readOnly)
+                {
+                    ValidationError = RemovedOutsideMessage(Target.Name);
+                    return false;
+                }
                 var message = missing ? RemovedOutsideMessage(Target.Name) : ChangedOutsideMessage(Target.Name);
                 var detail = missing ? RemovedOutsideDetail : ChangedOutsideDetail;
                 if (!dialogs.Confirm(message, detail, SaveAnywayButton))
                 {
                     return false;
+                }
+                // The editor's version of a read-only connector is only its filled values, so
+                // they go onto the author's change rather than the config the window opened on.
+                if (readOnly && current is not null)
+                {
+                    config = PlaceholdersFilledIn(current.Config);
                 }
             }
         }
