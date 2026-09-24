@@ -134,7 +134,7 @@ final class PopoverModelTests: XCTestCase {
         defer { popover.dispose() }
 
         XCTAssertEqual(popover.collectionBanner, .locate(collection: "Team", fileName: "team.json"))
-        XCTAssertEqual(popover.collectionBannerText, "Team's file isn’t on this Mac yet.")
+        XCTAssertEqual(popover.collectionBannerText, "Team’s file isn’t on this Mac yet.")
         XCTAssertEqual(popover.collectionBannerButton, "Locate team.json")
 
         let diff = CollectionDiff(added: ["jira"], removed: ["confluence"], changed: [])
@@ -497,7 +497,7 @@ final class PopoverModelTests: XCTestCase {
     func testARowsLockSaysWhatTheWindowsLockSays() {
         let row = ConnectorRow(name: "aws-mcp", enabled: true, toolWarning: nil, isLocked: true)
         XCTAssertEqual(row.lockTooltip, CollectionsModel.lockedGlyphTooltip)
-        XCTAssertEqual(row.lockTooltip, "Read-only: synced from the collection's author")
+        XCTAssertEqual(row.lockTooltip, "Read-only: synced from the collection’s author")
     }
     func testEverySyncedMenuRowNamesItsOwnSource() throws {
         let (h, state) = AppStateHarness.started()

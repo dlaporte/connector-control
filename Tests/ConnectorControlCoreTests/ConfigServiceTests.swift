@@ -163,7 +163,7 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertTrue(result.notes[0].hasPrefix("The MCP list file was unreadable; it was preserved as mcps.corrupt."))
         XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude's config."))
         XCTAssertEqual(result.notes[1],
-                       "Claude's config file is not valid JSON. Your MCP list is safe; "
+                       "Claude’s config file is not valid JSON. Your MCP list is safe; "
                        + "use Backups ▸ Restore to repair the file.")
     }
 
@@ -219,7 +219,7 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(result.store.mcps.count, 3)
         XCTAssertEqual(result.notes.count, 1)
         XCTAssertEqual(result.notes[0],
-                       "Claude's config file is not valid JSON. Your MCP list is safe; "
+                       "Claude’s config file is not valid JSON. Your MCP list is safe; "
                        + "use Backups ▸ Restore to repair the file.")
         XCTAssertNil(result.claudeServers, "no baseline should be recorded from a failed reconcile")
         XCTAssertEqual(try service.backups.backups(series: "mcps").count, backupCountBefore,

@@ -302,7 +302,7 @@ public class StringCatalogTests
         actual["ConfigService.invalidBackupError"] = "backup X is not a valid config file (Y)";
         actual["ConfigService.invalidBackupMcpServersError"] = "backup X has an invalid mcpServers section";
         actual["ConfigService.malformedClaudeConfigNote"] =
-            "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.";
+            "Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.";
 
         // MARK: Dialogs / AlertDialogs
 

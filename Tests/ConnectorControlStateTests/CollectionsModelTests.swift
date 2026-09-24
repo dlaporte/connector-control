@@ -934,7 +934,7 @@ final class CollectionsModelTests: XCTestCase {
     func testTheWindowsGlyphsAndActionsCarryTheirOwnWords() {
         XCTAssertEqual(CollectionsModel.editLabel(for: "notion"), "Edit “notion”")
         XCTAssertEqual(CollectionsModel.makeActiveAction, "Make Active")
-        XCTAssertEqual(CollectionsModel.lockedGlyphTooltip, "Read-only: synced from the collection's author")
+        XCTAssertEqual(CollectionsModel.lockedGlyphTooltip, "Read-only: synced from the collection’s author")
     }
 
     func testTheSidebarChainNamesTheDocumentThisMachineReads() throws {

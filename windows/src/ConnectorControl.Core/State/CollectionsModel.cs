@@ -46,7 +46,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>The sidebar's double-click, and the same action in its context menu.</summary>
     public const string MakeActiveAction = "Make Active";
     /// <summary>The lock at the head of a synced collection's row, and on the flyout's rows too.</summary>
-    public const string LockedGlyphTooltip = "Read-only: synced from the collection's author";
+    public const string LockedGlyphTooltip = "Read-only: synced from the collection’s author";
     /// <summary>
     /// The open and save dialogs' filter for a collection document. Windows only: the Mac's
     /// panels filter by content type, which has no wording.

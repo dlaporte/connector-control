@@ -49,14 +49,14 @@ public sealed class PublishModel : ObservableObject
         $"“{connector}” carries a path this machine keeps back, in {field}. Tick it where it sits, or release it.";
 
     public static string PublishFolderNote(string connector, string field) =>
-        $"“{connector}” carries this machine's publish folder as written, in {field}. Use ${{COLLECTION_DIR}} in its place.";
+        $"“{connector}” carries this machine’s publish folder as written, in {field}. Use ${{COLLECTION_DIR}} in its place.";
 
     /// <summary>
     /// The folder sits where this dialog cannot write: the author's editor is the way out.
     /// "dialog" is the platform-forced half of this sentence; the Mac mirror says "sheet".
     /// </summary>
     public static string PublishFolderEditNote(string connector, string field) =>
-        $"“{connector}” carries this machine's publish folder as written, in {field}, which this dialog cannot write over. Open “{connector}” and write ${{COLLECTION_DIR}} there.";
+        $"“{connector}” carries this machine’s publish folder as written, in {field}, which this dialog cannot write over. Open “{connector}” and write ${{COLLECTION_DIR}} there.";
 
     /// <summary>Publish with no folder chosen. The button is disabled then, so only a caller that skips it hears this.</summary>
     public const string NoFolderError = "Choose a folder to publish to.";

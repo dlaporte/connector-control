@@ -50,11 +50,11 @@ public final class PublishModel: ObservableObject {
 
     public static func keptPathNote(_ connector: String, _ field: String) -> String { "“\(connector)” carries a path this machine keeps back, in \(field). Tick it where it sits, or release it." }
 
-    public static func publishFolderNote(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine's publish folder as written, in \(field). Use ${COLLECTION_DIR} in its place." }
+    public static func publishFolderNote(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine’s publish folder as written, in \(field). Use ${COLLECTION_DIR} in its place." }
 
     /// The folder sits where this sheet cannot write: the author's editor is the way out. "sheet"
     /// is the platform-forced half of this sentence; the Windows mirror says "dialog".
-    public static func publishFolderEditNote(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine's publish folder as written, in \(field), which this sheet cannot write over. Open “\(connector)” and write ${COLLECTION_DIR} there." }
+    public static func publishFolderEditNote(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine’s publish folder as written, in \(field), which this sheet cannot write over. Open “\(connector)” and write ${COLLECTION_DIR} there." }
 
     /// Another collection's folder, or a synced collection's: whose it is, since releasing it
     /// sends one of this machine's own folders.

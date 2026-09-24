@@ -55,7 +55,7 @@ public final class AppState: ObservableObject {
 
     public static func duplicateNameError(_ name: String) -> String { "A connector named “\(name)” already exists." }
 
-    public static func malformedConfigMessage(detail: String) -> String { "Claude's config file is not valid JSON (\(detail)). Nothing was written. Use Backups ▸ Restore to recover it." }
+    public static func malformedConfigMessage(detail: String) -> String { "Claude’s config file is not valid JSON (\(detail)). Nothing was written. Use Backups ▸ Restore to recover it." }
 
     public static func enabledSubtitle(enabled: Int, total: Int) -> String { "\(enabled) of \(total) enabled" }
 
@@ -64,7 +64,7 @@ public final class AppState: ObservableObject {
     public static func collectionUpdateBanner(_ collection: String, _ summary: String) -> String { "\(collection) changed at its source: \(summary)." }
 
     /// "this Mac" is the platform-forced half of this sentence; the Windows mirror says "this PC".
-    public static func collectionLocateBanner(_ collection: String) -> String { "\(collection)'s file isn’t on this Mac yet." }
+    public static func collectionLocateBanner(_ collection: String) -> String { "\(collection)’s file isn’t on this Mac yet." }
 
     public static func collectionPublishFailedBanner(_ collection: String, _ folder: String, _ reason: String) -> String { "Couldn’t publish \(collection) to \(folder): \(reason)" }
 
@@ -76,7 +76,7 @@ public final class AppState: ObservableObject {
 
     public static func pathMarkMovedError(_ connector: String) -> String { "A path marked in “\(connector)” has moved. Open Publishing Settings to mark it again." }
 
-    public static func publishFolderCarriedError(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine's publish folder as written, in \(field). Open Publishing Settings to use ${COLLECTION_DIR} in its place." }
+    public static func publishFolderCarriedError(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine’s publish folder as written, in \(field). Open Publishing Settings to use ${COLLECTION_DIR} in its place." }
 
     public static func keptPathCarriedError(_ connector: String, _ field: String) -> String { "“\(connector)” carries a path this machine keeps back, in \(field). Open Publishing Settings to review it." }
 

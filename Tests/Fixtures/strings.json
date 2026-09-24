@@ -12,10 +12,10 @@
   },
   "AppState.collectionLocateBanner": {
     "mac": {
-      "format": "{0}'s file isn’t on this Mac yet."
+      "format": "{0}’s file isn’t on this Mac yet."
     },
     "win": {
-      "format": "{0}'s file isn’t on this PC yet."
+      "format": "{0}’s file isn’t on this PC yet."
     }
   },
   "AppState.collectionPublishFailedBanner": {
@@ -49,7 +49,7 @@
   "AppState.lastLocalCollectionError": "The last local collection can’t be deleted.",
   "AppState.locateCaution": "Locate the collection file to resolve paths.",
   "AppState.malformedConfigMessage": {
-    "format": "Claude's config file is not valid JSON ({0}). Nothing was written. Use Backups ▸ Restore to recover it."
+    "format": "Claude’s config file is not valid JSON ({0}). Nothing was written. Use Backups ▸ Restore to recover it."
   },
   "AppState.nameEmptyError": "Name must not be empty.",
   "AppState.needsValueCaution": {
@@ -63,7 +63,7 @@
     "format": "A path marked in “{0}” has moved. Open Publishing Settings to mark it again."
   },
   "AppState.publishFolderCarriedError": {
-    "format": "“{0}” carries this machine's publish folder as written, in {1}. Open Publishing Settings to use ${COLLECTION_DIR} in its place."
+    "format": "“{0}” carries this machine’s publish folder as written, in {1}. Open Publishing Settings to use ${COLLECTION_DIR} in its place."
   },
   "AppState.publishIntoStoreError": "Choose a folder other than the master list folder or its backups.",
   "AppState.publishSlugTakenError": {
@@ -152,7 +152,7 @@
   "CollectionsModel.localDetail": {
     "format": "local · {0} connectors"
   },
-  "CollectionsModel.lockedGlyphTooltip": "Read-only: synced from the collection's author",
+  "CollectionsModel.lockedGlyphTooltip": "Read-only: synced from the collection’s author",
   "CollectionsModel.makeActiveAction": "Make Active",
   "CollectionsModel.makeLocalCopyButton": "Make Local Copy",
   "CollectionsModel.moreActionsLabel": "More",
@@ -211,7 +211,7 @@
   "ConfigService.invalidBackupMcpServersError": {
     "format": "backup {0} has an invalid mcpServers section"
   },
-  "ConfigService.malformedClaudeConfigNote": "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.",
+  "ConfigService.malformedClaudeConfigNote": "Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.",
   "CopyModel.copyButton": "Copy",
   "CopyModel.title": {
     "format": "Copy to “{0}”"
@@ -329,7 +329,7 @@
   },
   "FieldName.command": "the command",
   "FieldName.document": {
-    "format": "the document's {0}"
+    "format": "the document’s {0}"
   },
   "FieldName.envValue": {
     "format": "the value of {0}"
@@ -443,14 +443,14 @@
   "PublishModel.publishButton": "Publish",
   "PublishModel.publishFolderEditNote": {
     "mac": {
-      "format": "“{0}” carries this machine's publish folder as written, in {1}, which this sheet cannot write over. Open “{0}” and write ${COLLECTION_DIR} there."
+      "format": "“{0}” carries this machine’s publish folder as written, in {1}, which this sheet cannot write over. Open “{0}” and write ${COLLECTION_DIR} there."
     },
     "win": {
-      "format": "“{0}” carries this machine's publish folder as written, in {1}, which this dialog cannot write over. Open “{0}” and write ${COLLECTION_DIR} there."
+      "format": "“{0}” carries this machine’s publish folder as written, in {1}, which this dialog cannot write over. Open “{0}” and write ${COLLECTION_DIR} there."
     }
   },
   "PublishModel.publishFolderNote": {
-    "format": "“{0}” carries this machine's publish folder as written, in {1}. Use ${COLLECTION_DIR} in its place."
+    "format": "“{0}” carries this machine’s publish folder as written, in {1}. Use ${COLLECTION_DIR} in its place."
   },
   "PublishModel.releaseValueButton": "Release",
   "PublishModel.shareValueLabel": "share value",

@@ -232,14 +232,14 @@ public class AppStateTests
         using var state = h.Create();
         File.WriteAllText(h.ClaudeConfigPath, "{oops");
         state.Reload();
-        Assert.Equal("Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.", state.LastError);
+        Assert.Equal("Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.", state.LastError);
         Assert.Equal(Fixture, state.SortedNames);
         Assert.Empty(h.Notifier.Sent);
         Assert.False(state.ApplyRetryNeeded);
 
         state.SetEnabled("aws-mcp", false);
         Assert.True(state.ApplyRetryNeeded);
-        Assert.StartsWith("Claude's config file is not valid JSON (", state.LastError, StringComparison.Ordinal);
+        Assert.StartsWith("Claude’s config file is not valid JSON (", state.LastError, StringComparison.Ordinal);
         Assert.EndsWith("). Nothing was written. Use Backups ▸ Restore to recover it.", state.LastError, StringComparison.Ordinal);
         Assert.False(h.StoreOnDisk().Mcps["aws-mcp"].Enabled);   // the store change persisted even though the apply failed
         Assert.Equal("{oops", File.ReadAllText(h.ClaudeConfigPath));
@@ -298,7 +298,7 @@ public class AppStateTests
         state.Reload();
         // Both sentences, in reconcile order; the second is the one that says what to do.
         Assert.StartsWith("The MCP list file was unreadable; it was preserved as mcps.corrupt.", state.LastError, StringComparison.Ordinal);
-        Assert.EndsWith(" Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.", state.LastError, StringComparison.Ordinal);
+        Assert.EndsWith(" Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.", state.LastError, StringComparison.Ordinal);
     }
 
     /// <summary>Reload's own catch used to filter by exception type, so a throw from
@@ -327,7 +327,7 @@ public class AppStateTests
     public void FriendlyMapsMalformedConfigAndPassesOtherMessagesThrough()
     {
         Assert.Equal(
-            "Claude's config file is not valid JSON (top level is not a JSON object). Nothing was written. Use Backups ▸ Restore to recover it.",
+            "Claude’s config file is not valid JSON (top level is not a JSON object). Nothing was written. Use Backups ▸ Restore to recover it.",
             AppState.Friendly(new ClaudeConfigException("top level is not a JSON object")));
         Assert.Equal("disk full", AppState.Friendly(new IOException("disk full")));
     }

@@ -21,7 +21,7 @@ public enum FieldName {
     /// A hint belongs to the Publish sheet, whichever form the editor opens.
     public static func hint(_ name: String) -> String { "the hint for \(name)" }
 
-    public static func document(_ field: String) -> String { "the document's \(field)" }
+    public static func document(_ field: String) -> String { "the document’s \(field)" }
 
     /// `field`, as `CollectionDocument.findings(of:)` names it, in the words of the form the editor
     /// opens `config` in. `value` is the path reported there, which finds the argument holding it

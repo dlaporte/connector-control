@@ -1045,7 +1045,7 @@ public class CollectionsModelTests
     {
         Assert.Equal("Edit “notion”", CollectionsModel.EditLabel("notion"));
         Assert.Equal("Make Active", CollectionsModel.MakeActiveAction);
-        Assert.Equal("Read-only: synced from the collection's author", CollectionsModel.LockedGlyphTooltip);
+        Assert.Equal("Read-only: synced from the collection’s author", CollectionsModel.LockedGlyphTooltip);
     }
 
     [Fact]

@@ -42,7 +42,7 @@ public final class CollectionsModel: ObservableObject {
     /// The lock at the head of a synced collection's row, and on the popover's rows too, which
     /// is why it is `nonisolated`: `ConnectorRow` is a plain value that reads it off the main
     /// actor, the same reason `AppState.chooseClaude` is spelled that way.
-    nonisolated public static let lockedGlyphTooltip = "Read-only: synced from the collection's author"
+    nonisolated public static let lockedGlyphTooltip = "Read-only: synced from the collection’s author"
 
     // MARK: - Selection bar
 

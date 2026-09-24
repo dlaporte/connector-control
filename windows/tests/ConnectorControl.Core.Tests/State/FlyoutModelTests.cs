@@ -139,7 +139,7 @@ public class FlyoutModelTests
 
         Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
         Assert.True(flyout.HasCollectionBanner);
-        Assert.Equal("Team's file isn’t on this PC yet.", flyout.CollectionBannerText);
+        Assert.Equal("Team’s file isn’t on this PC yet.", flyout.CollectionBannerText);
         Assert.Equal("Locate team.json", flyout.CollectionBannerButton);
 
         state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
@@ -552,7 +552,7 @@ public class FlyoutModelTests
         using var flyout = new FlyoutModel(state, h.Settings);
         var row = flyout.Rows[0];
         Assert.Equal(CollectionsModel.LockedGlyphTooltip, row.LockTooltip);
-        Assert.Equal("Read-only: synced from the collection's author", row.LockTooltip);
+        Assert.Equal("Read-only: synced from the collection’s author", row.LockTooltip);
         // One glyph, two names.
         Assert.Equal(FlyoutModel.ToolWarningGlyph, FlyoutModel.CautionGlyph);
     }

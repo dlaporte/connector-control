@@ -176,7 +176,7 @@ public class ConfigServiceTests : IDisposable
         Assert.Equal(2, result.Notes.Count);
         Assert.StartsWith("The MCP list file was unreadable; it was preserved as mcps.corrupt.", result.Notes[0], StringComparison.Ordinal);
         Assert.EndsWith(".json and rebuilt from Claude's config.", result.Notes[0], StringComparison.Ordinal);
-        Assert.Equal("Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.", result.Notes[1]);
+        Assert.Equal("Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.", result.Notes[1]);
     }
 
     [Fact]
@@ -228,7 +228,7 @@ public class ConfigServiceTests : IDisposable
         var result = service.LoadAndReconcile();
         Assert.Equal(3, result.Store.Mcps.Count);
         Assert.Single(result.Notes);
-        Assert.Equal("Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.", result.Notes[0]);
+        Assert.Equal("Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.", result.Notes[0]);
         Assert.Null(result.ClaudeServers);
         Assert.Equal(backupsBefore, service.Backups.Backups("mcps").Count);
     }

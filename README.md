@@ -299,7 +299,7 @@ retried quietly before anything is reported.
 
 Another machine picks the collection up from the master list, but where the
 document sits is a per-machine fact. If it lies inside the master-list
-folder the app finds it by itself; otherwise the collection shows "<name>'s
+folder the app finds it by itself; otherwise the collection shows "<name>’s
 file isn’t on this Mac yet." — "this PC" on Windows — with
 **Locate <file>**.
 

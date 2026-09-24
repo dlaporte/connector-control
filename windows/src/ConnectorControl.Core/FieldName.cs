@@ -24,7 +24,7 @@ public static class FieldName
     /// <summary>A hint belongs to the Publish dialog, whichever form the editor opens.</summary>
     public static string Hint(string name) => $"the hint for {name}";
 
-    public static string Document(string field) => $"the document's {field}";
+    public static string Document(string field) => $"the document’s {field}";
 
     /// <summary>
     /// <paramref name="field"/>, as <see cref="CollectionDocument.Findings"/> names it, in the words

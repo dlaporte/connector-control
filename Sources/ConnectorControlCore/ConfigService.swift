@@ -48,7 +48,7 @@ public struct ConfigService: Sendable {
             servers = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
         } catch is ClaudeConfigError {
             return (loaded.store,
-                    notes + ["Claude's config file is not valid JSON. Your MCP list is safe; "
+                    notes + ["Claude’s config file is not valid JSON. Your MCP list is safe; "
                      + "use Backups ▸ Restore to repair the file."],
                     nil)
         }
