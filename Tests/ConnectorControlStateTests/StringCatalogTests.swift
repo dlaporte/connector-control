@@ -464,7 +464,6 @@ final class StringCatalogTests: XCTestCase {
         actual["SettingsModel.loginItemFailureNote"] = SettingsModel.loginItemFailureNote("X")
         actual["SettingsModel.masterListHeader"] = SettingsModel.masterListHeader
         actual["SettingsModel.notifyTitle"] = SettingsModel.notifyTitle
-        actual["SettingsModel.restoreTitle"] = SettingsModel.restoreTitle
         actual["SettingsModel.revealInFinderTitle"] = SettingsModel.revealInFinderTitle
         actual["SettingsModel.storageTab"] = SettingsModel.storageTab
         actual["SettingsModel.toolsCaption"] = SettingsModel.toolsCaption

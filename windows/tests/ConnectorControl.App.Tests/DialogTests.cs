@@ -145,7 +145,7 @@ public class DialogTests
             var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = FlyoutWindow.OffScreen, Top = FlyoutWindow.OffScreen };
             window.Show();
             window.Activate();
-            // Settings ▸ Check for Updates… reaches the coordinator's ownerless WpfDialogs;
+            // Settings ▸ Check for Updates reaches the coordinator's ownerless WpfDialogs;
             // the dialog must still centre on Settings rather than on the screen.
             Assert.Same(window, dialogs.ResolveOwner());
             window.Close();

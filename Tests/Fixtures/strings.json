@@ -490,9 +490,6 @@
   },
   "SettingsModel.masterListHeader": "Master List Location",
   "SettingsModel.notifyTitle": "Notify on external changes",
-  "SettingsModel.restoreTitle": {
-    "mac": "Restore"
-  },
   "SettingsModel.revealInFinderTitle": {
     "mac": "Reveal in Finder",
     "win": "Show in Explorer"

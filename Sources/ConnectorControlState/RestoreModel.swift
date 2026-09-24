@@ -9,6 +9,8 @@ public final class RestoreModel: ObservableObject {
     public static let headline = "Restore Claude config from a backup"
     public static let caption = "The current file is backed up first, then replaced by the selected backup."
     public static let cancelTitle = "Cancel"
+    /// The button that opens this sheet from Settings and the sheet's own Restore, on both
+    /// platforms; `restoreButton` is the confirmation's, a separate question with its own title.
     public static let restoreTitle = "Restore"
     public static let restoreButton = "Restore"
     public static let series = "claude_desktop_config"

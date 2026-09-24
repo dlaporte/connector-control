@@ -23,7 +23,6 @@ public final class SettingsModel: ObservableObject {
     public static let backupsHeader = "Backups"
     public static let backupsCaption = "Both config files are backed up automatically before every change."
     public static let revealInFinderTitle = "Reveal in Finder"
-    public static let restoreTitle = "Restore"
     public static let claudeAppHeader = "Claude App"
     public static let claudeAppRejectedTitle = "That app can’t be used as Claude Desktop"
     public static let toolsHeader = ToolNote.settingsHeader

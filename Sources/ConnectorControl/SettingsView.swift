@@ -107,7 +107,7 @@ struct SettingsView: View {
                     Button(SettingsModel.revealInFinderTitle) {
                         NSWorkspace.shared.activateFileViewerSelecting([model.backupsDir])
                     }
-                    Button(SettingsModel.restoreTitle) { showRestore = true }
+                    Button(RestoreModel.restoreTitle) { showRestore = true }
                 }
             }
         }
