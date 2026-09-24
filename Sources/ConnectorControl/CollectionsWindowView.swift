@@ -362,6 +362,10 @@ struct CollectionsWindowView: View {
             .accessibilityLabel(model.addConnectorTooltipText)
         }
         .font(.callout)
+        // The height the row had with its title, so the rows sit where they did. A disabled
+        // accessory-bar button gives its height up to the list below, which the title used to
+        // hold open; without this the rows would jump up on a synced collection.
+        .frame(minHeight: 18)
     }
 
     private var rows: some View {
