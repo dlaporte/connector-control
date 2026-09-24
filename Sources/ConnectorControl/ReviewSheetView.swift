@@ -98,9 +98,7 @@ struct ReviewSheetView: View {
     /// land. Refresh rebuilds the rows from the file as it is now.
     @ViewBuilder private var moved: some View {
         HStack(spacing: 8) {
-            Image(systemName: PopoverModel.toolWarningGlyph)
-                .imageScale(.small)
-                .foregroundStyle(.orange)
+            CautionMark(nil)
             Text(ReviewModel.sourceMovedMessage)
                 .font(.caption)
                 .foregroundStyle(.orange)

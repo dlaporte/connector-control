@@ -443,7 +443,7 @@ private struct LockedLabel: View {
             if locked {
                 Image(systemName: "lock.fill")
                     .font(.caption2)
-                    .opacity(0.55)
+                    .opacity(LockMark.opacity)
                     .accessibilityLabel(lockLabel)
             }
         }

@@ -10,8 +10,6 @@ struct CollectionsWindowView: View {
     /// The scene id, which the popover's Manage Collections opens.
     static let windowID = "collections"
 
-    /// The lock leading a synced row, dimmed so it reads as a mark rather than as a control.
-    private static let lockOpacity = 0.55
     /// Wide enough for the longest collection name the sidebar is likely to hold without taking
     /// width the rows need for a target column and the pencil.
     private static let sidebarWidth: CGFloat = 200
@@ -181,11 +179,7 @@ struct CollectionsWindowView: View {
             // put them, rather than trailing the name at whatever width it happens to be.
             Spacer(minLength: 6)
             if item.kind == .synced { chain(item) }
-            if item.hasPendingUpdate {
-                Circle()
-                    .fill(.orange)
-                    .frame(width: 6, height: 6)
-            }
+            if item.hasPendingUpdate { PendingDot() }
         }
         // The row answers across its whole width, not only over its text.
         .contentShape(Rectangle())
@@ -367,12 +361,7 @@ struct CollectionsWindowView: View {
                 // synced collection's rows line up with a local one's.
                 ZStack(alignment: .leading) {
                     if row.isLocked {
-                        Image(systemName: "lock.fill")
-                            .imageScale(.small)
-                            .foregroundStyle(.secondary)
-                            .opacity(CollectionsWindowView.lockOpacity)
-                            .help(CollectionsModel.lockedGlyphTooltip)
-                            .accessibilityLabel(CollectionsModel.lockedGlyphTooltip)
+                        LockMark(label: CollectionsModel.lockedGlyphTooltip)
                     } else {
                         Toggle("", isOn: checkedBinding(row))
                             .toggleStyle(.checkbox)
@@ -434,11 +423,7 @@ struct CollectionsWindowView: View {
             if let caution = row.caution {
                 // Advisory only: the pencil stays live, and the tooltip sends the user to the
                 // editor's full note.
-                Image(systemName: PopoverModel.toolWarningGlyph)
-                    .imageScale(.small)
-                    .foregroundStyle(.orange)
-                    .help(caution)
-                    .accessibilityLabel(caution)
+                CautionMark(caution)
             }
         }
     }

@@ -145,13 +145,7 @@ struct ImportSheetView: View {
                     .disabled(row.excludedReason != nil)
                     .accessibilityLabel(ImportModel.includeLabel(row.name))
                 Text(row.name).lineLimit(1)
-                if let caution = row.needsCaution {
-                    Image(systemName: PopoverModel.toolWarningGlyph)
-                        .imageScale(.small)
-                        .foregroundStyle(.orange)
-                        .help(caution)
-                        .accessibilityLabel(caution)
-                }
+                if let caution = row.needsCaution { CautionMark(caution) }
                 Spacer(minLength: 8)
                 badge(for: $row)
             }

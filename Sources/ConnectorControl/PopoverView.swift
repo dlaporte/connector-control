@@ -86,7 +86,7 @@ struct PopoverView: View {
                         chain
                     }
                 }
-                if model.activeHasPendingUpdate { pendingDot }
+                if model.activeHasPendingUpdate { PendingDot() }
                 Text(PopoverView.disclosureMark)
             }
             .font(.caption2.weight(.semibold))
@@ -95,13 +95,6 @@ struct PopoverView: View {
         .menuStyle(.borderlessButton)
         .fixedSize()
         .padding(.top, 1)
-    }
-
-    /// An update is waiting at the source of the collection this sits beside.
-    private var pendingDot: some View {
-        Circle().fill(.orange).frame(width: 6, height: 6)
-            .help(PopoverModel.pendingSpokenLabel)
-            .accessibilityLabel(PopoverModel.pendingSpokenLabel)
     }
 
     /// The collections to switch between, then the window that owns everything else —
