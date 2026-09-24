@@ -263,6 +263,9 @@
   "EditorModel.propagateLabel": {
     "format": "Also apply this change to {0}, which has an identical {1}"
   },
+  "EditorModel.propagateLabelMany": {
+    "format": "Also apply this change to {0}, which have an identical {1}"
+  },
   "EditorModel.publishedNote": {
     "format": "Published to {0} — saving updates the file your team reads. Secrets stay here."
   },

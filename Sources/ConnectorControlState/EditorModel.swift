@@ -55,6 +55,11 @@ public final class EditorModel: ObservableObject {
         "Also apply this change to \(collections), which has an identical \(connector)"
     }
 
+    /// `propagateLabel` for more than one collection, whose verb agrees with the list.
+    public static func propagateLabelMany(_ collections: String, _ connector: String) -> String {
+        "Also apply this change to \(collections), which have an identical \(connector)"
+    }
+
     public static func duplicateEnvError(_ name: String) -> String { "Duplicate environment variable name: \(name)" }
 
     public static func changedOutsideMessage(_ name: String) -> String { "“\(name)” changed outside this editor." }
@@ -313,7 +318,8 @@ public final class EditorModel: ObservableObject {
     public var showPropagate: Bool { !propagateTargets.isEmpty }
 
     public var propagateMessage: String {
-        EditorModel.propagateLabel(propagateTargets.joined(separator: ", "), target.name)
+        let label = propagateTargets.count == 1 ? EditorModel.propagateLabel : EditorModel.propagateLabelMany
+        return label(propagateTargets.joined(separator: ", "), target.name)
     }
 
     private static func twins(of target: EditTarget, in state: AppState) -> [String] {

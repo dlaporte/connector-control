@@ -253,6 +253,19 @@ public class EditorModelCollectionsTests
 
     // MARK: propagate
 
+    /// <summary>More than one twin takes the plural verb.</summary>
+    [Fact]
+    public void ThePropagateLabelAgreesWithHowManyTwinsThereAre()
+    {
+        using var rig = new EditorRig();
+        var state = rig.State;
+        Assert.Null(state.CreateCollection("Backup"));   // a copy of Default
+        Assert.Null(state.CreateCollection("Spare"));    // a copy of Backup
+        state.SwitchCollection("Default");
+        using var editor = rig.Editor("scoutbook", "Default");
+        Assert.Equal("Also apply this change to Backup, Spare, which have an identical scoutbook", editor.PropagateMessage);
+    }
+
     [Fact]
     public void PropagateAppliesTheChangeToIdenticalTwins()
     {

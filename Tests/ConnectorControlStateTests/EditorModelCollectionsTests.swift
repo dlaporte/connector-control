@@ -215,6 +215,18 @@ final class EditorModelCollectionsTests: XCTestCase {
 
     // MARK: - Propagate
 
+    /// More than one twin takes the plural verb.
+    func testThePropagateLabelAgreesWithHowManyTwinsThereAre() {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let state = rig.state
+        XCTAssertNil(state.createCollection(named: "Backup"))   // a copy of Default
+        XCTAssertNil(state.createCollection(named: "Spare"))    // a copy of Backup
+        state.switchCollection(to: "Default")
+        XCTAssertEqual(rig.editor("scoutbook", in: "Default").propagateMessage,
+                       "Also apply this change to Backup, Spare, which have an identical scoutbook")
+    }
+
     func testPropagateAppliesTheChangeToIdenticalTwins() throws {
         let rig = EditorRig()
         defer { rig.dispose() }

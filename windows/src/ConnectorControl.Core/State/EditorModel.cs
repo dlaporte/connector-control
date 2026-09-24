@@ -61,6 +61,10 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public static string PropagateLabel(string collections, string connector) =>
         $"Also apply this change to {collections}, which has an identical {connector}";
 
+    /// <summary><see cref="PropagateLabel"/> for more than one collection, whose verb agrees with the list.</summary>
+    public static string PropagateLabelMany(string collections, string connector) =>
+        $"Also apply this change to {collections}, which have an identical {connector}";
+
     public static string DuplicateEnvError(string name) => $"Duplicate environment variable name: {name}";
     public static string ChangedOutsideMessage(string name) => $"“{name}” changed outside this editor.";
     public static string RemovedOutsideMessage(string name) => $"“{name}” was removed outside this editor.";
@@ -573,7 +577,9 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public bool ShowPropagate => PropagateTargets.Count > 0;
 
-    public string PropagateMessage => PropagateLabel(string.Join(", ", PropagateTargets), Target.Name);
+    public string PropagateMessage => PropagateTargets.Count == 1
+        ? PropagateLabel(string.Join(", ", PropagateTargets), Target.Name)
+        : PropagateLabelMany(string.Join(", ", PropagateTargets), Target.Name);
 
     /// <summary>The propagate checkbox: off unless the user ticks it.</summary>
     public bool Propagate { get => propagate; set => Set(ref propagate, value); }

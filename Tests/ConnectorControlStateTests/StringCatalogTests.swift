@@ -104,6 +104,7 @@ final class StringCatalogTests: XCTestCase {
         "EditorModel.importedNote": ["X", "Y"],
         "EditorModel.lockedFieldsNote": ["X"],
         "EditorModel.propagateLabel": ["X", "Y"],
+        "EditorModel.propagateLabelMany": ["X", "Y"],
         "EditorModel.publishedNote": ["X"],
         "EditorModel.removedOutsideMessage": ["X"],
         "FieldName.argument": ["1"],
@@ -315,6 +316,7 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.notValidJSON"] = EditorModel.notValidJSON
         actual["EditorModel.oauthSecretCaption"] = EditorModel.oauthSecretCaption
         actual["EditorModel.propagateLabel"] = EditorModel.propagateLabel("X", "Y")
+        actual["EditorModel.propagateLabelMany"] = EditorModel.propagateLabelMany("X", "Y")
         actual["EditorModel.publishedNote"] = EditorModel.publishedNote("X")
         actual["EditorModel.remoteFooter"] = EditorModel.remoteFooter
         actual["EditorModel.removedOutsideDetail"] = EditorModel.removedOutsideDetail

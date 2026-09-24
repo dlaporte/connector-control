@@ -111,6 +111,7 @@ public class StringCatalogTests
         ["EditorModel.importedNote"] = ["X", "Y"],
         ["EditorModel.lockedFieldsNote"] = ["X"],
         ["EditorModel.propagateLabel"] = ["X", "Y"],
+        ["EditorModel.propagateLabelMany"] = ["X", "Y"],
         ["EditorModel.publishedNote"] = ["X"],
         ["EditorModel.removedOutsideMessage"] = ["X"],
         ["FlyoutModel.settingsNotSavedCaution"] = ["X"],
@@ -339,6 +340,7 @@ public class StringCatalogTests
         actual["EditorModel.notValidJSON"] = EditorModel.NotValidJson;
         actual["EditorModel.oauthSecretCaption"] = EditorModel.OAuthSecretCaption;
         actual["EditorModel.propagateLabel"] = EditorModel.PropagateLabel("X", "Y");
+        actual["EditorModel.propagateLabelMany"] = EditorModel.PropagateLabelMany("X", "Y");
         actual["EditorModel.publishedNote"] = EditorModel.PublishedNote("X");
         actual["EditorModel.remoteFooter"] = EditorModel.RemoteFooter;
         actual["EditorModel.removedOutsideDetail"] = EditorModel.RemovedOutsideDetail;
