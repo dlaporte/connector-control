@@ -574,6 +574,10 @@ public class AppStateCollectionsTests
         var half = h.Dir.File("half.json");
         TempDir.Touch(half, "{half");
         Assert.StartsWith("half.json couldn’t be read: ", state.Subscribe(half, null), StringComparison.Ordinal);
+        var list = h.Dir.File("list.json");
+        TempDir.Touch(list, "[]");
+        // What is wrong with the document, as it stands.
+        Assert.Equal(AppState.SourceUnreadableError("list.json", "top level is not a JSON object"), state.Subscribe(list, null));
         var newer = CollectionDocumentSamples.DataTeam.Encode()
             .Replacing(JsonPointer.Parse("/connectorControlCollection")!, JsonValue.Int(2))!;
         var future = h.Dir.File("future.json");

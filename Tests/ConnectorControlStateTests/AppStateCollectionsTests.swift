@@ -492,6 +492,11 @@ final class AppStateCollectionsTests: XCTestCase {
         let half = h.dir.file("half.json")
         try TempDir.touch(half, "{half")
         XCTAssertEqual(state.subscribe(documentAt: half.path, as: nil)?.hasPrefix("half.json couldn’t be read: "), true)
+        let list = h.dir.file("list.json")
+        try TempDir.touch(list, "[]")
+        XCTAssertEqual(state.subscribe(documentAt: list.path, as: nil),
+                       AppState.sourceUnreadableError("list.json", "top level is not a JSON object"),
+                       "what is wrong with the document, as it stands")
         var newer = CollectionDocumentSamples.dataTeam.encode()
         newer = try XCTUnwrap(newer.replacing(at: JSONPointer(["connectorControlCollection"]), with: .int(2)))
         let future = h.dir.file("future.json")

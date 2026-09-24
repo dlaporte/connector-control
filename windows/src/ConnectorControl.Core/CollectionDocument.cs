@@ -31,7 +31,11 @@ public sealed class CollectionDocumentException(string message) : Exception(mess
     public static CollectionDocumentException NewerFormat(int version) =>
         new("This collection was made by a newer Connector Control.") { NewerFormatVersion = version };
 
-    public static CollectionDocumentException Malformed(string detail) => new("collection document: " + detail);
+    /// <summary>
+    /// What is wrong, as it stands: <c>AppState.SourceUnreadableError</c> puts the message after the
+    /// file's name, the way the Mac shows <c>CollectionDocumentError.malformed</c>'s detail.
+    /// </summary>
+    public static CollectionDocumentException Malformed(string detail) => new(detail);
 }
 
 /// <summary>
