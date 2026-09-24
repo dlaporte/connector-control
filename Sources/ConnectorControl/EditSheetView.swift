@@ -2,7 +2,7 @@ import SwiftUI
 import ConnectorControlCore
 import ConnectorControlState
 
-/// Fields, bindings and layout only; every rule is EditorModel's.
+/// Fields, bindings and layout only; every rule and string is EditorModel's.
 struct EditSheetView: View {
     @StateObject private var model: EditorModel
     /// EditorModel republishes on tool statuses and on the sidecar, whose change is what unlocks
@@ -28,9 +28,9 @@ struct EditSheetView: View {
         VStack(spacing: 0) {
             HStack {
                 Spacer()
-                Picker("View", selection: $model.viewSelection) {
-                    Text("Form").tag(EditView.form)
-                    Text("JSON").tag(EditView.json)
+                Picker(EditorModel.viewPickerLabel, selection: $model.viewSelection) {
+                    Text(EditorModel.formTab).tag(EditView.form)
+                    Text(EditorModel.jsonTab).tag(EditView.json)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -61,9 +61,9 @@ struct EditSheetView: View {
                     Spacer()
                     // Escape cancels, as it does in the Windows editor: this is a window rather
                     // than a sheet, and a window has no cancel key until a button claims it.
-                    Button(AlertDialogs.cancelTitle) { dismiss() }
+                    Button(EditorModel.cancelButton) { dismiss() }
                         .keyboardShortcut(.cancelAction)
-                    Button("Save") { if model.save() { dismiss() } }
+                    Button(EditorModel.saveButton) { if model.save() { dismiss() } }
                         .keyboardShortcut(.defaultAction)
                         .disabled(!model.canSave)
                 }
@@ -134,25 +134,25 @@ struct EditSheetView: View {
             Section {
                 if model.showTypePicker {
                     Picker(selection: $model.isRemote) {
-                        Text("Remote").tag(true)
-                        Text("Local").tag(false)
+                        Text(EditorModel.remoteTypeTitle).tag(true)
+                        Text(EditorModel.localTypeTitle).tag(false)
                     } label: {
-                        LockedLabel("Type", locked: model.isReadOnly, lockLabel: lockLabel)
+                        LockedLabel(EditorModel.typeLabel, locked: model.isReadOnly, lockLabel: lockLabel)
                     }
                     .pickerStyle(.segmented)
                     .fixedSize()
                     .disabled(model.isReadOnly)
                 }
-                TextField(text: $model.name, prompt: Text("my-mcp")) {
-                    LockedLabel("Name", locked: model.isReadOnly, lockLabel: lockLabel)
+                TextField(text: $model.name, prompt: Text(EditorModel.namePrompt)) {
+                    LockedLabel(EditorModel.nameLabel, locked: model.isReadOnly, lockLabel: lockLabel)
                 }
                 .disabled(model.isReadOnly)
             }
 
             if model.isRemote {
                 Section {
-                    TextField(text: $model.remoteURL, prompt: Text("https://example.com/mcp")) {
-                        LockedLabel("Server URL", locked: model.isReadOnly, lockLabel: lockLabel)
+                    TextField(text: $model.remoteURL, prompt: Text(EditorModel.serverURLPrompt)) {
+                        LockedLabel(EditorModel.serverURLLabel, locked: model.isReadOnly, lockLabel: lockLabel)
                     }
                     .disabled(model.isReadOnly)
                     if model.showURLHint {
@@ -166,19 +166,19 @@ struct EditSheetView: View {
                 } footer: {
                     Text(EditorModel.remoteFooter)
                 }
-                Section("Authentication") { authEditor }
+                Section(EditorModel.authenticationHeader) { authEditor }
             } else {
                 Section {
-                    TextField(text: $model.command, prompt: Text("npx")) {
-                        LockedLabel("Command", locked: model.isReadOnly, lockLabel: lockLabel)
+                    TextField(text: $model.command, prompt: Text(EditorModel.commandPrompt)) {
+                        LockedLabel(EditorModel.commandLabel, locked: model.isReadOnly, lockLabel: lockLabel)
                     }
                     .disabled(model.isReadOnly)
                     if let note = model.toolNote {
                         ToolNoteView(note: note)
                     }
                 }
-                Section("Arguments") { argsEditor }
-                Section("Environment Variables") { envEditor }
+                Section(EditorModel.argumentsHeader) { argsEditor }
+                Section(EditorModel.environmentHeader) { envEditor }
             }
 
             if model.hasAdditional {
@@ -205,7 +205,7 @@ struct EditSheetView: View {
                                  needs: EditorModel.needsPath,
                                  hint: model.placeholderHint(arg: index),
                                  published: model.publishedHint(arg: index)) {
-                    TextField("argument", text: $row.value,
+                    TextField(EditorModel.argumentPrompt, text: $row.value,
                               prompt: asks ? Text(EditorModel.needsPath) : nil)
                         .font(.system(.body, design: .monospaced))
                         .disabled(model.isReadOnly && !asks)
@@ -231,8 +231,8 @@ struct EditSheetView: View {
         if model.hasEnvRows {
             Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
                 GridRow {
-                    Text("Name").font(.caption).foregroundStyle(.secondary)
-                    Text("Value").font(.caption).foregroundStyle(.secondary)
+                    Text(EditorModel.nameLabel).font(.caption).foregroundStyle(.secondary)
+                    Text(EditorModel.valueLabel).font(.caption).foregroundStyle(.secondary)
                     Text("")
                 }
                 ForEach($model.envRows) { $row in
@@ -243,7 +243,7 @@ struct EditSheetView: View {
                         // Titles are kept for accessibility but hidden — the
                         // grouped form would render them as per-field labels,
                         // duplicating the column headers above.
-                        TextField("Name", text: $row.name)
+                        TextField(EditorModel.nameLabel, text: $row.name)
                             .labelsHidden()
                             .multilineTextAlignment(.leading)
                             .textFieldStyle(.roundedBorder)
@@ -258,12 +258,12 @@ struct EditSheetView: View {
                                 if model.asksFor(envRow: row.id) {
                                     // A marker is nobody's secret, and masking it would hide
                                     // which value the author is asking for.
-                                    TextField("Value", text: $row.value, prompt: Text(EditorModel.needsValue))
+                                    TextField(EditorModel.valueLabel, text: $row.value, prompt: Text(EditorModel.needsValue))
                                 } else if row.revealed {
-                                    TextField("Value", text: $row.value)
+                                    TextField(EditorModel.valueLabel, text: $row.value)
                                         .disabled(model.isReadOnly)
                                 } else {
-                                    SecureField("Value", text: $row.value)
+                                    SecureField(EditorModel.valueLabel, text: $row.value)
                                         .disabled(model.isReadOnly)
                                 }
                             }
@@ -308,7 +308,7 @@ struct EditSheetView: View {
                 Text(kind.title).tag(kind)
             }
         } label: {
-            LockedLabel("Type", locked: model.isReadOnly, lockLabel: lockLabel)
+            LockedLabel(EditorModel.typeLabel, locked: model.isReadOnly, lockLabel: lockLabel)
         }
         .pickerStyle(.menu)
         .disabled(model.isReadOnly)
@@ -324,7 +324,7 @@ struct EditSheetView: View {
                              needs: EditorModel.needsValue,
                              hint: model.bearerTokenHint,
                              published: nil) {
-                SecureField("Token", text: $model.bearerToken,
+                SecureField(EditorModel.tokenLabel, text: $model.bearerToken,
                             prompt: asksToken ? Text(EditorModel.needsValue) : nil)
                     .disabled(model.isReadOnly && !asksToken)
             }
@@ -332,33 +332,33 @@ struct EditSheetView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         case .header:
-            TextField("Header name", text: $model.headerName, prompt: Text("X-API-Key"))
+            TextField(EditorModel.headerNameLabel, text: $model.headerName, prompt: Text(EditorModel.headerNamePrompt))
                 .disabled(model.isReadOnly)
             let asksHeaderValue = model.asksForHeaderValue
             PlaceholderField(marked: model.headerValueOwed,
                              needs: EditorModel.needsValue,
                              hint: model.headerValueHint,
                              published: nil) {
-                SecureField("Header value", text: $model.headerValue,
+                SecureField(EditorModel.headerValueLabel, text: $model.headerValue,
                             prompt: asksHeaderValue ? Text(EditorModel.needsValue) : nil)
                     .disabled(model.isReadOnly && !asksHeaderValue)
             }
         case .oauthClient:
-            TextField("Client ID", text: $model.oauthClientID)
+            TextField(EditorModel.clientIDLabel, text: $model.oauthClientID)
                 .disabled(model.isReadOnly)
             let asksSecret = model.asksForClientSecret
             PlaceholderField(marked: model.clientSecretOwed,
                              needs: EditorModel.needsValue,
                              hint: model.clientSecretHint,
                              published: nil) {
-                SecureField("Client Secret", text: $model.oauthClientSecret,
+                SecureField(EditorModel.clientSecretLabel, text: $model.oauthClientSecret,
                             prompt: asksSecret ? Text(EditorModel.needsValue) : nil)
                     .disabled(model.isReadOnly && !asksSecret)
             }
             Text(EditorModel.oauthSecretCaption)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            TextField("Scopes (optional)", text: $model.oauthScopes, prompt: Text("space separated"))
+            TextField(EditorModel.scopesLabel, text: $model.oauthScopes, prompt: Text(EditorModel.scopesPrompt))
                 .disabled(model.isReadOnly)
         }
     }
@@ -370,8 +370,8 @@ struct EditSheetView: View {
             // Name lives in the Form's group box; JSON view needs its own so a
             // raw-JSON paste for a new MCP can be named without switching views.
             HStack(spacing: 8) {
-                LockedLabel("Name", locked: model.isReadOnly, lockLabel: lockLabel)
-                TextField("my-mcp", text: $model.name)
+                LockedLabel(EditorModel.nameLabel, locked: model.isReadOnly, lockLabel: lockLabel)
+                TextField(EditorModel.namePrompt, text: $model.name)
                     .textFieldStyle(.roundedBorder)
                     .disabled(model.isReadOnly)
             }

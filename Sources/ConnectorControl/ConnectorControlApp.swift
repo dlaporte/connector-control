@@ -18,12 +18,12 @@ struct ConnectorControlApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        WindowGroup("Connector Editor", id: EditTarget.editorWindowID, for: EditTarget.self) { $target in
+        WindowGroup(EditorModel.windowGroupTitle, id: EditTarget.editorWindowID, for: EditTarget.self) { $target in
             if let target = $target.wrappedValue {
                 EditSheetView(state: state, target: target)
                     .navigationTitle(target.windowTitle)
             } else {
-                Text("Choose a connector from the menu bar popover.")
+                Text(EditorModel.noTargetMessage)
                     .foregroundStyle(.secondary)
                     .padding(40)
             }
