@@ -17,7 +17,7 @@
     <TextBlock x:Name="SummaryText" Text="{Binding Summary}" Style="{StaticResource CaptionText}" />
 
     <ScrollViewer MaxHeight="380" VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
-      <!-- Grouped by kind, in the order the rows arrive, which is the order the summary reads in.
+      <!-- Grouped by kind, in ReviewModel.Kinds' order, which is the order the summary reads in.
            The grouped view is built in the code-behind, because the rows are replaced wholesale
            whenever the sheet re-reads the source. -->
       <ItemsControl x:Name="ChangeList">

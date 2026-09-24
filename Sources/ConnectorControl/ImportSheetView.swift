@@ -144,7 +144,7 @@ struct ImportSheetView: View {
                     .toggleStyle(.checkbox)
                     .labelsHidden()
                     // A connector this platform has no way to run cannot be imported at all.
-                    .disabled(row.excludedReason != nil)
+                    .disabled(!row.canInclude)
                     .accessibilityLabel(ImportModel.includeLabel(row.name))
                 Text(row.name).lineLimit(1)
                 if let caution = row.needsCaution { CautionMark(caution) }

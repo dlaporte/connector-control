@@ -6,7 +6,6 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Threading;
 using ConnectorControl.Core.State;
@@ -617,13 +616,9 @@ public partial class CollectionsWindow : Window
 /// One header pill's words, from <see cref="CollectionsModel.Title(CollectionsModel.Pill)"/>; this
 /// exists only because XAML cannot call a method.
 /// </summary>
-public sealed class CollectionPillTitleConverter : IValueConverter
+public sealed class CollectionPillTitleConverter : OneWayConverter<CollectionsModel.Pill>
 {
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is CollectionsModel.Pill pill ? CollectionsModel.Title(pill) : string.Empty;
-
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        Binding.DoNothing;
+    protected override object? Map(CollectionsModel.Pill pill, object? parameter) => CollectionsModel.Title(pill);
 }
 
 /// <summary>
@@ -631,11 +626,9 @@ public sealed class CollectionPillTitleConverter : IValueConverter
 /// <see cref="CollectionsModel.SyncedGlyphTooltip"/>'s, which answers null where there is no
 /// chain to explain; this exists only because XAML cannot call a method.
 /// </summary>
-public sealed class CollectionSourceTooltipConverter : IValueConverter
+public sealed class CollectionSourceTooltipConverter : OneWayConverter<CollectionsModel.Item>
 {
-    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is CollectionsModel.Item item ? CollectionsModel.SyncedGlyphTooltip(item) : null;
+    protected override object? Fallback => null;
 
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        Binding.DoNothing;
+    protected override object? Map(CollectionsModel.Item item, object? parameter) => CollectionsModel.SyncedGlyphTooltip(item);
 }

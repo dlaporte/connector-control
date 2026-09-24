@@ -1,8 +1,6 @@
 using System.ComponentModel;
-using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
-using System.Windows.Data;
 using ConnectorControl.Core.State;
 
 namespace ConnectorControl.App.Views;
@@ -84,13 +82,9 @@ public partial class ImportDialog : DialogWindow
 /// picker holds the choices themselves, so the titles are read off them here rather than kept as
 /// a second list beside them.
 /// </summary>
-public sealed class ImportChoiceTitleConverter : IValueConverter
+public sealed class ImportChoiceTitleConverter : OneWayConverter<ImportChoice>
 {
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is ImportChoice choice ? ImportModel.ChoiceTitle(choice) : string.Empty;
-
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        Binding.DoNothing;
+    protected override object? Map(ImportChoice choice, object? parameter) => ImportModel.ChoiceTitle(choice);
 }
 
 /// <summary>
@@ -99,32 +93,10 @@ public sealed class ImportChoiceTitleConverter : IValueConverter
 /// picker's <see cref="ImportModel.CollisionPickerLabel"/>. Both are factories over the row's own
 /// name, which a DataTemplate cannot call.
 /// </summary>
-public sealed class ImportRowLabelConverter : IValueConverter
+public sealed class ImportRowLabelConverter : OneWayConverter<string>
 {
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        if (value is not string connector)
-        {
-            return string.Empty;
-        }
-        return string.Equals(parameter as string, "choice", StringComparison.Ordinal)
+    protected override object? Map(string connector, object? parameter) =>
+        string.Equals(parameter as string, "choice", StringComparison.Ordinal)
             ? ImportModel.CollisionPickerLabel(connector)
             : ImportModel.IncludeLabel(connector);
-    }
-
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        Binding.DoNothing;
 }
-
-/// <summary>
-/// Whether a row can be ticked at all: a connector this platform has no way to run carries the
-/// reason it cannot, and there is nothing about it left to decide.
-/// </summary>
-public sealed class ImportCanIncludeConverter : IValueConverter
-{
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value is null;
-
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        Binding.DoNothing;
-}
-

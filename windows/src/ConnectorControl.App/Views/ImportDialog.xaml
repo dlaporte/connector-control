@@ -6,7 +6,6 @@
         Width="620">
   <Window.Resources>
     <views:ImportChoiceTitleConverter x:Key="ChoiceTitle" />
-    <views:ImportCanIncludeConverter x:Key="CanInclude" />
     <views:ImportRowLabelConverter x:Key="RowLabel" />
 
     <!-- How a collision resolves. Its own template, applied only to a row that has one: a
@@ -115,10 +114,10 @@
                         <ColumnDefinition Width="*" />
                       </Grid.ColumnDefinitions>
                       <!-- A connector this platform has no way to run cannot be imported at all.
-                           IsEnabled comes through a converter rather than a style trigger, because
-                           a local style on a CheckBox would replace the theme's own. -->
+                           IsEnabled is a binding rather than a style trigger, because a local
+                           style on a CheckBox would replace the theme's own. -->
                       <CheckBox x:Name="IncludeTick" IsChecked="{Binding Include, Mode=TwoWay}" VerticalAlignment="Center"
-                                IsEnabled="{Binding ExcludedReason, Converter={StaticResource CanInclude}}"
+                                IsEnabled="{Binding CanInclude}"
                                 AutomationProperties.Name="{Binding Name, Converter={StaticResource RowLabel}}" />
                       <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" Margin="8,0,0,0" />
                       <!-- Caution glyph: its own Auto column, so the badge column keeps the rest. -->
@@ -142,10 +141,8 @@
 
                       <!-- What would happen to this connector: how the collision it would cause
                            resolves, or — for every other row, and for a collision that is not
-                           coming across — the row's own badge. Unticking a collision and choosing
-                           Skip in the picker mean the same thing, so a row that is not coming
-                           across says so instead of offering the choice. Both states read the
-                           row's own Include, which notifies. -->
+                           coming across — the row's own badge. Which of the two is the row's
+                           ShowsPicker, which it raises as its Include changes. -->
                       <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
                         <!-- The badge is a row's whole point and the skipped reason is the longest
                              of them, so the one line that shows it carries the full sentence. -->
@@ -155,13 +152,9 @@
                             <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
                               <Setter Property="Visibility" Value="Visible" />
                               <Style.Triggers>
-                                <MultiDataTrigger>
-                                  <MultiDataTrigger.Conditions>
-                                    <Condition Binding="{Binding Present}" Value="True" />
-                                    <Condition Binding="{Binding Include}" Value="True" />
-                                  </MultiDataTrigger.Conditions>
+                                <DataTrigger Binding="{Binding ShowsPicker}" Value="True">
                                   <Setter Property="Visibility" Value="Collapsed" />
-                                </MultiDataTrigger>
+                                </DataTrigger>
                               </Style.Triggers>
                             </Style>
                           </TextBlock.Style>
@@ -173,14 +166,10 @@
                           <ContentControl.Style>
                             <Style TargetType="ContentControl">
                               <Style.Triggers>
-                                <MultiDataTrigger>
-                                  <MultiDataTrigger.Conditions>
-                                    <Condition Binding="{Binding Present}" Value="True" />
-                                    <Condition Binding="{Binding Include}" Value="True" />
-                                  </MultiDataTrigger.Conditions>
+                                <DataTrigger Binding="{Binding ShowsPicker}" Value="True">
                                   <Setter Property="Content" Value="{Binding}" />
                                   <Setter Property="ContentTemplate" Value="{StaticResource ChoiceTemplate}" />
-                                </MultiDataTrigger>
+                                </DataTrigger>
                               </Style.Triggers>
                             </Style>
                           </ContentControl.Style>

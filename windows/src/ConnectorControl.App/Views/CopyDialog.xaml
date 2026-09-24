@@ -45,15 +45,14 @@
               </Grid.ColumnDefinitions>
               <TextBlock x:Name="RowNameText" Text="{Binding Name}" TextTrimming="CharacterEllipsis"
                          VerticalAlignment="Center" />
-              <!-- A clash shows the picker; a clean arrival shows its badge, which a clashing row
-                   leaves empty for the picker to answer instead — so an empty badge is never
-                   drawn. -->
+              <!-- A clash shows the picker; a clean arrival shows its badge. Which of the two is
+                   the row's ShowsPicker, not whether the badge is empty. -->
               <ContentControl x:Name="Outcome" Grid.Column="1" Content="{Binding}" Margin="8,0,0,0">
                 <ContentControl.Style>
                   <Style TargetType="ContentControl">
                     <Setter Property="ContentTemplate" Value="{StaticResource BadgeTemplate}" />
                     <Style.Triggers>
-                      <DataTrigger Binding="{Binding Clashes}" Value="True">
+                      <DataTrigger Binding="{Binding ShowsPicker}" Value="True">
                         <Setter Property="ContentTemplate" Value="{StaticResource ChoiceTemplate}" />
                       </DataTrigger>
                     </Style.Triggers>

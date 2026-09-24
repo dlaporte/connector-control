@@ -105,7 +105,9 @@ public class ImportModelTests
         // The row carries that text itself, so the template needs no converter over the factory.
         Assert.Equal(ImportModel.SkippedBadge(bad.ExcludedReason!), bad.Badge);
         Assert.False(bad.Include);
+        Assert.False(bad.CanInclude);   // and its tick is out of reach
         Assert.Null(model.Rows[1].ExcludedReason);
+        Assert.True(model.Rows[1].CanInclude);
         Assert.True(model.Rows[1].Include);
 
         // Out of the count in both modes: this machine has no way to run it either way.

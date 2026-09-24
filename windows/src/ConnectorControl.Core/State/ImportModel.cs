@@ -144,6 +144,12 @@ public sealed class ImportModel : ObservableObject
         /// ticked; the Copy dialog's rows preselect Keep both.
         /// </summary>
         public bool ShowsPicker => Present && Include;
+
+        /// <summary>
+        /// Whether the row can be ticked at all: a connector this platform has no way to run
+        /// carries the reason it cannot, and there is nothing about it left to decide.
+        /// </summary>
+        public bool CanInclude => ExcludedReason is null;
     }
 
     private readonly AppState state;

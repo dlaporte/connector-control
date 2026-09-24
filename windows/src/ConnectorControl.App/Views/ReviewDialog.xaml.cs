@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 using ConnectorControl.Core.State;
@@ -13,6 +12,10 @@ namespace ConnectorControl.App.Views;
 /// </summary>
 public partial class ReviewDialog : DialogWindow
 {
+    /// <summary>Each kind's place in <see cref="ReviewModel.Kinds"/>, which is the order the groups show in.</summary>
+    private static readonly Dictionary<ReviewModel.Kind, int> KindOrder =
+        ReviewModel.Kinds.Select((kind, index) => (kind, index)).ToDictionary(pair => pair.kind, pair => pair.index);
+
     private readonly CollectionViewSource grouped = new();
     private readonly PropertyChangedEventHandler onModelChanged;
 
@@ -46,11 +49,14 @@ public partial class ReviewDialog : DialogWindow
     /// <summary>
     /// The grouped view over the rows as they now stand. Re-reading the source replaces the row
     /// list outright, and a view belongs to the collection it was made for, so both are rebuilt
-    /// together whenever the model says anything changed.
+    /// together whenever the model says anything changed. A group is made where its kind first
+    /// appears, so the rows go in sorted by <see cref="ReviewModel.Kinds"/> — a stable sort, which
+    /// keeps the model's order within a kind — and the groups come out in the model's order, as
+    /// the Mac sheet's do, whatever order the rows arrive in.
     /// </summary>
     private void Rebind()
     {
-        grouped.Source = Model.Rows;
+        grouped.Source = Model.Rows.OrderBy(row => KindOrder[row.Kind]).ToList();
         ChangeList.ItemsSource = grouped.View;
     }
 
@@ -79,11 +85,7 @@ public partial class ReviewDialog : DialogWindow
 /// kind itself, and <see cref="ReviewModel.KindLabel"/> is a method rather than a property, which
 /// is the whole of what this converter is for.
 /// </summary>
-public sealed class ReviewKindLabelConverter : IValueConverter
+public sealed class ReviewKindLabelConverter : OneWayConverter<ReviewModel.Kind>
 {
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is ReviewModel.Kind kind ? ReviewModel.KindLabel(kind) : string.Empty;
-
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        Binding.DoNothing;
+    protected override object? Map(ReviewModel.Kind kind, object? parameter) => ReviewModel.KindLabel(kind);
 }

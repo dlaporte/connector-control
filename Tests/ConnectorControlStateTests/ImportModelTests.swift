@@ -69,6 +69,7 @@ final class ImportModelTests: XCTestCase {
         let model = ImportModel(state: state, path: url.path)
         XCTAssertEqual(model.rows.map(\.name), ["bad", "good"])
         XCTAssertTrue(model.rows.allSatisfy { $0.excludedReason == nil })
+        XCTAssertTrue(model.rows.allSatisfy(\.canInclude), "nothing here is out of reach of its tick")
         XCTAssertTrue(model.rows.allSatisfy(\.include))
         XCTAssertEqual(model.importCount, 2)
         model.mode = .keepInSync

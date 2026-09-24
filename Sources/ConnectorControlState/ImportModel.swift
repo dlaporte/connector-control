@@ -103,6 +103,10 @@ public final class ImportModel: ObservableObject {
         /// ticked; the Copy sheet's rows preselect Keep both.
         public var showsPicker: Bool { present && include }
 
+        /// Whether the row can be ticked at all: a connector this platform has no way to run
+        /// carries the reason it cannot, and there is nothing about it left to decide.
+        public var canInclude: Bool { excludedReason == nil }
+
         public init(name: String, include: Bool, present: Bool, choice: ImportChoice,
                     excludedReason: String?, needs: [String], needsCaution: String?, badge: String) {
             self.id = name
