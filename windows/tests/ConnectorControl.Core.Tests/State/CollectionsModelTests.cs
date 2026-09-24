@@ -969,12 +969,15 @@ public class CollectionsModelTests
 
         // Team's file is missing, but the window is showing Default: the strip says nothing.
         Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), state.CollectionBanner);
+        Assert.Null(model.Banner);
         Assert.Null(model.BannerText);
         Assert.Null(model.BannerButton);
         Assert.False(model.HasBanner);
         Assert.False(model.BannerAction());
 
         model.Selected = "Team";
+        // What the window's button switches on, so it never reads AppState's.
+        Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), model.Banner);
         Assert.Equal(AppState.CollectionLocateBanner("Team"), model.BannerText);
         Assert.Equal(FlyoutModel.LocateButton("team.json"), model.BannerButton);
         Assert.True(model.HasBanner);

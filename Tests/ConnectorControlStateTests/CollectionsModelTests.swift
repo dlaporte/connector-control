@@ -862,11 +862,14 @@ final class CollectionsModelTests: XCTestCase {
 
         // Team's file is missing, but the window is showing Default: the strip says nothing.
         XCTAssertEqual(state.collectionBanner, .locate(collection: "Team", fileName: "team.json"))
+        XCTAssertNil(model.banner)
         XCTAssertNil(model.bannerText)
         XCTAssertNil(model.bannerButton)
         XCTAssertFalse(model.bannerAction())
 
         model.selected = "Team"
+        XCTAssertEqual(model.banner, .locate(collection: "Team", fileName: "team.json"),
+                       "what the window's button switches on, so it never reads AppState's")
         XCTAssertEqual(model.bannerText, AppState.collectionLocateBanner("Team"))
         XCTAssertEqual(model.bannerButton, PopoverModel.locateButton("team.json"))
         XCTAssertFalse(model.bannerAction(), "the view owes a file picker")

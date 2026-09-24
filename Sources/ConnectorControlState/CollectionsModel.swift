@@ -557,8 +557,9 @@ public final class CollectionsModel: ObservableObject {
 
     /// The banner above the rows, or nil. Unlike the popover's slot, which speaks for whichever
     /// collection has news, this answers only for the collection the window is showing: a strip
-    /// over one collection's rows saying something about another one would be a lie.
-    private var banner: CollectionBanner? {
+    /// over one collection's rows saying something about another one would be a lie. The window's
+    /// button switches on this, never on AppState's, so the view depends on its model alone.
+    public var banner: CollectionBanner? {
         guard let banner = state.collectionBanner,
               CollectionBannerPresentation.collection(of: banner) == selectedCollection else { return nil }
         return banner

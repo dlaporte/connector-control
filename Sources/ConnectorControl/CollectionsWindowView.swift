@@ -22,8 +22,9 @@ struct CollectionsWindowView: View {
     private static let selectionBarHeight: CGFloat = 30
 
     @StateObject private var model: CollectionsModel
-    /// The popover's request and the banner both travel through AppState, so this window repaints
-    /// on them as well as on the model's own changes — and `onChange` can watch the request.
+    /// The popover's request travels through AppState, not the model, so this window observes
+    /// AppState too, for `onChange` to see the request arrive. Everything else it shows, the
+    /// banner included, is the model's.
     @ObservedObject private var state: AppState
     @Environment(\.openWindow) private var openWindow
     @State private var sheet: Sheet?
@@ -593,7 +594,7 @@ struct CollectionsWindowView: View {
             }
             return
         }
-        switch state.collectionBanner {
+        switch model.banner {
         case .locate:
             if let path = FilePanels.chooseCollectionDocument() { shownError = model.locateSource(path) }
         case .publishFailed:

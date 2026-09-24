@@ -233,10 +233,10 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>
     /// Everything the window binds that follows the collection on show, and nothing that does not
     /// — in particular not <see cref="Items"/>, whose content the selection never touches. What
-    /// the code-behind reads when a menu opens — <see cref="CopyDestinations"/>,
+    /// the code-behind reads when a menu opens or a button is clicked — <see cref="CopyDestinations"/>,
     /// <see cref="CollectionMenu"/>, <see cref="CanRefresh"/>, <see cref="CanDelete"/>,
-    /// <see cref="PublishedFilePath"/> and <see cref="SourceFilePath"/> — is read fresh there, so
-    /// nothing listens for it and it is not raised.
+    /// <see cref="PublishedFilePath"/>, <see cref="SourceFilePath"/> and <see cref="Banner"/> — is
+    /// read fresh there, so nothing listens for it and it is not raised.
     /// </summary>
     private void RaiseSelectionDependents()
     {
@@ -702,9 +702,10 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>
     /// The banner above the rows, or null. Unlike the flyout's slot, which speaks for whichever
     /// collection has news, this answers only for the collection the window is showing: a strip
-    /// over one collection's rows saying something about another one would be a lie.
+    /// over one collection's rows saying something about another one would be a lie. The window's
+    /// button switches on this, never on AppState's, so the view depends on its model alone.
     /// </summary>
-    private CollectionBanner? Banner =>
+    public CollectionBanner? Banner =>
         state.CollectionBanner is { } banner
             && CollectionBannerPresentation.Collection(banner) == SelectedCollection
             ? banner
