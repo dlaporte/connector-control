@@ -887,6 +887,8 @@ public final class AppState: ObservableObject {
             move(&pendingRendered, from: name, to: trimmed)
             move(&sourceFailures, from: name, to: trimmed)
             move(&notifiedSourceHashes, from: name, to: trimmed)
+            // The retry flag stays under the old name: the retry waiting there finds nothing when it
+            // fires, and the next failure under the new name schedules one of its own.
             if let failure = publishError, failure.collection == name {
                 publishError = CollectionPublishError(collection: trimmed, message: failure.message, kind: failure.kind)
             }

@@ -1287,10 +1287,8 @@ public sealed class AppState : ObservableObject, IDisposable
             MoveInPlace(pendingRendered, name, trimmed);
             MoveInPlace(sourceFailures, name, trimmed);
             MoveInPlace(notifiedSourceHashes, name, trimmed);
-            if (sourceRetryScheduled.Remove(name))
-            {
-                sourceRetryScheduled.Add(trimmed);
-            }
+            // The retry flag stays under the old name: the retry waiting there finds nothing when it
+            // fires, and the next failure under the new name schedules one of its own.
             if (PublishError is { } failure && failure.Collection == name)
             {
                 PublishError = failure with { Collection = trimmed };

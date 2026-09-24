@@ -812,6 +812,34 @@ public class AppStateCollectionsTests
         Assert.Equal(renders, state.SourceRenders);
     }
 
+    /// <summary>
+    /// A retry waiting under the old name dies harmlessly when it fires, and the next failure under
+    /// the new one starts a chain of its own: renaming a collection during a backoff must not turn
+    /// automatic retries off.
+    /// </summary>
+    [Fact]
+    public void ARenameDuringTheBackoffKeepsRetrying()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("t.json");
+        WriteDocument(CollectionDocumentSamples.DataTeam, path);
+        Assert.Null(state.Subscribe(path, "T"));
+        Thread.Sleep(WatcherSettle);
+        File.WriteAllText(path, "{half");
+        TempDir.BumpModificationTime(path);
+        Assert.True(h.Ui.PumpUntil(() => h.Delays.Pending.Count > 0, Wait));
+
+        Assert.Null(state.RenameCollection("T", "U"));
+        // Every retry that is due, the old name's included, until the chain has nothing left.
+        for (var i = 0; i < 10 && h.Delays.Pending.Count > 0; i++)
+        {
+            h.Delays.RunNext();
+        }
+        Assert.NotNull(state.SourceErrors.GetValueOrDefault("U"));   // the chain went on under the new name to its third failure
+        Assert.Empty(h.Delays.Pending);
+    }
+
     [Fact]
     public void TheRetryChainReportsOnlyTheThirdFailure()
     {

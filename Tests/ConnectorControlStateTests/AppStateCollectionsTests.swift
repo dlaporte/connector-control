@@ -716,6 +716,26 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.sourceRenders, renders, "and re-deriving it still costs no decode")
     }
 
+    /// A retry waiting under the old name dies harmlessly when it fires, and the next failure under
+    /// the new one starts a chain of its own: renaming a collection during a backoff must not turn
+    /// automatic retries off.
+    func testARenameDuringTheBackoffKeepsRetrying() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("t.json")
+        try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: "T"))
+        try Data("{half".utf8).write(to: url)
+        try TempDir.bumpModificationDate(of: url)
+        XCTAssertTrue(h.ui.pumpUntil({ !h.delays.pending.isEmpty }, timeout: 8))
+
+        XCTAssertNil(state.renameCollection("T", to: "U"))
+        // Every retry that is due, the old name's included, until the chain has nothing left.
+        for _ in 0..<10 where !h.delays.pending.isEmpty { h.delays.runNext() }
+        XCTAssertNotNil(state.sourceErrors["U"], "the chain went on under the new name to its third failure")
+        XCTAssertTrue(h.delays.pending.isEmpty)
+    }
+
     func testTheRetryChainReportsOnlyTheThirdFailure() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
