@@ -366,7 +366,7 @@ public class UpdateCoordinatorTests
         Assert.Equal("1.3.0", coordinator.DeclinedVersion);
         Assert.Equal("1.3.0", settings.DeclinedUpdateVersion);   // persisted, not just in-memory
 
-        // Settings ▸ Check for Updates… always offers, even a version the user already declined.
+        // Settings ▸ Check for Updates always offers, even a version the user already declined.
         Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: true));
         Assert.Equal(2, dialogs.Offers.Count);
     }

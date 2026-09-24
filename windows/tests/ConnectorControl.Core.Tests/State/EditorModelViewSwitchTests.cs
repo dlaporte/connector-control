@@ -80,7 +80,7 @@ public class EditorModelViewSwitchTests
         editor.RequestView(EditView.Json);
         Assert.Equal(EditView.Form, editor.View);
         Assert.Equal("An environment variable value is missing its name.", editor.ValidationError);
-        Assert.Equal(EditView.Form, editor.View);
+        Assert.Equal(["orphan"], editor.EnvRows.Select(r => r.Value).ToArray());   // left as typed, for the user to name
     }
 
     [Fact]

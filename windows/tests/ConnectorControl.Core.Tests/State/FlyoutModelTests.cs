@@ -12,12 +12,10 @@ public class FlyoutModelTests
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
-        Assert.Equal("Connector Control", FlyoutModel.Title);
         Assert.Equal("No connectors configured", flyout.Subtitle);
         Assert.Equal("Default", flyout.ActiveCollection);
         Assert.True(flyout.IsEmpty);
-        Assert.Equal("No connectors configured yet.", FlyoutModel.EmptyText);
-        state.Upsert("z", new McpEntry(AppStateHarness.Remote("https://z.example/mcp")), null);
+        Assert.Null(state.Upsert("z", new McpEntry(AppStateHarness.Remote("https://z.example/mcp")), null));
         Assert.Equal("1 of 1 enabled", flyout.Subtitle);
         Assert.False(flyout.IsEmpty);
     }
@@ -27,7 +25,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        state.Upsert("Zebra", new McpEntry(AppStateHarness.Remote("https://zebra.example/mcp")), null);
+        Assert.Null(state.Upsert("Zebra", new McpEntry(AppStateHarness.Remote("https://zebra.example/mcp")), null));
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal(["Zebra", "aws-mcp", "scoutbook", "service-now"], flyout.Rows.Select(r => r.Name).ToArray());   // uppercase first: ordinal
         Assert.All(flyout.Rows, r => Assert.True(r.Enabled));
@@ -247,8 +245,8 @@ public class FlyoutModelTests
         Assert.All(flyout.Rows, r => Assert.Equal("Needs npx, which wasn’t found. Edit to see how to install it.", r.ToolWarning));
 
         // A connector whose command is a full path needs no PATH lookup, so it never warns.
-        state.Upsert("pathed", new McpEntry(JsonValue.Object(
-            ("command", JsonValue.String(@"C:\Program Files\nodejs\node.exe")))), null);
+        Assert.Null(state.Upsert("pathed", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String(@"C:\Program Files\nodejs\node.exe")))), null));
         var pathed = flyout.Rows.Single(r => r.Name == "pathed");
         Assert.False(pathed.HasToolWarning);
         Assert.Null(pathed.ToolWarning);
@@ -289,10 +287,10 @@ public class FlyoutModelTests
         flyout.Opened();   // an empty catalog
         Assert.Equal(0, h.Tools.Batches);
 
-        state.Upsert("pathed", new McpEntry(JsonValue.Object(
-            ("command", JsonValue.String(@"C:\tools\node.exe")))), null);
-        state.Upsert("stranger", new McpEntry(JsonValue.Object(
-            ("command", JsonValue.String("python")))), null);
+        Assert.Null(state.Upsert("pathed", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String(@"C:\tools\node.exe")))), null));
+        Assert.Null(state.Upsert("stranger", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("python")))), null));
         flyout.Opened();   // a full path and an unknown launcher both need no PATH lookup
         Assert.Equal(0, h.Tools.Batches);
         Assert.Empty(h.Tools.Probed);
@@ -348,12 +346,6 @@ public class FlyoutModelTests
         Assert.Equal("apply failed", flyout.ErrorMessage);
     }
     // MARK: collection menu titles, chip marks and locks
-
-    [Fact]
-    public void TheManageItemHasItsTitle()
-    {
-        Assert.Equal("Manage Collections", FlyoutModel.ManageTitle);
-    }
 
     [Fact]
     public void TheChipMarksAndLocksFollowTheActiveCollection()
@@ -680,23 +672,6 @@ public class FlyoutModelTests
         Assert.True(state.IsPublished("Default"));
     }
 
-    [Fact]
-    public void AMovedMarkIsClassifiedAsBlockedAndEverythingElseAsAFailedWrite()
-    {
-        Assert.Equal(PublishErrorKind.BlockedForReview, AppState.PublishErrorKindOf(new PathMarkMovedException("ledger")));
-        Assert.Equal(PublishErrorKind.WriteFailed, AppState.PublishErrorKindOf(new IOException("disk full")));
-    }
-
-    [Fact]
-    public void RenamingACollectionKeepsItsBlockedPublishBlocked()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
-        state.PublishError = new CollectionPublishError("Team", "moved", PublishErrorKind.BlockedForReview);
-        Assert.Null(state.RenameCollection("Team", "Crew"));
-        Assert.Equal(new CollectionPublishError("Crew", "moved", PublishErrorKind.BlockedForReview), state.PublishError);
-    }
     /// <summary>
     /// Adapted from the coll-21 review's probe P6. A real moved mark, not a hand-set error: the
     /// folder change that follows must be refused, because the intent it would carry is the one

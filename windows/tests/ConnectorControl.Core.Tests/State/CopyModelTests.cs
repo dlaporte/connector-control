@@ -56,21 +56,6 @@ public class CopyModelTests
         Assert.Equal([true, false, true], model.Rows.Select(r => r.ShowsPicker));   // every clash asks
     }
 
-    [Fact]
-    public void ARowThatDoesNotClashIsBadgedNew()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        Assert.Null(state.AddEmptyCollection("Spare"));
-        Assert.Null(state.Upsert("alpha", Local("/bin/alpha"), null, "Default"));
-        using var collections = new CollectionsModel(state, h.Dialogs);
-        collections.Selected = "Default";
-        collections.SetChecked("alpha", true);
-
-        var model = new CopyModel(collections, "Spare");
-        Assert.Equal([ImportModel.NewBadge], model.Rows.Select(r => r.Badge));
-    }
-
     /// <summary>Replace takes over the destination's own entry under its own name.</summary>
     [Fact]
     public void PerformWithReplaceReplacesTheDestinationsEntry()

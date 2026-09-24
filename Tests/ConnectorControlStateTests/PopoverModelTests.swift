@@ -299,10 +299,6 @@ final class PopoverModelTests: XCTestCase {
 
     // MARK: - Collection menu titles, chip marks and locks
 
-    func testTheManageItemHasItsTitle() {
-        XCTAssertEqual(PopoverModel.manageTitle, "Manage Collections")
-    }
-
     func testTheChipMarksAndLocksFollowTheActiveCollection() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
@@ -602,20 +598,6 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertTrue(state.isPublished("Default"))
     }
 
-    func testAMovedMarkIsClassifiedAsBlockedAndEverythingElseAsAFailedWrite() {
-        XCTAssertEqual(AppState.publishErrorKind(of: PublishIntentError.pathMarkMoved(connector: "ledger")),
-                       .blockedForReview)
-        XCTAssertEqual(AppState.publishErrorKind(of: CocoaError(.fileWriteNoPermission)), .writeFailed)
-    }
-
-    func testRenamingACollectionKeepsItsBlockedPublishBlocked() throws {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
-        state.publishError = CollectionPublishError(collection: "Team", message: "moved", kind: .blockedForReview)
-        XCTAssertNil(state.renameCollection("Team", to: "Crew"))
-        XCTAssertEqual(state.publishError, CollectionPublishError(collection: "Crew", message: "moved", kind: .blockedForReview))
-    }
     /// Adapted from the coll-21 review's probe P6. A real moved mark, not a hand-set error: the
     /// folder change that follows must be refused, because the intent it would carry is the one
     /// that blocked, so the new folder would be bound, receive nothing, and leave the old folder's

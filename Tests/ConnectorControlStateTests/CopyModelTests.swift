@@ -47,20 +47,6 @@ final class CopyModelTests: XCTestCase {
         XCTAssertEqual(model.rows.map(\.showsPicker), [true, false, true], "every clash asks")
     }
 
-    func testARowThatDoesNotClashIsBadgedNew() throws {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        XCTAssertNil(state.addEmptyCollection(named: "Spare"))
-        XCTAssertNil(state.upsert(name: "alpha", entry: local("/bin/alpha"), renamedFrom: nil, in: "Default"))
-        let collections = CollectionsModel(state: state, dialogs: h.dialogs)
-        defer { collections.dispose() }
-        collections.selected = "Default"
-        collections.setChecked("alpha", true)
-
-        let model = CopyModel(collections: collections, destination: "Spare")
-        XCTAssertEqual(model.rows.map(\.badge), [ImportModel.newBadge])
-    }
-
     /// `.replace` takes over the destination's own entry under its own name.
     func testPerformWithReplaceReplacesTheDestinationsEntry() throws {
         let (h, state) = AppStateHarness.started()

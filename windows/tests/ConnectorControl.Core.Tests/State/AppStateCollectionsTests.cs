@@ -528,7 +528,10 @@ public class AppStateCollectionsTests
     private static readonly TimeSpan Wait = TimeSpan.FromSeconds(8);
 
     /// <summary>Gives a just-armed source watcher a moment before a test relies on it seeing the
-    /// very next write — the same arming race AppStateWatcherTests waits out.</summary>
+    /// very next write — the same arming race AppStateWatcherTests waits out. A FileSystemWatcher
+    /// arms on a background thread on the Mac and leaves no signal to wait on, so only the one test
+    /// that proves the watcher delivers a change uses it; every other test reads the source
+    /// through RecomputePending, the watcher's own non-manual read.</summary>
     private static readonly TimeSpan WatcherSettle = TimeSpan.FromMilliseconds(300);
 
     /// <summary>The bytes an author's machine would have written, at a path this machine can read.</summary>
@@ -632,7 +635,7 @@ public class AppStateCollectionsTests
         var path = h.Dir.File("data-team.json");
         WriteDocument(CollectionDocumentSamples.DataTeam, path);
         Assert.Null(state.Subscribe(path, null));
-        Thread.Sleep(WatcherSettle);
+        Thread.Sleep(WatcherSettle);   // this test proves the watcher delivers the change, so it waits for it to arm
         // The user fills the token and turns dbt on.
         state.SwitchCollection("Data team");
         var token = JsonPointer.Parse("/env/DBT_TOKEN")!;
@@ -669,10 +672,8 @@ public class AppStateCollectionsTests
         var path = h.Dir.File("t.json");
         WriteDocument(CollectionDocumentSamples.DataTeam, path);
         Assert.Null(state.Subscribe(path, "T"));
-        Thread.Sleep(WatcherSettle);
         File.WriteAllText(path, "{half");
-        TempDir.BumpModificationTime(path);
-        h.Ui.PumpUntil(() => h.Delays.Pending.Count > 0, Wait);
+        state.RecomputePending();   // the source watcher's own read, without waiting on the watcher
         Assert.Empty(state.SourceErrors);   // the first failure schedules a retry instead of reporting
         Assert.Single(h.Delays.Pending);
         Assert.Equal(TimeSpan.FromSeconds(2), h.Delays.Pending[0].Delay);
@@ -726,7 +727,6 @@ public class AppStateCollectionsTests
         var path = h.Dir.File("data-team.json");
         WriteDocument(CollectionDocumentSamples.DataTeam, path);
         Assert.Null(state.Subscribe(path, null));
-        Thread.Sleep(WatcherSettle);
         var before = new Dictionary<string, McpEntry>(state.Store.Collections["Data team"].Mcps, StringComparer.Ordinal);
 
         state.StopSyncing("Data team");
@@ -846,10 +846,9 @@ public class AppStateCollectionsTests
         var path = h.Dir.File("t.json");
         WriteDocument(CollectionDocumentSamples.DataTeam, path);
         Assert.Null(state.Subscribe(path, "T"));
-        Thread.Sleep(WatcherSettle);
         File.WriteAllText(path, "{half");
-        TempDir.BumpModificationTime(path);
-        Assert.True(h.Ui.PumpUntil(() => h.Delays.Pending.Count > 0, Wait));
+        state.RecomputePending();   // the source watcher's own read, without waiting on the watcher
+        Assert.NotEmpty(h.Delays.Pending);
 
         Assert.Null(state.RenameCollection("T", "U"));
         // Every retry that is due, the old name's included, until the chain has nothing left.
@@ -869,10 +868,9 @@ public class AppStateCollectionsTests
         var path = h.Dir.File("t.json");
         WriteDocument(CollectionDocumentSamples.DataTeam, path);
         Assert.Null(state.Subscribe(path, "T"));
-        Thread.Sleep(WatcherSettle);
         File.WriteAllText(path, "{half");
-        TempDir.BumpModificationTime(path);
-        Assert.True(h.Ui.PumpUntil(() => h.Delays.Pending.Count > 0, Wait));
+        state.RecomputePending();   // the source watcher's own read, without waiting on the watcher
+        Assert.NotEmpty(h.Delays.Pending);
 
         Assert.Equal([TimeSpan.FromSeconds(2)], h.Delays.Pending.Select(p => p.Delay));
         Assert.Empty(state.SourceErrors);
@@ -923,13 +921,12 @@ public class AppStateCollectionsTests
         var path = h.Dir.File("data-team.json");
         WriteDocument(CollectionDocumentSamples.DataTeam, path);
         Assert.Null(state.Subscribe(path, null));
-        Thread.Sleep(WatcherSettle);
         Assert.Equal("Default", state.ActiveCollection);
         var before = h.ClaudeServers();
 
         WriteDocument(ChangedSample(), path);
-        TempDir.BumpModificationTime(path);
-        Assert.True(h.Ui.PumpUntil(() => state.PendingUpdates.ContainsKey("Data team"), Wait));
+        state.RecomputePending();   // the source watcher's own read, without waiting on the watcher
+        Assert.True(state.PendingUpdates.ContainsKey("Data team"));
 
         Assert.Null(state.ApplyPendingUpdate("Data team"));
         Assert.False(state.Store.Collections["Data team"].Mcps.ContainsKey("github"));
@@ -1436,6 +1433,24 @@ public class AppStateCollectionsTests
         state.Reload(ReloadTrigger.ExternalStoreAdoption);
         Assert.Equal(AppState.PathMarkMovedError("ledger"), state.PublishError?.Message);
         Assert.Equal(before, File.ReadAllBytes(file));
+    }
+
+    [Fact]
+    public void AMovedMarkIsClassifiedAsBlockedAndEverythingElseAsAFailedWrite()
+    {
+        Assert.Equal(PublishErrorKind.BlockedForReview, AppState.PublishErrorKindOf(new PathMarkMovedException("ledger")));
+        Assert.Equal(PublishErrorKind.WriteFailed, AppState.PublishErrorKindOf(new IOException("disk full")));
+    }
+
+    [Fact]
+    public void RenamingACollectionKeepsItsBlockedPublishBlocked()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateCollection("Team"));
+        state.PublishError = new CollectionPublishError("Team", "moved", PublishErrorKind.BlockedForReview);
+        Assert.Null(state.RenameCollection("Team", "Crew"));
+        Assert.Equal(new CollectionPublishError("Crew", "moved", PublishErrorKind.BlockedForReview), state.PublishError);
     }
 
     // MARK: this machine's list of marked paths
@@ -3198,7 +3213,7 @@ public class AppStateCollectionsTests
     }
 
     // Removing several connectors is one write, not one per connector: a loop would rotate a
-    // backup and republish for each. Each one's publish ticks and path marks go with it.
+    // backup and republish for each.
     [Fact]
     public void RemovingSeveralConnectorsPersistsOnce()
     {
@@ -3220,6 +3235,35 @@ public class AppStateCollectionsTests
         Assert.Equal(before + 1, BackupCount(h, "mcps"));
     }
 
+    // Each removed connector's publish ticks and path marks go with it, and the others' stay.
+    [Fact]
+    public void RemovingSeveralConnectorsTakesTheirPublishTicksAndMarksWithThem()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        foreach (var name in new[] { "alpha", "beta", "gamma" })
+        {
+            Assert.Null(state.Upsert(name, new McpEntry(JsonValue.Object(
+                ("command", JsonValue.String("/bin/" + name)),
+                ("args", JsonValue.Array([JsonValue.String($"/Users/d/{name}/index.js")])),
+                ("env", JsonValue.Object(("A", JsonValue.String("us")))))), null, "Default"));
+        }
+        static IReadOnlySet<string> A() => new HashSet<string>(StringComparer.Ordinal) { "A" };
+        static IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> Mark(string name) =>
+            new Dictionary<JsonPointer, PublishIntent.PathMark> { [ArgPointer(0)] = new(name + "_path", null, $"/Users/d/{name}/index.js") };
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing("Default", folder, new PublishIntent(
+            [new("alpha", A()), new("beta", A()), new("gamma", A())],
+            [new("alpha", Mark("alpha")), new("beta", Mark("beta")), new("gamma", Mark("gamma"))],
+            [])));
+
+        state.Remove(["alpha", "gamma"], "Default");
+
+        Assert.Equal(new PublishIntent([new("beta", A())], [new("beta", Mark("beta"))], []),
+            state.CollectionsFile.Collections["Default"].Publish?.Intent);
+        Assert.Null(state.PublishError);
+    }
+
     // A name the collection does not hold is skipped rather than failing, and removing nothing
     // writes nothing.
     [Fact]
@@ -3236,8 +3280,9 @@ public class AppStateCollectionsTests
         Assert.Equal(before, BackupCount(h, "mcps"));
 
         state.Remove(["nosuch"], "Default");
-        // A name it never held is skipped.
+        // A name it never held is skipped, and skipping it writes nothing either.
         Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("alpha"));
+        Assert.Equal(before, BackupCount(h, "mcps"));
     }
 
     // How many files the named backup series holds, for proving a write happened once.

@@ -79,11 +79,12 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertFalse(state.isLocated("Team"))
         XCTAssertTrue(state.isLocated("Default"))
 
-        // dispose() cuts the republish: the items still read through, nothing repaints.
+        // dispose() cuts the republish: nothing repaints. What the items read afterwards is not
+        // asserted — nobody reads them once the window is gone, and pinning a stale value would
+        // make a behaviour of it.
         model.dispose()
         let before = repaints
         state.pendingUpdates = [:]
-        XCTAssertEqual(model.items.map(\.hasPendingUpdate), [false, false, false])
         XCTAssertEqual(repaints, before)
     }
 

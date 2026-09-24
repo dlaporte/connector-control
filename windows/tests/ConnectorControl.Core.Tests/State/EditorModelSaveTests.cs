@@ -210,7 +210,7 @@ public class EditorModelSaveTests
     {
         using var rig = new EditorRig();
         var editor = rig.Editor(TestTargets.Existing("scoutbook", rig.State.Store.Mcps["scoutbook"]));
-        rig.State.Upsert("scoutbook", new McpEntry(AppStateHarness.Remote("https://elsewhere.example/mcp")), "scoutbook");
+        Assert.Null(rig.State.Upsert("scoutbook", new McpEntry(AppStateHarness.Remote("https://elsewhere.example/mcp")), "scoutbook"));
         editor.RemoteUrl = "https://mine.example/mcp";
         rig.H.Dialogs.NextConfirm = false;
         Assert.False(editor.Save());

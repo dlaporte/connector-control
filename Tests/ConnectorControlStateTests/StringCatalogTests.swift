@@ -589,7 +589,9 @@ final class StringCatalogTests: XCTestCase {
     }
 
     /// The fixture has no `null` platform value today, so the rule above is
-    /// pinned here rather than by the fixture walk.
+    /// pinned here rather than by the fixture walk. Swift-only: the C# walk
+    /// inlines `is not null`, which JsonNode already gives this meaning, so it
+    /// has no helper of its own to pin.
     func testANullPlatformValueDoesNotResolve() {
         XCTAssertFalse(Self.isResolved(nil))
         XCTAssertFalse(Self.isResolved(.null))

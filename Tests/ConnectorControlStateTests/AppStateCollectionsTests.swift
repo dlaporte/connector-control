@@ -562,7 +562,8 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.upsert(name: "dbt", entry: dbt, renamedFrom: "dbt"))
         XCTAssertTrue(state.pendingUpdates.isEmpty, "a filled marker is not a change to the collection")
 
-        // The author changes dbt's args and removes github.
+        // The author changes dbt's args and removes github. This test alone waits for the real
+        // source watcher to deliver it; the others read the source through recomputePending.
         try writeDocument(changedSample(), at: url)
         try TempDir.bumpModificationDate(of: url)
         XCTAssertTrue(h.ui.pumpUntil({ state.pendingUpdates["Data team"] != nil }, timeout: 8))
@@ -591,8 +592,7 @@ final class AppStateCollectionsTests: XCTestCase {
         try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
         XCTAssertNil(state.subscribe(documentAt: url.path, as: "T"))
         try Data("{half".utf8).write(to: url)
-        try TempDir.bumpModificationDate(of: url)
-        _ = h.ui.pumpUntil({ !h.delays.pending.isEmpty }, timeout: 8)
+        state.recomputePending()   // the source watcher's own read, without waiting on the watcher
         XCTAssertTrue(state.sourceErrors.isEmpty, "the first failure schedules a retry instead of reporting")
         XCTAssertEqual(h.delays.pending.count, 1)
         XCTAssertEqual(h.delays.pending.first?.delay, 2)
@@ -747,8 +747,8 @@ final class AppStateCollectionsTests: XCTestCase {
         try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
         XCTAssertNil(state.subscribe(documentAt: url.path, as: "T"))
         try Data("{half".utf8).write(to: url)
-        try TempDir.bumpModificationDate(of: url)
-        XCTAssertTrue(h.ui.pumpUntil({ !h.delays.pending.isEmpty }, timeout: 8))
+        state.recomputePending()   // the source watcher's own read, without waiting on the watcher
+        XCTAssertFalse(h.delays.pending.isEmpty)
 
         XCTAssertNil(state.renameCollection("T", to: "U"))
         // Every retry that is due, the old name's included, until the chain has nothing left.
@@ -764,8 +764,8 @@ final class AppStateCollectionsTests: XCTestCase {
         try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
         XCTAssertNil(state.subscribe(documentAt: url.path, as: "T"))
         try Data("{half".utf8).write(to: url)
-        try TempDir.bumpModificationDate(of: url)
-        XCTAssertTrue(h.ui.pumpUntil({ !h.delays.pending.isEmpty }, timeout: 8))
+        state.recomputePending()   // the source watcher's own read, without waiting on the watcher
+        XCTAssertFalse(h.delays.pending.isEmpty)
 
         XCTAssertEqual(h.delays.pending.map(\.delay), [2])
         XCTAssertTrue(state.sourceErrors.isEmpty)
@@ -815,8 +815,8 @@ final class AppStateCollectionsTests: XCTestCase {
         let before = try h.claudeServers()
 
         try writeDocument(changedSample(), at: url)
-        try TempDir.bumpModificationDate(of: url)
-        XCTAssertTrue(h.ui.pumpUntil({ state.pendingUpdates["Data team"] != nil }, timeout: 8))
+        state.recomputePending()   // the source watcher's own read, without waiting on the watcher
+        XCTAssertNotNil(state.pendingUpdates["Data team"])
 
         XCTAssertNil(state.applyPendingUpdate(for: "Data team"))
         XCTAssertNil(state.store.collections["Data team"]?.mcps["github"])
@@ -1247,6 +1247,21 @@ final class AppStateCollectionsTests: XCTestCase {
         state.reload(trigger: .externalStoreAdoption)
         XCTAssertEqual(state.publishError?.message, AppState.pathMarkMovedError("ledger"))
         XCTAssertEqual(try Data(contentsOf: file), before)
+    }
+
+    func testAMovedMarkIsClassifiedAsBlockedAndEverythingElseAsAFailedWrite() {
+        XCTAssertEqual(AppState.publishErrorKind(of: PublishIntentError.pathMarkMoved(connector: "ledger")),
+                       .blockedForReview)
+        XCTAssertEqual(AppState.publishErrorKind(of: CocoaError(.fileWriteNoPermission)), .writeFailed)
+    }
+
+    func testRenamingACollectionKeepsItsBlockedPublishBlocked() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createCollection(named: "Team"))
+        state.publishError = CollectionPublishError(collection: "Team", message: "moved", kind: .blockedForReview)
+        XCTAssertNil(state.renameCollection("Team", to: "Crew"))
+        XCTAssertEqual(state.publishError, CollectionPublishError(collection: "Crew", message: "moved", kind: .blockedForReview))
     }
 
     // MARK: - This machine's list of marked paths
@@ -2769,7 +2784,7 @@ final class AppStateCollectionsTests: XCTestCase {
     }
 
     /// Removing several connectors is one write, not one per connector: a loop would rotate a
-    /// backup and republish for each. Each one's publish ticks and path marks go with it.
+    /// backup and republish for each.
     func testRemovingSeveralConnectorsPersistsOnce() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
@@ -2789,6 +2804,31 @@ final class AppStateCollectionsTests: XCTestCase {
                        "one write, so one backup rotation")
     }
 
+    /// Each removed connector's publish ticks and path marks go with it, and the others' stay.
+    func testRemovingSeveralConnectorsTakesTheirPublishTicksAndMarksWithThem() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        for name in ["alpha", "beta", "gamma"] {
+            XCTAssertNil(state.upsert(name: name, entry: MCPEntry(config: .object([
+                "command": .string("/bin/" + name), "args": .array([.string("/Users/d/\(name)/index.js")]),
+                "env": .object(["A": .string("us")]),
+            ])), renamedFrom: nil, in: "Default"))
+        }
+        func mark(_ name: String) -> [JSONPointer: PublishIntent.PathMark] {
+            [JSONPointer(["args", "0"]): .init(name: name + "_path", hint: nil, value: "/Users/d/\(name)/index.js")]
+        }
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing("Default", to: folder.path, intent: PublishIntent(
+            shareValues: ["alpha": ["A"], "beta": ["A"], "gamma": ["A"]],
+            pathMarks: ["alpha": mark("alpha"), "beta": mark("beta"), "gamma": mark("gamma")], hints: [:])))
+
+        state.remove(names: ["alpha", "gamma"], in: "Default")
+
+        XCTAssertEqual(state.collectionsFile.collections["Default"]?.publish?.intent,
+                       PublishIntent(shareValues: ["beta": ["A"]], pathMarks: ["beta": mark("beta")], hints: [:]))
+        XCTAssertNil(state.publishError)
+    }
+
     /// A name the collection does not hold is skipped rather than failing, and removing nothing
     /// writes nothing.
     func testRemovingNoConnectorsWritesNothing() throws {
@@ -2804,6 +2844,7 @@ final class AppStateCollectionsTests: XCTestCase {
 
         state.remove(names: ["nosuch"], in: "Default")
         XCTAssertNotNil(state.store.collections["Default"]?.mcps["alpha"], "a name it never held is skipped")
+        XCTAssertEqual(try backupCount(h, series: "mcps"), before, "and skipping it writes nothing either")
     }
 
     /// How many files the named backup series holds, for proving a write happened once.

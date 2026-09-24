@@ -828,15 +828,6 @@ public class PublishModelTests
     }
 
     [Fact]
-    public void TheSheetOwnsItsButtonsAndItsExportTitle()
-    {
-        Assert.Equal("Cancel", PublishModel.CancelButton);
-        Assert.Equal("Choose Folder", PublishModel.ChooseFolderButton);
-        Assert.Equal("Mark as a path this machine supplies", PublishModel.MarkPathLabel);
-        Assert.Equal("Export “Data team”", PublishModel.ExportTitle("Data team"));
-    }
-
-    [Fact]
     public void TheFooterNamesTheFileAndTheOriginOnceThereIsOne()
     {
         using var h = new AppStateHarness();

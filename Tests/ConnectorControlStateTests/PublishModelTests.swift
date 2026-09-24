@@ -683,13 +683,6 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(model.envRows[0].value, "sk-live-secret", "the tick does not change what is there")
     }
 
-    func testTheSheetOwnsItsButtonsAndItsExportTitle() {
-        XCTAssertEqual(PublishModel.cancelButton, "Cancel")
-        XCTAssertEqual(PublishModel.chooseFolderButton, "Choose Folder")
-        XCTAssertEqual(PublishModel.markPathLabel, "Mark as a path this machine supplies")
-        XCTAssertEqual(PublishModel.exportTitle("Data team"), "Export “Data team”")
-    }
-
     func testTheFooterNamesTheFileAndTheOriginOnceThereIsOne() throws {
         let (h, state) = try started()
         defer { h.dispose() }

@@ -340,7 +340,7 @@ public class PublishDialogTests
     private const string LedgerPath = "/Users/d/ledger/dist/index.js";
 
     [Fact]
-    public void ALostMarkAndAKeptPathEachHoldTheSheetUntilAnswered()
+    public void ALostMarkAndAKeptPathEachHoldTheDialogUntilAnswered()
     {
         using var h = new AppStateHarness();
         using var state = Started(h);

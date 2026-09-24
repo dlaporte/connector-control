@@ -82,7 +82,7 @@ final class EditorModelViewSwitchTests: XCTestCase {
         editor.requestView(.json)
         XCTAssertEqual(editor.view, .form)
         XCTAssertEqual(editor.validationError, "An environment variable value is missing its name.")
-        XCTAssertEqual(editor.viewSelection, .form)
+        XCTAssertEqual(editor.envRows.map(\.value), ["orphan"], "the row is left as typed, for the user to name")
     }
 
     func testJsonToFormWithLossPromptsAndStaysUnlessForced() {

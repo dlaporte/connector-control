@@ -55,7 +55,7 @@ public class AppStateTests
     }
 
     [Fact]
-    public void RestartRequiredFollowsClaudeLaunchDate()
+    public void RestartRequiredFollowsClaudeLaunchTime()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();

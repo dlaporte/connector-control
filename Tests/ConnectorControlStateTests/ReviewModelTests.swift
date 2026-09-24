@@ -14,7 +14,9 @@ final class ReviewModelTests: XCTestCase {
     }
 
     /// Subscribes to the sample, then publishes a version of it with github gone and dbt's
-    /// arguments changed, and waits for that to become a pending update.
+    /// arguments changed, and reads it into a pending update. Every read here goes through
+    /// `recomputePending`, the source watcher's own read, rather than waiting on the watcher:
+    /// AppStateCollectionsTests proves the watcher delivers the change.
     private func pending(_ h: AppStateHarness, _ state: AppState) throws -> URL {
         let url = h.dir.file("data-team.json")
         try writeDocument(CollectionDocumentSamples.dataTeam, at: url)
@@ -23,8 +25,8 @@ final class ReviewModelTests: XCTestCase {
         doc.connectors["github"] = nil
         doc.connectors["dbt"]?.launcher = .local(.init(command: "npx", args: ["-y", "@dbt/mcp@2"], platform: .mac))
         try writeDocument(doc, at: url)
-        try TempDir.bumpModificationDate(of: url)
-        XCTAssertTrue(h.ui.pumpUntil({ state.pendingUpdates["Data team"] != nil }, timeout: 8))
+        state.recomputePending()
+        XCTAssertNotNil(state.pendingUpdates["Data team"])
         return url
     }
 
@@ -66,8 +68,8 @@ final class ReviewModelTests: XCTestCase {
         doc.connectors["jira"] = .init(launcher: .remote(.init(url: "https://mcp.jira.example/", auth: .automatic,
                                                                package: "mcp-remote", extraArgs: [])))
         try writeDocument(doc, at: url)
-        try TempDir.bumpModificationDate(of: url)
-        XCTAssertTrue(h.ui.pumpUntil({ state.pendingUpdates["Data team"] != nil }, timeout: 8))
+        state.recomputePending()
+        XCTAssertNotNil(state.pendingUpdates["Data team"])
 
         let model = ReviewModel(state: state, collection: "Data team")
         XCTAssertEqual(model.rows.map(\.name), ["jira"])
@@ -92,8 +94,8 @@ final class ReviewModelTests: XCTestCase {
         doc.connectors["notion"] = nil
         doc.connectors["dbt"]?.launcher = .local(.init(command: "npx", args: ["-y", "@dbt/mcp@3"], platform: .mac))
         try writeDocument(doc, at: url)
-        try TempDir.bumpModificationDate(of: url)
-        XCTAssertTrue(h.ui.pumpUntil({ state.pendingUpdates["Data team"]?.removed == ["github", "notion"] }, timeout: 8))
+        state.recomputePending()
+        XCTAssertEqual(state.pendingUpdates["Data team"]?.removed, ["github", "notion"])
 
         XCTAssertEqual(model.apply(), ReviewModel.sourceMovedMessage, "the rows on screen are not what would land")
         XCTAssertTrue(model.sourceMoved)
