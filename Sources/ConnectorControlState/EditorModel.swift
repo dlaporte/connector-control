@@ -263,9 +263,8 @@ public final class EditorModel: ObservableObject {
 
     // MARK: - Collection
 
-    /// The collection this window edits, resolved: a target that names none edits whatever is
-    /// active, which is what every editor opened from the popover has always meant.
-    public var collectionName: String { target.collection ?? state.activeCollection }
+    /// The collection this window edits.
+    public var collectionName: String { target.collection }
 
     /// A synced collection's connectors belong to the author of its document. Everything but
     /// the values the document asks this machine for is locked, and a save may move only those.
@@ -313,7 +312,7 @@ public final class EditorModel: ObservableObject {
     }
 
     private static func twins(of target: EditTarget, in state: AppState) -> [String] {
-        let collection = target.collection ?? state.activeCollection
+        let collection = target.collection
         // A connector that does not exist yet has no twins, and a synced collection's copy is
         // its author's — neither offers the checkbox.
         guard !target.isNew, state.kind(of: collection) == .local else { return [] }

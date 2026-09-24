@@ -504,11 +504,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     // MARK: collection
 
-    /// <summary>
-    /// The collection this window edits, resolved: a target that names none edits whatever is
-    /// active, which is what every editor opened from the flyout has always meant.
-    /// </summary>
-    public string CollectionName => Target.Collection ?? state.ActiveCollection;
+    /// <summary>The collection this window edits.</summary>
+    public string CollectionName => Target.Collection;
 
     /// <summary>
     /// A synced collection's connectors belong to the author of its document. Everything but the
@@ -575,7 +572,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     private static IReadOnlyList<string> TwinsOf(AppState state, EditTarget target)
     {
-        var collection = target.Collection ?? state.ActiveCollection;
+        var collection = target.Collection;
         // A connector that does not exist yet has no twins, and a synced collection's copy is its
         // author's — neither offers the checkbox.
         if (target.IsNew || state.KindOf(collection) != CollectionKind.Local)

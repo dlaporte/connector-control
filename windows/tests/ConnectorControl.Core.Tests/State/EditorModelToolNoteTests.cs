@@ -14,7 +14,7 @@ public class EditorModelToolNoteTests
     public void AdoptingAFormFromJsonEvaluatesTheToolOnceAtTheEnd()
     {
         using var rig = new EditorRig();
-        using var editor = rig.Editor(EditTarget.New(rig.Local("node", ["server.js"])));
+        using var editor = rig.Editor(TestTargets.New(rig.Local("node", ["server.js"])));
         Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses.ContainsKey(Tool.Node), TimeSpan.FromSeconds(5)));
         var batches = rig.H.Tools.Batches;
         editor.RequestView(EditView.Json);
@@ -35,7 +35,7 @@ public class EditorModelToolNoteTests
     public void NewRemoteConnectorNotesAMissingNpx()
     {
         using var rig = new EditorRig(h => h.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound);
-        using var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        using var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         Assert.Equal(Tool.Npx, editor.RequiredTool);
         Assert.Null(editor.ToolNote);   // not probed yet: no note, and nothing blocks
         Assert.False(editor.HasToolNote);
@@ -55,7 +55,7 @@ public class EditorModelToolNoteTests
     public void LocalCommandChangesReEvaluateAndReProbeTheTool()
     {
         using var rig = new EditorRig(h => h.Tools.Statuses[Tool.Uvx] = ToolStatus.NotFound);
-        using var editor = rig.Editor(EditTarget.New(rig.Local("node", ["server.js"])));
+        using var editor = rig.Editor(TestTargets.New(rig.Local("node", ["server.js"])));
         Assert.Equal(Tool.Node, editor.RequiredTool);
         Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses.ContainsKey(Tool.Node), TimeSpan.FromSeconds(5)));
         Assert.False(editor.HasToolNote);   // node is installed on this (fake) machine
@@ -83,7 +83,7 @@ public class EditorModelToolNoteTests
     public void JsonViewEvaluatesTheParsedConfig()
     {
         using var rig = new EditorRig(h => h.Tools.Statuses[Tool.Uv] = ToolStatus.NotFound);
-        using var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        using var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         editor.RequestView(EditView.Json);
         Assert.Equal(Tool.Node, editor.RequiredTool);   // the same config, now read from the text
         editor.JsonText = "{\"command\": \"uv\", \"args\": [\"run\", \"server.py\"]}";
@@ -109,10 +109,10 @@ public class EditorModelToolNoteTests
         Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses.ContainsKey(Tool.Npx), TimeSpan.FromSeconds(5)));
         Assert.True(warm.IsCompleted);
         var batches = rig.H.Tools.Batches;
-        using var remote = rig.Editor(EditTarget.Existing("scoutbook", rig.State.Store.Mcps["scoutbook"]));   // bare npx mcp-remote
+        using var remote = rig.Editor(TestTargets.Existing("scoutbook", rig.State.Store.Mcps["scoutbook"]));   // bare npx mcp-remote
         Assert.True(remote.HasToolNote);          // straight from the cache, no wait
         Assert.Equal(batches, rig.H.Tools.Batches);   // and no re-probe on open
-        using var local = rig.Editor(EditTarget.Existing("local", new McpEntry(rig.Local("node", ["x.js"]))));
+        using var local = rig.Editor(TestTargets.Existing("local", new McpEntry(rig.Local("node", ["x.js"]))));
         Assert.Equal(Tool.Node, local.RequiredTool);
         Assert.False(local.HasToolNote);
         Assert.Equal(batches, rig.H.Tools.Batches);
@@ -125,7 +125,7 @@ public class EditorModelToolNoteTests
     public void DisposeStopsRelayingAppStateToolStatusChanges()
     {
         using var rig = new EditorRig(h => h.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound);
-        using var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        using var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         Assert.True(rig.H.Ui.PumpUntil(() => editor.HasToolNote, TimeSpan.FromSeconds(5)));
 
         editor.Dispose();
@@ -154,7 +154,7 @@ public class EditorModelToolNoteTests
         using var rig = new EditorRig(h => h.Tools.Statuses[Tool.Uvx] = ToolStatus.NotFound);
         // "cmd /c" alone recognizes no tool; adding a second arg would flip RequiredTool to uvx
         // on a live editor (ToolRequirement unwraps one cmd /c and reads the next token).
-        using var editor = rig.Editor(EditTarget.New(rig.Local("cmd", ["/c"])));
+        using var editor = rig.Editor(TestTargets.New(rig.Local("cmd", ["/c"])));
         Assert.Null(editor.RequiredTool);
 
         editor.Dispose();

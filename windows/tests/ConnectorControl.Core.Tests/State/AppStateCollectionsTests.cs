@@ -1914,7 +1914,7 @@ public class AppStateCollectionsTests
         Assert.False(JsonText.FileContains(file, bound));
 
         // The editor is the way out, and taking it clears the block.
-        using var editor = new EditorModel(state, EditTarget.Existing("svc", state.Store.Mcps["svc"], state.ActiveCollection),
+        using var editor = new EditorModel(state, TestTargets.Existing("svc", state.Store.Mcps["svc"], state.ActiveCollection),
                                            h.Dialogs, RemoteLaunchStyle.Npx);
         // The command line carries it JSON-escaped, which is why the dialog cannot write over it and
         // the author rewrites the argument itself.

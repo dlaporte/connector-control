@@ -375,14 +375,13 @@ final class EditorModelCollectionsTests: XCTestCase {
 
     func testATargetNamesItsCollectionAndOpensItsOwnWindow() {
         let entry = MCPEntry(config: AppStateHarness.remote("https://x.example/mcp"))
-        let active = EditTarget.existing(name: "x", entry: entry)
+        let active = EditTarget.existing(name: "x", entry: entry, in: "Default")
         let team = EditTarget.existing(name: "x", entry: entry, in: "Team")
-        XCTAssertNil(active.collection)
+        XCTAssertEqual(active.collection, "Default")
         XCTAssertEqual(team.collection, "Team")
-        XCTAssertEqual(active.id, "x", "the active collection's editor keeps the id it always had")
+        XCTAssertEqual(active.id, "Default\u{001F}x", "the collection is part of the identity, the active one's too")
         XCTAssertNotEqual(team.id, active.id)
         XCTAssertNotEqual(team, active)
-        XCTAssertNil(EditTarget.newRemote().collection)
         XCTAssertEqual(EditTarget.newRemote(in: "Team").collection, "Team")
     }
     // MARK: - The open-time snapshot

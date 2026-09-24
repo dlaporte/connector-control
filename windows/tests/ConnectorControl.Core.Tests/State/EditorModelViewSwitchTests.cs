@@ -11,7 +11,7 @@ public class EditorModelViewSwitchTests
     public void SettingIsJsonViewSwitchesToJsonAndClearsIsFormView()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         Assert.Equal(EditView.Form, editor.View);
         editor.View = EditView.Json;
         Assert.Equal(EditView.Json, editor.View);
@@ -21,7 +21,7 @@ public class EditorModelViewSwitchTests
     public void SettingIsFormViewFromValidJsonSwitchesBack()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         editor.RequestView(EditView.Json);
         editor.JsonText = "{\"command\": \"node\", \"args\": [\"y.js\"]}";
         editor.View = EditView.Form;
@@ -36,7 +36,7 @@ public class EditorModelViewSwitchTests
     public void SettingIsFormViewWithUnrecoverableJsonIsRefusedAndSnapsBack()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         editor.RequestView(EditView.Json);
         editor.JsonText = "{\"command\": ";
         var raised = new List<string?>();
@@ -54,7 +54,7 @@ public class EditorModelViewSwitchTests
     public void FormToJsonSyncsTheTextAndJsonToFormAdoptsIt()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         editor.RemoteUrl = Url;
         editor.RequestView(EditView.Json);
         Assert.Equal(EditView.Json, editor.View);
@@ -76,7 +76,7 @@ public class EditorModelViewSwitchTests
     public void FormToJsonIsBlockedByEnvValidation()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         editor.AddEnvRow();
         editor.EnvRows[0].Value = "orphan";
         editor.RequestView(EditView.Json);
@@ -89,7 +89,7 @@ public class EditorModelViewSwitchTests
     public void JsonToFormWithLossPromptsAndStaysUnlessForced()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         editor.RequestView(EditView.Json);
         editor.JsonText = "{\"command\": 1, \"args\": [\"a\", 2], \"env\": {\"K\": true}}";
         rig.H.Dialogs.NextConfirm = false;
@@ -115,7 +115,7 @@ public class EditorModelViewSwitchTests
     public void TogglingTheTypeTwiceKeepsATypedLocalCommand()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         editor.IsRemote = false;
         editor.Command = "node";
         editor.Args.Clear();
@@ -137,7 +137,7 @@ public class EditorModelViewSwitchTests
     public void ATemplateEditedInJsonKeepsItsCommandOnSwitchToLocal()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         editor.RequestView(EditView.Json);
         editor.JsonText = "{\"command\":\"node\",\"args\":[\"server.js\"]}";
         editor.RequestView(EditView.Form);
@@ -155,7 +155,7 @@ public class EditorModelViewSwitchTests
     public void AnUnchangedJsonRoundTripStillDiscardsTheTemplateOnSwitchToLocal()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         editor.RequestView(EditView.Json);
         editor.RequestView(EditView.Form);
         Assert.Equal(EditView.Form, editor.View);
@@ -168,7 +168,7 @@ public class EditorModelViewSwitchTests
     public void JsonValidationErrorDisablesSave()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         editor.RequestView(EditView.Json);
         editor.JsonText = "{\"command\": ";
         Assert.Equal("Not valid JSON — check for a stray brace, missing comma, or unquoted value.", editor.JsonError);
@@ -185,7 +185,7 @@ public class EditorModelViewSwitchTests
     public void AdoptingAHeaderConfigClearsTheOldBearerToken()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         editor.RemoteUrl = Url;
         editor.AuthKindIndex = EditorRig.AuthKindIndexOf(RemoteAuthKind.Bearer);
         editor.BearerToken = "tok";

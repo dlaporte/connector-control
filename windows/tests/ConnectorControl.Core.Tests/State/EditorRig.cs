@@ -42,7 +42,7 @@ internal sealed class EditorRig : IDisposable
     /// throws rather than quietly opening an empty window.
     /// </summary>
     public EditorModel Editor(string name, string collection) =>
-        Editor(EditTarget.Existing(name, State.Store.Collections[collection].Mcps[name], collection));
+        Editor(TestTargets.Existing(name, State.Store.Collections[collection].Mcps[name], collection));
 
     /// <summary>EditorModel.AuthKinds' index for <paramref name="kind"/> — the picker's own
     /// order, not an assumption about enum declaration order.</summary>

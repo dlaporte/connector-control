@@ -79,7 +79,7 @@ public class EditorWindowTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        WpfApp.Invoke(() => Editing(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle), window =>
+        WpfApp.Invoke(() => Editing(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle, "Default"), window =>
         {
             Assert.Equal("Add Connector", window.Title);
             Assert.Equal(Visibility.Visible, window.FormBody.Visibility);
@@ -97,7 +97,7 @@ public class EditorWindowTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var config = JsonValue.Object(("command", JsonValue.String("node")), ("args", JsonValue.Array([JsonValue.String("x.js")])), ("env", JsonValue.Object(("K", JsonValue.String("v")))));
-        var target = EditTarget.Existing("local", new McpEntry(true, config, EditView.Json));
+        var target = EditTarget.Existing("local", new McpEntry(true, config, EditView.Json), "Default");
         WpfApp.Invoke(() => Editing(state, target, window =>
         {
             Assert.Equal("Edit “local”", window.Title);
@@ -120,7 +120,7 @@ public class EditorWindowTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        WpfApp.Invoke(() => Editing(state, EditTarget.Existing("scoutbook", state.Store.Mcps["scoutbook"]), window =>
+        WpfApp.Invoke(() => Editing(state, EditTarget.Existing("scoutbook", state.Store.Mcps["scoutbook"], "Default"), window =>
         {
             Assert.Equal(Visibility.Collapsed, window.TypePicker.Visibility);
             Assert.Equal(Visibility.Visible, window.RemoteSection.Visibility);
@@ -138,7 +138,7 @@ public class EditorWindowTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        WpfApp.Invoke(() => Editing(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle), window =>
+        WpfApp.Invoke(() => Editing(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle, "Default"), window =>
         {
             window.Model.Name = "example";
             window.Model.RemoteUrl = "https://example.com/mcp";
@@ -171,7 +171,7 @@ public class EditorWindowTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var config = JsonValue.Object(("command", JsonValue.String("node")), ("env", JsonValue.Object(("TOKEN", JsonValue.String("")))));
-        var target = EditTarget.Existing("local", new McpEntry(true, config, EditView.Form));
+        var target = EditTarget.Existing("local", new McpEntry(true, config, EditView.Form), "Default");
         WpfApp.Invoke(() => Editing(state, target, window =>
         {
             window.EnvList.UpdateLayout();
@@ -201,7 +201,7 @@ public class EditorWindowTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var config = JsonValue.Object(("command", JsonValue.String("node")));
-        var target = EditTarget.Existing("local", new McpEntry(true, config, EditView.Json));
+        var target = EditTarget.Existing("local", new McpEntry(true, config, EditView.Json), "Default");
         WpfApp.Invoke(() => Editing(state, target, window =>
         {
             Assert.True(window.JsonToggle.IsChecked);
@@ -226,7 +226,7 @@ public class EditorWindowTests
         using var h = new AppStateHarness();
         h.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound;
         using var state = h.Create();
-        WpfApp.Invoke(() => Editing(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle), window =>
+        WpfApp.Invoke(() => Editing(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle, "Default"), window =>
         {
             Assert.Equal(Visibility.Collapsed, window.RemoteToolNote.Visibility);   // not probed yet
             Assert.True(h.Ui.PumpUntil(() => window.Model.HasToolNote, TimeSpan.FromSeconds(5)));

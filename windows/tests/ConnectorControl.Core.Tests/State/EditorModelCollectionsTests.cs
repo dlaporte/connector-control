@@ -426,7 +426,7 @@ public class EditorModelCollectionsTests
         }
 
         // A connector that does not exist yet has no twins.
-        using var fresh = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        using var fresh = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         Assert.Empty(fresh.PropagateTargets);
     }
 
@@ -436,15 +436,14 @@ public class EditorModelCollectionsTests
     public void ATargetNamesItsCollectionAndOpensItsOwnWindow()
     {
         var entry = new McpEntry(AppStateHarness.Remote("https://x.example/mcp"));
-        var active = EditTarget.Existing("x", entry);
+        var active = EditTarget.Existing("x", entry, "Default");
         var team = EditTarget.Existing("x", entry, "Team");
-        Assert.Null(active.Collection);
+        Assert.Equal("Default", active.Collection);
         Assert.Equal("Team", team.Collection);
-        // The active collection's editor keeps the id it always had.
-        Assert.Equal("x", active.Id);
+        // The collection is part of the identity, the active one's too.
+        Assert.Equal("Default\u001Fx", active.Id);
         Assert.NotEqual(team.Id, active.Id);
         Assert.NotEqual(team, active);
-        Assert.Null(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx).Collection);
         Assert.Equal("Team", EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx, "Team").Collection);
     }
     /// <summary>
@@ -497,7 +496,7 @@ public class EditorModelCollectionsTests
     public void TheJsonTipFollowsTheJsonError()
     {
         using var rig = new EditorRig();
-        using var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        using var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         Assert.True(editor.ShowJsonTip);
         var raised = new List<string>();
         editor.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");

@@ -95,7 +95,7 @@ public class DialogTests
         using var state = h.Create();
         WpfApp.Invoke(() =>
         {
-            var model = new EditorModel(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle), h.Dialogs, EditorWindow.NewRemoteStyle);
+            var model = new EditorModel(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle, "Default"), h.Dialogs, EditorWindow.NewRemoteStyle);
             Assert.Equal("", model.BearerToken);
             var box = new PasswordBox();
             BindingOperations.SetBinding(box, PasswordBoxHelper.BoundPasswordProperty,
