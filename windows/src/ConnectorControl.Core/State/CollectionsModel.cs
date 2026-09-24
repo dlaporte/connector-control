@@ -1291,9 +1291,17 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             typed => state.MakeLocalCopyOfCollection(collection, typed));
     }
 
+    /// <summary>
+    /// Makes <paramref name="name"/> the active collection. The active one already is: saving and
+    /// applying it again would rewrite what is there for nothing, so it is left alone, and the
+    /// views' double-click and Make Active need no guard of their own.
+    /// </summary>
     public void SwitchTo(string name)
     {
-        state.SwitchCollection(name);
+        if (name != state.ActiveCollection)
+        {
+            state.SwitchCollection(name);
+        }
         LastError = null;
     }
 

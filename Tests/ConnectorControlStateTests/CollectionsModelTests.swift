@@ -820,6 +820,23 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.items.first { $0.isActive }?.name, "Spare Parts")
     }
 
+    /// A double-click on the active collection, or Make Active on it: nothing to switch, so
+    /// nothing is saved and nothing applied. The store file gone from disk is the witness, since
+    /// any save would write it back. It succeeds all the same, so the last refusal goes.
+    func testSwitchingToTheActiveCollectionSavesNothing() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        presetError(model, h)
+        try FileManager.default.removeItem(at: h.masterStoreURL)
+
+        model.switchTo("Default")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: h.masterStoreURL.path))
+        XCTAssertEqual(state.activeCollection, "Default")
+        XCTAssertNil(model.lastError)
+    }
+
     // MARK: - Banner strip
 
     /// Default, active and published into a real folder; Team, synced with its file still to be

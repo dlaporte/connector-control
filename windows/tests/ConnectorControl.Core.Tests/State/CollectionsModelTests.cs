@@ -923,6 +923,26 @@ public class CollectionsModelTests
         Assert.Equal("Spare Parts", model.Items.Single(i => i.IsActive).Name);
     }
 
+    /// <summary>
+    /// A double-click on the active collection, or Make Active on it: nothing to switch, so
+    /// nothing is saved and nothing applied. The store file gone from disk is the witness, since
+    /// any save would write it back. It succeeds all the same, so the last refusal goes.
+    /// </summary>
+    [Fact]
+    public void SwitchingToTheActiveCollectionSavesNothing()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        using var model = new CollectionsModel(state, h.Dialogs);
+        PresetError(model, h);
+        File.Delete(h.MasterStorePath);
+
+        model.SwitchTo("Default");
+        Assert.False(File.Exists(h.MasterStorePath));
+        Assert.Equal("Default", state.ActiveCollection);
+        Assert.Null(model.LastError);
+    }
+
     // MARK: banner strip
 
     /// <summary>

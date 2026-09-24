@@ -86,6 +86,20 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(popover.activeCollection, "Default")
     }
 
+    /// Choosing the ticked row: nothing to switch, so nothing is saved. The store file gone from
+    /// disk is the witness, since any save would write it back.
+    func testSwitchingToTheActiveCollectionSavesNothing() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+        try FileManager.default.removeItem(at: h.masterStoreURL)
+
+        popover.switchCollection("Default")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: h.masterStoreURL.path))
+        XCTAssertEqual(popover.activeCollection, "Default")
+    }
+
     func testASyncedCollectionIsMarkedInTheMenu() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

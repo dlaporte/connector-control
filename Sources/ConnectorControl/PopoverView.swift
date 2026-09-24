@@ -187,11 +187,11 @@ struct PopoverView: View {
         dialogs.inform(message: failure, informative: nil)
     }
 
-    /// A menu row's check. Choosing an unchecked row makes that collection the active one;
-    /// choosing the checked row asks to turn it off, which means nothing for a collection, so it
-    /// is left alone. The check is read back from the model rather than kept here.
+    /// A menu row's check. Choosing any row asks for that collection; the checked one is already
+    /// active, and the model leaves it alone. The check is read back from the model rather than
+    /// kept here.
     private func activeBinding(_ item: CollectionMenuItem) -> Binding<Bool> {
-        Binding(get: { item.isActive }, set: { on in if on { model.switchCollection(item.name) } })
+        Binding(get: { item.isActive }, set: { _ in model.switchCollection(item.name) })
     }
 
     /// The Collections window, which takes no arguments. Whatever the popover wants in front of

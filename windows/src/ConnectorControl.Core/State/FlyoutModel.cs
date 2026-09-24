@@ -191,7 +191,18 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
         return ToolNote.RowWarning(tool, status);
     }
 
-    public void SwitchCollection(string name) => state.SwitchCollection(name);
+    /// <summary>
+    /// A menu row. The ticked one is already active, and saving and applying it again would
+    /// rewrite what is there and clear an error banner for nothing, so it is left alone.
+    /// </summary>
+    public void SwitchCollection(string name)
+    {
+        if (name == state.ActiveCollection)
+        {
+            return;
+        }
+        state.SwitchCollection(name);
+    }
 
     /// <summary>
     /// The banner's button, for the two banners that need nothing from the user first: an update

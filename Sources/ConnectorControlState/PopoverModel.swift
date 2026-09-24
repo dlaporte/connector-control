@@ -167,7 +167,12 @@ public final class PopoverModel: ObservableObject {
     /// The row switch: persists and applies immediately.
     public func setEnabled(_ name: String, _ on: Bool) { state.setEnabled(name, on) }
 
-    public func switchCollection(_ name: String) { state.switchCollection(to: name) }
+    /// A menu row. The ticked one is already active, and saving and applying it again would
+    /// rewrite what is there and clear an error banner for nothing, so it is left alone.
+    public func switchCollection(_ name: String) {
+        guard name != state.activeCollection else { return }
+        state.switchCollection(to: name)
+    }
 
     /// The banner's button, for the two banners that need nothing from the user first: an update
     /// to review, and a publish blocked for review, each answered by a sheet in the Collections

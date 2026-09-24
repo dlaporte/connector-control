@@ -79,6 +79,23 @@ public class FlyoutModelTests
         Assert.Equal("Default", flyout.ActiveCollection);
     }
 
+    /// <summary>
+    /// Choosing the ticked row: nothing to switch, so nothing is saved. The store file gone from
+    /// disk is the witness, since any save would write it back.
+    /// </summary>
+    [Fact]
+    public void SwitchingToTheActiveCollectionSavesNothing()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        using var flyout = new FlyoutModel(state, h.Settings);
+        File.Delete(h.MasterStorePath);
+
+        flyout.SwitchCollection("Default");
+        Assert.False(File.Exists(h.MasterStorePath));
+        Assert.Equal("Default", flyout.ActiveCollection);
+    }
+
     [Fact]
     public void ASyncedCollectionIsMarkedInTheMenu()
     {
