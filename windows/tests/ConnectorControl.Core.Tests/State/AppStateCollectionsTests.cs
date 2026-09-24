@@ -156,7 +156,9 @@ public class AppStateCollectionsTests
         Assert.Equal(["Default"], state.CollectionNames);
         Assert.Null(state.CreateCollection("Work"));
         Assert.Equal(["aws-mcp", "scoutbook", "service-now"], state.SortedNames);   // a COPY of the active collection
-        Assert.Equal(h.Now, h.Settings.LastApplyDate);
+        Assert.Null(h.Settings.LastApplyDate);   // a copy runs what Claude already runs, so nothing is written
+        // But Claude's file now holds the new collection, which the launch ingest reads.
+        Assert.Equal("Work", state.CollectionsCache.LastAppliedCollection);
     }
 
     /// <summary>
@@ -195,6 +197,30 @@ public class AppStateCollectionsTests
         Assert.Null(state.CreateCollection("Work"));
         Assert.Equal("A collection named “Default” already exists.", state.RenameCollection("Work", "Default"));
         Assert.Equal(AppState.NameEmptyError, state.RenameCollection("Work", " "));
+    }
+
+    /// <summary>
+    /// A collection Claude does not run can be renamed or deleted without Claude hearing of it:
+    /// its config is not rewritten and no restart is asked for.
+    /// </summary>
+    [Fact]
+    public void RenamingOrDeletingAnotherCollectionLeavesClaudesConfigAlone()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.AddEmptyCollection("Other"));
+        h.Settings.LastApplyDate = null;
+        var before = File.ReadAllBytes(h.ClaudeConfigPath);
+        var backups = new BackupManager(h.BackupsDir);
+        var backedUp = backups.Backups("claude_desktop_config");
+
+        Assert.Null(state.RenameCollection("Other", "Else"));
+        Assert.Null(h.Settings.LastApplyDate);   // nothing Claude runs changed, so there is nothing to restart for
+        Assert.Null(state.DeleteCollection("Else"));
+        Assert.Null(h.Settings.LastApplyDate);
+        Assert.Equal(before, File.ReadAllBytes(h.ClaudeConfigPath));
+        Assert.Equal(backedUp, backups.Backups("claude_desktop_config"));
+        Assert.Equal("Default", state.CollectionsCache.LastAppliedCollection);
     }
 
     [Fact]

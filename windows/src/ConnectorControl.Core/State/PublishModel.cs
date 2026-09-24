@@ -593,7 +593,7 @@ public sealed class PublishModel : ObservableObject
         }
         if (Collection == state.ActiveCollection)
         {
-            state.Apply();
+            state.ApplyInteractively();
         }
         RefreshRows(kept.Connector);
         RaiseMarkGates();

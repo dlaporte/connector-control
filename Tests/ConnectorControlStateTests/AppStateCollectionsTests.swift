@@ -139,7 +139,9 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.collectionNames, ["Default"])
         XCTAssertNil(state.createCollection(named: "Work"))
         XCTAssertEqual(state.sortedNames, ["aws-mcp", "scoutbook", "service-now"], "a COPY of the active collection")
-        XCTAssertEqual(h.settings.lastApplyDate, h.now)
+        XCTAssertNil(h.settings.lastApplyDate, "a copy runs what Claude already runs, so nothing is written")
+        XCTAssertEqual(state.collectionsCache.lastAppliedCollection, "Work",
+                       "but Claude's file now holds the new collection, which the launch ingest reads")
     }
 
     /// Copy to ▸ New Collection's first half: a collection holding nothing, not a copy of the
@@ -172,6 +174,26 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.createCollection(named: "Work"))
         XCTAssertEqual(state.renameCollection("Work", to: "Default"), "A collection named \u{201C}Default\u{201D} already exists.")
         XCTAssertEqual(state.renameCollection("Work", to: " "), AppState.nameEmptyError)
+    }
+
+    /// A collection Claude does not run can be renamed or deleted without Claude hearing of it:
+    /// its config is not rewritten and no restart is asked for.
+    func testRenamingOrDeletingAnotherCollectionLeavesClaudesConfigAlone() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.addEmptyCollection(named: "Other"))
+        h.settings.lastApplyDate = nil
+        let before = try Data(contentsOf: h.claudeConfigURL)
+        let backups = BackupManager(backupsDir: h.backupsDir)
+        let backedUp = try backups.backups(series: "claude_desktop_config")
+
+        XCTAssertNil(state.renameCollection("Other", to: "Else"))
+        XCTAssertNil(h.settings.lastApplyDate, "nothing Claude runs changed, so there is nothing to restart for")
+        XCTAssertNil(state.deleteCollection(named: "Else"))
+        XCTAssertNil(h.settings.lastApplyDate)
+        XCTAssertEqual(try Data(contentsOf: h.claudeConfigURL), before)
+        XCTAssertEqual(try backups.backups(series: "claude_desktop_config"), backedUp)
+        XCTAssertEqual(state.collectionsCache.lastAppliedCollection, "Default")
     }
 
     func testDeletingTheActiveCollectionSwitchesToTheAlphabeticallyFirstRemaining() throws {

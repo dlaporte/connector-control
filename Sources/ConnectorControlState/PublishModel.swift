@@ -387,7 +387,7 @@ public final class PublishModel: ObservableObject {
         else { return note(for: kept) }
         entry.config = config
         if let error = state.upsert(name: kept.connector, entry: entry, renamedFrom: kept.connector, in: collection) { return error }
-        if collection == state.activeCollection { state.apply() }
+        if collection == state.activeCollection { state.applyInteractively() }
         refreshRows(of: kept.connector)
         return nil
     }

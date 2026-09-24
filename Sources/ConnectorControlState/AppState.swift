@@ -617,6 +617,14 @@ public final class AppState: ObservableObject {
         }
     }
 
+    /// Applies when what Claude runs has changed; otherwise only records which collection the
+    /// file now holds. A verb that touches a collection Claude does not run, or renders the same
+    /// connectors under another collection's name, must not rewrite the file: every write stamps
+    /// `lastApplyDate`, and that is what asks for a restart Claude does not need.
+    private func applyIfChanged() {
+        if isDirty { performApply() } else { recordApplied(activeCollection, names: Set(appliedServers.keys)) }
+    }
+
     /// What Claude's file was last written from, for the launch ingest: the collection and the
     /// connector names that apply wrote. In memory once the collections files are loaded, and read
     /// from this machine's cache before then — at launch the store loads first.
@@ -831,7 +839,7 @@ public final class AppState: ObservableObject {
     public func switchCollection(to name: String) {
         guard store.switchCollection(to: name) == nil else { return }
         persistStore()
-        performApply()
+        applyIfChanged()
     }
 
     /// The pending window request, cleared, so a request acted on once cannot be acted on again
@@ -852,7 +860,7 @@ public final class AppState: ObservableObject {
     public func createCollection(named name: String) -> String? {
         if let error = store.addCollection(named: name, copyingCurrent: true) { return error }
         persistStore()
-        performApply()
+        applyIfChanged()
         return nil
     }
 
@@ -889,7 +897,7 @@ public final class AppState: ObservableObject {
             try? BackupCollections.rename(name, to: trimmed, in: service.paths.backupsDirURL, staging: service.paths.stagingDirURL)
         }
         persistStore()
-        performApply()
+        applyIfChanged()
         return nil
     }
 
@@ -916,7 +924,7 @@ public final class AppState: ObservableObject {
         forgetSource(name)
         if publishError?.collection == name { publishError = nil }
         persistStore()
-        performApply()
+        applyIfChanged()
         return nil
     }
 
@@ -1061,7 +1069,7 @@ public final class AppState: ObservableObject {
         // ${COLLECTION_DIR} resolves against the folder just bound, so what Claude runs changes
         // the moment the file is found — with no second click. The dirty check keeps a locate
         // that resolves to nothing new from rewriting Claude's config for the sake of it.
-        if collection == activeCollection, isDirty { performApply() }
+        if collection == activeCollection { applyIfChanged() }
         return nil
     }
 
@@ -1093,7 +1101,7 @@ public final class AppState: ObservableObject {
         notifiedSourceHashes[collection] = source.hash
         persistStore()
         // Claude only runs the active collection, so only that one reaches its config.
-        if collection == activeCollection { performApply() }
+        if collection == activeCollection { applyIfChanged() }
         return nil
     }
 
@@ -1123,7 +1131,7 @@ public final class AppState: ObservableObject {
         // The expansion above changed what the collection holds; if it is the live one, that is
         // a change to what Claude runs. Baking in the same folder the token already resolved to
         // normally leaves the two identical, and the dirty check spares the write.
-        if collection == activeCollection, isDirty { performApply() }
+        if collection == activeCollection { applyIfChanged() }
     }
 
     /// The document the review sheet lists, as this platform renders it.
@@ -1332,7 +1340,7 @@ public final class AppState: ObservableObject {
         persistStore()
         // Everything imported arrives off, so only a Replace over a connector that was already
         // on can change what Claude runs — and the dirty check spares the write when it doesn't.
-        if collection == activeCollection, isDirty { performApply() }
+        if collection == activeCollection { applyIfChanged() }
         return nil
     }
 
@@ -1370,7 +1378,7 @@ public final class AppState: ObservableObject {
         persistStore()
         // Every copy arrives off, so only a Replace over a connector that was already on can
         // change what Claude runs — and the dirty check spares the write when it doesn't.
-        if target == activeCollection, isDirty { performApply() }
+        if target == activeCollection { applyIfChanged() }
         return nil
     }
 
@@ -1511,7 +1519,7 @@ public final class AppState: ObservableObject {
         // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
         // changes the moment publishing starts. The dirty check spares the write when nothing in
         // the collection uses the token.
-        if collection == activeCollection, isDirty { performApply() }
+        if collection == activeCollection { applyIfChanged() }
         return publishError?.collection == collection ? publishError?.message : nil
     }
 
@@ -1574,7 +1582,7 @@ public final class AppState: ObservableObject {
         persistStore()
         // ${COLLECTION_DIR} has no folder here any more: Claude gets the token as written, and
         // the row's caution says why.
-        if collection == activeCollection, isDirty { performApply() }
+        if collection == activeCollection { applyIfChanged() }
         // After the save, so a failure here reaches the banner rather than being overwritten by it.
         guard deleteFile, let folder else { return }
         let target = URL(fileURLWithPath: folder).appendingPathComponent(record.slug + "." + CollectionDocument.fileExtension)
