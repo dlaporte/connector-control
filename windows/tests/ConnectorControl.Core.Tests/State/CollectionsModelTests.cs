@@ -103,6 +103,26 @@ public class CollectionsModelTests
 
     // MARK: rows
 
+    /// <summary>
+    /// Rows list in UTF-16 code-unit order, as they always have here: a character beyond U+FFFF
+    /// comes before U+FF5E, where Swift's own <c>&lt;</c> puts it after.
+    /// </summary>
+    [Fact]
+    public void RowsSortAsWindowsDoes()
+    {
+        using var h = new AppStateHarness(seedClaudeConfig: false);
+        using var state = h.Create();
+        Assert.Null(state.Upsert("\uFF5E", Local("uvx"), null));
+        Assert.Null(state.Upsert("\U0001F600", Local("uvx"), null));
+        using var model = new CollectionsModel(state, h.Dialogs);
+        Assert.Equal(["\U0001F600", "\uFF5E"], model.Rows.Select(r => r.Name));
+        model.SetChecked("\uFF5E", true);
+        model.SetChecked("\U0001F600", true);
+        Assert.Null(state.CreateCollection("Other"));   // a copy of the active one: both clash
+        state.SwitchCollection("Default");
+        Assert.Equal(["\U0001F600", "\uFF5E"], model.CheckedNamesClashing("Other"));
+    }
+
     [Fact]
     public void RowsForASyncedCollectionAreLockedAndUncheckable()
     {

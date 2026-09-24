@@ -221,7 +221,7 @@ public final class ImportModel: ObservableObject {
             return
         }
         let held = state.store.collections[targetCollection]?.mcps ?? [:]
-        rows = Set(rendered.connectors.keys).union(rendered.excluded.keys).sorted().map { name in
+        rows = Set(rendered.connectors.keys).union(rendered.excluded.keys).sorted(by: { $0.ordinallyPrecedes($1) }).map { name in
             let reason = rendered.excluded[name]
             let present = held[name] != nil
             // First appearance in the config the import would write, not the `needs` map's own

@@ -89,6 +89,23 @@ final class CollectionsModelTests: XCTestCase {
 
     // MARK: - Rows
 
+    /// Rows list in UTF-16 code-unit order, as Windows lists them: a character beyond U+FFFF comes
+    /// before U+FF5E there, where Swift's own `<` puts it after.
+    func testRowsSortAsWindowsDoes() throws {
+        let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
+        defer { h.dispose() }
+        XCTAssertNil(state.upsert(name: "\u{FF5E}", entry: local("uvx"), renamedFrom: nil))
+        XCTAssertNil(state.upsert(name: "\u{1F600}", entry: local("uvx"), renamedFrom: nil))
+        let model = CollectionsModel(state: state, dialogs: h.dialogs)
+        defer { model.dispose() }
+        XCTAssertEqual(model.rows.map(\.name), ["\u{1F600}", "\u{FF5E}"])
+        model.setChecked("\u{FF5E}", true)
+        model.setChecked("\u{1F600}", true)
+        XCTAssertNil(state.createCollection(named: "Other"))   // a copy of the active one: both clash
+        state.switchCollection(to: "Default")
+        XCTAssertEqual(model.checkedNamesClashing(in: "Other"), ["\u{1F600}", "\u{FF5E}"])
+    }
+
     func testRowsForASyncedCollectionAreLockedAndUncheckable() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }

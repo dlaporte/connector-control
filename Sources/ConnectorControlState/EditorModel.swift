@@ -245,7 +245,7 @@ public final class EditorModel: ObservableObject {
     public var hasAdditional: Bool { !additional.isEmpty }
 
     public var additionalTitle: String {
-        EditorModel.additionalTitle(count: additional.count, keys: additional.keys.sorted())
+        EditorModel.additionalTitle(count: additional.count, keys: additional.keys.sorted(by: { $0.ordinallyPrecedes($1) }))
     }
 
     public var additionalPreview: String { JSONValue.object(additional).editorText() }

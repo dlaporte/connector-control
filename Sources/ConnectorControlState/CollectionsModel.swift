@@ -271,7 +271,7 @@ public final class CollectionsModel: ObservableObject {
         let mcps = state.store.collections[collection]?.mcps ?? [:]
         // Ordinal, which is how the popover sorts the same connectors of the same collection:
         // two surfaces over one list must agree on its order.
-        return mcps.keys.sorted().map { name in
+        return mcps.keys.sorted(by: { $0.ordinallyPrecedes($1) }).map { name in
             Row(name: name, caution: state.connectorCaution(name, in: collection), isLocked: locked,
                 checked: checks.contains(name),
                 target: CollectionsModel.target(of: mcps[name]?.config ?? .object([:])))
@@ -845,7 +845,7 @@ public final class CollectionsModel: ObservableObject {
     /// answer for. Empty when nothing clashes, so the copy can go straight through.
     public func checkedNamesClashing(in collection: String) -> [String] {
         let held = state.store.collections[collection]?.mcps ?? [:]
-        return checkedNames.filter { held[$0] != nil }.sorted()
+        return checkedNames.filter { held[$0] != nil }.sorted(by: { $0.ordinallyPrecedes($1) })
     }
 
     /// Both copy verbs' shared tail: the copy itself, reported like every other verb here.

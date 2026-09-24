@@ -117,7 +117,7 @@ public final class PopoverModel: ObservableObject {
         // Locked together or not at all: the rows are the active collection's, so one being the
         // author's makes all of them so.
         let locked = state.activeCollectionIsSynced
-        return state.store.mcps.sorted { $0.key < $1.key }.map { name, entry in
+        return state.store.mcps.sorted { $0.key.ordinallyPrecedes($1.key) }.map { name, entry in
             ConnectorRow(name: name, enabled: entry.enabled, toolWarning: warning(for: entry),
                          isLocked: locked)
         }

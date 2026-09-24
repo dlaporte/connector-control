@@ -16,9 +16,9 @@ public struct ServerDelta: Equatable, Sendable {
     }
 
     public init(from before: [String: JSONValue], to after: [String: JSONValue]) {
-        added = after.keys.filter { before[$0] == nil }.sorted()
-        removed = before.keys.filter { after[$0] == nil }.sorted()
-        changed = after.keys.filter { before[$0] != nil && before[$0] != after[$0] }.sorted()
+        added = after.keys.filter { before[$0] == nil }.sorted(by: { $0.ordinallyPrecedes($1) })
+        removed = before.keys.filter { after[$0] == nil }.sorted(by: { $0.ordinallyPrecedes($1) })
+        changed = after.keys.filter { before[$0] != nil && before[$0] != after[$0] }.sorted(by: { $0.ordinallyPrecedes($1) })
     }
 
     public var isEmpty: Bool { added.isEmpty && removed.isEmpty && changed.isEmpty }
