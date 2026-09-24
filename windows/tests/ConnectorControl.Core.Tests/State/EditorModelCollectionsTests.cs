@@ -489,6 +489,13 @@ public class EditorModelCollectionsTests
         Assert.NotEqual(team.Id, active.Id);
         Assert.NotEqual(team, active);
         Assert.Equal("Team", EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx, "Team").Collection);
+
+        // The same connector in the same collection is the same window, however its entry has
+        // changed since: a click on its row brings the open editor forward.
+        var again = EditTarget.Existing("x", entry with { Enabled = false }, "Default");
+        Assert.Equal(active, again);
+        Assert.Equal(active.GetHashCode(), again.GetHashCode());
+        Assert.NotEqual(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx, "Team"), EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx, "Team"));
     }
     /// <summary>
     /// The Mac has no mirror of this: there the secret fields and the JSON error are

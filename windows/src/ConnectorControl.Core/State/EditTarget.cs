@@ -35,4 +35,15 @@ public sealed record EditTarget(string Id, string Name, McpEntry Entry, bool IsN
 
     /// <summary>Fixed at open time.</summary>
     public string WindowTitle => IsNew ? AddTitle : EditTitle(Name);
+
+    /// <summary>
+    /// One window per connector per collection: two targets are the same window when their ids
+    /// match, whatever the entry held when each was made. WindowRegistry keys its editors by the
+    /// id, so a connector switched on or off since its editor opened still brings that editor
+    /// forward rather than opening a second. The Mac's editor window group finds its window by
+    /// this same equality.
+    /// </summary>
+    public bool Equals(EditTarget? other) => other is not null && string.Equals(Id, other.Id, StringComparison.Ordinal);
+
+    public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(Id);
 }

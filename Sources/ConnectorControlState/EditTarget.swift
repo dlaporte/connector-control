@@ -56,4 +56,13 @@ public struct EditTarget: Identifiable, Codable, Hashable, Sendable {
 
     /// Fixed at open time.
     public var windowTitle: String { isNew ? EditTarget.addTitle : EditTarget.editTitle(name) }
+
+    /// One window per connector per collection: two targets are the same window when their ids
+    /// match, whatever the entry held when each was made. The editor window group finds the
+    /// window already open for a target by this equality, so a connector switched on or off since
+    /// its editor opened still brings that editor forward rather than opening a second. The
+    /// Windows registry keys its editors by the same id.
+    public static func == (lhs: EditTarget, rhs: EditTarget) -> Bool { lhs.id == rhs.id }
+
+    public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }

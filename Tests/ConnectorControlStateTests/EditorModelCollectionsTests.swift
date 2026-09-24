@@ -420,6 +420,15 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertNotEqual(team.id, active.id)
         XCTAssertNotEqual(team, active)
         XCTAssertEqual(EditTarget.newRemote(in: "Team").collection, "Team")
+
+        // The same connector in the same collection is the same window, however its entry has
+        // changed since: a click on its row brings the open editor forward.
+        var switchedOff = entry
+        switchedOff.enabled = false
+        let again = EditTarget.existing(name: "x", entry: switchedOff, in: "Default")
+        XCTAssertEqual(again, active)
+        XCTAssertEqual(again.hashValue, active.hashValue)
+        XCTAssertNotEqual(EditTarget.newRemote(in: "Team"), EditTarget.newRemote(in: "Team"))
     }
     // MARK: - The open-time snapshot
 

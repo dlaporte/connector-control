@@ -17,6 +17,9 @@ bullet once the section is about to ship.
 
 ### macOS
 
+- Opening a connector whose editor is already open brings that editor forward even if the
+  connector was switched on or off in the meantime, rather than opening a second editor for
+  it, as on Windows.
 - Escape answers "Keep" when stopping publishing or deleting a published collection asks
   whether to remove its file, as it does on Windows; before, Escape did nothing there.
 - Escape cancels every sheet in the Collections window, and the connector editor, as their
