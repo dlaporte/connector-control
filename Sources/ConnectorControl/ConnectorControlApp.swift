@@ -20,7 +20,7 @@ struct ConnectorControlApp: App {
 
         WindowGroup(EditorModel.windowGroupTitle, id: EditTarget.editorWindowID, for: EditTarget.self) { $target in
             if let target = $target.wrappedValue {
-                EditSheetView(state: state, target: target)
+                EditorWindowView(state: state, target: target)
                     .navigationTitle(target.windowTitle)
             } else {
                 Text(EditorModel.noTargetMessage)

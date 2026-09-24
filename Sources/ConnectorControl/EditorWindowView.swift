@@ -3,7 +3,7 @@ import ConnectorControlCore
 import ConnectorControlState
 
 /// Fields, bindings and layout only; every rule and string is EditorModel's.
-struct EditSheetView: View {
+struct EditorWindowView: View {
     @StateObject private var model: EditorModel
     /// EditorModel republishes on tool statuses and on the sidecar, whose change is what unlocks
     /// the form and retakes its snapshot. Its header and hints also read the cache and the store,

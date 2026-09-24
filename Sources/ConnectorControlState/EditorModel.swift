@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import ConnectorControlCore
 
-/// EditSheetView without the pixels: every field, switch rule,
+/// EditorWindowView without the pixels: every field, switch rule,
 /// validation string, and the save flow. The loss warning is published
 /// state the view binds to as a sheet, with one method per button; the
 /// save-conflict alert goes through Dialogs. The Windows mirror asks the
