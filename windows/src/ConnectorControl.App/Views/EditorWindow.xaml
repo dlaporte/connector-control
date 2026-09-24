@@ -19,15 +19,11 @@
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Margin" Value="0,0,12,0" />
     </Style>
-    <!-- The lock that marks a value belonging to the collection's author. A private-use glyph
-         reads as nothing, so the header's own sentence is what a screen reader says instead. -->
-    <Style x:Key="LabelLock" TargetType="TextBlock">
-      <Setter Property="Text" Value="{StaticResource LockGlyph}" />
+    <!-- The lock that marks a value belonging to the collection's author, a size down beside a
+         field label. The header's own sentence is what a screen reader says for it. -->
+    <Style x:Key="LabelLock" TargetType="TextBlock" BasedOn="{StaticResource LockMark}">
       <Setter Property="AutomationProperties.Name" Value="{Binding HeaderNote}" />
-      <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
       <Setter Property="FontSize" Value="10" />
-      <Setter Property="Opacity" Value="0.55" />
-      <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Margin" Value="4,0,0,0" />
       <Setter Property="Visibility" Value="Collapsed" />
       <Style.Triggers>

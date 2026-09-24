@@ -5,7 +5,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
-using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.Core.State;
 using H.NotifyIcon.Core;
@@ -260,13 +259,7 @@ public partial class FlyoutWindow : Window
         header.Children.Add(new TextBlock { Text = item.Name, VerticalAlignment = VerticalAlignment.Center });
         if (item.IsSynced)
         {
-            var chain = new TextBlock
-            {
-                Text = (string)FindResource("ChainGlyph"),
-                FontFamily = (FontFamily)FindResource("IconFont"),
-                Margin = new Thickness(6, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center,
-            };
+            var chain = new TextBlock { Style = (Style)FindResource("ChainMark"), Margin = new Thickness(6, 0, 0, 0) };
             Speak(chain, FlyoutModel.MenuTooltip(item));
             header.Children.Add(chain);
         }

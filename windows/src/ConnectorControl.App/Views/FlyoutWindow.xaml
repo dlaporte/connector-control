@@ -46,9 +46,9 @@
             <Button x:Name="CollectionChip" Style="{StaticResource LinkButton}" FontSize="11" FontWeight="SemiBold" Padding="0,1,0,0" Click="OnCollectionChip">
               <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="CollectionChipName" Text="{Binding ActiveCollection}" VerticalAlignment="Center" />
-                <TextBlock x:Name="CollectionChipChain" Text="{StaticResource ChainGlyph}" FontFamily="{StaticResource IconFont}"
+                <TextBlock x:Name="CollectionChipChain" Style="{StaticResource ChainMark}"
                            ToolTip="{Binding SourceTooltip}" AutomationProperties.Name="{Binding SourceTooltip}"
-                           Margin="4,0,0,0" VerticalAlignment="Center"
+                           Margin="4,0,0,0"
                            Visibility="{Binding ActiveCollectionIsSynced, Converter={StaticResource Vis}}" />
                 <Ellipse x:Name="CollectionChipDot" Style="{StaticResource PendingDot}" Margin="4,0,0,0"
                          ToolTip="{x:Static state:FlyoutModel.PendingSpokenLabel}"
@@ -118,16 +118,13 @@
                       <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <ToggleButton Style="{StaticResource Switch}" IsChecked="{Binding Enabled}" VerticalAlignment="Center" />
-                    <!-- The lock leading a synced collection's row, dimmed so it reads as a mark
-                         rather than as a control: the switch beside it stays live. A private-use
-                         glyph reads as nothing, so it says its sentence out loud. -->
-                    <TextBlock x:Name="RowLockGlyph" Grid.Column="1"
-                               Text="{StaticResource LockGlyph}" FontFamily="{StaticResource IconFont}" FontSize="11"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" Opacity="0.55"
+                    <!-- The lock leading a synced collection's row: the switch beside it stays
+                         live. It says its sentence out loud. -->
+                    <TextBlock x:Name="RowLockGlyph" Grid.Column="1" Style="{StaticResource LockMark}"
                                ToolTip="{Binding LockTooltip}"
                                AutomationProperties.Name="{Binding LockTooltip}"
                                Visibility="{Binding IsLocked, Converter={StaticResource Vis}}"
-                               VerticalAlignment="Center" Margin="10,0,0,0" />
+                               Margin="10,0,0,0" />
                     <TextBlock Grid.Column="2" Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="10,0" />
                     <!-- Caution glyph: its own Auto column, so the name column stays a star
                          column and keeps trimming. -->

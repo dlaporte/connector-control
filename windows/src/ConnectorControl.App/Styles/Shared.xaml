@@ -13,6 +13,27 @@
   <system:String x:Key="LockGlyph">&#xE72E;</system:String>
   <system:String x:Key="ShareGlyph">&#xE72D;</system:String>
 
+  <!-- The lock on a read-only row or field: the glyph, dimmed so it reads as a mark rather than as
+       a control. A private-use glyph reads as nothing, so every use gives it a sentence to say. -->
+  <Style x:Key="LockMark" TargetType="TextBlock">
+    <Setter Property="Text" Value="{StaticResource LockGlyph}" />
+    <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    <Setter Property="Opacity" Value="0.55" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- The chain beside a synced collection's name, wherever the name is shown. Like the lock, it
+       is given the sentence it stands for where it is used. -->
+  <Style x:Key="ChainMark" TargetType="TextBlock">
+    <Setter Property="Text" Value="{StaticResource ChainGlyph}" />
+    <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
   <!-- The amber dot that says an update is waiting for review; the caution colour, so it reads as
        "look here" without being an error. -->
   <Style x:Key="PendingDot" TargetType="Ellipse">
