@@ -145,7 +145,9 @@ public class PublishModelTests
         Assert.Equal(PublishModel.NoFolderError, model.Publish());
         Assert.False(state.CollectionsCache.Published.ContainsKey(state.ActiveCollection));
 
-        var spaced = h.Dir.File("pub ");
+        // The space leads rather than trails: Windows drops a trailing space from a file name, so
+        // no such folder can be made here, and trimming would take either.
+        var spaced = h.Dir.File(" pub");
         Directory.CreateDirectory(spaced);
         model.Folder = spaced;
         Assert.Null(model.Publish());

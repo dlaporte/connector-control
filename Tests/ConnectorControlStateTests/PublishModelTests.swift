@@ -116,7 +116,9 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(model.publish(), PublishModel.noFolderError)
         XCTAssertNil(state.collectionsCache.published[state.activeCollection])
 
-        let spaced = h.dir.file("pub ")
+        // The space leads rather than trails: Windows drops a trailing space from a file name, so
+        // the mirror could not make that folder, and trimming would take either.
+        let spaced = h.dir.file(" pub")
         try FileManager.default.createDirectory(at: spaced, withIntermediateDirectories: true)
         model.folder = spaced.path
         XCTAssertNil(model.publish())
