@@ -243,6 +243,7 @@ public class StringCatalogTests
         actual["CollectionsModel.copyToButton"] = CollectionsModel.CopyToButton;
         actual["CollectionsModel.deleteAction"] = CollectionsModel.DeleteAction;
         actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.DeletePublishedFileQuestion("X");
+        actual["CollectionsModel.documentFilter"] = CollectionsModel.DocumentFilter;
         actual["CollectionsModel.duplicateAction"] = CollectionsModel.DuplicateAction;
         actual["CollectionsModel.editTooltip"] = CollectionsModel.EditTooltip;
         actual["CollectionsModel.exportAllAction"] = CollectionsModel.ExportAllAction;

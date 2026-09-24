@@ -175,13 +175,8 @@ struct SettingsView: View {
     }
 
     private func chooseStoreDir() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Choose"
-        if panel.runModal() == .OK, let url = panel.url {
-            model.chooseStoreDir(url)
+        if let folder = FilePanels.chooseFolder() {
+            model.chooseStoreDir(URL(fileURLWithPath: folder, isDirectory: true))
         }
     }
 
@@ -192,7 +187,7 @@ struct SettingsView: View {
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.applicationBundle]
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
-        panel.prompt = "Choose"
+        panel.prompt = SettingsModel.chooseTitle
         if panel.runModal() == .OK, let url = panel.url {
             // The path is trusted at every Restart Claude from now on, so a
             // bundle that is not Claude signed by Anthropic is refused here,

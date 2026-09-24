@@ -137,6 +137,9 @@
   "CollectionsModel.deletePublishedFileQuestion": {
     "format": "Also remove {0} from the folder?"
   },
+  "CollectionsModel.documentFilter": {
+    "win": "Collection (*.json)|*.json"
+  },
   "CollectionsModel.duplicateAction": "Duplicate",
   "CollectionsModel.editTooltip": "Edit",
   "CollectionsModel.exportAllAction": "Export All",

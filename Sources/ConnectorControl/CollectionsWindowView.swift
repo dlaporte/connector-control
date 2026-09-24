@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 import ConnectorControlState
 
 /// The Collections window: the collections in the left pane, the selected one's connectors in the
@@ -594,9 +593,9 @@ struct CollectionsWindowView: View {
         }
         switch state.collectionBanner {
         case .locate:
-            if let path = chooseDocument() { shownError = model.locateSource(path) }
+            if let path = FilePanels.chooseCollectionDocument() { shownError = model.locateSource(path) }
         case .publishFailed:
-            if let folder = chooseFolder() { shownError = model.choosePublishFolder(folder) }
+            if let folder = FilePanels.chooseFolder() { shownError = model.choosePublishFolder(folder) }
         case .publishBlocked:
             // Stopped for review, not for a folder: choosing another folder would only move the
             // failure there, so the answer is the Publish sheet.
@@ -613,29 +612,8 @@ struct CollectionsWindowView: View {
     /// Import and Subscribe are the same panel: one document, and what happens to it is the
     /// sheet's question rather than the picker's.
     private func openDocument(keepInSync: Bool) {
-        guard let path = chooseDocument() else { return }
+        guard let path = FilePanels.chooseCollectionDocument() else { return }
         show(.importFile(importModel(path: path, keepInSync: keepInSync)))
-    }
-
-    private func chooseDocument() -> String? {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [.json]
-        guard panel.runModal() == .OK else { return nil }
-        return panel.url?.path
-    }
-
-    /// Settings ▸ Storage's panel, for the folder a failed publish is asking to be pointed at.
-    private func chooseFolder() -> String? {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Choose"
-        guard panel.runModal() == .OK else { return nil }
-        return panel.url?.path
     }
 
     // MARK: - Bindings

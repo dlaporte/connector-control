@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 import ConnectorControlState
 
 struct PopoverView: View {
@@ -167,9 +166,9 @@ struct PopoverView: View {
         }
         switch model.collectionBanner {
         case .locate:
-            if let path = chooseDocument() { tell(model.locateSource(path)) }
+            if let path = FilePanels.chooseCollectionDocument() { tell(model.locateSource(path)) }
         case .publishFailed:
-            if let folder = chooseFolder() { tell(model.choosePublishFolder(folder)) }
+            if let folder = FilePanels.chooseFolder() { tell(model.choosePublishFolder(folder)) }
         // A blocked publish never reaches here: its action queues the Publish sheet and reports
         // true, which opens the window above.
         case .updateAvailable, .publishBlocked, nil:
@@ -202,28 +201,6 @@ struct PopoverView: View {
         request()
         openWindow(id: CollectionsWindowView.windowID)
         NSApp.activate(ignoringOtherApps: true)
-    }
-
-    /// The Collections window's panel, for the document a collection is asking to be pointed at.
-    private func chooseDocument() -> String? {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [.json]
-        guard panel.runModal() == .OK else { return nil }
-        return panel.url?.path
-    }
-
-    /// Settings ▸ Storage's panel, for the folder a failed publish is asking to be pointed at.
-    private func chooseFolder() -> String? {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Choose"
-        guard panel.runModal() == .OK else { return nil }
-        return panel.url?.path
     }
 
     /// Cap before the list scrolls (~12 rows); large catalogs stay usable

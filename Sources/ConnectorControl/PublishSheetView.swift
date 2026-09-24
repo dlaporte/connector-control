@@ -1,11 +1,9 @@
 import SwiftUI
-import AppKit
-import UniformTypeIdentifiers
 import ConnectorControlState
 
 /// The Publish sheet and, with one flag flipped, the Export sheet: layout, bindings and the two
-/// native panels. Every rule and string is PublishModel's; the preview under the ticks is the
-/// document itself, so nothing here filters, elides or reformats it.
+/// native panels, which are FilePanels'. Every rule and string is PublishModel's; the preview
+/// under the ticks is the document itself, so nothing here filters, elides or reformats it.
 struct PublishSheetView: View {
     /// Publishing binds the collection to a folder it rewrites on every change; exporting writes
     /// the same document once, wherever the save panel says, and binds nothing. The sheet is the
@@ -300,20 +298,13 @@ struct PublishSheetView: View {
         }
     }
 
-    // MARK: panels
+    // MARK: verbs
 
-    /// Settings ▸ Storage's panel, for a folder instead of the store: one directory, handed
-    /// straight to the model.
+    /// One directory, handed straight to the model.
     private func chooseFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Choose"
-        if panel.runModal() == .OK, let url = panel.url {
-            model.folder = url.path
-            failure = nil
-        }
+        guard let folder = FilePanels.chooseFolder() else { return }
+        model.folder = folder
+        failure = nil
     }
 
     private func publish() {
@@ -322,11 +313,8 @@ struct PublishSheetView: View {
     }
 
     private func export() {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = model.fileName
-        panel.allowedContentTypes = [.json]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        failure = model.export(to: url.path)
+        guard let path = FilePanels.saveCollectionDocument(named: model.fileName) else { return }
+        failure = model.export(to: path)
         if failure == nil { onDone() }
     }
 }
