@@ -479,6 +479,46 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertFalse(notion.asksForClientSecret)
     }
 
+    /// Owed: asked for when the window opened, and either still the author's marker or emptied
+    /// since. What the caution ring and the phrase under a field follow.
+    func testAValueIsOwedWhileItsMarkerStandsAndAgainOnceEmptied() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        try subscribeToDataTeam(rig)
+
+        let dbt = rig.editor("dbt", in: "Data team")
+        let token = try envRow(dbt, "DBT_TOKEN")
+        let tokenIndex = try XCTUnwrap(dbt.envRows.firstIndex { $0.id == token.id })
+        XCTAssertTrue(dbt.isOwed(envRow: token.id))
+        dbt.envRows[tokenIndex].value = "secret_abc"
+        XCTAssertFalse(dbt.isOwed(envRow: token.id))
+        dbt.envRows[tokenIndex].value = ""
+        XCTAssertTrue(dbt.isOwed(envRow: token.id), "emptied, it owes again")
+        let region = try envRow(dbt, "DBT_REGION")
+        let regionIndex = try XCTUnwrap(dbt.envRows.firstIndex { $0.id == region.id })
+        dbt.envRows[regionIndex].value = ""
+        XCTAssertFalse(dbt.isOwed(envRow: region.id), "a field that never asked owes nothing, empty or not")
+
+        let ledger = rig.editor("ledger", in: "Data team")
+        XCTAssertTrue(ledger.isOwed(arg: 0))
+        ledger.args[0].value = "/Users/d/ledger/dist/index.js"
+        XCTAssertFalse(ledger.isOwed(arg: 0))
+        ledger.args[0].value = ""
+        XCTAssertTrue(ledger.isOwed(arg: 0))
+        XCTAssertFalse(ledger.isOwed(arg: 7), "an index past the end owes nothing")
+
+        let notion = rig.editor("notion", in: "Data team")
+        XCTAssertTrue(notion.bearerTokenOwed)
+        notion.bearerToken = "secret_abc"
+        XCTAssertFalse(notion.bearerTokenOwed)
+        notion.bearerToken = ""
+        XCTAssertTrue(notion.bearerTokenOwed)
+        notion.headerValue = ""
+        XCTAssertFalse(notion.headerValueOwed)
+        notion.oauthClientSecret = ""
+        XCTAssertFalse(notion.clientSecretOwed)
+    }
+
     // MARK: - Published hints
 
     func testAPublishedConnectorCarriesTheAuthorsHintForEachStrippedValue() throws {

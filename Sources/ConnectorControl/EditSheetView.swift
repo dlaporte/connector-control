@@ -5,9 +5,10 @@ import ConnectorControlState
 /// Fields, bindings and layout only; every rule is EditorModel's.
 struct EditSheetView: View {
     @StateObject private var model: EditorModel
-    /// EditorModel republishes only on tool statuses, but its header, its locks and its
-    /// placeholder hints all read AppState — so a collection that stops syncing while this
-    /// window is open has to repaint it from here.
+    /// EditorModel republishes on tool statuses and on the sidecar, whose change is what unlocks
+    /// the form and retakes its snapshot. Its header and hints also read the cache and the store,
+    /// which it does not relay, so this window observes AppState itself for those. The Windows
+    /// model raises on all three instead, since a WPF window has no whole-object republish.
     @ObservedObject private var state: AppState
     @Environment(\.dismiss) private var dismiss
     @State private var whatCanIChangeShown = false
@@ -22,20 +23,6 @@ struct EditSheetView: View {
     /// lock is only ever on screen while the collection is synced, so this is the very sentence
     /// the header shows — which is what the Windows glyph names too.
     private var lockLabel: String { EditorModel.lockedFieldsNote(model.collectionName) }
-
-    /// Still owed: the document asked for this value, and it is either still the author's marker
-    /// or the user has emptied the field without putting anything in its place.
-    private func envOwed(_ row: EnvRow) -> Bool {
-        model.asksFor(envRow: row.id) && (model.isPlaceholder(envRow: row.id) || row.value.isEmpty)
-    }
-
-    private func argOwed(_ index: Int, _ value: String) -> Bool {
-        model.asksFor(arg: index) && (model.argsWithPlaceholders.contains(index) || value.isEmpty)
-    }
-
-    private func fieldOwed(_ asks: Bool, _ isPlaceholder: Bool, _ value: String) -> Bool {
-        asks && (isPlaceholder || value.isEmpty)
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -214,7 +201,7 @@ struct EditSheetView: View {
             let index = model.args.firstIndex { $0.id == row.id } ?? -1
             let asks = model.asksFor(arg: index)
             HStack(alignment: .top) {
-                PlaceholderField(marked: argOwed(index, row.value),
+                PlaceholderField(marked: model.isOwed(arg: index),
                                  needs: EditorModel.needsPath,
                                  hint: model.placeholderHint(arg: index),
                                  published: model.publishedHint(arg: index)) {
@@ -261,7 +248,7 @@ struct EditSheetView: View {
                             .font(.system(.body, design: .monospaced))
                             .focused($envFocus, equals: row.id)
                             .disabled(model.isReadOnly)
-                        PlaceholderField(marked: envOwed(row),
+                        PlaceholderField(marked: model.isOwed(envRow: row.id),
                                          needs: EditorModel.needsValue,
                                          hint: model.placeholderHint(envRow: row.id),
                                          published: model.publishedHint(envRow: row.id)) {
@@ -322,7 +309,7 @@ struct EditSheetView: View {
                 .foregroundStyle(.secondary)
         case .bearer:
             let asksToken = model.asksForBearerToken
-            PlaceholderField(marked: fieldOwed(asksToken, model.bearerTokenIsPlaceholder, model.bearerToken),
+            PlaceholderField(marked: model.bearerTokenOwed,
                              needs: EditorModel.needsValue,
                              hint: model.bearerTokenHint,
                              published: nil) {
@@ -337,7 +324,7 @@ struct EditSheetView: View {
             TextField("Header name", text: $model.headerName, prompt: Text("X-API-Key"))
                 .disabled(model.isReadOnly)
             let asksHeaderValue = model.asksForHeaderValue
-            PlaceholderField(marked: fieldOwed(asksHeaderValue, model.headerValueIsPlaceholder, model.headerValue),
+            PlaceholderField(marked: model.headerValueOwed,
                              needs: EditorModel.needsValue,
                              hint: model.headerValueHint,
                              published: nil) {
@@ -349,7 +336,7 @@ struct EditSheetView: View {
             TextField("Client ID", text: $model.oauthClientID)
                 .disabled(model.isReadOnly)
             let asksSecret = model.asksForClientSecret
-            PlaceholderField(marked: fieldOwed(asksSecret, model.clientSecretIsPlaceholder, model.oauthClientSecret),
+            PlaceholderField(marked: model.clientSecretOwed,
                              needs: EditorModel.needsValue,
                              hint: model.clientSecretHint,
                              published: nil) {

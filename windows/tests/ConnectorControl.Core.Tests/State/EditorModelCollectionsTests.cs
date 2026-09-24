@@ -615,6 +615,47 @@ public class EditorModelCollectionsTests
         Assert.False(notion.AsksForClientSecret);
     }
 
+    /// <summary>
+    /// Owed: asked for when the window opened, and either still the author's marker or emptied
+    /// since. What the caution ring and the phrase under a field follow.
+    /// </summary>
+    [Fact]
+    public void AValueIsOwedWhileItsMarkerStandsAndAgainOnceEmptied()
+    {
+        using var rig = new EditorRig();
+        SubscribeToDataTeam(rig);
+
+        using var dbt = rig.Editor("dbt", "Data team");
+        var token = EnvRow(dbt, "DBT_TOKEN");
+        Assert.True(dbt.IsOwed(token));
+        token.Value = "secret_abc";
+        Assert.False(dbt.IsOwed(token));
+        token.Value = "";
+        Assert.True(dbt.IsOwed(token));   // emptied, it owes again
+        var region = EnvRow(dbt, "DBT_REGION");
+        region.Value = "";
+        Assert.False(dbt.IsOwed(region));   // a field that never asked owes nothing, empty or not
+
+        using var ledger = rig.Editor("ledger", "Data team");
+        Assert.True(ledger.IsOwedArg(0));
+        ledger.Args[0].Value = "/Users/d/ledger/dist/index.js";
+        Assert.False(ledger.IsOwedArg(0));
+        ledger.Args[0].Value = "";
+        Assert.True(ledger.IsOwedArg(0));
+        Assert.False(ledger.IsOwedArg(7));   // an index past the end owes nothing
+
+        using var notion = rig.Editor("notion", "Data team");
+        Assert.True(notion.BearerTokenOwed);
+        notion.BearerToken = "secret_abc";
+        Assert.False(notion.BearerTokenOwed);
+        notion.BearerToken = "";
+        Assert.True(notion.BearerTokenOwed);
+        notion.HeaderValue = "";
+        Assert.False(notion.HeaderValueOwed);
+        notion.OAuthClientSecret = "";
+        Assert.False(notion.ClientSecretOwed);
+    }
+
     // MARK: published hints
 
     [Fact]

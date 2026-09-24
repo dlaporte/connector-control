@@ -388,7 +388,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// <summary>
     /// The three secret fields raise what is read off their text as well as the text itself: the
     /// caution ring and the author's hint under a field follow whether its value is still a
-    /// placeholder, so the two have to move together. Whether the field is locked does not: that
+    /// placeholder or owed, so they have to move together. Whether the field is locked does not: that
     /// is the asked-for snapshot taken when the window opened, so typing over the marker never
     /// locks the field again. The Mac needs none of this — there these are <c>@Published</c>, and
     /// a change to one republishes the whole object.
@@ -401,6 +401,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
             if (Set(ref bearerToken, value))
             {
                 Raise(nameof(BearerTokenIsPlaceholder));
+                Raise(nameof(BearerTokenOwed));
                 Raise(nameof(BearerTokenHint));
             }
         }
@@ -416,6 +417,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
             if (Set(ref headerValue, value))
             {
                 Raise(nameof(HeaderValueIsPlaceholder));
+                Raise(nameof(HeaderValueOwed));
                 Raise(nameof(HeaderValueHint));
             }
         }
@@ -431,6 +433,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
             if (Set(ref oauthClientSecret, value))
             {
                 Raise(nameof(ClientSecretIsPlaceholder));
+                Raise(nameof(ClientSecretOwed));
                 Raise(nameof(ClientSecretHint));
             }
         }
@@ -674,6 +677,30 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public bool AsksForClientSecret { get; private set; }
 
+    // MARK: owed values
+
+    /// <summary>
+    /// A value the document asked for and has not been given: asked for when the window opened,
+    /// and either still the author's marker or emptied since. What the caution ring and the phrase
+    /// under a field follow; a field that never asked owes nothing, however empty.
+    /// </summary>
+    private static bool Owed(bool asks, bool isPlaceholder, string value) =>
+        asks && (isPlaceholder || value.Length == 0);
+
+    /// <summary>Takes the row, for the reason <see cref="IsPlaceholder"/> gives.</summary>
+    public bool IsOwed(EnvRow row) => Owed(AsksFor(row), IsPlaceholder(row), row.Value);
+
+    /// <summary>EditorModel.swift's <c>isOwed(arg:)</c>; C# has no argument labels to tell the two apart.</summary>
+    public bool IsOwedArg(int index) =>
+        index >= 0 && index < Args.Count
+        && Owed(AsksForArg(index), Placeholder.ContainsMarker(Args[index].Value), Args[index].Value);
+
+    public bool BearerTokenOwed => Owed(AsksForBearerToken, BearerTokenIsPlaceholder, bearerToken);
+
+    public bool HeaderValueOwed => Owed(AsksForHeaderValue, HeaderValueIsPlaceholder, headerValue);
+
+    public bool ClientSecretOwed => Owed(AsksForClientSecret, ClientSecretIsPlaceholder, oauthClientSecret);
+
     // MARK: published hints
 
     /// <summary>
@@ -830,7 +857,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
         // Everything the collection decides: its kind, the grey line above the fields, what the
         // footer offers, and whether the author left a hint beside a stripped value. The window
         // used to re-seat its DataContext to pick these up, which regenerated every row and took
-        // the caret with it. The Mac needs none of this: its whole object republishes.
+        // the caret with it. The Mac model relays only the sidecar and tool statuses, and its
+        // editor view observes AppState itself for the cache and the store.
         if (Affects(e, nameof(AppState.CollectionsFile)) || Affects(e, nameof(AppState.CollectionsCache))
             || Affects(e, nameof(AppState.Store)))
         {
@@ -851,6 +879,9 @@ public sealed class EditorModel : ObservableObject, IDisposable
                 Raise(nameof(AsksForBearerToken));
                 Raise(nameof(AsksForHeaderValue));
                 Raise(nameof(AsksForClientSecret));
+                Raise(nameof(BearerTokenOwed));
+                Raise(nameof(HeaderValueOwed));
+                Raise(nameof(ClientSecretOwed));
             }
         }
     }

@@ -420,6 +420,41 @@ public final class EditorModel: ObservableObject {
 
     public var asksForClientSecret: Bool { askedClientSecret }
 
+    // MARK: - Owed values
+
+    /// A value the document asked for and has not been given: asked for when the window opened,
+    /// and either still the author's marker or emptied since. What the caution ring and the phrase
+    /// under a field follow; a field that never asked owes nothing, however empty.
+    private static func owed(asks: Bool, isPlaceholder: Bool, value: String) -> Bool {
+        asks && (isPlaceholder || value.isEmpty)
+    }
+
+    /// Takes an id rather than the row, for the reason `isPlaceholder(envRow:)` gives.
+    public func isOwed(envRow id: UUID) -> Bool {
+        guard let row = envRows.first(where: { $0.id == id }) else { return false }
+        return EditorModel.owed(asks: asksFor(envRow: id), isPlaceholder: Placeholder.containsMarker(row.value),
+                                value: row.value)
+    }
+
+    /// EditorModel.cs calls this `IsOwedArg`, as it names `AsksForArg`.
+    public func isOwed(arg index: Int) -> Bool {
+        guard args.indices.contains(index) else { return false }
+        let value = args[index].value
+        return EditorModel.owed(asks: asksFor(arg: index), isPlaceholder: Placeholder.containsMarker(value), value: value)
+    }
+
+    public var bearerTokenOwed: Bool {
+        EditorModel.owed(asks: asksForBearerToken, isPlaceholder: bearerTokenIsPlaceholder, value: bearerToken)
+    }
+
+    public var headerValueOwed: Bool {
+        EditorModel.owed(asks: asksForHeaderValue, isPlaceholder: headerValueIsPlaceholder, value: headerValue)
+    }
+
+    public var clientSecretOwed: Bool {
+        EditorModel.owed(asks: asksForClientSecret, isPlaceholder: clientSecretIsPlaceholder, value: oauthClientSecret)
+    }
+
     // MARK: - Published hints
 
     /// The author's hints for the values publishing strips, by environment variable name. Empty
