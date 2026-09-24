@@ -326,4 +326,20 @@ public class ConfigServiceTests : IDisposable
             ex.Detail);
         Assert.Equal(before, File.ReadAllBytes(paths.ClaudeConfigPath));
     }
+
+    /// <summary>
+    /// ParseRoot treats zero bytes as an empty root (the same rule ClaudeConfigIO's own read path
+    /// already applies), so a zero-byte backup — the same crash/truncation artifact — restores to
+    /// an empty config instead of being refused as malformed.
+    /// </summary>
+    [Fact]
+    public void RestoreFromAnEmptyBackupTreatsItAsAnEmptyConfig()
+    {
+        var store = service.LoadAndReconcile().Store;
+        var empty = dir.File("empty-backup.json");
+        File.WriteAllBytes(empty, []);
+        var servers = service.RestoreClaudeConfig(empty, store);
+        Assert.Empty(servers);
+        Assert.Empty(ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath));
+    }
 }
