@@ -71,6 +71,19 @@ public final class ImportModel: ObservableObject {
 
     public enum Mode: Equatable, Sendable { case addToCollection, keepInSync }
 
+    /// Where the copies land, as the target picker lists it: an existing local collection, or a
+    /// new one named when it is chosen and made only when Import is pressed.
+    public enum Target: Hashable, Sendable { case collection(String), newCollection }
+
+    /// One target's picker label: the collection's name, or New Collection, the words Copy to's
+    /// menu ends with for the same thing.
+    public static func targetTitle(_ target: Target) -> String {
+        switch target {
+        case .collection(let name): return name
+        case .newCollection: return CollectionsModel.newButton
+        }
+    }
+
     /// One connector of the document against the collection it would land in. A tick or a choice
     /// here republishes the whole `rows` array, which is what makes `importCount` and the button
     /// re-read; the Windows mirror has to raise PropertyChanged from the row for the same effect.
@@ -139,13 +152,19 @@ public final class ImportModel: ObservableObject {
     @Published public var targetCollection: String {
         didSet { if targetCollection != oldValue { rebuildRows() } }
     }
+    /// The name New Collection was given, while it is the target; nil while an existing collection
+    /// is. Nothing by this name exists until `perform()` makes it.
+    @Published public private(set) var newCollectionName: String?
     @Published public var syncName: String
     @Published public var rows: [Row] = []
 
     private let state: AppState
     private let rendered: RenderedCollection?
 
-    public init(state: AppState, path: String) {
+    /// `selected` is the collection the Collections window is showing, which is the target when
+    /// it is local; otherwise, or with nothing selected, the active collection is, as it was
+    /// before the window had a selection to offer.
+    public init(state: AppState, path: String, selected: String? = nil) {
         self.state = state
         self.path = path
         let url = URL(fileURLWithPath: path).standardizedFileURL
@@ -153,7 +172,11 @@ public final class ImportModel: ObservableObject {
         // The target picker is filled either way, so a sheet that cannot read its document still
         // shows the collection the user was in.
         let locals = state.localCollectionNames
-        targetCollection = locals.contains(state.activeCollection) ? state.activeCollection : (locals.first ?? "")
+        if let selected, locals.contains(selected) {
+            targetCollection = selected
+        } else {
+            targetCollection = locals.contains(state.activeCollection) ? state.activeCollection : (locals.first ?? "")
+        }
         guard let document else {
             loadError = failure
             documentName = url.lastPathComponent
@@ -180,6 +203,36 @@ public final class ImportModel: ObservableObject {
     /// it is never one of them.
     public var localCollections: [String] { state.localCollectionNames }
 
+    /// What the target picker lists: every local collection, then New Collection.
+    public var targets: [Target] { localCollections.map(Target.collection) + [.newCollection] }
+
+    /// The picker's selection. Choosing New Collection asks for its name through AppState's
+    /// dialogs, as Copy to ▸ New Collection does; a cancelled prompt leaves the target as it was.
+    /// Choosing a collection gives up a new one that was named.
+    public var target: Target {
+        get { newCollectionName == nil ? .collection(targetCollection) : .newCollection }
+        set {
+            switch newValue {
+            case .collection(let name):
+                let wasNew = newCollectionName != nil
+                newCollectionName = nil
+                if name != targetCollection { targetCollection = name } else if wasNew { rebuildRows() }
+            case .newCollection:
+                guard let typed = state.dialogs.promptForName(title: AppState.newCollectionTitle, initial: "") else {
+                    // The picker already shows the choice it just made; this puts it back.
+                    objectWillChange.send()
+                    return
+                }
+                newCollectionName = MasterStore.collectionName(typed)
+                rebuildRows()
+            }
+        }
+    }
+
+    /// The collection the copies land in, by name, whichever kind of target it is: what the mode's
+    /// title says.
+    public var targetName: String { newCollectionName ?? targetCollection }
+
     /// What the Import button counts: the rows that are ticked in add mode, and everything this
     /// platform can carry in sync mode, where the whole document comes across or none of it.
     public var importCount: Int {
@@ -197,7 +250,7 @@ public final class ImportModel: ObservableObject {
         guard loadError == nil else { return false }
         switch mode {
         case .addToCollection:
-            return importCount > 0 && !targetCollection.isEmpty
+            return importCount > 0 && !targetName.isEmpty
         case .keepInSync:
             // A document every connector of which this platform excludes still subscribes: what
             // the author ships next may be something this machine can run.
@@ -206,7 +259,8 @@ public final class ImportModel: ObservableObject {
     }
 
     /// Lands what the sheet says: copies into the target, or a collection of its own bound to
-    /// the file. nil on success, else the message to show.
+    /// the file. nil on success, else the message to show. A new collection is made here, empty,
+    /// local and not active (`AppState.addEmptyCollection`), and the copies go into it.
     public func perform() -> String? {
         if let loadError { return loadError }
         switch mode {
@@ -214,6 +268,10 @@ public final class ImportModel: ObservableObject {
             var choices: [String: ImportChoice] = [:]
             for row in rows {
                 choices[row.name] = row.include && row.excludedReason == nil ? row.choice : .skip
+            }
+            if let name = newCollectionName {
+                if let error = state.addEmptyCollection(named: name) { return error }
+                return state.importCopies(documentAt: path, into: name, choices: choices)
             }
             return state.importCopies(documentAt: path, into: targetCollection, choices: choices)
         case .keepInSync:
@@ -230,7 +288,8 @@ public final class ImportModel: ObservableObject {
             rows = []
             return
         }
-        let held = state.store.collections[targetCollection]?.mcps ?? [:]
+        // A new collection holds nothing yet, whatever an existing one of that name might.
+        let held = newCollectionName == nil ? state.store.collections[targetCollection]?.mcps ?? [:] : [:]
         rows = Set(rendered.connectors.keys).union(rendered.excluded.keys).sorted(by: { $0.ordinallyPrecedes($1) }).map { name in
             let reason = rendered.excluded[name]
             let present = held[name] != nil

@@ -82,7 +82,11 @@ public class ImportDialogTests
             Assert.False(window.SyncMode.IsChecked);
             Assert.Equal(Visibility.Visible, window.CopiesBody.Visibility);
             Assert.Equal(Visibility.Collapsed, window.SyncBody.Visibility);
-            Assert.Equal("Default", window.TargetBox.SelectedItem);
+            Assert.Equal(new ImportModel.Target("Default"), window.TargetBox.SelectedItem);
+            // Every local collection, then New Collection, drawn by its title.
+            Assert.Equal([new ImportModel.Target("Default"), ImportModel.Target.NewCollection],
+                window.TargetBox.Items.Cast<ImportModel.Target>());
+            Assert.Equal(CollectionsModel.NewButton, ImportModel.Target.NewCollection.ToString());
             // What is already there is not imported by default, so three of the four are ticked.
             Assert.Equal(ImportModel.ImportButton(3), window.ImportButton.Content);
             Assert.True(window.ImportButton.IsEnabled);

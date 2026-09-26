@@ -52,9 +52,9 @@ public partial class ImportDialog : DialogWindow
     /// </summary>
     private void Refresh()
     {
-        CopiesMode.Content = ImportModel.AddModeTitle(Model.TargetCollection);
+        CopiesMode.Content = ImportModel.AddModeTitle(Model.TargetName);
         // The radio's sentence is what names the target, so it is the picker's label too.
-        AutomationProperties.SetName(TargetBox, ImportModel.AddModeTitle(Model.TargetCollection));
+        AutomationProperties.SetName(TargetBox, ImportModel.AddModeTitle(Model.TargetName));
         ImportButton.Content = ImportModel.ImportButton(Model.ImportCount);
     }
 

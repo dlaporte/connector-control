@@ -187,6 +187,10 @@ bullet once the section is about to ship.
   as `mcps.corrupt.<time>.json`, and the banner says "…and restored from the backup of
   <date and time>." Only when no backup can be read is it rebuilt from Claude's config, as
   before, which kept only the connectors Claude was running.
+- Import's "Add to a collection" starts on the collection selected in the Collections
+  window when that one is local, rather than always on the active collection, and its
+  target picker ends with New Collection, which asks for a name and imports the copies
+  into a new, empty local collection that does not become active.
 - In a subscribed collection, a local server authored on the other platform is marked on
   its row; remote connectors cross either way.
 - A folder the app watches — Claude's config folder, the master list's, or a subscribed

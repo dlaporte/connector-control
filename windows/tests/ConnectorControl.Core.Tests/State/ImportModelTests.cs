@@ -64,6 +64,81 @@ public class ImportModelTests
     }
 
     /// <summary>
+    /// The target is the collection the window has selected when that one is local; otherwise the
+    /// active collection, as it is for an Import started with nothing selected.
+    /// </summary>
+    [Fact]
+    public void TheTargetIsTheSelectedLocalCollectionElseTheActiveOne()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, Path.Combine("shared", "data-team.json"));
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam, "other.json", "Team");
+        Assert.Null(state.AddEmptyCollection("Work"));
+        Assert.Equal("Work", new ImportModel(state, path, "Work").TargetCollection);
+        // A subscribed collection takes no copies.
+        Assert.Equal("Default", new ImportModel(state, path, "Team").TargetCollection);
+        Assert.Equal("Default", new ImportModel(state, path).TargetCollection);
+        Assert.Equal("Default", new ImportModel(state, path, "Gone").TargetCollection);
+    }
+
+    /// <summary>
+    /// New Collection, the last of the targets, asks for a name when it is chosen and lands the
+    /// copies in a new, empty local collection that does not become active; nothing is made until
+    /// Import is pressed, and a cancelled prompt leaves the target where it was.
+    /// </summary>
+    [Fact]
+    public void NewCollectionAsksForANameAndImportsIntoIt()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, Path.Combine("shared", "data-team.json"));
+        Assert.Null(state.Upsert("github", new McpEntry(true, AppStateHarness.Remote("https://x/")), null));
+        var model = new ImportModel(state, path);
+        Assert.Equal([new ImportModel.Target("Default"), ImportModel.Target.NewCollection], model.Targets);
+        Assert.Equal(["Default", CollectionsModel.NewButton], model.Targets.Select(ImportModel.TargetTitle));
+        Assert.Equal(new ImportModel.Target("Default"), model.ImportTarget);
+
+        h.Dialogs.NextPromptAnswer = null;
+        model.ImportTarget = ImportModel.Target.NewCollection;
+        // A cancelled prompt leaves the target where it was.
+        Assert.Equal(new ImportModel.Target("Default"), model.ImportTarget);
+        Assert.Equal(new FakeDialogs.PromptCall(AppState.NewCollectionTitle, ""), h.Dialogs.Prompts[^1]);
+
+        h.Dialogs.NextPromptAnswer = "  Fresh  ";
+        model.ImportTarget = ImportModel.Target.NewCollection;
+        Assert.Equal(ImportModel.Target.NewCollection, model.ImportTarget);
+        Assert.Equal("Fresh", model.TargetName);
+        Assert.Equal("Add to a collection: Fresh", ImportModel.AddModeTitle(model.TargetName));
+        // Nothing is in a new collection's way.
+        Assert.Equal([false, false, false, false], model.Rows.Select(r => r.Present));
+        Assert.Equal(4, model.ImportCount);
+        // Nothing is made before Import.
+        Assert.False(state.Store.Collections.ContainsKey("Fresh"));
+
+        var before = h.ClaudeServers();
+        Assert.Null(model.Perform());
+        var fresh = state.Store.Collections["Fresh"];
+        Assert.Equal(["dbt", "github", "ledger", "notion"], fresh.Mcps.Keys.Order(StringComparer.Ordinal));
+        Assert.All(fresh.Mcps.Values, entry => Assert.False(entry.Enabled));   // copies arrive off
+        Assert.Equal(CollectionKind.Local, state.KindOf("Fresh"));
+        Assert.Equal("Default", state.ActiveCollection);   // the new collection is not made active
+        Assert.True(DictionaryEquality.Equal(before, h.ClaudeServers()));
+
+        // A name already taken is the store's refusal, and nothing is imported.
+        var again = new ImportModel(state, path);
+        h.Dialogs.NextPromptAnswer = "Fresh";
+        again.ImportTarget = ImportModel.Target.NewCollection;
+        Assert.Equal("A collection named “Fresh” already exists.", again.Perform());
+        Assert.Equal(fresh, state.Store.Collections["Fresh"]);
+
+        // Choosing an existing collection again gives up the new one.
+        again.ImportTarget = new ImportModel.Target("Default");
+        Assert.Equal("Default", again.TargetName);
+        Assert.Equal([false, true, false, false], again.Rows.Select(r => r.Present));
+    }
+
+    /// <summary>
     /// Two remote connectors, one with a header name carrying the &amp; the Windows cmd /c
     /// launcher cannot hand to cmd.exe.
     /// </summary>

@@ -101,8 +101,8 @@
               </Style>
             </StackPanel.Style>
             <!-- The radio above names the collection the copies would land in; this changes it. -->
-            <ComboBox x:Name="TargetBox" ItemsSource="{Binding LocalCollections}"
-                      SelectedItem="{Binding TargetCollection, Mode=TwoWay}"
+            <ComboBox x:Name="TargetBox" ItemsSource="{Binding Targets}"
+                      SelectedItem="{Binding ImportTarget, Mode=TwoWay}"
                       MinWidth="180" HorizontalAlignment="Left" />
             <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
               <ItemsControl x:Name="RowList" ItemsSource="{Binding Rows}">

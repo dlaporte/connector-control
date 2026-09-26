@@ -676,7 +676,7 @@ public partial class CollectionsWindow : Window
         {
             return;
         }
-        var model = new ImportModel(state, path);
+        var model = new ImportModel(state, path, Model.Selected);
         // Subscribe is Import with the second mode already chosen: the picker that opened it
         // said which of the two the user asked for.
         if (keepInSync)

@@ -213,6 +213,12 @@ public sealed class AppState : ObservableObject, IDisposable
 
     public ConfigService Service { get => service; private set => Set(ref service, value); }
 
+    /// <summary>
+    /// The prompts AppState raises, which a model built on it asks through as well: the Import
+    /// dialog's New Collection name. The Mac's <c>dialogs</c> is public for the same reason.
+    /// </summary>
+    public IDialogs Dialogs => dialogs;
+
     /// <summary>The sidecar beside the master list, reconciled with the store on every load.</summary>
     public CollectionsFile CollectionsFile { get => collectionsFile; private set => Set(ref collectionsFile, value); }
 

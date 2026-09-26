@@ -89,6 +89,25 @@ public sealed class ImportModel : ObservableObject
     }
 
     /// <summary>
+    /// Where the copies land, as the target picker lists it: an existing local collection, or a new
+    /// one named when it is chosen and made only when Import is pressed. The Mac's is an enum; here a
+    /// record, whose <see cref="ToString"/> is the label a ComboBox draws, with a null collection for
+    /// the new one.
+    /// </summary>
+    public sealed record Target(string? Collection)
+    {
+        public static readonly Target NewCollection = new((string?)null);
+
+        public override string ToString() => TargetTitle(this);
+    }
+
+    /// <summary>
+    /// One target's picker label: the collection's name, or New Collection, the words Copy to's menu
+    /// ends with for the same thing.
+    /// </summary>
+    public static string TargetTitle(Target target) => target.Collection ?? CollectionsModel.NewButton;
+
+    /// <summary>
     /// One connector of the document against the collection it would land in. <see cref="Present"/>
     /// is what the badge says and what <see cref="Choice"/> answers; an excluded connector cannot
     /// be included at all, since this platform has no way to run it. A class, not a record: the
@@ -156,10 +175,16 @@ public sealed class ImportModel : ObservableObject
     private readonly RenderedCollection? rendered;
     private Mode mode = Mode.AddToCollection;
     private string targetCollection;
+    private string? newCollectionName;
     private string syncName;
     private IReadOnlyList<Row> rows = [];
 
-    public ImportModel(AppState state, string path)
+    /// <summary>
+    /// <paramref name="selected"/> is the collection the Collections window is showing, which is the
+    /// target when it is local; otherwise, or with nothing selected, the active collection is, as it
+    /// was before the window had a selection to offer.
+    /// </summary>
+    public ImportModel(AppState state, string path, string? selected = null)
     {
         this.state = state;
         Path = path;
@@ -168,9 +193,16 @@ public sealed class ImportModel : ObservableObject
         // The target picker is filled either way, so a sheet that cannot read its document still
         // shows the collection the user was in.
         var locals = state.LocalCollectionNames;
-        targetCollection = locals.Contains(state.ActiveCollection, StringComparer.Ordinal)
-            ? state.ActiveCollection
-            : locals.Count > 0 ? locals[0] : string.Empty;
+        if (selected is not null && locals.Contains(selected, StringComparer.Ordinal))
+        {
+            targetCollection = selected;
+        }
+        else
+        {
+            targetCollection = locals.Contains(state.ActiveCollection, StringComparer.Ordinal)
+                ? state.ActiveCollection
+                : locals.Count > 0 ? locals[0] : string.Empty;
+        }
         if (document is null)
         {
             LoadError = failure;
@@ -232,8 +264,75 @@ public sealed class ImportModel : ObservableObject
             {
                 RebuildRows();
                 RaiseFooter();
+                RaiseTarget();
             }
         }
+    }
+
+    /// <summary>
+    /// The name New Collection was given, while it is the target; null while an existing collection
+    /// is. Nothing by this name exists until <see cref="Perform"/> makes it.
+    /// </summary>
+    public string? NewCollectionName
+    {
+        get => newCollectionName;
+        private set
+        {
+            if (Set(ref newCollectionName, value))
+            {
+                RaiseTarget();
+            }
+        }
+    }
+
+    /// <summary>What the target picker lists: every local collection, then New Collection.</summary>
+    public IReadOnlyList<Target> Targets => [.. LocalCollections.Select(name => new Target(name)), Target.NewCollection];
+
+    /// <summary>
+    /// The picker's selection; the Mac calls this <c>target</c>, and here the nested record owns that
+    /// name. Choosing New Collection asks for its name through AppState's dialogs, as Copy to ▸ New
+    /// Collection does; a cancelled prompt leaves the target as it was. Choosing a collection gives
+    /// up a new one that was named.
+    /// </summary>
+    public Target ImportTarget
+    {
+        get => newCollectionName is null ? new Target(targetCollection) : Target.NewCollection;
+        set
+        {
+            if (value.Collection is { } name)
+            {
+                var wasNew = newCollectionName is not null;
+                NewCollectionName = null;
+                if (name != targetCollection)
+                {
+                    TargetCollection = name;
+                }
+                else if (wasNew)
+                {
+                    RebuildRows();
+                    RaiseFooter();
+                }
+                return;
+            }
+            if (state.Dialogs.PromptForName(AppState.NewCollectionTitle, "") is not { } typed)
+            {
+                // The picker already shows the choice it just made; this puts it back.
+                RaiseTarget();
+                return;
+            }
+            NewCollectionName = MasterStore.CollectionName(typed);
+            RebuildRows();
+            RaiseFooter();
+        }
+    }
+
+    /// <summary>The collection the copies land in, by name, whichever kind of target it is: what the mode's title says.</summary>
+    public string TargetName => newCollectionName ?? targetCollection;
+
+    private void RaiseTarget()
+    {
+        Raise(nameof(ImportTarget));
+        Raise(nameof(TargetName));
     }
 
     /// <summary>The name a synced collection takes, which the gate reads, so it is raised with it.</summary>
@@ -312,14 +411,15 @@ public sealed class ImportModel : ObservableObject
             // A document every connector of which this platform excludes still subscribes: what
             // the author ships next may be something this machine can run.
             return ImportMode == Mode.AddToCollection
-                ? ImportCount > 0 && TargetCollection.Length > 0
+                ? ImportCount > 0 && TargetName.Length > 0
                 : SyncName.TrimSpaces().Length > 0;
         }
     }
 
     /// <summary>
     /// Lands what the sheet says: copies into the target, or a collection of its own bound to the
-    /// file. null on success, else the message to show.
+    /// file. null on success, else the message to show. A new collection is made here, empty, local
+    /// and not active (<see cref="AppState.AddEmptyCollection"/>), and the copies go into it.
     /// </summary>
     public string? Perform()
     {
@@ -335,6 +435,14 @@ public sealed class ImportModel : ObservableObject
         foreach (var row in Rows)
         {
             choices[row.Name] = row.Include && row.ExcludedReason is null ? row.Choice : ImportChoice.Skip;
+        }
+        if (newCollectionName is { } name)
+        {
+            if (state.AddEmptyCollection(name) is { } error)
+            {
+                return error;
+            }
+            return state.ImportCopies(Path, name, choices);
         }
         return state.ImportCopies(Path, TargetCollection, choices);
     }
@@ -352,7 +460,8 @@ public sealed class ImportModel : ObservableObject
             Rows = [];
             return;
         }
-        var held = state.Store.Collections.TryGetValue(TargetCollection, out var target)
+        // A new collection holds nothing yet, whatever an existing one of that name might.
+        var held = newCollectionName is null && state.Store.Collections.TryGetValue(TargetCollection, out var target)
             ? target.Mcps
             : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
         var names = new HashSet<string>(rendered.Connectors.Keys, StringComparer.Ordinal);

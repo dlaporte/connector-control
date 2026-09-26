@@ -338,7 +338,11 @@ subscribed collection never touches the source file.
 
 The Import sheet's other mode, **Add to a collection**, copies the
 document's connectors into a local collection of your choosing and keeps no
-link to the file afterwards. Each connector is listed as "new · arrives
+link to the file afterwards. It starts on the collection selected in the
+Collections window when that one is local, and otherwise on the active
+collection. The last choice, **New Collection**, asks for a name; the copies
+then go into a new, empty local collection, which does not become active.
+Each connector is listed as "new · arrives
 off", "already present · skipped", or "skipped: <reason>". Where the name is
 already taken you choose **Replace**, which "keeps your filled values",
 **Keep both**, which lands the new one as `<name> 2`, or **Skip**. Every

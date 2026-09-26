@@ -51,6 +51,71 @@ final class ImportModelTests: XCTestCase {
         XCTAssertEqual(state.kind(of: "Default"), .local)
     }
 
+    /// The target is the collection the window has selected when that one is local; otherwise the
+    /// active collection, as it is for an Import started with nothing selected.
+    func testTheTargetIsTheSelectedLocalCollectionElseTheActiveOne() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "shared/data-team.json")
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam, at: "other.json", as: "Team")
+        XCTAssertNil(state.addEmptyCollection(named: "Work"))
+        XCTAssertEqual(ImportModel(state: state, path: url.path, selected: "Work").targetCollection, "Work")
+        XCTAssertEqual(ImportModel(state: state, path: url.path, selected: "Team").targetCollection, "Default",
+                       "a subscribed collection takes no copies")
+        XCTAssertEqual(ImportModel(state: state, path: url.path).targetCollection, "Default")
+        XCTAssertEqual(ImportModel(state: state, path: url.path, selected: "Gone").targetCollection, "Default")
+    }
+
+    /// New Collection, the last of the targets, asks for a name when it is chosen and lands the
+    /// copies in a new, empty local collection that does not become active; nothing is made until
+    /// Import is pressed, and a cancelled prompt leaves the target where it was.
+    func testNewCollectionAsksForANameAndImportsIntoIt() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "shared/data-team.json")
+        XCTAssertNil(state.upsert(name: "github", entry: MCPEntry(enabled: true, config: AppStateHarness.remote("https://x/")),
+                                  renamedFrom: nil))
+        let model = ImportModel(state: state, path: url.path)
+        XCTAssertEqual(model.targets, [.collection("Default"), .newCollection])
+        XCTAssertEqual(model.targets.map(ImportModel.targetTitle), ["Default", CollectionsModel.newButton])
+        XCTAssertEqual(model.target, .collection("Default"))
+
+        h.dialogs.nextPromptAnswer = nil
+        model.target = .newCollection
+        XCTAssertEqual(model.target, .collection("Default"), "a cancelled prompt leaves the target where it was")
+        XCTAssertEqual(h.dialogs.prompts.last, FakeDialogs.PromptCall(title: AppState.newCollectionTitle, initial: ""))
+
+        h.dialogs.nextPromptAnswer = "  Fresh  "
+        model.target = .newCollection
+        XCTAssertEqual(model.target, .newCollection)
+        XCTAssertEqual(model.targetName, "Fresh")
+        XCTAssertEqual(ImportModel.addModeTitle(model.targetName), "Add to a collection: Fresh")
+        XCTAssertEqual(model.rows.map(\.present), [false, false, false, false], "nothing is in a new collection's way")
+        XCTAssertEqual(model.importCount, 4)
+        XCTAssertNil(state.store.collections["Fresh"], "nothing is made before Import")
+
+        let before = try h.claudeServers()
+        XCTAssertNil(model.perform())
+        let fresh = try XCTUnwrap(state.store.collections["Fresh"])
+        XCTAssertEqual(fresh.mcps.keys.sorted(), ["dbt", "github", "ledger", "notion"])
+        XCTAssertTrue(fresh.mcps.values.allSatisfy { !$0.enabled }, "copies arrive off")
+        XCTAssertEqual(state.kind(of: "Fresh"), .local)
+        XCTAssertEqual(state.activeCollection, "Default", "the new collection is not made active")
+        XCTAssertEqual(try h.claudeServers(), before)
+
+        // A name already taken is the store's refusal, and nothing is imported.
+        let again = ImportModel(state: state, path: url.path)
+        h.dialogs.nextPromptAnswer = "Fresh"
+        again.target = .newCollection
+        XCTAssertEqual(again.perform(), "A collection named \u{201C}Fresh\u{201D} already exists.")
+        XCTAssertEqual(state.store.collections["Fresh"], fresh)
+
+        // Choosing an existing collection again gives up the new one.
+        again.target = .collection("Default")
+        XCTAssertEqual(again.targetName, "Default")
+        XCTAssertEqual(again.rows.map(\.present), [false, true, false, false])
+    }
+
     /// The platform-forced half of a mirrored pair: the Mac never writes the `cmd /c` launcher,
     /// so a header name cmd.exe would re-parse excludes nothing here, where the Windows mirror
     /// asserts the row is excluded, uncountable and skipped.

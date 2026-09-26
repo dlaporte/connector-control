@@ -99,21 +99,21 @@ struct ImportSheetView: View {
 
     /// Copies into a collection the user owns: which one, and what would happen to each connector.
     @ViewBuilder private var copiesCard: some View {
-        card(.addToCollection, ImportModel.addModeTitle(model.targetCollection)) { selected in
+        card(.addToCollection, ImportModel.addModeTitle(model.targetName)) { selected in
             Text(ImportModel.addModeDetail)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if selected {
                 // The title names the collection the copies would land in; this changes it.
-                Picker("", selection: $model.targetCollection) {
-                    ForEach(model.localCollections, id: \.self) { name in
-                        Text(name).tag(name)
+                Picker("", selection: $model.target) {
+                    ForEach(model.targets, id: \.self) { target in
+                        Text(ImportModel.targetTitle(target)).tag(target)
                     }
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .fixedSize()
-                .accessibilityLabel(ImportModel.addModeTitle(model.targetCollection))
+                .accessibilityLabel(ImportModel.addModeTitle(model.targetName))
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) { rows }
                         .frame(maxWidth: .infinity, alignment: .leading)

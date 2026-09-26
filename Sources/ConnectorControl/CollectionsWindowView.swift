@@ -607,7 +607,7 @@ struct CollectionsWindowView: View {
     }
 
     private func importModel(path: String, keepInSync: Bool) -> ImportModel {
-        let sheetModel = ImportModel(state: state, path: path)
+        let sheetModel = ImportModel(state: state, path: path, selected: model.selected)
         // Subscribe is Import with the second mode already chosen: the panel that opened it
         // said which of the two the user asked for.
         if keepInSync { sheetModel.mode = .keepInSync }
