@@ -49,6 +49,24 @@ public class RestoreModelTests
         Assert.Null(model.RestoreError);
     }
 
+    /// <summary>A restore AppState would refuse is refused before the confirmation asks anything.</summary>
+    [Fact]
+    public void ARefusedRestoreSaysWhyWithoutAsking()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam);
+        state.SwitchCollection("Data team");
+        var model = new RestoreModel(state, h.Dialogs);
+        model.Load();
+        model.Selection = model.Backups[^1];   // the first-run original, which records no collection
+        Assert.EndsWith(".original.json", model.Selection, StringComparison.Ordinal);
+        Assert.False(model.Restore());
+        Assert.Empty(h.Dialogs.Confirms);
+        Assert.Equal(AppState.RestoreSubscribedError("Data team"), model.RestoreError);
+        Assert.Equal("Data team", state.ActiveCollection);
+    }
+
     [Fact]
     public void RestoreFailureShowsInlineAndInLastError()
     {

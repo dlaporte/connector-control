@@ -89,6 +89,13 @@ public sealed class RestoreModel : ObservableObject
         {
             return false;
         }
+        // A restore AppState would refuse says why at once, rather than after a confirmation it
+        // could never honour.
+        if (state.RestoreRefusal(backup) is { } refusal)
+        {
+            RestoreError = refusal.Message;
+            return false;
+        }
         if (!dialogs.Confirm(ConfirmMessage(Path.GetFileName(backup)), null, RestoreButton, destructive: true))
         {
             return false;
@@ -100,7 +107,7 @@ public sealed class RestoreModel : ObservableObject
             return true;
         }
         catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException or JsonException
-                                   or RestoreCollectionGoneException)
+                                   or RestoreCollectionGoneException or RestoreSubscribedException)
         {
             RestoreError = ex.Message;         // raw message, not Friendly()
             state.LastError = ex.Message;

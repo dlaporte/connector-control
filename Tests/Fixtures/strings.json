@@ -85,6 +85,9 @@
   "AppState.restoreCollectionGoneError": {
     "format": "This backup was taken from “{0}”, which no longer exists. Nothing was restored. Create a collection named “{0}” again, and this backup goes back into it."
   },
+  "AppState.restoreSubscribedError": {
+    "format": "“{0}” is subscribed, so its connectors are the author’s. Make a local collection active, then restore."
+  },
   "AppState.sourceUnreadableError": {
     "format": "{0} couldn’t be read: {1}"
   },

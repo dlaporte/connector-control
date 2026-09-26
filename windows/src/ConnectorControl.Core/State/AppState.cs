@@ -63,6 +63,9 @@ public sealed class AppState : ObservableObject, IDisposable
     public static string KeptPathCarriedError(string connector, string field) => $"“{connector}” carries a path this machine keeps back, in {field}. Open Publishing Settings to review it.";
     /// <summary>The way back is the second sentence: the refusal holds whatever the user does, and a collection of that name makes the same backup restorable.</summary>
     public static string RestoreCollectionGoneError(string collection) => $"This backup was taken from “{collection}”, which no longer exists. Nothing was restored. Create a collection named “{collection}” again, and this backup goes back into it.";
+
+    /// <summary>A backup that records no collection goes into the active one, which here is subscribed.</summary>
+    public static string RestoreSubscribedError(string collection) => $"“{collection}” is subscribed, so its connectors are the author’s. Make a local collection active, then restore.";
     /// <summary>Claude's launch time is re-read 3 s after the restart completes.</summary>
     public static readonly TimeSpan RestartRecheckDelay = TimeSpan.FromSeconds(3);
     /// <summary>
@@ -562,17 +565,18 @@ public sealed class AppState : ObservableObject, IDisposable
     /// active one again, since Claude's file held that collection's connectors. A backup whose
     /// collection is gone is refused (<see cref="RestoreCollectionGoneException"/>). One with no
     /// record — older than the record, the first-run original, a file from elsewhere — goes into the
-    /// active collection, and publishing still keeps back any path or folder it carries.
+    /// active collection, and publishing still keeps back any path or folder it carries. While that
+    /// collection is subscribed, it is refused (<see cref="RestoreRefusal"/>).
     /// </summary>
     public void RestoreClaudeConfig(string backupPath)
     {
+        if (RestoreRefusal(backupPath) is { } refusal)
+        {
+            throw refusal;
+        }
         var target = Store.Clone();
         if (BackupCollections.CollectionOf(backupPath, Service.Paths.BackupsDir) is { } recorded)
         {
-            if (!Store.Collections.ContainsKey(recorded))
-            {
-                throw new RestoreCollectionGoneException(recorded);
-            }
             target.ActiveCollection = recorded;
         }
         // Every apply backed Claude's file up with this machine's publish folder where the store
@@ -591,6 +595,23 @@ public sealed class AppState : ObservableObject, IDisposable
         settings.LastApplyDate = host.Now();
         // ConfigService already merged and persisted the store; a quiet adoption takes it as-is.
         Reload(ReloadTrigger.QuietStoreAdoption);
+    }
+
+    /// <summary>
+    /// Why a restore of <paramref name="backupPath"/> would be refused, before anything is asked or
+    /// written; null when it can go ahead. A backup recorded against a collection that is gone has
+    /// nowhere to go back to. One with no record goes into the active collection, and a subscribed
+    /// collection's connectors are its author's: a snapshot adopted there could be neither edited nor
+    /// deleted, and the next Review &amp; Apply would undo it. A recorded backup of a subscribed
+    /// collection is what Claude ran from it, and goes back as any other.
+    /// </summary>
+    public Exception? RestoreRefusal(string backupPath)
+    {
+        if (BackupCollections.CollectionOf(backupPath, Service.Paths.BackupsDir) is { } recorded)
+        {
+            return Store.Collections.ContainsKey(recorded) ? null : new RestoreCollectionGoneException(recorded);
+        }
+        return IsSynced(ActiveCollection) ? new RestoreSubscribedException(ActiveCollection) : null;
     }
 
     // MARK: service construction
@@ -2964,6 +2985,7 @@ public sealed class AppState : ObservableObject, IDisposable
         PathMarkMovedException moved => PathMarkMovedError(moved.Connector),
         KeptPathCarriedException kept => KeptPathCarriedError(kept.Connector, kept.Field),
         RestoreCollectionGoneException gone => RestoreCollectionGoneError(gone.Collection),
+        RestoreSubscribedException subscribed => RestoreSubscribedError(subscribed.Collection),
         PublishFolderCarriedException carried => PublishFolderCarriedError(carried.Connector, carried.Field),
         _ => error.Message,
     };
@@ -2992,6 +3014,18 @@ public sealed class AppState : ObservableObject, IDisposable
 /// </summary>
 public sealed class RestoreCollectionGoneException(string collection)
     : Exception(AppState.RestoreCollectionGoneError(collection))
+{
+    public string Collection { get; } = collection;
+}
+
+/// <summary>
+/// A restore refused before anything was written: the backup records no collection, and the active
+/// one, which would take it, is subscribed. Its message is the one the restore dialog shows.
+///
+/// Mirror: <c>RestoreError.subscribedActive</c> in Sources/ConnectorControlState/AppState.swift
+/// </summary>
+public sealed class RestoreSubscribedException(string collection)
+    : Exception(AppState.RestoreSubscribedError(collection))
 {
     public string Collection { get; } = collection;
 }

@@ -1936,6 +1936,43 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// A backup with no record goes into the active collection, and a subscribed collection's
+    /// connectors are its author's: that restore is refused before anything is written. A recorded
+    /// backup still goes back into the collection it came from, and once a local collection is
+    /// active the same unrecorded backup restores.
+    /// </summary>
+    [Fact]
+    public void ARestoreWithNoRecordIsRefusedWhileASubscribedCollectionIsActive()
+    {
+        using var h = new AppStateHarness();
+        using var s = h.Create();
+        h.Subscribe(s, CollectionDocumentSamples.DataTeam);
+        s.SwitchCollection("Data team");   // backs up Default's file, recorded as Default's
+        var recorded = s.Service.Backups.Backups("claude_desktop_config")[0];
+        Assert.Equal("Default", BackupCollections.CollectionOf(recorded, h.BackupsDir));
+        var original = Path.Combine(h.BackupsDir, "claude_desktop_config.original.json");
+        Assert.True(File.Exists(original));
+        Assert.Null(BackupCollections.CollectionOf(original, h.BackupsDir));
+        var claudeBefore = File.ReadAllBytes(h.ClaudeConfigPath);
+        var storeBefore = s.Store.Clone();
+
+        Assert.IsType<RestoreSubscribedException>(s.RestoreRefusal(original));
+        var refused = Assert.Throws<RestoreSubscribedException>(() => s.RestoreClaudeConfig(original));
+        Assert.Equal("Data team", refused.Collection);
+        Assert.Equal(AppState.RestoreSubscribedError("Data team"), refused.Message);
+        // Nothing was restored.
+        Assert.Equal(claudeBefore, File.ReadAllBytes(h.ClaudeConfigPath));
+        Assert.Equal(storeBefore, s.Store);
+
+        // A recorded backup names its own collection.
+        Assert.Null(s.RestoreRefusal(recorded));
+        s.RestoreClaudeConfig(recorded);
+        Assert.Equal("Default", s.ActiveCollection);
+        // With a local collection active it goes ahead.
+        Assert.Null(s.RestoreRefusal(original));
+    }
+
+    /// <summary>
     /// A connector an installer wrote straight into Claude's config while the app was off, and the
     /// other machine switched collections meanwhile: the collection that was applied keeps its own,
     /// and the new name still comes in to the collection now active.

@@ -411,7 +411,10 @@ machines that follow it, including the one that publishes it.
   collection named “<name>” again, and this backup goes back into it." Only
   this version records the collection, so a backup from an earlier one —
   which is every backup you already have, and the first-run original —
-  goes into the active collection instead.
+  goes into the active collection instead. While the active collection is
+  subscribed, such a backup is refused before anything is asked: "“<name>”
+  is subscribed, so its connectors are the author’s. Make a local
+  collection active, then restore."
 - An export of part of a published collection still carries that
   collection's identity, so your own app refuses to subscribe to it, as it
   refuses the published document itself.

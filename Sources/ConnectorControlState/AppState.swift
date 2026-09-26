@@ -88,6 +88,9 @@ public final class AppState: ObservableObject {
     /// collection of that name makes the same backup restorable.
     nonisolated public static func restoreCollectionGoneError(_ collection: String) -> String { "This backup was taken from “\(collection)”, which no longer exists. Nothing was restored. Create a collection named “\(collection)” again, and this backup goes back into it." }
 
+    /// A backup that records no collection goes into the active one, which here is subscribed.
+    nonisolated public static func restoreSubscribedError(_ collection: String) -> String { "“\(collection)” is subscribed, so its connectors are the author’s. Make a local collection active, then restore." }
+
     /// A synced connector-list change was adopted and written into Claude's config: say what it runs now.
     public static func connectorListChangedBody(_ delta: ServerDelta, restartRequired: Bool) -> String {
         let what = delta.isEmpty ? "was regenerated" : "now " + delta.summary()
@@ -435,11 +438,12 @@ public final class AppState: ObservableObject {
     /// active one again, since Claude's file held that collection's connectors. A backup whose
     /// collection is gone is refused. One with no record — older than the record, the first-run
     /// original, a file from elsewhere — goes into the active collection, and publishing still
-    /// keeps back any path or folder it carries.
+    /// keeps back any path or folder it carries. While that collection is subscribed, it is refused
+    /// (`restoreRefusal(for:)`).
     public func restoreClaudeConfig(from backup: URL) throws {
+        if let refusal = restoreRefusal(for: backup) { throw refusal }
         var target = store
         if let recorded = BackupCollections.collection(of: backup, in: service.paths.backupsDirURL) {
-            guard store.collections[recorded] != nil else { throw RestoreError.collectionGone(recorded) }
             target.activeCollection = recorded
         }
         // Every apply backed Claude's file up with this machine's publish folder where the store
@@ -461,6 +465,19 @@ public final class AppState: ObservableObject {
         // adoption takes it as-is and suppresses notifications for the
         // user's own restore action.
         reload(trigger: .quietStoreAdoption)
+    }
+
+    /// Why a restore of `backup` would be refused, before anything is asked or written; nil when it
+    /// can go ahead. A backup recorded against a collection that is gone has nowhere to go back to.
+    /// One with no record goes into the active collection, and a subscribed collection's connectors
+    /// are its author's: a snapshot adopted there could be neither edited nor deleted, and the next
+    /// Review & Apply would undo it. A recorded backup of a subscribed collection is what Claude ran
+    /// from it, and goes back as any other.
+    public func restoreRefusal(for backup: URL) -> RestoreError? {
+        if let recorded = BackupCollections.collection(of: backup, in: service.paths.backupsDirURL) {
+            return store.collections[recorded] == nil ? .collectionGone(recorded) : nil
+        }
+        return isSynced(activeCollection) ? .subscribedActive(activeCollection) : nil
     }
 
     // MARK: - Tools
@@ -2035,6 +2052,9 @@ public final class AppState: ObservableObject {
         if case RestoreError.collectionGone(let collection) = error {
             return restoreCollectionGoneError(collection)
         }
+        if case RestoreError.subscribedActive(let collection) = error {
+            return restoreSubscribedError(collection)
+        }
         if case PublishIntentError.publishFolderCarried(let connector, let field) = error {
             return publishFolderCarriedError(connector, field)
         }
@@ -2059,10 +2079,13 @@ public final class AppState: ObservableObject {
 public enum RestoreError: Error, Equatable, LocalizedError {
     /// The backup was taken from this collection, which no longer exists.
     case collectionGone(String)
+    /// The backup records no collection, and the active one, which would take it, is subscribed.
+    case subscribedActive(String)
 
     public var errorDescription: String? {
         switch self {
         case .collectionGone(let collection): return AppState.restoreCollectionGoneError(collection)
+        case .subscribedActive(let collection): return AppState.restoreSubscribedError(collection)
         }
     }
 }

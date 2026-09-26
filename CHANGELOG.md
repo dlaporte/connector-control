@@ -172,6 +172,11 @@ bullet once the section is about to ship.
 - The Backups caption in Settings ▸ Storage names the three files backed up before every
   change: Claude’s config, the master list and collections.json. It said "Both config
   files".
+- A backup that records no collection, such as the first-run original or one from an
+  earlier version, is refused while a subscribed collection is active, before the
+  confirmation: "“<name>” is subscribed, so its connectors are the author’s. Make a local
+  collection active, then restore." Before, it was restored into the subscribed collection,
+  where its connectors could be neither edited nor deleted.
 - In a subscribed collection, a local server authored on the other platform is marked on
   its row; remote connectors cross either way.
 - A folder the app watches — Claude's config folder, the master list's, or a subscribed

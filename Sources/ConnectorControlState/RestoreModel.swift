@@ -50,10 +50,16 @@ public final class RestoreModel: ObservableObject {
 
     /// The Restore button. A fresh attempt starts with a clean sheet: the
     /// previous attempt's error must not outlive a new selection or a cancelled
-    /// confirmation. Then the confirmation sheet opens.
+    /// confirmation. A restore AppState would refuse says why at once, rather
+    /// than after a confirmation it could never honour. Then the confirmation
+    /// sheet opens.
     public func requestRestore() {
         restoreError = nil
-        guard selection != nil else { return }
+        guard let backup = selection else { return }
+        if let refusal = state.restoreRefusal(for: backup) {
+            restoreError = refusal.localizedDescription
+            return
+        }
         confirming = true
     }
 

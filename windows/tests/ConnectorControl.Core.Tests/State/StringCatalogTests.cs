@@ -89,6 +89,7 @@ public class StringCatalogTests
         ["AppState.publishFolderCarriedError"] = ["X", "Y"],
         ["AppState.publishSlugTakenError"] = ["X"],
         ["AppState.restoreCollectionGoneError"] = ["X"],
+        ["AppState.restoreSubscribedError"] = ["X"],
         ["AppState.sourceUnreadableError"] = ["X", "Y"],
         ["ClaudeProcess.notAClaudePackageError"] = ["X"],
         ["ClaudePublisher.subjectNoOrganizationError"] = ["X", "Y"],
@@ -209,6 +210,7 @@ public class StringCatalogTests
         actual["AppState.restartInformative"] = AppState.RestartInformative;
         actual["AppState.restartMessage"] = AppState.RestartMessage;
         actual["AppState.restoreCollectionGoneError"] = AppState.RestoreCollectionGoneError("X");
+        actual["AppState.restoreSubscribedError"] = AppState.RestoreSubscribedError("X");
         actual["AppState.sourceUnreadableError"] = AppState.SourceUnreadableError("X", "Y");
         actual["AppState.storeChangedBody"] = AppState.StoreChangedBody;
         actual["AppState.targetMustBeLocalError"] = AppState.TargetMustBeLocalError;

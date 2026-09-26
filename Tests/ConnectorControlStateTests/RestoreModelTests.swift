@@ -1,5 +1,6 @@
 import XCTest
 import ConnectorControlCore
+import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
 /// Mirror: windows/tests/ConnectorControl.Core.Tests/State/RestoreModelTests.cs; the
@@ -60,6 +61,21 @@ final class RestoreModelTests: XCTestCase {
         XCTAssertEqual(state.store.mcps["aws-mcp"]?.enabled, true)
         XCTAssertNil(model.restoreError)
         XCTAssertTrue(h.dialogs.confirms.isEmpty)   // a sheet, not an NSAlert
+    }
+
+    /// A restore AppState would refuse is refused before the confirmation asks anything.
+    func testARefusedRestoreSaysWhyWithoutAsking() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
+        state.switchCollection(to: "Data team")
+        let model = RestoreModel(state: state)
+        model.load()
+        model.selection = try XCTUnwrap(state.service.backups.originalSnapshotURL(series: RestoreModel.series))
+        model.requestRestore()
+        XCTAssertFalse(model.confirming)
+        XCTAssertEqual(model.restoreError, AppState.restoreSubscribedError("Data team"))
+        XCTAssertEqual(state.activeCollection, "Data team")
     }
 
     func testRestoreFailureShowsInlineAndInLastError() throws {

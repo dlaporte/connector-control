@@ -1648,6 +1648,36 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNotNil(s.store.collections["Gone"]?.mcps["gone-only"])
     }
 
+    /// A backup with no record goes into the active collection, and a subscribed collection's
+    /// connectors are its author's: that restore is refused before anything is written. A recorded
+    /// backup still goes back into the collection it came from, and once a local collection is
+    /// active the same unrecorded backup restores.
+    func testARestoreWithNoRecordIsRefusedWhileASubscribedCollectionIsActive() throws {
+        let (h, s) = AppStateHarness.started()
+        defer { h.dispose() }
+        try h.subscribe(s, to: CollectionDocumentSamples.dataTeam)
+        s.switchCollection(to: "Data team")   // backs up Default's file, recorded as Default's
+        let recorded = try XCTUnwrap(try s.service.backups.backups(series: "claude_desktop_config").first)
+        XCTAssertEqual(BackupCollections.collection(of: recorded, in: h.backupsDir), "Default")
+        let original = try XCTUnwrap(s.service.backups.originalSnapshotURL(series: "claude_desktop_config"))
+        XCTAssertNil(BackupCollections.collection(of: original, in: h.backupsDir))
+        let claudeBefore = try Data(contentsOf: h.claudeConfigURL)
+        let storeBefore = s.store
+
+        XCTAssertEqual(s.restoreRefusal(for: original), .subscribedActive("Data team"))
+        XCTAssertThrowsError(try s.restoreClaudeConfig(from: original)) {
+            XCTAssertEqual($0 as? RestoreError, .subscribedActive("Data team"))
+            XCTAssertEqual($0.localizedDescription, AppState.restoreSubscribedError("Data team"))
+        }
+        XCTAssertEqual(try Data(contentsOf: h.claudeConfigURL), claudeBefore, "nothing was restored")
+        XCTAssertEqual(s.store, storeBefore)
+
+        XCTAssertNil(s.restoreRefusal(for: recorded), "a recorded backup names its own collection")
+        try s.restoreClaudeConfig(from: recorded)
+        XCTAssertEqual(s.activeCollection, "Default")
+        XCTAssertNil(s.restoreRefusal(for: original), "with a local collection active it goes ahead")
+    }
+
     /// A connector an installer wrote straight into Claude's config while the app was off, and the
     /// other machine switched collections meanwhile: the collection that was applied keeps its own,
     /// and the new name still comes in to the collection now active.

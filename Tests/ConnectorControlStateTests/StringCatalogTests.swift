@@ -83,6 +83,7 @@ final class StringCatalogTests: XCTestCase {
         "AppState.publishFolderCarriedError": ["X", "Y"],
         "AppState.publishSlugTakenError": ["X"],
         "AppState.restoreCollectionGoneError": ["X"],
+        "AppState.restoreSubscribedError": ["X"],
         "AppState.sourceUnreadableError": ["X", "Y"],
         "ClaudeSignature.notFoundMessage": ["X"],
         "ClaudeSignature.refusalMessage": ["X", "Y"],
@@ -192,6 +193,7 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.restartInformative"] = AppState.restartInformative
         actual["AppState.restartMessage"] = AppState.restartMessage
         actual["AppState.restoreCollectionGoneError"] = AppState.restoreCollectionGoneError("X")
+        actual["AppState.restoreSubscribedError"] = AppState.restoreSubscribedError("X")
         actual["AppState.sourceUnreadableError"] = AppState.sourceUnreadableError("X", "Y")
         actual["AppState.storeChangedBody"] = AppState.storeChangedBody
         actual["AppState.targetMustBeLocalError"] = AppState.targetMustBeLocalError
