@@ -1,5 +1,16 @@
 import Foundation
 
+/// Connectors a load took out of Claude's file into a collection other than the active one,
+/// because the active one is subscribed (`ConfigService.ingestTarget`).
+public struct IngestedElsewhere: Equatable, Sendable {
+    public var collection: String
+    public var names: [String]
+    public init(collection: String, names: [String]) {
+        self.collection = collection
+        self.names = names
+    }
+}
+
 /// Orchestrates every stateful operation, guaranteeing the backup-before-write
 /// invariant. The UI layer calls only this type for file operations.
 public struct ConfigService: Sendable {
@@ -30,12 +41,15 @@ public struct ConfigService: Sendable {
     /// are rather than poured into the active one; everything else the file holds is still taken
     /// in (`ingestible(_:lastApplied:lastAppliedNames:corrupt:store:)`). The caller then applies
     /// the active collection over the file.
+    ///
+    /// What is taken in lands where `ingestTarget(store:collections:lastApplied:)` says, and
+    /// `ingestedElsewhere` names it when that is not the active collection.
     public func loadAndReconcile(baseline: [String: JSONValue]? = nil,
                                  storeAuthoritative: Bool = false,
                                  lastAppliedCollection: String? = nil,
                                  lastAppliedNames: Set<String>? = nil) throws
         -> (store: MasterStore, notes: [String],
-            claudeServers: [String: JSONValue]?) {
+            claudeServers: [String: JSONValue]?, ingestedElsewhere: IngestedElsewhere?) {
         var notes: [String] = []
         let loaded = MasterStoreIO.load(from: paths.masterStoreURL)
         if let corrupt = loaded.corruptFileURL {
@@ -50,7 +64,7 @@ public struct ConfigService: Sendable {
             return (loaded.store,
                     notes + ["Claude’s config file is not valid JSON. Your MCP list is safe; "
                      + "use Backups ▸ Restore to repair the file."],
-                    nil)
+                    nil, nil)
         }
         // A corrupt store is rebuilt with fresh-launch (nil-baseline) import
         // semantics: reconciling the empty replacement against a baseline would
@@ -72,16 +86,48 @@ public struct ConfigService: Sendable {
         } else {
             effectiveBaseline = baseline
         }
+        let target = ConfigService.ingestTarget(store: loaded.store, collections: loadCollections(),
+                                                lastApplied: lastAppliedCollection)
         let outcome = Reconciler.reconcile(
             store: loaded.store,
             claudeServers: ConfigService.ingestible(servers, lastApplied: lastAppliedCollection,
                                                     lastAppliedNames: lastAppliedNames,
                                                     corrupt: loaded.corruptFileURL != nil, store: loaded.store),
-            baseline: effectiveBaseline)
+            baseline: effectiveBaseline, into: target)
         if outcome.storeChanged || loaded.corruptFileURL != nil {
             try saveStore(outcome.store)
         }
-        return (outcome.store, notes, servers)
+        let elsewhere = target == outcome.store.activeCollection || outcome.ingested.isEmpty
+            ? nil : IngestedElsewhere(collection: target, names: outcome.ingested)
+        return (outcome.store, notes, servers, elsewhere)
+    }
+
+    /// The collection a load takes Claude's new connectors into: the active one, unless it is
+    /// subscribed. A subscribed collection holds what its author published and nothing more — a
+    /// connector taken into it could be neither edited nor deleted, and the next Apply would delete
+    /// it from Claude. It goes into a local collection instead: the one Claude's file was last
+    /// applied from when that is local, else the first local one by name, else a new, empty
+    /// "Default" (under a free name, should a subscribed collection bear that one), which the
+    /// reconcile creates as the first addition lands in it and which does not become active.
+    ///
+    /// `collections` is nil when the sidecar cannot be read, and then nothing says which
+    /// collections are subscribed: the active collection takes the additions, as it always has.
+    static func ingestTarget(store: MasterStore, collections: CollectionsFile?, lastApplied: String?) -> String {
+        guard let collections, collections.kind(of: store.activeCollection) == .synced else { return store.activeCollection }
+        if let lastApplied, store.collections[lastApplied] != nil, collections.kind(of: lastApplied) == .local {
+            return lastApplied
+        }
+        if let first = store.collections.keys.filter({ collections.kind(of: $0) == .local })
+            .min(by: { $0.ordinallyPrecedes($1) }) {
+            return first
+        }
+        var name = MasterStore.empty.activeCollection
+        var suffix = 2
+        while store.collections[name] != nil {
+            name = "\(MasterStore.empty.activeCollection) \(suffix)"
+            suffix += 1
+        }
+        return name
     }
 
     /// Backup mcps.json (if present), then atomically save the store.

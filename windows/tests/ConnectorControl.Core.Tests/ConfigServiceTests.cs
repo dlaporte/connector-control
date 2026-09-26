@@ -68,6 +68,64 @@ public class ConfigServiceTests : IDisposable
         Assert.DoesNotContain("scoutbook", kept);
     }
 
+    /// <summary>
+    /// A subscribed collection holds what its author published and nothing more, so what the file
+    /// adds while one is active goes to a local collection: the one last applied when that is local,
+    /// else the first local one by name, else a new one.
+    /// </summary>
+    [Fact]
+    public void TheIngestTargetIsNeverASubscribedCollection()
+    {
+        var store = new MasterStore([]);
+        store.Collections["Team"] = new Collection();
+        store.Collections["Beta"] = new Collection();
+        store.ActiveCollection = "Team";
+        var synced = new CollectionsFile.Entry(CollectionKind.Synced);
+        var teamSynced = new CollectionsFile(new Dictionary<string, CollectionsFile.Entry> { ["Team"] = synced });
+        Assert.Equal("Beta", ConfigService.IngestTarget(store, teamSynced, "Team"));
+        // The local collection Claude's file was last applied from.
+        Assert.Equal("Default", ConfigService.IngestTarget(store, teamSynced, "Default"));
+        Assert.Equal("Beta", ConfigService.IngestTarget(store, teamSynced, "Gone"));
+        // A local active collection takes it as it always has, and an unreadable sidecar says nothing about kinds.
+        Assert.Equal("Team", ConfigService.IngestTarget(store, new CollectionsFile(new Dictionary<string, CollectionsFile.Entry>()), null));
+        Assert.Equal("Team", ConfigService.IngestTarget(store, null, null));
+        var allSynced = new CollectionsFile(new Dictionary<string, CollectionsFile.Entry>
+        {
+            ["Team"] = synced, ["Beta"] = synced, ["Default"] = synced,
+        });
+        // No local collection: a new one, under a free name.
+        Assert.Equal("Default 2", ConfigService.IngestTarget(store, allSynced, "Default"));
+        store.Collections.Remove("Default");
+        Assert.Equal("Default", ConfigService.IngestTarget(store, allSynced, null));
+    }
+
+    [Fact]
+    public void ALoadWithASubscribedCollectionActiveKeepsTheAdditionsElsewhere()
+    {
+        var store = new MasterStore([new KeyValuePair<string, McpEntry>("scoutbook", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("old")))))]);
+        store.Collections["Team"] = new Collection([new KeyValuePair<string, McpEntry>("aws-mcp", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("t")))))]);
+        store.ActiveCollection = "Team";
+        service.SaveStore(store);
+        service.SaveCollections(new CollectionsFile(new Dictionary<string, CollectionsFile.Entry> { ["Team"] = new(CollectionKind.Synced) }));
+
+        var loaded = service.LoadAndReconcile(lastAppliedCollection: "Team");
+        // The subscribed collection stays exactly as its author published it.
+        Assert.Equal(Set(["aws-mcp"]), Set(loaded.Store.Collections["Team"].Mcps.Keys));
+        Assert.Equal(Set(["scoutbook", "scoutbook 2", "service-now"]), Set(loaded.Store.Collections["Default"].Mcps.Keys));
+        Assert.Equal(new IngestedElsewhere("Default", ["scoutbook 2", "service-now"]), loaded.IngestedElsewhere);
+        // And it was saved.
+        Assert.Equal(loaded.Store, MasterStoreIO.Read(paths.MasterStorePath));
+        var again = service.LoadAndReconcile(lastAppliedCollection: "Team");
+        // What is already there is not taken in twice.
+        Assert.Equal(loaded.Store, again.Store);
+
+        // A local active collection takes what is new itself, and nothing is said about it.
+        service.SaveCollections(new CollectionsFile(new Dictionary<string, CollectionsFile.Entry>()));
+        var local = service.LoadAndReconcile(lastAppliedCollection: "Team");
+        Assert.Null(local.IngestedElsewhere);
+        Assert.True(local.Store.Collections["Team"].Mcps.ContainsKey("service-now"));
+    }
+
     [Fact]
     public void EachBackupRecordsTheCollectionItWasAppliedFrom()
     {

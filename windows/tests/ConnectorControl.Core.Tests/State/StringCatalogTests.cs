@@ -81,6 +81,7 @@ public class StringCatalogTests
         ["AppState.deleteCollectionMessage"] = ["X"],
         ["AppState.duplicateNameError"] = ["X"],
         ["AppState.enabledSubtitle"] = ["3", "7"],
+        ["AppState.ingestedElsewhereSentence"] = ["X", "Y", "Z"],
         ["AppState.malformedConfigMessage"] = ["X"],
         ["AppState.needsValueCaution"] = ["X"],
         ["AppState.keptPathCarriedError"] = ["X", "Y"],
@@ -183,6 +184,7 @@ public class StringCatalogTests
         actual["AppState.deleteCollectionMessage"] = AppState.DeleteCollectionMessage("X");
         actual["AppState.duplicateNameError"] = AppState.DuplicateNameError("X");
         actual["AppState.enabledSubtitle"] = AppState.EnabledSubtitle(3, 7);
+        actual["AppState.ingestedElsewhereSentence"] = AppState.IngestedElsewhereSentence("X", "Y", "Z");
         actual["AppState.lastLocalCollectionError"] = AppState.LastLocalCollectionError;
         actual["AppState.locateCaution"] = AppState.LocateCaution;
         actual["AppState.malformedConfigMessage"] = AppState.MalformedConfigMessage("X");

@@ -75,6 +75,7 @@ final class StringCatalogTests: XCTestCase {
         "AppState.deleteCollectionMessage": ["X"],
         "AppState.duplicateNameError": ["X"],
         "AppState.enabledSubtitle": ["3", "7"],
+        "AppState.ingestedElsewhereSentence": ["X", "Y", "Z"],
         "AppState.malformedConfigMessage": ["X"],
         "AppState.needsValueCaution": ["X"],
         "AppState.keptPathCarriedError": ["X", "Y"],
@@ -167,6 +168,7 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.deleteCollectionMessage"] = AppState.deleteCollectionMessage("X")
         actual["AppState.duplicateNameError"] = AppState.duplicateNameError("X")
         actual["AppState.enabledSubtitle"] = AppState.enabledSubtitle(enabled: 3, total: 7)
+        actual["AppState.ingestedElsewhereSentence"] = AppState.ingestedElsewhereSentence("X", "Y", "Z")
         actual["AppState.lastLocalCollectionError"] = AppState.lastLocalCollectionError
         actual["AppState.locateCaution"] = AppState.locateCaution
         actual["AppState.malformedConfigMessage"] = AppState.malformedConfigMessage(detail: "X")

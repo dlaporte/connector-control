@@ -43,6 +43,9 @@
   "AppState.enabledSubtitle": {
     "format": "{0} of {1} enabled"
   },
+  "AppState.ingestedElsewhereSentence": {
+    "format": "“{0}” is subscribed, so {1} went into “{2}”."
+  },
   "AppState.keptPathCarriedError": {
     "format": "“{0}” carries a path this machine keeps back, in {1}. Open Publishing Settings to review it."
   },

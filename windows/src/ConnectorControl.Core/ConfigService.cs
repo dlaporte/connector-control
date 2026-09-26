@@ -35,6 +35,9 @@ public sealed class ConfigService
     /// where they are rather than poured into the active one; everything else the file holds is
     /// still taken in (<see cref="Ingestible"/>). The caller then applies the active collection over
     /// the file.
+    ///
+    /// What is taken in lands where <see cref="IngestTarget"/> says, and <c>IngestedElsewhere</c> names it
+    /// when that is not the active collection.
     /// </remarks>
     public LoadResult LoadAndReconcile(
         IReadOnlyDictionary<string, JsonValue>? baseline = null,
@@ -85,14 +88,56 @@ public sealed class ConfigService
         {
             effectiveBaseline = baseline;
         }
+        var target = IngestTarget(store, LoadCollections(), lastAppliedCollection);
         var outcome = Reconciler.Reconcile(
             store, Ingestible(servers, lastAppliedCollection, lastAppliedNames, corruptPath is not null, store),
-            effectiveBaseline);
+            effectiveBaseline, target);
         if (outcome.StoreChanged || corruptPath is not null)
         {
             SaveStore(outcome.Store);
         }
-        return new LoadResult(outcome.Store, notes, servers);
+        var elsewhere = target == outcome.Store.ActiveCollection || outcome.Ingested.Count == 0
+            ? null : new IngestedElsewhere(target, outcome.Ingested);
+        return new LoadResult(outcome.Store, notes, servers, elsewhere);
+    }
+
+    /// <summary>
+    /// The collection a load takes Claude's new connectors into: the active one, unless it is
+    /// subscribed. A subscribed collection holds what its author published and nothing more — a
+    /// connector taken into it could be neither edited nor deleted, and the next Apply would delete
+    /// it from Claude. It goes into a local collection instead: the one Claude's file was last
+    /// applied from when that is local, else the first local one by name, else a new, empty
+    /// "Default" (under a free name, should a subscribed collection bear that one), which the
+    /// reconcile creates as the first addition lands in it and which does not become active.
+    /// <para>
+    /// <paramref name="collections"/> is null when the sidecar cannot be read, and then nothing says which
+    /// collections are subscribed: the active collection takes the additions, as it always has.
+    /// </para>
+    /// </summary>
+    internal static string IngestTarget(MasterStore store, CollectionsFile? collections, string? lastApplied)
+    {
+        if (collections is null || collections.KindOf(store.ActiveCollection) != CollectionKind.Synced)
+        {
+            return store.ActiveCollection;
+        }
+        if (lastApplied is not null && store.Collections.ContainsKey(lastApplied)
+            && collections.KindOf(lastApplied) == CollectionKind.Local)
+        {
+            return lastApplied;
+        }
+        if (store.Collections.Keys.Where(k => collections.KindOf(k) == CollectionKind.Local)
+            .Order(StringComparer.Ordinal).FirstOrDefault() is { } first)
+        {
+            return first;
+        }
+        var name = MasterStore.Empty().ActiveCollection;
+        var suffix = 2;
+        while (store.Collections.ContainsKey(name))
+        {
+            name = $"{MasterStore.Empty().ActiveCollection} {suffix}";
+            suffix++;
+        }
+        return name;
     }
 
     /// <summary>

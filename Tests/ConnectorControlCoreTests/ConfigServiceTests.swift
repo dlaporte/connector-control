@@ -63,6 +63,54 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertFalse(kept.contains("scoutbook"), "the collection that is gone rendered it, and it is not guessed at")
     }
 
+    /// A subscribed collection holds what its author published and nothing more, so what the file
+    /// adds while one is active goes to a local collection: the one last applied when that is local,
+    /// else the first local one by name, else a new one.
+    func testTheIngestTargetIsNeverASubscribedCollection() {
+        var store = MasterStore.single([:])
+        store.collections["Team"] = Collection()
+        store.collections["Beta"] = Collection()
+        store.activeCollection = "Team"
+        let synced = CollectionsFile.Entry(kind: .synced)
+        let teamSynced = CollectionsFile(collections: ["Team": synced])
+        XCTAssertEqual(ConfigService.ingestTarget(store: store, collections: teamSynced, lastApplied: "Team"), "Beta")
+        XCTAssertEqual(ConfigService.ingestTarget(store: store, collections: teamSynced, lastApplied: "Default"), "Default",
+                       "the local collection Claude's file was last applied from")
+        XCTAssertEqual(ConfigService.ingestTarget(store: store, collections: teamSynced, lastApplied: "Gone"), "Beta")
+        XCTAssertEqual(ConfigService.ingestTarget(store: store, collections: CollectionsFile(collections: [:]), lastApplied: nil),
+                       "Team", "a local active collection takes it as it always has")
+        XCTAssertEqual(ConfigService.ingestTarget(store: store, collections: nil, lastApplied: nil), "Team",
+                       "an unreadable sidecar says nothing about kinds")
+        let allSynced = CollectionsFile(collections: ["Team": synced, "Beta": synced, "Default": synced])
+        XCTAssertEqual(ConfigService.ingestTarget(store: store, collections: allSynced, lastApplied: "Default"), "Default 2",
+                       "no local collection: a new one, under a free name")
+        store.collections.removeValue(forKey: "Default")
+        XCTAssertEqual(ConfigService.ingestTarget(store: store, collections: allSynced, lastApplied: nil), "Default")
+    }
+
+    func testALoadWithASubscribedCollectionActiveKeepsTheAdditionsElsewhere() throws {
+        var store = MasterStore.single(["scoutbook": MCPEntry(enabled: true, config: .object(["command": .string("old")]))])
+        store.collections["Team"] = Collection(mcps: ["aws-mcp": MCPEntry(enabled: true, config: .object(["command": .string("t")]))])
+        store.activeCollection = "Team"
+        try service.saveStore(store)
+        try service.saveCollections(CollectionsFile(collections: ["Team": CollectionsFile.Entry(kind: .synced)]))
+
+        let loaded = try service.loadAndReconcile(lastAppliedCollection: "Team")
+        XCTAssertEqual(Set(try XCTUnwrap(loaded.store.collections["Team"]).mcps.keys), ["aws-mcp"],
+                       "the subscribed collection stays exactly as its author published it")
+        XCTAssertEqual(Set(try XCTUnwrap(loaded.store.collections["Default"]).mcps.keys), ["scoutbook", "scoutbook 2", "service-now"])
+        XCTAssertEqual(loaded.ingestedElsewhere, IngestedElsewhere(collection: "Default", names: ["scoutbook 2", "service-now"]))
+        XCTAssertEqual(MasterStoreIO.read(from: paths.masterStoreURL), loaded.store, "and it was saved")
+        let again = try service.loadAndReconcile(lastAppliedCollection: "Team")
+        XCTAssertEqual(again.store, loaded.store, "what is already there is not taken in twice")
+
+        // A local active collection takes what is new itself, and nothing is said about it.
+        try service.saveCollections(CollectionsFile(collections: [:]))
+        let local = try service.loadAndReconcile(lastAppliedCollection: "Team")
+        XCTAssertNil(local.ingestedElsewhere)
+        XCTAssertNotNil(local.store.collections["Team"]?.mcps["service-now"])
+    }
+
     func testEachBackupRecordsTheCollectionItWasAppliedFrom() throws {
         try service.apply(servers: ["x": .object(["command": .string("x")])], backedUpFrom: "Team")
         let backup = try XCTUnwrap(try service.backups.backups(series: "claude_desktop_config").first)

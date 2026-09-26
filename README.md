@@ -525,10 +525,14 @@ backing both up. Backups are named by the millisecond they were taken; two
 taken in the same one are numbered, and still list, restore and prune
 newest first. A reconciliation pass runs at launch, every time the popover or flyout
 opens, and whenever either file changes on disk: connectors added outside the app
-are imported, external edits are detected (and you're notified), and
+are imported into the active collection, external edits are detected (and you're notified), and
 connectors missing from Claude's config are flagged for restore rather than
-ever being silently dropped. Claude only reads its config at startup, hence
-the Restart Required flow.
+ever being silently dropped. While a subscribed collection is active, a connector
+added outside the app goes into a local collection instead: the one Claude's config
+was last applied from if that is local, otherwise the first local collection by name,
+or a new, empty "Default" if there is none. The subscribed collection stays as its
+author published it, and the notification names where the connector went. Claude only
+reads its config at startup, hence the Restart Required flow.
 
 On Windows, **Restart Claude** asks Claude Desktop to end its session cleanly
 (the same request Windows sends at sign-out) and relaunches it from its Start

@@ -124,6 +124,41 @@ final class ReconcilerTests: XCTestCase {
         XCTAssertFalse(outcome.storeChanged)
     }
 
+    // MARK: ingestion into another collection
+
+    func testAnAdditionCanLandInACollectionOtherThanTheActiveOne() {
+        var s = store(["team": MCPEntry(enabled: false, config: configB)])
+        s.collections["Personal"] = Collection()
+        let outcome = Reconciler.reconcile(store: s, claudeServers: ["new": configA, "team": configA], into: "Personal")
+        XCTAssertEqual(outcome.store.collections["Personal"]?.mcps["new"], MCPEntry(enabled: true, config: configA))
+        XCTAssertNil(outcome.store.mcps["new"], "the active collection is left exactly as it was")
+        XCTAssertEqual(outcome.store.mcps["team"]?.config, configB, "a name the active collection holds is not new")
+        XCTAssertNil(outcome.store.collections["Personal"]?.mcps["team"])
+        XCTAssertEqual(outcome.ingested, ["new"])
+        XCTAssertTrue(outcome.storeChanged)
+    }
+
+    func testAnAdditionCreatesTheCollectionItLandsIn() {
+        let outcome = Reconciler.reconcile(store: store([:]), claudeServers: ["new": configA], into: "Default 2")
+        XCTAssertEqual(outcome.store.collections["Default 2"]?.mcps["new"], MCPEntry(enabled: true, config: configA))
+        XCTAssertEqual(outcome.store.activeCollection, "Default")
+        XCTAssertNil(Reconciler.reconcile(store: store([:]), claudeServers: [:], into: "Default 2")
+                        .store.collections["Default 2"], "nothing to take in creates nothing")
+    }
+
+    func testAnAdditionNeverOverwritesWhatTheOtherCollectionHolds() {
+        var s = store([:])
+        s.collections["Personal"] = Collection(mcps: ["same": MCPEntry(enabled: false, config: configA),
+                                                      "other": MCPEntry(enabled: false, config: configB)])
+        let outcome = Reconciler.reconcile(store: s, claudeServers: ["same": configA, "other": configA], into: "Personal")
+        XCTAssertEqual(outcome.store.collections["Personal"]?.mcps["same"], MCPEntry(enabled: false, config: configA),
+                       "the same connector is already there")
+        XCTAssertEqual(outcome.store.collections["Personal"]?.mcps["other"]?.config, configB)
+        XCTAssertEqual(outcome.store.collections["Personal"]?.mcps["other 2"], MCPEntry(enabled: true, config: configA),
+                       "a different one under a taken name lands beside it")
+        XCTAssertEqual(outcome.ingested, ["other 2", "same"])
+    }
+
     // MARK: adoptSnapshot (Backups ▸ Restore)
 
     func testAdoptSnapshotPreservesViewMemoryAndDisablesAbsent() {

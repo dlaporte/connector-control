@@ -1,6 +1,8 @@
 public struct ReconcileOutcome {
     public var store: MasterStore
     public var storeChanged: Bool
+    /// The names the file's additions are kept under, in the collection `reconcile` took them into.
+    public var ingested: [String] = []
 }
 
 /// The store is the source of truth; Claude's config is downstream of it.
@@ -11,24 +13,48 @@ public struct ReconcileOutcome {
 /// are all resolved by the caller regenerating the file from
 /// `store.enabledServers`.
 public enum Reconciler {
+    /// `target` (nil: the active collection) is where the additions land. What counts as one is
+    /// always measured against the active collection, the one Claude's file renders; another
+    /// collection is created as the first addition lands in it, and what it already holds is never
+    /// overwritten (`keptName(_:_:in:)`).
     public static func reconcile(
         store: MasterStore, claudeServers: [String: JSONValue],
-        baseline: [String: JSONValue]? = nil
+        baseline: [String: JSONValue]? = nil, into target: String? = nil
     ) -> ReconcileOutcome {
         var result = store
         var changed = false
+        var ingested: [String] = []
+        let destination = target ?? store.activeCollection
 
         for (name, config) in claudeServers where result.mcps[name] == nil {
             if isExternalAddition(name: name, config: config, baseline: baseline) {
-                result.mcps[name] = MCPEntry(enabled: true, config: config)
-                changed = true
+                let kept = keptName(name, config, in: result.collections[destination]?.mcps ?? [:])
+                if result.collections[destination]?.mcps[kept] == nil {
+                    result.collections[destination, default: Collection()].mcps[kept] = MCPEntry(enabled: true, config: config)
+                    changed = true
+                }
+                ingested.append(kept)
             }
             // else: the entry matches the baseline but is gone from the store —
             // a PENDING REMOVAL awaiting Apply. Re-importing it here would
             // silently resurrect a connector the user just deleted.
         }
 
-        return ReconcileOutcome(store: result, storeChanged: changed)
+        return ReconcileOutcome(store: result, storeChanged: changed,
+                                ingested: ingested.sorted { $0.ordinallyPrecedes($1) })
+    }
+
+    /// `name`, or "name 2", "name 3", … — the first name under which `held` has nothing or has
+    /// this very config. The active collection never holds the name, so there it is `name`
+    /// itself; another collection may hold a connector of its own under it, which stays as it is.
+    private static func keptName(_ name: String, _ config: JSONValue, in held: [String: MCPEntry]) -> String {
+        var candidate = name
+        var suffix = 2
+        while let entry = held[candidate], entry.config != config {
+            candidate = "\(name) \(suffix)"
+            suffix += 1
+        }
+        return candidate
     }
 
     /// A file entry unknown to the store is imported only when it's genuinely

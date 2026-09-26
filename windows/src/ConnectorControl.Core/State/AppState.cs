@@ -50,6 +50,12 @@ public sealed class AppState : ObservableObject, IDisposable
     public static string CollectionLocateBanner(string collection) => $"{collection}’s file isn’t on this PC yet.";
     public static string CollectionPublishFailedBanner(string collection, string folder, string reason) => $"Couldn\u2019t publish {collection} to {folder}: {reason}";
     public static string CollectionUpdateNotificationBody(string collection, string summary) => $"{collection} changed at its source: {summary}. Review it in Connector Control.";
+
+    /// <summary>
+    /// Joined to the notification that Claude's config was regenerated, when what was added to it went
+    /// into a local collection because the active one is subscribed.
+    /// </summary>
+    public static string IngestedElsewhereSentence(string subscribed, string names, string collection) => $"“{subscribed}” is subscribed, so {names} went into “{collection}”.";
     public static string SourceUnreadableError(string fileName, string detail) => $"{fileName} couldn\u2019t be read: {detail}";
     public static string PublishSlugTakenError(string fileName) => $"{fileName} already exists there and belongs to a different collection.";
     public static string PathMarkMovedError(string connector) => $"A path marked in “{connector}” has moved. Open Publishing Settings to mark it again.";
@@ -680,11 +686,17 @@ public sealed class AppState : ObservableObject, IDisposable
                 RecordApplied(ActiveCollection, held.Keys);
             }
 
+            // What the file added and a subscribed collection could not hold went into a local
+            // collection, and the notification that follows says which.
+            var elsewhere = result.IngestedElsewhere is { } ingested
+                ? " " + IngestedElsewhereSentence(ActiveCollection, ServerDelta.List(ingested.Names, limit: 4), ingested.Collection)
+                : "";
+
             // Fire notifications AFTER all state above has been assigned, never on first load or for
             // quiet adoptions. At most one per reload.
             if (regenerated && wasLoaded && trigger == ReloadTrigger.Routine && claudeConfigChangedExternally)
             {
-                Notify(ClaudeConfigRegeneratedBody);
+                Notify(ClaudeConfigRegeneratedBody + elsewhere);
             }
             else if (regenerated && wasLoaded && trigger == ReloadTrigger.ExternalStoreAdoption)
             {
@@ -696,11 +708,11 @@ public sealed class AppState : ObservableObject, IDisposable
                 var delta = ServerDelta.Between(previousApplied, enabled);
                 if (NeedsClaudeRestart)
                 {
-                    Notify(ConnectorListChangedBody(delta, restartRequired: true), Notifications.RestartCategory);
+                    Notify(ConnectorListChangedBody(delta, restartRequired: true) + elsewhere, Notifications.RestartCategory);
                 }
                 else
                 {
-                    Notify(ConnectorListChangedBody(delta, restartRequired: false));
+                    Notify(ConnectorListChangedBody(delta, restartRequired: false) + elsewhere);
                 }
             }
             else if (regenerationFailed && wasLoaded && trigger != ReloadTrigger.QuietStoreAdoption)

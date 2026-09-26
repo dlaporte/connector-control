@@ -70,6 +70,10 @@ public final class AppState: ObservableObject {
 
     public static func collectionUpdateNotificationBody(_ collection: String, _ summary: String) -> String { "\(collection) changed at its source: \(summary). Review it in Connector Control." }
 
+    /// Joined to the notification that Claude's config was regenerated, when what was added to it
+    /// went into a local collection because the active one is subscribed.
+    public static func ingestedElsewhereSentence(_ subscribed: String, _ names: String, _ collection: String) -> String { "“\(subscribed)” is subscribed, so \(names) went into “\(collection)”." }
+
     public static func sourceUnreadableError(_ fileName: String, _ detail: String) -> String { "\(fileName) couldn’t be read: \(detail)" }
 
     public static func publishSlugTakenError(_ fileName: String) -> String { "\(fileName) already exists there and belongs to a different collection." }
@@ -561,10 +565,16 @@ public final class AppState: ObservableObject {
                 recordApplied(activeCollection, names: Set(servers.keys))
             }
 
+            // What the file added and a subscribed collection could not hold went into a local
+            // collection, and the notification that follows says which.
+            let elsewhere = result.ingestedElsewhere.map {
+                " " + AppState.ingestedElsewhereSentence(activeCollection, ServerDelta.list($0.names, limit: 4), $0.collection)
+            } ?? ""
+
             // Fire notifications AFTER all state above has been assigned, never
             // on first load or for quiet adoptions. At most one per reload.
             if regenerated && wasLoaded && trigger == .routine && claudeConfigChangedExternally {
-                notify(AppState.claudeConfigRegeneratedBody)
+                notify(AppState.claudeConfigRegeneratedBody + elsewhere)
             } else if regenerated && wasLoaded && trigger == .externalStoreAdoption {
                 // A remote (synced) connector-list change landed while nobody
                 // was looking and has just been written into Claude's config.
@@ -575,10 +585,10 @@ public final class AppState: ObservableObject {
                 // offer, but the user still learns what starts next launch.
                 let delta = ServerDelta(from: previousApplied, to: expandedServers)
                 if needsClaudeRestart {
-                    notify(AppState.connectorListChangedBody(delta, restartRequired: true),
+                    notify(AppState.connectorListChangedBody(delta, restartRequired: true) + elsewhere,
                            category: Notifications.restartCategory)
                 } else {
-                    notify(AppState.connectorListChangedBody(delta, restartRequired: false))
+                    notify(AppState.connectorListChangedBody(delta, restartRequired: false) + elsewhere)
                 }
             } else if regenerationFailed && wasLoaded && trigger != .quietStoreAdoption {
                 notify(AppState.regenerationFailedBody)

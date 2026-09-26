@@ -37,7 +37,7 @@ public sealed record ServerDelta(IReadOnlyList<string> Added, IReadOnlyList<stri
         return string.Join("; ", parts);
     }
 
-    private static string List(IReadOnlyList<string> names, int limit) =>
+    internal static string List(IReadOnlyList<string> names, int limit) =>
         names.Count <= limit
             ? string.Join(", ", names)
             : string.Join(", ", names.Take(limit)) + $" and {names.Count - limit} more";

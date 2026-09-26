@@ -2876,6 +2876,83 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(try backupCount(h, series: "mcps"), before, "and skipping it writes nothing either")
     }
 
+    // MARK: - External changes while a subscribed collection is active
+
+    /// An installer writes a connector into Claude's file while a subscribed collection is active.
+    /// Taken into that collection it could be neither edited nor deleted, and the next Review &
+    /// Apply would delete it from Claude. It goes into a local collection instead, the subscribed
+    /// one stays as its author published it, and the notification says where the connector went.
+    func testAnExternalAdditionWhileSubscribedGoesIntoALocalCollection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
+        state.setEnabled("github", true, in: "Data team")
+        state.switchCollection(to: "Data team")
+        let authored = try XCTUnwrap(state.store.collections["Data team"])
+        h.notifier.clearSent()
+
+        var servers = try h.claudeServers()
+        servers["installer"] = .object(["command": .string("node"), "args": .array([.string("/opt/installer/srv.js")])])
+        try h.writeClaudeServers(servers.map { ($0.key, $0.value) })
+        state.reload()
+
+        XCTAssertEqual(state.store.collections["Data team"], authored, "the subscribed collection is untouched")
+        XCTAssertEqual(state.store.collections["Default"]?.mcps["installer"]?.enabled, true)
+        XCTAssertEqual(try h.storeOnDisk().collections["Default"]?.mcps["installer"]?.enabled, true)
+        XCTAssertTrue(state.pendingUpdates.isEmpty, "nothing shows as a pending removal")
+        XCTAssertEqual(state.activeCollection, "Data team")
+        XCTAssertNil(try h.claudeServers()["installer"], "Claude runs what the active collection renders")
+        XCTAssertEqual(h.notifier.sent.map(\.body), [
+            AppState.claudeConfigRegeneratedBody + " " + AppState.ingestedElsewhereSentence("Data team", "installer", "Default"),
+        ])
+    }
+
+    /// With no local collection left — a 1.3 app sharing the store can delete the last one — the
+    /// addition goes into a new, empty "Default", which does not become active.
+    func testAnExternalAdditionWithNoLocalCollectionMakesOne() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
+        state.switchCollection(to: "Data team")
+        try h.editStoreOnDisk { $0.collections.removeValue(forKey: "Default") }
+        state.reload()
+        XCTAssertEqual(state.collectionNames, ["Data team"])
+
+        try h.writeClaudeServers([("installer", .object(["command": .string("node")]))])
+        state.reload()
+        XCTAssertEqual(state.collectionNames, ["Data team", "Default"])
+        XCTAssertEqual(state.store.collections["Default"]?.mcps.keys.sorted(), ["installer"])
+        XCTAssertEqual(state.kind(of: "Default"), .local)
+        XCTAssertEqual(state.activeCollection, "Data team")
+    }
+
+    /// An edit or a removal made outside the app to a connector the subscribed collection runs is
+    /// regenerated away, as it is for a local collection: the store keeps the author's connector,
+    /// nothing becomes pending, and Claude's file runs it again.
+    func testAnExternalEditOrRemovalWhileSubscribedIsRegeneratedAway() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
+        state.setEnabled("github", true, in: "Data team")
+        state.switchCollection(to: "Data team")
+        let authored = try XCTUnwrap(state.store.collections["Data team"])
+        let running = try h.claudeServers()
+        XCTAssertNotNil(running["github"])
+
+        try h.writeClaudeServers([("github", .object(["command": .string("edited")]))])
+        state.reload()
+        XCTAssertEqual(state.store.collections["Data team"], authored)
+        XCTAssertEqual(try h.claudeServers(), running)
+
+        try h.writeClaudeServers([])
+        state.reload()
+        XCTAssertEqual(state.store.collections["Data team"], authored)
+        XCTAssertTrue(state.pendingUpdates.isEmpty)
+        XCTAssertEqual(try h.claudeServers(), running)
+        XCTAssertEqual(state.store.collections["Default"].map { Set($0.mcps.keys) }, ["scoutbook", "aws-mcp", "service-now"],
+                       "nothing was taken into the local collection either")
+    }
+
     /// How many files the named backup series holds, for proving a write happened once.
     private func backupCount(_ h: AppStateHarness, series: String) throws -> Int {
         let fm = FileManager.default

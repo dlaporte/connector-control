@@ -3337,6 +3337,100 @@ public class AppStateCollectionsTests
         Assert.Equal(before, BackupCount(h, "mcps"));
     }
 
+    // MARK: external changes while a subscribed collection is active
+
+    /// <summary>
+    /// An installer writes a connector into Claude's file while a subscribed collection is active.
+    /// Taken into that collection it could be neither edited nor deleted, and the next Review &amp;
+    /// Apply would delete it from Claude. It goes into a local collection instead, the subscribed
+    /// one stays as its author published it, and the notification says where the connector went.
+    /// </summary>
+    [Fact]
+    public void AnExternalAdditionWhileSubscribedGoesIntoALocalCollection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam);
+        state.SetEnabled("github", true, "Data team");
+        state.SwitchCollection("Data team");
+        var authored = state.Store.Collections["Data team"].Clone();
+        h.Notifier.Sent.Clear();
+
+        var servers = new Dictionary<string, JsonValue>(h.ClaudeServers(), StringComparer.Ordinal)
+        {
+            ["installer"] = NodeWith("/opt/installer/srv.js"),
+        };
+        h.WriteClaudeServers(servers.Select(p => (p.Key, p.Value)).ToArray());
+        state.Reload();
+
+        // The subscribed collection is untouched.
+        Assert.Equal(authored, state.Store.Collections["Data team"]);
+        Assert.True(state.Store.Collections["Default"].Mcps["installer"].Enabled);
+        Assert.True(h.StoreOnDisk().Collections["Default"].Mcps["installer"].Enabled);
+        // Nothing shows as a pending removal.
+        Assert.Empty(state.PendingUpdates);
+        Assert.Equal("Data team", state.ActiveCollection);
+        // Claude runs what the active collection renders.
+        Assert.False(h.ClaudeServers().ContainsKey("installer"));
+        Assert.Equal(
+            [AppState.ClaudeConfigRegeneratedBody + " " + AppState.IngestedElsewhereSentence("Data team", "installer", "Default")],
+            h.Notifier.Sent.Select(n => n.Body));
+    }
+
+    /// <summary>
+    /// With no local collection left — a 1.3 app sharing the store can delete the last one — the
+    /// addition goes into a new, empty "Default", which does not become active.
+    /// </summary>
+    [Fact]
+    public void AnExternalAdditionWithNoLocalCollectionMakesOne()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam);
+        state.SwitchCollection("Data team");
+        h.EditStoreOnDisk(store => store.Collections.Remove("Default"));
+        state.Reload();
+        Assert.Equal(["Data team"], state.CollectionNames);
+
+        h.WriteClaudeServers(("installer", JsonValue.Object(("command", JsonValue.String("node")))));
+        state.Reload();
+        Assert.Equal(["Data team", "Default"], state.CollectionNames);
+        Assert.Equal(["installer"], state.Store.Collections["Default"].Mcps.Keys);
+        Assert.Equal(CollectionKind.Local, state.KindOf("Default"));
+        Assert.Equal("Data team", state.ActiveCollection);
+    }
+
+    /// <summary>
+    /// An edit or a removal made outside the app to a connector the subscribed collection runs is
+    /// regenerated away, as it is for a local collection: the store keeps the author's connector,
+    /// nothing becomes pending, and Claude's file runs it again.
+    /// </summary>
+    [Fact]
+    public void AnExternalEditOrRemovalWhileSubscribedIsRegeneratedAway()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam);
+        state.SetEnabled("github", true, "Data team");
+        state.SwitchCollection("Data team");
+        var authored = state.Store.Collections["Data team"].Clone();
+        var running = h.ClaudeServers();
+        Assert.True(running.ContainsKey("github"));
+
+        h.WriteClaudeServers(("github", JsonValue.Object(("command", JsonValue.String("edited")))));
+        state.Reload();
+        Assert.Equal(authored, state.Store.Collections["Data team"]);
+        Assert.True(DictionaryEquality.Equal(running, h.ClaudeServers()));
+
+        h.WriteClaudeServers();
+        state.Reload();
+        Assert.Equal(authored, state.Store.Collections["Data team"]);
+        Assert.Empty(state.PendingUpdates);
+        Assert.True(DictionaryEquality.Equal(running, h.ClaudeServers()));
+        // Nothing was taken into the local collection either.
+        Assert.Equal(["aws-mcp", "scoutbook", "service-now"], state.Store.Collections["Default"].Mcps.Keys.Order(StringComparer.Ordinal));
+    }
+
     // How many files the named backup series holds, for proving a write happened once.
     private static int BackupCount(AppStateHarness h, string series) =>
         Directory.Exists(h.BackupsDir)

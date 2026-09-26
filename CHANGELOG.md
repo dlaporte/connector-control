@@ -158,6 +158,12 @@ bullet once the section is about to ship.
   while the active collection is the one that file was written from, so a relaunch after
   another machine switched collections no longer pours one collection's connectors into
   another. Profiles have had that flaw since 1.1.
+- A connector added to Claude's configuration outside the app, by an installer or a hand
+  edit, while a subscribed collection is active goes into a local collection: the one
+  Claude's configuration was last applied from if that is local, else the first local one
+  by name, else a new, empty "Default". Before, it went into the subscribed collection,
+  where it could be neither edited nor deleted, and the next Review & Apply deleted it
+  from Claude. The notification names where it went.
 - In a subscribed collection, a local server authored on the other platform is marked on
   its row; remote connectors cross either way.
 - A folder the app watches — Claude's config folder, the master list's, or a subscribed
