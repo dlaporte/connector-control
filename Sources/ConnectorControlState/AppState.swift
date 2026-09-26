@@ -849,15 +849,6 @@ public final class AppState: ObservableObject {
         return collectionsWindowRequest
     }
 
-    /// Copies the active collection under a new name and makes it active, as New Collection in the
-    /// Collections window does. nil on success, else the message to show.
-    public func createCollection(named name: String) -> String? {
-        if let error = store.addCollection(named: name, copyingCurrent: true) { return error }
-        persistStore()
-        applyIfChanged()
-        return nil
-    }
-
     /// Renames a collection wherever its name is a key: the master list, the sidecar entry, this
     /// machine's bindings, and the derived state the banner reads. nil on success.
     public func renameCollection(_ name: String, to newName: String) -> String? {
@@ -1396,9 +1387,10 @@ public final class AppState: ObservableObject {
         return nil
     }
 
-    /// A new local collection with no connectors in it, for a copy to start from the ticked rows
-    /// alone. It does not become the active collection: switching to an empty one would empty
-    /// Claude's config, so nothing is applied either. nil on success, else the message.
+    /// A new local collection with no connectors in it, as New Collection makes and as Copy to ▸
+    /// New Collection starts from before the ticked rows land. It does not become the active
+    /// collection: switching to an empty one would empty Claude's config, so nothing is applied
+    /// either. nil on success, else the message.
     public func addEmptyCollection(named name: String) -> String? {
         if let error = store.addCollection(named: name, copyingCurrent: false, activating: false) { return error }
         persistStore()

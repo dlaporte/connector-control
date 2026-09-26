@@ -619,6 +619,43 @@ public class CollectionsModelTests
     }
 
     [Fact]
+    public void NewCollectionStartsEmptyAndLeavesTheActiveCollectionAlone()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var model = h.CollectionsModel(state);
+        Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("aws-mcp"));   // Default holds the seeded connectors
+        var servers = h.ClaudeServers();
+        var claudeBytes = File.ReadAllBytes(h.ClaudeConfigPath);
+
+        // Cancelled: nothing is made and nothing changes.
+        h.Dialogs.NextPromptAnswer = null;
+        model.Create();
+        Assert.Equal(["Default"], state.CollectionNames);
+        Assert.Equal("Default", model.Selected);
+        Assert.Null(model.LastError);
+
+        h.Dialogs.NextPromptAnswer = "  Work  ";
+        model.Create();
+        Assert.Null(model.LastError);
+        Assert.Equal(["Default", "Work"], state.CollectionNames);
+        Assert.Empty(state.Store.Collections["Work"].Mcps);            // a new collection holds no connectors
+        Assert.Equal(CollectionKind.Local, state.KindOf("Work"));
+        Assert.Equal("Default", state.ActiveCollection);              // making a collection does not switch to it
+        Assert.Equal("Work", model.Selected);                         // the window shows what it just made
+        Assert.True(DictionaryEquality.Equal(servers, h.ClaudeServers()));   // Claude still runs what it ran
+        Assert.Equal(claudeBytes, File.ReadAllBytes(h.ClaudeConfigPath));   // Claude's config is not rewritten
+
+        // A name the store already holds is refused, and nothing else changes.
+        h.Dialogs.NextPromptAnswer = "Work";
+        model.Create();
+        Assert.NotNull(model.LastError);
+        Assert.Equal(["Default", "Work"], state.CollectionNames);
+        Assert.Equal("Default", state.ActiveCollection);
+        Assert.Equal(claudeBytes, File.ReadAllBytes(h.ClaudeConfigPath));
+    }
+
+    [Fact]
     public void CreateRenameDeleteGoThroughTheDialogs()
     {
         using var h = new AppStateHarness(seedClaudeConfig: false);

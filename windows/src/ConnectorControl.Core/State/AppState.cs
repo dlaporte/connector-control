@@ -1216,22 +1216,6 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Copies the active collection under a new name and makes it active, as New Collection in the
-    /// Collections window does. null on success, else the message to show.
-    /// </summary>
-    public string? CreateCollection(string name)
-    {
-        if (Store.AddCollection(name, copyingCurrent: true) is { } error)
-        {
-            return error;
-        }
-        PersistStore();
-        ApplyIfChanged();
-        RaiseAll();
-        return null;
-    }
-
-    /// <summary>
     /// Renames a collection wherever its name is a key: the master list, the sidecar entry, this
     /// machine's bindings, and the derived state the banner reads. null on success.
     /// </summary>
@@ -2117,9 +2101,10 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// A new local collection with no connectors in it, for a copy to start from the ticked rows
-    /// alone. It does not become the active collection: switching to an empty one would empty
-    /// Claude's config, so nothing is applied either. null on success, else the message.
+    /// A new local collection with no connectors in it, as New Collection makes and as Copy to ▸
+    /// New Collection starts from before the ticked rows land. It does not become the active
+    /// collection: switching to an empty one would empty Claude's config, so nothing is applied
+    /// either. null on success, else the message.
     /// </summary>
     public string? AddEmptyCollection(string name)
     {

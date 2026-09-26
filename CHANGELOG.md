@@ -45,6 +45,10 @@ bullet once the section is about to ship.
 
 ### Both platforms
 
+- New Collection, under the Collections window's sidebar +, makes an empty collection and
+  leaves the active one as it was, so Claude's config is not touched. Before, it copied the
+  active collection's connectors and switched to the copy. Add connectors with the list's +,
+  then make the new collection active once it holds what you want.
 - "Delete" is the one word for deleting: the selection bar's button and its question
   ("Delete “<name>”?", "Delete 3 connectors?"), the published-file question and its
   button, the editor's Delete argument and Delete variable, "was deleted outside this

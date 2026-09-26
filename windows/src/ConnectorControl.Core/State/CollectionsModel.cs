@@ -1218,7 +1218,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     // MARK: collection actions
 
     public void Create() =>
-        AskNameThenRetarget(AppState.NewCollectionTitle, "", typed => state.CreateCollection(typed));
+        AskNameThenRetarget(AppState.NewCollectionTitle, "", typed => state.AddEmptyCollection(typed));
 
     public void Rename()
     {

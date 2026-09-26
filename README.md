@@ -115,9 +115,11 @@ Escape cancels any of these sheets, and the connector editor, as its
 
 - **The sidebar** lists the collections under the heading **Collections**.
   Its **+** (tooltip "Add Collection") offers **New Collection**, which
-  starts a collection as a copy of the active one's connectors and makes it
-  the active one, then **Import**, "Adds copies you own", and **Subscribe**,
-  "Stays in sync, read-only" (see Sharing a collection with a team).
+  asks for a name and makes an empty local collection, leaving Claude
+  running the active one; fill it with the list's **+**, then make it active
+  once it holds what you want. Next come **Import**, "Adds copies you own",
+  and **Subscribe**, "Stays in sync, read-only" (see Sharing a collection
+  with a team).
   Selecting a collection only shows it; double-click it, or choose **Make
   Active** from its context menu, to switch to it. Double-clicking the
   collection that is already active does nothing. Renaming or deleting a

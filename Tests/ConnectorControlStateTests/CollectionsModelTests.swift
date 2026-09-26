@@ -525,6 +525,41 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(state.collectionNames, ["Default", "Team"], "no prompt that was cancelled made anything")
     }
 
+    func testNewCollectionStartsEmptyAndLeavesTheActiveCollectionAlone() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let model = h.collectionsModel(state)
+        XCTAssertNotNil(state.store.collections["Default"]?.mcps["aws-mcp"], "Default holds the seeded connectors")
+        let servers = try h.claudeServers()
+        let claudeBytes = try Data(contentsOf: h.claudeConfigURL)
+
+        // Cancelled: nothing is made and nothing changes.
+        h.dialogs.nextPromptAnswer = nil
+        model.create()
+        XCTAssertEqual(state.collectionNames, ["Default"])
+        XCTAssertEqual(model.selected, "Default")
+        XCTAssertNil(model.lastError)
+
+        h.dialogs.nextPromptAnswer = "  Work  "
+        model.create()
+        XCTAssertNil(model.lastError)
+        XCTAssertEqual(state.collectionNames, ["Default", "Work"])
+        XCTAssertEqual(state.store.collections["Work"]?.mcps, [:], "a new collection holds no connectors")
+        XCTAssertEqual(state.kind(of: "Work"), .local)
+        XCTAssertEqual(state.activeCollection, "Default", "making a collection does not switch to it")
+        XCTAssertEqual(model.selected, "Work", "the window shows what it just made")
+        XCTAssertEqual(try h.claudeServers(), servers, "Claude still runs what it ran")
+        XCTAssertEqual(try Data(contentsOf: h.claudeConfigURL), claudeBytes, "Claude's config is not rewritten")
+
+        // A name the store already holds is refused, and nothing else changes.
+        h.dialogs.nextPromptAnswer = "Work"
+        model.create()
+        XCTAssertNotNil(model.lastError)
+        XCTAssertEqual(state.collectionNames, ["Default", "Work"])
+        XCTAssertEqual(state.activeCollection, "Default")
+        XCTAssertEqual(try Data(contentsOf: h.claudeConfigURL), claudeBytes)
+    }
+
     func testCreateRenameDeleteGoThroughTheDialogs() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }

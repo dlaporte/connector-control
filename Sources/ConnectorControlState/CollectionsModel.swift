@@ -917,7 +917,7 @@ public final class CollectionsModel: ObservableObject {
     // MARK: - Collection actions
 
     public func create() {
-        askNameThenRetarget(title: AppState.newCollectionTitle, initial: "") { state.createCollection(named: $0) }
+        askNameThenRetarget(title: AppState.newCollectionTitle, initial: "") { state.addEmptyCollection(named: $0) }
     }
 
     public func rename() {
