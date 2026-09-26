@@ -407,7 +407,7 @@ public class CollectionsWindowTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         SubscribeToDataTeam(h, state);
-        Assert.Null(state.CreateCollection("Spare"));
+        Assert.Null(state.CreateActiveCopy("Spare"));
         state.SwitchCollection("Default");
         Showing(h, state, (window, _) =>
         {
@@ -784,7 +784,7 @@ public class CollectionsWindowTests
         SubscribeToDataTeam(h, state);
         // Spare starts as a copy of Default, so everything ticked there clashes; Empty holds
         // nothing, so a copy into it goes straight through.
-        Assert.Null(state.CreateCollection("Spare"));
+        Assert.Null(state.CreateActiveCopy("Spare"));
         Assert.Null(state.AddEmptyCollection("Empty"));
         state.SwitchCollection("Default");
         Showing(h, state, (window, recorder) =>
@@ -865,7 +865,7 @@ public class CollectionsWindowTests
         var document = Path.GetFullPath(h.Dir.File(Path.Combine("shared", "data-team.json")));
         Directory.CreateDirectory(Path.GetDirectoryName(document)!);
         File.WriteAllBytes(document, CollectionDocumentSamples.DataTeam.Serialize());
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         state.SwitchCollection("Default");
         new CollectionsFile([new KeyValuePair<string, CollectionsFile.Entry>(
             "Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json"))])
@@ -901,7 +901,7 @@ public class CollectionsWindowTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Spare"));
+        Assert.Null(state.CreateActiveCopy("Spare"));
         state.SwitchCollection("Default");
         state.PublishError = new CollectionPublishError("Spare", "A marked path has moved.", PublishErrorKind.BlockedForReview);
         Showing(h, state, (window, recorder) =>

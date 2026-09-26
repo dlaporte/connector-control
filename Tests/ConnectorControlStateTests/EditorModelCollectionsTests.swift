@@ -237,7 +237,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertEqual(imported.headerNote, "Imported from “Data team” on \(date). Edits stay here.")
         XCTAssertFalse(imported.isReadOnly, "a copy is the user's own")
 
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         let folder = try rig.h.publish(state, "Team", folder: "share").deletingLastPathComponent()
         let published = rig.editor("scoutbook", in: "Team")
         XCTAssertEqual(published.headerState, .published(folder: folder.path))
@@ -389,7 +389,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         let state = rig.state
 
         // A twin whose config has moved on is not the same connector any more.
-        XCTAssertNil(state.createCollection(named: "Other"))
+        XCTAssertNil(state.createActiveCopy(named: "Other"))
         state.switchCollection(to: "Default")
         XCTAssertNil(state.upsert(name: "scoutbook",
                                   entry: MCPEntry(config: AppStateHarness.remote("https://elsewhere.example/mcp")),
@@ -517,7 +517,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         let rig = EditorRig()
         defer { rig.dispose() }
         let state = rig.state
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         XCTAssertNil(state.upsert(name: "svc", entry: MCPEntry(config: .object([
             "command": .string("node"),
             "args": .array([.string("/Users/d/server.js")]),
@@ -632,7 +632,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         let rig = EditorRig()
         defer { rig.dispose() }
         let state = rig.state
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         XCTAssertNil(state.upsert(name: "svc", entry: MCPEntry(config: .object([
             "command": .string("node"),
             "args": .array([.string("/Users/d/server.js")]),
@@ -659,7 +659,7 @@ final class EditorModelCollectionsTests: XCTestCase {
     @discardableResult
     private func publishTeam(_ rig: EditorRig, args: [String]) throws -> URL {
         let state = rig.state
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         XCTAssertNil(state.upsert(name: "svc", entry: MCPEntry(config: rig.local("node", args)), renamedFrom: nil, in: "Team"))
         let index = try XCTUnwrap(args.firstIndex(of: serverPath))
         return try rig.h.publish(state, "Team", intent: PublishIntent(
@@ -835,7 +835,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         defer { rig.dispose() }
         let state = rig.state
         try publishTeam(rig, args: [serverPath])
-        XCTAssertNil(state.createCollection(named: "Mirror"))   // a copy of Team, and now active
+        XCTAssertNil(state.createActiveCopy(named: "Mirror"))   // a copy of Team, and now active
         try rig.h.publish(state, "Mirror", intent: PublishIntent(
             shareValues: [:], pathMarks: ["svc": mark(at: 0, value: serverPath)], hints: [:]), folder: "share2")
 

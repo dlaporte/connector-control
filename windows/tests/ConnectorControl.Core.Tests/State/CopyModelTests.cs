@@ -21,7 +21,7 @@ public class CopyModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        // Created before any connector is seeded: CreateCollection copies whichever collection
+        // Created before any connector is seeded: CreateActiveCopy copies whichever collection
         // is active when it is made, so seeding "Spare" first would carry today's connectors
         // along with it and change what clashes below.
         Assert.Null(state.AddEmptyCollection("Spare"));

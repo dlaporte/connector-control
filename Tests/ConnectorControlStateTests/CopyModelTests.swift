@@ -15,7 +15,7 @@ final class CopyModelTests: XCTestCase {
     func testRowsMirrorTheTicksWithClashesDefaultedToKeepBoth() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        // Created before any connector is seeded: `createCollection` copies whichever collection
+        // Created before any connector is seeded: `createActiveCopy` copies whichever collection
         // is active when it is made, so seeding "Spare" first would carry today's connectors
         // along with it and change what clashes below.
         XCTAssertNil(state.addEmptyCollection(named: "Spare"))

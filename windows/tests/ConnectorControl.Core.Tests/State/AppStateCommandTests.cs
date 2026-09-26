@@ -216,7 +216,7 @@ public class AppStateCommandTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateActiveCopy("Work"));
         Assert.Equal("Work", state.ActiveCollection);
         state.SetEnabled("aws-mcp", false);
         Assert.Equal(["scoutbook", "service-now"], AppStateHarness.Keys(h.ClaudeServers().Keys));

@@ -137,7 +137,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateActiveCopy("Work"));
         Assert.Null(state.RenameCollection("Work", "Team"));
         Assert.Equal(["Default", "Team"], state.CollectionNames);
         // A new collection becomes the active one.
@@ -154,7 +154,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateActiveCopy("Work"));
         state.SwitchCollection("Default");
 
         state.SetEnabled("aws-mcp", false, "Work");
@@ -174,10 +174,10 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Equal("A collection named “Default” already exists.", state.CreateCollection("Default"));
-        Assert.Equal(AppState.NameEmptyError, state.CreateCollection("   "));
+        Assert.Equal("A collection named “Default” already exists.", state.CreateActiveCopy("Default"));
+        Assert.Equal(AppState.NameEmptyError, state.CreateActiveCopy("   "));
         Assert.Equal(["Default"], state.CollectionNames);
-        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateActiveCopy("Work"));
         Assert.Equal(["aws-mcp", "scoutbook", "service-now"], state.SortedNames);   // a COPY of the active collection
         Assert.Null(h.Settings.LastApplyDate);   // a copy runs what Claude already runs, so nothing is written
         // But Claude's file now holds the new collection, which the launch ingest reads.
@@ -217,7 +217,7 @@ public class AppStateCollectionsTests
         using var state = h.Create();
         Assert.Equal("No collection named “Nope”.", state.RenameCollection("Nope", "Q"));
         Assert.Equal("No collection named “Nope”.", state.DeleteCollection("Nope"));
-        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateActiveCopy("Work"));
         Assert.Equal("A collection named “Default” already exists.", state.RenameCollection("Work", "Default"));
         Assert.Equal(AppState.NameEmptyError, state.RenameCollection("Work", " "));
     }
@@ -251,8 +251,8 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Zeta"));
-        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateActiveCopy("Zeta"));
+        Assert.Null(state.CreateActiveCopy("Work"));
         Assert.Equal("Work", state.ActiveCollection);
         Assert.Null(state.DeleteCollection("Work"));
         Assert.Equal(["Default", "Zeta"], state.CollectionNames);
@@ -265,7 +265,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Seed(h, state, File_(("Team", Synced("team.json"))));
         Assert.Equal(AppState.LastLocalCollectionError, state.DeleteCollection("Default"));
         Assert.Null(state.DeleteCollection("Team"));   // a synced collection is not the one that has to stay
@@ -279,7 +279,7 @@ public class AppStateCollectionsTests
         using var state = h.Create();
         var source = h.Dir.File("team.json");
         TempDir.Touch(source, "{\"version\":1}");
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Seed(h, state, File_(("Team", Synced("team.json"))), Cache([new("Team", Bound(source))]));
         Assert.Equal(source, state.SourceBinding("Team")?.Path);
 
@@ -294,7 +294,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Seed(h, state, File_(("Team", Synced("team.json"))), Cache([new("Team", Bound("/shared/team.json"))]));
         state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
         {
@@ -320,7 +320,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateActiveCopy("Work"));
         Assert.True(File.Exists(Path.Combine(h.StoreDir, CollectionsFile.FileName)));
         Assert.True(File.Exists(state.Service.Paths.CollectionsCachePath));
     }
@@ -331,7 +331,7 @@ public class AppStateCollectionsTests
         using var h = new AppStateHarness();
         using (var first = h.Create())
         {
-            Assert.Null(first.CreateCollection("Team"));
+            Assert.Null(first.CreateActiveCopy("Team"));
             Seed(h, first, File_(("Team", Synced("team.json"))), Cache([new("Team", Bound("/shared/team.json"))]));
             Assert.Null(first.RenameCollection("Team", "Data"));   // a real persist of both files
         }
@@ -504,7 +504,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         var tokenPointer = JsonPointer.Parse("/env/DBT_TOKEN")!;
         var config = JsonValue.Object(
             ("command", JsonValue.String("node")),
@@ -555,8 +555,8 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Alpha"));
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Alpha"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         var bothSynced = File_(("Alpha", Synced("alpha.json")), ("Team", Synced("team.json")));
         Seed(h, state, bothSynced);
         Assert.Equal("Team", state.ActiveCollection);
@@ -590,7 +590,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateActiveCopy("Work"));
         Assert.Null(state.CollectionBanner);
         Assert.Empty(state.PendingUpdates);
         Assert.Empty(state.SourceErrors);
@@ -1488,7 +1488,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         state.PublishError = new CollectionPublishError("Team", "moved", PublishErrorKind.BlockedForReview);
         Assert.Null(state.RenameCollection("Team", "Crew"));
         Assert.Equal(new CollectionPublishError("Crew", "moved", PublishErrorKind.BlockedForReview), state.PublishError);
@@ -1810,7 +1810,7 @@ public class AppStateCollectionsTests
             [],
             [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark> { [ArgPointer(0)] = new("server_path", null, MarkedPath) })],
             []), new HashSet<string>([MarkedPath], StringComparer.Ordinal)));
-        Assert.Null(s.CreateCollection("Clients"));
+        Assert.Null(s.CreateActiveCopy("Clients"));
         s.Delete(["ledger"], "Clients");
         s.Delete(["x"], "Clients");
         Assert.Null(s.Upsert("crm", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("crm-mcp")))), null, "Clients"));
@@ -1909,7 +1909,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var s = h.Create();
-        Assert.Null(s.CreateCollection("Gone"));
+        Assert.Null(s.CreateActiveCopy("Gone"));
         // A collection of its own content: a backup identical to the newest belongs to whichever
         // collection last wrote it.
         Assert.Null(s.Upsert("gone-only", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("g")))), null, "Gone"));
@@ -1929,7 +1929,7 @@ public class AppStateCollectionsTests
 
         // The way back the message names: a collection of that name again, and the same backup goes in.
         Assert.Contains("Create a collection named “Gone”", AppState.RestoreCollectionGoneError("Gone"));
-        Assert.Null(s.CreateCollection("Gone"));
+        Assert.Null(s.CreateActiveCopy("Gone"));
         s.RestoreClaudeConfig(backup);
         Assert.Equal("Gone", s.ActiveCollection);
         Assert.True(s.Store.Collections["Gone"].Mcps.ContainsKey("gone-only"));
@@ -1949,7 +1949,7 @@ public class AppStateCollectionsTests
         {
             team = first.ActiveCollection;
             Assert.Null(first.Upsert("a", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("a")))), null));
-            Assert.Null(first.CreateCollection("Second"));
+            Assert.Null(first.CreateActiveCopy("Second"));
             first.Delete(["a"], "Second");
             first.SwitchCollection(team);
         }
@@ -1986,7 +1986,7 @@ public class AppStateCollectionsTests
         using (var first = h.Create())
         {
             home = first.ActiveCollection;
-            Assert.Null(first.CreateCollection("Second"));
+            Assert.Null(first.CreateActiveCopy("Second"));
             first.SwitchCollection(home);
         }
         // The record names the collection Claude's file came from. The store syncs and this machine's
@@ -2027,7 +2027,7 @@ public class AppStateCollectionsTests
         using (var first = h.Create())
         {
             home = first.ActiveCollection;
-            Assert.Null(first.CreateCollection("Team"));   // Team is active, so Claude's file holds Team
+            Assert.Null(first.CreateActiveCopy("Team"));   // Team is active, so Claude's file holds Team
             Assert.Null(first.Upsert("t1", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("t1")))), null, "Team"));
             first.Apply();   // Claude's file now holds t1, and the record says Team wrote it
             Assert.True(h.ClaudeServers().ContainsKey("t1"));
@@ -2065,7 +2065,7 @@ public class AppStateCollectionsTests
         string document;
         using (var first = h.Create())
         {
-            Assert.Null(first.CreateCollection("Team"));   // Team is active, so Claude's file holds Team
+            Assert.Null(first.CreateActiveCopy("Team"));   // Team is active, so Claude's file holds Team
             Assert.Null(first.Upsert("ledger", new McpEntry(true, NodeWith(MarkedPath)), null, "Team"));
             first.Apply();
             // Team is published from the author's other machine: the sidecar carries the mark and its value.
@@ -2109,7 +2109,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var s = h.Create();
-        Assert.Null(s.CreateCollection("Team"));
+        Assert.Null(s.CreateActiveCopy("Team"));
         Assert.Null(s.Upsert("team-only", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("t")))), null, "Team"));
         s.Apply();
         s.SwitchCollection("Default");   // backs up what Team put in Claude's file
@@ -2217,7 +2217,7 @@ public class AppStateCollectionsTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var home = state.ActiveCollection;
-        Assert.Null(state.CreateCollection("Team"));            // active, a copy of home
+        Assert.Null(state.CreateActiveCopy("Team"));            // active, a copy of home
         Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath)), null, "Team"));
         Assert.Null(state.StartPublishing("Team", PublishFolder(h, "pubTeam"), new PublishIntent(
             [],
@@ -2257,7 +2257,7 @@ public class AppStateCollectionsTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var home = state.ActiveCollection;
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath)), null, "Team"));
         Assert.Null(state.StartPublishing("Team", PublishFolder(h, "pubTeam"), new PublishIntent(
             [],
@@ -2303,7 +2303,7 @@ public class AppStateCollectionsTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var home = state.ActiveCollection;
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath)), null, "Team"));
         Assert.Null(state.StartPublishing("Team", PublishFolder(h, "pubTeam"), new PublishIntent(
             [],
@@ -2320,7 +2320,7 @@ public class AppStateCollectionsTests
         Assert.Contains(bound, state.KeptBack("Team").Folders);
 
         Assert.Null(state.DeleteCollection("Team"));
-        Assert.Null(state.CreateCollection("Team"));   // the way back the refused restore names
+        Assert.Null(state.CreateActiveCopy("Team"));   // the way back the refused restore names
         var kept = state.KeptBack("Team");
         // A different collection: never released is not the rule for it, and it is still a folder
         // this machine binds, so it is releasable.
@@ -2336,7 +2336,7 @@ public class AppStateCollectionsTests
     private static string PublishThenDeleteTeam(AppStateHarness h, AppState state)
     {
         var home = state.ActiveCollection;
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath)), null, "Team"));
         var folder = PublishFolder(h, "pubTeam");
         Assert.Null(state.StartPublishing("Team", folder, new PublishIntent(
@@ -2411,7 +2411,7 @@ public class AppStateCollectionsTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var folder = PublishThenDeleteTeam(h, state);
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Assert.Null(state.Upsert("tool", new McpEntry(JsonValue.Object(
             ("command", JsonValue.String(folder + "/bin/tool")))), null, "Team"));
         var second = PublishFolder(h, "pubTeam2");
@@ -2448,7 +2448,7 @@ public class AppStateCollectionsTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var folder = PublishThenDeleteTeam(h, state);
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         var second = PublishFolder(h, "pubTeam2");
         Assert.Null(state.StartPublishing("Team", second, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
         // The old Team's record outlives the new one's publish, and belongs to no collection.
@@ -2480,7 +2480,7 @@ public class AppStateCollectionsTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var folder = PublishThenDeleteTeam(h, state);
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Assert.Null(state.StartPublishing("Team", PublishFolder(h, "pubTeam2"), PublishIntent.None,
             new HashSet<string>(StringComparer.Ordinal)));
         state.StopPublishing("Team", deleteFile: false);
@@ -2524,7 +2524,7 @@ public class AppStateCollectionsTests
         var home = state.ActiveCollection;
         // Squad published and stopped, so its record is its own; Team published and was deleted, so
         // its record is a departed collection's.
-        Assert.Null(state.CreateCollection("Squad"));
+        Assert.Null(state.CreateActiveCopy("Squad"));
         var squadFolder = PublishFolder(h, "pubSquad");
         Assert.Null(state.StartPublishing("Squad", squadFolder, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
         var squadOrigin = state.CollectionsFile.Collections["Squad"].Publish?.Origin;
@@ -2563,7 +2563,7 @@ public class AppStateCollectionsTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var home = state.ActiveCollection;
-        Assert.Null(state.CreateCollection("Squad"));
+        Assert.Null(state.CreateActiveCopy("Squad"));
         var squadFolder = PublishFolder(h, "pubSquad");
         Assert.Null(state.StartPublishing("Squad", squadFolder, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
         state.StopPublishing("Squad", deleteFile: false);
@@ -2594,7 +2594,7 @@ public class AppStateCollectionsTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         var home = state.ActiveCollection;
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath)), null, "Team"));
         state.SwitchCollection(home);
         var all = state.CollectionsFile.Collections.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
@@ -3044,7 +3044,7 @@ public class AppStateCollectionsTests
         var team = state.ActiveCollection;
         Assert.Null(state.StartPublishing(team, PublishFolder(h, "pubTeam"), PublishIntent.None));
         var teamFolder = state.CollectionsCache.Published[team].Folder;
-        Assert.Null(state.CreateCollection("Clients"));
+        Assert.Null(state.CreateActiveCopy("Clients"));
         Assert.Null(state.Upsert("shared", new McpEntry(NodeWith(teamFolder + "/tools/x.js")), null, "Clients"));
         var clients = PublishFolder(h, "pubClients");
         Assert.Equal(AppState.KeptPathCarriedError("shared", FieldName.Argument(1)),
@@ -3173,7 +3173,7 @@ public class AppStateCollectionsTests
         var path = Path.Combine(h.Dir.File("shared"), "data-team.json");
         AppStateHarness.WriteDocumentAt(ImportableDocument(), path);
         Assert.Null(state.Subscribe(path, null));
-        Assert.Null(state.CreateCollection("Personal"));
+        Assert.Null(state.CreateActiveCopy("Personal"));
 
         Assert.Null(state.MakeLocalCopy(["dbt", "ledger"], "Data team", "Personal"));
         var mcps = state.Store.Collections["Personal"].Mcps;
@@ -3234,7 +3234,7 @@ public class AppStateCollectionsTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Source"));
+        Assert.Null(state.CreateActiveCopy("Source"));
         Assert.Null(state.Upsert("github", new McpEntry(JsonValue.Object(
             ("command", JsonValue.String("/new/github")))), null, "Source"));
         Assert.Null(state.Upsert("github", new McpEntry(JsonValue.Object(

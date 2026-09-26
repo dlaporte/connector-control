@@ -282,7 +282,7 @@ public class EditorModelCollectionsTests
             Assert.False(imported.IsReadOnly);
         }
 
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         var folder = Path.GetDirectoryName(rig.H.Publish(state, "Team", folder: "share"))!;
         using var published = rig.Editor("scoutbook", "Team");
         Assert.Equal(new EditorModel.HeaderState.Published(folder), published.Header);
@@ -447,7 +447,7 @@ public class EditorModelCollectionsTests
         var state = rig.State;
 
         // A twin whose config has moved on is not the same connector any more.
-        Assert.Null(state.CreateCollection("Other"));
+        Assert.Null(state.CreateActiveCopy("Other"));
         state.SwitchCollection("Default");
         Assert.Null(state.Upsert("scoutbook", new McpEntry(AppStateHarness.Remote("https://elsewhere.example/mcp")),
                                  "scoutbook", "Other"));
@@ -654,7 +654,7 @@ public class EditorModelCollectionsTests
     {
         using var rig = new EditorRig();
         var state = rig.State;
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Assert.Null(state.Upsert("svc", new McpEntry(JsonValue.Object(
             ("command", JsonValue.String("node")),
             ("args", JsonValue.Array([JsonValue.String("/Users/d/server.js")])),
@@ -824,7 +824,7 @@ public class EditorModelCollectionsTests
     {
         using var rig = new EditorRig();
         var state = rig.State;
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Assert.Null(state.Upsert("svc", new McpEntry(JsonValue.Object(
             ("command", JsonValue.String("node")),
             ("args", JsonValue.Array([JsonValue.String("/Users/d/server.js")])))), null, "Team"));
@@ -862,7 +862,7 @@ public class EditorModelCollectionsTests
     private static string PublishTeam(EditorRig rig, params string[] args)
     {
         var state = rig.State;
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Assert.Null(state.Upsert("svc", new McpEntry(rig.Local("node", args)), null, "Team"));
         return rig.H.Publish(state, "Team", new PublishIntent(
             [], [new("svc", MarkAt(Array.IndexOf(args, ServerPath), ServerPath))], []), "share");
@@ -1069,7 +1069,7 @@ public class EditorModelCollectionsTests
         using var rig = new EditorRig();
         var state = rig.State;
         PublishTeam(rig, ServerPath);
-        Assert.Null(state.CreateCollection("Mirror"));   // a copy of Team, and now active
+        Assert.Null(state.CreateActiveCopy("Mirror"));   // a copy of Team, and now active
         rig.H.Publish(state, "Mirror", new PublishIntent(
             [], [new("svc", MarkAt(0, ServerPath))], []), "share2");
 

@@ -170,3 +170,32 @@ public sealed class AppStateHarness : IDisposable
         Dir.Dispose();
     }
 }
+
+public static class AppStateTestVerbs
+{
+    /// <summary>
+    /// A new local collection holding the active one's connectors exactly as they stand, enabled
+    /// flags included, made active and applied: the setup most collection tests start from. New
+    /// Collection makes an empty one and leaves the active collection alone, so this is built from
+    /// the verbs that remain. null on success, else the store's message.
+    /// </summary>
+    public static string? CreateActiveCopy(this AppState state, string name)
+    {
+        var source = state.ActiveCollection;
+        if (state.AddEmptyCollection(name) is { } error)
+        {
+            return error;
+        }
+        var copy = MasterStore.CollectionName(name);
+        var held = state.Store.Collections.GetValueOrDefault(source)?.Mcps ?? [];
+        foreach (var (connector, entry) in held.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToList())
+        {
+            if (state.Upsert(connector, entry, renamedFrom: null, collection: copy) is { } refused)
+            {
+                return refused;
+            }
+        }
+        state.SwitchCollection(copy);
+        return null;
+    }
+}

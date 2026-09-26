@@ -39,7 +39,7 @@ internal sealed class EditorRig : IDisposable
     public void Twin(string name)
     {
         var active = State.ActiveCollection;
-        Assert.Null(State.CreateCollection(name));
+        Assert.Null(State.CreateActiveCopy(name));
         State.SwitchCollection(active);
     }
 

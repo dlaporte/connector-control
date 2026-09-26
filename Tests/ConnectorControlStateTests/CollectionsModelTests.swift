@@ -35,8 +35,8 @@ final class CollectionsModelTests: XCTestCase {
     func testItemsMirrorTheStoreAndMarkSyncedPublishedAndPending() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Shared"))
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Shared"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         state.switchCollection(to: "Default")
         let file = CollectionsFile(collections: ["Shared": published(slug: "shared"), "Team": synced(fileName: "team.json")])
         let cache = CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")],
@@ -87,7 +87,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.rows.map(\.name), ["\u{1F600}", "\u{FF5E}"])
         model.setChecked("\u{FF5E}", true)
         model.setChecked("\u{1F600}", true)
-        XCTAssertNil(state.createCollection(named: "Other"))   // a copy of the active one: both clash
+        XCTAssertNil(state.createActiveCopy(named: "Other"))   // a copy of the active one: both clash
         state.switchCollection(to: "Default")
         XCTAssertEqual(model.checkedNamesClashing(in: "Other"), ["\u{1F600}", "\u{FF5E}"])
     }
@@ -95,7 +95,7 @@ final class CollectionsModelTests: XCTestCase {
     func testRowsForASyncedCollectionAreLockedAndUncheckable() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         XCTAssertNil(state.upsert(name: "github", entry: MCPEntry(config: AppStateHarness.remote("https://github.example/mcp")),
                                   renamedFrom: nil, in: "Team"))
         XCTAssertNil(state.upsert(name: "Ledger", entry: AppStateHarness.localConnector("/usr/local/bin/node", ["index.js"]), renamedFrom: nil, in: "Team"))
@@ -435,8 +435,8 @@ final class CollectionsModelTests: XCTestCase {
     func testCollectionMenuEnablementFollowsTheSelection() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Shared"))
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Shared"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         state.switchCollection(to: "Default")
         let file = CollectionsFile(collections: ["Shared": published(slug: "shared"), "Team": synced(fileName: "team.json")])
         let located = CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")],
@@ -491,7 +491,7 @@ final class CollectionsModelTests: XCTestCase {
     func testAVerbThatDoesNothingClearsTheLastError() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Default"))
         let model = h.collectionsModel(state, selecting: "Default")
 
@@ -528,7 +528,7 @@ final class CollectionsModelTests: XCTestCase {
     func testCreateRenameDeleteGoThroughTheDialogs() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
         let model = h.collectionsModel(state)
         XCTAssertEqual(model.selected, "Work")
 
@@ -579,7 +579,7 @@ final class CollectionsModelTests: XCTestCase {
     func testStopSyncingConfirmsAndADeclineLeavesTheCollectionSynced() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         state.switchCollection(to: "Default")
         try h.makeSynced(state, "Team", boundTo: "/shared/team.json")
         XCTAssertTrue(state.isSynced("Team"))
@@ -610,7 +610,7 @@ final class CollectionsModelTests: XCTestCase {
     func testVerbsOutOfTurnDoNothingAndAskNothing() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         state.switchCollection(to: "Default")
         // Synced, but not located on this machine: nothing to refresh.
         try h.makeSynced(state, "Team")
@@ -643,8 +643,8 @@ final class CollectionsModelTests: XCTestCase {
         defer { h.dispose() }
         let folder = h.dir.file("share")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        XCTAssertNil(state.createCollection(named: "Shared"))
-        XCTAssertNil(state.createCollection(named: "Consulting"))
+        XCTAssertNil(state.createActiveCopy(named: "Shared"))
+        XCTAssertNil(state.createActiveCopy(named: "Consulting"))
         XCTAssertNil(state.startPublishing("Shared", to: folder.path, intent: .none))
         XCTAssertNil(state.startPublishing("Consulting", to: folder.path, intent: .none))
         let sharedFile = folder.appendingPathComponent("shared.json")
@@ -686,7 +686,7 @@ final class CollectionsModelTests: XCTestCase {
     func testDeleteConfirmationSaysWhatGoesWithTheCollection() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        for name in ["Empty", "One", "Shared", "Team", "Two"] { XCTAssertNil(state.createCollection(named: name)) }
+        for name in ["Empty", "One", "Shared", "Team", "Two"] { XCTAssertNil(state.createActiveCopy(named: name)) }
         for (connector, collection) in [("alpha", "One"), ("alpha", "Team"), ("alpha", "Two"), ("beta", "Two")] {
             XCTAssertNil(state.upsert(name: connector, entry: AppStateHarness.localConnector("/bin/" + connector),
                                       renamedFrom: nil, in: collection))
@@ -729,7 +729,7 @@ final class CollectionsModelTests: XCTestCase {
         defer { h.dispose() }
         let folder = h.dir.file("share")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        XCTAssertNil(state.createCollection(named: "Shared"))
+        XCTAssertNil(state.createActiveCopy(named: "Shared"))
         XCTAssertNil(state.startPublishing("Shared", to: folder.path, intent: .none))
         let file = folder.appendingPathComponent("shared.json")
         XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
@@ -744,7 +744,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNil(state.publishError)
 
         // Another collection's failure is not this one's, so the question comes back.
-        XCTAssertNil(state.createCollection(named: "Consulting"))
+        XCTAssertNil(state.createActiveCopy(named: "Consulting"))
         XCTAssertNil(state.startPublishing("Consulting", to: folder.path, intent: .none))
         model.selected = "Consulting"
         state.publishError = CollectionPublishError(collection: "Shared", message: "the folder is read-only")
@@ -778,8 +778,8 @@ final class CollectionsModelTests: XCTestCase {
     func testConnectorCountSaysNothingElseExceptASourceThatCouldNotBeRead() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Shared"))
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Shared"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         state.switchCollection(to: "Default")
         let file = CollectionsFile(collections: ["Shared": published(slug: "shared"), "Team": synced(fileName: "team.json")])
         let located = CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")],
@@ -823,8 +823,8 @@ final class CollectionsModelTests: XCTestCase {
     func testSelectionFallsBackToTheActiveCollectionWhenItsCollectionDisappears() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Work"))
-        XCTAssertNil(state.createCollection(named: "Spare"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
+        XCTAssertNil(state.createActiveCopy(named: "Spare"))
         state.switchCollection(to: "Default")
         let model = h.collectionsModel(state)
 
@@ -870,7 +870,7 @@ final class CollectionsModelTests: XCTestCase {
     /// Default, active and published into a real folder; Team, synced with its file still to be
     /// found. The two banners the window can show therefore belong to different collections.
     private func twoBanners(_ h: AppStateHarness, _ state: AppState, publishingInto folder: URL) throws {
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         state.switchCollection(to: "Default")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try h.seed(state,
@@ -965,7 +965,7 @@ final class CollectionsModelTests: XCTestCase {
     func testTheSidebarChainNamesTheDocumentThisMachineReads() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         state.switchCollection(to: "Default")
         try h.makeSynced(state, "Team", boundTo: "/Acme/mcp/team.json")
         let model = h.collectionsModel(state)
@@ -997,7 +997,7 @@ final class CollectionsModelTests: XCTestCase {
     func testChoosingTheCollectionAlreadyShowingChangesNothing() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
         state.switchCollection(to: "Default")
         let model = h.collectionsModel(state, ticking: ["aws-mcp"])
         var repaints = 0
@@ -1028,7 +1028,7 @@ final class CollectionsModelTests: XCTestCase {
     func testASelectionRenamedAwayIsForgottenWithoutAnyWriteBack() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Spare"))
+        XCTAssertNil(state.createActiveCopy(named: "Spare"))
         state.switchCollection(to: "Default")
         let model = h.collectionsModel(state, selecting: "Spare")
 
@@ -1041,7 +1041,7 @@ final class CollectionsModelTests: XCTestCase {
     func testASelectionRenamedAwayDoesNotPullTheWindowBackWhenItReturns() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Spare"))
+        XCTAssertNil(state.createActiveCopy(named: "Spare"))
         state.switchCollection(to: "Default")
         let model = h.collectionsModel(state, selecting: "Spare")
         XCTAssertEqual(model.selected, "Spare")
@@ -1061,7 +1061,7 @@ final class CollectionsModelTests: XCTestCase {
         defer { h.dispose() }
         let folder = h.dir.file("share")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        XCTAssertNil(state.createCollection(named: "Shared"))
+        XCTAssertNil(state.createActiveCopy(named: "Shared"))
         XCTAssertNil(state.startPublishing("Shared", to: folder.path, intent: .none))
         let model = h.collectionsModel(state, selecting: "Shared")
 
@@ -1089,12 +1089,12 @@ final class CollectionsModelTests: XCTestCase {
     func testCopyDestinationsEnableNeitherTheSourceNorASyncedCollection() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Other"))
+        XCTAssertNil(state.createActiveCopy(named: "Other"))
         // Created first: the sidecar only annotates a collection already in the master list
         // (CollectionsFile.reconciled(with:)), so seeding "Team" with nothing to annotate would
         // leave it dropped, and missing from copyDestinations for not existing rather than
         // disabled for being synced.
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         try h.makeSynced(state, "Team")
         XCTAssertTrue(state.isSynced("Team"))
         let model = h.collectionsModel(state)
@@ -1111,8 +1111,8 @@ final class CollectionsModelTests: XCTestCase {
     func testCopyDestinationsListEveryOtherCollectionAndDisableTheSyncedOnes() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Other"))
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Other"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         try h.makeSynced(state, "Team")
         XCTAssertTrue(state.isSynced("Team"))
         let model = h.collectionsModel(state)
@@ -1150,7 +1150,7 @@ final class CollectionsModelTests: XCTestCase {
     func testTheRemovePredicateIsGatedBySyncSpecifically() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Team"))
         let model = h.collectionsModel(state, selecting: "Team", ticking: ["alpha"])
         XCTAssertTrue(model.canDeleteChecked, "still local, and something is ticked")
@@ -1199,7 +1199,7 @@ final class CollectionsModelTests: XCTestCase {
     func testRemoveCheckedAppliesOnlyWhenTheActiveCollectionLosesRows() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
         XCTAssertNil(state.upsert(name: "gamma", entry: AppStateHarness.localConnector("/bin/gamma"), renamedFrom: nil, in: "Work"))
         state.switchCollection(to: "Default")
         let model = h.collectionsModel(state)
@@ -1234,12 +1234,12 @@ final class CollectionsModelTests: XCTestCase {
     func testCopyCheckedCopiesIntoTheTargetClearsTicksAndDoesNotApply() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        // Created first: `createCollection` starts a collection as a copy of whichever one is
+        // Created first: `createActiveCopy` starts a collection as a copy of whichever one is
         // active when it is made, so making Spare before alpha exists keeps alpha out of that
         // starting snapshot — otherwise the copy below would collide with it and land as
         // "alpha 2" instead, leaving the original untouched and this test green for the wrong
         // reason.
-        XCTAssertNil(state.createCollection(named: "Spare"))
+        XCTAssertNil(state.createActiveCopy(named: "Spare"))
         XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Default"))
         let model = h.collectionsModel(state, selecting: "Default", ticking: ["alpha"])
 
@@ -1262,7 +1262,7 @@ final class CollectionsModelTests: XCTestCase {
         // Created first, for the same reason as the success test above, and so seeding the
         // sidecar afterwards has something in the master list to annotate
         // (CollectionsFile.reconciled(with:)).
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Default"))
         try h.makeSynced(state, "Team")
         let model = h.collectionsModel(state, selecting: "Default", ticking: ["alpha"])
@@ -1278,7 +1278,7 @@ final class CollectionsModelTests: XCTestCase {
     func testCopyCheckedRefusesWhenNothingIsTicked() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Spare"))
+        XCTAssertNil(state.createActiveCopy(named: "Spare"))
         let before = state.store.collections["Spare"]
         let model = h.collectionsModel(state, selecting: "Default")
 
@@ -1330,7 +1330,7 @@ final class CollectionsModelTests: XCTestCase {
     func testCopyCheckedIntoNewCollectionReportsARefusedName() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
         XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Default"))
         state.switchCollection(to: "Default")
         let model = h.collectionsModel(state, selecting: "Default", ticking: ["alpha"])
@@ -1348,7 +1348,7 @@ final class CollectionsModelTests: XCTestCase {
     func testCheckedNamesClashingNamesTheTickedConnectorsTheDestinationHolds() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Spare"))
+        XCTAssertNil(state.createActiveCopy(named: "Spare"))
         state.switchCollection(to: "Default")
         for name in ["zeta", "alpha", "beta"] {
             XCTAssertNil(state.upsert(name: name, entry: AppStateHarness.localConnector("/bin/" + name), renamedFrom: nil, in: "Default"))
@@ -1369,9 +1369,9 @@ final class CollectionsModelTests: XCTestCase {
     func testPillsMarkActivePublishedAndSubscribedExceptions() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Shared"))
-        XCTAssertNil(state.createCollection(named: "Team"))
-        XCTAssertNil(state.createCollection(named: "Plain"))
+        XCTAssertNil(state.createActiveCopy(named: "Shared"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Plain"))
         state.switchCollection(to: "Default")
         let file = CollectionsFile(collections: ["Shared": published(slug: "shared"), "Team": synced(fileName: "team.json")])
         let cache = CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")],
@@ -1432,7 +1432,7 @@ final class CollectionsModelTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         // A second local collection, so the common case is not also the last-collection case.
-        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
         state.switchCollection(to: "Default")
         let model = h.collectionsModel(state, selecting: "Default")
         XCTAssertEqual(model.collectionMenu, [
@@ -1447,7 +1447,7 @@ final class CollectionsModelTests: XCTestCase {
         defer { h.dispose() }
         let folder = h.dir.file("share")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        XCTAssertNil(state.createCollection(named: "Shared"))
+        XCTAssertNil(state.createActiveCopy(named: "Shared"))
         XCTAssertNil(state.startPublishing("Shared", to: folder.path, intent: .none))
         state.switchCollection(to: "Default")   // Shared stays, now not the active collection
 
@@ -1463,7 +1463,7 @@ final class CollectionsModelTests: XCTestCase {
     func testCollectionMenuForSyncedNotActiveLocated() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         state.switchCollection(to: "Default")
         try h.makeSynced(state, "Team")
         let model = h.collectionsModel(state, selecting: "Team")
@@ -1486,7 +1486,7 @@ final class CollectionsModelTests: XCTestCase {
     func testCollectionMenuOmitsRefreshAndShowSourceFileWhenNotLocated() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         state.switchCollection(to: "Default")
         try h.makeSynced(state, "Team")
         let model = h.collectionsModel(state, selecting: "Team")
@@ -1509,11 +1509,11 @@ final class CollectionsModelTests: XCTestCase {
     }
 
     func testDuplicateCopiesConnectorsDisabledWithoutActivatingAndReportsAClash() throws {
-        // Not seeded: createCollection(named:) copies whichever collection is active when it
+        // Not seeded: createActiveCopy(named:) copies whichever collection is active when it
         // runs, and Default is still active at that point.
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Team"))
         XCTAssertNil(state.upsert(name: "beta", entry: AppStateHarness.localConnector("/bin/beta"), renamedFrom: nil, in: "Team"))
         state.switchCollection(to: "Default")
@@ -1545,8 +1545,8 @@ final class CollectionsModelTests: XCTestCase {
     func testPublishedFilePathAndSourceFilePathNameTheDocumentsThisMachineKnows() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Shared"))
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Shared"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         state.switchCollection(to: "Default")
         try h.makeSynced(state, "Team")
 
@@ -1576,7 +1576,7 @@ final class CollectionsModelTests: XCTestCase {
     func testAddConnectorAffordanceFollowsSyncAndTargetsTheSelectedCollection() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         state.switchCollection(to: "Default")
         try h.makeSynced(state, "Team")
         let model = h.collectionsModel(state)

@@ -230,7 +230,7 @@ public class FlyoutWindowTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Work"));   // Default + Work, with Work active
+        Assert.Null(state.CreateActiveCopy("Work"));   // Default + Work, with Work active
         var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>
@@ -460,7 +460,7 @@ public class FlyoutWindowTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Work"));   // Default + Work, with Work active
+        Assert.Null(state.CreateActiveCopy("Work"));   // Default + Work, with Work active
         // Claude runs Work with a connector Default lacks, so switching back has something to
         // apply: a switch that changes nothing Claude runs rewrites nothing, and clears no banner.
         Assert.Null(state.Upsert("extra", new McpEntry(true, AppStateHarness.Remote("https://extra/")), null));

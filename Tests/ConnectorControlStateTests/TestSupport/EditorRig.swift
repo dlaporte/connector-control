@@ -31,7 +31,7 @@ final class EditorRig {
     /// identical twin of the active collection's.
     func twin(_ name: String, file: StaticString = #filePath, line: UInt = #line) {
         let active = state.activeCollection
-        XCTAssertNil(state.createCollection(named: name), file: file, line: line)
+        XCTAssertNil(state.createActiveCopy(named: name), file: file, line: line)
         state.switchCollection(to: active)
     }
 

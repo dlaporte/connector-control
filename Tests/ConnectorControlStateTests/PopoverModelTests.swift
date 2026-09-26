@@ -76,7 +76,7 @@ final class PopoverModelTests: XCTestCase {
         defer { popover.dispose() }
         XCTAssertEqual(popover.collectionItems, [CollectionMenuItem(name: "Default", isActive: true)])
 
-        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
         XCTAssertEqual(popover.collectionItems.map(\.name), ["Default", "Work"], "switching only — New, Rename and Delete live in the window")
         XCTAssertEqual(popover.collectionItems.map(\.isActive), [false, true])
         XCTAssertEqual(popover.collectionItems.map(\.isSynced), [false, false])
@@ -103,7 +103,7 @@ final class PopoverModelTests: XCTestCase {
     func testASyncedCollectionIsMarkedInTheMenu() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         try h.makeSynced(state, "Team")
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
@@ -117,7 +117,7 @@ final class PopoverModelTests: XCTestCase {
     func testTheCollectionBannerCarriesItsTextAndButton() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         try h.makeSynced(state, "Team")
         let folder = try h.publish(state, "Default").deletingLastPathComponent()
         let popover = PopoverModel(state: state)
@@ -318,7 +318,7 @@ final class PopoverModelTests: XCTestCase {
     func testTheSourceTooltipNamesTheSidecarFileWhileTheDocumentIsUnfound() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         try h.makeSynced(state, "Team")
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
@@ -330,7 +330,7 @@ final class PopoverModelTests: XCTestCase {
     func testTheLocateBannerBindsTheCollectionItNames() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         try h.makeSynced(state, "Team")
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
@@ -381,7 +381,7 @@ final class PopoverModelTests: XCTestCase {
     func testOnlyTheFailedPublishBannerOffersStopPublishing() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         state.switchCollection(to: "Default")
         try h.makeSynced(state, "Team")
         let folder = try h.publish(state, "Default").deletingLastPathComponent()
@@ -407,7 +407,7 @@ final class PopoverModelTests: XCTestCase {
     func testTheCollectionsWindowRequestsRoundTripThroughAppState() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         try h.makeSynced(state, "Team")
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
@@ -427,7 +427,7 @@ final class PopoverModelTests: XCTestCase {
     func testAMenuRowSpellsOutWhatItsSingleImageCannotShow() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         try h.makeSynced(state, "Team")
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
@@ -458,8 +458,8 @@ final class PopoverModelTests: XCTestCase {
     func testEverySyncedMenuRowNamesItsOwnSource() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
-        XCTAssertNil(state.createCollection(named: "Ops"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Ops"))
         state.switchCollection(to: "Default")
         try CollectionsFile(collections: [
             "Team": CollectionsFile.Entry(kind: .synced, fileName: "team.json"),
@@ -496,7 +496,7 @@ final class PopoverModelTests: XCTestCase {
     func testAnEmptySidecarNameAsksForNothingAnywhere() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         // Only a hand-edited or malformed sidecar says this; nothing here writes an empty name.
         try CollectionsFile(collections: ["Team": CollectionsFile.Entry(kind: .synced, fileName: "")])
             .save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)

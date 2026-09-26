@@ -123,7 +123,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testCreateRenameAndDeleteByName() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
         XCTAssertNil(state.renameCollection("Work", to: "Team"))
         XCTAssertEqual(state.collectionNames, ["Default", "Team"])
         XCTAssertEqual(state.activeCollection, "Team", "a new collection becomes the active one")
@@ -137,7 +137,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testSetEnabledInAnInactiveCollectionLeavesClaudesConfigAlone() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
         state.switchCollection(to: "Default")
 
         state.setEnabled("aws-mcp", false, in: "Work")
@@ -154,10 +154,10 @@ final class AppStateCollectionsTests: XCTestCase {
     func testCreateCopiesTheActiveCollectionAndReportsItsErrors() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertEqual(state.createCollection(named: "Default"), "A collection named \u{201C}Default\u{201D} already exists.")
-        XCTAssertEqual(state.createCollection(named: "   "), AppState.nameEmptyError)
+        XCTAssertEqual(state.createActiveCopy(named: "Default"), "A collection named \u{201C}Default\u{201D} already exists.")
+        XCTAssertEqual(state.createActiveCopy(named: "   "), AppState.nameEmptyError)
         XCTAssertEqual(state.collectionNames, ["Default"])
-        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
         XCTAssertEqual(state.sortedNames, ["aws-mcp", "scoutbook", "service-now"], "a COPY of the active collection")
         XCTAssertNil(h.settings.lastApplyDate, "a copy runs what Claude already runs, so nothing is written")
         XCTAssertEqual(state.collectionsCache.lastAppliedCollection, "Work",
@@ -191,7 +191,7 @@ final class AppStateCollectionsTests: XCTestCase {
         defer { h.dispose() }
         XCTAssertEqual(state.renameCollection("Nope", to: "Q"), "No collection named \u{201C}Nope\u{201D}.")
         XCTAssertEqual(state.deleteCollection(named: "Nope"), "No collection named \u{201C}Nope\u{201D}.")
-        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
         XCTAssertEqual(state.renameCollection("Work", to: "Default"), "A collection named \u{201C}Default\u{201D} already exists.")
         XCTAssertEqual(state.renameCollection("Work", to: " "), AppState.nameEmptyError)
     }
@@ -219,8 +219,8 @@ final class AppStateCollectionsTests: XCTestCase {
     func testDeletingTheActiveCollectionSwitchesToTheAlphabeticallyFirstRemaining() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Zeta"))
-        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.createActiveCopy(named: "Zeta"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
         XCTAssertEqual(state.activeCollection, "Work")
         XCTAssertNil(state.deleteCollection(named: "Work"))
         XCTAssertEqual(state.collectionNames, ["Default", "Zeta"])
@@ -231,7 +231,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testTheLastLocalCollectionStaysEvenBesideASyncedOne() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]))
         XCTAssertEqual(state.deleteCollection(named: "Default"), AppState.lastLocalCollectionError)
         XCTAssertNil(state.deleteCollection(named: "Team"), "a synced collection is not the one that has to stay")
@@ -243,7 +243,7 @@ final class AppStateCollectionsTests: XCTestCase {
         defer { h.dispose() }
         let source = h.dir.file("shared/team.json")
         try TempDir.touch(source, "{\"version\":1}")
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]),
                  cache: CollectionsLocalCache(synced: ["Team": bound(source.path)], published: [:]))
         XCTAssertEqual(state.sourceBinding(of: "Team")?.path, source.path)
@@ -257,7 +257,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testRenamingCarriesTheSidecarEntryTheBindingsAndTheDerivedState() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         try seed(h, state, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]),
                  cache: CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")], published: [:]))
         state.pendingUpdates = ["Team": CollectionDiff(added: ["jira"], removed: [], changed: [])]
@@ -279,7 +279,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testPersistWritesTheSidecarBesideTheStore() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
         XCTAssertTrue(FileManager.default.fileExists(atPath: h.storeDir.appendingPathComponent(CollectionsFile.fileName).path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: state.service.paths.collectionsCacheURL.path))
     }
@@ -288,7 +288,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let h = AppStateHarness()
         defer { h.dispose() }
         let first = h.create()
-        XCTAssertNil(first.createCollection(named: "Team"))
+        XCTAssertNil(first.createActiveCopy(named: "Team"))
         try seed(h, first, file: CollectionsFile(collections: ["Team": synced(fileName: "team.json")]),
                  cache: CollectionsLocalCache(synced: ["Team": bound("/shared/team.json")], published: [:]))
         XCTAssertNil(first.renameCollection("Team", to: "Data"))   // a real persist of both files
@@ -445,7 +445,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testTheCollectionQueriesReadTheSidecarAndTheStore() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         let tokenPointer = try XCTUnwrap(JSONPointer(string: "/env/DBT_TOKEN"))
         let config = JSONValue.object([
             "command": .string("node"),
@@ -490,8 +490,8 @@ final class AppStateCollectionsTests: XCTestCase {
     func testTheBannerFollowsItsPrecedence() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Alpha"))
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Alpha"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         let bothSynced = CollectionsFile(collections: [
             "Alpha": synced(fileName: "alpha.json"), "Team": synced(fileName: "team.json"),
         ])
@@ -522,7 +522,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testAPurelyLocalSetupHasNoBanner() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
         XCTAssertNil(state.collectionBanner)
         XCTAssertTrue(state.pendingUpdates.isEmpty)
         XCTAssertTrue(state.sourceErrors.isEmpty)
@@ -1291,7 +1291,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testRenamingACollectionKeepsItsBlockedPublishBlocked() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         state.publishError = CollectionPublishError(collection: "Team", message: "moved", kind: .blockedForReview)
         XCTAssertNil(state.renameCollection("Team", to: "Crew"))
         XCTAssertEqual(state.publishError, CollectionPublishError(collection: "Crew", message: "moved", kind: .blockedForReview))
@@ -1539,7 +1539,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(s.startPublishing(team, to: try publishFolder(h, "pubTeam").path, intent: PublishIntent(
             shareValues: [:], pathMarks: ["ledger": [JSONPointer(["args", "0"]): .init(name: "server_path", hint: nil, value: markedPath)]],
             hints: [:]), reviewedValues: [markedPath]))
-        XCTAssertNil(s.createCollection(named: "Clients"))
+        XCTAssertNil(s.createActiveCopy(named: "Clients"))
         s.delete(names: ["ledger"], in: "Clients")
         s.delete(names: ["x"], in: "Clients")
         XCTAssertNil(s.upsert(name: "crm", entry: MCPEntry(enabled: true, config: .object(["command": .string("crm-mcp")])),
@@ -1621,7 +1621,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testARestoreOfABackupWhoseCollectionIsGoneIsRefused() throws {
         let (h, s) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(s.createCollection(named: "Gone"))
+        XCTAssertNil(s.createActiveCopy(named: "Gone"))
         // A collection of its own content: a backup identical to the newest belongs to whichever
         // collection last wrote it.
         XCTAssertNil(s.upsert(name: "gone-only", entry: MCPEntry(enabled: true, config: .object(["command": .string("g")])),
@@ -1642,7 +1642,7 @@ final class AppStateCollectionsTests: XCTestCase {
 
         // The way back the message names: a collection of that name again, and the same backup goes in.
         XCTAssertTrue(AppState.restoreCollectionGoneError("Gone").contains("Create a collection named “Gone”"))
-        XCTAssertNil(s.createCollection(named: "Gone"))
+        XCTAssertNil(s.createActiveCopy(named: "Gone"))
         try s.restoreClaudeConfig(from: backup)
         XCTAssertEqual(s.activeCollection, "Gone")
         XCTAssertNotNil(s.store.collections["Gone"]?.mcps["gone-only"])
@@ -1658,7 +1658,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let team = first.activeCollection
         XCTAssertNil(first.upsert(name: "a", entry: MCPEntry(enabled: true, config: .object(["command": .string("a")])),
                                   renamedFrom: nil))
-        XCTAssertNil(first.createCollection(named: "Second"))
+        XCTAssertNil(first.createActiveCopy(named: "Second"))
         first.delete(names: ["a"], in: "Second")
         first.switchCollection(to: team)
         first.dispose()
@@ -1686,7 +1686,7 @@ final class AppStateCollectionsTests: XCTestCase {
         defer { h.dispose() }
         let first = h.create()
         let home = first.activeCollection
-        XCTAssertNil(first.createCollection(named: "Second"))
+        XCTAssertNil(first.createActiveCopy(named: "Second"))
         first.switchCollection(to: home)
         first.dispose()
         // The record names the collection Claude's file came from. The store syncs and this
@@ -1716,7 +1716,7 @@ final class AppStateCollectionsTests: XCTestCase {
         defer { h.dispose() }
         let first = h.create()
         let home = first.activeCollection
-        XCTAssertNil(first.createCollection(named: "Team"))   // Team is active, so Claude's file holds Team
+        XCTAssertNil(first.createActiveCopy(named: "Team"))   // Team is active, so Claude's file holds Team
         XCTAssertNil(first.upsert(name: "t1", entry: MCPEntry(enabled: true, config: .object(["command": .string("t1")])),
                                   renamedFrom: nil, in: "Team"))
         first.apply()   // Claude's file now holds t1, and the record says Team wrote it
@@ -1748,7 +1748,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let h = AppStateHarness()
         defer { h.dispose() }
         let first = h.create()
-        XCTAssertNil(first.createCollection(named: "Team"))   // Team is active, so Claude's file holds Team
+        XCTAssertNil(first.createActiveCopy(named: "Team"))   // Team is active, so Claude's file holds Team
         XCTAssertNil(first.upsert(name: "ledger", entry: MCPEntry(enabled: true, config: .object([
             "command": .string("node"), "args": .array([.string(markedPath)]),
         ])), renamedFrom: nil, in: "Team"))
@@ -1789,7 +1789,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testARenameCarriesTheRecordsOfWhereClaudesFileCameFrom() throws {
         let (h, s) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(s.createCollection(named: "Team"))
+        XCTAssertNil(s.createActiveCopy(named: "Team"))
         XCTAssertNil(s.upsert(name: "team-only", entry: MCPEntry(enabled: true, config: .object(["command": .string("t")])),
                               renamedFrom: nil, in: "Team"))
         s.apply()
@@ -1883,7 +1883,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let home = state.activeCollection
-        XCTAssertNil(state.createCollection(named: "Team"))          // active, a copy of home
+        XCTAssertNil(state.createActiveCopy(named: "Team"))          // active, a copy of home
         XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: .object([
             "command": .string("node"), "args": .array([.string(markedPath)]),
         ])), renamedFrom: nil, in: "Team"))
@@ -1921,7 +1921,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let home = state.activeCollection
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: .object([
             "command": .string("node"), "args": .array([.string(markedPath)]),
         ])), renamedFrom: nil, in: "Team"))
@@ -1965,7 +1965,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let home = state.activeCollection
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: .object([
             "command": .string("node"), "args": .array([.string(markedPath)]),
         ])), renamedFrom: nil, in: "Team"))
@@ -1985,7 +1985,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertTrue(state.keptBack(for: "Team").folders.contains(bound))
 
         XCTAssertNil(state.deleteCollection(named: "Team"))
-        XCTAssertNil(state.createCollection(named: "Team"))   // the way back the refused restore names
+        XCTAssertNil(state.createActiveCopy(named: "Team"))   // the way back the refused restore names
         let kept = state.keptBack(for: "Team")
         XCTAssertFalse(kept.folders.contains(bound), "a different collection: never released is not the rule for it")
         XCTAssertTrue(kept.values.contains(bound), "it is still a folder this machine binds, and it is releasable")
@@ -1996,7 +1996,7 @@ final class AppStateCollectionsTests: XCTestCase {
     /// Returns the folder it published into.
     private func publishThenDeleteTeam(_ h: AppStateHarness, _ state: AppState) throws -> URL {
         let home = state.activeCollection
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: .object([
             "command": .string("node"), "args": .array([.string(markedPath)]),
         ])), renamedFrom: nil, in: "Team"))
@@ -2056,7 +2056,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let folder = try publishThenDeleteTeam(h, state)
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         XCTAssertNil(state.upsert(name: "tool", entry: MCPEntry(config: .object([
             "command": .string(folder.path + "/bin/tool"),
         ])), renamedFrom: nil, in: "Team"))
@@ -2093,7 +2093,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let folder = try publishThenDeleteTeam(h, state)
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         let second = try publishFolder(h, "pubTeam2")
         XCTAssertNil(state.startPublishing("Team", to: second.path, intent: .none, reviewedValues: []))
         let record = try XCTUnwrap(state.collectionsCache.kept["Team"], "the old Team's record outlives the new one's publish")
@@ -2121,7 +2121,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let folder = try publishThenDeleteTeam(h, state)
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         XCTAssertNil(state.startPublishing("Team", to: try publishFolder(h, "pubTeam2").path, intent: .none, reviewedValues: []))
         state.stopPublishing("Team", deleteFile: false)
         let third = try publishFolder(h, "pubTeam3")
@@ -2163,7 +2163,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let home = state.activeCollection
         // Squad published and stopped, so its record is its own; Team published and was deleted,
         // so its record is a departed collection's.
-        XCTAssertNil(state.createCollection(named: "Squad"))
+        XCTAssertNil(state.createActiveCopy(named: "Squad"))
         let squadFolder = try publishFolder(h, "pubSquad")
         XCTAssertNil(state.startPublishing("Squad", to: squadFolder.path, intent: .none, reviewedValues: []))
         let squadOrigin = try XCTUnwrap(state.collectionsFile.collections["Squad"]?.publish?.origin)
@@ -2198,7 +2198,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let home = state.activeCollection
-        XCTAssertNil(state.createCollection(named: "Squad"))
+        XCTAssertNil(state.createActiveCopy(named: "Squad"))
         let squadFolder = try publishFolder(h, "pubSquad")
         XCTAssertNil(state.startPublishing("Squad", to: squadFolder.path, intent: .none, reviewedValues: []))
         state.stopPublishing("Squad", deleteFile: false)
@@ -2223,7 +2223,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let home = state.activeCollection
-        XCTAssertNil(state.createCollection(named: "Team"))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
         XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: .object([
             "command": .string("node"), "args": .array([.string(markedPath)]),
         ])), renamedFrom: nil, in: "Team"))
@@ -2630,7 +2630,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let team = state.activeCollection
         XCTAssertNil(state.startPublishing(team, to: try publishFolder(h, "pubTeam").path, intent: .none))
         let teamFolder = try XCTUnwrap(state.collectionsCache.published[team]?.folder)
-        XCTAssertNil(state.createCollection(named: "Clients"))
+        XCTAssertNil(state.createActiveCopy(named: "Clients"))
         XCTAssertNil(state.upsert(name: "shared", entry: MCPEntry(config: .object([
             "command": .string("node"), "args": .array([.string(teamFolder + "/tools/x.js")])])), renamedFrom: nil, in: "Clients"))
         let clients = try publishFolder(h, "pubClients")
@@ -2731,7 +2731,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let url = try h.subscribe(state, to: importableDocument, at: "shared/data-team.json")
-        XCTAssertNil(state.createCollection(named: "Personal"))
+        XCTAssertNil(state.createActiveCopy(named: "Personal"))
 
         XCTAssertNil(state.makeLocalCopy(of: ["dbt", "ledger"], from: "Data team", into: "Personal"))
         let mcps = try XCTUnwrap(state.store.collections["Personal"]).mcps
@@ -2783,7 +2783,7 @@ final class AppStateCollectionsTests: XCTestCase {
     func testCopyingAConnectorHonoursTheCollisionChoice() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Source"))
+        XCTAssertNil(state.createActiveCopy(named: "Source"))
         XCTAssertNil(state.upsert(name: "github", entry: MCPEntry(config: .object([
             "command": .string("/new/github"),
         ])), renamedFrom: nil, in: "Source"))

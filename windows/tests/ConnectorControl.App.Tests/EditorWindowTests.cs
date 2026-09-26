@@ -402,7 +402,7 @@ public class EditorWindowTests
                 Assert.True(imported.NameBox.IsEnabled);
             });
 
-            Assert.Null(state.CreateCollection("Team"));
+            Assert.Null(state.CreateActiveCopy("Team"));
             Assert.Null(state.StartPublishing("Team", folder, PublishIntent.None));
             Editing(state, In(state, "Team", "scoutbook"), published =>
             {
@@ -496,7 +496,7 @@ public class EditorWindowTests
             });
 
             // A second local collection, copied from this one, holds the same connector.
-            Assert.Null(state.CreateCollection("Backup"));
+            Assert.Null(state.CreateActiveCopy("Backup"));
             state.SwitchCollection("Default");
 
             Editing(state, In(state, "Default", "scoutbook"), twinned =>

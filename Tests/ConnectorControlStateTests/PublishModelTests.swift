@@ -658,7 +658,7 @@ final class PublishModelTests: XCTestCase {
 
         // A remote connector carries no passthrough environment and no arguments of its own,
         // so the sheet over one has neither section.
-        XCTAssertNil(state.createCollection(named: "Remote"))
+        XCTAssertNil(state.createActiveCopy(named: "Remote"))
         state.delete(names: ["c"], in: "Remote")
         XCTAssertNil(state.upsert(name: "r", entry: MCPEntry(config: AppStateHarness.remote("https://r.example/mcp")),
                                   renamedFrom: nil, in: "Remote"))

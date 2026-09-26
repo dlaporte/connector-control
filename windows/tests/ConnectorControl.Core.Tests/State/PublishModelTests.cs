@@ -799,7 +799,7 @@ public class PublishModelTests
 
         // A remote connector carries no passthrough environment and no arguments of its own, so
         // the sheet over one has neither section.
-        Assert.Null(state.CreateCollection("Remote"));
+        Assert.Null(state.CreateActiveCopy("Remote"));
         state.Delete(["c"], "Remote");
         Assert.Null(state.Upsert("r", new McpEntry(AppStateHarness.Remote("https://r.example/mcp")), null, "Remote"));
         var bare = new PublishModel(state, "Remote");

@@ -47,8 +47,8 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Shared"));
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Shared"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         state.SwitchCollection("Default");
         var file = File_(("Shared", Published("shared")), ("Team", Synced("team.json")));
         var cache = Cache([new("Team", Bound("/shared/team.json"))],
@@ -103,7 +103,7 @@ public class CollectionsModelTests
         Assert.Equal(["\U0001F600", "\uFF5E"], model.Rows.Select(r => r.Name));
         model.SetChecked("\uFF5E", true);
         model.SetChecked("\U0001F600", true);
-        Assert.Null(state.CreateCollection("Other"));   // a copy of the active one: both clash
+        Assert.Null(state.CreateActiveCopy("Other"));   // a copy of the active one: both clash
         state.SwitchCollection("Default");
         Assert.Equal(["\U0001F600", "\uFF5E"], model.CheckedNamesClashing("Other"));
     }
@@ -113,7 +113,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Assert.Null(state.Upsert("github", new McpEntry(AppStateHarness.Remote("https://github.example/mcp")), null, "Team"));
         Assert.Null(state.Upsert("Ledger", AppStateHarness.LocalConnector("/usr/local/bin/node", "index.js"), null, "Team"));
         Assert.Null(state.Upsert("jira", new McpEntry(JsonValue.Object(
@@ -522,8 +522,8 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Shared"));
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Shared"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         state.SwitchCollection("Default");
         var file = File_(("Shared", Published("shared")), ("Team", Synced("team.json")));
         var located = Cache([new("Team", Bound("/shared/team.json"))],
@@ -583,7 +583,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Default"));
         var model = h.CollectionsModel(state, "Default");
 
@@ -623,7 +623,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateActiveCopy("Work"));
         var model = h.CollectionsModel(state);
         Assert.Equal("Work", model.Selected);
 
@@ -676,7 +676,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         state.SwitchCollection("Default");
         h.MakeSynced(state, "Team", "/shared/team.json");
         Assert.True(state.IsSynced("Team"));
@@ -711,7 +711,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         state.SwitchCollection("Default");
         // Synced, but not located on this machine: nothing to refresh.
         h.MakeSynced(state, "Team");
@@ -746,8 +746,8 @@ public class CollectionsModelTests
         using var state = h.Create();
         var folder = h.Dir.File("share");
         Directory.CreateDirectory(folder);
-        Assert.Null(state.CreateCollection("Shared"));
-        Assert.Null(state.CreateCollection("Consulting"));
+        Assert.Null(state.CreateActiveCopy("Shared"));
+        Assert.Null(state.CreateActiveCopy("Consulting"));
         Assert.Null(state.StartPublishing("Shared", folder, PublishIntent.None));
         Assert.Null(state.StartPublishing("Consulting", folder, PublishIntent.None));
         var sharedFile = Path.Combine(folder, "shared.json");
@@ -797,7 +797,7 @@ public class CollectionsModelTests
         using var state = h.Create();
         foreach (var name in new[] { "Empty", "One", "Shared", "Team", "Two" })
         {
-            Assert.Null(state.CreateCollection(name));
+            Assert.Null(state.CreateActiveCopy(name));
         }
         foreach (var (connector, collection) in new[] { ("alpha", "One"), ("alpha", "Team"), ("alpha", "Two"), ("beta", "Two") })
         {
@@ -841,7 +841,7 @@ public class CollectionsModelTests
         using var state = h.Create();
         var folder = h.Dir.File("share");
         Directory.CreateDirectory(folder);
-        Assert.Null(state.CreateCollection("Shared"));
+        Assert.Null(state.CreateActiveCopy("Shared"));
         Assert.Null(state.StartPublishing("Shared", folder, PublishIntent.None));
         var file = Path.Combine(folder, "shared.json");
         Assert.True(File.Exists(file));
@@ -858,7 +858,7 @@ public class CollectionsModelTests
         Assert.Null(state.PublishError);
 
         // Another collection's failure is not this one's, so the question comes back.
-        Assert.Null(state.CreateCollection("Consulting"));
+        Assert.Null(state.CreateActiveCopy("Consulting"));
         Assert.Null(state.StartPublishing("Consulting", folder, PublishIntent.None));
         model.Selected = "Consulting";
         state.PublishError = new CollectionPublishError("Shared", "the folder is read-only");
@@ -898,8 +898,8 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Shared"));
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Shared"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         state.SwitchCollection("Default");
         var file = File_(("Shared", Published("shared")), ("Team", Synced("team.json")));
         var located = Cache([new("Team", Bound("/shared/team.json"))],
@@ -945,8 +945,8 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Work"));
-        Assert.Null(state.CreateCollection("Spare"));
+        Assert.Null(state.CreateActiveCopy("Work"));
+        Assert.Null(state.CreateActiveCopy("Spare"));
         state.SwitchCollection("Default");
         var model = h.CollectionsModel(state);
 
@@ -1000,7 +1000,7 @@ public class CollectionsModelTests
     /// </summary>
     private static void TwoBanners(AppStateHarness h, AppState state, string folder)
     {
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         state.SwitchCollection("Default");
         Directory.CreateDirectory(folder);
         h.Seed(state, File_(("Team", Synced("team.json")), ("Default", Published("default"))),
@@ -1101,7 +1101,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         state.SwitchCollection("Default");
         h.MakeSynced(state, "Team", "/Acme/mcp/team.json");
         var model = h.CollectionsModel(state);
@@ -1134,7 +1134,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateActiveCopy("Work"));
         state.SwitchCollection("Default");
         var model = h.CollectionsModel(state, null, "aws-mcp");
         var raised = new List<string?>();
@@ -1169,7 +1169,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Spare"));
+        Assert.Null(state.CreateActiveCopy("Spare"));
         state.SwitchCollection("Default");
         var model = h.CollectionsModel(state, "Spare");
 
@@ -1185,7 +1185,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Spare"));
+        Assert.Null(state.CreateActiveCopy("Spare"));
         state.SwitchCollection("Default");
         var model = h.CollectionsModel(state, "Spare");
         Assert.Equal("Spare", model.Selected);
@@ -1210,7 +1210,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateActiveCopy("Work"));
         Assert.Null(state.Upsert("extra", new McpEntry(AppStateHarness.Remote("https://extra.example/mcp")), null, "Work"));
         state.SwitchCollection("Default");
         var model = h.CollectionsModel(state);
@@ -1248,7 +1248,7 @@ public class CollectionsModelTests
         using var state = h.Create();
         var folder = h.Dir.File("share");
         Directory.CreateDirectory(folder);
-        Assert.Null(state.CreateCollection("Shared"));
+        Assert.Null(state.CreateActiveCopy("Shared"));
         Assert.Null(state.StartPublishing("Shared", folder, PublishIntent.None));
         var model = h.CollectionsModel(state, "Shared");
 
@@ -1278,12 +1278,12 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Other"));
+        Assert.Null(state.CreateActiveCopy("Other"));
         // Created first: the sidecar only annotates a collection already in the master list
         // (CollectionsFile.Reconciled), so seeding "Team" with nothing to annotate would leave it
         // dropped, and missing from CopyDestinations for not existing rather than disabled for
         // being synced.
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         h.MakeSynced(state, "Team");
         Assert.True(state.IsSynced("Team"));
         var model = h.CollectionsModel(state);
@@ -1304,8 +1304,8 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Other"));
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Other"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         h.MakeSynced(state, "Team");
         Assert.True(state.IsSynced("Team"));
         var model = h.CollectionsModel(state);
@@ -1348,7 +1348,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Team"));
         var model = h.CollectionsModel(state, "Team", "alpha");
         Assert.True(model.CanDeleteChecked);   // still local, and something is ticked
@@ -1406,7 +1406,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateActiveCopy("Work"));
         Assert.Null(state.Upsert("gamma", AppStateHarness.LocalConnector("/bin/gamma"), null, "Work"));
         state.SwitchCollection("Default");
         var model = h.CollectionsModel(state);
@@ -1446,12 +1446,12 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        // Created first: CreateCollection starts a collection as a copy of whichever one is
+        // Created first: CreateActiveCopy starts a collection as a copy of whichever one is
         // active when it is made, so making Spare before alpha exists keeps alpha out of that
         // starting snapshot — otherwise the copy below would collide with it and land as
         // "alpha 2" instead, leaving the original untouched and this test green for the wrong
         // reason.
-        Assert.Null(state.CreateCollection("Spare"));
+        Assert.Null(state.CreateActiveCopy("Spare"));
         Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Default"));
         var model = h.CollectionsModel(state, "Default", "alpha");
 
@@ -1478,7 +1478,7 @@ public class CollectionsModelTests
         using var state = h.Create();
         // Created first, for the same reason as the success test above, and so seeding the
         // sidecar afterwards has something in the master list to annotate (CollectionsFile.Reconciled).
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Default"));
         h.MakeSynced(state, "Team");
         var model = h.CollectionsModel(state, "Default", "alpha");
@@ -1496,7 +1496,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Spare"));
+        Assert.Null(state.CreateActiveCopy("Spare"));
         var before = state.Store.Collections["Spare"];
         var model = h.CollectionsModel(state, "Default");
 
@@ -1559,7 +1559,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateActiveCopy("Work"));
         Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Default"));
         state.SwitchCollection("Default");
         var model = h.CollectionsModel(state, "Default", "alpha");
@@ -1579,7 +1579,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Spare"));
+        Assert.Null(state.CreateActiveCopy("Spare"));
         state.SwitchCollection("Default");
         foreach (var name in new[] { "zeta", "alpha", "beta" })
         {
@@ -1604,9 +1604,9 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Shared"));
-        Assert.Null(state.CreateCollection("Team"));
-        Assert.Null(state.CreateCollection("Plain"));
+        Assert.Null(state.CreateActiveCopy("Shared"));
+        Assert.Null(state.CreateActiveCopy("Team"));
+        Assert.Null(state.CreateActiveCopy("Plain"));
         state.SwitchCollection("Default");
         var file = File_(("Shared", Published("shared")), ("Team", Synced("team.json")));
         var cache = Cache([new("Team", Bound("/shared/team.json"))],
@@ -1678,7 +1678,7 @@ public class CollectionsModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         // A second local collection, so the common case is not also the last-collection case.
-        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateActiveCopy("Work"));
         state.SwitchCollection("Default");
         var model = h.CollectionsModel(state, "Default");
         Assert.Equal(
@@ -1697,7 +1697,7 @@ public class CollectionsModelTests
         using var state = h.Create();
         var folder = h.Dir.File("share");
         Directory.CreateDirectory(folder);
-        Assert.Null(state.CreateCollection("Shared"));
+        Assert.Null(state.CreateActiveCopy("Shared"));
         Assert.Null(state.StartPublishing("Shared", folder, PublishIntent.None));
         state.SwitchCollection("Default");   // Shared stays, now not the active collection
 
@@ -1718,7 +1718,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         state.SwitchCollection("Default");
         h.MakeSynced(state, "Team");
         var model = h.CollectionsModel(state, "Team");
@@ -1748,7 +1748,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         state.SwitchCollection("Default");
         h.MakeSynced(state, "Team");
         var model = h.CollectionsModel(state, "Team");
@@ -1775,11 +1775,11 @@ public class CollectionsModelTests
     [Fact]
     public void DuplicateCopiesConnectorsDisabledWithoutActivatingAndReportsAClash()
     {
-        // Not seeded: CreateCollection copies whichever collection is active when it runs, and
+        // Not seeded: CreateActiveCopy copies whichever collection is active when it runs, and
         // Default is still active at that point.
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Team"));
         Assert.Null(state.Upsert("beta", AppStateHarness.LocalConnector("/bin/beta"), null, "Team"));
         state.SwitchCollection("Default");
@@ -1813,8 +1813,8 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Shared"));
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Shared"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         state.SwitchCollection("Default");
         h.MakeSynced(state, "Team");
 
@@ -1847,7 +1847,7 @@ public class CollectionsModelTests
     {
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         state.SwitchCollection("Default");
         h.MakeSynced(state, "Team");
         var model = h.CollectionsModel(state);

@@ -348,7 +348,7 @@ public class ImportModelTests
 
         // Rebuilding the rows lets the old ones go: the replaced row no longer reaches the model.
         var stale = model.Rows[1];
-        Assert.Null(state.CreateCollection("Other"));
+        Assert.Null(state.CreateActiveCopy("Other"));
         model.TargetCollection = "Other";
         raised.Clear();
         stale.Include = !stale.Include;
@@ -381,7 +381,7 @@ public class ImportModelTests
 
         raised.Clear();
         model.ImportMode = ImportModel.Mode.AddToCollection;
-        Assert.Null(state.CreateCollection("Other"));
+        Assert.Null(state.CreateActiveCopy("Other"));
         raised.Clear();
         model.TargetCollection = "Other";
         Assert.Contains(nameof(ImportModel.CanImport), raised);

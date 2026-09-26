@@ -78,7 +78,7 @@ public class FlyoutModelTests
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal([new CollectionMenuItem("Default", true)], flyout.CollectionItems);
 
-        Assert.Null(state.CreateCollection("Work"));
+        Assert.Null(state.CreateActiveCopy("Work"));
         // Switching only — New, Rename and Delete live in the window.
         Assert.Equal(
             [new CollectionMenuItem("Default", false), new CollectionMenuItem("Work", true)],
@@ -110,7 +110,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         h.MakeSynced(state, "Team");
         using var flyout = new FlyoutModel(state, h.Settings);
         state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
@@ -128,7 +128,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         h.MakeSynced(state, "Team");
         var folder = Path.GetDirectoryName(h.Publish(state, "Default"))!;
         using var flyout = new FlyoutModel(state, h.Settings);
@@ -374,7 +374,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         h.MakeSynced(state, "Team");
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal("Synced from team.json", flyout.SourceTooltip);
@@ -387,7 +387,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         h.MakeSynced(state, "Team");
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
@@ -440,7 +440,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         state.SwitchCollection("Default");
         h.MakeSynced(state, "Team");
         var folder = Path.GetDirectoryName(h.Publish(state, "Default"))!;
@@ -470,7 +470,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         h.MakeSynced(state, "Team");
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Null(state.TakeCollectionsWindowRequest());
@@ -494,7 +494,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         h.MakeSynced(state, "Team");
         using var flyout = new FlyoutModel(state, h.Settings);
 
@@ -529,8 +529,8 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
-        Assert.Null(state.CreateCollection("Ops"));
+        Assert.Null(state.CreateActiveCopy("Team"));
+        Assert.Null(state.CreateActiveCopy("Ops"));
         state.SwitchCollection("Default");
         new CollectionsFile([
             Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json")),
@@ -566,7 +566,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Null(state.CreateCollection("Team"));
+        Assert.Null(state.CreateActiveCopy("Team"));
         // Only a hand-edited or malformed sidecar says this; nothing here writes an empty name.
         new CollectionsFile([Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, ""))])
             .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));

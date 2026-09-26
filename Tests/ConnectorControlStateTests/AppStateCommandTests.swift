@@ -156,7 +156,7 @@ final class AppStateCommandTests: XCTestCase {
     func testSwitchCollectionAppliesImmediately() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertNil(state.createCollection(named: "Work"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
         XCTAssertEqual(state.activeCollection, "Work")
         state.setEnabled("aws-mcp", false)
         XCTAssertEqual(try h.claudeServers().keys.sorted(), ["scoutbook", "service-now"])
