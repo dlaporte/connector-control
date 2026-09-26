@@ -1716,6 +1716,27 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(s.restoreRefusal(for: original), "with a local collection active it goes ahead")
     }
 
+    /// A backup recorded against a subscribed collection holds that collection's own rendered state,
+    /// so it goes back into it, which becomes active again, with nothing left pending.
+    func testARecordedBackupOfASubscribedCollectionRestoresIntoIt() throws {
+        let (h, s) = AppStateHarness.started()
+        defer { h.dispose() }
+        try h.subscribe(s, to: CollectionDocumentSamples.dataTeam)
+        s.setEnabled("github", true, in: "Data team")
+        s.switchCollection(to: "Data team")
+        let authored = try XCTUnwrap(s.store.collections["Data team"])
+        s.switchCollection(to: "Default")   // backs up Data team's file, recorded as Data team's
+        let backup = try XCTUnwrap(try s.service.backups.backups(series: "claude_desktop_config").first)
+        XCTAssertEqual(BackupCollections.collection(of: backup, in: h.backupsDir), "Data team")
+
+        XCTAssertNil(s.restoreRefusal(for: backup))
+        try s.restoreClaudeConfig(from: backup)
+        XCTAssertEqual(s.activeCollection, "Data team")
+        XCTAssertEqual(s.store.collections["Data team"], authored, "the author's rows, as Claude ran them")
+        XCTAssertTrue(s.pendingUpdates.isEmpty)
+        XCTAssertNotNil(try h.claudeServers()["github"])
+    }
+
     /// A connector an installer wrote straight into Claude's config while the app was off, and the
     /// other machine switched collections meanwhile: the collection that was applied keeps its own,
     /// and the new name still comes in to the collection now active.

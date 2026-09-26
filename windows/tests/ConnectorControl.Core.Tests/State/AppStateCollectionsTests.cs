@@ -1984,6 +1984,32 @@ public class AppStateCollectionsTests
     /// backup still goes back into the collection it came from, and once a local collection is
     /// active the same unrecorded backup restores.
     /// </summary>
+    /// <summary>
+    /// A backup recorded against a subscribed collection holds that collection's own rendered state,
+    /// so it goes back into it, which becomes active again, with nothing left pending.
+    /// </summary>
+    [Fact]
+    public void ARecordedBackupOfASubscribedCollectionRestoresIntoIt()
+    {
+        using var h = new AppStateHarness();
+        using var s = h.Create();
+        h.Subscribe(s, CollectionDocumentSamples.DataTeam);
+        s.SetEnabled("github", true, "Data team");
+        s.SwitchCollection("Data team");
+        var authored = s.Store.Collections["Data team"].Clone();
+        s.SwitchCollection("Default");   // backs up Data team's file, recorded as Data team's
+        var backup = s.Service.Backups.Backups("claude_desktop_config")[0];
+        Assert.Equal("Data team", BackupCollections.CollectionOf(backup, h.BackupsDir));
+
+        Assert.Null(s.RestoreRefusal(backup));
+        s.RestoreClaudeConfig(backup);
+        Assert.Equal("Data team", s.ActiveCollection);
+        // The author's rows, as Claude ran them.
+        Assert.Equal(authored, s.Store.Collections["Data team"]);
+        Assert.Empty(s.PendingUpdates);
+        Assert.True(h.ClaudeServers().ContainsKey("github"));
+    }
+
     [Fact]
     public void ARestoreWithNoRecordIsRefusedWhileASubscribedCollectionIsActive()
     {

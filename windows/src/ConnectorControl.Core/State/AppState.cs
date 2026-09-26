@@ -609,7 +609,8 @@ public sealed class AppState : ObservableObject, IDisposable
     /// nowhere to go back to. One with no record goes into the active collection, and a subscribed
     /// collection's connectors are its author's: a snapshot adopted there could be neither edited nor
     /// deleted, and the next Review &amp; Apply would undo it. A recorded backup of a subscribed
-    /// collection is what Claude ran from it, and goes back as any other.
+    /// collection is different: it holds that collection's own rendered state, what Claude ran from
+    /// it, so restoring it there is consistent with the subscription, and it goes back as any other.
     /// </summary>
     public Exception? RestoreRefusal(string backupPath)
     {

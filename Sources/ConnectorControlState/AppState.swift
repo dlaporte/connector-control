@@ -471,8 +471,9 @@ public final class AppState: ObservableObject {
     /// can go ahead. A backup recorded against a collection that is gone has nowhere to go back to.
     /// One with no record goes into the active collection, and a subscribed collection's connectors
     /// are its author's: a snapshot adopted there could be neither edited nor deleted, and the next
-    /// Review & Apply would undo it. A recorded backup of a subscribed collection is what Claude ran
-    /// from it, and goes back as any other.
+    /// Review & Apply would undo it. A recorded backup of a subscribed collection is different: it
+    /// holds that collection's own rendered state, what Claude ran from it, so restoring it there is
+    /// consistent with the subscription, and it goes back as any other.
     public func restoreRefusal(for backup: URL) -> RestoreError? {
         if let recorded = BackupCollections.collection(of: backup, in: service.paths.backupsDirURL) {
             return store.collections[recorded] == nil ? .collectionGone(recorded) : nil
