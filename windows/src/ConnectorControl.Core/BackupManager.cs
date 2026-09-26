@@ -104,6 +104,17 @@ public sealed class BackupManager
     }
 
     /// <summary>
+    /// When a backup was taken, read from its name: <c>&lt;series&gt;.&lt;stamp&gt;.json</c>, or
+    /// <c>-&lt;n&gt;</c> after the stamp. Null for a name that carries no stamp, such as the first-run
+    /// original.
+    /// </summary>
+    public static DateTime? TakenAt(string backup)
+    {
+        var stamp = Order(Path.GetFileName(backup)).Stamp;
+        return BackupTimestamp.Parse(stamp[(stamp.LastIndexOf('.') + 1)..]);
+    }
+
+    /// <summary>
     /// A backup name's stamp and counter: <c>&lt;series&gt;.&lt;stamp&gt;.json</c> is counter 1, and
     /// <c>&lt;series&gt;.&lt;stamp&gt;-&lt;n&gt;.json</c> counter n. The stamp ends in <c>Z</c>, so the
     /// counter is what follows it.

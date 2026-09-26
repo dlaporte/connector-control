@@ -100,6 +100,7 @@ final class StringCatalogTests: XCTestCase {
         "CollectionsModel.selectedCount": ["3"],
         "CollectionsModel.stopSyncingMessage": ["X"],
         "ConfigService.corruptStoreNote": ["X"],
+        "ConfigService.corruptStoreRestoredNote": ["X", "Y"],
         "ConfigService.invalidBackupError": ["X", "Y"],
         "ConfigService.invalidBackupMcpServersError": ["X"],
         "CopyModel.title": ["X"],
@@ -226,6 +227,8 @@ final class StringCatalogTests: XCTestCase {
 
         actual["ConfigService.corruptStoreNote"] =
             "The MCP list file was unreadable; it was preserved as X and rebuilt from Claude's config."
+        actual["ConfigService.corruptStoreRestoredNote"] =
+            "The MCP list file was unreadable; it was preserved as X and restored from the backup of Y."
         actual["ConfigService.invalidBackupError"] = "backup X is not a valid config file (Y)"
         actual["ConfigService.invalidBackupMcpServersError"] = "backup X has an invalid mcpServers section"
         actual["ConfigService.malformedClaudeConfigNote"] =

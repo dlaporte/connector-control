@@ -706,6 +706,12 @@ public sealed class AppState : ObservableObject, IDisposable
                 // that collection — which a first launch, with no apply yet, needs recorded.
                 RecordApplied(ActiveCollection, held.Keys);
             }
+            // A regeneration that lands clears the banner, and the notes above still have something
+            // to say: a master list restored from a backup is the usual reason for both.
+            if (regenerated && notes.Count > 0)
+            {
+                LastError = string.Join(" ", notes);
+            }
 
             // What the file added and a subscribed collection could not hold went into a local
             // collection, and the notification that follows says which.

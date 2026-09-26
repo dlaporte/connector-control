@@ -20,4 +20,9 @@ public enum BackupTimestamp {
     public static func string(from date: Date) -> String {
         formatter.string(from: date)
     }
+
+    /// The instant a stamp names, or nil for text that is not one.
+    public static func date(from stamp: String) -> Date? {
+        formatter.date(from: stamp)
+    }
 }

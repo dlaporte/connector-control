@@ -182,6 +182,11 @@ bullet once the section is about to ship.
   none. Before, the first remaining collection by name took over even when it was
   subscribed or empty, which emptied Claude's config. The Delete confirmation names the
   collection that takes over.
+- A master list that can't be read is restored from its newest backup that can be, so
+  every collection, subscription and published setting survives. It is still kept aside
+  as `mcps.corrupt.<time>.json`, and the banner says "…and restored from the backup of
+  <date and time>." Only when no backup can be read is it rebuilt from Claude's config, as
+  before, which kept only the connectors Claude was running.
 - In a subscribed collection, a local server authored on the other platform is marked on
   its row; remote connectors cross either way.
 - A folder the app watches — Claude's config folder, the master list's, or a subscribed

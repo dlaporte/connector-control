@@ -44,6 +44,10 @@ public struct ConfigService: Sendable {
     ///
     /// What is taken in lands where `ingestTarget(store:collections:lastApplied:)` says, and
     /// `ingestedElsewhere` names it when that is not the active collection.
+    ///
+    /// A master list that cannot be read is moved aside and replaced by the newest `mcps` backup
+    /// that decodes (`newestReadableStoreBackup()`), so every collection it held survives; only when
+    /// none does is it rebuilt from Claude's config alone. Either way the note says which.
     public func loadAndReconcile(baseline: [String: JSONValue]? = nil,
                                  storeAuthoritative: Bool = false,
                                  lastAppliedCollection: String? = nil,
@@ -51,16 +55,31 @@ public struct ConfigService: Sendable {
         -> (store: MasterStore, notes: [String],
             claudeServers: [String: JSONValue]?, ingestedElsewhere: IngestedElsewhere?) {
         var notes: [String] = []
-        let loaded = MasterStoreIO.load(from: paths.masterStoreURL)
+        var loaded = MasterStoreIO.load(from: paths.masterStoreURL)
+        // A store restored from a backup is a real one again: the record of the last apply means
+        // what it says about it, where an empty rebuild has nothing to compare the record with.
+        var rebuilt = loaded.corruptFileURL != nil
         if let corrupt = loaded.corruptFileURL {
-            notes.append(
-                "The MCP list file was unreadable; it was preserved as "
-                + "\(corrupt.lastPathComponent) and rebuilt from Claude's config.")
+            if let (restored, backup) = newestReadableStoreBackup() {
+                loaded.store = restored
+                rebuilt = false
+                let taken = BackupManager.takenAt(backup).map(IsoTimestamp.localDateTime) ?? backup.lastPathComponent
+                notes.append(
+                    "The MCP list file was unreadable; it was preserved as "
+                    + "\(corrupt.lastPathComponent) and restored from the backup of \(taken).")
+            } else {
+                notes.append(
+                    "The MCP list file was unreadable; it was preserved as "
+                    + "\(corrupt.lastPathComponent) and rebuilt from Claude's config.")
+            }
         }
         let servers: [String: JSONValue]
         do {
             servers = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
         } catch is ClaudeConfigError {
+            // Nothing below runs to save it, and the unreadable file has already been moved aside:
+            // a restored store is written now, or the next load would find no master list at all.
+            if loaded.corruptFileURL != nil, !rebuilt { try saveStore(loaded.store) }
             return (loaded.store,
                     notes + ["Claude’s config file is not valid JSON. Your MCP list is safe; "
                      + "use Backups ▸ Restore to repair the file."],
@@ -69,7 +88,9 @@ public struct ConfigService: Sendable {
         // A corrupt store is rebuilt with fresh-launch (nil-baseline) import
         // semantics: reconciling the empty replacement against a baseline would
         // classify every server as a pending removal, rebuild an empty list,
-        // and set up the next apply to wipe Claude's config.
+        // and set up the next apply to wipe Claude's config. A store restored
+        // from a backup gets the same: the backup predates the last save, and
+        // a connector added since is in Claude's file and nowhere else.
         let effectiveBaseline: [String: JSONValue]?
         if loaded.corruptFileURL != nil {
             effectiveBaseline = nil
@@ -92,7 +113,7 @@ public struct ConfigService: Sendable {
             store: loaded.store,
             claudeServers: ConfigService.ingestible(servers, lastApplied: lastAppliedCollection,
                                                     lastAppliedNames: lastAppliedNames,
-                                                    corrupt: loaded.corruptFileURL != nil, store: loaded.store),
+                                                    corrupt: rebuilt, store: loaded.store),
             baseline: effectiveBaseline, into: target)
         if outcome.storeChanged || loaded.corruptFileURL != nil {
             try saveStore(outcome.store)
@@ -128,6 +149,16 @@ public struct ConfigService: Sendable {
             suffix += 1
         }
         return name
+    }
+
+    /// The newest `mcps` backup that decodes, with the file it came from, or nil when none does.
+    /// Newest first by stamp and then by counter (`BackupManager.backups(series:)`), so of two taken
+    /// in one millisecond the later is tried first.
+    func newestReadableStoreBackup() -> (store: MasterStore, backup: URL)? {
+        for backup in (try? backups.backups(series: "mcps")) ?? [] {
+            if let store = MasterStoreIO.read(from: backup) { return (store, backup) }
+        }
+        return nil
     }
 
     /// Backup mcps.json (if present), then atomically save the store.

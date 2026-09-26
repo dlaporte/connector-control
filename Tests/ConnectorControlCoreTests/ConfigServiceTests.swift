@@ -201,6 +201,63 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude's config."))
     }
 
+    /// A master list that cannot be read comes back from the newest `mcps` backup that can, so
+    /// every collection it held survives; only with no such backup is it rebuilt from Claude's
+    /// config. The unreadable file is kept aside either way.
+    func testACorruptStoreIsRestoredFromTheNewestBackupThatDecodes() throws {
+        var saved = try service.loadAndReconcile().store
+        XCTAssertNil(saved.addCollection(named: "Team", copyingCurrent: true, activating: false))
+        try service.saveStore(saved)            // backs up the first store, which has no Team
+        saved.collections["Team"]?.mcps.removeValue(forKey: "scoutbook")
+        try service.saveStore(saved)            // backs up the store with Team in it
+        let backups = try service.backups.backups(series: "mcps")
+        XCTAssertEqual(backups.count, 2)
+        let withTeam = MasterStoreIO.read(from: backups[0])
+        XCTAssertNotNil(withTeam?.collections["Team"])
+        try Data("garbage".utf8).write(to: paths.masterStoreURL)
+
+        let result = try service.loadAndReconcile()
+        XCTAssertEqual(result.store, withTeam, "the newest backup, with every collection it held")
+        XCTAssertEqual(MasterStoreIO.read(from: paths.masterStoreURL), withTeam, "and it was saved")
+        let aside = try XCTUnwrap(try FileManager.default.contentsOfDirectory(atPath: paths.storeDirURL.path)
+            .first { $0.hasPrefix("mcps.corrupt.") })
+        XCTAssertEqual(try Data(contentsOf: paths.storeDirURL.appendingPathComponent(aside)), Data("garbage".utf8))
+        let taken = try XCTUnwrap(BackupManager.takenAt(backups[0]))
+        XCTAssertEqual(result.notes, ["The MCP list file was unreadable; it was preserved as \(aside) and restored "
+                                      + "from the backup of \(IsoTimestamp.localDateTime(from: taken))."])
+    }
+
+    func testACorruptStoreSkipsANewestBackupThatIsCorruptToo() throws {
+        var saved = try service.loadAndReconcile().store
+        XCTAssertNil(saved.addCollection(named: "Team", copyingCurrent: true, activating: false))
+        try service.saveStore(saved)            // backs up the first store, which has no Team
+        try service.saveStore(saved)            // backs up the store with Team in it
+        let backups = try service.backups.backups(series: "mcps")
+        XCTAssertEqual(backups.count, 2)
+        let older = MasterStoreIO.read(from: backups[1])
+        try Data("{\"half".utf8).write(to: backups[0])
+        try Data("garbage".utf8).write(to: paths.masterStoreURL)
+
+        let result = try service.loadAndReconcile()
+        XCTAssertEqual(result.store, older, "the newest backup that decodes, which here is the older one")
+        XCTAssertNil(result.store.collections["Team"])
+        let taken = try XCTUnwrap(BackupManager.takenAt(backups[1]))
+        XCTAssertTrue(result.notes[0].hasSuffix(" and restored from the backup of \(IsoTimestamp.localDateTime(from: taken))."))
+    }
+
+    func testACorruptStoreWithNoBackupThatDecodesIsRebuiltFromClaudesConfig() throws {
+        var saved = try service.loadAndReconcile().store
+        XCTAssertNil(saved.addCollection(named: "Team", copyingCurrent: true, activating: false))
+        try service.saveStore(saved)
+        for backup in try service.backups.backups(series: "mcps") { try Data("garbage".utf8).write(to: backup) }
+        try Data("garbage".utf8).write(to: paths.masterStoreURL)
+
+        let result = try service.loadAndReconcile()
+        XCTAssertEqual(Array(result.store.collections.keys), ["Default"], "rebuilt from Claude's config")
+        XCTAssertEqual(result.store.mcps.count, 3)
+        XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude's config."))
+    }
+
     func testCorruptStoreAndMalformedClaudeConfigBothNotesSurface() throws {
         _ = try service.loadAndReconcile()
         try Data("garbage".utf8).write(to: paths.masterStoreURL)

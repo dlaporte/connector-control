@@ -24,4 +24,12 @@ public static class IsoTimestamp
     /// </summary>
     public static string LocalDate(DateTime value) =>
         value.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The date and time here to the minute, "2026-09-21 14:02": when a backup was taken, as the note
+    /// that names it says. Local for the same reason as <see cref="LocalDate"/>. Named
+    /// <c>LocalDateTime</c> to mirror Swift's <c>IsoTimestamp.localDateTime(from:)</c>.
+    /// </summary>
+    public static string LocalDateTime(DateTime value) =>
+        value.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 }

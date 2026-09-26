@@ -3417,7 +3417,32 @@ public class AppStateCollectionsTests
         Assert.Equal(before, BackupCount(h, "mcps"));
     }
 
-    // MARK: external changes while a subscribed collection is active
+    // MARK: a corrupt master list
+
+    /// <summary>
+    /// A master list that cannot be read comes back from its newest backup, subscriptions and all:
+    /// the sidecar reconciles against the restored store, so the subscribed collection keeps its
+    /// kind and this machine keeps its binding to the document.
+    /// </summary>
+    [Fact]
+    public void ACorruptStoreRestoredFromABackupKeepsItsSubscriptions()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam);
+        state.SetEnabled("aws-mcp", false);   // a save after the subscribe, so a backup holds Data team
+        var backups = state.Service.Backups.Backups("mcps");
+        Assert.True(MasterStoreIO.Read(backups[0])!.Collections.ContainsKey("Data team"));
+        File.WriteAllText(h.MasterStorePath, "garbage");
+
+        state.Reload();
+        Assert.Equal(["Data team", "Default"], state.CollectionNames);
+        Assert.Equal(CollectionKind.Synced, state.KindOf("Data team"));
+        Assert.Equal(path, state.SourceBinding("Data team")?.Path);
+        Assert.Equal(["Data team", "Default"], h.StoreOnDisk().Collections.Keys.Order(StringComparer.Ordinal));
+        Assert.Contains("and restored from the backup of ", state.LastError);
+    }
+
 
     /// <summary>
     /// An installer writes a connector into Claude's file while a subscribed collection is active.

@@ -581,6 +581,9 @@ public final class AppState: ObservableObject {
                 // holds that collection — which a first launch, with no apply yet, needs recorded.
                 recordApplied(activeCollection, names: Set(servers.keys))
             }
+            // A regeneration that lands clears the banner, and the notes above still have
+            // something to say: a master list restored from a backup is the usual reason for both.
+            if regenerated, !notes.isEmpty { lastError = notes.joined(separator: " ") }
 
             // What the file added and a subscribed collection could not hold went into a local
             // collection, and the notification that follows says which.

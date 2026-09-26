@@ -38,6 +38,10 @@ public sealed class ConfigService
     ///
     /// What is taken in lands where <see cref="IngestTarget"/> says, and <c>IngestedElsewhere</c> names it
     /// when that is not the active collection.
+    ///
+    /// A master list that cannot be read is moved aside and replaced by the newest <c>mcps</c> backup
+    /// that decodes (<see cref="NewestReadableStoreBackup"/>), so every collection it held survives; only
+    /// when none does is it rebuilt from Claude's config alone. Either way the note says which.
     /// </remarks>
     public LoadResult LoadAndReconcile(
         IReadOnlyDictionary<string, JsonValue>? baseline = null,
@@ -47,10 +51,24 @@ public sealed class ConfigService
     {
         var notes = new List<string>();
         var (store, corruptPath) = MasterStoreIO.Load(Paths.MasterStorePath);
+        // A store restored from a backup is a real one again: the record of the last apply means
+        // what it says about it, where an empty rebuild has nothing to compare the record with.
+        var rebuilt = corruptPath is not null;
         if (corruptPath is not null)
         {
-            notes.Add("The MCP list file was unreadable; it was preserved as "
-                + $"{Path.GetFileName(corruptPath)} and rebuilt from Claude's config.");
+            if (NewestReadableStoreBackup() is ({ } restored, { } backup))
+            {
+                store = restored;
+                rebuilt = false;
+                var taken = BackupManager.TakenAt(backup) is { } at ? IsoTimestamp.LocalDateTime(at) : Path.GetFileName(backup);
+                notes.Add("The MCP list file was unreadable; it was preserved as "
+                    + $"{Path.GetFileName(corruptPath)} and restored from the backup of {taken}.");
+            }
+            else
+            {
+                notes.Add("The MCP list file was unreadable; it was preserved as "
+                    + $"{Path.GetFileName(corruptPath)} and rebuilt from Claude's config.");
+            }
         }
         IReadOnlyDictionary<string, JsonValue> servers;
         try
@@ -59,6 +77,12 @@ public sealed class ConfigService
         }
         catch (ClaudeConfigException)
         {
+            // Nothing below runs to save it, and the unreadable file has already been moved aside: a
+            // restored store is written now, or the next load would find no master list at all.
+            if (corruptPath is not null && !rebuilt)
+            {
+                SaveStore(store);
+            }
             notes.Add("Claude’s config file is not valid JSON. Your MCP list is safe; "
                 + "use Backups ▸ Restore to repair the file.");
             return new LoadResult(store, notes, null);
@@ -66,7 +90,9 @@ public sealed class ConfigService
         // A corrupt store is rebuilt with fresh-launch (null-baseline) import
         // semantics: reconciling the empty replacement against a baseline would
         // classify every server as a pending removal, rebuild an empty list,
-        // and set up the next apply to wipe Claude's config.
+        // and set up the next apply to wipe Claude's config. A store restored
+        // from a backup gets the same: the backup predates the last save, and
+        // a connector added since is in Claude's file and nowhere else.
         IReadOnlyDictionary<string, JsonValue>? effectiveBaseline;
         if (corruptPath is not null)
         {
@@ -90,7 +116,7 @@ public sealed class ConfigService
         }
         var target = IngestTarget(store, LoadCollections(), lastAppliedCollection);
         var outcome = Reconciler.Reconcile(
-            store, Ingestible(servers, lastAppliedCollection, lastAppliedNames, corruptPath is not null, store),
+            store, Ingestible(servers, lastAppliedCollection, lastAppliedNames, rebuilt, store),
             effectiveBaseline, target);
         if (outcome.StoreChanged || corruptPath is not null)
         {
@@ -181,6 +207,23 @@ public sealed class ConfigService
         }
         var rendered = collection.Mcps.Where(p => p.Value.Enabled).Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
         return servers.Where(p => !rendered.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// The newest <c>mcps</c> backup that decodes, with the file it came from, or null when none does.
+    /// Newest first by stamp and then by counter (<see cref="BackupManager.Backups"/>), so of two
+    /// taken in one millisecond the later is tried first.
+    /// </summary>
+    internal (MasterStore Store, string Backup)? NewestReadableStoreBackup()
+    {
+        foreach (var backup in Backups.Backups("mcps"))
+        {
+            if (MasterStoreIO.Read(backup) is { } store)
+            {
+                return (store, backup);
+            }
+        }
+        return null;
     }
 
     /// <summary>Backup mcps.json (if present), then atomically save the store. Reports whether the file is owner-only.</summary>

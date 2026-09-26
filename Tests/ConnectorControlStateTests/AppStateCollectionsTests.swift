@@ -2944,6 +2944,28 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(try backupCount(h, series: "mcps"), before, "and skipping it writes nothing either")
     }
 
+    // MARK: - A corrupt master list
+
+    /// A master list that cannot be read comes back from its newest backup, subscriptions and all:
+    /// the sidecar reconciles against the restored store, so the subscribed collection keeps its
+    /// kind and this machine keeps its binding to the document.
+    func testACorruptStoreRestoredFromABackupKeepsItsSubscriptions() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
+        state.setEnabled("aws-mcp", false)   // a save after the subscribe, so a backup holds Data team
+        let backups = try state.service.backups.backups(series: "mcps")
+        XCTAssertNotNil(MasterStoreIO.read(from: backups[0])?.collections["Data team"])
+        try Data("garbage".utf8).write(to: h.masterStoreURL)
+
+        state.reload()
+        XCTAssertEqual(state.collectionNames, ["Data team", "Default"])
+        XCTAssertEqual(state.kind(of: "Data team"), .synced)
+        XCTAssertEqual(state.sourceBinding(of: "Data team")?.path, url.path)
+        XCTAssertEqual(try h.storeOnDisk().collections.keys.sorted(), ["Data team", "Default"])
+        XCTAssertEqual(try XCTUnwrap(state.lastError).components(separatedBy: "and restored from the backup of ").count, 2)
+    }
+
     // MARK: - External changes while a subscribed collection is active
 
     /// An installer writes a connector into Claude's file while a subscribed collection is active.

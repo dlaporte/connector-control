@@ -223,6 +223,78 @@ public class ConfigServiceTests : IDisposable
         Assert.EndsWith(".json and rebuilt from Claude's config.", result.Notes[0], StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A master list that cannot be read comes back from the newest <c>mcps</c> backup that can, so
+    /// every collection it held survives; only with no such backup is it rebuilt from Claude's
+    /// config. The unreadable file is kept aside either way.
+    /// </summary>
+    [Fact]
+    public void ACorruptStoreIsRestoredFromTheNewestBackupThatDecodes()
+    {
+        var saved = service.LoadAndReconcile().Store;
+        Assert.Null(saved.AddCollection("Team", copyingCurrent: true, activating: false));
+        service.SaveStore(saved);            // backs up the first store, which has no Team
+        saved.Collections["Team"].Mcps.Remove("scoutbook");
+        service.SaveStore(saved);            // backs up the store with Team in it
+        var backups = service.Backups.Backups("mcps");
+        Assert.Equal(2, backups.Count);
+        var withTeam = MasterStoreIO.Read(backups[0]);
+        Assert.True(withTeam!.Collections.ContainsKey("Team"));
+        File.WriteAllText(paths.MasterStorePath, "garbage");
+
+        var result = service.LoadAndReconcile();
+        // The newest backup, with every collection it held, and it was saved.
+        Assert.Equal(withTeam, result.Store);
+        Assert.Equal(withTeam, MasterStoreIO.Read(paths.MasterStorePath));
+        var aside = Path.GetFileName(Assert.Single(Directory.GetFiles(paths.StoreDir, "mcps.corrupt.*")));
+        Assert.Equal("garbage", File.ReadAllText(Path.Combine(paths.StoreDir, aside)));
+        var taken = BackupManager.TakenAt(backups[0]);
+        Assert.NotNull(taken);
+        Assert.Equal([$"The MCP list file was unreadable; it was preserved as {aside} and restored "
+                      + $"from the backup of {IsoTimestamp.LocalDateTime(taken.Value)}."], result.Notes);
+    }
+
+    [Fact]
+    public void ACorruptStoreSkipsANewestBackupThatIsCorruptToo()
+    {
+        var saved = service.LoadAndReconcile().Store;
+        Assert.Null(saved.AddCollection("Team", copyingCurrent: true, activating: false));
+        service.SaveStore(saved);            // backs up the first store, which has no Team
+        service.SaveStore(saved);            // backs up the store with Team in it
+        var backups = service.Backups.Backups("mcps");
+        Assert.Equal(2, backups.Count);
+        var older = MasterStoreIO.Read(backups[1]);
+        File.WriteAllText(backups[0], "{\"half");
+        File.WriteAllText(paths.MasterStorePath, "garbage");
+
+        var result = service.LoadAndReconcile();
+        // The newest backup that decodes, which here is the older one.
+        Assert.Equal(older, result.Store);
+        Assert.False(result.Store.Collections.ContainsKey("Team"));
+        var taken = BackupManager.TakenAt(backups[1]);
+        Assert.NotNull(taken);
+        Assert.EndsWith($" and restored from the backup of {IsoTimestamp.LocalDateTime(taken.Value)}.", result.Notes[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACorruptStoreWithNoBackupThatDecodesIsRebuiltFromClaudesConfig()
+    {
+        var saved = service.LoadAndReconcile().Store;
+        Assert.Null(saved.AddCollection("Team", copyingCurrent: true, activating: false));
+        service.SaveStore(saved);
+        foreach (var backup in service.Backups.Backups("mcps"))
+        {
+            File.WriteAllText(backup, "garbage");
+        }
+        File.WriteAllText(paths.MasterStorePath, "garbage");
+
+        var result = service.LoadAndReconcile();
+        // Rebuilt from Claude's config.
+        Assert.Equal(["Default"], result.Store.Collections.Keys);
+        Assert.Equal(3, result.Store.Mcps.Count);
+        Assert.EndsWith(".json and rebuilt from Claude's config.", result.Notes[0], StringComparison.Ordinal);
+    }
+
     [Fact]
     public void CorruptStoreAndMalformedClaudeConfigBothNotesSurface()
     {

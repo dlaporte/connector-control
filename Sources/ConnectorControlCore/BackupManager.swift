@@ -97,6 +97,13 @@ public struct BackupManager: Sendable {
         return x.stamp != y.stamp ? y.stamp.ordinallyPrecedes(x.stamp) : x.counter > y.counter
     }
 
+    /// When a backup was taken, read from its name: `<series>.<stamp>.json`, or `-<n>` after the
+    /// stamp. nil for a name that carries no stamp, such as the first-run original.
+    public static func takenAt(_ backup: URL) -> Date? {
+        let stamp = order(of: backup.lastPathComponent).stamp
+        return stamp.split(separator: ".").last.flatMap { BackupTimestamp.date(from: String($0)) }
+    }
+
     /// A backup name's stamp and counter: `<series>.<stamp>.json` is counter 1, and
     /// `<series>.<stamp>-<n>.json` counter n. The stamp ends in `Z`, so the counter is what follows it.
     private static func order(of name: String) -> (stamp: String, counter: Int) {

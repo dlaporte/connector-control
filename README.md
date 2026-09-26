@@ -534,7 +534,10 @@ Every change (toggle, edit, add, delete, restore) writes the master list and
 regenerates the `mcpServers` section of Claude's config — atomically, after
 backing both up. Backups are named by the millisecond they were taken; two
 taken in the same one are numbered, and still list, restore and prune
-newest first. A reconciliation pass runs at launch, every time the popover or flyout
+newest first. A master list that can't be read is kept aside as
+`mcps.corrupt.<time>.json` and replaced by its newest backup that can be
+read, so every collection survives; only when no backup can be read is it
+rebuilt from Claude's config. A banner says which happened. A reconciliation pass runs at launch, every time the popover or flyout
 opens, and whenever either file changes on disk: connectors added outside the app
 are imported into the active collection, external edits are detected (and you're notified), and
 connectors missing from Claude's config are flagged for restore rather than
