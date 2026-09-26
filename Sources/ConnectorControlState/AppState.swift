@@ -925,7 +925,7 @@ public final class AppState: ObservableObject {
         if store.collections[name] != nil, kind(of: name) == .local, localCollectionNames.count <= 1 {
             return AppState.lastLocalCollectionError
         }
-        if let error = store.deleteCollection(named: name) { return error }
+        if let error = store.deleteCollection(named: name, isLocal: { kind(of: $0) == .local }) { return error }
         collectionsFile.collections.removeValue(forKey: name)
         collectionsCache.synced.removeValue(forKey: name)
         // Deleting a collection is not the author's word that the paths it kept back may travel:
@@ -938,6 +938,12 @@ public final class AppState: ObservableObject {
         persistStore()
         applyIfChanged()
         return nil
+    }
+
+    /// The collection that becomes active if `name`, the active one, is deleted — the store's rule,
+    /// told which collections are local. The Delete confirmation names it from here.
+    public func activeAfterDeleting(_ name: String) -> String? {
+        store.activeAfterDeleting(name, isLocal: { kind(of: $0) == .local })
     }
 
     private func move<Value>(_ dictionary: inout [String: Value], from name: String, to newName: String) {

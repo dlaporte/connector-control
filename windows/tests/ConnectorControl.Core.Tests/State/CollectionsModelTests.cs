@@ -855,8 +855,9 @@ public class CollectionsModelTests
         Assert.Equal("It has no connectors. A copy remains in Backups.", Informative("Empty"));
         Assert.Equal("Its 1 connector is deleted with it. Copies in other collections are not affected. "
                      + "A copy remains in Backups.", Informative("One"));
+        // The first local collection with connectors, not the empty Default.
         Assert.Equal("Its 2 connectors are deleted with it. Copies in other collections are not affected. "
-                     + "“Default” becomes the active collection. A copy remains in Backups.", Informative("Two"));
+                     + "“One” becomes the active collection. A copy remains in Backups.", Informative("Two"));
         Assert.Equal("Its 1 connector is deleted with it. Copies in other collections are not affected. "
                      + "The source file is not changed. A copy remains in Backups.", Informative("Team"));
         // Publishing adds nothing here: the file has its own question.
@@ -867,7 +868,7 @@ public class CollectionsModelTests
         model.Selected = "Two";
         h.Dialogs.NextConfirm = true;
         model.Delete();
-        Assert.Equal("Default", state.ActiveCollection);
+        Assert.Equal("One", state.ActiveCollection);
         Assert.True(state.Store.Collections["One"].Mcps.ContainsKey("alpha"));   // a copy in another collection stays
     }
 

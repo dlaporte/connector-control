@@ -1322,7 +1322,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return LastLocalCollectionError;
         }
-        if (Store.DeleteCollection(name) is { } error)
+        if (Store.DeleteCollection(name, c => KindOf(c) == CollectionKind.Local) is { } error)
         {
             return error;
         }
@@ -1343,6 +1343,13 @@ public sealed class AppState : ObservableObject, IDisposable
         RaiseAll();
         return null;
     }
+
+    /// <summary>
+    /// The collection that becomes active if <paramref name="name"/>, the active one, is deleted — the
+    /// store's rule, told which collections are local. The Delete confirmation names it from here.
+    /// </summary>
+    public string? ActiveAfterDeleting(string name) =>
+        Store.ActiveAfterDeleting(name, c => KindOf(c) == CollectionKind.Local);
 
     private static Dictionary<string, TValue> Moved<TValue>(IReadOnlyDictionary<string, TValue> source, string name, string newName)
     {

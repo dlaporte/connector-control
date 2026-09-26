@@ -743,7 +743,8 @@ final class CollectionsModelTests: XCTestCase {
                        + "A copy remains in Backups.")
         XCTAssertEqual(informative("Two"),
                        "Its 2 connectors are deleted with it. Copies in other collections are not affected. "
-                       + "“Default” becomes the active collection. A copy remains in Backups.")
+                       + "“One” becomes the active collection. A copy remains in Backups.",
+                       "the first local collection with connectors, not the empty Default")
         XCTAssertEqual(informative("Team"),
                        "Its 1 connector is deleted with it. Copies in other collections are not affected. "
                        + "The source file is not changed. A copy remains in Backups.")
@@ -755,7 +756,7 @@ final class CollectionsModelTests: XCTestCase {
         model.selected = "Two"
         h.dialogs.nextConfirm = true
         model.delete()
-        XCTAssertEqual(state.activeCollection, "Default")
+        XCTAssertEqual(state.activeCollection, "One")
         XCTAssertNotNil(state.store.collections["One"]?.mcps["alpha"], "a copy in another collection stays")
     }
 

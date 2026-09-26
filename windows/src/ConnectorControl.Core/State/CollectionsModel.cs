@@ -1269,7 +1269,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             sentences.Add(DeleteCopiesSentence);
         }
-        if (collection == state.ActiveCollection && state.Store.ActiveAfterDeleting(collection) is { } next)
+        if (collection == state.ActiveCollection && state.ActiveAfterDeleting(collection) is { } next)
         {
             sentences.Add(DeleteNextActiveSentence(next));
         }

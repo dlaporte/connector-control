@@ -127,7 +127,10 @@ Escape cancels any of these sheets, and the connector editor, as its
   Active** from its context menu, to switch to it. Double-clicking the
   collection that is already active does nothing. Renaming or deleting a
   collection other than the active one changes nothing Claude runs, so it
-  leaves Claude's config alone and raises no **Restart Required**.
+  leaves Claude's config alone and raises no **Restart Required**. Deleting
+  the active collection makes the first local collection by name that has
+  connectors active, or, when none has, the first remaining collection by
+  name; the confirmation names it.
 - **The header** carries the selected collection's name, its pills — a green
   **Active** on the collection Claude is running, then **Published** or
   **Subscribed**, never both — and a **⋯** (tooltip "More") holding

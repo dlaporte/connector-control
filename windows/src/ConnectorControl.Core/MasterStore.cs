@@ -124,10 +124,10 @@ public sealed class MasterStore : IEquatable<MasterStore>
 
     /// <summary>
     /// null on success, else a user-facing error message. Refuses to delete the last remaining
-    /// collection. Deleting the active collection hands the sorted-first remaining collection
-    /// the active spot.
+    /// collection. Deleting the active collection hands the active spot to
+    /// <see cref="ActiveAfterDeleting"/>'s choice.
     /// </summary>
-    public string? DeleteCollection(string name)
+    public string? DeleteCollection(string name, Func<string, bool>? isLocal = null)
     {
         if (!Collections.ContainsKey(name))
         {
@@ -137,7 +137,7 @@ public sealed class MasterStore : IEquatable<MasterStore>
         {
             return "Can’t delete the last collection.";
         }
-        var successor = ActiveAfterDeleting(name);
+        var successor = ActiveAfterDeleting(name, isLocal);
         Collections.Remove(name);
         if (ActiveCollection == name)
         {
@@ -147,12 +147,19 @@ public sealed class MasterStore : IEquatable<MasterStore>
     }
 
     /// <summary>
-    /// The collection that takes the active spot if <paramref name="name"/> is deleted: the
-    /// sorted-first of the rest, or null when none remain. The one rule, so the Delete
-    /// confirmation that names it cannot disagree with the delete that picks it.
+    /// The collection that takes the active spot if <paramref name="name"/> is deleted: the first local
+    /// collection, by name, that holds a connector, else the sorted-first of the rest, or null when
+    /// none remain. A subscribed collection's connectors arrive off and an empty one runs nothing, so
+    /// either would empty Claude's config. The store does not know which collections are subscribed:
+    /// <paramref name="isLocal"/> says, and with nothing said every collection is local, as the sidecar
+    /// reads a collection it has no entry for. The one rule, so the Delete confirmation that names it
+    /// cannot disagree with the delete that picks it.
     /// </summary>
-    public string? ActiveAfterDeleting(string name) =>
-        Collections.Keys.Where(k => k != name).Order(StringComparer.Ordinal).FirstOrDefault();
+    public string? ActiveAfterDeleting(string name, Func<string, bool>? isLocal = null)
+    {
+        var rest = Collections.Keys.Where(k => k != name).Order(StringComparer.Ordinal).ToList();
+        return rest.FirstOrDefault(k => (isLocal?.Invoke(k) ?? true) && Collections[k].Mcps.Count > 0) ?? rest.FirstOrDefault();
+    }
 
     /// <summary>The one wording for a name no collection has, shared by switch, rename and delete.</summary>
     private static string NoCollectionError(string name) => $"No collection named “{name}”.";

@@ -260,6 +260,49 @@ public class AppStateCollectionsTests
         Assert.Equal("Default", h.StoreOnDisk().ActiveCollection);
     }
 
+    /// <summary>
+    /// Deleting the active collection hands the active spot to the first local collection that holds
+    /// a connector, and the confirmation names exactly that one. A subscribed collection, whose
+    /// connectors all arrive off, or an empty one would empty Claude's config; either takes the spot
+    /// only when no local collection has a connector, by the old sorted-first rule.
+    /// </summary>
+    [Fact]
+    public void DeletingTheActiveCollectionHandsTheSpotToALocalOneWithConnectors()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam, collection: "Aaa team");
+        Assert.Null(state.AddEmptyCollection("Aardvark"));
+        Assert.Null(state.AddEmptyCollection("Beta"));
+        Assert.Null(state.Upsert("b", AppStateHarness.LocalConnector("/bin/b"), null, "Beta"));
+        Assert.Null(state.CreateActiveCopy("Work"));
+        var model = h.CollectionsModel(state);
+
+        void Deletes(string name, string next)
+        {
+            Assert.Equal(next, state.ActiveAfterDeleting(name));
+            // The confirmation names the collection the delete picks.
+            Assert.Contains(CollectionsModel.DeleteNextActiveSentence(next), model.DeleteInformative(name));
+            Assert.Null(state.DeleteCollection(name));
+            Assert.Equal(next, state.ActiveCollection);
+        }
+
+        // A local collection with connectors: Beta, over the empty Aardvark and the subscribed Aaa team.
+        Deletes("Work", "Beta");
+        // A mix, with a subscribed collection active: Default holds connectors and sorts after both.
+        state.SwitchCollection("Aaa team");
+        Deletes("Aaa team", "Beta");
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam, "again.json", "Aaa team");
+        Deletes("Beta", "Default");
+        // Only empty local collections beside the subscribed one: the sorted-first of the rest.
+        Assert.Null(state.CreateActiveCopy("Only"));
+        Assert.Null(state.DeleteCollection("Default"));
+        Assert.Equal("Only", state.ActiveCollection);
+        state.Delete([.. state.Store.Mcps.Keys]);
+        Assert.Null(state.AddEmptyCollection("Zed"));
+        Deletes("Only", "Aaa team");
+    }
+
     [Fact]
     public void TheLastLocalCollectionStaysEvenBesideASyncedOne()
     {

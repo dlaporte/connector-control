@@ -955,7 +955,7 @@ public final class CollectionsModel: ObservableObject {
         let count = state.store.collections[collection]?.mcps.count ?? 0
         var sentences = [Self.deleteConnectorsSentence(count)]
         if count > 0 { sentences.append(Self.deleteCopiesSentence) }
-        if collection == state.activeCollection, let next = state.store.activeAfterDeleting(collection) {
+        if collection == state.activeCollection, let next = state.activeAfterDeleting(collection) {
             sentences.append(Self.deleteNextActiveSentence(next))
         }
         if state.isSynced(collection) { sentences.append(Self.deleteSourceSentence) }

@@ -228,6 +228,44 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(try h.storeOnDisk().activeCollection, "Default")
     }
 
+    /// Deleting the active collection hands the active spot to the first local collection that holds
+    /// a connector, and the confirmation names exactly that one. A subscribed collection, whose
+    /// connectors all arrive off, or an empty one would empty Claude's config; either takes the spot
+    /// only when no local collection has a connector, by the old sorted-first rule.
+    func testDeletingTheActiveCollectionHandsTheSpotToALocalOneWithConnectors() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam, as: "Aaa team")
+        XCTAssertNil(state.addEmptyCollection(named: "Aardvark"))
+        XCTAssertNil(state.addEmptyCollection(named: "Beta"))
+        XCTAssertNil(state.upsert(name: "b", entry: AppStateHarness.localConnector("/bin/b"), renamedFrom: nil, in: "Beta"))
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
+        let model = h.collectionsModel(state)
+
+        func deletes(_ name: String, handingTo next: String, file: StaticString = #filePath, line: UInt = #line) {
+            XCTAssertEqual(state.activeAfterDeleting(name), next, file: file, line: line)
+            XCTAssertTrue(model.deleteInformative(for: name).contains(CollectionsModel.deleteNextActiveSentence(next)),
+                          "the confirmation names the collection the delete picks", file: file, line: line)
+            XCTAssertNil(state.deleteCollection(named: name), file: file, line: line)
+            XCTAssertEqual(state.activeCollection, next, file: file, line: line)
+        }
+
+        // A local collection with connectors: Beta, over the empty Aardvark and the subscribed Aaa team.
+        deletes("Work", handingTo: "Beta")
+        // A mix, with a subscribed collection active: Default holds connectors and sorts after both.
+        state.switchCollection(to: "Aaa team")
+        deletes("Aaa team", handingTo: "Beta")
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam, at: "again.json", as: "Aaa team")
+        deletes("Beta", handingTo: "Default")
+        // Only empty local collections beside the subscribed one: the sorted-first of the rest.
+        XCTAssertNil(state.createActiveCopy(named: "Only"))
+        XCTAssertNil(state.deleteCollection(named: "Default"))
+        XCTAssertEqual(state.activeCollection, "Only")
+        state.delete(names: Array(state.store.mcps.keys))
+        XCTAssertNil(state.addEmptyCollection(named: "Zed"))
+        deletes("Only", handingTo: "Aaa team")
+    }
+
     func testTheLastLocalCollectionStaysEvenBesideASyncedOne() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

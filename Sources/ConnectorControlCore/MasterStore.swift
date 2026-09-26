@@ -95,22 +95,27 @@ public struct MasterStore: Equatable, Codable, Sendable {
     }
 
     /// nil on success, else a user-facing error message. Refuses to delete the
-    /// last remaining collection. Deleting the active collection hands the
-    /// sorted-first remaining collection the active spot.
-    public mutating func deleteCollection(named name: String) -> String? {
+    /// last remaining collection. Deleting the active collection hands the active
+    /// spot to `activeAfterDeleting(_:isLocal:)`'s choice.
+    public mutating func deleteCollection(named name: String, isLocal: (String) -> Bool = { _ in true }) -> String? {
         guard collections[name] != nil else { return Self.noCollectionError(name) }
         guard collections.count > 1 else { return "Can\u{2019}t delete the last collection." }
-        let successor = activeAfterDeleting(name)
+        let successor = activeAfterDeleting(name, isLocal: isLocal)
         collections.removeValue(forKey: name)
         if activeCollection == name { activeCollection = successor ?? "Default" }
         return nil
     }
 
-    /// The collection that takes the active spot if `name` is deleted: the sorted-first of the
-    /// rest, or nil when none remain. The one rule, so the Delete confirmation that names it
+    /// The collection that takes the active spot if `name` is deleted: the first local collection,
+    /// by name, that holds a connector, else the sorted-first of the rest, or nil when none remain.
+    /// A subscribed collection's connectors arrive off and an empty one runs nothing, so either
+    /// would empty Claude's config. The store does not know which collections are subscribed:
+    /// `isLocal` says, and with nothing said every collection is local, as the sidecar reads a
+    /// collection it has no entry for. The one rule, so the Delete confirmation that names it
     /// cannot disagree with the delete that picks it.
-    public func activeAfterDeleting(_ name: String) -> String? {
-        collections.keys.filter { $0 != name }.min { $0.ordinallyPrecedes($1) }
+    public func activeAfterDeleting(_ name: String, isLocal: (String) -> Bool = { _ in true }) -> String? {
+        let rest = collections.keys.filter { $0 != name }.sorted { $0.ordinallyPrecedes($1) }
+        return rest.first { isLocal($0) && !(collections[$0]?.mcps.isEmpty ?? true) } ?? rest.first
     }
 
     /// The one wording for a name no collection has, shared by switch, rename and delete.

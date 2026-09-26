@@ -115,6 +115,31 @@ public class CollectionTests
         Assert.False(store.Collections.ContainsKey("Work"));
     }
 
+    /// <summary>
+    /// The active spot goes to the first local collection, by name, that holds a connector, so a
+    /// delete does not leave Claude running nothing while such a collection exists. Only when none
+    /// does is it the sorted-first of the rest, whatever its kind.
+    /// </summary>
+    [Fact]
+    public void DeletingTheActiveCollectionPrefersALocalOneWithConnectors()
+    {
+        static Collection One() => new([new("x", new McpEntry(JsonValue.Object(("command", JsonValue.String("x")))))]);
+        var store = new MasterStore(2, "Work",
+            [new("Work", One()), new("Alpha", new Collection()), new("Beta", One()), new("Aaa team", One())]);
+        Func<string, bool> local = name => name != "Aaa team";
+        Assert.Equal("Beta", store.ActiveAfterDeleting("Work", local));   // a local collection with connectors
+        var emptyLocals = store.Clone();
+        emptyLocals.Collections["Beta"] = new Collection();
+        // Only empty local collections: the sorted-first of the rest.
+        Assert.Equal("Aaa team", emptyLocals.ActiveAfterDeleting("Work", local));
+        Assert.Equal("Aaa team", store.ActiveAfterDeleting("Work", _ => false));   // only subscribed ones
+        Assert.Equal("Aaa team", store.ActiveAfterDeleting("Work"));   // with nothing said, every collection is local
+
+        var deleting = store.Clone();
+        Assert.Null(deleting.DeleteCollection("Work", local));
+        Assert.Equal("Beta", deleting.ActiveCollection);   // the delete picks what the confirmation names
+    }
+
     [Fact]
     public void DeleteActiveCollectionRejectsLastCollection()
     {

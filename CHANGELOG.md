@@ -177,6 +177,11 @@ bullet once the section is about to ship.
   confirmation: "“<name>” is subscribed, so its connectors are the author’s. Make a local
   collection active, then restore." Before, it was restored into the subscribed collection,
   where its connectors could be neither edited nor deleted.
+- Deleting the active collection makes the first local collection with connectors active,
+  by name, and falls back to the first remaining collection by name only when there is
+  none. Before, the first remaining collection by name took over even when it was
+  subscribed or empty, which emptied Claude's config. The Delete confirmation names the
+  collection that takes over.
 - In a subscribed collection, a local server authored on the other platform is marked on
   its row; remote connectors cross either way.
 - A folder the app watches — Claude's config folder, the master list's, or a subscribed
