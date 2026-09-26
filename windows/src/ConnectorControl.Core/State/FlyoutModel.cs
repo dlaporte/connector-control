@@ -14,7 +14,6 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public const string Title = Product.Name;
     public const string SettingsTooltip = "Settings";
     public const string QuitTooltip = "Quit Connector Control";
-    public const string EmptyText = "No connectors configured yet.";
     public const string RetryTitle = "Apply Failed — Retry";
     public const string RestartTitle = "Restart Required";
     public const string ReviewAndApplyButton = "Review & Apply";
@@ -58,6 +57,12 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public static string SettingsNotSavedCaution(string detail) => $"Settings could not be saved ({detail}); changes apply until the app quits.";
 
     public static string LocateButton(string fileName) => $"Locate {fileName}";
+
+    /// <summary>
+    /// The list's empty state, followed by the Manage Collections button that answers it: an empty
+    /// active collection is an ordinary one now, and connectors are added in the window.
+    /// </summary>
+    public static string EmptyText(string collection) => $"No connectors in “{collection}”.";
 
     /// <summary>
     /// One row of the collections menu, as the Mac draws it: the chain is the row's single image
@@ -149,6 +154,15 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public ObservableCollection<ConnectorRow> Rows { get; }
 
     public bool IsEmpty => state.Store.Mcps.Count == 0;
+
+    public string EmptyMessage => EmptyText(state.ActiveCollection);
+
+    /// <summary>
+    /// The empty state's Manage Collections: the window opens on the active collection, the one that
+    /// has nothing in it, rather than on whatever it was last showing.
+    /// </summary>
+    public void ManageActiveCollection() =>
+        state.CollectionsWindowRequest = new CollectionsWindowRequest.Select(state.ActiveCollection);
 
     public FooterKind Footer => state.ApplyRetryNeeded ? FooterKind.RetryApply
         : state.NeedsClaudeRestart ? FooterKind.RestartRequired

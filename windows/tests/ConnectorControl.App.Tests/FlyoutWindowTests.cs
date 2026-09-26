@@ -157,7 +157,7 @@ public class FlyoutWindowTests
             Assert.Equal(3, window.RowList.Items.Count);
             Assert.Equal(Visibility.Collapsed, window.FooterPanel.Visibility);
             Assert.Equal(Visibility.Collapsed, window.ErrorBanner.Visibility);
-            Assert.Equal(Visibility.Collapsed, window.EmptyLabel.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.EmptyState.Visibility);
             Assert.Equal("3 of 3 enabled", window.SubtitleText.Text);
             Assert.Equal("Default", window.CollectionChipName.Text);
             Assert.Equal(Visibility.Collapsed, window.CollectionBannerStrip.Visibility);
@@ -379,6 +379,22 @@ public class FlyoutWindowTests
             Assert.NotNull(dot);
             Assert.Equal(FlyoutModel.PendingSpokenLabel, dot.ToolTip);
             Assert.Equal(FlyoutModel.PendingSpokenLabel, AutomationProperties.GetName(dot));
+        }));
+    }
+
+    [Fact]
+    public void AnEmptyCollectionIsNamedWithTheWayToAddConnectors()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.AddEmptyCollection("Home"));
+        state.SwitchCollection("Home");
+
+        WpfApp.Invoke(() => Showing(h, state, (window, _, _) =>
+        {
+            Assert.Equal(Visibility.Visible, window.EmptyState.Visibility);
+            Assert.Equal(FlyoutModel.EmptyText("Home"), window.EmptyLabel.Text);
+            Assert.Equal(FlyoutModel.ManageTitle, window.EmptyManageButton.Content);
         }));
     }
 

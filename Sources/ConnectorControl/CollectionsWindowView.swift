@@ -668,6 +668,8 @@ struct CollectionsWindowView: View {
             // A publish the app stopped for review: the sheet is where the author answers it.
             model.selected = collection
             show(.publish(publishModel(for: collection)))
+        case .select(let collection):
+            model.selected = collection
         case nil:
             break
         }

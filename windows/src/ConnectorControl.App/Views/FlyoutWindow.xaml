@@ -145,7 +145,12 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <TextBlock x:Name="EmptyLabel" Text="{x:Static state:FlyoutModel.EmptyText}" Style="{StaticResource CaptionText}" FontSize="13" Margin="16" Visibility="{Binding IsEmpty, Converter={StaticResource Vis}}" />
+          <!-- The empty state names the collection and offers the way forward: connectors are added
+               in the Collections window, opened on the active collection. -->
+          <StackPanel x:Name="EmptyState" Margin="16" Visibility="{Binding IsEmpty, Converter={StaticResource Vis}}">
+            <TextBlock x:Name="EmptyLabel" Text="{Binding EmptyMessage, Mode=OneWay}" Style="{StaticResource CaptionText}" FontSize="13" TextWrapping="Wrap" />
+            <Button x:Name="EmptyManageButton" Content="{x:Static state:FlyoutModel.ManageTitle}" Style="{StaticResource LinkButton}" Margin="0,4,0,0" Click="OnManageEmpty" />
+          </StackPanel>
         </StackPanel>
       </ScrollViewer>
 

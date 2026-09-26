@@ -24,4 +24,10 @@ public abstract record CollectionsWindowRequest
     /// dialog, which is where a moved mark is placed again.
     /// </summary>
     public sealed record Publish(string Collection) : CollectionsWindowRequest;
+
+    /// <summary>
+    /// Manage Collections from the flyout's empty state: the window selects this collection, the
+    /// active one, which is where its connectors are added.
+    /// </summary>
+    public sealed record Select(string Collection) : CollectionsWindowRequest;
 }

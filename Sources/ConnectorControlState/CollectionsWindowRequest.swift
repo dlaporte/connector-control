@@ -9,4 +9,7 @@ public enum CollectionsWindowRequest: Equatable, Sendable {
     /// A publish blocked for review: the window selects this collection and shows the Publish
     /// sheet, which is where a moved mark is placed again.
     case publish(collection: String)
+    /// Manage Collections from the pull-down's empty state: the window selects this collection,
+    /// the active one, which is where its connectors are added.
+    case select(collection: String)
 }

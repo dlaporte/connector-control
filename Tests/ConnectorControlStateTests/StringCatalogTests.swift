@@ -124,6 +124,7 @@ final class StringCatalogTests: XCTestCase {
         "ImportModel.sourceLine": ["X", "Y", "3"],
         "MasterStore.duplicateCollectionNameError": ["X"],
         "MasterStore.unknownCollectionError": ["X"],
+        "PopoverModel.emptyText": ["X"],
         "PopoverModel.locateButton": ["X"],
         "PopoverModel.sourceTooltipFormat": ["X"],
         "PublishModel.exportTitle": ["X"],
@@ -418,7 +419,7 @@ final class StringCatalogTests: XCTestCase {
         actual["Notifications.restartToastButton"] = Notifications.restartToastButton
         actual["Notifications.title"] = Notifications.title
         actual["PopoverModel.chooseFolderButton"] = PopoverModel.chooseFolderButton
-        actual["PopoverModel.emptyText"] = PopoverModel.emptyText
+        actual["PopoverModel.emptyText"] = PopoverModel.emptyText("X")
         actual["PopoverModel.locateButton"] = PopoverModel.locateButton("X")
         actual["PopoverModel.manageTitle"] = PopoverModel.manageTitle
         actual["PopoverModel.pendingMenuMark"] = PopoverModel.pendingMenuMark

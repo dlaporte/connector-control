@@ -978,6 +978,14 @@ public class CollectionsWindowTests
             Assert.Equal(new CollectionsWindowRequest.Review("Data team"), window.LastRequest);
             Assert.Equal("Data team", window.Model.Selected);
             Assert.Equal("Data team", Assert.Single(recorder.Reviews).Collection);
+
+            // The flyout's empty state asks for the active collection, and nothing more.
+            state.CollectionsWindowRequest = new CollectionsWindowRequest.Select(state.ActiveCollection);
+            Pump(window);
+            Assert.Equal(new CollectionsWindowRequest.Select(state.ActiveCollection), window.LastRequest);
+            Assert.Equal(state.ActiveCollection, window.Model.Selected);
+            Assert.Single(recorder.Reviews);
+            Assert.Single(recorder.Publishes);
         }, select: "Data team");
     }
 }

@@ -164,6 +164,10 @@ bullet once the section is about to ship.
   by name, else a new, empty "Default". Before, it went into the subscribed collection,
   where it could be neither edited nor deleted, and the next Review & Apply deleted it
   from Claude. The notification names where it went.
+- When the active collection has no connectors, the popover (Mac) and flyout (Windows) say
+  "No connectors in “<collection>”." with a Manage Collections button beneath, which opens
+  the Collections window on that collection. Before, they said "No connectors configured
+  yet." and offered nothing.
 - In a subscribed collection, a local server authored on the other platform is marked on
   its row; remote connectors cross either way.
 - A folder the app watches — Claude's config folder, the master list's, or a subscribed

@@ -181,6 +181,12 @@ public partial class FlyoutWindow : Window
 
     private void OnFooter(object sender, RoutedEventArgs e) => model.FooterAction();
 
+    private void OnManageEmpty(object sender, RoutedEventArgs e)
+    {
+        model.ManageActiveCollection();
+        OpenCollections();
+    }
+
     private void OnCollectionChip(object sender, RoutedEventArgs e) => OpenCollectionMenu();
 
     /// <summary>

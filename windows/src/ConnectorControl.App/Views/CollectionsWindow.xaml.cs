@@ -658,6 +658,9 @@ public partial class CollectionsWindow : Window
                 Model.Selected = publish.Collection;
                 Surfaces.ShowPublish(this, new PublishModel(state, publish.Collection));
                 break;
+            case CollectionsWindowRequest.Select select:
+                Model.Selected = select.Collection;
+                break;
         }
     }
 

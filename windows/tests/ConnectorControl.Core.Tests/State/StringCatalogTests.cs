@@ -132,6 +132,7 @@ public class StringCatalogTests
         ["ImportModel.sourceLine"] = ["X", "Y", "3"],
         ["MasterStore.duplicateCollectionNameError"] = ["X"],
         ["MasterStore.unknownCollectionError"] = ["X"],
+        ["PopoverModel.emptyText"] = ["X"],
         ["PopoverModel.locateButton"] = ["X"],
         ["PopoverModel.sourceTooltipFormat"] = ["X"],
         ["PublishModel.exportTitle"] = ["X"],
@@ -447,7 +448,7 @@ public class StringCatalogTests
         actual["Notifications.restartToastButton"] = Notifications.RestartToastButton;
         actual["Notifications.title"] = Notifications.Title;
         actual["PopoverModel.chooseFolderButton"] = FlyoutModel.ChooseFolderButton;
-        actual["PopoverModel.emptyText"] = FlyoutModel.EmptyText;
+        actual["PopoverModel.emptyText"] = FlyoutModel.EmptyText("X");
         actual["PopoverModel.locateButton"] = FlyoutModel.LocateButton("X");
         actual["PopoverModel.manageTitle"] = FlyoutModel.ManageTitle;
         actual["PopoverModel.pendingMenuMark"] = FlyoutModel.PendingMenuMark;

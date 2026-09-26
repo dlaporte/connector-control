@@ -212,10 +212,18 @@ struct PopoverView: View {
                     Divider()
                 }
                 if model.isEmpty {
-                    Text(PopoverModel.emptyText)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding()
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(model.emptyMessage)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button(PopoverModel.manageTitle) {
+                            model.manageActiveCollection()
+                            openCollections()
+                        }
+                        .buttonStyle(.link)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
                 }
             }
             .onGeometryChange(for: CGFloat.self) { proxy in

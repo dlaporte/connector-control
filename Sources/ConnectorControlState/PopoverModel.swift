@@ -11,7 +11,6 @@ public final class PopoverModel: ObservableObject {
     public static let title = "Connector Control"
     public static let settingsTooltip = "Settings"
     public static let quitTooltip = "Quit Connector Control"
-    public static let emptyText = "No connectors configured yet."
     public static let retryTitle = "Apply Failed — Retry"
     public static let restartTitle = "Restart Required"
     public static let reviewAndApplyButton = "Review & Apply"
@@ -48,6 +47,10 @@ public final class PopoverModel: ObservableObject {
     }
 
     public static func locateButton(_ fileName: String) -> String { "Locate \(fileName)" }
+
+    /// The list's empty state, followed by the Manage Collections button that answers it: an
+    /// empty active collection is an ordinary one now, and connectors are added in the window.
+    public static func emptyText(_ collection: String) -> String { "No connectors in “\(collection)”." }
 
     /// The chain glyph's tooltip. Named with the `Format` suffix because the Windows mirror
     /// cannot carry a static and an instance member under one name.
@@ -124,6 +127,14 @@ public final class PopoverModel: ObservableObject {
     }
 
     public var isEmpty: Bool { state.store.mcps.isEmpty }
+
+    public var emptyMessage: String { PopoverModel.emptyText(state.activeCollection) }
+
+    /// The empty state's Manage Collections: the window opens on the active collection, the one
+    /// that has nothing in it, rather than on whatever it was last showing.
+    public func manageActiveCollection() {
+        state.collectionsWindowRequest = .select(collection: state.activeCollection)
+    }
 
     /// One row's caution-glyph tooltip, by the rule the editor and Settings
     /// also use: the entry's required tool, then that tool's cached status.

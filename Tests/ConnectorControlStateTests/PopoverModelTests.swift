@@ -404,6 +404,23 @@ final class PopoverModelTests: XCTestCase {
                       "the document in the folder stays: a folder this machine cannot reach is not one to delete from")
     }
 
+    /// An empty active collection is a normal state now that New Collection makes empty ones, so
+    /// the pull-down names it and offers the way forward: Manage Collections, on that collection.
+    func testTheEmptyStateNamesTheCollectionAndOpensItsWindow() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.addEmptyCollection(named: "Home"))
+        state.switchCollection(to: "Home")
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose() }
+        XCTAssertTrue(popover.isEmpty)
+        XCTAssertEqual(popover.emptyMessage, "No connectors in “Home”.")
+        XCTAssertEqual(popover.emptyMessage, PopoverModel.emptyText("Home"))
+
+        popover.manageActiveCollection()
+        XCTAssertEqual(state.takeCollectionsWindowRequest(), .select(collection: "Home"))
+    }
+
     func testTheCollectionsWindowRequestsRoundTripThroughAppState() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

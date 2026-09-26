@@ -107,7 +107,10 @@ the machine that publishes it says so: the Collections window's ⋯ menu offers
 Show Published File, and the editor has a line at the top: "Published to
 <folder> — saving updates the file your team reads. Secrets stay here."
 
-**Manage Collections** opens the Collections window. Every control in it
+**Manage Collections** opens the Collections window. When the active
+collection has no connectors, the popover or flyout says "No connectors in
+“<collection>”." with a **Manage Collections** button beneath it, which
+opens the window on that collection. Every control in it
 sits on the thing it acts on. What this README calls a sheet — Import,
 Copy, Publish, Export, Review — opens as a dialog on Windows. On a Mac,
 Escape cancels any of these sheets, and the connector editor, as its

@@ -397,7 +397,9 @@
   "Notifications.restartToastButton": "Restart Claude",
   "Notifications.title": "Connector Control",
   "PopoverModel.chooseFolderButton": "Choose Folder",
-  "PopoverModel.emptyText": "No connectors configured yet.",
+  "PopoverModel.emptyText": {
+    "format": "No connectors in “{0}”."
+  },
   "PopoverModel.locateButton": {
     "format": "Locate {0}"
   },
