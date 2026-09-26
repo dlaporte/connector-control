@@ -168,6 +168,9 @@ bullet once the section is about to ship.
   "No connectors in “<collection>”." with a Manage Collections button beneath, which opens
   the Collections window on that collection. Before, they said "No connectors configured
   yet." and offered nothing.
+- The Backups caption in Settings ▸ Storage names the three files backed up before every
+  change: Claude’s config, the master list and collections.json. It said "Both config
+  files".
 - In a subscribed collection, a local server authored on the other platform is marked on
   its row; remote connectors cross either way.
 - A folder the app watches — Claude's config folder, the master list's, or a subscribed

@@ -21,7 +21,7 @@ public final class SettingsModel: ObservableObject {
     public static let chooseTitle = "Choose"
     public static let useDefaultTitle = "Use Default"
     public static let backupsHeader = "Backups"
-    public static let backupsCaption = "Both config files are backed up automatically before every change."
+    public static let backupsCaption = "Claude’s config, the master list and collections.json are backed up automatically before every change."
     public static let revealInFinderTitle = "Reveal in Finder"
     public static let claudeAppHeader = "Claude App"
     public static let claudeAppRejectedTitle = "That app can’t be used as Claude Desktop"

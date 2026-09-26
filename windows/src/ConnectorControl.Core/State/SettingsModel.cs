@@ -20,7 +20,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string ChooseTitle = "Choose";
     public const string UseDefaultTitle = "Use Default";
     public const string BackupsHeader = "Backups";
-    public const string BackupsCaption = "Both config files are backed up automatically before every change.";
+    public const string BackupsCaption = "Claude’s config, the master list and collections.json are backed up automatically before every change.";
     public const string ShowInExplorerTitle = "Show in Explorer";
     public const string ClaudeAppHeader = "Claude App";
     public const string ConfigPathLabel = "Config file";

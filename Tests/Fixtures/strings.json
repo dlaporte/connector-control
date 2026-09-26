@@ -497,7 +497,7 @@
     "format": "Update to {0}"
   },
   "SettingsModel.autoUpdateTitle": "Automatically download and install updates",
-  "SettingsModel.backupsCaption": "Both config files are backed up automatically before every change.",
+  "SettingsModel.backupsCaption": "Claude’s config, the master list and collections.json are backed up automatically before every change.",
   "SettingsModel.backupsHeader": "Backups",
   "SettingsModel.checkForUpdatesTitle": "Check for Updates",
   "SettingsModel.chooseTitle": "Choose",
