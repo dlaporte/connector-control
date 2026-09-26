@@ -1543,7 +1543,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertTrue(model.collectionMenu.contains(.delete(enabled: false)))
     }
 
-    func testDuplicateCopiesConnectorsDisabledWithoutActivatingAndReportsAClash() throws {
+    func testDuplicateKeepsEachConnectorAsItIsWithoutActivatingAndReportsAClash() throws {
         // Not seeded: createActiveCopy(named:) copies whichever collection is active when it
         // runs, and Default is still active at that point.
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
@@ -1551,6 +1551,11 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNil(state.createActiveCopy(named: "Team"))
         XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Team"))
         XCTAssertNil(state.upsert(name: "beta", entry: AppStateHarness.localConnector("/bin/beta"), renamedFrom: nil, in: "Team"))
+        state.setEnabled("beta", false, in: "Team")
+        // A connector Team itself took in as a copy, so it has provenance of its own to keep.
+        XCTAssertNil(state.upsert(name: "gamma", entry: AppStateHarness.localConnector("/bin/gamma"), renamedFrom: nil, in: "Default"))
+        XCTAssertNil(state.makeLocalCopy(of: ["gamma"], from: "Default", into: "Team"))
+        let gammaProvenance = try XCTUnwrap(state.collectionsFile.collections["Team"]?.provenance["gamma"])
         state.switchCollection(to: "Default")
         let model = h.collectionsModel(state, selecting: "Team")
 
@@ -1564,8 +1569,12 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertTrue(model.duplicate())
         XCTAssertEqual(h.dialogs.prompts.last, FakeDialogs.PromptCall(title: AppState.newCollectionTitle, initial: ""))
         let copy = try XCTUnwrap(state.store.collections["Team Copy"], "the store trimmed the name")
-        XCTAssertEqual(copy.mcps.keys.sorted(), ["alpha", "beta"])
-        XCTAssertEqual(copy.mcps.values.map(\.enabled), [false, false], "every copy arrives disabled")
+        XCTAssertEqual(copy, state.store.collections["Team"], "every connector as it stands, its switch included")
+        XCTAssertEqual(copy.mcps["alpha"]?.enabled, true)
+        XCTAssertEqual(copy.mcps["beta"]?.enabled, false)
+        XCTAssertEqual(state.collectionsFile.collections["Team Copy"]?.provenance, ["gamma": gammaProvenance],
+                       "it is the user's own copy: nothing says it was imported, and what Team says is kept")
+        XCTAssertEqual(state.kind(of: "Team Copy"), .local)
         XCTAssertEqual(state.activeCollection, "Default", "duplicate does not activate")
         XCTAssertEqual(try h.claudeServers(), before, "nothing Claude runs has changed")
         XCTAssertEqual(model.selected, "Team", "the selection stays where it was")

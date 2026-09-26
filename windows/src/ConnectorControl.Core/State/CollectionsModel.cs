@@ -978,8 +978,9 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Duplicate: the same copy semantics as every other copy in this window — disabled, with
-    /// provenance — but of the whole collection, and the selection stays where it was rather than
+    /// Duplicate: the whole collection as it stands, every connector's switch kept and nothing
+    /// marked as imported — unlike every other copy in this window, it is the user's own (see
+    /// <see cref="AppState.DuplicateCollection"/>). The selection stays where it was rather than
     /// following the new one the way <see cref="MakeLocalCopy"/> and <see cref="Create"/> do.
     /// </summary>
     public bool Duplicate()
@@ -990,7 +991,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             LastError = null;
             return false;
         }
-        return Report(state.MakeLocalCopyOfCollection(collection, typed));
+        return Report(state.DuplicateCollection(collection, typed));
     }
 
     /// <summary>

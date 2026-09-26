@@ -138,8 +138,9 @@ bullet once the section is about to ship.
 - Delete takes out any number of ticked connectors at once. It asks first, naming the
   connector or the count, and says a copy remains in Backups; the connector editor no
   longer has a Delete button of its own.
-- Duplicate copies a whole local collection into a new one, every connector switched off
-  and marked with where it came from.
+- Duplicate copies a whole local collection into a new one exactly as it stands, each
+  connector's switch included, without marking anything as imported. The copy does not
+  become active, so Claude's config is unchanged.
 - The popover (Mac) and flyout (Windows) now only run the active collection: they switch
   collections and turn connectors on and off. Adding and editing connectors moved to the
   Collections window, and the chip's menu lists the collections, then Manage Collections.

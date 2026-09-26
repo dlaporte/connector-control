@@ -1397,6 +1397,24 @@ public final class AppState: ObservableObject {
         return nil
     }
 
+    /// Duplicate: the whole local collection again as a new local one, each connector exactly as it
+    /// stands, its enabled flag included. It is the user's own copy, so nothing records it as
+    /// imported; where a connector the source took in as a copy came from is kept, as the source
+    /// keeps it. It does not become the active collection, so Claude's config is not touched.
+    /// nil on success, else the message.
+    public func duplicateCollection(_ source: String, named newName: String) -> String? {
+        guard let held = store.collections[source], !isSynced(source) else { return nil }
+        if let error = store.addCollection(named: newName, copyingCurrent: false, activating: false) { return error }
+        let name = MasterStore.collectionName(newName)
+        store.collections[name] = held
+        let provenance = collectionsFile.collections[source]?.provenance ?? [:]
+        if !provenance.isEmpty {
+            collectionsFile.collections[name] = CollectionsFile.Entry(kind: .local, provenance: provenance)
+        }
+        persistStore()
+        return nil
+    }
+
     /// A new local collection with no connectors in it, as New Collection makes and as Copy to ▸
     /// New Collection starts from before the ticked rows land. It does not become the active
     /// collection: switching to an empty one would empty Claude's config, so nothing is applied

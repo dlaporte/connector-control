@@ -142,9 +142,11 @@ Escape cancels any of these sheets, and the connector editor, as its
   machine that writes the file; on a subscribed collection **Refresh** and
   **Show Source File** once its file has been found, and **Stop Syncing**,
   which asks first; **Export All**, dimmed on a subscribed collection; and
-  **Delete**, which asks first. Duplicate and Make Local Copy both copy the
-  whole collection into a new local one, every connector switched off and
-  marked with where it came from.
+  **Delete**, which asks first. Duplicate copies a local collection into a
+  new local one exactly as it stands, each connector's switch included; it
+  is your own copy, so nothing is marked as imported. Make Local Copy copies
+  a subscribed collection into a new local one, every connector switched off
+  and marked with where it came from. Neither makes the copy active.
 - **The connector list** has its **+** under the header's ⋯, beside the
   count (tooltip "Add Connector"). It opens the editor on a new connector in
   this collection. Each row has a tick — a lock on a subscribed collection —

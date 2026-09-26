@@ -746,9 +746,10 @@ public final class CollectionsModel: ObservableObject {
         return entries
     }
 
-    /// Duplicate: the same copy semantics as every other copy in this window — disabled, with
-    /// provenance — but of the whole collection, and the selection stays where it was rather than
-    /// following the new one the way `makeLocalCopy()` and `create()` do.
+    /// Duplicate: the whole collection as it stands, every connector's switch kept and nothing
+    /// marked as imported — unlike every other copy in this window, it is the user's own (see
+    /// `AppState.duplicateCollection`). The selection stays where it was rather than following the
+    /// new one the way `makeLocalCopy()` and `create()` do.
     @discardableResult
     public func duplicate() -> Bool {
         let collection = selectedCollection
@@ -757,7 +758,7 @@ public final class CollectionsModel: ObservableObject {
             lastError = nil
             return false
         }
-        return report(state.makeLocalCopyOfCollection(collection, named: typed))
+        return report(state.duplicateCollection(collection, named: typed))
     }
 
     /// This machine's published document for the selected collection: the folder it writes to,

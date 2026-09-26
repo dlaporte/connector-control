@@ -1810,7 +1810,7 @@ public class CollectionsModelTests
     }
 
     [Fact]
-    public void DuplicateCopiesConnectorsDisabledWithoutActivatingAndReportsAClash()
+    public void DuplicateKeepsEachConnectorAsItIsWithoutActivatingAndReportsAClash()
     {
         // Not seeded: CreateActiveCopy copies whichever collection is active when it runs, and
         // Default is still active at that point.
@@ -1819,6 +1819,11 @@ public class CollectionsModelTests
         Assert.Null(state.CreateActiveCopy("Team"));
         Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Team"));
         Assert.Null(state.Upsert("beta", AppStateHarness.LocalConnector("/bin/beta"), null, "Team"));
+        state.SetEnabled("beta", false, "Team");
+        // A connector Team itself took in as a copy, so it has provenance of its own to keep.
+        Assert.Null(state.Upsert("gamma", AppStateHarness.LocalConnector("/bin/gamma"), null, "Default"));
+        Assert.Null(state.MakeLocalCopy(["gamma"], "Default", "Team"));
+        var gammaProvenance = state.CollectionsFile.Collections["Team"].Provenance["gamma"];
         state.SwitchCollection("Default");
         var model = h.CollectionsModel(state, "Team");
 
@@ -1832,8 +1837,14 @@ public class CollectionsModelTests
         Assert.True(model.Duplicate());
         Assert.Equal(new FakeDialogs.PromptCall(AppState.NewCollectionTitle, ""), h.Dialogs.Prompts[^1]);
         var copy = state.Store.Collections["Team Copy"];   // the store trimmed the name
-        Assert.Equal(["alpha", "beta"], copy.Mcps.Keys.Order(StringComparer.Ordinal));
-        Assert.Equal([false, false], copy.Mcps.Values.Select(v => v.Enabled));   // every copy arrives disabled
+        Assert.Equal(state.Store.Collections["Team"], copy);   // every connector as it stands, its switch included
+        Assert.True(copy.Mcps["alpha"].Enabled);
+        Assert.False(copy.Mcps["beta"].Enabled);
+        // It is the user's own copy: nothing says it was imported, and what Team says is kept.
+        var provenance = Assert.Single(state.CollectionsFile.Collections["Team Copy"].Provenance);
+        Assert.Equal("gamma", provenance.Key);
+        Assert.Equal(gammaProvenance, provenance.Value);
+        Assert.Equal(CollectionKind.Local, state.KindOf("Team Copy"));
         Assert.Equal("Default", state.ActiveCollection);   // duplicate does not activate
         Assert.True(DictionaryEquality.Equal(before, h.ClaudeServers()));   // nothing Claude runs has changed
         Assert.Equal("Team", model.Selected);   // the selection stays where it was

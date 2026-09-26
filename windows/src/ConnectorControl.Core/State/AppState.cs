@@ -2113,6 +2113,35 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Duplicate: the whole local collection again as a new local one, each connector exactly as it
+    /// stands, its enabled flag included. It is the user's own copy, so nothing records it as
+    /// imported; where a connector the source took in as a copy came from is kept, as the source
+    /// keeps it. It does not become the active collection, so Claude's config is not touched.
+    /// null on success, else the message.
+    /// </summary>
+    public string? DuplicateCollection(string source, string newName)
+    {
+        if (!Store.Collections.TryGetValue(source, out var held) || IsSynced(source))
+        {
+            return null;
+        }
+        if (Store.AddCollection(newName, copyingCurrent: false, activating: false) is { } error)
+        {
+            return error;
+        }
+        var name = MasterStore.CollectionName(newName);
+        Store.Collections[name] = held.Clone();
+        var provenance = CollectionsFile.Collections.TryGetValue(source, out var entry) ? entry.Provenance : null;
+        if (provenance is { Count: > 0 })
+        {
+            SetSidecarEntry(name, new CollectionsFile.Entry(CollectionKind.Local, provenance: provenance));
+        }
+        PersistStore();
+        RaiseAll();
+        return null;
+    }
+
+    /// <summary>
     /// A new local collection with no connectors in it, as New Collection makes and as Copy to ▸
     /// New Collection starts from before the ticked rows land. It does not become the active
     /// collection: switching to an empty one would empty Claude's config, so nothing is applied
