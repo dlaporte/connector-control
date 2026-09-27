@@ -382,6 +382,23 @@ public class CollectionDocumentTests
     }
 
     /// <summary>
+    /// A field the form has no widget for travels as written too, so a copy there is listed, first, in
+    /// the order the document's fields are walked.
+    /// </summary>
+    [Fact]
+    public void CopiesOfMarkedPathsIncludeTheAdditionalFields()
+    {
+        var intent = LedgerIntent(Mark("/Users/d/ledger.js"));
+        var config = JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String("/Users/d/ledger.js")])),
+            ("cwd", JsonValue.String("/Users/d/ledger.js")),
+            ("extra", JsonValue.Object(("nested", JsonValue.Array([JsonValue.String("/Users/d/ledger.js")])))));
+        Assert.Equal(["additional.cwd", "additional.extra.nested[0]"],
+            CollectionDocument.CopiesOfMarkedPaths(new Dictionary<string, JsonValue> { ["ledger"] = config }, intent).Select(f => f.Field));
+    }
+
+    /// <summary>
     /// A character past U+FFFF sorts before U+FF5E by UTF-16 code unit, which is how this side
     /// orders, and after it by Unicode scalar, which is Swift's <c>&lt;</c>: the refusal names the
     /// same one on both.

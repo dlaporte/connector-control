@@ -1713,6 +1713,47 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// A copy of a path the sheet marks, sitting in a field the editor has no row for, is listed like
+    /// any other copy and holds Publish, rather than leaving Publish enabled for the exporter to refuse.
+    /// </summary>
+    [Fact]
+    public void TheSheetListsACopyOfAPathItMarksInAnAdditionalField()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        const string path = "/Users/d/srv/start.js";
+        Assert.Null(state.Upsert("srv", new McpEntry(NodeWith(path).With("cwd", JsonValue.String(path))), null));
+        var dialog = new PublishModel(state, state.ActiveCollection);
+        dialog.Folder = PublishFolder(h);
+        dialog.PathRows.Single(r => r.Value == path).Marked = true;
+        Assert.Equal(["srv additional.cwd"], dialog.KeptPaths.Select(k => $"{k.Connector} {k.Field}"));
+        Assert.False(dialog.CanPublish);
+        Assert.False(dialog.CanExport);
+    }
+
+    /// <summary>
+    /// A copy of a path the sheet marks and a path another collection keeps back are listed together,
+    /// so the author sees everything Publish waits on at once rather than the second only once the
+    /// first is answered.
+    /// </summary>
+    [Fact]
+    public void TheSheetListsCopiesAndKeptPathsTogether()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        PublishMarkedLedger(h, state, MarkedPath);
+        Assert.Null(state.AddEmptyCollection("Other"));
+        const string path = "/Users/d/tool/run.js";
+        Assert.Null(state.Upsert("tool", new McpEntry(NodeWith(path, path)), null, "Other"));
+        Assert.Null(state.Upsert("carrier", new McpEntry(NodeWith("x.js").With("cwd", JsonValue.String(MarkedPath))), null, "Other"));
+        var dialog = new PublishModel(state, "Other");
+        dialog.PathRows.First(r => r.Connector == "tool" && r.Value == path).Marked = true;
+        Assert.Equal(new HashSet<string> { "tool local.args[1]", "carrier additional.cwd" },
+            dialog.KeptPaths.Select(k => $"{k.Connector} {k.Field}").ToHashSet());
+        Assert.False(dialog.CanExport);
+    }
+
+    /// <summary>
     /// C#-only: the Mac never starts a connector through cmd.exe. A folder with a space or a cmd
     /// metacharacter, expanded into a cmd /c connector's arguments, would split or run as a command.
     /// </summary>

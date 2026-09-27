@@ -99,8 +99,8 @@ bullet once the section is about to ship.
   placeholder, and a preview shows every byte before it leaves, flagging any argument or
   shared value that looks like a credential.
 - The sheet also lists every mark it could not place and every path this machine keeps
-  back that the document would otherwise carry as written, each with its connector and
-  field; Publish and Export wait until every one is ticked where it now sits, forgotten
+  back that the document would otherwise carry as written, a copy of a ticked path in any
+  field included, all at once, each with its connector and field; Publish and Export wait until every one is ticked where it now sits, forgotten
   or released. The folder a collection publishes into never travels: Use
   `${COLLECTION_DIR}` answers it by rewriting the connector.
 - A publish that fails says so on the collection banner, with Choose Folder and Stop

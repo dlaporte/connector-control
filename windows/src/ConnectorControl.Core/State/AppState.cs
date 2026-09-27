@@ -2514,8 +2514,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// not follow — an older app, a hand edit, a master list that synced ahead of the file beside
     /// it — and the path it stood for may be travelling under another name.
     /// </exception>
+    /// <param name="refusingCopies">
+    /// False lets a copy of a marked path travel as written, for the Publish sheet's own reading
+    /// (<see cref="CollectionDocument.Export"/>).
+    /// </param>
     public CollectionDocument ExportDocument(string collection, PublishIntent intent,
-                                             IReadOnlyList<string>? only = null)
+                                             IReadOnlyList<string>? only = null, bool refusingCopies = true)
     {
         var connectors = Store.Collections.TryGetValue(collection, out var held)
             ? held.Mcps.ToDictionary(pair => pair.Key, pair => pair.Value.Config, StringComparer.Ordinal)
@@ -2542,7 +2546,8 @@ public sealed class AppState : ObservableObject, IDisposable
             CollectionsFile.Collections.GetValueOrDefault(collection)?.Publish?.Origin,
             IsoTimestamp.String(host.Now()),
             connectors,
-            intent);
+            intent,
+            refusingCopies);
     }
 
     /// <summary>

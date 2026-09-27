@@ -1018,11 +1018,14 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     /// each importer, so a mark there was made while it was a local one, and the path it stood for
     /// may now be travelling in its extra arguments. Throws <see cref="KeptPathCarriedException"/>
     /// for a local connector that also holds a placed mark's text somewhere unmarked that travels —
-    /// another argument, the command or a shared environment value — since a duplicate of a marked
-    /// path is that path.
+    /// another argument, the command, a shared environment value or a field the form has no widget
+    /// for — since a duplicate of a marked path is that path. With <paramref name="refusingCopies"/>
+    /// false the copy travels as written instead: the Publish sheet reads such a document for what
+    /// else it keeps back, and lists the copies itself (<see cref="CopiesOfMarkedPaths"/>).
     /// </summary>
     public static CollectionDocument Export(string name, string? author, string? origin, string exported,
-                                            IEnumerable<KeyValuePair<string, JsonValue>> connectors, PublishIntent intent)
+                                            IEnumerable<KeyValuePair<string, JsonValue>> connectors, PublishIntent intent,
+                                            bool refusingCopies = true)
     {
         var result = new Dictionary<string, Connector>(StringComparer.Ordinal);
         // By name, so the connector a refusal names is the same on both platforms.
@@ -1080,7 +1083,7 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                 {
                     throw new PathMarkMovedException(connectorName);
                 }
-                if (Copies(model, placement.Placed, shared) is [var copy, ..])
+                if (refusingCopies && Copies(model, placement.Placed, shared) is [var copy, ..])
                 {
                     throw new KeptPathCarriedException(connectorName, FieldName.Of(copy.Field, config, copy.Text));
                 }
@@ -1109,8 +1112,9 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
 
     /// <summary>
     /// Every copy of a marked path that would travel as written, connector by connector in ordinal
-    /// order: another argument, the command or a shared environment value holding a placed mark's
-    /// text. The exporter refuses the first; the Publish sheet lists them all.
+    /// order: another argument, the command, a shared environment value or a field the form has no
+    /// widget for holding a placed mark's text. The exporter refuses the first; the Publish sheet
+    /// lists them all.
     /// </summary>
     public static IReadOnlyList<KeptValueFinding> CopiesOfMarkedPaths(IEnumerable<KeyValuePair<string, JsonValue>> connectors,
                                                                       PublishIntent intent)
@@ -1133,9 +1137,9 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     }
 
     /// <summary>
-    /// In the order <see cref="Places"/> walks a connector: the shared environment values by name,
-    /// then the arguments by index, then the command. The exporter names the first of these, so both
-    /// platforms refuse the same field.
+    /// In the order <see cref="Places"/> walks a connector: the additional fields as it walks them,
+    /// then the shared environment values by name, then the arguments by index, then the command. The
+    /// exporter names the first of these, so both platforms refuse the same field.
     /// </summary>
     private static IReadOnlyList<(string Field, string Text)> Copies(FormModel model, IReadOnlyDictionary<int, PublishIntent.PathMark> placed,
                                                                     IReadOnlySet<string> shared)
@@ -1145,8 +1149,9 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         {
             return [];
         }
-        var unmarked = model.Env.Where(p => shared.Contains(p.Key)).OrderBy(p => p.Key, StringComparer.Ordinal)
-            .Select(p => ($"env.{p.Key}.value", p.Value))
+        var unmarked = Places(JsonValue.Object(("additional", JsonValue.Object(model.Additional))))
+            .Concat(model.Env.Where(p => shared.Contains(p.Key)).OrderBy(p => p.Key, StringComparer.Ordinal)
+                .Select(p => ($"env.{p.Key}.value", p.Value)))
             .Concat(Enumerable.Range(0, model.Args.Count).Where(i => !placed.ContainsKey(i))
                 .Select(i => ($"local.args[{i}]", model.Args[i])))
             .Append(("local.command", model.Command));

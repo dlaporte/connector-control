@@ -521,7 +521,9 @@ public sealed class PublishModel : ObservableObject
     /// Every path this machine keeps back that the document, as the rows now make it, would carry
     /// as written, with its connector and field: a copy of a ticked path; a path on one of this
     /// machine's lists of marked paths, this collection's or another's; a folder it binds. Each is
-    /// answered by ticking it where it sits in an argument row, or by releasing it.
+    /// answered by ticking it where it sits in an argument row, or by releasing it. All of it is listed
+    /// at once: the copies are read from the rows, and the rest from the document as it would travel
+    /// with those copies in it, so answering one kind does not reveal the other.
     /// </summary>
     public IReadOnlyList<KeptPath> KeptPaths
     {
@@ -530,22 +532,18 @@ public sealed class PublishModel : ObservableObject
             var intent = Intent;
             var held = Held(state, Collection, Connectors).ToDictionary(p => p.Key, p => p.Value.Config, StringComparer.Ordinal);
             var found = CollectionDocument.CopiesOfMarkedPaths(held, intent).Select(f => new KeptPath(f.Value, f.Connector, f.Field)).ToList();
-            if (found.Count == 0)
+            try
             {
-                try
-                {
-                    var document = state.ExportDocument(Collection, intent, Connectors);
-                    var (values, folders) = state.KeptBack(Collection, ReviewedValues, released);
-                    found.AddRange(document.Findings(values).Select(f => new KeptPath(f.Value, f.Connector, f.Field)));
-                    // A folder of this collection's own is a folder entry wherever it sits, even where
-                    // the rewrite cannot reach it: its note then says where to write the token.
-                    found.AddRange(document.Findings(folders).Select(f => new KeptPath(
-                        f.Value, f.Connector, f.Field, KeptPathKind.Folder)));
-                }
-                catch (PublishIntentException)
-                {
-                    found.Clear();
-                }
+                var document = state.ExportDocument(Collection, intent, Connectors, refusingCopies: false);
+                var (values, folders) = state.KeptBack(Collection, ReviewedValues, released);
+                found.AddRange(document.Findings(values).Select(f => new KeptPath(f.Value, f.Connector, f.Field)));
+                // A folder of this collection's own is a folder entry wherever it sits, even where
+                // the rewrite cannot reach it: its note then says where to write the token.
+                found.AddRange(document.Findings(folders).Select(f => new KeptPath(
+                    f.Value, f.Connector, f.Field, KeptPathKind.Folder)));
+            }
+            catch (PublishIntentException)
+            {
             }
             return found.DistinctBy(kept => kept.Id).ToList();
         }

@@ -266,6 +266,17 @@ final class CollectionDocumentTests: XCTestCase {
                        ["local.args[1]", "local.command"])
     }
 
+    /// A field the form has no widget for travels as written too, so a copy there is listed, first,
+    /// in the order the document's fields are walked.
+    func testCopiesOfMarkedPathsIncludeTheAdditionalFields() {
+        let intent = PublishIntent(shareValues: [:], pathMarks: ["ledger": [arg(0): mark("/Users/d/ledger.js")]], hints: [:])
+        let config: JSONValue = .object(["command": .string("node"), "args": .array([.string("/Users/d/ledger.js")]),
+                                         "cwd": .string("/Users/d/ledger.js"),
+                                         "extra": .object(["nested": .array([.string("/Users/d/ledger.js")])])])
+        XCTAssertEqual(CollectionDocument.copiesOfMarkedPaths(in: ["ledger": config], intent: intent).map(\.field),
+                       ["additional.cwd", "additional.extra.nested[0]"])
+    }
+
     /// A character past U+FFFF sorts before U+FF5E by UTF-16 code unit, which is how C# orders, and
     /// after it by Unicode scalar, which is Swift's `<`: the refusal names the same one on both.
     func testARefusalNamesTheFirstConnectorInOrdinalOrder() {

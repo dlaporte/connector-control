@@ -369,14 +369,16 @@ public final class PublishModel: ObservableObject {
     /// Every path this machine keeps back that the document, as the rows now make it, would carry
     /// as written, with its connector and field: a copy of a ticked path; a path on one of this
     /// machine's lists of marked paths, this collection's or another's; a folder it binds. Each
-    /// is answered by ticking it where it sits in an argument row, or by releasing it.
+    /// is answered by ticking it where it sits in an argument row, or by releasing it. All of it is
+    /// listed at once: the copies are read from the rows, and the rest from the document as it would
+    /// travel with those copies in it, so answering one kind does not reveal the other.
     public var keptPaths: [KeptPath] {
         let held = PublishModel.held(in: state, collection, only: connectors).mapValues(\.config)
         var found = CollectionDocument.copiesOfMarkedPaths(in: held, intent: intent)
             .map { KeptPath(value: $0.value, connector: $0.connector, field: $0.field) }
-        if found.isEmpty, let document = try? state.exportDocument(for: collection, intent: intent, only: connectors) {
+        if let document = try? state.exportDocument(for: collection, intent: intent, only: connectors, refusingCopies: false) {
             let kept = state.keptBack(for: collection, reviewed: reviewedValues, released: released)
-            found = document.findings(of: kept.values)
+            found += document.findings(of: kept.values)
                 .map { KeptPath(value: $0.value, connector: $0.connector, field: $0.field) }
                 + document.findings(of: kept.folders).map {
                     // A folder of this collection's own is a folder entry wherever it sits, even

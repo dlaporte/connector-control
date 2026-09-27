@@ -1676,8 +1676,11 @@ public final class AppState: ObservableObject {
     /// made on one renamed or removed where the record could not follow — an older app, a hand
     /// edit, a master list that synced ahead of the file beside it — and the path it stood for
     /// may be travelling under another name.
+    ///
+    /// `refusingCopies` false lets a copy of a marked path travel as written, for the Publish
+    /// sheet's own reading (`CollectionDocument.export`).
     public func exportDocument(for collection: String, intent: PublishIntent,
-                               only: [String]? = nil) throws -> CollectionDocument {
+                               only: [String]? = nil, refusingCopies: Bool = true) throws -> CollectionDocument {
         let held = (store.collections[collection]?.mcps ?? [:]).mapValues(\.config)
         if let orphan = intent.pathMarks.keys.sorted(by: { $0.ordinallyPrecedes($1) }).first(where: { name in
             held[name] == nil && (intent.pathMarks[name]?.values.contains { $0.value != nil } ?? false)
@@ -1696,7 +1699,8 @@ public final class AppState: ObservableObject {
             origin: collectionsFile.collections[collection]?.publish?.origin,
             exported: IsoTimestamp.string(from: host.now()),
             connectors: connectors,
-            intent: intent)
+            intent: intent,
+            refusingCopies: refusingCopies)
     }
 
     /// Export: the same document written once, wherever the user chose. nil on success.

@@ -505,10 +505,13 @@ public struct CollectionDocument: Equatable, Sendable {
     /// importer, so a mark there was made while it was a local one, and the path it stood for may
     /// now be travelling in its extra arguments. Throws `PublishIntentError.keptPathCarried` for a
     /// local connector that also holds a placed mark's text somewhere unmarked that travels —
-    /// another argument, the command or a shared environment value — since a duplicate of a marked
-    /// path is that path.
+    /// another argument, the command, a shared environment value or a field the form has no widget
+    /// for — since a duplicate of a marked path is that path. With `refusingCopies` false the copy
+    /// travels as written instead: the Publish sheet reads such a document for what else it keeps
+    /// back, and lists the copies itself (`copiesOfMarkedPaths(in:intent:)`).
     public static func export(name: String, author: String?, origin: String?, exported: String,
-                              connectors: [String: JSONValue], intent: PublishIntent) throws -> CollectionDocument {
+                              connectors: [String: JSONValue], intent: PublishIntent,
+                              refusingCopies: Bool = true) throws -> CollectionDocument {
         var out: [String: Connector] = [:]
         // By name, in ordinal order, so the connector a refusal names is the same on both platforms.
         for connectorName in connectors.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
@@ -548,7 +551,7 @@ public struct CollectionDocument: Equatable, Sendable {
                 var args = model.args
                 let placement = PublishIntent.placePathMarks(marks, in: model.args)
                 guard placement.unresolved.isEmpty else { throw PublishIntentError.pathMarkMoved(connector: connectorName) }
-                if let copy = CollectionDocument.copies(in: model, placed: placement.placed, shared: shared).first {
+                if refusingCopies, let copy = CollectionDocument.copies(in: model, placed: placement.placed, shared: shared).first {
                     throw PublishIntentError.keptPathCarried(
                         connector: connectorName, field: FieldName.of(copy.field, in: config, holding: copy.text))
                 }
@@ -571,8 +574,9 @@ public struct CollectionDocument: Equatable, Sendable {
     }
 
     /// Every copy of a marked path that would travel as written, connector by connector in ordinal
-    /// order: another argument, the command or a shared environment value holding a placed mark's
-    /// text. The exporter refuses the first; the Publish sheet lists them all.
+    /// order: another argument, the command, a shared environment value or a field the form has no
+    /// widget for holding a placed mark's text. The exporter refuses the first; the Publish sheet
+    /// lists them all.
     public static func copiesOfMarkedPaths(in connectors: [String: JSONValue], intent: PublishIntent) -> [KeptValueFinding] {
         connectors.keys.sorted(by: { $0.ordinallyPrecedes($1) }).flatMap { name -> [KeptValueFinding] in
             guard let config = connectors[name], RemotePattern.decode(config) == nil else { return [] }
@@ -584,14 +588,15 @@ public struct CollectionDocument: Equatable, Sendable {
         }
     }
 
-    /// In the order `places(in:)` walks a connector: the shared environment values by name, then
-    /// the arguments by index, then the command. The exporter names the first of these, so both
-    /// platforms refuse the same field.
+    /// In the order `places(in:)` walks a connector: the additional fields as it walks them, then
+    /// the shared environment values by name, then the arguments by index, then the command. The
+    /// exporter names the first of these, so both platforms refuse the same field.
     private static func copies(in model: FormModel, placed: [Int: PublishIntent.PathMark],
                                shared: Set<String>) -> [(field: String, text: String)] {
         let marked = Set(placed.keys.map { KeptValue.nfc(model.args[$0]) })
         guard !marked.isEmpty else { return [] }
-        var unmarked: [(field: String, text: String)] = model.env.keys.sorted { $0.ordinallyPrecedes($1) }
+        var unmarked = places(in: .object(["additional": .object(model.additional)]))
+        unmarked += model.env.keys.sorted { $0.ordinallyPrecedes($1) }
             .filter(shared.contains).map { ("env.\($0).value", model.env[$0] ?? "") }
         unmarked += model.args.indices.filter { placed[$0] == nil }.map { ("local.args[\($0)]", model.args[$0]) }
         unmarked.append(("local.command", model.command))

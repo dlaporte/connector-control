@@ -1482,6 +1482,46 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertTrue(jsonText(sheet.preview, contains: "--script=\(markedPath)"), "the preview shows where it sits")
     }
 
+    /// A copy of a path the sheet marks, sitting in a field the editor has no row for, is listed
+    /// like any other copy and holds Publish, rather than leaving Publish enabled for the exporter
+    /// to refuse.
+    func testTheSheetListsACopyOfAPathItMarksInAnAdditionalField() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let path = "/Users/d/srv/start.js"
+        XCTAssertNil(state.upsert(name: "srv", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string(path)]), "cwd": .string(path),
+        ])), renamedFrom: nil))
+        let sheet = PublishModel(state: state, collection: state.activeCollection)
+        sheet.folder = try publishFolder(h).path
+        sheet.pathRows[try XCTUnwrap(sheet.pathRows.firstIndex { $0.value == path })].marked = true
+        XCTAssertEqual(sheet.keptPaths.map { "\($0.connector) \($0.field)" }, ["srv additional.cwd"])
+        XCTAssertFalse(sheet.canPublish)
+        XCTAssertFalse(sheet.canExport)
+    }
+
+    /// A copy of a path the sheet marks and a path another collection keeps back are listed
+    /// together, so the author sees everything Publish waits on at once rather than the second
+    /// only once the first is answered.
+    func testTheSheetListsCopiesAndKeptPathsTogether() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        _ = try publishMarkedLedger(h, state, args: [markedPath])
+        XCTAssertNil(state.addEmptyCollection(named: "Other"))
+        let path = "/Users/d/tool/run.js"
+        XCTAssertNil(state.upsert(name: "tool", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string(path), .string(path)]),
+        ])), renamedFrom: nil, in: "Other"))
+        XCTAssertNil(state.upsert(name: "carrier", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string("x.js")]), "cwd": .string(markedPath),
+        ])), renamedFrom: nil, in: "Other"))
+        let sheet = PublishModel(state: state, collection: "Other")
+        sheet.pathRows[try XCTUnwrap(sheet.pathRows.firstIndex { $0.connector == "tool" && $0.value == path })].marked = true
+        XCTAssertEqual(Set(sheet.keptPaths.map { "\($0.connector) \($0.field)" }),
+                       ["tool local.args[1]", "carrier additional.cwd"])
+        XCTAssertFalse(sheet.canExport)
+    }
+
     /// Renamed on the other machine while this one was off, the rename carrying the marks along;
     /// at launch Claude's config brings the old name back from this machine's own last apply.
     func testAConnectorRenamedElsewhereWhileOffIsNotPublishedUnderItsOldName() throws {
