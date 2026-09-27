@@ -376,8 +376,9 @@ public sealed record CollectionsLocalCache
         /// Every path this machine has written into the document as a placeholder, which must never
         /// appear in it as written. Kept here, where nothing syncs it, so the publisher fails closed
         /// whatever the sidecar or the editor says: a publish that happens on its own only adds to
-        /// it, and only the author, pressing Publish in the sheet after reading the preview,
-        /// replaces it.
+        /// it, the dialog's Publish adds what its rows tick, and a path leaves it only when the author
+        /// releases it there after reading the preview — never because the dialog had no row holding
+        /// it.
         /// </summary>
         public IReadOnlySet<string> MarkedValues
         {
@@ -721,8 +722,8 @@ public sealed record CollectionsLocalCache
     /// remembered when a load or an edit first sees it, not when it goes: the other machine's change can
     /// sync in while this one is off, and the launch after finds nothing left to remember it by. So a
     /// mark the author drops on the other machine stays kept back here until it is released in this
-    /// machine's Publish dialog. A collection this machine publishes is left to its binding, whose lists
-    /// the author's reviewed Publish replaces and which a binding that goes leaves in
+    /// machine's Publish dialog. A collection this machine publishes is left to its binding, whose paths
+    /// leave its list only by the author's Release in the dialog and which a binding that goes leaves in
     /// <see cref="Kept"/> itself (<see cref="KeptRecord.Remembering"/>).
     /// </summary>
     public CollectionsLocalCache RememberingMarks(CollectionsFile file)

@@ -109,6 +109,10 @@ bullet once the section is about to ship.
   from every collection this machine publishes, and stays kept back once that machine drops
   the mark, stops publishing the collection or deletes it, even when the change arrives
   while this machine is off. Release it in this machine's Publish sheet to let it travel.
+- A path you marked stays kept back until you release it, even after the argument or the
+  connector that held it is deleted and the sheet is published again with no row for it:
+  put back later, it is refused and listed in the sheet. Before, that Publish forgot it, so
+  the path travelled as written once it came back.
 - A publish that fails says so on the collection banner, with Choose Folder and Stop
   Publishing, and pressing Publish again retries the write at once. The banner goes if the
   collection stops publishing, or is deleted, on your other machine. A path marked for

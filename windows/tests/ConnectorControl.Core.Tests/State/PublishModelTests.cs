@@ -224,8 +224,8 @@ public class PublishModelTests
         Assert.Equal("srv", row.Name);
 
         // A marked argument that does not look like a path keeps its row, so publishing from the
-        // dialog cannot quietly unmark it. Recorded as the author's reviewed answer, which is what
-        // lets the path it replaces leave this machine's list of marked paths.
+        // dialog cannot quietly unmark it. Recorded as the author's reviewed answer, with the path it
+        // replaces released, which is what lets that path leave this machine's list of marked paths.
         var flag = new PublishIntent(
             [],
             [new("c", new Dictionary<JsonPointer, PublishIntent.PathMark>
@@ -233,7 +233,8 @@ public class PublishModelTests
                 [new JsonPointer(["args", "0"])] = new("flag", null, "--quiet"),
             })],
             []);
-        Assert.Null(state.UpdatePublishIntent(state.ActiveCollection, flag, new HashSet<string>(["--quiet"], StringComparer.Ordinal)));
+        Assert.Null(state.UpdatePublishIntent(state.ActiveCollection, flag, new HashSet<string>(["--quiet"], StringComparer.Ordinal),
+            new HashSet<string>(["/Users/d/x.js"], StringComparer.Ordinal)));
         var marked = new PublishModel(state, state.ActiveCollection);
         Assert.Equal(["--quiet"], marked.PathRows.Where(r => r.Connector == "c" && r.Marked).Select(r => r.Value));
         Assert.Equal(flag, marked.Intent);
@@ -365,8 +366,8 @@ public class PublishModelTests
         // The author's explicit choice: the path travels as written.
         Assert.Equal(["/Users/d/y.js", "--quiet"], DocumentArgs("c", File.ReadAllBytes(file)));
         Assert.Null(RecordedMarks(state, "c"));
-        // Forgetting then publishing is how a path leaves this machine's list.
-        Assert.Empty(state.CollectionsCache.Published[state.ActiveCollection].MarkedValues);
+        // Forgetting takes the mark off the record; only a Release takes its path off this machine's list.
+        Assert.Equal(["/Users/d/x.js"], state.CollectionsCache.Published[state.ActiveCollection].MarkedValues);
     }
 
     [Fact]

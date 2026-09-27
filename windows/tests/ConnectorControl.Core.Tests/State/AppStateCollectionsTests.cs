@@ -1732,6 +1732,38 @@ public class AppStateCollectionsTests
         Assert.Equal([MarkedPath], LedgerArgs(file));
     }
 
+    /// <summary>
+    /// A marked path leaves this machine's list only by Release. With its argument deleted in the
+    /// editor, a later Publish in the dialog has no row holding it, and keeps it on the list all the
+    /// same: put back, the path is refused. The dialog then lists it where it sits, and Release there
+    /// lets it travel.
+    /// </summary>
+    [Fact]
+    public void AMarkedPathLeavesTheListOnlyByRelease()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var file = PublishMarkedLedger(h, state, MarkedPath);
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith("--quiet")), "ledger",
+            pathMarks: new Dictionary<JsonPointer, PublishIntent.PathMark>()));
+        Assert.Null(new PublishModel(state, state.ActiveCollection).Publish());
+        Assert.Equal([MarkedPath], MarkedValues(state)!);   // a dialog with no row for the path keeps it
+
+        RewriteLedger(state, MarkedPath);
+        Assert.Equal(AppState.KeptPathCarriedError("ledger", FieldName.Argument(1)), state.PublishError?.Message);
+        Assert.False(JsonText.FileContains(file, MarkedPath));
+        var dialog = new PublishModel(state, state.ActiveCollection);
+        foreach (var row in dialog.PathRows.Where(r => r.Value == MarkedPath))
+        {
+            row.Marked = false;
+        }
+        Assert.Equal([MarkedPath], dialog.KeptPaths.Select(k => k.Value));   // listed where it sits
+        Assert.Null(dialog.ReleaseKeptPath(MarkedPath));
+        Assert.Null(dialog.Publish());
+        Assert.Empty(MarkedValues(state)!);
+        Assert.Equal([MarkedPath], LedgerArgs(file));
+    }
+
     [Fact]
     public void TheSheetsExportRefusesACopyOfAPathItMarks()
     {
@@ -3065,6 +3097,61 @@ public class AppStateCollectionsTests
         Assert.False(File.Exists(exported));
     }
 
+    /// <summary>
+    /// This machine's own record of a collection it stopped publishing, holding a mark another machine
+    /// made since, is spent when this machine publishes the collection again: its marks go to the new
+    /// binding, even with nothing in the collection holding the path by then, so the path is still kept
+    /// back from every other collection published here.
+    /// </summary>
+    [Fact]
+    public void AnOwnRecordSpentByAPublishHandsItsMarksToTheBinding()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var home = state.ActiveCollection;
+        Assert.Null(state.AddEmptyCollection("Team"));
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith("/tmp/team-ledger.js")), null, "Team"));
+        Assert.Null(new PublishModel(state, "Team") { Folder = PublishFolder(h, "pubTeam") }.Publish());
+        state.StopPublishing("Team", deleteFile: false);
+        Assert.NotNull(state.CollectionsCache.Kept["Team"].Origin);   // an own record
+        var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
+        var all = CollectionsFile.LoadIfReadable(sidecar)!.Collections.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        all["Team"] = new CollectionsFile.Entry(CollectionKind.Local, publish: new CollectionsFile.PublishRecord(
+            "team", "other-origin", new PublishIntent(
+                [],
+                [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark> { [ArgPointer(0)] = new("server_path", null, MarkedPath) })],
+                [])));
+        new CollectionsFile(all).Save(sidecar);
+        state.Reload();
+        Assert.Equal([MarkedPath], state.CollectionsCache.Kept["Team"].MarkedValues);   // the other machine's mark, remembered
+
+        var document = CopyAnotherMachinesMarkedPathIntoAReviewedLedger(h, state, home);
+        all = CollectionsFile.LoadIfReadable(sidecar)!.Collections.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        all.Remove("Team");
+        new CollectionsFile(all).Save(sidecar);
+        state.Reload();
+        Assert.Null(new PublishModel(state, "Team") { Folder = PublishFolder(h, "pubTeam2") }.Publish());
+        // The spent record's mark is the binding's now.
+        Assert.Contains(MarkedPath, state.CollectionsCache.Published["Team"].MarkedValues);
+        Assert.False(JsonText.FileContains(document, MarkedPath));
+        AssertKeptBackBySidecarMark(state);
+    }
+
+    /// <summary>
+    /// <paramref name="home"/>'s <c>ledger</c> reviewed in the Publish dialog holding a path of its own,
+    /// then edited to hold <c>MarkedPath</c>, which only what this machine keeps back holds. Returns
+    /// home's document.
+    /// </summary>
+    private static string CopyAnotherMachinesMarkedPathIntoAReviewedLedger(AppStateHarness h, AppState state, string home)
+    {
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith("/tmp/own-ledger.js")), null, home));
+        var folder = PublishFolder(h);
+        Assert.Null(new PublishModel(state, home) { Folder = folder }.Publish());
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath)), "ledger", home));
+        AssertKeptBackBySidecarMark(state);
+        return Path.Combine(folder, Slug.Make(home) + ".json");
+    }
+
     /// <summary>A copy of the marked path in an <c>additional</c> field is kept back, and the refusal says where it sits rather than that the mark moved.</summary>
     [Fact]
     public void ACopyOfAMarkedPathSaysWhereItSits()
@@ -4132,7 +4219,7 @@ public class AppStateCollectionsTests
         var record = state.CollectionsFile.Collections["Default"].Publish!;
         Assert.Null(state.UpdatePublishIntent("Default", record.Intent, new HashSet<string>(["/opt/reviewed"])));
         var reviewed = state.CollectionsCache.Published["Default"];
-        Assert.Equal(["/opt/reviewed"], reviewed.MarkedValues);
+        Assert.Equal(["/opt/marked", "/opt/reviewed"], reviewed.MarkedValues.Order(StringComparer.Ordinal));   // the ticks join the list; only a Release takes one off
         // The dialog reviews what the connectors hold now.
         Assert.Empty(reviewed.ReviewedWarnings);
         AssertSameFields(reviewed, before, "MarkedValues", "ReviewedWarnings");

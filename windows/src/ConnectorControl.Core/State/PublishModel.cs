@@ -816,8 +816,9 @@ public sealed class PublishModel : ObservableObject
 
     /// <summary>
     /// The text of every path the rows mark: what Publish or Export must not send as written
-    /// anywhere else in the document, and what the dialog's Publish records as this machine's list
-    /// of marked paths — the author's reviewed answer, replacing whatever was kept before.
+    /// anywhere else in the document, and what the dialog's Publish adds to this machine's list of
+    /// marked paths. The list keeps what it held besides, but what the author released here
+    /// (<c>AppState.UpdatePublishIntent</c>).
     /// </summary>
     private IReadOnlySet<string> ReviewedValues =>
         Intent.PathMarks.Values.SelectMany(marks => marks.Values)

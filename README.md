@@ -439,6 +439,9 @@ machines that follow it, including the one that publishes it.
   once that machine drops the mark, stops publishing the collection or
   deletes it, even when the change syncs in while this machine is off:
   **Release** it in this machine's Publish sheet to let it travel.
+- A path stays kept back until you **Release** it. Unticking its row is not
+  enough, and neither is deleting the argument or the connector that held
+  it and pressing Publish: put back later, it is refused and listed again.
 - A differently spelled version of a marked path is a different path to the
   app — another case, `~` in place of your home folder, a trailing slash.
   It is not recognised as the one you marked, so it travels as written;

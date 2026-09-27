@@ -189,12 +189,13 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(row.name, "srv")
 
         // A marked argument that does not look like a path keeps its row, so publishing from the
-        // sheet cannot quietly unmark it. Recorded as the author's reviewed answer, which is what
-        // lets the path it replaces leave this machine's list of marked paths.
+        // sheet cannot quietly unmark it. Recorded as the author's reviewed answer, with the path it
+        // replaces released, which is what lets that path leave this machine's list of marked paths.
         let flag = PublishIntent(shareValues: [:], pathMarks: ["c": [
             JSONPointer(["args", "0"]): .init(name: "flag", hint: nil, value: "--quiet"),
         ]], hints: [:])
-        XCTAssertNil(state.updatePublishIntent(state.activeCollection, intent: flag, reviewedValues: ["--quiet"]))
+        XCTAssertNil(state.updatePublishIntent(state.activeCollection, intent: flag, reviewedValues: ["--quiet"],
+                                               releasedValues: ["/Users/d/x.js"]))
         let marked = PublishModel(state: state, collection: state.activeCollection)
         XCTAssertEqual(marked.pathRows.filter { $0.connector == "c" && $0.marked }.map(\.value), ["--quiet"])
         XCTAssertEqual(marked.intent, flag)
@@ -312,8 +313,8 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(try documentArgs("c", in: Data(contentsOf: file)), ["/Users/d/y.js", "--quiet"],
                        "the author's explicit choice: the path travels as written")
         XCTAssertNil(state.collectionsFile.collections[state.activeCollection]?.publish?.intent.pathMarks["c"])
-        XCTAssertEqual(state.collectionsCache.published[state.activeCollection]?.markedValues, [],
-                       "forgetting then publishing is how a path leaves this machine's list")
+        XCTAssertEqual(state.collectionsCache.published[state.activeCollection]?.markedValues, ["/Users/d/x.js"],
+                       "forgetting takes the mark off the record; only a Release takes its path off this machine's list")
     }
 
     func testARowHoldingAPathThisMachineKeepsBackStartsTicked() throws {

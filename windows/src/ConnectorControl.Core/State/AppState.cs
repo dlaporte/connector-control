@@ -2335,10 +2335,13 @@ public sealed class AppState : ObservableObject, IDisposable
     /// null on success, else the message to show.
     /// </summary>
     /// <param name="reviewedValues">
-    /// What the author's Publish in the dialog says must never travel as written: it replaces this
-    /// machine's list of marked paths (<see cref="CollectionsLocalCache.PublishBinding.MarkedValues"/>).
-    /// Null — the banner's Choose Folder, which nobody reviewed — keeps the list the collection
-    /// already had.
+    /// What the author's Publish in the dialog says must never travel as written: it joins this
+    /// machine's list of marked paths (<see cref="CollectionsLocalCache.PublishBinding.MarkedValues"/>),
+    /// which keeps every path already on it but the ones the author released there
+    /// (<paramref name="releasedValues"/>). A path leaves the list only by Release, never because the
+    /// dialog has no row holding it — its argument deleted, or its connector — so a path put back
+    /// later is still refused, and the dialog lists it where it sits. Null — the banner's Choose
+    /// Folder, which nobody reviewed — adds nothing.
     /// </param>
     /// <param name="releasedValues">
     /// The paths the author released in the dialog, let travel in this collection's document
@@ -2400,7 +2403,12 @@ public sealed class AppState : ObservableObject, IDisposable
         // origin so the next Stop merges them as departed rather than as its own.
         var remembered = CollectionsCache.Kept.GetValueOrDefault(collection);
         var own = IsOwn(remembered, collection, collection, previousOrigin);
-        var marked = previous?.MarkedValues ?? remembered?.MarkedValues;
+        // The paths already on the list: the binding's, and an own record's that this call spends, or
+        // the record's a first binding inherits. Only a Release in the dialog takes one off.
+        var marked = (previous?.MarkedValues ?? Enumerable.Empty<string>())
+            .Concat(own || previous is null ? remembered?.MarkedValues ?? Enumerable.Empty<string>() : Enumerable.Empty<string>())
+            .ToHashSet(StringComparer.Ordinal);
+        var released = Released(previous?.ReleasedValues ?? remembered?.ReleasedValues, releasedValues, reviewedValues ?? marked);
         // What the dialog's Publish showed is what it reviewed. Choose Folder moves a binding and
         // reviews nothing, so it carries the review it had; it never makes a first one
         // (ChangePublishFolder), so a first binding with no dialog is a caller vouching for what the
@@ -2411,8 +2419,8 @@ public sealed class AppState : ObservableObject, IDisposable
             full,
             // A new folder has nothing in it this app wrote, so the next write is unconditional.
             string.Equals(previous?.Folder, full, StringComparison.Ordinal) ? previous?.LastWrittenHash : null,
-            reviewedValues ?? marked,
-            Released(previous?.ReleasedValues ?? remembered?.ReleasedValues, releasedValues, reviewedValues ?? marked),
+            (reviewedValues ?? Enumerable.Empty<string>()).Concat(marked.Where(value => !released.Contains(value))),
+            released,
             // The folder it left stays this machine's own: a backup or a connector can bring it back.
             (previous?.PublishedFolders
                 ?? (own ? remembered?.PublishedFolders : null)
@@ -2481,10 +2489,10 @@ public sealed class AppState : ObservableObject, IDisposable
     /// is rewritten if the change makes it say something different. null on success.
     /// </summary>
     /// <param name="reviewedValues">
-    /// From the dialog's Publish: replaces this machine's list of marked paths as
-    /// <see cref="StartPublishing"/> describes. It is the one way a path leaves that list.
+    /// From the dialog's Publish: joins this machine's list of marked paths as
+    /// <see cref="StartPublishing"/> describes.
     /// </param>
-    /// <param name="releasedValues">As <see cref="StartPublishing"/> takes them.</param>
+    /// <param name="releasedValues">As <see cref="StartPublishing"/> takes them: the one way a path leaves that list.</param>
     /// <param name="shown">What the dialog showed, as <see cref="StartPublishing"/> takes it.</param>
     public string? UpdatePublishIntent(string collection, PublishIntent intent, IReadOnlySet<string>? reviewedValues = null,
                                        IReadOnlySet<string>? releasedValues = null, IReadOnlyDictionary<string, JsonValue>? shown = null)
@@ -2495,12 +2503,18 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         // The lists are this machine's: another machine's publish record has no binding here.
         var binding = CollectionsCache.Published.GetValueOrDefault(collection);
-        var changed = reviewedValues is not null && binding is not null
-            ? ReviewedBy(binding with
+        var changed = binding;
+        if (reviewedValues is not null && binding is not null)
+        {
+            var released = Released(binding.ReleasedValues, releasedValues, reviewedValues);
+            // A path leaves the list only by Release: one the dialog has no row for stays.
+            changed = ReviewedBy(binding with
             {
-                MarkedValues = reviewedValues, ReleasedValues = Released(binding.ReleasedValues, releasedValues, reviewedValues),
-            }, collection, intent, shown)
-            : binding;
+                MarkedValues = reviewedValues.Concat(binding.MarkedValues.Where(value => !released.Contains(value)))
+                    .ToHashSet(StringComparer.Ordinal),
+                ReleasedValues = released,
+            }, collection, intent, shown);
+        }
         var listsChanged = !Equals(changed, binding);
         if (record.Intent.Equals(intent) && !listsChanged)
         {
@@ -2702,7 +2716,7 @@ public sealed class AppState : ObservableObject, IDisposable
                 // A path this machine has published as a placeholder, now in the document as
                 // written: whatever the marks say — the other machine dropped them in a sidecar that
                 // landed before its master list, a connector came back without them — this machine
-                // does not send it. Only the author's Publish in the dialog clears it.
+                // does not send it. Only the author's Release in the dialog clears it.
                 RefuseKeptBackPaths(document, collection);
                 var hash = PublishHash(document);
                 if (hash == binding.LastWrittenHash && collection != forced)

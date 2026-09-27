@@ -1525,9 +1525,12 @@ public final class AppState: ObservableObject {
     /// nil on success, else the message to show.
     ///
     /// `reviewedValues` is what the author's Publish in the sheet says must never travel as
-    /// written: it replaces this machine's list of marked paths (`PublishBinding.markedValues`).
-    /// nil — the banner's Choose Folder, which nobody reviewed — keeps the list the collection
-    /// already had. `releasedValues` are the paths the author released in the sheet, let travel
+    /// written: it joins this machine's list of marked paths (`PublishBinding.markedValues`), which
+    /// keeps every path already on it but the ones the author released there (`releasedValues`).
+    /// A path leaves the list only by Release, never because the sheet has no row holding it — its
+    /// argument deleted, or its connector — so a path put back later is still refused, and the
+    /// sheet lists it where it sits. nil — the banner's Choose Folder, which nobody reviewed —
+    /// adds nothing. `releasedValues` are the paths the author released in the sheet, let travel
     /// in this collection's document although this machine keeps them back elsewhere. `shown` is
     /// each connector the sheet showed, as it showed it: its Publish reviews those alone
     /// (`sheetReview(of:intent:shown:after:)`).
@@ -1577,7 +1580,11 @@ public final class AppState: ObservableObject {
         // under the new origin so the next Stop merges them as departed rather than as its own.
         let remembered = collectionsCache.kept[collection]
         let own = AppState.isOwn(remembered, filedUnder: collection, of: collection, publishing: record?.origin)
-        let marked = previous?.markedValues ?? remembered?.markedValues ?? []
+        // The paths already on the list: the binding's, and an own record's that this call spends,
+        // or the record's a first binding inherits. Only a Release in the sheet takes one off.
+        let marked = (previous?.markedValues ?? []).union(own || previous == nil ? remembered?.markedValues ?? [] : [])
+        let released = AppState.released(previous?.releasedValues ?? remembered?.releasedValues ?? [],
+                                          adding: releasedValues, marked: reviewedValues ?? marked)
         // What the sheet's Publish showed is what it reviewed. Choose Folder moves a binding and
         // reviews nothing, so it carries the review it had; it never makes a first one
         // (`changePublishFolder`), so a first binding with no sheet is a caller vouching for what
@@ -1588,9 +1595,8 @@ public final class AppState: ObservableObject {
             folder: url.path,
             // A new folder has nothing in it this app wrote, so the next write is unconditional.
             lastWrittenHash: previous?.folder == url.path ? previous?.lastWrittenHash : nil,
-            markedValues: reviewedValues ?? marked,
-            releasedValues: AppState.released(previous?.releasedValues ?? remembered?.releasedValues ?? [],
-                                              adding: releasedValues, marked: reviewedValues ?? marked),
+            markedValues: (reviewedValues ?? []).union(marked.subtracting(released)),
+            releasedValues: released,
             // The folder it left stays this machine's own: a backup or a connector can bring it
             // back.
             publishedFolders: (previous?.publishedFolders ?? (own ? remembered?.publishedFolders : nil) ?? [])
@@ -1640,9 +1646,9 @@ public final class AppState: ObservableObject {
     /// What the author ticked in the sheet, for a collection that already publishes. The document
     /// is rewritten if the change makes it say something different. nil on success.
     ///
-    /// `reviewedValues`, from the sheet's Publish, replaces this machine's list of marked paths as
-    /// `startPublishing` describes; it is the one way a path leaves that list. `shown` is what the
-    /// sheet showed, as `startPublishing` takes it.
+    /// `reviewedValues`, from the sheet's Publish, joins this machine's list of marked paths as
+    /// `startPublishing` describes, and `releasedValues` are the one way a path leaves it. `shown`
+    /// is what the sheet showed, as `startPublishing` takes it.
     public func updatePublishIntent(_ collection: String, intent: PublishIntent,
                                     reviewedValues: Set<String>? = nil, releasedValues: Set<String> = [],
                                     shown: [String: JSONValue]? = nil) -> String? {
@@ -1651,7 +1657,8 @@ public final class AppState: ObservableObject {
         var binding = collectionsCache.published[collection]
         if let reviewedValues, var changed = binding {
             changed.releasedValues = AppState.released(changed.releasedValues, adding: releasedValues, marked: reviewedValues)
-            changed.markedValues = reviewedValues
+            // A path leaves the list only by Release: one the sheet has no row for stays.
+            changed.markedValues = reviewedValues.union(changed.markedValues.subtracting(changed.releasedValues))
             binding = reviewedBy(changed, collection, intent, shown: shown)
         }
         let listsChanged = binding != collectionsCache.published[collection]
@@ -1962,7 +1969,7 @@ public final class AppState: ObservableObject {
                 // A path this machine has published as a placeholder, now in the document as
                 // written: whatever the marks say — the other machine dropped them in a sidecar
                 // that landed before its master list, a connector came back without them — this
-                // machine does not send it. Only the author's Publish in the sheet clears it.
+                // machine does not send it. Only the author's Release in the sheet clears it.
                 try refuseKeptBackPaths(in: document, of: collection)
                 let hash = try AppState.publishHash(of: document)
                 guard hash != binding.lastWrittenHash || collection == forced else {
