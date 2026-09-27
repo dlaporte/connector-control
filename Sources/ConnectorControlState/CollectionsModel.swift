@@ -959,7 +959,8 @@ public final class CollectionsModel: ObservableObject {
 
     /// What Delete takes with the collection and what it leaves: its connectors (copies elsewhere
     /// stay), the collection that becomes active if this one is, a synced source it never
-    /// touches, and the backup the store keeps before it saves.
+    /// touches, and the backup the store keeps before it saves — said only when it held
+    /// connectors, since an empty collection has nothing in it to get back.
     public func deleteInformative(for collection: String) -> String {
         let count = state.store.collections[collection]?.mcps.count ?? 0
         var sentences = [Self.deleteConnectorsSentence(count)]
@@ -968,7 +969,7 @@ public final class CollectionsModel: ObservableObject {
             sentences.append(Self.deleteNextActiveSentence(next))
         }
         if state.isSynced(collection) { sentences.append(Self.deleteSourceSentence) }
-        sentences.append(Self.deleteCheckedInformative)
+        if count > 0 { sentences.append(Self.deleteCheckedInformative) }
         return sentences.joined(separator: " ")
     }
 

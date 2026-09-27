@@ -742,7 +742,7 @@ final class CollectionsModelTests: XCTestCase {
 
     /// The Delete confirmation says what goes with the collection before the button is pressed:
     /// its connectors, which collection becomes active, that a synced source is left alone, and
-    /// that a copy remains in Backups.
+    /// that a copy remains in Backups, for a collection that held anything to get back.
     func testDeleteConfirmationSaysWhatGoesWithTheCollection() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
@@ -762,7 +762,7 @@ final class CollectionsModelTests: XCTestCase {
             model.delete()
             return h.dialogs.confirms.last?.informative
         }
-        XCTAssertEqual(informative("Empty"), "It has no connectors. A copy remains in Backups.")
+        XCTAssertEqual(informative("Empty"), "It has no connectors.", "nothing in it to get back from Backups")
         XCTAssertEqual(informative("One"),
                        "Its 1 connector is deleted with it. Copies in other collections are not affected. "
                        + "A copy remains in Backups.")
@@ -773,7 +773,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(informative("Team"),
                        "Its 1 connector is deleted with it. Copies in other collections are not affected. "
                        + "The source file is not changed. A copy remains in Backups.")
-        XCTAssertEqual(informative("Shared"), "It has no connectors. A copy remains in Backups.",
+        XCTAssertEqual(informative("Shared"), "It has no connectors.",
                        "publishing adds nothing here: the file has its own question")
         XCTAssertEqual(state.collectionNames, ["Default", "Empty", "One", "Shared", "Team", "Two"], "every one declined")
 

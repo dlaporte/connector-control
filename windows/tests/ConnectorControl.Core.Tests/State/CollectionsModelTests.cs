@@ -856,7 +856,7 @@ public class CollectionsModelTests
     /// <summary>
     /// The Delete confirmation says what goes with the collection before the button is pressed:
     /// its connectors, which collection becomes active, that a synced source is left alone, and
-    /// that a copy remains in Backups.
+    /// that a copy remains in Backups, for a collection that held anything to get back.
     /// </summary>
     [Fact]
     public void DeleteConfirmationSaysWhatGoesWithTheCollection()
@@ -883,7 +883,8 @@ public class CollectionsModelTests
             model.Delete();
             return h.Dialogs.Confirms[^1].Informative;
         }
-        Assert.Equal("It has no connectors. A copy remains in Backups.", Informative("Empty"));
+        // Nothing in it to get back from Backups.
+        Assert.Equal("It has no connectors.", Informative("Empty"));
         Assert.Equal("Its 1 connector is deleted with it. Copies in other collections are not affected. "
                      + "A copy remains in Backups.", Informative("One"));
         // The first local collection with connectors, not the empty Default.
@@ -892,7 +893,7 @@ public class CollectionsModelTests
         Assert.Equal("Its 1 connector is deleted with it. Copies in other collections are not affected. "
                      + "The source file is not changed. A copy remains in Backups.", Informative("Team"));
         // Publishing adds nothing here: the file has its own question.
-        Assert.Equal("It has no connectors. A copy remains in Backups.", Informative("Shared"));
+        Assert.Equal("It has no connectors.", Informative("Shared"));
         Assert.Equal(["Default", "Empty", "One", "Shared", "Team", "Two"], state.CollectionNames);   // every one declined
 
         // Accepted: the collection the confirmation named is the one that becomes active.

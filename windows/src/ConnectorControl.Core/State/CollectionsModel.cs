@@ -1270,7 +1270,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>
     /// What Delete takes with the collection and what it leaves: its connectors (copies elsewhere
     /// stay), the collection that becomes active if this one is, a synced source it never
-    /// touches, and the backup the store keeps before it saves.
+    /// touches, and the backup the store keeps before it saves — said only when it held
+    /// connectors, since an empty collection has nothing in it to get back.
     /// </summary>
     public string DeleteInformative(string collection)
     {
@@ -1288,7 +1289,10 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             sentences.Add(DeleteSourceSentence);
         }
-        sentences.Add(DeleteCheckedInformative);
+        if (count > 0)
+        {
+            sentences.Add(DeleteCheckedInformative);
+        }
         return string.Join(" ", sentences);
     }
 
