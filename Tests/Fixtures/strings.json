@@ -209,7 +209,7 @@
   "CollectionsModel.updateAvailableStatus": "update available",
   "CollectionsModel.windowTitle": "Collections",
   "ConfigService.corruptStoreNote": {
-    "format": "The MCP list file was unreadable; it was preserved as {0} and rebuilt from Claude's config."
+    "format": "The MCP list file was unreadable; it was preserved as {0} and rebuilt from Claude’s config."
   },
   "ConfigService.corruptStoreRestoredNote": {
     "format": "The MCP list file was unreadable; it was preserved as {0} and restored from the backup of {1}."

@@ -226,7 +226,7 @@ final class StringCatalogTests: XCTestCase {
         // and cross-checked against ConfigServiceTests.swift's real-I/O assertions.
 
         actual["ConfigService.corruptStoreNote"] =
-            "The MCP list file was unreadable; it was preserved as X and rebuilt from Claude's config."
+            "The MCP list file was unreadable; it was preserved as X and rebuilt from Claude’s config."
         actual["ConfigService.corruptStoreRestoredNote"] =
             "The MCP list file was unreadable; it was preserved as X and restored from the backup of Y."
         actual["ConfigService.invalidBackupError"] = "backup X is not a valid config file (Y)"

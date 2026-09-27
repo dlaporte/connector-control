@@ -197,7 +197,7 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(result.store.mcps.count, 3, "rebuilt from Claude's config")
         XCTAssertEqual(result.notes.count, 1)
         XCTAssertTrue(result.notes[0].hasPrefix("The MCP list file was unreadable; it was preserved as mcps.corrupt."))
-        XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude's config."))
+        XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude’s config."))
     }
 
     /// A master list that cannot be read comes back from the newest `mcps` backup that can, so
@@ -273,7 +273,7 @@ final class ConfigServiceTests: XCTestCase {
         let result = try service.loadAndReconcile()
         XCTAssertEqual(Array(result.store.collections.keys), ["Default"], "rebuilt from Claude's config")
         XCTAssertEqual(result.store.mcps.count, 3)
-        XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude's config."))
+        XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude’s config."))
     }
 
     func testCorruptStoreAndMalformedClaudeConfigBothNotesSurface() throws {
@@ -284,7 +284,7 @@ final class ConfigServiceTests: XCTestCase {
         // Both sentences, in reconcile order; the second is the one that says what to do.
         XCTAssertEqual(result.notes.count, 2)
         XCTAssertTrue(result.notes[0].hasPrefix("The MCP list file was unreadable; it was preserved as mcps.corrupt."))
-        XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude's config."))
+        XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude’s config."))
         XCTAssertEqual(result.notes[1],
                        "Claude’s config file is not valid JSON. Your MCP list is safe; "
                        + "use Backups ▸ Restore to repair the file.")

@@ -219,7 +219,7 @@ public class ConfigServiceTests : IDisposable
         Assert.Equal(3, result.Store.Mcps.Count);   // rebuilt from Claude's config
         Assert.Single(result.Notes);
         Assert.StartsWith("The MCP list file was unreadable; it was preserved as mcps.corrupt.", result.Notes[0], StringComparison.Ordinal);
-        Assert.EndsWith(".json and rebuilt from Claude's config.", result.Notes[0], StringComparison.Ordinal);
+        Assert.EndsWith(".json and rebuilt from Claude’s config.", result.Notes[0], StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -316,7 +316,7 @@ public class ConfigServiceTests : IDisposable
         // Rebuilt from Claude's config.
         Assert.Equal(["Default"], result.Store.Collections.Keys);
         Assert.Equal(3, result.Store.Mcps.Count);
-        Assert.EndsWith(".json and rebuilt from Claude's config.", result.Notes[0], StringComparison.Ordinal);
+        Assert.EndsWith(".json and rebuilt from Claude’s config.", result.Notes[0], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -329,7 +329,7 @@ public class ConfigServiceTests : IDisposable
         // Both sentences, in reconcile order; the second is the one that says what to do.
         Assert.Equal(2, result.Notes.Count);
         Assert.StartsWith("The MCP list file was unreadable; it was preserved as mcps.corrupt.", result.Notes[0], StringComparison.Ordinal);
-        Assert.EndsWith(".json and rebuilt from Claude's config.", result.Notes[0], StringComparison.Ordinal);
+        Assert.EndsWith(".json and rebuilt from Claude’s config.", result.Notes[0], StringComparison.Ordinal);
         Assert.Equal("Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.", result.Notes[1]);
     }
 

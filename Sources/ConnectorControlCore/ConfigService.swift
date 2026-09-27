@@ -73,7 +73,7 @@ public struct ConfigService: Sendable {
             } else {
                 notes.append(
                     "The MCP list file was unreadable; it was preserved as "
-                    + "\(corrupt.lastPathComponent) and rebuilt from Claude's config.")
+                    + "\(corrupt.lastPathComponent) and rebuilt from Claude’s config.")
             }
         }
         let servers: [String: JSONValue]

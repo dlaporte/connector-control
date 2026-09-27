@@ -70,7 +70,7 @@ public sealed class ConfigService
             else
             {
                 notes.Add("The MCP list file was unreadable; it was preserved as "
-                    + $"{Path.GetFileName(corruptPath)} and rebuilt from Claude's config.");
+                    + $"{Path.GetFileName(corruptPath)} and rebuilt from Claude’s config.");
             }
         }
         IReadOnlyDictionary<string, JsonValue> servers;
