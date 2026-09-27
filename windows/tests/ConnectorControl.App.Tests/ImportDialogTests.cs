@@ -206,6 +206,58 @@ public class ImportDialogTests
     }
 
     /// <summary>
+    /// The picker is what the user chose New Collection in, and a cancelled or refused name has to
+    /// put the picker itself back, not only the model: the ComboBox's own selection is set before
+    /// the model's setter asks for the name.
+    /// </summary>
+    [Fact]
+    public void ACancelledOrRefusedNewCollectionPutsThePickerBack()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("data-team.json");
+        Write(CollectionDocumentSamples.DataTeam, path);
+        WpfApp.Invoke(() =>
+        {
+            var model = new ImportModel(state, path);
+            var window = Shown(model);
+            try
+            {
+                h.Dialogs.NextPromptAnswer = null;
+                window.TargetBox.SelectedItem = ImportModel.Target.NewCollection;
+                Layout(window);
+                Assert.Equal(new ImportModel.Target("Default"), model.ImportTarget);
+                Assert.Equal(new ImportModel.Target("Default"), window.TargetBox.SelectedItem);
+                Assert.Equal(0, window.TargetBox.SelectedIndex);
+                Assert.Equal(ImportModel.AddModeTitle("Default"), window.CopiesMode.Content);
+                Assert.Equal(Visibility.Collapsed, window.FailureText.Visibility);
+
+                // A name that trims to nothing is refused and puts the picker back the same way,
+                // and the sheet says why.
+                h.Dialogs.NextPromptAnswer = "  ";
+                window.TargetBox.SelectedItem = ImportModel.Target.NewCollection;
+                Layout(window);
+                Assert.Equal(new ImportModel.Target("Default"), window.TargetBox.SelectedItem);
+                Assert.Equal(ImportModel.AddModeTitle("Default"), window.CopiesMode.Content);
+                Assert.Equal(AppState.NameEmptyError, window.FailureText.Text);
+                Assert.Equal(Visibility.Visible, window.FailureText.Visibility);
+
+                // A name it takes stays chosen, and answers the refusal.
+                h.Dialogs.NextPromptAnswer = "Fresh";
+                window.TargetBox.SelectedItem = ImportModel.Target.NewCollection;
+                Layout(window);
+                Assert.Equal(ImportModel.Target.NewCollection, window.TargetBox.SelectedItem);
+                Assert.Equal(ImportModel.AddModeTitle("Fresh"), window.CopiesMode.Content);
+                Assert.Equal(Visibility.Collapsed, window.FailureText.Visibility);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    /// <summary>
     /// A failed Import leaves its reason on the sheet, and switching mode takes it away: the other
     /// mode is another question, as it is on the Mac.
     /// </summary>
