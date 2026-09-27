@@ -453,6 +453,9 @@ final class CollectionDocumentTests: XCTestCase {
         func url(_ url: String) -> [String: JSONValue] { ["type": .string("http"), "url": .string(url)] }
         XCTAssertEqual(warnings(header("Authorization", "Bearer ${API_TOKEN}")), ["headers.Authorization refers to a credential"])
         XCTAssertEqual(warnings(header("Authorization", "${CC_NEEDS:TOKEN}")), ["headers.Authorization refers to a credential"])
+        XCTAssertEqual(warnings(header("Authorization", "Bearer $API_TOKEN")), ["headers.Authorization refers to a credential"],
+                       "a reference without braces")
+        XCTAssertEqual(warnings(header("Authorization", "pa$$word")), ["headers.Authorization looks like a credential"])
         XCTAssertEqual(warnings(header("Authorization", "Bearer abc")), ["headers.Authorization looks like a credential"])
         XCTAssertEqual(warnings(header("Authorization", "Bearer ${A} extra")), ["headers.Authorization looks like a credential"],
                        "a reference beside more than a scheme word")

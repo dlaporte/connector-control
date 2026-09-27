@@ -43,9 +43,10 @@ public static class CredentialHeuristics
 
     /// <summary>
     /// Whether <paramref name="value"/> takes its secret from somewhere else rather than holding it: one
-    /// or more <c>${NAME}</c> references — an environment variable, a <c>${CC_NEEDS:NAME}</c> placeholder
-    /// — with, beside them, at most one word of letters, an authentication scheme such as <c>Bearer</c>.
-    /// Walked one UTF-16 unit at a time, as the Mac walks Unicode scalars.
+    /// or more <c>${NAME}</c> or <c>$NAME</c> references — an environment variable, a
+    /// <c>${CC_NEEDS:NAME}</c> placeholder — with, beside them, at most one word of letters, an
+    /// authentication scheme such as <c>Bearer</c>. Walked one UTF-16 unit at a time, as the Mac walks
+    /// Unicode scalars.
     /// </summary>
     public static bool IsReference(string value)
     {
@@ -61,6 +62,17 @@ public static class CredentialHeuristics
             {
                 references++;
                 index = close + 1;
+            }
+            else if (value[index] == '$' && index + 1 < value.Length && (char.IsAsciiLetter(value[index + 1]) || value[index + 1] == '_'))
+            {
+                // $NAME, as a shell writes a variable: a letter or _, then letters, digits and _.
+                var end = index + 2;
+                while (end < value.Length && (char.IsAsciiLetterOrDigit(value[end]) || value[end] == '_'))
+                {
+                    end++;
+                }
+                references++;
+                index = end;
             }
             else
             {

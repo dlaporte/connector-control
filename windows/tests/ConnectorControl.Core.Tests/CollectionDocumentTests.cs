@@ -612,6 +612,8 @@ public class CollectionDocumentTests
         static IReadOnlyList<string> Url(string url) => Warnings(("type", JsonValue.String("http")), ("url", JsonValue.String(url)));
         Assert.Equal(["headers.Authorization refers to a credential"], Header("Authorization", "Bearer ${API_TOKEN}"));
         Assert.Equal(["headers.Authorization refers to a credential"], Header("Authorization", "${CC_NEEDS:TOKEN}"));
+        Assert.Equal(["headers.Authorization refers to a credential"], Header("Authorization", "Bearer $API_TOKEN"));   // a reference without braces
+        Assert.Equal(["headers.Authorization looks like a credential"], Header("Authorization", "pa$$word"));
         Assert.Equal(["headers.Authorization looks like a credential"], Header("Authorization", "Bearer abc"));
         // A reference beside more than a scheme word.
         Assert.Equal(["headers.Authorization looks like a credential"], Header("Authorization", "Bearer ${A} extra"));

@@ -252,9 +252,9 @@ The sheet decides what leaves the machine:
   secret or holding one, a URL path segment that looks like a key, and a
   URL with a user name or password in it. Each line says how the value is
   held: one that only refers to a credential kept elsewhere, such as
-  `Bearer ${API_TOKEN}` or a placeholder, "refers to a credential", and a
-  URL user with no password "names a user". A connector whose value then
-  holds the credential itself waits for review again.
+  `Bearer ${API_TOKEN}`, `Bearer $API_TOKEN` or a placeholder, "refers to a
+  credential", and a URL user with no password "names a user". A connector
+  whose value then holds the credential itself waits for review again.
   Nothing is ever edited on your behalf; the preview is there so you see
   every byte before it leaves.
 

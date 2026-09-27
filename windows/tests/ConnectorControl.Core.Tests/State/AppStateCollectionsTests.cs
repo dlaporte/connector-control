@@ -4227,6 +4227,7 @@ public class AppStateCollectionsTests
     /// </summary>
     [Theory]
     [InlineData("a header")]
+    [InlineData("a header without braces")]
     [InlineData("a user part")]
     public void ALiteralTokenWhereAReferenceOrAUserWasReviewedWaitsForReview(string label)
     {
@@ -4239,7 +4240,7 @@ public class AppStateCollectionsTests
         var userUrl = label == "a user part";
         Assert.Null(state.Upsert("api", userUrl
             ? Api("https://reader@db.example.com/mcp", null)
-            : Api("https://mcp.example.com/mcp", "Bearer ${API_TOKEN}"), null));
+            : Api("https://mcp.example.com/mcp", label == "a header" ? "Bearer ${API_TOKEN}" : "Bearer $API_TOKEN"), null));
         var file = h.Publish(state, "Default");
         var before = File.ReadAllBytes(file);
         Assert.Null(state.Upsert("api", userUrl

@@ -101,8 +101,9 @@ bullet once the section is about to ship.
   shared value that looks like a credential, a header or URL query or fragment parameter
   named like a secret or holding one, a URL path segment that looks like a key, and a URL
   with a user name or password in it. A value that only refers to a credential kept elsewhere
-  (`Bearer ${API_TOKEN}`, a placeholder) "refers to a credential", and a URL user with no
-  password "names a user"; either one later given the credential itself waits for review.
+  (`Bearer ${API_TOKEN}`, `Bearer $API_TOKEN`, a placeholder) "refers to a credential", and a
+  URL user with no password "names a user"; either one later given the credential itself
+  waits for review.
   A header passed as an argument is read as a header, with or without a space after the
   colon (`Authorization:Bearer …`), so mcp-remote's `--header "Authorization:${AUTH}"`
   reads "refers to a credential".

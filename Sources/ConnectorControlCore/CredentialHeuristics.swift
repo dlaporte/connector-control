@@ -30,9 +30,9 @@ public enum CredentialHeuristics {
     private static let secretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"]
 
     /// Whether `value` takes its secret from somewhere else rather than holding it: one or more
-    /// `${NAME}` references — an environment variable, a `${CC_NEEDS:NAME}` placeholder — with, beside
-    /// them, at most one word of letters, an authentication scheme such as `Bearer`. Walked one
-    /// Unicode scalar at a time, as the Windows mirror walks UTF-16 units.
+    /// `${NAME}` or `$NAME` references — an environment variable, a `${CC_NEEDS:NAME}` placeholder —
+    /// with, beside them, at most one word of letters, an authentication scheme such as `Bearer`.
+    /// Walked one Unicode scalar at a time, as the Windows mirror walks UTF-16 units.
     public static func isReference(_ value: String) -> Bool {
         let scalars = Array(value.unicodeScalars)
         var rest: [Unicode.Scalar] = []
@@ -44,6 +44,13 @@ public enum CredentialHeuristics {
                scalars[(index + 2)..<close].allSatisfy({ isASCIILetterOrDigit($0) || $0 == "_" || $0 == ":" }) {
                 references += 1
                 index = close + 1
+            } else if scalars[index] == "$", index + 1 < scalars.count,
+                      ("A"..."Z").contains(scalars[index + 1]) || ("a"..."z").contains(scalars[index + 1]) || scalars[index + 1] == "_" {
+                // `$NAME`, as a shell writes a variable: a letter or `_`, then letters, digits and `_`.
+                var end = index + 2
+                while end < scalars.count, isASCIILetterOrDigit(scalars[end]) || scalars[end] == "_" { end += 1 }
+                references += 1
+                index = end
             } else {
                 rest.append(scalars[index])
                 index += 1

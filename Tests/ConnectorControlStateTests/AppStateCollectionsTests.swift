@@ -3649,6 +3649,8 @@ final class AppStateCollectionsTests: XCTestCase {
     func testALiteralTokenWhereAReferenceOrAUserWasReviewedWaitsForReview() throws {
         for (label, reviewed, literal) in [
             ("a header", ["Authorization": JSONValue.string("Bearer ${API_TOKEN}")], ["Authorization": JSONValue.string("Bearer \(longToken)")]),
+            ("a header without braces", ["Authorization": JSONValue.string("Bearer $API_TOKEN")],
+             ["Authorization": JSONValue.string("Bearer \(longToken)")]),
             ("a user part", [:], [:]),
         ] {
             let (h, state) = AppStateHarness.started()
