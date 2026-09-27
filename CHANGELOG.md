@@ -110,9 +110,10 @@ bullet once the section is about to ship.
   reads "refers to a credential".
 - The sheet also lists every mark it could not place and every path this machine keeps
   back that the document would otherwise carry as written, a copy of a ticked path in any
-  field included, all at once, each with its connector and field; Publish and Export wait until every one is ticked where it now sits, forgotten
-  or released. The folder a collection publishes into never travels: Use
-  `${COLLECTION_DIR}` answers it by rewriting the connector.
+  field included, all at once, each with its connector and field; Publish and Export wait
+  until every one is ticked where it now sits, forgotten or released. The folder a
+  collection publishes into never travels: Use `${COLLECTION_DIR}` answers it by rewriting
+  the connector.
 - A path marked on your other machine, in a collection published from there, is kept back
   from every collection this machine publishes, and stays kept back once that machine drops
   the mark, stops publishing the collection or deletes it, even when the change arrives
@@ -200,9 +201,10 @@ bullet once the section is about to ship.
   Claude's configuration was last applied from if that is local, else the first local one
   by name, else a new, empty one named "Default" ("Default 2" and so on if that is
   taken). Before, it went into the subscribed collection, where it could be neither
-  edited nor deleted, and the next Review & Apply deleted it from Claude. The notification names where it went; at launch, when nothing is notified,
-  the banner does. The same holds when the collections file can't be read for a moment
-  while the app is running, as when a sync tool is halfway through writing it.
+  edited nor deleted, and the next Review & Apply deleted it from Claude. The notification
+  names where it went; at launch, when nothing is notified, the banner does. The same
+  holds when the collections file can't be read for a moment while the app is running, as
+  when a sync tool is halfway through writing it.
 - When the active collection has no connectors, the popover (Mac) and flyout (Windows) say
   "No connectors in “<collection>”." with a Manage Collections button beneath, which opens
   the Collections window on that collection. Before, they said "No connectors configured
