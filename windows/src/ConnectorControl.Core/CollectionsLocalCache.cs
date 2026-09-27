@@ -84,13 +84,34 @@ public sealed record CollectionsLocalCache
     /// <summary>
     /// The lists a stopped publish left behind, as <see cref="PublishBinding"/> holds them while it
     /// publishes, and the one no binding holds: the folders of the collections that bore the name
-    /// before.
+    /// before. Every property is <c>init</c>, as <see cref="PublishBinding"/>'s are, so a change to one
+    /// field is <c>record with { … }</c> and a field added later comes through every change that does
+    /// not name it. The sets are copied ordinally however they are given.
     /// </summary>
     public sealed record KeptRecord
     {
-        public IReadOnlySet<string> MarkedValues { get; }
-        public IReadOnlySet<string> ReleasedValues { get; }
-        public IReadOnlySet<string> PublishedFolders { get; }
+        private readonly HashSet<string> markedValues = new(StringComparer.Ordinal);
+        private readonly HashSet<string> releasedValues = new(StringComparer.Ordinal);
+        private readonly HashSet<string> publishedFolders = new(StringComparer.Ordinal);
+        private readonly HashSet<string> departedFolders = new(StringComparer.Ordinal);
+
+        public IReadOnlySet<string> MarkedValues
+        {
+            get => markedValues;
+            init => markedValues = new HashSet<string>(value, StringComparer.Ordinal);
+        }
+
+        public IReadOnlySet<string> ReleasedValues
+        {
+            get => releasedValues;
+            init => releasedValues = new HashSet<string>(value, StringComparer.Ordinal);
+        }
+
+        public IReadOnlySet<string> PublishedFolders
+        {
+            get => publishedFolders;
+            init => publishedFolders = new HashSet<string>(value, StringComparer.Ordinal);
+        }
 
         /// <summary>
         /// The folders that collections which once bore this name, and have since left the store,
@@ -100,7 +121,11 @@ public sealed record CollectionsLocalCache
         /// Kept apart from <see cref="PublishedFolders"/> because a Stop would otherwise fold them
         /// into the next collection's own, and withdraw the release the dialog offered for them.
         /// </summary>
-        public IReadOnlySet<string> DepartedFolders { get; }
+        public IReadOnlySet<string> DepartedFolders
+        {
+            get => departedFolders;
+            init => departedFolders = new HashSet<string>(value, StringComparer.Ordinal);
+        }
 
         /// <summary>
         /// The origin the collection this record belongs to published under, while that collection
@@ -163,8 +188,7 @@ public sealed record CollectionsLocalCache
         public static KeptRecord RememberingMarks(IEnumerable<string> marks, KeptRecord? earlier) =>
             earlier is null
                 ? new KeptRecord(marks)
-                : new KeptRecord(earlier.MarkedValues.Concat(marks), earlier.ReleasedValues, earlier.PublishedFolders,
-                                 earlier.DepartedFolders, earlier.Origin);
+                : earlier with { MarkedValues = earlier.MarkedValues.Concat(marks).ToHashSet(StringComparer.Ordinal) };
 
         /// <summary>
         /// What a rename files under a name a departed collection left a record under. A rename

@@ -224,6 +224,25 @@ final class CollectionsLocalCacheTests: XCTestCase {
         XCTAssertEqual(remembered.rememberingMarks(in: file), remembered, "remembering the same marks again changes nothing")
     }
 
+    /// Remembering marks changes a record's marked paths alone. Every field is filled, so a field
+    /// added later fails the first check until it is filled here too; the comparison then walks every
+    /// field, so it is checked without being named.
+    func testRememberingMarksKeepsEveryOtherFieldOfTheRecord() {
+        let earlier = CollectionsLocalCache.KeptRecord(markedValues: ["/a"], releasedValues: ["/r"], publishedFolders: ["/Users/d/pub"],
+                                                       departedFolders: ["/Users/d/gone"], origin: "0c9b7d1e")
+        for child in Mirror(reflecting: earlier).children {
+            let label = child.label ?? "?"
+            let value = Mirror(reflecting: child.value)
+            XCTAssertFalse(value.displayStyle == .optional && value.children.isEmpty, "\(label) is filled")
+            if let set = child.value as? Set<String> { XCTAssertFalse(set.isEmpty, "\(label) is filled") }
+        }
+        let remembered = CollectionsLocalCache.KeptRecord.remembering(marks: ["/b"], after: earlier)
+        XCTAssertEqual(remembered.markedValues, ["/a", "/b"])
+        for (x, y) in zip(Mirror(reflecting: remembered).children, Mirror(reflecting: earlier).children) where x.label != "markedValues" {
+            XCTAssertEqual(x.value as? AnyHashable, y.value as? AnyHashable, "\(x.label ?? "?") came through")
+        }
+    }
+
     func testAnUnknownVersionDecodesAsMalformed() {
         XCTAssertThrowsError(try CollectionsLocalCache.decode(.object(["version": .int(9), "synced": .object([:]), "published": .object([:])])))
     }

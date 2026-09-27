@@ -310,6 +310,31 @@ public sealed class CollectionsLocalCacheTests : IDisposable
         Assert.Equal(remembered, remembered.RememberingMarks(file));
     }
 
+    /// <summary>
+    /// Remembering marks changes a record's marked paths alone. Every field is filled, so a field added
+    /// later fails the first check until it is filled here too; the comparison then walks every field,
+    /// so it is checked without being named.
+    /// </summary>
+    [Fact]
+    public void RememberingMarksKeepsEveryOtherFieldOfTheRecord()
+    {
+        var earlier = new CollectionsLocalCache.KeptRecord(["/a"], ["/r"], ["/Users/d/pub"], ["/Users/d/gone"], "0c9b7d1e");
+        var fields = typeof(CollectionsLocalCache.KeptRecord).GetProperties();
+        foreach (var property in fields.Where(p => p.Name != nameof(CollectionsLocalCache.KeptRecord.IsEmpty)))
+        {
+            var value = property.GetValue(earlier);
+            Assert.True(value is IReadOnlySet<string> set ? set.Count > 0 : value is not null, $"{property.Name} is filled");
+        }
+        var remembered = CollectionsLocalCache.KeptRecord.RememberingMarks(["/b"], earlier);
+        Assert.Equal(new HashSet<string>(["/a", "/b"]), remembered.MarkedValues);
+        foreach (var property in fields.Where(p => p.Name != nameof(CollectionsLocalCache.KeptRecord.MarkedValues)))
+        {
+            var (x, y) = (property.GetValue(remembered), property.GetValue(earlier));
+            Assert.True(x is IReadOnlySet<string> xs && y is IReadOnlySet<string> ys ? xs.SetEquals(ys) : Equals(x, y),
+                $"{property.Name} came through");
+        }
+    }
+
     [Fact]
     public void AnUnknownVersionDecodesAsMalformed()
     {
