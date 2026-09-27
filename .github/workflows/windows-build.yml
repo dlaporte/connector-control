@@ -111,6 +111,25 @@ jobs:
         with:
           global-json-file: windows/global.json
 
+      # Dependabot bumps the vpk packer in the tool manifest but never the Velopack library the
+      # app references: its compatibility table has no net10.0-windows10.0.19041, so it calls
+      # every newer Velopack "not compatible" (dependabot-core#13923). A vpk-only bump would
+      # pack one version's Setup.exe, Update.exe and stub under the other's library. On such a
+      # pull request, push the matching Velopack bump to its branch. A version this step cannot
+      # read fails too.
+      - name: vpk and Velopack at one version
+        shell: pwsh
+        run: |
+          $tool = (Get-Content windows/.config/dotnet-tools.json -Raw | ConvertFrom-Json).tools.vpk.version
+          $project = [xml](Get-Content windows/src/ConnectorControl.App/ConnectorControl.App.csproj -Raw)
+          $reference = $project.SelectSingleNode("//PackageReference[@Include='Velopack']")
+          $library = if ($reference) { $reference.GetAttribute('Version') }
+          if (-not $tool -or -not $library -or $tool -ne $library) {
+            Write-Output "::error::vpk is '$tool' in windows/.config/dotnet-tools.json but Velopack is '$library' in windows/src/ConnectorControl.App/ConnectorControl.App.csproj; set both to the same version."
+            exit 1
+          }
+          Write-Output "vpk and Velopack are both $tool."
+
       - name: Restore
         shell: pwsh
         run: dotnet restore windows/ConnectorControl.slnx
