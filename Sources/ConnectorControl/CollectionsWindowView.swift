@@ -107,7 +107,10 @@ struct CollectionsWindowView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
+        // Both columns always: with no sidebar toggle, a sidebar dragged shut would have no control
+        // to bring it back. The Windows sidebar can be narrowed but never closed, so neither can
+        // this one.
+        NavigationSplitView(columnVisibility: .constant(.all)) {
             sidebar
         } detail: {
             detail

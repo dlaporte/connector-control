@@ -136,7 +136,8 @@
   <Grid Margin="10">
     <Grid.ColumnDefinitions>
       <!-- Resizable, as the Mac's split view is: a long collection name is otherwise elided
-           here for good. -->
+           here for good. Never closed, as the Mac's sidebar is pinned open: the splitter stops
+           at the minimum width. -->
       <ColumnDefinition Width="200" MinWidth="140" />
       <ColumnDefinition Width="Auto" />
       <ColumnDefinition Width="*" MinWidth="380" />
