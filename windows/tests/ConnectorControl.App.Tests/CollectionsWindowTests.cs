@@ -709,6 +709,9 @@ public class CollectionsWindowTests
             // The slot is the row's full height and 8 px wider than the box on either side, so a
             // click that lands beside the box still ticks it.
             Assert.Equal(InRow<Button>(window, first, "RowBody").ActualHeight, slot.ActualHeight);
+            // The row is at least the Mac's rowHeight, all of it a target.
+            Assert.Equal(30.0, (double)window.FindResource("RowHeight"));
+            Assert.True(slot.ActualHeight >= 30.0, $"row height {slot.ActualHeight}");
             Assert.Equal(new Thickness(8, 0, 8, 0), slot.Padding);
             Assert.Equal(20 + 16, slot.ActualWidth);
             // The box itself takes no clicks and no focus: the slot and the row do.

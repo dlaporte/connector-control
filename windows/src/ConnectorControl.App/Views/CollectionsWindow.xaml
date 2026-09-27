@@ -14,6 +14,8 @@
          idiom: a Fluent button stands 32 high at the bar's Padding of 10,4, and the bar keeps it
          clear of its own top rule, where the Mac bar holds small controls. -->
     <system:Double x:Key="SelectionBarHeight">44</system:Double>
+    <!-- A connector row's height, all of which answers a click: the Mac's rowHeight. -->
+    <system:Double x:Key="RowHeight">30</system:Double>
     <!-- The chain's tooltip, which the model answers from the item itself. -->
     <views:CollectionSourceTooltipConverter x:Key="SourceTooltip" />
     <!-- A header pill's words, which the model answers from the pill itself. -->
@@ -115,7 +117,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="4" MinHeight="30">
+            <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="4" MinHeight="{StaticResource RowHeight}">
               <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
             </Border>
             <ControlTemplate.Triggers>
