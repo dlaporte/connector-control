@@ -115,7 +115,7 @@ public class FlyoutWindowTests
         Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
         Directory.Delete(folder, recursive: true);
         File.WriteAllText(folder, "not a folder");
-        Assert.Null(state.Upsert("blocked", new McpEntry(AppStateHarness.Remote("https://example.test/")), null));
+        Assert.Null(state.Upsert("aws-mcp", new McpEntry(AppStateHarness.Remote("https://example.test/")), "aws-mcp"));
         Assert.NotNull(state.PublishError);
         return folder;
     }
