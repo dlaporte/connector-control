@@ -254,7 +254,9 @@ The sheet decides what leaves the machine:
   held: one that only refers to a credential kept elsewhere, such as
   `Bearer ${API_TOKEN}`, `Bearer $API_TOKEN` or a placeholder, "refers to a
   credential", and a URL user with no password "names a user". A connector
-  whose value then holds the credential itself waits for review again.
+  whose value then holds the credential itself waits for review again, and
+  so does one given a new path segment or bare parameter that looks like a
+  key: each position is a line of its own.
   Nothing is ever edited on your behalf; the preview is there so you see
   every byte before it leaves.
 

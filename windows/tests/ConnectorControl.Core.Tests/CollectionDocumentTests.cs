@@ -577,6 +577,32 @@ public class CollectionDocumentTests
     }
 
     /// <summary>
+    /// A warning names the field, a section and position, and the kind, and never a value: a secret in
+    /// every place a URL can hold one leaves no trace of itself in the warnings. Keyed by position, a
+    /// second path segment or bare parameter is a key of its own, so approving one approves no other.
+    /// </summary>
+    [Fact]
+    public void CredentialWarningsHoldOnlyTheFieldThePositionAndTheKind()
+    {
+        var secrets = Enumerable.Range(1, 8).Select(i => $"Zq8RkT2mWx7LpN4vHc9J{i:00}Ab").ToArray();
+        var url = $"https://user:{secrets[0]}@m.example.com/p/{secrets[1]}/x/{secrets[2]}"
+            + $"?api_key={secrets[3]}&{secrets[4]}&{secrets[5]}=1#{secrets[6]}&t={secrets[7]}";
+        var warnings = CollectionDocument.CredentialWarnings(
+            JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String(url))), new HashSet<string>(StringComparer.Ordinal));
+        Assert.Equal(
+            [
+                "url.userinfo looks like a credential", "url.path[1] looks like a credential", "url.path[3] looks like a credential",
+                "url.query.api_key looks like a credential", "url.query[1] looks like a credential",
+                "url.fragment[0] looks like a credential", "url.fragment.t looks like a credential",
+            ],
+            warnings);
+        foreach (var secret in secrets)
+        {
+            Assert.DoesNotContain(warnings, w => w.Contains(secret, StringComparison.Ordinal));
+        }
+    }
+
+    /// <summary>
     /// A header written as an argument, as a <c>--header</c> flag takes it, is read as a header is, with or
     /// without a space after the colon. A URL, a host and port, and a Windows path are not headers.
     /// </summary>
@@ -638,14 +664,14 @@ public class CollectionDocumentTests
     {
         static IReadOnlyList<string> Warnings(string url) => CollectionDocument.CredentialWarnings(
             JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String(url))), new HashSet<string>(StringComparer.Ordinal));
-        Assert.Equal(["url.path looks like a credential"], Warnings("https://actions.example.com/mcp/sk-ak-a1b2c3/sse"));
-        Assert.Equal(["url.path looks like a credential"], Warnings("https://mcp.example.com/s/Zq8RkT2mWx7LpN4vHc9J/mcp"));   // a random segment
+        Assert.Equal(["url.path[1] looks like a credential"], Warnings("https://actions.example.com/mcp/sk-ak-a1b2c3/sse"));
+        Assert.Equal(["url.path[1] looks like a credential"], Warnings("https://mcp.example.com/s/Zq8RkT2mWx7LpN4vHc9J/mcp"));   // a random segment
         Assert.Equal(["url.fragment.access_token looks like a credential"], Warnings("https://mcp.example.com/mcp#access_token=abc"));
-        // A bare parameter is keyed by its section alone: the key holds nothing of the secret.
-        Assert.Equal(["url.fragment looks like a credential"], Warnings("https://mcp.example.com/mcp#Zq8RkT2mWx7LpN4vHc9J"));
-        Assert.Equal(["url.query looks like a credential"], Warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J"));
+        // A bare parameter is keyed by its position: the key holds nothing of the secret.
+        Assert.Equal(["url.fragment[0] looks like a credential"], Warnings("https://mcp.example.com/mcp#Zq8RkT2mWx7LpN4vHc9J"));
+        Assert.Equal(["url.query[0] looks like a credential"], Warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J"));
         // And so is one whose name looks like a secret.
-        Assert.Equal(["url.query looks like a credential"], Warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J=ghp_q"));
+        Assert.Equal(["url.query[0] looks like a credential"], Warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J=ghp_q"));
         Assert.Equal(["url.query.k looks like a credential"], Warnings("https://mcp.example.com/mcp?k=Zq8RkT2mWx7LpN4vHc9J"));   // a random query value
         Assert.Empty(Warnings("https://mcp.example.com/v2/servers/gmail-tools/sse#section-2"));
     }

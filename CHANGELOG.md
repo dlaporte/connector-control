@@ -103,7 +103,8 @@ bullet once the section is about to ship.
   with a user name or password in it. A value that only refers to a credential kept elsewhere
   (`Bearer ${API_TOKEN}`, `Bearer $API_TOKEN`, a placeholder) "refers to a credential", and a
   URL user with no password "names a user"; either one later given the credential itself
-  waits for review.
+  waits for review. Each URL path segment and bare parameter is a line of its own, so a new
+  one that looks like a key waits for review too.
   A header passed as an argument is read as a header, with or without a space after the
   colon (`Authorization:Bearer …`), so mcp-remote's `--header "Authorization:${AUTH}"`
   reads "refers to a credential".

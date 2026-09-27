@@ -1524,10 +1524,13 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     /// <summary>
     /// The parts of a URL that can carry a secret, each named as a warning names it with how it holds
     /// it: <c>userinfo</c>, a user part before the host (a literal with a password, or a user that looks
-    /// like a token; a reference; or a user alone); <c>path</c>, a path segment that looks like a
-    /// credential or a random token, the way some servers take their key; and <c>query.NAME</c> or
+    /// like a token; a reference; or a user alone); <c>path[i]</c>, the i-th path segment where it looks
+    /// like a credential or a random token, the way some servers take their key; and <c>query.NAME</c> or
     /// <c>fragment.NAME</c>, a parameter of the query, or of the fragment read as one
-    /// (<see cref="CredentialKindOf"/>; a bare parameter only when it looks like a secret). None for text
+    /// (<see cref="CredentialKindOf"/>; a bare parameter only when it looks like a secret, keyed
+    /// <c>query[i]</c> or <c>fragment[i]</c> by its position). A key is a field, a section and a position,
+    /// never a value, and each position is a key of its own, so a review of one segment or parameter
+    /// approves no other. None for text
     /// with no <c>://</c>. Split by hand, one UTF-16 unit at a time as the Mac walks Unicode scalars,
     /// rather than by a URL parser: both platforms split it the same way, and a URL a parser would refuse
     /// can still carry a token.
@@ -1565,9 +1568,13 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         var beforeFragment = hash < 0 ? tail : tail[..hash];
         var question = beforeFragment.IndexOf('?');
         var path = question < 0 ? beforeFragment : beforeFragment[..question];
-        if (path.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(LooksLikeSecret))
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        for (var i = 0; i < segments.Length; i++)
         {
-            parts.Add(("path", CredentialKind.Literal));
+            if (LooksLikeSecret(segments[i]))
+            {
+                parts.Add(($"path[{i}]", CredentialKind.Literal));
+            }
         }
         if (question >= 0)
         {
@@ -1583,20 +1590,22 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     /// <summary>
     /// The <c>&amp;</c>-separated parameters of a query or a fragment that can carry a secret, each as
     /// <c>section.NAME</c> with how it holds it. A bare parameter is its own value, and counts only when
-    /// it looks like a secret. It, and a parameter whose name looks like one, is keyed by its section
-    /// alone, as the path is: the key must hold nothing derived from a secret.
+    /// it looks like a secret. It, and a parameter whose name looks like one, is keyed <c>section[i]</c>
+    /// by its position, as a path segment is: the key must hold nothing derived from a secret.
     /// </summary>
     private static IEnumerable<(string Part, CredentialKind Kind)> Parameters(string text, string section)
     {
-        foreach (var pair in text.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        var pairs = text.Split('&', StringSplitOptions.RemoveEmptyEntries);
+        for (var index = 0; index < pairs.Length; index++)
         {
+            var pair = pairs[index];
             var equals = pair.IndexOf('=');
             var name = equals < 0 ? pair : pair[..equals];
             var kind = equals >= 0 ? CredentialKindOf(name, pair[(equals + 1)..])
                 : LooksLikeSecret(name) ? CredentialKind.Literal : null;
             if (kind is { } found)
             {
-                yield return (equals < 0 || LooksLikeSecret(name) ? section : $"{section}.{name}", found);
+                yield return (equals < 0 || LooksLikeSecret(name) ? $"{section}[{index}]" : $"{section}.{name}", found);
             }
         }
     }

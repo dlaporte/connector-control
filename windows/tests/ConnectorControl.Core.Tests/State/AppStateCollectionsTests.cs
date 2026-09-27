@@ -4221,6 +4221,30 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// A URL reviewed with a long id in its path, a false positive the author approved, and later given a
+    /// key in another segment, or a second bare parameter, waits for review: each position is a warning
+    /// of its own, so approving one approves no other.
+    /// </summary>
+    [Theory]
+    [InlineData("a segment")]
+    [InlineData("a bare parameter")]
+    public void AnotherSegmentOrParameterInAReviewedUrlWaitsForReview(string label)
+    {
+        const string id = "0123456789abcdef0123456789abcdef";
+        var (reviewed, gains) = label == "a segment"
+            ? ($"https://m.example.com/mcp/{id}/sse", $"https://m.example.com/mcp/{id}/sk-ak-{LongToken}/sse")
+            : ($"https://m.example.com/mcp?{id}", $"https://m.example.com/mcp?{id}&{LongToken}");
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.Upsert("api", new McpEntry(JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String(reviewed)))), null));
+        var file = h.Publish(state, "Default");
+        var before = File.ReadAllBytes(file);
+        Assert.Null(state.Upsert("api", new McpEntry(JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String(gains)))), "api"));
+        Assert.Equal(AppState.NewCredentialError("api"), state.PublishError?.Message);
+        Assert.Equal(before, File.ReadAllBytes(file));
+    }
+
+    /// <summary>
     /// A header reviewed while it only referred to a credential, and a URL reviewed with a user and no
     /// password, each later given a literal token, wait for review: the warning says how the field holds
     /// its credential, so the literal is one the review has not seen.

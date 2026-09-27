@@ -427,6 +427,24 @@ final class CollectionDocumentTests: XCTestCase {
                        ["args[1].query.access_token looks like a credential", "args[2].userinfo looks like a credential"])
     }
 
+    /// A warning names the field, a section and position, and the kind, and never a value: a secret in
+    /// every place a URL can hold one leaves no trace of itself in the warnings. Keyed by position, a
+    /// second path segment or bare parameter is a key of its own, so approving one approves no other.
+    func testCredentialWarningsHoldOnlyTheFieldThePositionAndTheKind() {
+        let secrets = (1...8).map { "Zq8RkT2mWx7LpN4vHc9J\(String(format: "%02d", $0))Ab" }
+        let url = "https://user:\(secrets[0])@m.example.com/p/\(secrets[1])/x/\(secrets[2])"
+            + "?api_key=\(secrets[3])&\(secrets[4])&\(secrets[5])=1#\(secrets[6])&t=\(secrets[7])"
+        let warnings = CollectionDocument.credentialWarnings(.object(["type": .string("http"), "url": .string(url)]), sharedEnv: [])
+        XCTAssertEqual(warnings, [
+            "url.userinfo looks like a credential", "url.path[1] looks like a credential", "url.path[3] looks like a credential",
+            "url.query.api_key looks like a credential", "url.query[1] looks like a credential",
+            "url.fragment[0] looks like a credential", "url.fragment.t looks like a credential",
+        ])
+        for secret in secrets {
+            XCTAssertFalse(warnings.contains { $0.contains(secret) }, "a warning holds \(secret)")
+        }
+    }
+
     /// A header written as an argument, as a `--header` flag takes it, is read as a header is, with
     /// or without a space after the colon. A URL, a host and port, and a Windows path are not headers.
     func testCredentialWarningsReadAHeaderWrittenAsAnArgument() {
@@ -478,14 +496,14 @@ final class CollectionDocumentTests: XCTestCase {
         func warnings(_ url: String) -> [String] {
             CollectionDocument.credentialWarnings(.object(["type": .string("http"), "url": .string(url)]), sharedEnv: [])
         }
-        XCTAssertEqual(warnings("https://actions.example.com/mcp/sk-ak-a1b2c3/sse"), ["url.path looks like a credential"])
-        XCTAssertEqual(warnings("https://mcp.example.com/s/Zq8RkT2mWx7LpN4vHc9J/mcp"), ["url.path looks like a credential"],
+        XCTAssertEqual(warnings("https://actions.example.com/mcp/sk-ak-a1b2c3/sse"), ["url.path[1] looks like a credential"])
+        XCTAssertEqual(warnings("https://mcp.example.com/s/Zq8RkT2mWx7LpN4vHc9J/mcp"), ["url.path[1] looks like a credential"],
                        "a random segment")
         XCTAssertEqual(warnings("https://mcp.example.com/mcp#access_token=abc"), ["url.fragment.access_token looks like a credential"])
-        XCTAssertEqual(warnings("https://mcp.example.com/mcp#Zq8RkT2mWx7LpN4vHc9J"), ["url.fragment looks like a credential"],
-                       "a bare parameter is keyed by its section alone: the key holds nothing of the secret")
-        XCTAssertEqual(warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J"), ["url.query looks like a credential"])
-        XCTAssertEqual(warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J=ghp_q"), ["url.query looks like a credential"],
+        XCTAssertEqual(warnings("https://mcp.example.com/mcp#Zq8RkT2mWx7LpN4vHc9J"), ["url.fragment[0] looks like a credential"],
+                       "a bare parameter is keyed by its position: the key holds nothing of the secret")
+        XCTAssertEqual(warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J"), ["url.query[0] looks like a credential"])
+        XCTAssertEqual(warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J=ghp_q"), ["url.query[0] looks like a credential"],
                        "and so is one whose name looks like a secret")
         XCTAssertEqual(warnings("https://mcp.example.com/mcp?k=Zq8RkT2mWx7LpN4vHc9J"), ["url.query.k looks like a credential"],
                        "a random query value")
