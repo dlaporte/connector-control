@@ -208,7 +208,7 @@ struct EditorWindowView: View {
                     TextField(EditorModel.argumentPrompt, text: $row.value,
                               prompt: asks ? Text(EditorModel.needsPath) : nil)
                         .font(.system(.body, design: .monospaced))
-                        .disabled(model.isReadOnly && !asks)
+                        .disabled(!model.isLive(arg: index))
                 }
                 Button { model.deleteArg(id: row.id) } label: {
                     Image(systemName: "xmark.circle")
@@ -326,7 +326,7 @@ struct EditorWindowView: View {
                              published: nil) {
                 SecureField(EditorModel.tokenLabel, text: $model.bearerToken,
                             prompt: asksToken ? Text(EditorModel.needsValue) : nil)
-                    .disabled(model.isReadOnly && !asksToken)
+                    .disabled(!model.bearerTokenIsLive)
             }
             Text(EditorModel.bearerCaption)
                 .font(.caption)
@@ -341,7 +341,7 @@ struct EditorWindowView: View {
                              published: nil) {
                 SecureField(EditorModel.headerValueLabel, text: $model.headerValue,
                             prompt: asksHeaderValue ? Text(EditorModel.needsValue) : nil)
-                    .disabled(model.isReadOnly && !asksHeaderValue)
+                    .disabled(!model.headerValueIsLive)
             }
         case .oauthClient:
             TextField(EditorModel.clientIDLabel, text: $model.oauthClientID)
@@ -353,7 +353,7 @@ struct EditorWindowView: View {
                              published: nil) {
                 SecureField(EditorModel.clientSecretLabel, text: $model.oauthClientSecret,
                             prompt: asksSecret ? Text(EditorModel.needsValue) : nil)
-                    .disabled(model.isReadOnly && !asksSecret)
+                    .disabled(!model.clientSecretIsLive)
             }
             Text(EditorModel.oauthSecretCaption)
                 .font(.caption)

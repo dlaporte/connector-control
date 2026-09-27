@@ -4,11 +4,61 @@ namespace ConnectorControl.Core.State;
 public sealed class ArgRow : ObservableObject
 {
     private string value;
+    private EditorModel? editor;
 
     public ArgRow(string value)
     {
         this.value = value;
     }
 
-    public string Value { get => value; set => Set(ref this.value, value); }
+    /// <summary>Whether the value is still owed, and the hint for its marker, follow it.</summary>
+    public string Value
+    {
+        get => value;
+        set
+        {
+            if (Set(ref this.value, value))
+            {
+                Raise(nameof(Owed));
+                Raise(nameof(Hint));
+            }
+        }
+    }
+
+    // MARK: the editor's rules
+
+    // What EditorModel says about this argument, as properties the row's template binds, for the
+    // reason EnvRow gives. The model indexes arguments by position for the Mac's sake; a row asks
+    // by itself, which is the identity those answers resolve through anyway.
+
+    /// <summary><see cref="EditorModel.AsksForArg"/>: the box is the live placeholder one.</summary>
+    public bool Asks => editor?.AsksFor(this) ?? false;
+
+    /// <summary><see cref="EditorModel.IsLiveArg"/>: whether the box takes typing in this form.</summary>
+    public bool Live => editor?.IsLive(this) ?? true;
+
+    /// <summary><see cref="EditorModel.IsOwedArg"/>: the caution ring and the phrase under the box.</summary>
+    public bool Owed => editor?.IsOwed(this) ?? false;
+
+    /// <summary><see cref="EditorModel.PlaceholderHintForArg"/>: what the document said about finding the path.</summary>
+    public string? Hint => editor?.PlaceholderHint(this);
+
+    /// <summary><see cref="EditorModel.PublishedHintForArg"/>: what a published collection sends in its place.</summary>
+    public string? PublishedHint => editor?.PublishedHint(this);
+
+    /// <summary>The editor whose rules this row answers with, set as the row joins its list.</summary>
+    internal void Attach(EditorModel owner)
+    {
+        editor = owner;
+        RaiseRules();
+    }
+
+    internal void RaiseRules()
+    {
+        Raise(nameof(Asks));
+        Raise(nameof(Live));
+        Raise(nameof(Owed));
+        Raise(nameof(Hint));
+        Raise(nameof(PublishedHint));
+    }
 }

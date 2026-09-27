@@ -237,6 +237,9 @@ public sealed class EditorModel : ObservableObject, IDisposable
         command = "";
         Args = [];
         EnvRows = [];
+        // Before Load, so every row that ever joins either list answers with this model's rules.
+        Args.CollectionChanged += OnRowsChanged;
+        EnvRows.CollectionChanged += OnRowsChanged;
         additional = new Dictionary<string, JsonValue>(StringComparer.Ordinal);
         jsonText = config.EditorText();
         recoveredJson = PasteRecovery.Recover(jsonText);
@@ -677,7 +680,9 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     /// <summary>EditorModel.swift's <c>placeholderHint(arg:)</c>; C# has no argument labels to tell the two apart.</summary>
     public string? PlaceholderHintForArg(int index) =>
-        index >= 0 && index < Args.Count ? Hint(Args[index].Value) : null;
+        index >= 0 && index < Args.Count ? PlaceholderHint(Args[index]) : null;
+
+    internal string? PlaceholderHint(ArgRow row) => Hint(row.Value);
 
     public bool BearerTokenIsPlaceholder => Placeholder.ContainsMarker(bearerToken);
 
@@ -700,14 +705,31 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// The same question for an argument. Takes an index because that is what a view has, and
     /// resolves it through the row's identity so a row inserted above does not move the answer.
     /// </summary>
-    public bool AsksForArg(int index) =>
-        index >= 0 && index < Args.Count && askedArgs.Contains(Args[index]);
+    public bool AsksForArg(int index) => index >= 0 && index < Args.Count && AsksFor(Args[index]);
+
+    /// <summary>The row the index above resolves to, asked directly: what an <see cref="ArgRow"/> binds.</summary>
+    internal bool AsksFor(ArgRow row) => askedArgs.Contains(row);
+
+    /// <summary>
+    /// Whether an argument's box takes typing: always in a form that is the user's, and in a
+    /// read-only one only where the document asks this machine for the value.
+    /// </summary>
+    public bool IsLiveArg(int index) => !IsReadOnly || AsksForArg(index);
+
+    internal bool IsLive(ArgRow row) => !IsReadOnly || AsksFor(row);
 
     public bool AsksForBearerToken { get; private set; }
 
     public bool AsksForHeaderValue { get; private set; }
 
     public bool AsksForClientSecret { get; private set; }
+
+    /// <summary>The same question for the three secret fields, whose boxes the view enables by it.</summary>
+    public bool BearerTokenIsLive => !IsReadOnly || AsksForBearerToken;
+
+    public bool HeaderValueIsLive => !IsReadOnly || AsksForHeaderValue;
+
+    public bool ClientSecretIsLive => !IsReadOnly || AsksForClientSecret;
 
     // MARK: owed values
 
@@ -723,9 +745,9 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public bool IsOwed(EnvRow row) => Owed(AsksFor(row), IsPlaceholder(row), row.Value);
 
     /// <summary>EditorModel.swift's <c>isOwed(arg:)</c>; C# has no argument labels to tell the two apart.</summary>
-    public bool IsOwedArg(int index) =>
-        index >= 0 && index < Args.Count
-        && Owed(AsksForArg(index), Placeholder.ContainsMarker(Args[index].Value), Args[index].Value);
+    public bool IsOwedArg(int index) => index >= 0 && index < Args.Count && IsOwed(Args[index]);
+
+    internal bool IsOwed(ArgRow row) => Owed(AsksFor(row), Placeholder.ContainsMarker(row.Value), row.Value);
 
     public bool BearerTokenOwed => Owed(AsksForBearerToken, BearerTokenIsPlaceholder, bearerToken);
 
@@ -768,10 +790,13 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// position would sit beside whichever row happened to slide into it. Null for a row added
     /// since the window opened, which the published document has never described.
     /// </summary>
-    public string? PublishedHintForArg(int index)
+    public string? PublishedHintForArg(int index) =>
+        index >= 0 && index < Args.Count ? PublishedHint(Args[index]) : null;
+
+    internal string? PublishedHint(ArgRow row)
     {
-        if (!state.CollectionsCache.Published.ContainsKey(CollectionName) || index < 0 || index >= Args.Count
-            || !openArgIndexByRow.TryGetValue(Args[index], out var published))
+        if (!state.CollectionsCache.Published.ContainsKey(CollectionName)
+            || !openArgIndexByRow.TryGetValue(row, out var published))
         {
             return null;
         }
@@ -783,8 +808,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// The last marks placed on the opened arguments, and where they went. The view asks for a
-    /// hint once per row on every render, and the placement changes only with the record. Kept by
+    /// The last marks placed on the opened arguments, and where they went. Each row asks for its
+    /// hint whenever its rules are raised, and the placement changes only with the record. Kept by
     /// reference, where the Mac compares values: a publish record's dictionaries are replaced
     /// whole, never edited in place.
     /// </summary>
@@ -879,6 +904,40 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     private void OnArgsChanged(object? sender, NotifyCollectionChangedEventArgs e) => EvaluateRequiredTool();
 
+    /// <summary>A row joining either list answers with this model's rules from then on.</summary>
+    private void OnRowsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        foreach (var row in e.NewItems ?? Array.Empty<object>())
+        {
+            switch (row)
+            {
+                case ArgRow arg:
+                    arg.Attach(this);
+                    break;
+                case EnvRow env:
+                    env.Attach(this);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Every row's rules asked again: what the rows ask for, owe and are hinted with follow the
+    /// snapshot, the form's lock, the sidecar's needs and the publish record, none of which a row
+    /// hears about itself.
+    /// </summary>
+    private void RaiseRowRules()
+    {
+        foreach (var row in Args)
+        {
+            row.RaiseRules();
+        }
+        foreach (var row in EnvRows)
+        {
+            row.RaiseRules();
+        }
+    }
+
     private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (Affects(e, nameof(AppState.ToolStatuses)))
@@ -906,6 +965,14 @@ public sealed class EditorModel : ObservableObject, IDisposable
             Raise(nameof(CanSave));
             Raise(nameof(ShowJsonTip));
             Raise(nameof(HasPublishedHints));
+            Raise(nameof(BearerTokenIsLive));
+            Raise(nameof(HeaderValueIsLive));
+            Raise(nameof(ClientSecretIsLive));
+            // A hint belongs to the subscription that asked for the value, so it must not
+            // outlive it.
+            Raise(nameof(BearerTokenHint));
+            Raise(nameof(HeaderValueHint));
+            Raise(nameof(ClientSecretHint));
             if (retook)
             {
                 Raise(nameof(AsksForBearerToken));
@@ -915,6 +982,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
                 Raise(nameof(HeaderValueOwed));
                 Raise(nameof(ClientSecretOwed));
             }
+            RaiseRowRules();
         }
     }
 
@@ -953,6 +1021,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
     {
         state.PropertyChanged -= OnStateChanged;
         Args.CollectionChanged -= OnArgsChanged;
+        Args.CollectionChanged -= OnRowsChanged;
+        EnvRows.CollectionChanged -= OnRowsChanged;
     }
 
     // MARK: list editing
@@ -1059,6 +1129,9 @@ public sealed class EditorModel : ObservableObject, IDisposable
         isUntouchedTemplate = isUntouchedTemplate && config == Target.Entry.Config;
         EvaluateRequiredTool();
         RaiseAll();
+        // The rows are new, and the records they answer from were carried onto them after they
+        // joined their lists.
+        RaiseRowRules();
     }
 
     /// <summary>

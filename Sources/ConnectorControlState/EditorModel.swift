@@ -454,11 +454,23 @@ public final class EditorModel: ObservableObject {
         args.indices.contains(index) && askedArgs.contains(args[index].id)
     }
 
+    /// Whether an argument's field takes typing: always in a form that is the user's, and in a
+    /// read-only one only where the document asks this machine for the value. EditorModel.cs
+    /// calls this `IsLiveArg`, as it names `AsksForArg`.
+    public func isLive(arg index: Int) -> Bool { !isReadOnly || asksFor(arg: index) }
+
     public var asksForBearerToken: Bool { askedBearerToken }
 
     public var asksForHeaderValue: Bool { askedHeaderValue }
 
     public var asksForClientSecret: Bool { askedClientSecret }
+
+    /// The same question for the three secret fields, which the view enables by it.
+    public var bearerTokenIsLive: Bool { !isReadOnly || asksForBearerToken }
+
+    public var headerValueIsLive: Bool { !isReadOnly || asksForHeaderValue }
+
+    public var clientSecretIsLive: Bool { !isReadOnly || asksForClientSecret }
 
     // MARK: - Owed values
 

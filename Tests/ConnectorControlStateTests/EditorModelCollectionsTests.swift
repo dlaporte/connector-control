@@ -511,6 +511,37 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertFalse(notion.clientSecretOwed)
     }
 
+    /// Live: every field takes typing in a form that is the user's, and a read-only form's only
+    /// where the document asked this machine for the value when the window opened. What the view
+    /// enables a field by.
+    func testAFieldIsLiveInTheUsersOwnFormOrWhereTheDocumentAsks() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        try subscribeToDataTeam(rig)
+
+        let ledger = rig.editor("ledger", in: "Data team")
+        XCTAssertTrue(ledger.isReadOnly)
+        XCTAssertTrue(ledger.isLive(arg: 0), "the path the document asks for")
+        ledger.args[0].value = "/Users/d/ledger/dist/index.js"
+        XCTAssertTrue(ledger.isLive(arg: 0), "filling it does not lock it")
+        ledger.args.append(ArgRow(value: "--quiet"))
+        XCTAssertFalse(ledger.isLive(arg: 1), "an argument the document did not ask for is the author's")
+        XCTAssertFalse(ledger.isLive(arg: 7), "an index past the end is the author's too")
+
+        let notion = rig.editor("notion", in: "Data team")
+        XCTAssertTrue(notion.bearerTokenIsLive)
+        XCTAssertFalse(notion.headerValueIsLive)
+        XCTAssertFalse(notion.clientSecretIsLive)
+
+        // A form that stops being the author's locks nothing.
+        rig.state.stopSyncing("Data team")
+        XCTAssertFalse(ledger.isReadOnly)
+        XCTAssertTrue(ledger.isLive(arg: 1))
+        XCTAssertTrue(ledger.isLive(arg: 7))
+        XCTAssertTrue(notion.headerValueIsLive)
+        XCTAssertTrue(notion.clientSecretIsLive)
+    }
+
     // MARK: - Published hints
 
     func testAPublishedConnectorCarriesTheAuthorsHintForEachStrippedValue() throws {

@@ -647,6 +647,95 @@ public class EditorModelCollectionsTests
         Assert.False(notion.ClientSecretOwed);
     }
 
+    /// <summary>
+    /// Live: every field takes typing in a form that is the user's, and a read-only form's only
+    /// where the document asked this machine for the value when the window opened. What the view
+    /// enables a field by.
+    /// </summary>
+    [Fact]
+    public void AFieldIsLiveInTheUsersOwnFormOrWhereTheDocumentAsks()
+    {
+        using var rig = new EditorRig();
+        SubscribeToDataTeam(rig);
+
+        using var ledger = rig.Editor("ledger", "Data team");
+        Assert.True(ledger.IsReadOnly);
+        Assert.True(ledger.IsLiveArg(0));   // the path the document asks for
+        ledger.Args[0].Value = "/Users/d/ledger/dist/index.js";
+        Assert.True(ledger.IsLiveArg(0));   // filling it does not lock it
+        ledger.Args.Add(new ArgRow("--quiet"));
+        Assert.False(ledger.IsLiveArg(1));   // an argument the document did not ask for is the author's
+        Assert.False(ledger.IsLiveArg(7));   // an index past the end is the author's too
+
+        using var notion = rig.Editor("notion", "Data team");
+        Assert.True(notion.BearerTokenIsLive);
+        Assert.False(notion.HeaderValueIsLive);
+        Assert.False(notion.ClientSecretIsLive);
+
+        // A form that stops being the author's locks nothing.
+        rig.State.StopSyncing("Data team");
+        Assert.False(ledger.IsReadOnly);
+        Assert.True(ledger.IsLiveArg(1));
+        Assert.True(ledger.IsLiveArg(7));
+        Assert.True(notion.HeaderValueIsLive);
+        Assert.True(notion.ClientSecretIsLive);
+    }
+
+    /// <summary>
+    /// C#-only: the Mac's rows are structs its view reads the model's answers for on every render,
+    /// so nothing there needs raising. Here each row carries the model's answers as properties its
+    /// template binds, and raises them when its own value or name moves or the model says the
+    /// snapshot, the lock, the sidecar or the publish record did.
+    /// </summary>
+    [Fact]
+    public void RowsCarryTheModelsAnswersAndRaiseThemWhenTheyMove()
+    {
+        using var rig = new EditorRig();
+        SubscribeToDataTeam(rig);
+
+        using var dbt = rig.Editor("dbt", "Data team");
+        var token = EnvRow(dbt, "DBT_TOKEN");
+        Assert.Equal(dbt.AsksFor(token), token.Asks);
+        Assert.True(token.Owed);
+        Assert.Equal(dbt.PlaceholderHint(token), token.Hint);
+        Assert.NotNull(token.Hint);
+        var raised = new List<string>();
+        token.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");
+        token.Value = "secret_abc";
+        Assert.Contains(nameof(Core.State.EnvRow.Owed), raised);
+        Assert.Contains(nameof(Core.State.EnvRow.Hint), raised);
+        Assert.False(token.Owed);
+        Assert.Null(token.Hint);
+
+        using var ledger = rig.Editor("ledger", "Data team");
+        var arg = Assert.Single(ledger.Args);
+        Assert.True(arg.Asks);
+        Assert.True(arg.Live);
+        Assert.True(arg.Owed);
+        Assert.Equal(ledger.PlaceholderHintForArg(0), arg.Hint);
+        Assert.NotNull(arg.Hint);
+        // A row added since the window opened answers too, from the moment it joins the list.
+        ledger.Args.Add(new ArgRow("--quiet"));
+        var added = ledger.Args[1];
+        Assert.False(added.Asks);
+        Assert.False(added.Live);
+
+        // Stop Syncing retakes the snapshot and unlocks the form, and takes the needs the hints
+        // came from with it: every row hears it.
+        var argRaised = new List<string>();
+        arg.PropertyChanged += (_, e) => argRaised.Add(e.PropertyName ?? "");
+        var addedRaised = new List<string>();
+        added.PropertyChanged += (_, e) => addedRaised.Add(e.PropertyName ?? "");
+        raised.Clear();
+        rig.State.StopSyncing("Data team");
+        Assert.Contains(nameof(ArgRow.Hint), argRaised);
+        Assert.Contains(nameof(ArgRow.Live), addedRaised);
+        Assert.Contains(nameof(Core.State.EnvRow.Asks), raised);
+        Assert.True(added.Live);
+        Assert.Null(arg.Hint);
+        Assert.False(token.Asks);
+    }
+
     // MARK: published hints
 
     [Fact]
@@ -753,6 +842,13 @@ public class EditorModelCollectionsTests
         Assert.Contains(nameof(EditorModel.HasHeaderNote), raised);
         Assert.Contains(nameof(EditorModel.ShowJsonTip), raised);
         Assert.Contains(nameof(EditorModel.HasPublishedHints), raised);
+        // The secret fields' live rule follows the lock, and their hints the needs they came from.
+        Assert.Contains(nameof(EditorModel.BearerTokenIsLive), raised);
+        Assert.Contains(nameof(EditorModel.HeaderValueIsLive), raised);
+        Assert.Contains(nameof(EditorModel.ClientSecretIsLive), raised);
+        Assert.Contains(nameof(EditorModel.BearerTokenHint), raised);
+        Assert.Contains(nameof(EditorModel.HeaderValueHint), raised);
+        Assert.Contains(nameof(EditorModel.ClientSecretHint), raised);
     }
     [Fact]
     public void StopSyncingRetakesTheSnapshotSoAFilledSecretIsMaskedAgain()
