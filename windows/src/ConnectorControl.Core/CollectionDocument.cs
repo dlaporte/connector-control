@@ -1559,6 +1559,11 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
             }
             else
             {
+                // A user alone is a literal only where the credential heuristics tell it from a name: a known
+                // prefix, 32 or more letters and digits, or a random token of 20 or more. A shorter token with
+                // no known prefix reads as a user name, so one put where a user was reviewed keeps the
+                // reviewed "names a user" key and publishes: a residual, since nothing but its text tells
+                // such a token from a name.
                 parts.Add(("userinfo", CredentialHeuristics.IsReference(userinfo) ? CredentialKind.Reference
                     : LooksLikeSecret(userinfo) ? CredentialKind.Literal : CredentialKind.UserOnly));
             }

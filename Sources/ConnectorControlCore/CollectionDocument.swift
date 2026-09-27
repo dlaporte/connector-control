@@ -868,6 +868,11 @@ public struct CollectionDocument: Equatable, Sendable {
                 let password = String(String.UnicodeScalarView(userinfo[(colon + 1)...]))
                 parts.append(("userinfo", password.isEmpty ? .userOnly : CredentialHeuristics.isReference(password) ? .reference : .literal))
             } else {
+                // A user alone is a literal only where the credential heuristics tell it from a name: a
+                // known prefix, 32 or more letters and digits, or a random token of 20 or more. A shorter
+                // token with no known prefix reads as a user name, so one put where a user was reviewed
+                // keeps the reviewed "names a user" key and publishes: a residual, since nothing but its
+                // text tells such a token from a name.
                 let user = String(String.UnicodeScalarView(userinfo))
                 parts.append(("userinfo", CredentialHeuristics.isReference(user) ? .reference : looksLikeSecret(user) ? .literal : .userOnly))
             }

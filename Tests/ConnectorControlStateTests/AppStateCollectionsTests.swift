@@ -3674,6 +3674,7 @@ final class AppStateCollectionsTests: XCTestCase {
             ("a header without braces", ["Authorization": JSONValue.string("Bearer $API_TOKEN")],
              ["Authorization": JSONValue.string("Bearer \(longToken)")]),
             ("a user part", [:], [:]),
+            ("a token as the user", [:], [:]),
         ] {
             let (h, state) = AppStateHarness.started()
             defer { h.dispose() }
@@ -3682,12 +3683,13 @@ final class AppStateCollectionsTests: XCTestCase {
                 if !headers.isEmpty { object["headers"] = .object(headers) }
                 return MCPEntry(config: .object(object))
             }
-            let userURL = label == "a user part"
+            let userURL = label == "a user part" || label == "a token as the user"
             XCTAssertNil(state.upsert(name: "api", entry: api(userURL ? "https://reader@db.example.com/mcp" : "https://mcp.example.com/mcp", reviewed),
                                       renamedFrom: nil))
             let file = try h.publish(state, "Default")
             let before = try Data(contentsOf: file)
-            XCTAssertNil(state.upsert(name: "api", entry: api(userURL ? "https://reader:\(longToken)@db.example.com/mcp" : "https://mcp.example.com/mcp",
+            let gained = label == "a token as the user" ? "https://\(longToken)@db.example.com/mcp" : "https://reader:\(longToken)@db.example.com/mcp"
+            XCTAssertNil(state.upsert(name: "api", entry: api(userURL ? gained : "https://mcp.example.com/mcp",
                                                               literal), renamedFrom: "api"))
             XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("api"), label)
             XCTAssertEqual(try Data(contentsOf: file), before, label)

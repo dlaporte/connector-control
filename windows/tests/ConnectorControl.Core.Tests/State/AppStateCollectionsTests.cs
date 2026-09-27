@@ -4253,6 +4253,7 @@ public class AppStateCollectionsTests
     [InlineData("a header")]
     [InlineData("a header without braces")]
     [InlineData("a user part")]
+    [InlineData("a token as the user")]
     public void ALiteralTokenWhereAReferenceOrAUserWasReviewedWaitsForReview(string label)
     {
         using var h = new AppStateHarness();
@@ -4261,14 +4262,14 @@ public class AppStateCollectionsTests
             ? JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String(url)))
             : JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String(url)),
                 ("headers", JsonValue.Object(("Authorization", JsonValue.String(authorization))))));
-        var userUrl = label == "a user part";
+        var userUrl = label is "a user part" or "a token as the user";
         Assert.Null(state.Upsert("api", userUrl
             ? Api("https://reader@db.example.com/mcp", null)
             : Api("https://mcp.example.com/mcp", label == "a header" ? "Bearer ${API_TOKEN}" : "Bearer $API_TOKEN"), null));
         var file = h.Publish(state, "Default");
         var before = File.ReadAllBytes(file);
         Assert.Null(state.Upsert("api", userUrl
-            ? Api($"https://reader:{LongToken}@db.example.com/mcp", null)
+            ? Api(label == "a token as the user" ? $"https://{LongToken}@db.example.com/mcp" : $"https://reader:{LongToken}@db.example.com/mcp", null)
             : Api("https://mcp.example.com/mcp", $"Bearer {LongToken}"), "api"));
         Assert.Equal(AppState.NewCredentialError("api"), state.PublishError?.Message);
         Assert.Equal(before, File.ReadAllBytes(file));

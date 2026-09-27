@@ -484,6 +484,12 @@ final class CollectionDocumentTests: XCTestCase {
         XCTAssertEqual(warnings(url("https://reader:s3cret@db.example.com/mcp")), ["url.userinfo looks like a credential"])
         XCTAssertEqual(warnings(url("https://ghp_abc@git.example.com/mcp")), ["url.userinfo looks like a credential"],
                        "a token as the user")
+        XCTAssertEqual(warnings(url("https://a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6@git.example.com/mcp")), ["url.userinfo looks like a credential"],
+                       "32 letters and digits as the user")
+        XCTAssertEqual(warnings(url("https://Zq8RkT2mWx7LpN4vHc9J@git.example.com/mcp")), ["url.userinfo looks like a credential"],
+                       "a random token as the user")
+        XCTAssertEqual(warnings(url("https://k9Xa2mQ7pL4w@git.example.com/mcp")), ["url.userinfo names a user"],
+                       "the residual: a short token with no known prefix reads as a user name")
         XCTAssertEqual(warnings(url("https://mcp.example.com/mcp?api_key=${KEY}")), ["url.query.api_key refers to a credential"])
         XCTAssertEqual(warnings(url("https://mcp.example.com/mcp#token=${KEY}")), ["url.fragment.token refers to a credential"])
         XCTAssertEqual(warnings(["command": .string("node"), "args": .array([.string("postgres://reader@localhost/db")])]),

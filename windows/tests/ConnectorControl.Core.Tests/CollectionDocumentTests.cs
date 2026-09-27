@@ -649,6 +649,10 @@ public class CollectionDocumentTests
         Assert.Equal(["url.userinfo refers to a credential"], Url("https://reader:${DB_PASSWORD}@db.example.com/mcp"));
         Assert.Equal(["url.userinfo looks like a credential"], Url("https://reader:s3cret@db.example.com/mcp"));
         Assert.Equal(["url.userinfo looks like a credential"], Url("https://ghp_abc@git.example.com/mcp"));   // a token as the user
+        Assert.Equal(["url.userinfo looks like a credential"], Url("https://a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6@git.example.com/mcp"));   // 32 letters and digits
+        Assert.Equal(["url.userinfo looks like a credential"], Url("https://Zq8RkT2mWx7LpN4vHc9J@git.example.com/mcp"));   // a random token
+        // The residual: a short token with no known prefix reads as a user name.
+        Assert.Equal(["url.userinfo names a user"], Url("https://k9Xa2mQ7pL4w@git.example.com/mcp"));
         Assert.Equal(["url.query.api_key refers to a credential"], Url("https://mcp.example.com/mcp?api_key=${KEY}"));
         Assert.Equal(["url.fragment.token refers to a credential"], Url("https://mcp.example.com/mcp#token=${KEY}"));
         Assert.Equal(["args[0].userinfo names a user"],
