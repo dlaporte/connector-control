@@ -1097,7 +1097,9 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// Rewrites a published collection's intent in memory, for the save that follows to write. A
     /// collection that publishes nothing is left alone, and so is the sidecar when the edit changes
-    /// nothing — every assignment announces itself to the windows watching it.
+    /// nothing — every assignment announces itself to the windows watching it. A mark the edit drops
+    /// from a collection another machine publishes is remembered here
+    /// (<see cref="CollectionsLocalCache.RememberingMarks"/>).
     /// </summary>
     private void EditPublishIntent(string collection, Func<PublishIntent, PublishIntent> edit)
     {
@@ -1110,7 +1112,9 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return;
         }
+        var before = CollectionsFile;
         SetSidecarEntry(collection, entry with { Publish = record with { Intent = intent } });
+        CollectionsCache = CollectionsCache.RememberingMarks(before, CollectionsFile);
     }
 
     /// <summary>
@@ -1340,12 +1344,15 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return error;
         }
+        var before = CollectionsFile;
         CollectionsFile = new CollectionsFile(Without(CollectionsFile.Collections, name));
         CollectionsCache = CollectionsCache with { Synced = Without(CollectionsCache.Synced, name) };
         // Deleting a collection is not the author's word that the paths it kept back may travel: the
         // connector that carried one is still in another collection, or comes back by an import, a
-        // copy or an ingest. What Stop Publishing remembers, this remembers too.
+        // copy or an ingest. What Stop Publishing remembers, this remembers too — this machine's
+        // binding, and the marks of a record another machine publishes.
         RememberWhatWasKeptBack(name);
+        CollectionsCache = CollectionsCache.RememberingMarks(before, CollectionsFile);
         ForgetOriginsOfDepartedCollections();
         ForgetSource(name);
         if (PublishError is { } failure && failure.Collection == name)
@@ -2418,11 +2425,13 @@ public sealed class AppState : ObservableObject, IDisposable
             return;
         }
         var folder = CollectionsCache.Published.GetValueOrDefault(collection)?.Folder;
+        var before = CollectionsFile;
         var stripped = entry with { Publish = null };
         // An entry with nothing left to say is no entry at all, which is how the sidecar writes it
         // and how the next load reads it back.
         SetSidecarEntry(collection, stripped.Equals(CollectionsFile.Entry.Local) ? null : stripped);
         RememberWhatWasKeptBack(collection);
+        CollectionsCache = CollectionsCache.RememberingMarks(before, CollectionsFile);
         if (PublishError?.Collection == collection)
         {
             PublishError = null;
@@ -2742,8 +2751,18 @@ public sealed class AppState : ObservableObject, IDisposable
             }
             return;
         }
-        CollectionsFile = loaded.Reconciled(Store);
-        var cache = CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath).Reconciled(CollectionsFile);
+        var reconciled = loaded.Reconciled(Store);
+        var fromDisk = CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath).Reconciled(reconciled);
+        // What the sidecar's publish records marked and no longer do is remembered: a record that went
+        // with a collection the store no longer holds and, once there is an earlier load to compare
+        // with, a record another machine's sidecar arrives without.
+        var cache = fromDisk.RememberingMarks(loaded, reconciled);
+        if (hasLoadedCollectionsOnce)
+        {
+            cache = cache.RememberingMarks(CollectionsFile, reconciled);
+        }
+        var rememberedMarks = !DictionaryEquality.Equal(cache.Kept, fromDisk.Kept);
+        CollectionsFile = reconciled;
         // Only this machine writes its cache, so a record of the last apply made in memory is never
         // older than the file's — and it may be newer, when the save it waited for was held back.
         // The names that apply wrote are half of that record and travel with it: dropping them would
@@ -2754,6 +2773,19 @@ public sealed class AppState : ObservableObject, IDisposable
         ForgetOriginsOfDepartedCollections();
         collectionsLoaded = true;
         hasLoadedCollectionsOnce = true;
+        // Saved at once: the record the marks came from may be gone from disk already, and the next
+        // launch would have nothing left to remember them by.
+        if (rememberedMarks)
+        {
+            try
+            {
+                CollectionsCache.Save(Service.Paths.CollectionsCachePath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                collectionsNote = Friendly(ex);
+            }
+        }
         // What is on disk NOW, not what this app last wrote: another machine's sidecar is the
         // file the next save has to differ from, or a change that happens to restore our old
         // bytes would be skipped and reverted by the reload after it.
@@ -2907,12 +2939,12 @@ public sealed class AppState : ObservableObject, IDisposable
         // with the master list, so a collection the author publishes from another machine of their own
         // marks its paths here too. A colleague's collection is another matter — this machine never
         // sees their sidecar — and their document reaches it as placeholders anyway.
+        // Once a record stops marking a path, Kept remembers it (CollectionsLocalCache.RememberingMarks).
         foreach (var entry in CollectionsFile.Collections.Values)
         {
             if (entry.Publish is { } record)
             {
-                values.UnionWith(record.Intent.PathMarks.Values
-                    .SelectMany(marks => marks.Values).Select(mark => mark.Value).OfType<string>());
+                values.UnionWith(record.Intent.MarkedValues);
             }
         }
         // What a stopped publish left behind keeps its say, so publishing the collection again — or

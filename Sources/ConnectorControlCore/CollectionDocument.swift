@@ -187,6 +187,10 @@ public struct PublishIntent: Equatable, Sendable {
         return moved
     }
 
+    /// The text of every path this intent marks, whichever connector holds it: what a document
+    /// written through it carries as a placeholder, and so what must never appear in it as written.
+    public var markedValues: Set<String> { Set(pathMarks.values.flatMap { $0.values.compactMap(\.value) }) }
+
     /// The same intent with `connector`'s path marks replaced; an empty set drops its entry.
     public func replacingPathMarks(of connector: String, with marks: [JSONPointer: PathMark]) -> PublishIntent {
         var replaced = self

@@ -155,6 +155,18 @@ public sealed record CollectionsLocalCache
         }
 
         /// <summary>
+        /// Paths a publish record in the sidecar marked, remembered under its name once the record no
+        /// longer marks them, merged with whatever is already remembered there. Only the paths: a
+        /// record names no folder this machine published into, and no origin that would make any
+        /// folder a collection's own.
+        /// </summary>
+        public static KeptRecord RememberingMarks(IEnumerable<string> marks, KeptRecord? earlier) =>
+            earlier is null
+                ? new KeptRecord(marks)
+                : new KeptRecord(earlier.MarkedValues.Concat(marks), earlier.ReleasedValues, earlier.PublishedFolders,
+                                 earlier.DepartedFolders, earlier.Origin);
+
+        /// <summary>
         /// What a rename files under a name a departed collection left a record under. A rename
         /// can land on a record only where the collection that left it has gone — a live
         /// collection's name is refused — so the record already there is a departed collection's,
@@ -570,5 +582,35 @@ public sealed record CollectionsLocalCache
             Published = vouched,
             Kept = remembered,
         };
+    }
+
+    /// <summary>
+    /// Remembers the paths the sidecar's publish records mark in <paramref name="before"/> and no longer
+    /// mark in <paramref name="after"/>, for every collection this machine has no publish binding for.
+    /// A mark in the sidecar is kept back on every machine the sidecar reaches, and on one that does not
+    /// publish the collection it is the only thing that marks the path. The record losing it — the
+    /// collection deleted or unpublished, or the connector deleted, here or on another machine, or the
+    /// collection dropped by a master list restored from a backup that does not hold it — is not the
+    /// author's word that the path may travel. A collection this machine publishes is left to its
+    /// binding, whose lists the author's reviewed Publish replaces and which a binding that goes leaves
+    /// in <see cref="Kept"/> itself (<see cref="KeptRecord.Remembering"/>).
+    /// </summary>
+    public CollectionsLocalCache RememberingMarks(CollectionsFile before, CollectionsFile after)
+    {
+        var remembered = new Dictionary<string, KeptRecord>(Kept, StringComparer.Ordinal);
+        foreach (var (name, entry) in before.Collections)
+        {
+            if (Published.ContainsKey(name) || entry.Publish is not { } record)
+            {
+                continue;
+            }
+            var departed = record.Intent.MarkedValues.ToHashSet(StringComparer.Ordinal);
+            departed.ExceptWith(after.Collections.GetValueOrDefault(name)?.Publish?.Intent.MarkedValues ?? new HashSet<string>());
+            if (departed.Count > 0)
+            {
+                remembered[name] = KeptRecord.RememberingMarks(departed, remembered.GetValueOrDefault(name));
+            }
+        }
+        return this with { Kept = remembered };
     }
 }

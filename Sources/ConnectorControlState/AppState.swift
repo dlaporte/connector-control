@@ -809,14 +809,18 @@ public final class AppState: ObservableObject {
 
     /// Rewrites a published collection's intent in memory, for the save that follows to write.
     /// A collection that publishes nothing is left alone, and so is the sidecar when the edit
-    /// changes nothing — every assignment announces itself to the windows watching it.
+    /// changes nothing — every assignment announces itself to the windows watching it. A mark the
+    /// edit drops from a collection another machine publishes is remembered here
+    /// (`CollectionsLocalCache.rememberingMarks(leaving:for:)`).
     private func editPublishIntent(of collection: String, _ edit: (inout PublishIntent) -> Void) {
         guard var record = collectionsFile.collections[collection]?.publish else { return }
         var intent = record.intent
         edit(&intent)
         guard intent != record.intent else { return }
+        let before = collectionsFile
         record.intent = intent
         collectionsFile.collections[collection]?.publish = record
+        collectionsCache = collectionsCache.rememberingMarks(leaving: before, for: collectionsFile)
     }
 
     // MARK: - Quit
@@ -932,12 +936,15 @@ public final class AppState: ObservableObject {
             return AppState.lastLocalCollectionError
         }
         if let error = store.deleteCollection(named: name, isLocal: { kind(of: $0) == .local }) { return error }
+        let before = collectionsFile
         collectionsFile.collections.removeValue(forKey: name)
         collectionsCache.synced.removeValue(forKey: name)
         // Deleting a collection is not the author's word that the paths it kept back may travel:
         // the connector that carried one is still in another collection, or comes back by an
-        // import, a copy or an ingest. What Stop Publishing remembers, this remembers too.
+        // import, a copy or an ingest. What Stop Publishing remembers, this remembers too — this
+        // machine's binding, and the marks of a record another machine publishes.
         rememberWhatWasKeptBack(of: name)
+        collectionsCache = collectionsCache.rememberingMarks(leaving: before, for: collectionsFile)
         forgetOriginsOfDepartedCollections()
         forgetSource(name)
         if publishError?.collection == name { publishError = nil }
@@ -1611,6 +1618,7 @@ public final class AppState: ObservableObject {
     public func stopPublishing(_ collection: String, deleteFile: Bool) {
         guard var entry = collectionsFile.collections[collection], let record = entry.publish else { return }
         let folder = collectionsCache.published[collection]?.folder
+        let before = collectionsFile
         entry.publish = nil
         // An entry with nothing left to say is no entry at all, which is how the sidecar writes
         // it and how the next load reads it back.
@@ -1620,6 +1628,7 @@ public final class AppState: ObservableObject {
             collectionsFile.collections[collection] = entry
         }
         rememberWhatWasKeptBack(of: collection)
+        collectionsCache = collectionsCache.rememberingMarks(leaving: before, for: collectionsFile)
         if publishError?.collection == collection { publishError = nil }
         persistStore()
         // ${COLLECTION_DIR} has no folder here any more: Claude gets the token as written, and
@@ -1762,9 +1771,10 @@ public final class AppState: ObservableObject {
         // travels with the master list, so a collection the author publishes from another machine
         // of their own marks its paths here too. A colleague's collection is another matter — this
         // machine never sees their sidecar — and their document reaches it as placeholders anyway.
+        // Once a record stops marking a path, `kept` remembers it (`rememberingMarks(leaving:for:)`).
         for entry in collectionsFile.collections.values {
             guard let record = entry.publish else { continue }
-            values.formUnion(record.intent.pathMarks.values.flatMap { $0.values.compactMap(\.value) })
+            values.formUnion(record.intent.markedValues)
         }
         // What a stopped publish left behind keeps its say, so publishing the collection again —
         // or another collection carrying one of its paths — is still refused.
@@ -1992,8 +2002,15 @@ public final class AppState: ObservableObject {
             }
             return
         }
-        collectionsFile = loaded.reconciled(with: store)
-        var cache = CollectionsLocalCache.load(from: service.paths.collectionsCacheURL).reconciled(with: collectionsFile)
+        let reconciled = loaded.reconciled(with: store)
+        let fromDisk = CollectionsLocalCache.load(from: service.paths.collectionsCacheURL).reconciled(with: reconciled)
+        // What the sidecar's publish records marked and no longer do is remembered: a record that
+        // went with a collection the store no longer holds and, once there is an earlier load to
+        // compare with, a record another machine's sidecar arrives without.
+        var cache = fromDisk.rememberingMarks(leaving: loaded, for: reconciled)
+        if hasLoadedCollectionsOnce { cache = cache.rememberingMarks(leaving: collectionsFile, for: reconciled) }
+        let rememberedMarks = cache.kept != fromDisk.kept
+        collectionsFile = reconciled
         // Only this machine writes its cache, so a record of the last apply made in memory is never
         // older than the file's — and it may be newer, when the save it waited for was held back.
         // The names that apply wrote are half of that record and travel with it: dropping them
@@ -2006,6 +2023,15 @@ public final class AppState: ObservableObject {
         forgetOriginsOfDepartedCollections()
         collectionsLoaded = true
         hasLoadedCollectionsOnce = true
+        // Saved at once: the record the marks came from may be gone from disk already, and the
+        // next launch would have nothing left to remember them by.
+        if rememberedMarks {
+            do {
+                try collectionsCache.save(to: service.paths.collectionsCacheURL, staging: service.paths.stagingDirURL)
+            } catch {
+                collectionsNote = AppState.friendly(error)
+            }
+        }
         // What is on disk NOW, not what this app last wrote: another machine's sidecar is the
         // file the next save has to differ from, or a change that happens to restore our old
         // bytes would be skipped and reverted by the reload after it.

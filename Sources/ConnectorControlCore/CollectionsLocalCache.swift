@@ -95,6 +95,16 @@ public struct CollectionsLocalCache: Equatable, Sendable {
                 origin: binding.origin ?? earlier?.origin)
         }
 
+        /// Paths a publish record in the sidecar marked, remembered under its name once the record no
+        /// longer marks them, merged with whatever is already remembered there. Only the paths: a
+        /// record names no folder this machine published into, and no origin that would make any
+        /// folder a collection's own.
+        public static func remembering(marks: Set<String>, after earlier: KeptRecord?) -> KeptRecord {
+            var record = earlier ?? KeptRecord()
+            record.markedValues.formUnion(marks)
+            return record
+        }
+
         /// What a rename files under a name a departed collection left a record under. A rename
         /// can land on a record only where the collection that left it has gone — a live
         /// collection's name is refused — so the record already there is a departed collection's,
@@ -249,6 +259,26 @@ public struct CollectionsLocalCache: Equatable, Sendable {
             kept: remembered,
             lastAppliedCollection: lastAppliedCollection,
             lastAppliedNames: lastAppliedNames)
+    }
+
+    /// Remembers the paths the sidecar's publish records mark in `before` and no longer mark in
+    /// `after`, for every collection this machine has no publish binding for. A mark in the sidecar
+    /// is kept back on every machine the sidecar reaches, and on one that does not publish the
+    /// collection it is the only thing that marks the path. The record losing it — the collection
+    /// deleted or unpublished, or the connector deleted, here or on another machine, or the
+    /// collection dropped by a master list restored from a backup that does not hold it — is not the
+    /// author's word that the path may travel. A collection this machine publishes is left to its
+    /// binding, whose lists the author's reviewed Publish replaces and which a binding that goes
+    /// leaves in `kept` itself (`KeptRecord.remembering(_:after:)`).
+    public func rememberingMarks(leaving before: CollectionsFile, for after: CollectionsFile) -> CollectionsLocalCache {
+        var cache = self
+        for (name, entry) in before.collections where published[name] == nil {
+            guard let marks = entry.publish?.intent.markedValues else { continue }
+            let departed = marks.subtracting(after.collections[name]?.publish?.intent.markedValues ?? [])
+            guard !departed.isEmpty else { continue }
+            cache.kept[name] = KeptRecord.remembering(marks: departed, after: cache.kept[name])
+        }
+        return cache
     }
 }
 

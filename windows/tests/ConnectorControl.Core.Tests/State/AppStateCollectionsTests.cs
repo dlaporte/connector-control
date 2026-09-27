@@ -2753,6 +2753,161 @@ public class AppStateCollectionsTests
         Assert.False(JsonText.FileContains(document, MarkedPath));
     }
 
+    // MARK: another machine's marks outlive its record
+
+    /// <summary>
+    /// Team, published from the author's other machine, marks <c>MarkedPath</c> in the sidecar. This
+    /// machine publishes its active collection, and a copy of the marked connector lands there and is
+    /// refused. Returns the active collection's document.
+    /// </summary>
+    private static string CopyAnotherMachinesMarkedPath(AppStateHarness h, AppState state)
+    {
+        var home = state.ActiveCollection;
+        Assert.Null(state.CreateActiveCopy("Team"));
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath)), null, "Team"));
+        state.SwitchCollection(home);
+        var all = state.CollectionsFile.Collections.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        all["Team"] = new CollectionsFile.Entry(CollectionKind.Local, publish: new CollectionsFile.PublishRecord(
+            "team", "team-origin", new PublishIntent(
+                [],
+                [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark> { [ArgPointer(0)] = new("server_path", null, MarkedPath) })],
+                [])));
+        new CollectionsFile(all).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        state.Reload();
+        // The folder is the other machine's.
+        Assert.False(state.CollectionsCache.Published.ContainsKey("Team"));
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(home, folder, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath)), null, home));
+        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+        var document = Path.Combine(folder, Slug.Make(home) + ".json");
+        Assert.False(JsonText.FileContains(document, MarkedPath));
+        return document;
+    }
+
+    /// <summary>
+    /// A master list restored from a backup older than Team drops Team's sidecar entry, and the other
+    /// machine's marks with it. The path they kept back stays kept back here, so the publish that ends
+    /// the same reload does not send it.
+    /// </summary>
+    [Fact]
+    public void AnotherMachinesMarksOutliveARestoreThatDropsItsCollection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var document = CopyAnotherMachinesMarkedPath(h, state);
+        var older = state.Store.Clone();
+        older.Collections.Remove("Team");
+        state.Service.SaveStore(older);
+        state.Service.SaveStore(older);   // the newest backup predates Team
+        File.WriteAllText(h.MasterStorePath, "garbage");
+
+        state.Reload();
+        // Restored from the backup without it.
+        Assert.False(state.Store.Collections.ContainsKey("Team"));
+        Assert.False(state.CollectionsFile.Collections.ContainsKey("Team"));
+        Assert.False(JsonText.FileContains(document, MarkedPath));
+        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+    }
+
+    /// <summary>
+    /// The same once the other machine deletes Team and the sidecar arrives without it. The marks are
+    /// remembered on disk, so a later launch still refuses the path.
+    /// </summary>
+    [Fact]
+    public void AnotherMachinesMarksOutliveItsCollectionDeletedElsewhere()
+    {
+        using var h = new AppStateHarness();
+        var state = h.Create();
+        var document = CopyAnotherMachinesMarkedPath(h, state);
+        h.EditStoreOnDisk(store => store.Collections.Remove("Team"));
+        var all = state.CollectionsFile.Collections.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        all.Remove("Team");
+        new CollectionsFile(all).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+
+        state.Reload();
+        Assert.False(state.CollectionsFile.Collections.ContainsKey("Team"));
+        Assert.False(JsonText.FileContains(document, MarkedPath));
+        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+        state.Dispose();
+        using var relaunched = h.Create();
+        // A later launch still refuses it.
+        Assert.False(JsonText.FileContains(document, MarkedPath));
+        Assert.Equal(PublishErrorKind.BlockedForReview, relaunched.PublishError?.Kind);
+    }
+
+    /// <summary>And when the other machine stops publishing Team: the collection stays, its record goes.</summary>
+    [Fact]
+    public void AnotherMachinesMarksOutliveItsCollectionUnpublishedElsewhere()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var document = CopyAnotherMachinesMarkedPath(h, state);
+        var all = state.CollectionsFile.Collections.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        all.Remove("Team");
+        new CollectionsFile(all).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+
+        state.Reload();
+        Assert.True(state.Store.Collections.ContainsKey("Team"));
+        Assert.False(state.IsPublished("Team"));
+        Assert.False(JsonText.FileContains(document, MarkedPath));
+        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+    }
+
+    /// <summary>
+    /// A delete or a Stop Publishing made here, of the collection the other machine publishes, is not
+    /// the author's word that its paths may travel either.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AnotherMachinesMarksOutliveItsCollectionDeletedOrUnpublishedHere(bool deleting)
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var document = CopyAnotherMachinesMarkedPath(h, state);
+        if (deleting)
+        {
+            Assert.Null(state.DeleteCollection("Team"));
+        }
+        else
+        {
+            state.StopPublishing("Team", deleteFile: false);
+        }
+        Assert.False(state.IsPublished("Team"));
+        Assert.False(JsonText.FileContains(document, MarkedPath));
+        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+    }
+
+    /// <summary>
+    /// The record loses the mark when its connector is deleted, here or on the other machine. The
+    /// copy that carries the path in this machine's collection still does not travel.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AnotherMachinesMarksOutliveItsConnectorDeletedHereOrElsewhere(bool here)
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var document = CopyAnotherMachinesMarkedPath(h, state);
+        if (here)
+        {
+            state.Delete(["ledger"], "Team");
+        }
+        else
+        {
+            h.EditStoreOnDisk(store => store.Collections["Team"].Mcps.Remove("ledger"));
+            var all = state.CollectionsFile.Collections.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+            all["Team"] = all["Team"] with { Publish = all["Team"].Publish! with { Intent = PublishIntent.None } };
+            new CollectionsFile(all).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+            state.Reload();
+        }
+        Assert.Equal(PublishIntent.None, state.CollectionsFile.Collections["Team"].Publish?.Intent);
+        Assert.False(JsonText.FileContains(document, MarkedPath));
+        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+    }
+
     /// <summary>A copy of the marked path in an <c>additional</c> field is kept back, and the refusal says where it sits rather than that the mark moved.</summary>
     [Fact]
     public void ACopyOfAMarkedPathSaysWhereItSits()

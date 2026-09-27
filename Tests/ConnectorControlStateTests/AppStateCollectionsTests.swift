@@ -2362,6 +2362,132 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertFalse(try jsonFile(document, contains: markedPath))
     }
 
+    // MARK: - Another machine's marks outlive its record
+
+    /// Team, published from the author's other machine, marks `markedPath` in the sidecar. This
+    /// machine publishes its active collection, and a copy of the marked connector lands there and
+    /// is refused. Returns the active collection's document.
+    private func copyAnotherMachinesMarkedPath(_ h: AppStateHarness, _ state: AppState) throws -> URL {
+        let home = state.activeCollection
+        let ledger = MCPEntry(config: .object(["command": .string("node"), "args": .array([.string(markedPath)])]))
+        XCTAssertNil(state.createActiveCopy(named: "Team"))
+        XCTAssertNil(state.upsert(name: "ledger", entry: ledger, renamedFrom: nil, in: "Team"))
+        state.switchCollection(to: home)
+        var file = state.collectionsFile
+        file.collections["Team"] = CollectionsFile.Entry(kind: .local, publish: CollectionsFile.PublishRecord(
+            slug: "team", origin: "team-origin", intent: PublishIntent(
+                shareValues: [:], pathMarks: ["ledger": [JSONPointer(["args", "0"]):
+                    .init(name: "server_path", hint: nil, value: markedPath)]], hints: [:])))
+        try file.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        state.reload()
+        XCTAssertNil(state.collectionsCache.published["Team"], "the folder is the other machine's")
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(home, to: folder.path, intent: .none, reviewedValues: []))
+        XCTAssertNil(state.upsert(name: "ledger", entry: ledger, renamedFrom: nil, in: home))
+        XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+        let document = folder.appendingPathComponent(Slug.make(home) + ".json")
+        XCTAssertFalse(try jsonFile(document, contains: markedPath))
+        return document
+    }
+
+    /// A master list restored from a backup older than Team drops Team's sidecar entry, and the
+    /// other machine's marks with it. The path they kept back stays kept back here, so the publish
+    /// that ends the same reload does not send it.
+    func testAnotherMachinesMarksOutliveARestoreThatDropsItsCollection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let document = try copyAnotherMachinesMarkedPath(h, state)
+        var older = state.store
+        older.collections.removeValue(forKey: "Team")
+        try state.service.saveStore(older)
+        try state.service.saveStore(older)   // the newest backup predates Team
+        try Data("garbage".utf8).write(to: h.masterStoreURL)
+
+        state.reload()
+        XCTAssertNil(state.store.collections["Team"], "restored from the backup without it")
+        XCTAssertNil(state.collectionsFile.collections["Team"])
+        XCTAssertFalse(try jsonFile(document, contains: markedPath))
+        XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+    }
+
+    /// The same once the other machine deletes Team and the sidecar arrives without it. The marks
+    /// are remembered on disk, so a later launch still refuses the path.
+    func testAnotherMachinesMarksOutliveItsCollectionDeletedElsewhere() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let document = try copyAnotherMachinesMarkedPath(h, state)
+        try h.editStoreOnDisk { $0.collections.removeValue(forKey: "Team") }
+        var file = state.collectionsFile
+        file.collections.removeValue(forKey: "Team")
+        try file.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+
+        state.reload()
+        XCTAssertNil(state.collectionsFile.collections["Team"])
+        XCTAssertFalse(try jsonFile(document, contains: markedPath))
+        XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+        state.dispose()
+        let relaunched = h.create()
+        XCTAssertFalse(try jsonFile(document, contains: markedPath), "a later launch still refuses it")
+        XCTAssertEqual(relaunched.publishError?.kind, .blockedForReview)
+    }
+
+    /// And when the other machine stops publishing Team: the collection stays, its record goes.
+    func testAnotherMachinesMarksOutliveItsCollectionUnpublishedElsewhere() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let document = try copyAnotherMachinesMarkedPath(h, state)
+        var file = state.collectionsFile
+        file.collections.removeValue(forKey: "Team")
+        try file.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+
+        state.reload()
+        XCTAssertNotNil(state.store.collections["Team"])
+        XCTAssertFalse(state.isPublished("Team"))
+        XCTAssertFalse(try jsonFile(document, contains: markedPath))
+        XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+    }
+
+    /// A delete or a Stop Publishing made here, of the collection the other machine publishes, is
+    /// not the author's word that its paths may travel either.
+    func testAnotherMachinesMarksOutliveItsCollectionDeletedOrUnpublishedHere() throws {
+        for deleting in [true, false] {
+            let (h, state) = AppStateHarness.started()
+            defer { h.dispose() }
+            let document = try copyAnotherMachinesMarkedPath(h, state)
+            if deleting {
+                XCTAssertNil(state.deleteCollection(named: "Team"))
+            } else {
+                state.stopPublishing("Team", deleteFile: false)
+            }
+            XCTAssertFalse(state.isPublished("Team"))
+            XCTAssertFalse(try jsonFile(document, contains: markedPath), deleting ? "deleted" : "unpublished")
+            XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+        }
+    }
+
+    /// The record loses the mark when its connector is deleted, here or on the other machine. The
+    /// copy that carries the path in this machine's collection still does not travel.
+    func testAnotherMachinesMarksOutliveItsConnectorDeletedHereOrElsewhere() throws {
+        for here in [true, false] {
+            let (h, state) = AppStateHarness.started()
+            defer { h.dispose() }
+            let document = try copyAnotherMachinesMarkedPath(h, state)
+            if here {
+                state.delete(names: ["ledger"], in: "Team")
+            } else {
+                try h.editStoreOnDisk { $0.collections["Team"]?.mcps.removeValue(forKey: "ledger") }
+                var file = state.collectionsFile
+                file.collections["Team"]?.publish?.intent = .none
+                try file.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+                state.reload()
+            }
+            let route = here ? "deleted here" : "deleted elsewhere"
+            XCTAssertEqual(state.collectionsFile.collections["Team"]?.publish?.intent, PublishIntent.none, route)
+            XCTAssertFalse(try jsonFile(document, contains: markedPath), route)
+            XCTAssertEqual(state.publishError?.kind, .blockedForReview, route)
+        }
+    }
+
     /// A copy of the marked path in an `additional` field is kept back, and the refusal says where
     /// it sits rather than that the mark moved.
     func testACopyOfAMarkedPathSaysWhereItSits() throws {

@@ -291,6 +291,13 @@ public sealed class PublishIntent : IEquatable<PublishIntent>
         return new PublishIntent(shareValues, pathMarks, hints);
     }
 
+    /// <summary>
+    /// The text of every path this intent marks, whichever connector holds it: what a document written
+    /// through it carries as a placeholder, and so what must never appear in it as written.
+    /// </summary>
+    public IReadOnlySet<string> MarkedValues =>
+        PathMarks.Values.SelectMany(marks => marks.Values).Select(mark => mark.Value).OfType<string>().ToHashSet(StringComparer.Ordinal);
+
     /// <summary>The same intent with <paramref name="connector"/>'s path marks replaced; an empty set drops its entry.</summary>
     public PublishIntent ReplacingPathMarks(string connector, IReadOnlyDictionary<JsonPointer, PathMark> marks)
     {
