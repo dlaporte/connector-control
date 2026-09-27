@@ -3264,6 +3264,30 @@ final class AppStateCollectionsTests: XCTestCase {
                        "deleted and added again, it is a new connector")
     }
 
+    /// A copy or an import that replaces a reviewed connector puts content nobody reviewed under
+    /// its name, so it waits for review as a new connector does.
+    func testACopyOrImportReplacingAReviewedConnectorWaitsForReview() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.addEmptyCollection(named: "Other"))
+        XCTAssertNil(state.upsert(name: "github", entry: node(["other.js"]), renamedFrom: nil, in: "Other"))
+        XCTAssertNil(state.upsert(name: "github", entry: node(["mine.js"]), renamedFrom: nil))
+        let file = try h.publish(state, "Default")
+        let before = try Data(contentsOf: file)
+
+        XCTAssertNil(state.makeLocalCopy(of: ["github"], from: "Other", into: "Default", choices: ["github": .replace]))
+        XCTAssertEqual(state.publishError?.message, AppState.unreviewedConnectorError("github"))
+        XCTAssertEqual(try Data(contentsOf: file), before)
+        XCTAssertNil(PublishModel(state: state, collection: "Default").publish())
+        XCTAssertNil(state.publishError)
+
+        let document = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "import.json")
+        XCTAssertNil(state.importCopies(documentAt: document.path, into: "Default",
+                                        choices: ["github": .replace, "dbt": .skip, "ledger": .skip, "notion": .skip]))
+        XCTAssertEqual(state.publishError?.message, AppState.unreviewedConnectorError("github"))
+        XCTAssertFalse(try jsonFile(file, contains: "mcp.github.com"))
+    }
+
     /// A reviewed connector edited so it holds something that looks like a credential — in an
     /// argument, or in a value it shares — waits for review. Reviewed in the sheet, it travels, and
     /// an edit that holds only what was reviewed publishes on its own again.

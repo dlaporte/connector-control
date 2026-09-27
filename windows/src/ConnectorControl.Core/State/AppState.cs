@@ -2078,6 +2078,10 @@ public sealed class AppState : ObservableObject, IDisposable
                         StringComparer.Ordinal),
                 });
             target.Mcps[landing] = result.Entries[landing];
+            if (replacing)
+            {
+                ForgetReview(landing, collection);
+            }
             // The needs the render produced are not kept: a copy is not waiting on an author, and
             // the markers left in its config are what the row's caution reads.
             provenance[landing] = new CollectionsFile.Provenance(document.Name, document.Author, date);
@@ -2145,6 +2149,10 @@ public sealed class AppState : ObservableObject, IDisposable
                 ? name
                 : FreeConnectorName(name, target);
             into.Mcps[copied] = held with { Enabled = false, Config = CopiedConfig(held.Config, source) };
+            if (copied == name && taken)
+            {
+                ForgetReview(copied, target);
+            }
             provenance[copied] = new CollectionsFile.Provenance(source, null, date);
             landed = true;
         }
@@ -2736,6 +2744,19 @@ public sealed class AppState : ObservableObject, IDisposable
             }
         }
         return (connectors, warnings);
+    }
+
+    /// <summary>
+    /// A copy that replaces a connector puts content nobody reviewed under a reviewed name, so the
+    /// name is reviewed again before the next publish sends it.
+    /// </summary>
+    private void ForgetReview(string connector, string collection)
+    {
+        if (CollectionsCache.Published.GetValueOrDefault(collection) is not { ReviewedConnectors: { } names } binding)
+        {
+            return;
+        }
+        SetPublishBinding(collection, binding.KeepingReview(names.Where(name => name != connector).ToHashSet(StringComparer.Ordinal)));
     }
 
     /// <summary><paramref name="binding"/> with every connector the dialog showed reviewed, under what it now shares.</summary>

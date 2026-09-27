@@ -1382,6 +1382,7 @@ public final class AppState: ObservableObject {
                 current: current,
                 previousNeeds: [target: incoming.needs.mapValues { CollectionsFile.Need(hint: $0.hint, pointer: $0.pointer) }])
             store.collections[collection]?.mcps[target] = result.entries[target]
+            if replacing { forgetReview(of: target, in: collection) }
             // The needs the render produced are not kept: a copy is not waiting on an author,
             // and the markers left in its config are what the row's caution reads.
             entry.provenance[target] = CollectionsFile.Provenance(from: document.name, author: document.author, date: date)
@@ -1422,6 +1423,7 @@ public final class AppState: ObservableObject {
             let copied = (choices[name] == .replace && taken) ? name : freeConnectorName(name, in: target)
             store.collections[target]?.mcps[copied] = MCPEntry(
                 enabled: false, config: copiedConfig(held.config, from: source), lastEditView: held.lastEditView)
+            if copied == name, taken { forgetReview(of: copied, in: target) }
             entry.provenance[copied] = CollectionsFile.Provenance(from: source, author: nil, date: date)
             landed = true
         }
@@ -2002,6 +2004,13 @@ public final class AppState: ObservableObject {
             }
         }
         return (Set(held.keys), warnings)
+    }
+
+    /// A copy that replaces a connector puts content nobody reviewed under a reviewed name, so the
+    /// name is reviewed again before the next publish sends it.
+    private func forgetReview(of connector: String, in collection: String) {
+        guard let binding = collectionsCache.published[collection], let names = binding.reviewedConnectors else { return }
+        collectionsCache.published[collection] = binding.keepingReview(of: names.subtracting([connector]))
     }
 
     /// `binding` with every connector the sheet showed reviewed, under what it now shares.

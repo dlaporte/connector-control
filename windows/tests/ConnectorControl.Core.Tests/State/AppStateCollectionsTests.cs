@@ -3796,6 +3796,34 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// A copy or an import that replaces a reviewed connector puts content nobody reviewed under its
+    /// name, so it waits for review as a new connector does.
+    /// </summary>
+    [Fact]
+    public void ACopyOrImportReplacingAReviewedConnectorWaitsForReview()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.AddEmptyCollection("Other"));
+        Assert.Null(state.Upsert("github", Node(["other.js"]), null, "Other"));
+        Assert.Null(state.Upsert("github", Node(["mine.js"]), null));
+        var file = h.Publish(state, "Default");
+        var before = File.ReadAllBytes(file);
+
+        Assert.Null(state.MakeLocalCopy(["github"], "Other", "Default", Choices(("github", ImportChoice.Replace))));
+        Assert.Equal(AppState.UnreviewedConnectorError("github"), state.PublishError?.Message);
+        Assert.Equal(before, File.ReadAllBytes(file));
+        Assert.Null(new PublishModel(state, "Default").Publish());
+        Assert.Null(state.PublishError);
+
+        var document = h.WriteDocument(CollectionDocumentSamples.DataTeam, "import.json");
+        Assert.Null(state.ImportCopies(document, "Default", Choices(
+            ("github", ImportChoice.Replace), ("dbt", ImportChoice.Skip), ("ledger", ImportChoice.Skip), ("notion", ImportChoice.Skip))));
+        Assert.Equal(AppState.UnreviewedConnectorError("github"), state.PublishError?.Message);
+        Assert.False(JsonText.FileContains(file, "mcp.github.com"));
+    }
+
+    /// <summary>
     /// A reviewed connector edited so it holds something that looks like a credential — in an
     /// argument, or in a value it shares — waits for review. Reviewed in the dialog, it travels, and
     /// an edit that holds only what was reviewed publishes on its own again.
