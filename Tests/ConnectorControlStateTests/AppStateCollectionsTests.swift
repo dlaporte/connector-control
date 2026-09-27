@@ -3312,6 +3312,52 @@ final class AppStateCollectionsTests: XCTestCase {
                        "deleted and added again, it is a new connector")
     }
 
+    /// A reviewed connector deleted, and a different one added under its name, is new however long
+    /// the publish is held in between — by a connector nobody reviewed, by a folder that will not
+    /// take the write, or across two syncs from the other machine — even with a credential in the
+    /// argument the reviewed one held its own. The review goes on the pass that finds the connector
+    /// gone, written or not.
+    func testADeletedConnectorsReviewGoesWithItWhileThePublishIsHeld() throws {
+        let otherToken = "ghp_ZZZZzzzz9999yyyy8888xxxx7777wwww6666"
+        for route in ["held for review", "folder offline", "two syncs"] {
+            let (h, state) = AppStateHarness.started()
+            defer { h.dispose() }
+            XCTAssertNil(state.upsert(name: "b", entry: node(["/opt/b/srv.js", longToken]), renamedFrom: nil))
+            let file = try h.publish(state, "Default")
+            XCTAssertTrue(try jsonFile(file, contains: longToken), route)
+            let replacement = node(["/opt/other/srv.js", otherToken])
+            switch route {
+            case "held for review":
+                XCTAssertNil(state.upsert(name: "n", entry: node(["/opt/n/srv.js"]), renamedFrom: nil))
+                state.delete(names: ["b"])
+                XCTAssertNil(state.upsert(name: "b", entry: replacement, renamedFrom: nil))
+                state.delete(names: ["n"])
+            case "folder offline":
+                let folder = file.deletingLastPathComponent()
+                let saved = try Data(contentsOf: file)
+                try FileManager.default.removeItem(at: folder)
+                try Data().write(to: folder)
+                state.delete(names: ["b"])
+                XCTAssertEqual(state.publishError?.kind, .writeFailed, route)
+                XCTAssertNil(state.upsert(name: "b", entry: replacement, renamedFrom: nil))
+                try FileManager.default.removeItem(at: folder)
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try saved.write(to: file)
+                XCTAssertNil(state.upsert(name: "aws-mcp", entry: node(["a.js"]), renamedFrom: "aws-mcp"))
+            default:
+                XCTAssertNil(state.upsert(name: "n", entry: node(["/opt/n/srv.js"]), renamedFrom: nil))
+                try h.editStoreOnDisk { $0.collections["Default"]?.mcps.removeValue(forKey: "b") }
+                state.reload(trigger: .externalStoreAdoption)
+                try h.editStoreOnDisk { $0.collections["Default"]?.mcps["b"] = replacement }
+                state.reload(trigger: .externalStoreAdoption)
+                state.delete(names: ["n"])
+            }
+            XCTAssertEqual(state.publishError?.message, AppState.unreviewedConnectorError("b"), route)
+            XCTAssertFalse(try jsonFile(file, contains: otherToken), route)
+            XCTAssertFalse(try jsonFile(file, contains: "/opt/other/srv.js"), route)
+        }
+    }
+
     /// A copy or an import that replaces a reviewed connector puts content nobody reviewed under
     /// its name, so it waits for review as a new connector does.
     func testACopyOrImportReplacingAReviewedConnectorWaitsForReview() throws {

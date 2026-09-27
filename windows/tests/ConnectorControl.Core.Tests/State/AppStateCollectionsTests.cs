@@ -3848,6 +3848,61 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// A reviewed connector deleted, and a different one added under its name, is new however long the
+    /// publish is held in between — by a connector nobody reviewed, by a folder that will not take the
+    /// write, or across two syncs from the other machine — even with a credential in the argument the
+    /// reviewed one held its own. The review goes on the pass that finds the connector gone, written or
+    /// not.
+    /// </summary>
+    [Theory]
+    [InlineData("held for review")]
+    [InlineData("folder offline")]
+    [InlineData("two syncs")]
+    public void ADeletedConnectorsReviewGoesWithItWhileThePublishIsHeld(string route)
+    {
+        const string otherToken = "ghp_ZZZZzzzz9999yyyy8888xxxx7777wwww6666";
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.Upsert("b", Node(["/opt/b/srv.js", LongToken]), null));
+        var file = h.Publish(state, "Default");
+        Assert.True(JsonText.FileContains(file, LongToken));
+        var replacement = Node(["/opt/other/srv.js", otherToken]);
+        switch (route)
+        {
+            case "held for review":
+                Assert.Null(state.Upsert("n", Node(["/opt/n/srv.js"]), null));
+                state.Delete(["b"]);
+                Assert.Null(state.Upsert("b", replacement, null));
+                state.Delete(["n"]);
+                break;
+            case "folder offline":
+                var folder = Path.GetDirectoryName(file)!;
+                var saved = File.ReadAllBytes(file);
+                Directory.Delete(folder, true);
+                File.WriteAllBytes(folder, []);
+                state.Delete(["b"]);
+                Assert.Equal(PublishErrorKind.WriteFailed, state.PublishError?.Kind);
+                Assert.Null(state.Upsert("b", replacement, null));
+                File.Delete(folder);
+                Directory.CreateDirectory(folder);
+                File.WriteAllBytes(file, saved);
+                Assert.Null(state.Upsert("aws-mcp", Node(["a.js"]), "aws-mcp"));
+                break;
+            default:
+                Assert.Null(state.Upsert("n", Node(["/opt/n/srv.js"]), null));
+                h.EditStoreOnDisk(store => store.Collections["Default"].Mcps.Remove("b"));
+                state.Reload(ReloadTrigger.ExternalStoreAdoption);
+                h.EditStoreOnDisk(store => store.Collections["Default"].Mcps["b"] = replacement);
+                state.Reload(ReloadTrigger.ExternalStoreAdoption);
+                state.Delete(["n"]);
+                break;
+        }
+        Assert.Equal(AppState.UnreviewedConnectorError("b"), state.PublishError?.Message);
+        Assert.False(JsonText.FileContains(file, otherToken));
+        Assert.False(JsonText.FileContains(file, "/opt/other/srv.js"));
+    }
+
+    /// <summary>
     /// A copy or an import that replaces a reviewed connector puts content nobody reviewed under its
     /// name, so it waits for review as a new connector does.
     /// </summary>

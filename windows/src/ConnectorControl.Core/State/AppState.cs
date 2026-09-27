@@ -2663,10 +2663,21 @@ public sealed class AppState : ObservableObject, IDisposable
         var cacheChanged = false;
         foreach (var collection in CollectionsCache.Published.Keys.Order(StringComparer.Ordinal).ToList())
         {
-            if (CollectionsCache.Published.GetValueOrDefault(collection) is not { } binding
+            if (CollectionsCache.Published.GetValueOrDefault(collection) is not { } found
                 || CollectionsFile.Collections.GetValueOrDefault(collection)?.Publish is not { } record)
             {
                 continue;
+            }
+            var mcps = Store.Collections.GetValueOrDefault(collection)?.Mcps ?? [];
+            // A reviewed connector that has gone takes its review with it on every pass, whether or not
+            // this one writes: whatever next takes its name — added here, copied, imported or synced in
+            // — is a new connector, however long a hold or a folder that will not take the write keeps
+            // the document from being published in between.
+            var binding = found.KeepingReview(mcps.Keys.ToHashSet(StringComparer.Ordinal));
+            if (!binding.Equals(found))
+            {
+                SetPublishBinding(collection, binding);
+                cacheChanged = true;
             }
             try
             {
@@ -2677,7 +2688,6 @@ public sealed class AppState : ObservableObject, IDisposable
                 // does not send it. Only the author's Publish in the dialog clears it.
                 RefuseKeptBackPaths(document, collection);
                 var hash = PublishHash(document);
-                var mcps = Store.Collections.GetValueOrDefault(collection)?.Mcps ?? [];
                 if (hash == binding.LastWrittenHash && collection != forced)
                 {
                     // The folder already holds what the store renders — the change that failed or
@@ -2717,7 +2727,7 @@ public sealed class AppState : ObservableObject, IDisposable
                 // back, never forget one.
                 var held = mcps.ToDictionary(p => p.Key, p => p.Value.Config, StringComparer.Ordinal);
                 var placed = record.Intent.PlacedArguments(held).ToHashSet(StringComparer.Ordinal);
-                SetPublishBinding(collection, reviewed.KeepingReview(mcps.Keys.ToHashSet(StringComparer.Ordinal)) with
+                SetPublishBinding(collection, reviewed with
                 {
                     LastWrittenHash = hash,
                     MarkedValues = binding.MarkedValues.Concat(placed).ToHashSet(StringComparer.Ordinal),

@@ -1931,8 +1931,19 @@ public final class AppState: ObservableObject {
         guard !collectionsCache.published.isEmpty else { return }
         var cacheChanged = false
         for collection in collectionsCache.published.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
-            guard let binding = collectionsCache.published[collection],
+            guard var binding = collectionsCache.published[collection],
                   let record = collectionsFile.collections[collection]?.publish else { continue }
+            let held = store.collections[collection]?.mcps ?? [:]
+            // A reviewed connector that has gone takes its review with it on every pass, whether or
+            // not this one writes: whatever next takes its name — added here, copied, imported or
+            // synced in — is a new connector, however long a hold or a folder that will not take
+            // the write keeps the document from being published in between.
+            let pruned = binding.keepingReview(of: Set(held.keys))
+            if pruned != binding {
+                binding = pruned
+                collectionsCache.published[collection] = pruned
+                cacheChanged = true
+            }
             do {
                 let document = try exportDocument(for: collection, intent: record.intent)
                 // A path this machine has published as a placeholder, now in the document as
@@ -1941,7 +1952,6 @@ public final class AppState: ObservableObject {
                 // machine does not send it. Only the author's Publish in the sheet clears it.
                 try refuseKeptBackPaths(in: document, of: collection)
                 let hash = try AppState.publishHash(of: document)
-                let held = store.collections[collection]?.mcps ?? [:]
                 guard hash != binding.lastWrittenHash || collection == forced else {
                     // The folder already holds what the store renders — the change that failed or
                     // was refused has been undone — so nothing is failing any more.
@@ -1970,7 +1980,7 @@ public final class AppState: ObservableObject {
                 }
                 try AppState.refuseUnreviewed(held, intent: record.intent, reviewedBy: reviewed)
                 try AtomicFile.write(document.serialized(), to: target, staging: service.paths.stagingDirURL)
-                collectionsCache.published[collection] = reviewed.keepingReview(of: Set(held.keys))
+                collectionsCache.published[collection] = reviewed
                 collectionsCache.published[collection]?.lastWrittenHash = hash
                 // Only ever added to here: a publish nobody reviewed may learn a path it now
                 // keeps back, never forget one.
