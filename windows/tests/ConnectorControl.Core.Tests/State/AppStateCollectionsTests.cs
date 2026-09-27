@@ -719,6 +719,24 @@ public class AppStateCollectionsTests
         Assert.Equal(["Analytics", "Default"], state.CollectionNames);   // a refused document creates nothing
     }
 
+    /// <summary>
+    /// With no name of its own the collection takes the document's, trimmed as every collection name
+    /// is: one collection, with its kind, its connectors and this machine's binding under it.
+    /// </summary>
+    [Fact]
+    public void SubscribeTrimsTheDocumentsNameEverywhere()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var sample = CollectionDocumentSamples.DataTeam;
+        var doc = new CollectionDocument(" Data team ", sample.Author, sample.Origin, sample.Exported, sample.Connectors);
+        var path = h.Subscribe(state, doc);
+        Assert.Equal(["Data team", "Default"], state.CollectionNames);
+        Assert.Equal(CollectionKind.Synced, state.KindOf("Data team"));
+        Assert.Equal(["dbt", "github", "ledger", "notion"], AppStateHarness.Keys(state.Store.Collections["Data team"].Mcps.Keys));
+        Assert.Equal(path, state.SourceBinding("Data team")?.Path);
+    }
+
     [Fact]
     public void SubscribingToYourOwnPublishedCollectionIsRefused()
     {

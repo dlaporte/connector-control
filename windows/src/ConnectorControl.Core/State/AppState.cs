@@ -1289,7 +1289,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return error;
         }
-        var trimmed = newName.TrimSpaces();
+        var trimmed = MasterStore.CollectionName(newName);
         if (trimmed != name)
         {
             CollectionsFile = new CollectionsFile(Moved(CollectionsFile.Collections, name, trimmed));
@@ -1639,8 +1639,8 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return OwnCollectionError;
         }
-        var requested = requestedName?.TrimSpaces() ?? string.Empty;
-        var name = requested.Length == 0 ? document.Name : requested;
+        var requested = MasterStore.CollectionName(requestedName ?? string.Empty);
+        var name = MasterStore.CollectionName(requested.Length == 0 ? document.Name : requested);
         if (Store.AddCollection(name) is { } error)
         {
             return error;
@@ -2166,7 +2166,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return error;
         }
-        var name = newName.TrimSpaces();
+        var name = MasterStore.CollectionName(newName);
         var date = Today;
         var entries = new Dictionary<string, McpEntry>(StringComparer.Ordinal);
         var provenance = new Dictionary<string, CollectionsFile.Provenance>(StringComparer.Ordinal);

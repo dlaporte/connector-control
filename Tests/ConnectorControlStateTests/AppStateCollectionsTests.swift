@@ -630,6 +630,20 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.collectionNames, ["Analytics", "Default"], "a refused document creates nothing")
     }
 
+    /// With no name of its own the collection takes the document's, trimmed as every collection
+    /// name is: one collection, with its kind, its connectors and this machine's binding under it.
+    func testSubscribeTrimsTheDocumentsNameEverywhere() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        var doc = CollectionDocumentSamples.dataTeam
+        doc.name = " Data team "
+        let url = try h.subscribe(state, to: doc)
+        XCTAssertEqual(state.collectionNames, ["Data team", "Default"])
+        XCTAssertEqual(state.kind(of: "Data team"), .synced)
+        XCTAssertEqual(state.store.collections["Data team"]?.mcps.keys.sorted(), ["dbt", "github", "ledger", "notion"])
+        XCTAssertEqual(state.sourceBinding(of: "Data team")?.path, url.path)
+    }
+
     func testSubscribingToYourOwnPublishedCollectionIsRefused() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

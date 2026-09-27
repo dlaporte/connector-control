@@ -900,7 +900,7 @@ public final class AppState: ObservableObject {
     /// machine's bindings, and the derived state the banner reads. nil on success.
     public func renameCollection(_ name: String, to newName: String) -> String? {
         if let error = store.renameCollection(name, to: newName) { return error }
-        let trimmed = newName.trimmingCharacters(in: .whitespaces)
+        let trimmed = MasterStore.collectionName(newName)
         if trimmed != name {
             move(&collectionsFile.collections, from: name, to: trimmed)
             move(&collectionsCache.synced, from: name, to: trimmed)
@@ -1064,8 +1064,8 @@ public final class AppState: ObservableObject {
            collectionsFile.collections.values.contains(where: { $0.publish?.origin == origin }) {
             return AppState.ownCollectionError
         }
-        let requested = requestedName?.trimmingCharacters(in: .whitespaces) ?? ""
-        let name = requested.isEmpty ? document.name : requested
+        let requested = MasterStore.collectionName(requestedName ?? "")
+        let name = MasterStore.collectionName(requested.isEmpty ? document.name : requested)
         if let error = store.addCollection(named: name) { return error }
         let rendered = document.render()
         let result = CollectionApply.apply(rendered: rendered, current: [:], previousNeeds: [:])
@@ -1428,7 +1428,7 @@ public final class AppState: ObservableObject {
     public func makeLocalCopyOfCollection(_ source: String, named newName: String) -> String? {
         guard let held = store.collections[source] else { return nil }
         if let error = store.addCollection(named: newName) { return error }
-        let name = newName.trimmingCharacters(in: .whitespaces)
+        let name = MasterStore.collectionName(newName)
         let date = today
         var entries: [String: MCPEntry] = [:]
         var provenance: [String: CollectionsFile.Provenance] = [:]
