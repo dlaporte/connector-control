@@ -3,7 +3,7 @@
 #
 # Jobs:
 #   prepare          (ubuntu)   version from the tag; CHANGELOG section -> notes.md (gate 1);
-#                               the tagged commit is on master (gate 2)
+#                               the tagged commit is on master (gate 2, tag pushes only)
 #   mac-test         (macos-15) swift test; a failed test, or a skipped one other than the
 #                               deliberate goldens-regeneration skip, stops the run here
 #   mac              (macos-15) .github/workflows/mac-build.yml: build, sign, notarize, DMG,
@@ -24,7 +24,9 @@
 #
 # Trigger: exact vX.Y.Z tags only (see below). workflow_dispatch runs everything EXCEPT
 # publish — a rehearsal that cannot create a release (its version input names the
-# CHANGELOG section and stamps the packages; the artifacts are the only output).
+# CHANGELOG section and stamps the packages; the artifacts are the only output), from any
+# branch the signing environment allows, so a change to this file or to mac-build.yml can be
+# proved before it reaches master.
 #
 # Required secrets. The Mac set belongs in the "signing" GitHub Environment (Settings ▸
 # Environments), which only mac-build.yml's job names: with required reviewers and a
@@ -125,8 +127,12 @@ jobs:
           cat notes.md
 
       # Releases build from master only. A v* tag pushed from another branch would
-      # otherwise ship that branch as THE Mac release at releases/latest.
+      # otherwise ship that branch as THE Mac release at releases/latest. Only a tag push can
+      # get there: publish runs on push alone, so a dispatch rehearsal publishes nothing and
+      # may rehearse a branch (the signing environment's own branch policy still decides
+      # whether its mac job may run).
       - name: Require the tagged commit to be on master
+        if: github.event_name == 'push'
         run: |
           git fetch --no-tags origin master:refs/remotes/origin/master
           git merge-base --is-ancestor HEAD origin/master \
