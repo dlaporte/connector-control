@@ -1583,7 +1583,8 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     /// <summary>
     /// The <c>&amp;</c>-separated parameters of a query or a fragment that can carry a secret, each as
     /// <c>section.NAME</c> with how it holds it. A bare parameter is its own value, and counts only when
-    /// it looks like a secret.
+    /// it looks like a secret. It, and a parameter whose name looks like one, is keyed by its section
+    /// alone, as the path is: the key must hold nothing derived from a secret.
     /// </summary>
     private static IEnumerable<(string Part, CredentialKind Kind)> Parameters(string text, string section)
     {
@@ -1595,7 +1596,7 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                 : LooksLikeSecret(name) ? CredentialKind.Literal : null;
             if (kind is { } found)
             {
-                yield return ($"{section}.{name}", found);
+                yield return (equals < 0 || LooksLikeSecret(name) ? section : $"{section}.{name}", found);
             }
         }
     }

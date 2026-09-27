@@ -884,14 +884,16 @@ public struct CollectionDocument: Equatable, Sendable {
 
     /// The `&`-separated parameters of a query or a fragment that can carry a secret, each as
     /// `section.NAME` with how it holds it. A bare parameter is its own value, and counts only when it
-    /// looks like a secret.
+    /// looks like a secret. It, and a parameter whose name looks like one, is keyed by its section
+    /// alone, as the path is: the key must hold nothing derived from a secret.
     private static func parameters(_ text: ArraySlice<Unicode.Scalar>, in section: String) -> [(part: String, kind: CredentialKind)] {
         text.split(separator: "&").compactMap { pair in
             let equals = pair.firstIndex(of: "=")
             let name = String(String.UnicodeScalarView(pair[..<(equals ?? pair.endIndex)]))
             let kind: CredentialKind? = equals.map { credentialKind(named: name, holding: String(String.UnicodeScalarView(pair[($0 + 1)...]))) }
                 ?? (looksLikeSecret(name) ? .literal : nil)
-            return kind.map { (part: "\(section).\(name)", kind: $0) }
+            let part = equals == nil || looksLikeSecret(name) ? section : "\(section).\(name)"
+            return kind.map { (part: part, kind: $0) }
         }
     }
 

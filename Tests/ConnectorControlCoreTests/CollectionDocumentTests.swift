@@ -479,7 +479,11 @@ final class CollectionDocumentTests: XCTestCase {
         XCTAssertEqual(warnings("https://mcp.example.com/s/Zq8RkT2mWx7LpN4vHc9J/mcp"), ["url.path looks like a credential"],
                        "a random segment")
         XCTAssertEqual(warnings("https://mcp.example.com/mcp#access_token=abc"), ["url.fragment.access_token looks like a credential"])
-        XCTAssertEqual(warnings("https://mcp.example.com/mcp#Zq8RkT2mWx7LpN4vHc9J"), ["url.fragment.Zq8RkT2mWx7LpN4vHc9J looks like a credential"])
+        XCTAssertEqual(warnings("https://mcp.example.com/mcp#Zq8RkT2mWx7LpN4vHc9J"), ["url.fragment looks like a credential"],
+                       "a bare parameter is keyed by its section alone: the key holds nothing of the secret")
+        XCTAssertEqual(warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J"), ["url.query looks like a credential"])
+        XCTAssertEqual(warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J=ghp_q"), ["url.query looks like a credential"],
+                       "and so is one whose name looks like a secret")
         XCTAssertEqual(warnings("https://mcp.example.com/mcp?k=Zq8RkT2mWx7LpN4vHc9J"), ["url.query.k looks like a credential"],
                        "a random query value")
         XCTAssertEqual(warnings("https://mcp.example.com/v2/servers/gmail-tools/sse#section-2"), [])

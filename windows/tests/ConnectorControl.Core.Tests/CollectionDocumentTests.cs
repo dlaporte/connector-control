@@ -639,7 +639,11 @@ public class CollectionDocumentTests
         Assert.Equal(["url.path looks like a credential"], Warnings("https://actions.example.com/mcp/sk-ak-a1b2c3/sse"));
         Assert.Equal(["url.path looks like a credential"], Warnings("https://mcp.example.com/s/Zq8RkT2mWx7LpN4vHc9J/mcp"));   // a random segment
         Assert.Equal(["url.fragment.access_token looks like a credential"], Warnings("https://mcp.example.com/mcp#access_token=abc"));
-        Assert.Equal(["url.fragment.Zq8RkT2mWx7LpN4vHc9J looks like a credential"], Warnings("https://mcp.example.com/mcp#Zq8RkT2mWx7LpN4vHc9J"));
+        // A bare parameter is keyed by its section alone: the key holds nothing of the secret.
+        Assert.Equal(["url.fragment looks like a credential"], Warnings("https://mcp.example.com/mcp#Zq8RkT2mWx7LpN4vHc9J"));
+        Assert.Equal(["url.query looks like a credential"], Warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J"));
+        // And so is one whose name looks like a secret.
+        Assert.Equal(["url.query looks like a credential"], Warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J=ghp_q"));
         Assert.Equal(["url.query.k looks like a credential"], Warnings("https://mcp.example.com/mcp?k=Zq8RkT2mWx7LpN4vHc9J"));   // a random query value
         Assert.Empty(Warnings("https://mcp.example.com/v2/servers/gmail-tools/sse#section-2"));
     }
