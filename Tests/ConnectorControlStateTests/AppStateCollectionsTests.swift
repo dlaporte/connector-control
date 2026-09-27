@@ -126,7 +126,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.createActiveCopy(named: "Work"))
         XCTAssertNil(state.renameCollection("Work", to: "Team"))
         XCTAssertEqual(state.collectionNames, ["Default", "Team"])
-        XCTAssertEqual(state.activeCollection, "Team", "a new collection becomes the active one")
+        XCTAssertEqual(state.activeCollection, "Team", "the setup made Work active")
         XCTAssertNil(state.deleteCollection(named: "Team"))
         XCTAssertEqual(state.collectionNames, ["Default"])
         XCTAssertEqual(state.deleteCollection(named: state.activeCollection), AppState.lastLocalCollectionError)
@@ -151,12 +151,11 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(try h.claudeServers()["aws-mcp"])
     }
 
-    func testCreateCopiesTheActiveCollectionAndReportsItsErrors() {
+    /// Switching to a collection identical to the active one writes nothing to Claude's config, but
+    /// records it as the collection Claude's file was last applied from.
+    func testSwitchingToACopyOfTheActiveCollectionWritesNothingButRecordsIt() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        XCTAssertEqual(state.createActiveCopy(named: "Default"), "A collection named \u{201C}Default\u{201D} already exists.")
-        XCTAssertEqual(state.createActiveCopy(named: "   "), AppState.nameEmptyError)
-        XCTAssertEqual(state.collectionNames, ["Default"])
         XCTAssertNil(state.createActiveCopy(named: "Work"))
         XCTAssertEqual(state.sortedNames, ["aws-mcp", "scoutbook", "service-now"], "a COPY of the active collection")
         XCTAssertNil(h.settings.lastApplyDate, "a copy runs what Claude already runs, so nothing is written")
@@ -182,6 +181,7 @@ final class AppStateCollectionsTests: XCTestCase {
 
         // A name the store refuses is the store's own error, and nothing is added.
         XCTAssertEqual(state.addEmptyCollection(named: "Empty"), "A collection named \u{201C}Empty\u{201D} already exists.")
+        XCTAssertEqual(state.addEmptyCollection(named: "   "), AppState.nameEmptyError)
         XCTAssertEqual(state.collectionNames, ["Default", "Empty"])
         XCTAssertEqual(state.activeCollection, "Default")
     }
@@ -3349,9 +3349,9 @@ final class AppStateCollectionsTests: XCTestCase {
                        ["github", "github 2"], "and with no choice it still lands beside")
     }
 
-    /// Removing several connectors is one write, not one per connector: a loop would rotate a
+    /// Deleting several connectors is one write, not one per connector: a loop would rotate a
     /// backup and republish for each.
-    func testRemovingSeveralConnectorsPersistsOnce() throws {
+    func testDeletingSeveralConnectorsPersistsOnce() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         for name in ["alpha", "beta", "gamma"] {
@@ -3371,7 +3371,7 @@ final class AppStateCollectionsTests: XCTestCase {
     }
 
     /// Each removed connector's publish ticks and path marks go with it, and the others' stay.
-    func testRemovingSeveralConnectorsTakesTheirPublishTicksAndMarksWithThem() throws {
+    func testDeletingSeveralConnectorsTakesTheirPublishTicksAndMarksWithThem() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         for name in ["alpha", "beta", "gamma"] {
@@ -3397,7 +3397,7 @@ final class AppStateCollectionsTests: XCTestCase {
 
     /// A name the collection does not hold is skipped rather than failing, and removing nothing
     /// writes nothing.
-    func testRemovingNoConnectorsWritesNothing() throws {
+    func testDeletingNoConnectorsWritesNothing() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.upsert(name: "alpha", entry: MCPEntry(config: .object([

@@ -703,6 +703,8 @@ public class PublishModelTests
         Assert.Equal(PublishModel.Mode.Publish, publish.SheetMode);   // a dialog opened with no mode is the Publish dialog
         Assert.Equal(PublishModel.Title(collection), publish.SheetTitle);
         Assert.False(publish.CanFinish);   // nothing is published until a folder is chosen
+        // Only C# asserts CanFinish is raised: WPF re-reads a property only when told, where SwiftUI
+        // re-renders from the model.
         var raised = new List<string>();
         publish.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");
         publish.Folder = PublishFolder(h);

@@ -140,7 +140,7 @@ public class AppStateCollectionsTests
         Assert.Null(state.CreateActiveCopy("Work"));
         Assert.Null(state.RenameCollection("Work", "Team"));
         Assert.Equal(["Default", "Team"], state.CollectionNames);
-        // A new collection becomes the active one.
+        // The setup made Work active.
         Assert.Equal("Team", state.ActiveCollection);
         Assert.Null(state.DeleteCollection("Team"));
         Assert.Equal(["Default"], state.CollectionNames);
@@ -169,14 +169,15 @@ public class AppStateCollectionsTests
         Assert.False(h.ClaudeServers().ContainsKey("aws-mcp"));
     }
 
+    /// <summary>
+    /// Switching to a collection identical to the active one writes nothing to Claude's config, but
+    /// records it as the collection Claude's file was last applied from.
+    /// </summary>
     [Fact]
-    public void CreateCopiesTheActiveCollectionAndReportsItsErrors()
+    public void SwitchingToACopyOfTheActiveCollectionWritesNothingButRecordsIt()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        Assert.Equal("A collection named “Default” already exists.", state.CreateActiveCopy("Default"));
-        Assert.Equal(AppState.NameEmptyError, state.CreateActiveCopy("   "));
-        Assert.Equal(["Default"], state.CollectionNames);
         Assert.Null(state.CreateActiveCopy("Work"));
         Assert.Equal(["aws-mcp", "scoutbook", "service-now"], state.SortedNames);   // a COPY of the active collection
         Assert.Null(h.Settings.LastApplyDate);   // a copy runs what Claude already runs, so nothing is written
@@ -206,6 +207,7 @@ public class AppStateCollectionsTests
 
         // A name the store refuses is the store's own error, and nothing is added.
         Assert.Equal("A collection named “Empty” already exists.", state.AddEmptyCollection("Empty"));
+        Assert.Equal(AppState.NameEmptyError, state.AddEmptyCollection("   "));
         Assert.Equal(["Default", "Empty"], state.CollectionNames);
         Assert.Equal("Default", state.ActiveCollection);
     }
@@ -2179,6 +2181,37 @@ public class AppStateCollectionsTests
     /// backup still goes back into the collection it came from, and once a local collection is
     /// active the same unrecorded backup restores.
     /// </summary>
+    [Fact]
+    public void ARestoreWithNoRecordIsRefusedWhileASubscribedCollectionIsActive()
+    {
+        using var h = new AppStateHarness();
+        using var s = h.Create();
+        h.Subscribe(s, CollectionDocumentSamples.DataTeam);
+        s.SwitchCollection("Data team");   // backs up Default's file, recorded as Default's
+        var recorded = s.Service.Backups.Backups("claude_desktop_config")[0];
+        Assert.Equal("Default", BackupCollections.CollectionOf(recorded, h.BackupsDir));
+        var original = Path.Combine(h.BackupsDir, "claude_desktop_config.original.json");
+        Assert.True(File.Exists(original));
+        Assert.Null(BackupCollections.CollectionOf(original, h.BackupsDir));
+        var claudeBefore = File.ReadAllBytes(h.ClaudeConfigPath);
+        var storeBefore = s.Store.Clone();
+
+        Assert.IsType<RestoreSubscribedException>(s.RestoreRefusal(original));
+        var refused = Assert.Throws<RestoreSubscribedException>(() => s.RestoreClaudeConfig(original));
+        Assert.Equal("Data team", refused.Collection);
+        Assert.Equal(AppState.RestoreSubscribedError("Data team"), refused.Message);
+        // Nothing was restored.
+        Assert.Equal(claudeBefore, File.ReadAllBytes(h.ClaudeConfigPath));
+        Assert.Equal(storeBefore, s.Store);
+
+        // A recorded backup names its own collection.
+        Assert.Null(s.RestoreRefusal(recorded));
+        s.RestoreClaudeConfig(recorded);
+        Assert.Equal("Default", s.ActiveCollection);
+        // With a local collection active it goes ahead.
+        Assert.Null(s.RestoreRefusal(original));
+    }
+
     /// <summary>
     /// A backup recorded against a subscribed collection holds that collection's own rendered state,
     /// so it goes back into it, which becomes active again, with nothing left pending.
@@ -2230,37 +2263,6 @@ public class AppStateCollectionsTests
         Assert.Empty(s.PendingUpdates);
         // No update is announced for a change nobody made.
         Assert.Null(s.CollectionBanner);
-    }
-
-    [Fact]
-    public void ARestoreWithNoRecordIsRefusedWhileASubscribedCollectionIsActive()
-    {
-        using var h = new AppStateHarness();
-        using var s = h.Create();
-        h.Subscribe(s, CollectionDocumentSamples.DataTeam);
-        s.SwitchCollection("Data team");   // backs up Default's file, recorded as Default's
-        var recorded = s.Service.Backups.Backups("claude_desktop_config")[0];
-        Assert.Equal("Default", BackupCollections.CollectionOf(recorded, h.BackupsDir));
-        var original = Path.Combine(h.BackupsDir, "claude_desktop_config.original.json");
-        Assert.True(File.Exists(original));
-        Assert.Null(BackupCollections.CollectionOf(original, h.BackupsDir));
-        var claudeBefore = File.ReadAllBytes(h.ClaudeConfigPath);
-        var storeBefore = s.Store.Clone();
-
-        Assert.IsType<RestoreSubscribedException>(s.RestoreRefusal(original));
-        var refused = Assert.Throws<RestoreSubscribedException>(() => s.RestoreClaudeConfig(original));
-        Assert.Equal("Data team", refused.Collection);
-        Assert.Equal(AppState.RestoreSubscribedError("Data team"), refused.Message);
-        // Nothing was restored.
-        Assert.Equal(claudeBefore, File.ReadAllBytes(h.ClaudeConfigPath));
-        Assert.Equal(storeBefore, s.Store);
-
-        // A recorded backup names its own collection.
-        Assert.Null(s.RestoreRefusal(recorded));
-        s.RestoreClaudeConfig(recorded);
-        Assert.Equal("Default", s.ActiveCollection);
-        // With a local collection active it goes ahead.
-        Assert.Null(s.RestoreRefusal(original));
     }
 
     /// <summary>
@@ -3466,11 +3468,6 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
-    /// Release is no answer for a folder of the collection's own, whatever the view offers: the entry
-    /// stays, Publish and Export stay held, and the folder reaches no document. Only writing the token
-    /// takes it out of the preview.
-    /// </summary>
-    /// <summary>
     /// The publish folder copied beside a tick is listed as a copy of a marked path, whose note
     /// ends "or release it". Release refuses the folder all the same, so its refusal must not
     /// repeat that advice: it says what a folder entry says, where the token goes.
@@ -3499,6 +3496,11 @@ public class AppStateCollectionsTests
         Assert.Equal([true, false], dialog.PathRows.Select(row => row.Marked));
     }
 
+    /// <summary>
+    /// Release is no answer for a folder of the collection's own, whatever the view offers: the entry
+    /// stays, Publish and Export stay held, and the folder reaches no document. Only writing the token
+    /// takes it out of the preview.
+    /// </summary>
     [Fact]
     public void ReleasingAFolderEntryIsRefused()
     {
@@ -3881,10 +3883,10 @@ public class AppStateCollectionsTests
             state.Store.Collections["Default"].Mcps.Keys.Where(k => k.StartsWith("github", StringComparison.Ordinal))));
     }
 
-    // Removing several connectors is one write, not one per connector: a loop would rotate a
+    // Deleting several connectors is one write, not one per connector: a loop would rotate a
     // backup and republish for each.
     [Fact]
-    public void RemovingSeveralConnectorsPersistsOnce()
+    public void DeletingSeveralConnectorsPersistsOnce()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -3906,7 +3908,7 @@ public class AppStateCollectionsTests
 
     // Each removed connector's publish ticks and path marks go with it, and the others' stay.
     [Fact]
-    public void RemovingSeveralConnectorsTakesTheirPublishTicksAndMarksWithThem()
+    public void DeletingSeveralConnectorsTakesTheirPublishTicksAndMarksWithThem()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -3936,7 +3938,7 @@ public class AppStateCollectionsTests
     // A name the collection does not hold is skipped rather than failing, and removing nothing
     // writes nothing.
     [Fact]
-    public void RemovingNoConnectorsWritesNothing()
+    public void DeletingNoConnectorsWritesNothing()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -4465,7 +4467,8 @@ public class AppStateCollectionsTests
         Assert.Equal(CollectionKind.Synced, state.KindOf("Data team"));
         Assert.Equal(path, state.SourceBinding("Data team")?.Path);
         Assert.Equal(["Data team", "Default"], h.StoreOnDisk().Collections.Keys.Order(StringComparer.Ordinal));
-        Assert.Contains("and restored from the backup of ", state.LastError);
+        // Said once, as the Mac counts it.
+        Assert.Equal(2, state.LastError!.Split("and restored from the backup of ").Length);
     }
 
     /// <summary>
