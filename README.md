@@ -124,9 +124,9 @@ Escape cancels any of these sheets, and the connector editor, as its
   once it holds what you want. Next come **Import**, "Adds copies you own",
   and **Subscribe**, "Stays in sync, read-only" (see Sharing a collection
   with a team).
-  Selecting a collection only shows it; double-click it, or choose **Make
-  Active** from its context menu, to switch to it. Double-clicking the
-  collection that is already active does nothing. Renaming or deleting a
+  Selecting a collection only shows it; double-click it, press Return, or
+  choose **Make Active** from its context menu, to switch to it.
+  Double-clicking the collection that is already active does nothing. Renaming or deleting a
   collection other than the active one changes nothing Claude runs, so it
   leaves Claude's config alone and raises no **Restart Required**. Deleting
   the active collection makes the first local collection by name that has
@@ -173,20 +173,22 @@ Escape cancels any of these sheets, and the connector editor, as its
   apart at the far end, **Delete**. The rows of a subscribed collection
   can't be ticked.
 
-The column after the name says what the connector runs: a remote
-connector's host, or a local one's program with its paths, URLs and package
-names — `npx …/server-filesystem ~/Documents`. It is built to leave secrets
-out. It shows the program's name, a URL as its scheme, host and port, a
-file path with your home folder shortened to `~`, and a package's name. It
-leaves out whatever follows a flag named like a secret (anything with token,
-key, secret, pass, pwd, pw, auth, credential or bearer in it), any
-`KEY=value` word, a URL's user name and password and its query string, long
-random-looking strings, and everything it does not recognise, flags
-included. It is a best-effort mask, not a guarantee: a secret shaped like a
-path or a package name, or one following a flag that is not named like a
-secret, still shows, as does one written into a real hostname, or a
-hyphenated word in the place where npx or uvx names the server it runs.
-Check the column before you share a screenshot of the window.
+The column after the name says what the connector runs: a remote connector's
+host (with its scheme, `https://mcp.example.com`, for one Claude reaches by
+URL alone rather than through mcp-remote), or a local one's program with its
+paths, URLs and package names — `npx …/server-filesystem ~/Documents`. It is
+built to leave secrets out. It shows the program's name, a URL as its
+scheme, host and port, a file path with your home folder shortened to `~`,
+and a package's name. It leaves out whatever follows a flag named like a
+secret (anything with token, key, secret, pass, pwd, pw, auth, credential or
+bearer in it), any `KEY=value` word, a URL's user name and password and its
+query string, long random-looking strings, and everything it does not
+recognise, flags included. It is a best-effort mask, not a guarantee: a
+secret shaped like a path or a package name, or one following a flag that is
+not named like a secret, still shows, as does one written into a real
+hostname, or a hyphenated word in the place where npx or uvx names the
+server it runs. Check the column before you share a screenshot of the
+window.
 
 **Copy to** lists every other collection — a subscribed one is listed but
 dimmed and marked "read-only", since its connectors are the author's — then
@@ -202,7 +204,7 @@ Export sheet on the ticked rows. **Delete** asks first — "Delete
 deleting from the active collection applies at once.
 
 <p align="center">
-  <img src="docs/screenshots/mac-collections-window.png" width="620" alt="The Collections window on macOS: collections in the sidebar with a chain on the subscribed one; the selected collection's name with its pills and a more menu; its connectors with ticks, names, what each one runs and edit pencils; and the selection bar along the bottom.">
+  <img src="docs/screenshots/mac-collections-window.png" width="620" alt="The Collections window on macOS: collections in the sidebar with a chain on the subscribed one; the selected collection's name with its pills and a More menu, and under it the connector count and the + that adds one; its connectors with ticks, names and what each one runs; and the selection bar along the bottom.">
 </p>
 
 The master list file (mcps.json) is v2 (collection-aware); older v1 files,
@@ -566,10 +568,10 @@ connectors missing from Claude's config are flagged for restore rather than
 ever being silently dropped. While a subscribed collection is active, a connector
 added outside the app goes into a local collection instead: the one Claude's config
 was last applied from if that is local, otherwise the first local collection by name,
-or a new, empty "Default" if there is none. The subscribed collection stays as its
-author published it, and the notification names where the connector went (at launch,
-when nothing is notified, the banner does). Claude only
-reads its config at startup, hence the Restart Required flow.
+or, if there is none, a new, empty one named "Default" ("Default 2" and so on if that is
+taken). The subscribed collection stays as its author published it, and the notification
+names where the connector went (at launch, when nothing is notified, the banner does).
+Claude only reads its config at startup, hence the Restart Required flow.
 
 On Windows, **Restart Claude** asks Claude Desktop to end its session cleanly
 (the same request Windows sends at sign-out) and relaunches it from its Start
@@ -582,7 +584,7 @@ you point it at any file.
 
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/mac-settings-general.png" width="290" alt="Settings, General tab: launch at login, confirm before restarting Claude, confirm before quitting, notify about outside changes, and update options."><br><sub>General</sub></td>
+    <td align="center"><img src="docs/screenshots/mac-settings-general.png" width="290" alt="Settings, General tab: launch at login, confirm before restarting Claude, confirm before quitting, notify on external changes, and update options."><br><sub>General</sub></td>
     <td align="center"><img src="docs/screenshots/mac-settings-storage.png" width="290" alt="Settings, Storage tab: the master list location (here a OneDrive folder) and the backup retention count with Reveal in Finder and Restore buttons."><br><sub>Storage</sub></td>
     <td align="center"><img src="docs/screenshots/mac-settings-claude.png" width="290" alt="Settings, Claude tab: the Claude app path and a Tools table showing whether npx, node, uvx and uv are installed where Claude can find them."><br><sub>Claude</sub></td>
   </tr>

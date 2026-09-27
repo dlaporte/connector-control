@@ -20,8 +20,6 @@ bullet once the section is about to ship.
 - Opening a connector whose editor is already open brings that editor forward even if the
   connector was switched on or off in the meantime, rather than opening a second editor for
   it, as on Windows.
-- Escape answers "Keep" when stopping publishing or deleting a published collection asks
-  whether to delete its file, as it does on Windows; before, Escape did nothing there.
 - Escape cancels every sheet in the Collections window, and the connector editor, as their
   Cancel buttons do.
 - A connector editor left open in 1.3 that macOS reopens after the upgrade closes itself,
@@ -58,7 +56,8 @@ bullet once the section is about to ship.
   all say Delete where they said Remove.
 - In "Also delete <file> from the folder?", asked by Stop Publishing and by Delete of a
   published collection, Return and Escape both answer Keep. Delete, shown as the
-  destructive answer, needs a click; before, Return deleted the file.
+  destructive answer, needs a click; before, Return deleted the file, and on the Mac
+  Escape did nothing.
 - In the Collections window, clicking a connector's row opens its editor, and the
   pencil at the end of the row is gone, so what the connector runs has the room. A click
   on or beside a row's tick ticks it instead. The rows highlight under the pointer, and
@@ -129,9 +128,8 @@ bullet once the section is about to ship.
   only what applies to that collection: Make Active, Rename, Duplicate or Make Local
   Copy, Start Publishing or Publishing Settings and Stop Publishing, Show Published File
   or Show Source File, Refresh, Stop Syncing, Export All and Delete. The + beside the
-  count, under the ⋯, adds a connector, and each row's pencil opens its editor.
-  Double-clicking a collection in the sidebar makes it active; double-clicking the
-  active one does nothing.
+  count, under the ⋯, adds a connector. Double-clicking a collection in the sidebar makes
+  it active; double-clicking the active one does nothing.
 - A change that alters nothing Claude runs, such as renaming or deleting a collection
   other than the active one, leaves Claude's config alone and raises no Restart Required.
 - Each row says what its connector runs: a remote connector's host (with its scheme for
@@ -175,9 +173,9 @@ bullet once the section is about to ship.
 - A connector added to Claude's configuration outside the app, by an installer or a hand
   edit, while a subscribed collection is active goes into a local collection: the one
   Claude's configuration was last applied from if that is local, else the first local one
-  by name, else a new, empty "Default". Before, it went into the subscribed collection,
-  where it could be neither edited nor deleted, and the next Review & Apply deleted it
-  from Claude. The notification names where it went; at launch, when nothing is notified,
+  by name, else a new, empty one named "Default" ("Default 2" and so on if that is
+  taken). Before, it went into the subscribed collection, where it could be neither
+  edited nor deleted, and the next Review & Apply deleted it from Claude. The notification names where it went; at launch, when nothing is notified,
   the banner does. The same holds while the collections file can't be read for a moment,
   as when a sync tool is halfway through writing it.
 - When the active collection has no connectors, the popover (Mac) and flyout (Windows) say
