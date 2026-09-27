@@ -3005,6 +3005,15 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.store.collections["Data team"]?.mcps["dbt 2"])
     }
 
+    /// A source that is not there is a refusal, not a success, and nothing is made.
+    func testCopyingAMissingCollectionIsRefused() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertEqual(state.duplicateCollection("Nope", named: "Copy"), "No collection named “Nope”.")
+        XCTAssertEqual(state.makeLocalCopyOfCollection("Nope", named: "Copy"), "No collection named “Nope”.")
+        XCTAssertEqual(state.collectionNames, ["Default"])
+    }
+
     func testMakeLocalCopyOfAWholeSyncedCollection() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
@@ -3025,7 +3034,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.kind(of: "Data team"), .synced)
 
         XCTAssertNotNil(state.makeLocalCopyOfCollection("Data team", named: "Data team copy"), "a name already taken is refused")
-        XCTAssertNil(state.makeLocalCopyOfCollection("Nowhere", named: "Ghost"))
+        XCTAssertEqual(state.makeLocalCopyOfCollection("Nowhere", named: "Ghost"), "No collection named “Nowhere”.")
         XCTAssertFalse(state.collectionNames.contains("Ghost"))
     }
 

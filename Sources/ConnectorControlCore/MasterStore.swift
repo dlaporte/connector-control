@@ -148,7 +148,7 @@ public struct MasterStore: Equatable, Codable, Sendable {
     }
 
     /// The one wording for a name no collection has, shared by switch, rename and delete.
-    static func noCollectionError(_ name: String) -> String { "No collection named \u{201C}\(name)\u{201D}." }
+    public static func noCollectionError(_ name: String) -> String { "No collection named \u{201C}\(name)\u{201D}." }
 
     public mutating func switchCollection(to name: String) -> String? {
         guard collections[name] != nil else { return Self.noCollectionError(name) }

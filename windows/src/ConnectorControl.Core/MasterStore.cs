@@ -162,7 +162,7 @@ public sealed class MasterStore : IEquatable<MasterStore>
     }
 
     /// <summary>The one wording for a name no collection has, shared by switch, rename and delete.</summary>
-    private static string NoCollectionError(string name) => $"No collection named “{name}”.";
+    public static string NoCollectionError(string name) => $"No collection named “{name}”.";
 
     public string? SwitchCollection(string name)
     {

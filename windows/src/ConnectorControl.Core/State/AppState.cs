@@ -2166,7 +2166,7 @@ public sealed class AppState : ObservableObject, IDisposable
     {
         if (!Store.Collections.TryGetValue(source, out var held))
         {
-            return null;
+            return MasterStore.NoCollectionError(source);
         }
         if (Store.AddCollection(newName) is { } error)
         {
@@ -2197,7 +2197,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// </summary>
     public string? DuplicateCollection(string source, string newName)
     {
-        if (!Store.Collections.TryGetValue(source, out var held) || IsSynced(source))
+        if (!Store.Collections.TryGetValue(source, out var held))
+        {
+            return MasterStore.NoCollectionError(source);
+        }
+        // A subscribed collection is copied by Make Local Copy, which the model offers instead.
+        if (IsSynced(source))
         {
             return null;
         }

@@ -1430,7 +1430,7 @@ public final class AppState: ObservableObject {
     /// recording where it came from. It does not become the active collection: everything in it
     /// is off, so switching would empty Claude's config. nil on success, else the message.
     public func makeLocalCopyOfCollection(_ source: String, named newName: String) -> String? {
-        guard let held = store.collections[source] else { return nil }
+        guard let held = store.collections[source] else { return MasterStore.noCollectionError(source) }
         if let error = store.addCollection(named: newName) { return error }
         let name = MasterStore.collectionName(newName)
         let date = today
@@ -1453,7 +1453,9 @@ public final class AppState: ObservableObject {
     /// keeps it. It does not become the active collection, so Claude's config is not touched.
     /// nil on success, else the message.
     public func duplicateCollection(_ source: String, named newName: String) -> String? {
-        guard let held = store.collections[source], !isSynced(source) else { return nil }
+        guard let held = store.collections[source] else { return MasterStore.noCollectionError(source) }
+        // A subscribed collection is copied by Make Local Copy, which the model offers instead.
+        guard !isSynced(source) else { return nil }
         if let error = store.addCollection(named: newName) { return error }
         let name = MasterStore.collectionName(newName)
         store.collections[name] = held

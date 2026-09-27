@@ -3502,6 +3502,17 @@ public class AppStateCollectionsTests
         Assert.False(state.Store.Collections["Data team"].Mcps.ContainsKey("dbt 2"));
     }
 
+    /// <summary>A source that is not there is a refusal, not a success, and nothing is made.</summary>
+    [Fact]
+    public void CopyingAMissingCollectionIsRefused()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Equal("No collection named “Nope”.", state.DuplicateCollection("Nope", "Copy"));
+        Assert.Equal("No collection named “Nope”.", state.MakeLocalCopyOfCollection("Nope", "Copy"));
+        Assert.Equal(["Default"], state.CollectionNames);
+    }
+
     [Fact]
     public void MakeLocalCopyOfAWholeSyncedCollection()
     {
@@ -3529,7 +3540,7 @@ public class AppStateCollectionsTests
         Assert.Equal(CollectionKind.Synced, state.KindOf("Data team"));
 
         Assert.NotNull(state.MakeLocalCopyOfCollection("Data team", "Data team copy"));
-        Assert.Null(state.MakeLocalCopyOfCollection("Nowhere", "Ghost"));
+        Assert.Equal("No collection named “Nowhere”.", state.MakeLocalCopyOfCollection("Nowhere", "Ghost"));
         Assert.DoesNotContain("Ghost", state.CollectionNames);
     }
 
