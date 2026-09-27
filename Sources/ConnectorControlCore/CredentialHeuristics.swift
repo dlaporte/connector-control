@@ -53,7 +53,7 @@ public enum CredentialHeuristics {
         return references > 0 && words.count <= 1 && words.allSatisfy { $0.allSatisfy { ("A"..."Z").contains($0) || ("a"..."z").contains($0) } }
     }
 
-    private static func isASCIILetterOrDigit(_ scalar: Unicode.Scalar) -> Bool {
+    static func isASCIILetterOrDigit(_ scalar: Unicode.Scalar) -> Bool {
         ("A"..."Z").contains(scalar) || ("a"..."z").contains(scalar) || ("0"..."9").contains(scalar)
     }
 

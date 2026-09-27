@@ -4073,6 +4073,9 @@ public class AppStateCollectionsTests
             state.PublishError);
         Assert.Equal(before, File.ReadAllBytes(file));
 
+        Assert.Null(state.Upsert("tool", Node(["x.js", "--header", $"Authorization:Bearer {LongToken}"], ("REGION", "us")), "tool"));
+        // A header argument, no space after the colon.
+        Assert.Equal(AppState.NewCredentialError("tool"), state.PublishError?.Message);
         Assert.Null(state.Upsert("tool", Node(["x.js"], ("REGION", LongToken)), "tool"));
         // A shared value, edited to a secret.
         Assert.Equal(AppState.NewCredentialError("tool"), state.PublishError?.Message);

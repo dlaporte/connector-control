@@ -427,6 +427,19 @@ final class CollectionDocumentTests: XCTestCase {
                        ["args[1].query.access_token looks like a credential", "args[2].userinfo looks like a credential"])
     }
 
+    /// A header written as an argument, as a `--header` flag takes it, is read as a header is, with
+    /// or without a space after the colon. A URL, a host and port, and a Windows path are not headers.
+    func testCredentialWarningsReadAHeaderWrittenAsAnArgument() {
+        let config: JSONValue = .object(["command": .string("npx"), "args": .array([
+            "--header", "Authorization:Bearer abc", "X-Api-Key:k1", "Authorization:${AUTH_HEADER}", "X-Team:alpha",
+            "https://mcp.example.com/sse", "localhost:8080", "C:\\tools\\srv.exe", "some text: sk-live-1",
+        ].map(JSONValue.string))])
+        XCTAssertEqual(CollectionDocument.credentialWarnings(config, sharedEnv: []), [
+            "args[1] looks like a credential", "args[2] looks like a credential", "args[3] refers to a credential",
+            "args[8] looks like a credential",
+        ])
+    }
+
     /// A warning says how the field holds its credential, and nothing more: written out as it
     /// travels, a `${…}` reference to one kept elsewhere, or a user part with no password. A field
     /// reviewed as a reference or a bare user that later holds a literal says something new.

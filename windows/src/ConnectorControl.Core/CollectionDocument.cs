@@ -1398,10 +1398,11 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     /// so a review keyed on the lines holds nothing derived from a secret. Each arg is tested whole and,
     /// for a literal "key: value" pair such as a <c>--header</c> flag's argument, on the text after the
     /// colon too, since the heuristic's own space check would otherwise hide a credential sitting right
-    /// after one; an arg that is a URL is read part by part as <c>url</c> is. Env is only tested for
-    /// names in <paramref name="sharedEnv"/> — the ones the author ticked to travel as a value rather
-    /// than a hint — since a hint-only value never leaves this machine. A connector Claude reaches by
-    /// URL keeps its secret in <c>headers</c> or in <c>url</c>: a header is read as
+    /// after one; an arg that is a header, with or without that space (<see cref="HeaderArgument"/>), is
+    /// read as a header is; and an arg that is a URL is read part by part as <c>url</c> is. Env is only
+    /// tested for names in <paramref name="sharedEnv"/> — the ones the author ticked to travel as a value
+    /// rather than a hint — since a hint-only value never leaves this machine. A connector Claude reaches
+    /// by URL keeps its secret in <c>headers</c> or in <c>url</c>: a header is read as
     /// <see cref="CredentialKindOf"/> reads it, and the URL's parts are those
     /// <see cref="CredentialPartsOfUrl"/> names.
     /// </summary>
@@ -1424,9 +1425,11 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                 var s = item.StringValue;
                 var colon = s.IndexOf(": ", StringComparison.Ordinal);
                 var afterColon = colon >= 0 ? s[(colon + 2)..] : null;
-                if (CredentialHeuristics.LooksLikeCredential(s) || (afterColon is not null && CredentialHeuristics.LooksLikeCredential(afterColon)))
+                var literal = CredentialHeuristics.LooksLikeCredential(s) || (afterColon is not null && CredentialHeuristics.LooksLikeCredential(afterColon));
+                var header = HeaderArgument(s) is { } pair ? CredentialKindOf(pair.Name, pair.Value) : null;
+                if ((literal ? CredentialKind.Literal : header) is { } kind)
                 {
-                    warnings.Add($"args[{i}] {Phrase(CredentialKind.Literal)}");
+                    warnings.Add($"args[{i}] {Phrase(kind)}");
                 }
                 warnings.AddRange(CredentialPartsOfUrl(s).Select(p => $"args[{i}].{p.Part} {Phrase(p.Kind)}"));
             }
@@ -1500,6 +1503,22 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
             return CredentialKind.Literal;
         }
         return CredentialHeuristics.NamesASecret(name) && !Placeholder.ContainsMarker(value) ? CredentialKind.Literal : null;
+    }
+
+    /// <summary>
+    /// A <c>Name:value</c> header written as an argument, as a <c>--header</c> flag takes it, with or
+    /// without a space after the colon: a name of letters, digits, <c>-</c> and <c>_</c>, and the value
+    /// after the colon and any spaces. Null for anything else, a URL's <c>scheme://</c> included.
+    /// </summary>
+    internal static (string Name, string Value)? HeaderArgument(string text)
+    {
+        var colon = text.IndexOf(':');
+        if (colon <= 0 || !text[..colon].All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_'))
+        {
+            return null;
+        }
+        var value = text[(colon + 1)..].TrimStart(' ');
+        return value.StartsWith("//", StringComparison.Ordinal) ? null : (text[..colon], value);
     }
 
     /// <summary>

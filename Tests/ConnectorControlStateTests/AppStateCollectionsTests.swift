@@ -3516,6 +3516,9 @@ final class AppStateCollectionsTests: XCTestCase {
             collection: "Default", message: AppState.newCredentialError("tool"), kind: .blockedForReview))
         XCTAssertEqual(try Data(contentsOf: file), before)
 
+        XCTAssertNil(state.upsert(name: "tool", entry: node(["x.js", "--header", "Authorization:Bearer \(longToken)"], env: ["REGION": "us"]),
+                                  renamedFrom: "tool"))
+        XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("tool"), "a header argument, no space after the colon")
         XCTAssertNil(state.upsert(name: "tool", entry: node(["x.js"], env: ["REGION": longToken]), renamedFrom: "tool"))
         XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("tool"), "a shared value, edited to a secret")
         XCTAssertFalse(try jsonFile(file, contains: longToken))

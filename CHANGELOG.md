@@ -103,6 +103,9 @@ bullet once the section is about to ship.
   with a user name or password in it. A value that only refers to a credential kept elsewhere
   (`Bearer ${API_TOKEN}`, a placeholder) "refers to a credential", and a URL user with no
   password "names a user"; either one later given the credential itself waits for review.
+  A header passed as an argument is read as a header, with or without a space after the
+  colon (`Authorization:Bearer …`), so mcp-remote's `--header "Authorization:${AUTH}"`
+  reads "refers to a credential".
 - The sheet also lists every mark it could not place and every path this machine keeps
   back that the document would otherwise carry as written, a copy of a ticked path in any
   field included, all at once, each with its connector and field; Publish and Export wait until every one is ticked where it now sits, forgotten

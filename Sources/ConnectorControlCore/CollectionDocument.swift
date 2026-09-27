@@ -761,11 +761,12 @@ public struct CollectionDocument: Equatable, Sendable {
     /// a review keyed on the lines holds nothing derived from a secret. Each arg is tested whole and,
     /// for a literal "key: value" pair such as a `--header` flag's argument, on the text after the
     /// colon too, since the heuristic's own space check would otherwise hide a credential sitting
-    /// right after one; an arg that is a URL is read part by part as `url` is. Env is only tested for
-    /// names in `sharedEnv` — the ones the author ticked to travel as a value rather than a hint —
-    /// since a hint-only value never leaves this machine. A connector Claude reaches by URL keeps its
-    /// secret in `headers` or in `url`: a header is read as `credentialKind(named:holding:)` reads
-    /// it, and the URL's parts are those `credentialParts(ofURL:)` names.
+    /// right after one; an arg that is a header, with or without that space (`headerArgument`), is
+    /// read as a header is; and an arg that is a URL is read part by part as `url` is. Env is only
+    /// tested for names in `sharedEnv` — the ones the author ticked to travel as a value rather than a
+    /// hint — since a hint-only value never leaves this machine. A connector Claude reaches by URL
+    /// keeps its secret in `headers` or in `url`: a header is read as `credentialKind(named:holding:)`
+    /// reads it, and the URL's parts are those `credentialParts(ofURL:)` names.
     public static func credentialWarnings(_ config: JSONValue, sharedEnv: Set<String>) -> [String] {
         guard case .object(let object) = config else { return [] }
         var warnings: [String] = []
@@ -773,8 +774,10 @@ public struct CollectionDocument: Equatable, Sendable {
             for (index, value) in args.enumerated() {
                 guard case .string(let s) = value else { continue }
                 let afterColon = s.range(of: ": ").map { String(s[$0.upperBound...]) }
-                if CredentialHeuristics.looksLikeCredential(s) || (afterColon.map(CredentialHeuristics.looksLikeCredential) ?? false) {
-                    warnings.append("args[\(index)] \(CredentialKind.literal.phrase)")
+                let literal = CredentialHeuristics.looksLikeCredential(s) || (afterColon.map(CredentialHeuristics.looksLikeCredential) ?? false)
+                let header = headerArgument(s).flatMap { credentialKind(named: $0.name, holding: $0.value) }
+                if let kind = literal ? CredentialKind.literal : header {
+                    warnings.append("args[\(index)] \(kind.phrase)")
                 }
                 warnings += credentialParts(ofURL: s).map { "args[\(index)].\($0.part) \($0.kind.phrase)" }
             }
@@ -825,6 +828,18 @@ public struct CollectionDocument: Equatable, Sendable {
         if CredentialHeuristics.isReference(value) { return CredentialHeuristics.namesASecret(name) ? .reference : nil }
         if looksLikeSecret(value) { return .literal }
         return CredentialHeuristics.namesASecret(name) && !Placeholder.containsMarker(value) ? .literal : nil
+    }
+
+    /// A `Name:value` header written as an argument, as a `--header` flag takes it, with or without a
+    /// space after the colon: a name of letters, digits, `-` and `_`, and the value after the colon and
+    /// any spaces. nil for anything else, a URL's `scheme://` included.
+    static func headerArgument(_ text: String) -> (name: String, value: String)? {
+        let scalars = Array(text.unicodeScalars)
+        guard let colon = scalars.firstIndex(of: ":"), colon > 0,
+              scalars[..<colon].allSatisfy({ CredentialHeuristics.isASCIILetterOrDigit($0) || $0 == "-" || $0 == "_" }) else { return nil }
+        let value = scalars[(colon + 1)...].drop { $0 == " " }
+        guard !value.starts(with: ["/", "/"]) else { return nil }
+        return (String(String.UnicodeScalarView(scalars[..<colon])), String(String.UnicodeScalarView(value)))
     }
 
     /// The parts of a URL that can carry a secret, each named as a warning names it with how it holds

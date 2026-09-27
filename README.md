@@ -266,8 +266,8 @@ rewrites the document.
 The bearer token, custom header value or OAuth client secret set in a
 remote connector's Authentication fields always becomes a placeholder,
 whatever you tick. A header typed straight into the arguments travels as
-written, so check the preview for one; the warnings under it catch a value
-that looks like a credential. Enabled flags never travel, so turning a
+written, so check the preview for one; the warnings under it read it as a
+header, with or without a space after the colon (`Authorization:Bearer …`). Enabled flags never travel, so turning a
 connector on or off never rewrites the document.
 
 `${COLLECTION_DIR}` is the other way to keep a path out of a document. Write

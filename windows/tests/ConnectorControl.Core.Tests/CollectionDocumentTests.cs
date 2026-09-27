@@ -577,6 +577,26 @@ public class CollectionDocumentTests
     }
 
     /// <summary>
+    /// A header written as an argument, as a <c>--header</c> flag takes it, is read as a header is, with or
+    /// without a space after the colon. A URL, a host and port, and a Windows path are not headers.
+    /// </summary>
+    [Fact]
+    public void CredentialWarningsReadAHeaderWrittenAsAnArgument()
+    {
+        var config = JsonValue.Object(
+            ("command", JsonValue.String("npx")),
+            ("args", JsonValue.Array(new[]
+            {
+                "--header", "Authorization:Bearer abc", "X-Api-Key:k1", "Authorization:${AUTH_HEADER}", "X-Team:alpha",
+                "https://mcp.example.com/sse", "localhost:8080", "C:\\tools\\srv.exe", "some text: sk-live-1",
+            }.Select(JsonValue.String))));
+        Assert.Equal(
+            ["args[1] looks like a credential", "args[2] looks like a credential", "args[3] refers to a credential",
+             "args[8] looks like a credential"],
+            CollectionDocument.CredentialWarnings(config, new HashSet<string>(StringComparer.Ordinal)));
+    }
+
+    /// <summary>
     /// A warning says how the field holds its credential, and nothing more: written out as it travels, a
     /// <c>${…}</c> reference to one kept elsewhere, or a user part with no password. A field reviewed as a
     /// reference or a bare user that later holds a literal says something new.
