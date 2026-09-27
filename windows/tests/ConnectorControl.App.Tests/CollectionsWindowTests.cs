@@ -580,10 +580,10 @@ public class CollectionsWindowTests
             Assert.Equal(CollectionsModel.AddConnectorTooltip, AutomationProperties.GetName(window.AddConnectorButton));
             // The plus shares the header's second line with the count, and sits under the More.
             Assert.Equal([window.AddConnectorButton, window.ConnectorCountText],
-                window.ConnectorsHeader.Children.Cast<UIElement>());
+                window.CountLine.Children.Cast<UIElement>());
             Assert.Equal(Dock.Right, DockPanel.GetDock(window.AddConnectorButton));
             Assert.Equal(window.MoreButton.ActualWidth, window.AddConnectorButton.ActualWidth);
-            var height = window.ConnectorsHeader.ActualHeight;
+            var height = window.CountLine.ActualHeight;
 
             // The same button on a synced collection is dead, and its tooltip says where
             // additions go instead.
@@ -593,7 +593,7 @@ public class CollectionsWindowTests
             Assert.Equal(CollectionsModel.AddConnectorDisabledTooltip, window.AddConnectorButton.ToolTip);
             Assert.Equal(CollectionsModel.AddConnectorDisabledTooltip, AutomationProperties.GetName(window.AddConnectorButton));
             // A dead plus holds the line open as a live one does, so the rows do not move.
-            Assert.Equal(height, window.ConnectorsHeader.ActualHeight);
+            Assert.Equal(height, window.CountLine.ActualHeight);
         });
     }
 

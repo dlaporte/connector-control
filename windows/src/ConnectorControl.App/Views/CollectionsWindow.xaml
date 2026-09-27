@@ -265,7 +265,7 @@
              instead. The plus is shorter than the More, so the two lines sit close. A source failure
              in the count can name a raw path. WPF has no middle ellipsis, so a pane too narrow for
              one loses its tail; the Mac window elides the middle and keeps the file name. -->
-        <DockPanel x:Name="ConnectorsHeader">
+        <DockPanel x:Name="CountLine">
           <Button x:Name="AddConnectorButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;"
                   Height="22" IsEnabled="{Binding CanAddConnector}" ToolTip="{Binding AddConnectorTooltipText}"
                   AutomationProperties.Name="{Binding AddConnectorTooltipText}"
