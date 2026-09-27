@@ -412,7 +412,7 @@ final class CollectionDocumentTests: XCTestCase {
         ])
         XCTAssertEqual(CollectionDocument.credentialWarnings(config, sharedEnv: []), [
             "headers.Authorization looks like a credential", "headers.X-Api-Key looks like a credential",
-            "headers.X-Trace looks like a credential",
+            "headers.X-Token-Later refers to a credential", "headers.X-Trace looks like a credential",
             "url.userinfo looks like a credential", "url.query.api_key looks like a credential",
             "url.query.sig looks like a credential",
         ])
@@ -424,7 +424,36 @@ final class CollectionDocumentTests: XCTestCase {
             .string("postgres://me:pw@localhost/db"), .string("https://mcp.example.com/sse?page=2"),
         ])])
         XCTAssertEqual(CollectionDocument.credentialWarnings(arguments, sharedEnv: []),
-                       ["args[1] looks like a credential", "args[2] looks like a credential"])
+                       ["args[1].query.access_token looks like a credential", "args[2].userinfo looks like a credential"])
+    }
+
+    /// A warning says how the field holds its credential, and nothing more: written out as it
+    /// travels, a `${…}` reference to one kept elsewhere, or a user part with no password. A field
+    /// reviewed as a reference or a bare user that later holds a literal says something new.
+    func testCredentialWarningsTellAReferenceOrAUserFromALiteral() {
+        func warnings(_ object: [String: JSONValue]) -> [String] {
+            CollectionDocument.credentialWarnings(.object(object), sharedEnv: [])
+        }
+        func header(_ name: String, _ value: String) -> [String: JSONValue] {
+            ["type": .string("http"), "url": .string("https://mcp.example.com/mcp"), "headers": .object([name: .string(value)])]
+        }
+        func url(_ url: String) -> [String: JSONValue] { ["type": .string("http"), "url": .string(url)] }
+        XCTAssertEqual(warnings(header("Authorization", "Bearer ${API_TOKEN}")), ["headers.Authorization refers to a credential"])
+        XCTAssertEqual(warnings(header("Authorization", "${CC_NEEDS:TOKEN}")), ["headers.Authorization refers to a credential"])
+        XCTAssertEqual(warnings(header("Authorization", "Bearer abc")), ["headers.Authorization looks like a credential"])
+        XCTAssertEqual(warnings(header("Authorization", "Bearer ${A} extra")), ["headers.Authorization looks like a credential"],
+                       "a reference beside more than a scheme word")
+        XCTAssertEqual(warnings(header("X-Team", "${TEAM}")), [])
+        XCTAssertEqual(warnings(url("https://reader@db.example.com/mcp")), ["url.userinfo names a user"])
+        XCTAssertEqual(warnings(url("https://reader:@db.example.com/mcp")), ["url.userinfo names a user"])
+        XCTAssertEqual(warnings(url("https://reader:${DB_PASSWORD}@db.example.com/mcp")), ["url.userinfo refers to a credential"])
+        XCTAssertEqual(warnings(url("https://reader:s3cret@db.example.com/mcp")), ["url.userinfo looks like a credential"])
+        XCTAssertEqual(warnings(url("https://ghp_abc@git.example.com/mcp")), ["url.userinfo looks like a credential"],
+                       "a token as the user")
+        XCTAssertEqual(warnings(url("https://mcp.example.com/mcp?api_key=${KEY}")), ["url.query.api_key refers to a credential"])
+        XCTAssertEqual(warnings(url("https://mcp.example.com/mcp#token=${KEY}")), ["url.fragment.token refers to a credential"])
+        XCTAssertEqual(warnings(["command": .string("node"), "args": .array([.string("postgres://reader@localhost/db")])]),
+                       ["args[0].userinfo names a user"])
     }
 
     /// Some remote servers take their key in the URL's path, as a long random segment, or in its

@@ -3585,6 +3585,33 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertFalse(try jsonFile(file, contains: longToken))
     }
 
+    /// A header reviewed while it only referred to a credential, and a URL reviewed with a user and
+    /// no password, each later given a literal token, wait for review: the warning says how the field
+    /// holds its credential, so the literal is one the review has not seen.
+    func testALiteralTokenWhereAReferenceOrAUserWasReviewedWaitsForReview() throws {
+        for (label, reviewed, literal) in [
+            ("a header", ["Authorization": JSONValue.string("Bearer ${API_TOKEN}")], ["Authorization": JSONValue.string("Bearer \(longToken)")]),
+            ("a user part", [:], [:]),
+        ] {
+            let (h, state) = AppStateHarness.started()
+            defer { h.dispose() }
+            func api(_ url: String, _ headers: [String: JSONValue]) -> MCPEntry {
+                var object: [String: JSONValue] = ["type": .string("http"), "url": .string(url)]
+                if !headers.isEmpty { object["headers"] = .object(headers) }
+                return MCPEntry(config: .object(object))
+            }
+            let userURL = label == "a user part"
+            XCTAssertNil(state.upsert(name: "api", entry: api(userURL ? "https://reader@db.example.com/mcp" : "https://mcp.example.com/mcp", reviewed),
+                                      renamedFrom: nil))
+            let file = try h.publish(state, "Default")
+            let before = try Data(contentsOf: file)
+            XCTAssertNil(state.upsert(name: "api", entry: api(userURL ? "https://reader:\(longToken)@db.example.com/mcp" : "https://mcp.example.com/mcp",
+                                                              literal), renamedFrom: "api"))
+            XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("api"), label)
+            XCTAssertEqual(try Data(contentsOf: file), before, label)
+        }
+    }
+
     /// A binding from before reviews were kept has reviewed what it already published: at the
     /// first load that finds the folder holding what the collection renders, all of it. One that
     /// meets a change it never published has reviewed only what the folder holds unchanged.

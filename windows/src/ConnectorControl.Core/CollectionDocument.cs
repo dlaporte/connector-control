@@ -1392,16 +1392,18 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
 
     /// <summary>
     /// "args[N] looks like a credential" / "env.NAME looks like a credential" /
-    /// "headers.NAME looks like a credential" / "url.userinfo looks like a credential" /
-    /// "url.query.NAME looks like a credential" lines for the publish preview; never an edit. Each
-    /// arg is tested whole and, for a literal "key: value" pair such as a <c>--header</c> flag's
-    /// argument, on the text after the colon too, since the heuristic's own space check would
-    /// otherwise hide a credential sitting right after one; an arg that is a URL is read as
-    /// <c>url</c> is. Env is only tested for names in <paramref name="sharedEnv"/> — the ones the
-    /// author ticked to travel as a value rather than a hint — since a hint-only value never leaves
-    /// this machine. A connector Claude reaches by URL keeps its secret in <c>headers</c> or in
-    /// <c>url</c>: a header named for a secret (<see cref="CredentialHeuristics.NamesASecret"/>) or
-    /// holding one, and the URL parts <see cref="CredentialPartsOfUrl"/> names.
+    /// "headers.NAME refers to a credential" / "url.userinfo names a user" /
+    /// "args[N].query.NAME looks like a credential" … lines for the publish preview; never an edit. Each
+    /// names the field and how it holds its credential (<see cref="CredentialKind"/>), and nothing else,
+    /// so a review keyed on the lines holds nothing derived from a secret. Each arg is tested whole and,
+    /// for a literal "key: value" pair such as a <c>--header</c> flag's argument, on the text after the
+    /// colon too, since the heuristic's own space check would otherwise hide a credential sitting right
+    /// after one; an arg that is a URL is read part by part as <c>url</c> is. Env is only tested for
+    /// names in <paramref name="sharedEnv"/> — the ones the author ticked to travel as a value rather
+    /// than a hint — since a hint-only value never leaves this machine. A connector Claude reaches by
+    /// URL keeps its secret in <c>headers</c> or in <c>url</c>: a header is read as
+    /// <see cref="CredentialKindOf"/> reads it, and the URL's parts are those
+    /// <see cref="CredentialPartsOfUrl"/> names.
     /// </summary>
     public static IReadOnlyList<string> CredentialWarnings(JsonValue config, IReadOnlySet<string> sharedEnv)
     {
@@ -1422,11 +1424,11 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                 var s = item.StringValue;
                 var colon = s.IndexOf(": ", StringComparison.Ordinal);
                 var afterColon = colon >= 0 ? s[(colon + 2)..] : null;
-                if (CredentialHeuristics.LooksLikeCredential(s) || (afterColon is not null && CredentialHeuristics.LooksLikeCredential(afterColon))
-                    || CredentialPartsOfUrl(s).Count > 0)
+                if (CredentialHeuristics.LooksLikeCredential(s) || (afterColon is not null && CredentialHeuristics.LooksLikeCredential(afterColon)))
                 {
-                    warnings.Add($"args[{i}] looks like a credential");
+                    warnings.Add($"args[{i}] {Phrase(CredentialKind.Literal)}");
                 }
+                warnings.AddRange(CredentialPartsOfUrl(s).Select(p => $"args[{i}].{p.Part} {Phrase(p.Kind)}"));
             }
         }
         if (config["env"] is { Kind: JsonKind.Object } env)
@@ -1435,7 +1437,7 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
             {
                 if (env[name] is { Kind: JsonKind.String } value && CredentialHeuristics.LooksLikeCredential(value.StringValue))
                 {
-                    warnings.Add($"env.{name} looks like a credential");
+                    warnings.Add($"env.{name} {Phrase(CredentialKind.Literal)}");
                 }
             }
         }
@@ -1443,32 +1445,75 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         {
             foreach (var name in headers.ObjectProperties.Keys.Order(StringComparer.Ordinal))
             {
-                if (headers[name] is { Kind: JsonKind.String } header && header.StringValue.Length > 0
-                    && !Placeholder.ContainsMarker(header.StringValue)
-                    && (CredentialHeuristics.NamesASecret(name) || CredentialHeuristics.LooksLikeCredential(header.StringValue)))
+                if (headers[name] is { Kind: JsonKind.String } header && CredentialKindOf(name, header.StringValue) is { } kind)
                 {
-                    warnings.Add($"headers.{name} looks like a credential");
+                    warnings.Add($"headers.{name} {Phrase(kind)}");
                 }
             }
         }
         if (config["url"] is { Kind: JsonKind.String } url)
         {
-            warnings.AddRange(CredentialPartsOfUrl(url.StringValue).Select(part => $"{part} looks like a credential"));
+            warnings.AddRange(CredentialPartsOfUrl(url.StringValue).Select(p => $"url.{p.Part} {Phrase(p.Kind)}"));
         }
         return warnings;
     }
 
     /// <summary>
-    /// The parts of a URL that can carry a secret, as a warning names them: <c>url.userinfo</c> for a
-    /// user part before the host; <c>url.path</c> for a path segment that looks like a credential or a
-    /// random token, the way some servers take their key; and <c>url.query.NAME</c> or
-    /// <c>url.fragment.NAME</c> for a parameter of the query, or of the fragment read as one, named for a
-    /// secret with a value, or holding a value that looks like a credential or a random token. None for
-    /// text with no <c>://</c>. Split by hand, one UTF-16 unit at a time as the Mac walks Unicode scalars,
+    /// How a field holds its credential, as its warning says it. Only the kind reaches the warning, and
+    /// so the review's key: a field that goes from a reference, or from a user with no password, to a
+    /// literal says something the review has not seen, and is held for review again.
+    /// </summary>
+    internal enum CredentialKind
+    {
+        /// <summary>Written out, as it travels.</summary>
+        Literal,
+        /// <summary>A <c>${…}</c> reference: the secret itself is supplied from somewhere else.</summary>
+        Reference,
+        /// <summary>A URL's user part with no password.</summary>
+        UserOnly,
+    }
+
+    private static string Phrase(CredentialKind kind) => kind switch
+    {
+        CredentialKind.Literal => "looks like a credential",
+        CredentialKind.Reference => "refers to a credential",
+        _ => "names a user",
+    };
+
+    /// <summary>
+    /// How a value under <paramref name="name"/> — a header, or a URL parameter — holds a credential, or
+    /// null when it holds none: a reference where it only refers to one under a name named for a secret,
+    /// a literal where it looks like one or its name is named for one.
+    /// </summary>
+    internal static CredentialKind? CredentialKindOf(string name, string value)
+    {
+        if (value.Length == 0)
+        {
+            return null;
+        }
+        if (CredentialHeuristics.IsReference(value))
+        {
+            return CredentialHeuristics.NamesASecret(name) ? CredentialKind.Reference : null;
+        }
+        if (LooksLikeSecret(value))
+        {
+            return CredentialKind.Literal;
+        }
+        return CredentialHeuristics.NamesASecret(name) && !Placeholder.ContainsMarker(value) ? CredentialKind.Literal : null;
+    }
+
+    /// <summary>
+    /// The parts of a URL that can carry a secret, each named as a warning names it with how it holds
+    /// it: <c>userinfo</c>, a user part before the host (a literal with a password, or a user that looks
+    /// like a token; a reference; or a user alone); <c>path</c>, a path segment that looks like a
+    /// credential or a random token, the way some servers take their key; and <c>query.NAME</c> or
+    /// <c>fragment.NAME</c>, a parameter of the query, or of the fragment read as one
+    /// (<see cref="CredentialKindOf"/>; a bare parameter only when it looks like a secret). None for text
+    /// with no <c>://</c>. Split by hand, one UTF-16 unit at a time as the Mac walks Unicode scalars,
     /// rather than by a URL parser: both platforms split it the same way, and a URL a parser would refuse
     /// can still carry a token.
     /// </summary>
-    internal static IReadOnlyList<string> CredentialPartsOfUrl(string text)
+    internal static IReadOnlyList<(string Part, CredentialKind Kind)> CredentialPartsOfUrl(string text)
     {
         var start = text.IndexOf("://", StringComparison.Ordinal);
         if (start < 0)
@@ -1477,10 +1522,24 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         }
         var rest = text[(start + 3)..];
         var authorityEnd = rest.IndexOfAny(['/', '?', '#']);
-        var parts = new List<string>();
-        if ((authorityEnd < 0 ? rest : rest[..authorityEnd]).Contains('@'))
+        var authority = authorityEnd < 0 ? rest : rest[..authorityEnd];
+        var parts = new List<(string Part, CredentialKind Kind)>();
+        var at = authority.LastIndexOf('@');
+        if (at >= 0)
         {
-            parts.Add("url.userinfo");
+            var userinfo = authority[..at];
+            var colon = userinfo.IndexOf(':');
+            if (colon >= 0)
+            {
+                var password = userinfo[(colon + 1)..];
+                parts.Add(("userinfo", password.Length == 0 ? CredentialKind.UserOnly
+                    : CredentialHeuristics.IsReference(password) ? CredentialKind.Reference : CredentialKind.Literal));
+            }
+            else
+            {
+                parts.Add(("userinfo", CredentialHeuristics.IsReference(userinfo) ? CredentialKind.Reference
+                    : LooksLikeSecret(userinfo) ? CredentialKind.Literal : CredentialKind.UserOnly));
+            }
         }
         var tail = authorityEnd < 0 ? string.Empty : rest[authorityEnd..];
         var hash = tail.IndexOf('#');
@@ -1489,35 +1548,35 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         var path = question < 0 ? beforeFragment : beforeFragment[..question];
         if (path.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(LooksLikeSecret))
         {
-            parts.Add("url.path");
+            parts.Add(("path", CredentialKind.Literal));
         }
         if (question >= 0)
         {
-            parts.AddRange(Parameters(beforeFragment[(question + 1)..], "url.query"));
+            parts.AddRange(Parameters(beforeFragment[(question + 1)..], "query"));
         }
         if (hash >= 0)
         {
-            parts.AddRange(Parameters(tail[(hash + 1)..], "url.fragment"));
+            parts.AddRange(Parameters(tail[(hash + 1)..], "fragment"));
         }
         return parts;
     }
 
     /// <summary>
     /// The <c>&amp;</c>-separated parameters of a query or a fragment that can carry a secret, each as
-    /// <c>section.NAME</c>: named for a secret with a value, or holding one that looks like a secret. A
-    /// bare parameter is its own value.
+    /// <c>section.NAME</c> with how it holds it. A bare parameter is its own value, and counts only when
+    /// it looks like a secret.
     /// </summary>
-    private static IEnumerable<string> Parameters(string text, string section)
+    private static IEnumerable<(string Part, CredentialKind Kind)> Parameters(string text, string section)
     {
         foreach (var pair in text.Split('&', StringSplitOptions.RemoveEmptyEntries))
         {
             var equals = pair.IndexOf('=');
             var name = equals < 0 ? pair : pair[..equals];
-            var value = equals < 0 ? pair : pair[(equals + 1)..];
-            var named = equals >= 0 && value.Length > 0 && !Placeholder.ContainsMarker(value) && CredentialHeuristics.NamesASecret(name);
-            if (named || LooksLikeSecret(value))
+            var kind = equals >= 0 ? CredentialKindOf(name, pair[(equals + 1)..])
+                : LooksLikeSecret(name) ? CredentialKind.Literal : null;
+            if (kind is { } found)
             {
-                yield return $"{section}.{name}";
+                yield return ($"{section}.{name}", found);
             }
         }
     }

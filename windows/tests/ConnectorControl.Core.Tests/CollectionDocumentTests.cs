@@ -557,7 +557,7 @@ public class CollectionDocumentTests
         Assert.Equal(
             [
                 "headers.Authorization looks like a credential", "headers.X-Api-Key looks like a credential",
-                "headers.X-Trace looks like a credential",
+                "headers.X-Token-Later refers to a credential", "headers.X-Trace looks like a credential",
                 "url.userinfo looks like a credential", "url.query.api_key looks like a credential",
                 "url.query.sig looks like a credential",
             ],
@@ -572,7 +572,39 @@ public class CollectionDocumentTests
                 JsonValue.String("mcp-remote"), JsonValue.String("https://mcp.example.com/sse?access_token=abc"),
                 JsonValue.String("postgres://me:pw@localhost/db"), JsonValue.String("https://mcp.example.com/sse?page=2"),
             ])));
-        Assert.Equal(["args[1] looks like a credential", "args[2] looks like a credential"], CollectionDocument.CredentialWarnings(arguments, none));
+        Assert.Equal(["args[1].query.access_token looks like a credential", "args[2].userinfo looks like a credential"],
+            CollectionDocument.CredentialWarnings(arguments, none));
+    }
+
+    /// <summary>
+    /// A warning says how the field holds its credential, and nothing more: written out as it travels, a
+    /// <c>${…}</c> reference to one kept elsewhere, or a user part with no password. A field reviewed as a
+    /// reference or a bare user that later holds a literal says something new.
+    /// </summary>
+    [Fact]
+    public void CredentialWarningsTellAReferenceOrAUserFromALiteral()
+    {
+        static IReadOnlyList<string> Warnings(params (string Key, JsonValue Value)[] properties) =>
+            CollectionDocument.CredentialWarnings(JsonValue.Object(properties), new HashSet<string>(StringComparer.Ordinal));
+        static IReadOnlyList<string> Header(string name, string value) => Warnings(
+            ("type", JsonValue.String("http")), ("url", JsonValue.String("https://mcp.example.com/mcp")),
+            ("headers", JsonValue.Object((name, JsonValue.String(value)))));
+        static IReadOnlyList<string> Url(string url) => Warnings(("type", JsonValue.String("http")), ("url", JsonValue.String(url)));
+        Assert.Equal(["headers.Authorization refers to a credential"], Header("Authorization", "Bearer ${API_TOKEN}"));
+        Assert.Equal(["headers.Authorization refers to a credential"], Header("Authorization", "${CC_NEEDS:TOKEN}"));
+        Assert.Equal(["headers.Authorization looks like a credential"], Header("Authorization", "Bearer abc"));
+        // A reference beside more than a scheme word.
+        Assert.Equal(["headers.Authorization looks like a credential"], Header("Authorization", "Bearer ${A} extra"));
+        Assert.Empty(Header("X-Team", "${TEAM}"));
+        Assert.Equal(["url.userinfo names a user"], Url("https://reader@db.example.com/mcp"));
+        Assert.Equal(["url.userinfo names a user"], Url("https://reader:@db.example.com/mcp"));
+        Assert.Equal(["url.userinfo refers to a credential"], Url("https://reader:${DB_PASSWORD}@db.example.com/mcp"));
+        Assert.Equal(["url.userinfo looks like a credential"], Url("https://reader:s3cret@db.example.com/mcp"));
+        Assert.Equal(["url.userinfo looks like a credential"], Url("https://ghp_abc@git.example.com/mcp"));   // a token as the user
+        Assert.Equal(["url.query.api_key refers to a credential"], Url("https://mcp.example.com/mcp?api_key=${KEY}"));
+        Assert.Equal(["url.fragment.token refers to a credential"], Url("https://mcp.example.com/mcp#token=${KEY}"));
+        Assert.Equal(["args[0].userinfo names a user"],
+            Warnings(("command", JsonValue.String("node")), ("args", JsonValue.Array([JsonValue.String("postgres://reader@localhost/db")]))));
     }
 
     /// <summary>

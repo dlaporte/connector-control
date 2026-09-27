@@ -42,6 +42,37 @@ public static class CredentialHeuristics
     private static readonly string[] SecretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"];
 
     /// <summary>
+    /// Whether <paramref name="value"/> takes its secret from somewhere else rather than holding it: one
+    /// or more <c>${NAME}</c> references — an environment variable, a <c>${CC_NEEDS:NAME}</c> placeholder
+    /// — with, beside them, at most one word of letters, an authentication scheme such as <c>Bearer</c>.
+    /// Walked one UTF-16 unit at a time, as the Mac walks Unicode scalars.
+    /// </summary>
+    public static bool IsReference(string value)
+    {
+        var rest = new System.Text.StringBuilder();
+        var references = 0;
+        var index = 0;
+        while (index < value.Length)
+        {
+            var close = index + 1 < value.Length && value[index] == '$' && value[index + 1] == '{'
+                ? value.IndexOf('}', index + 2)
+                : -1;
+            if (close > index + 2 && value[(index + 2)..close].All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or ':'))
+            {
+                references++;
+                index = close + 1;
+            }
+            else
+            {
+                rest.Append(value[index]);
+                index++;
+            }
+        }
+        var words = rest.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return references > 0 && words.Length <= 1 && words.All(word => word.All(char.IsAsciiLetter));
+    }
+
+    /// <summary>
     /// A random token rather than a name: with its slashes removed, at least 20 characters, with
     /// an upper-case letter, a lower-case letter and a digit, and none of <c>.</c>, <c>-</c> or
     /// <c>_</c>. An AWS secret key has this shape and a <c>/</c>, which <see cref="LooksLikeCredential"/>

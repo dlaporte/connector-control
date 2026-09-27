@@ -4151,6 +4151,35 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// A header reviewed while it only referred to a credential, and a URL reviewed with a user and no
+    /// password, each later given a literal token, wait for review: the warning says how the field holds
+    /// its credential, so the literal is one the review has not seen.
+    /// </summary>
+    [Theory]
+    [InlineData("a header")]
+    [InlineData("a user part")]
+    public void ALiteralTokenWhereAReferenceOrAUserWasReviewedWaitsForReview(string label)
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        static McpEntry Api(string url, string? authorization) => new(authorization is null
+            ? JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String(url)))
+            : JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String(url)),
+                ("headers", JsonValue.Object(("Authorization", JsonValue.String(authorization))))));
+        var userUrl = label == "a user part";
+        Assert.Null(state.Upsert("api", userUrl
+            ? Api("https://reader@db.example.com/mcp", null)
+            : Api("https://mcp.example.com/mcp", "Bearer ${API_TOKEN}"), null));
+        var file = h.Publish(state, "Default");
+        var before = File.ReadAllBytes(file);
+        Assert.Null(state.Upsert("api", userUrl
+            ? Api($"https://reader:{LongToken}@db.example.com/mcp", null)
+            : Api("https://mcp.example.com/mcp", $"Bearer {LongToken}"), "api"));
+        Assert.Equal(AppState.NewCredentialError("api"), state.PublishError?.Message);
+        Assert.Equal(before, File.ReadAllBytes(file));
+    }
+
+    /// <summary>
     /// A binding from before reviews were kept has reviewed what it already published: at the first
     /// load that finds the folder holding what the collection renders, all of it. One that meets a
     /// change it never published has reviewed only what the folder holds unchanged.

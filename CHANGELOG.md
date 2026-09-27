@@ -100,7 +100,9 @@ bullet once the section is about to ship.
   placeholder, and a preview shows every byte before it leaves, flagging any argument or
   shared value that looks like a credential, a header or URL query or fragment parameter
   named like a secret or holding one, a URL path segment that looks like a key, and a URL
-  with a user name or password in it.
+  with a user name or password in it. A value that only refers to a credential kept elsewhere
+  (`Bearer ${API_TOKEN}`, a placeholder) "refers to a credential", and a URL user with no
+  password "names a user"; either one later given the credential itself waits for review.
 - The sheet also lists every mark it could not place and every path this machine keeps
   back that the document would otherwise carry as written, a copy of a ticked path in any
   field included, all at once, each with its connector and field; Publish and Export wait until every one is ticked where it now sits, forgotten
