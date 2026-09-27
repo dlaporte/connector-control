@@ -218,8 +218,10 @@ final class ConfigServiceTests: XCTestCase {
         let result = try service.loadAndReconcile()
         XCTAssertEqual(result.store, withTeam, "the newest backup, with every collection it held")
         XCTAssertEqual(MasterStoreIO.read(from: paths.masterStoreURL), withTeam, "and it was saved")
-        let aside = try XCTUnwrap(try FileManager.default.contentsOfDirectory(atPath: paths.storeDirURL.path)
-            .first { $0.hasPrefix("mcps.corrupt.") })
+        let asides = try FileManager.default.contentsOfDirectory(atPath: paths.storeDirURL.path)
+            .filter { $0.hasPrefix("mcps.corrupt.") }
+        XCTAssertEqual(asides.count, 1, "the unreadable file is kept aside once")
+        let aside = try XCTUnwrap(asides.first)
         XCTAssertEqual(try Data(contentsOf: paths.storeDirURL.appendingPathComponent(aside)), Data("garbage".utf8))
         let taken = try XCTUnwrap(BackupManager.takenAt(backups[0]))
         XCTAssertEqual(result.notes, ["The MCP list file was unreadable; it was preserved as \(aside) and restored "
