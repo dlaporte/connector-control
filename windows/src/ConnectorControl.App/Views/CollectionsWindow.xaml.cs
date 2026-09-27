@@ -459,7 +459,7 @@ public partial class CollectionsWindow : Window
     {
         if (sender is CheckBox { DataContext: CollectionsModel.Row row } box && (box.IsChecked == true) != row.Checked)
         {
-            Model.SetChecked(row.Name, box.IsChecked == true);
+            KeepingRowFocus(() => Model.SetChecked(row.Name, box.IsChecked == true));
         }
         e.Handled = true;
     }
@@ -500,7 +500,7 @@ public partial class CollectionsWindow : Window
                 OpenEditor(Model.EditTargetFor(row.Name));
                 break;
             case Key.Space:
-                Model.ToggleChecked(row.Name);
+                KeepingRowFocus(() => Model.ToggleChecked(row.Name));
                 break;
             case Key.Up:
             case Key.Down:
@@ -536,9 +536,31 @@ public partial class CollectionsWindow : Window
     {
         if (sender is FrameworkElement { DataContext: CollectionsModel.Row row })
         {
-            Model.ToggleChecked(row.Name);
+            KeepingRowFocus(() => Model.ToggleChecked(row.Name));
         }
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// Every tick goes through here. The model answers one with a new list of rows, and a new list
+    /// is new elements, so the row that held the focus goes and the focus with it: Space would
+    /// then tick once and do nothing after. This puts the focus back on the row of the same name
+    /// once the new rows are laid out. The Mac list keeps its rows by name, so its focus stays.
+    /// </summary>
+    private void KeepingRowFocus(Action tick)
+    {
+        var focused = FocusManager.GetFocusedElement(FocusManager.GetFocusScope(RowList)) is FrameworkElement { DataContext: CollectionsModel.Row row }
+            ? row.Name
+            : null;
+        tick();
+        if (focused is not null)
+        {
+            RowList.UpdateLayout();
+            if (RowBodyFor(focused) is { } body)
+            {
+                FocusRow(body);
+            }
+        }
     }
 
     /// <summary>

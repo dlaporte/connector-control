@@ -792,6 +792,43 @@ public class CollectionsWindowTests
         });
     }
 
+    /// <summary>
+    /// A tick rebuilds the rows, and the row the keyboard was on is a new element afterwards: the
+    /// focus goes to the new row of the same name, so the next Space reaches it, as on the Mac.
+    /// The second press goes to whatever holds the focus, as a key does, not to a row fetched anew.
+    /// </summary>
+    [Fact]
+    public void ATickKeepsTheFocusOnItsRow()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Showing(h, state, (window, recorder) =>
+        {
+            var first = window.Model.Rows[0].Name;
+            var body = InRow<Button>(window, first, "RowBody");
+            FocusManager.SetFocusedElement(window, body);
+
+            Press(window, body, Key.Space);
+            Assert.Equal([first], window.Model.CheckedNames);
+            var focused = Assert.IsAssignableFrom<Button>(FocusManager.GetFocusedElement(window));
+            // The tick rebuilt the rows, and the focus is on the rebuilt one.
+            Assert.NotSame(body, focused);
+            Assert.Same(InRow<Button>(window, first, "RowBody"), focused);
+
+            Press(window, focused, Key.Space);
+            Assert.Empty(window.Model.CheckedNames);
+            Assert.Same(InRow<Button>(window, first, "RowBody"), FocusManager.GetFocusedElement(window));
+
+            // A click in the slot focuses the row and ticks it, and the focus stays on it too.
+            MouseClick(window, InRow<Border>(window, first, "RowTickSlot"));
+            Assert.Equal([first], window.Model.CheckedNames);
+            Assert.Same(InRow<Button>(window, first, "RowBody"), FocusManager.GetFocusedElement(window));
+            Press(window, (UIElement)FocusManager.GetFocusedElement(window), Key.Space);
+            Assert.Empty(window.Model.CheckedNames);
+            Assert.Empty(recorder.Editors);
+        });
+    }
+
     [Fact]
     public void ASubscribedRowOpensReadOnlyAndItsLockSlotDoesNothing()
     {
