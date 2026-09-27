@@ -57,7 +57,10 @@ public class DialogTests
             var dialog = new ConfirmDialog("You're up to date.", null, "OK", null, destructive: false);
             Assert.Equal(Visibility.Collapsed, dialog.InformativeText.Visibility);
             Assert.Equal(Visibility.Collapsed, dialog.CancelButton.Visibility);
-            var destructive = new ConfirmDialog("Delete Collection “Work”?", "Its connector list is removed; backups keep prior states.", "Delete", "Cancel", destructive: true);
+            // Delete Collection's own question, informative and button, as CollectionsModel.Delete asks it.
+            var informative = string.Join(" ", CollectionsModel.DeleteConnectorsSentence(2), CollectionsModel.DeleteCopiesSentence,
+                CollectionsModel.DeleteCheckedInformative);
+            var destructive = new ConfirmDialog(AppState.DeleteCollectionMessage("Work"), informative, AppState.DeleteButton, "Cancel", destructive: true);
             Assert.Same(destructive.TryFindResource("DestructiveButton"), destructive.PrimaryButton.Style);
         });
     }
