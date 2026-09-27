@@ -155,13 +155,14 @@ public final class ImportModel: ObservableObject {
     /// target picker's binding, which has no caller to hand a message to.
     @Published public private(set) var failure: String?
     /// Which collection the copies land in. Changing it rebuilds the rows: a different target
-    /// collides with different connectors, so the badges and the ticks have to follow it.
-    @Published public var targetCollection: String {
+    /// collides with different connectors, so the badges and the ticks have to follow it. Set
+    /// only through `target`, which gives up a named new collection as it does.
+    @Published private var targetCollection: String {
         didSet { if targetCollection != oldValue { rebuildRows() } }
     }
     /// The name New Collection was given, while it is the target; nil while an existing collection
     /// is. Nothing by this name exists until `perform()` makes it.
-    @Published public private(set) var newCollectionName: String?
+    @Published private var newCollectionName: String?
     @Published public var syncName: String
     @Published public var rows: [Row] = []
 
@@ -206,12 +207,9 @@ public final class ImportModel: ObservableObject {
         ImportModel.sourceLine(documentName, author ?? ImportModel.unknownAuthor, rows.count)
     }
 
-    /// The collections copies may land in. A synced collection answers to its own document, so
-    /// it is never one of them.
-    public var localCollections: [String] { state.localCollectionNames }
-
-    /// What the target picker lists: every local collection, then New Collection.
-    public var targets: [Target] { localCollections.map(Target.collection) + [.newCollection] }
+    /// What the target picker lists: every local collection, then New Collection. A synced
+    /// collection answers to its own document, so it is never one of them.
+    public var targets: [Target] { state.localCollectionNames.map(Target.collection) + [.newCollection] }
 
     /// The picker's selection. Choosing New Collection asks for its name through AppState's
     /// dialogs, as Copy to ▸ New Collection does; a cancelled prompt leaves the target as it was.

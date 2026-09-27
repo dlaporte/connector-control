@@ -263,9 +263,10 @@ public sealed class ImportModel : ObservableObject
 
     /// <summary>
     /// Which collection the copies land in. Changing it rebuilds the rows: a different target
-    /// collides with different connectors, so the badges and the ticks have to follow it.
+    /// collides with different connectors, so the badges and the ticks have to follow it. Set
+    /// only through <see cref="ImportTarget"/>, which gives up a named new collection as it does.
     /// </summary>
-    public string TargetCollection
+    private string TargetCollection
     {
         get => targetCollection;
         set
@@ -283,10 +284,10 @@ public sealed class ImportModel : ObservableObject
     /// The name New Collection was given, while it is the target; null while an existing collection
     /// is. Nothing by this name exists until <see cref="Perform"/> makes it.
     /// </summary>
-    public string? NewCollectionName
+    private string? NewCollectionName
     {
         get => newCollectionName;
-        private set
+        set
         {
             if (Set(ref newCollectionName, value))
             {
@@ -295,8 +296,12 @@ public sealed class ImportModel : ObservableObject
         }
     }
 
-    /// <summary>What the target picker lists: every local collection, then New Collection.</summary>
-    public IReadOnlyList<Target> Targets => [.. LocalCollections.Select(name => new Target(name)), Target.NewCollection];
+    /// <summary>
+    /// What the target picker lists: every local collection, then New Collection. A synced
+    /// collection answers to its own document, so it is never one of them.
+    /// </summary>
+    public IReadOnlyList<Target> Targets =>
+        [.. state.LocalCollectionNames.Select(name => new Target(name)), Target.NewCollection];
 
     /// <summary>
     /// The picker's selection; the Mac calls this <c>target</c>, and here the nested record owns that
@@ -405,9 +410,6 @@ public sealed class ImportModel : ObservableObject
     /// Mac calls this <c>sourceLine</c>; here the static factory already owns that name.
     /// </summary>
     public string SourceSentence => SourceLine(DocumentName, Author ?? UnknownAuthor, Rows.Count);
-
-    /// <summary>The collections copies may land in. A synced collection answers to its own document, so it is never one of them.</summary>
-    public IReadOnlyList<string> LocalCollections => state.LocalCollectionNames;
 
     /// <summary>
     /// What the Import button counts: the rows that are ticked in add mode, and everything this

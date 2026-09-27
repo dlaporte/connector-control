@@ -19,8 +19,8 @@ final class ImportModelTests: XCTestCase {
         let model = ImportModel(state: state, path: url.path)
         XCTAssertNil(model.loadError)
         XCTAssertEqual(model.mode, .addToCollection)
-        XCTAssertEqual(model.targetCollection, "Default", "the active collection is local, so it is the target")
-        XCTAssertEqual(model.localCollections, ["Default"])
+        XCTAssertEqual(model.target, .collection("Default"), "the active collection is local, so it is the target")
+        XCTAssertEqual(model.targets, [.collection("Default"), .newCollection])
         XCTAssertEqual(model.sourceLine, ImportModel.sourceLine("Data team", "Acme Data Platform", 4))
         XCTAssertEqual(model.rows.map(\.name), ["dbt", "github", "ledger", "notion"])
         XCTAssertEqual(model.rows.map(\.present), [false, true, false, false])
@@ -59,11 +59,11 @@ final class ImportModelTests: XCTestCase {
         let url = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "shared/data-team.json")
         try h.subscribe(state, to: CollectionDocumentSamples.dataTeam, at: "other.json", as: "Team")
         XCTAssertNil(state.addEmptyCollection(named: "Work"))
-        XCTAssertEqual(ImportModel(state: state, path: url.path, selected: "Work").targetCollection, "Work")
-        XCTAssertEqual(ImportModel(state: state, path: url.path, selected: "Team").targetCollection, "Default",
+        XCTAssertEqual(ImportModel(state: state, path: url.path, selected: "Work").target, .collection("Work"))
+        XCTAssertEqual(ImportModel(state: state, path: url.path, selected: "Team").target, .collection("Default"),
                        "a subscribed collection takes no copies")
-        XCTAssertEqual(ImportModel(state: state, path: url.path).targetCollection, "Default")
-        XCTAssertEqual(ImportModel(state: state, path: url.path, selected: "Gone").targetCollection, "Default")
+        XCTAssertEqual(ImportModel(state: state, path: url.path).target, .collection("Default"))
+        XCTAssertEqual(ImportModel(state: state, path: url.path, selected: "Gone").target, .collection("Default"))
     }
 
     /// New Collection, the last of the targets, asks for a name when it is chosen and lands the

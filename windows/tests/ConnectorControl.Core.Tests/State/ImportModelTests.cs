@@ -23,8 +23,8 @@ public class ImportModelTests
         Assert.Null(model.LoadError);
         Assert.Equal(ImportModel.Mode.AddToCollection, model.ImportMode);
         // The active collection is local, so it is the target.
-        Assert.Equal("Default", model.TargetCollection);
-        Assert.Equal(["Default"], model.LocalCollections);
+        Assert.Equal(new ImportModel.Target("Default"), model.ImportTarget);
+        Assert.Equal([new ImportModel.Target("Default"), ImportModel.Target.NewCollection], model.Targets);
         Assert.Equal(ImportModel.SourceLine("Data team", "Acme Data Platform", 4), model.SourceSentence);
         Assert.Equal(["dbt", "github", "ledger", "notion"], model.Rows.Select(r => r.Name));
         Assert.Equal([false, true, false, false], model.Rows.Select(r => r.Present));
@@ -75,11 +75,11 @@ public class ImportModelTests
         var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, Path.Combine("shared", "data-team.json"));
         h.Subscribe(state, CollectionDocumentSamples.DataTeam, "other.json", "Team");
         Assert.Null(state.AddEmptyCollection("Work"));
-        Assert.Equal("Work", new ImportModel(state, path, "Work").TargetCollection);
+        Assert.Equal(new ImportModel.Target("Work"), new ImportModel(state, path, "Work").ImportTarget);
         // A subscribed collection takes no copies.
-        Assert.Equal("Default", new ImportModel(state, path, "Team").TargetCollection);
-        Assert.Equal("Default", new ImportModel(state, path).TargetCollection);
-        Assert.Equal("Default", new ImportModel(state, path, "Gone").TargetCollection);
+        Assert.Equal(new ImportModel.Target("Default"), new ImportModel(state, path, "Team").ImportTarget);
+        Assert.Equal(new ImportModel.Target("Default"), new ImportModel(state, path).ImportTarget);
+        Assert.Equal(new ImportModel.Target("Default"), new ImportModel(state, path, "Gone").ImportTarget);
     }
 
     /// <summary>
@@ -503,7 +503,7 @@ public class ImportModelTests
         // Rebuilding the rows lets the old ones go: the replaced row no longer reaches the model.
         var stale = model.Rows[1];
         Assert.Null(state.CreateActiveCopy("Other"));
-        model.TargetCollection = "Other";
+        model.ImportTarget = new ImportModel.Target("Other");
         raised.Clear();
         stale.Include = !stale.Include;
         Assert.Empty(raised);
@@ -537,7 +537,7 @@ public class ImportModelTests
         model.ImportMode = ImportModel.Mode.AddToCollection;
         Assert.Null(state.CreateActiveCopy("Other"));
         raised.Clear();
-        model.TargetCollection = "Other";
+        model.ImportTarget = new ImportModel.Target("Other");
         Assert.Contains(nameof(ImportModel.CanImport), raised);
         Assert.Contains(nameof(ImportModel.ImportCount), raised);
 
