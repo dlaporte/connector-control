@@ -40,37 +40,22 @@ final class CollectionTests: XCTestCase {
 
     // MARK: - Collection management
 
-    func testAddCollectionCopyingCurrent() {
+    func testAddCollectionStartsBlankAndLeavesTheActiveOne() {
         var store = MasterStore.single(["a": entry("https://a.example/mcp")])
-        let error = store.addCollection(named: "Copy", copyingCurrent: true)
-        XCTAssertNil(error)
-        XCTAssertEqual(store.activeCollection, "Copy")
-        XCTAssertEqual(store.collections["Copy"]?.mcps.keys.sorted(), ["a"])
-        XCTAssertEqual(store.collections["Default"]?.mcps.keys.sorted(), ["a"], "original untouched")
-    }
-
-    func testAddCollectionEmptyStartsBlank() {
-        var store = MasterStore.single(["a": entry("https://a.example/mcp")])
-        let error = store.addCollection(named: "Fresh", copyingCurrent: false)
-        XCTAssertNil(error)
-        XCTAssertEqual(store.collections["Fresh"]?.mcps, [:])
-    }
-
-    func testAddCollectionWithoutActivatingLeavesTheActiveOne() {
-        var store = MasterStore.single(["a": entry("https://a.example/mcp")])
-        XCTAssertNil(store.addCollection(named: "Fresh", copyingCurrent: false, activating: false))
+        XCTAssertNil(store.addCollection(named: " Fresh "))
         XCTAssertEqual(store.collections["Fresh"]?.mcps, [:])
         XCTAssertEqual(store.activeCollection, "Default")
+        XCTAssertEqual(store.collections["Default"]?.mcps.keys.sorted(), ["a"])
     }
 
     func testAddCollectionRejectsEmptyName() {
         var store = MasterStore.empty
-        XCTAssertEqual(store.addCollection(named: "   ", copyingCurrent: false), "Name must not be empty.")
+        XCTAssertEqual(store.addCollection(named: "   "), "Name must not be empty.")
     }
 
     func testAddCollectionRejectsDuplicateName() {
         var store = MasterStore.empty
-        XCTAssertEqual(store.addCollection(named: "Default", copyingCurrent: false),
+        XCTAssertEqual(store.addCollection(named: "Default"),
                        "A collection named “Default” already exists.")
     }
 
@@ -152,7 +137,7 @@ final class CollectionTests: XCTestCase {
 
     func testErrorMessagesUseTypographicPunctuationLikeTheMacApp() {
         var store = MasterStore.empty
-        let duplicate = store.addCollection(named: "Default", copyingCurrent: false)!
+        let duplicate = store.addCollection(named: "Default")!
         XCTAssertEqual(duplicate[duplicate.index(before: duplicate.range(of: "Default")!.lowerBound)], "“")
         XCTAssertEqual(duplicate[duplicate.range(of: "Default")!.upperBound], "”")
         XCTAssertTrue(store.deleteCollection(named: store.activeCollection)!.contains("’"))

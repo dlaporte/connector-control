@@ -411,9 +411,9 @@ final class StringCatalogTests: XCTestCase {
         // the reason this key names.
 
         var nameEmptyStore = MasterStore.empty
-        actual["MasterStore.nameEmptyError"] = nameEmptyStore.addCollection(named: "   ", copyingCurrent: false)
+        actual["MasterStore.nameEmptyError"] = nameEmptyStore.addCollection(named: "   ")
         var duplicateStore = MasterStore(activeCollection: "X", collections: ["X": Collection()])
-        actual["MasterStore.duplicateCollectionNameError"] = duplicateStore.addCollection(named: "X", copyingCurrent: false)
+        actual["MasterStore.duplicateCollectionNameError"] = duplicateStore.addCollection(named: "X")
         var deleteLastStore = MasterStore.empty
         actual["MasterStore.deleteLastCollectionError"] = deleteLastStore.deleteCollection(named: deleteLastStore.activeCollection)
         var unknownCollectionStore = MasterStore.empty

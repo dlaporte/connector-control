@@ -42,42 +42,25 @@ public class CollectionTests
     // Collection management
 
     [Fact]
-    public void AddCollectionCopyingCurrent()
+    public void AddCollectionStartsBlankAndLeavesTheActiveOne()
     {
         var store = new MasterStore(new Dictionary<string, McpEntry> { ["a"] = Entry("https://a.example/mcp") });
-        Assert.Null(store.AddCollection("Copy", copyingCurrent: true));
-        Assert.Equal("Copy", store.ActiveCollection);
-        Assert.Equal(["a"], Keys(store.Collections["Copy"]));
-        Assert.Equal(["a"], Keys(store.Collections["Default"]));
-    }
-
-    [Fact]
-    public void AddCollectionEmptyStartsBlank()
-    {
-        var store = new MasterStore(new Dictionary<string, McpEntry> { ["a"] = Entry("https://a.example/mcp") });
-        Assert.Null(store.AddCollection("Fresh", copyingCurrent: false));
-        Assert.Empty(store.Collections["Fresh"].Mcps);
-    }
-
-    [Fact]
-    public void AddCollectionWithoutActivatingLeavesTheActiveOne()
-    {
-        var store = new MasterStore(new Dictionary<string, McpEntry> { ["a"] = Entry("https://a.example/mcp") });
-        Assert.Null(store.AddCollection("Fresh", copyingCurrent: false, activating: false));
+        Assert.Null(store.AddCollection(" Fresh "));
         Assert.Empty(store.Collections["Fresh"].Mcps);
         Assert.Equal("Default", store.ActiveCollection);
+        Assert.Equal(["a"], Keys(store.Collections["Default"]));
     }
 
     [Fact]
     public void AddCollectionRejectsEmptyName()
     {
-        Assert.Equal("Name must not be empty.", MasterStore.Empty().AddCollection("   ", false));
+        Assert.Equal("Name must not be empty.", MasterStore.Empty().AddCollection("   "));
     }
 
     [Fact]
     public void AddCollectionRejectsDuplicateName()
     {
-        Assert.Equal("A collection named “Default” already exists.", MasterStore.Empty().AddCollection("Default", false));
+        Assert.Equal("A collection named “Default” already exists.", MasterStore.Empty().AddCollection("Default"));
     }
 
     [Fact]
@@ -169,7 +152,7 @@ public class CollectionTests
     public void ErrorMessagesUseTypographicPunctuationLikeTheMacApp()
     {
         var store = MasterStore.Empty();
-        var duplicate = store.AddCollection("Default", false)!;
+        var duplicate = store.AddCollection("Default")!;
         Assert.Equal('“', duplicate[duplicate.IndexOf("Default", StringComparison.Ordinal) - 1]);
         Assert.Equal('”', duplicate[duplicate.IndexOf("Default", StringComparison.Ordinal) + "Default".Length]);
         Assert.Contains('’', store.DeleteCollection(store.ActiveCollection)!);

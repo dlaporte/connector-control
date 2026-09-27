@@ -92,16 +92,16 @@ public struct MasterStore: Equatable, Codable, Sendable {
     /// asks here rather than trimming again.
     public static func collectionName(_ typed: String) -> String { typed.trimmingCharacters(in: .whitespaces) }
 
-    /// nil on success, else a user-facing error message. The new collection becomes the active
-    /// one unless `activating` is false.
-    public mutating func addCollection(named name: String, copyingCurrent: Bool, activating: Bool = true) -> String? {
+    /// nil on success, else a user-facing error message. The new collection is empty and does not
+    /// become active: a new collection never clones another, and switching to it is the caller's
+    /// own step.
+    public mutating func addCollection(named name: String) -> String? {
         let trimmed = Self.collectionName(name)
         guard !trimmed.isEmpty else { return "Name must not be empty." }
         guard collections[trimmed] == nil else {
             return "A collection named \u{201C}\(trimmed)\u{201D} already exists."
         }
-        collections[trimmed] = copyingCurrent ? Collection(mcps: mcps) : Collection()
-        if activating { activeCollection = trimmed }
+        collections[trimmed] = Collection()
         return nil
     }
 

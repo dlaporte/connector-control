@@ -72,10 +72,11 @@ public sealed class MasterStore : IEquatable<MasterStore>
     public static string CollectionName(string typed) => typed.TrimSpaces();
 
     /// <summary>
-    /// null on success, else a user-facing error message. The new collection becomes the active
-    /// one unless <paramref name="activating"/> is false.
+    /// null on success, else a user-facing error message. The new collection is empty and does not
+    /// become active: a new collection never clones another, and switching to it is the caller's
+    /// own step.
     /// </summary>
-    public string? AddCollection(string name, bool copyingCurrent, bool activating = true)
+    public string? AddCollection(string name)
     {
         var trimmed = CollectionName(name);
         if (trimmed.Length == 0)
@@ -86,11 +87,7 @@ public sealed class MasterStore : IEquatable<MasterStore>
         {
             return $"A collection named “{trimmed}” already exists.";
         }
-        Collections[trimmed] = copyingCurrent ? new Collection(Mcps) : new Collection();
-        if (activating)
-        {
-            ActiveCollection = trimmed;
-        }
+        Collections[trimmed] = new Collection();
         return null;
     }
 

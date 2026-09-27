@@ -1066,7 +1066,7 @@ public final class AppState: ObservableObject {
         }
         let requested = requestedName?.trimmingCharacters(in: .whitespaces) ?? ""
         let name = requested.isEmpty ? document.name : requested
-        if let error = store.addCollection(named: name, copyingCurrent: false, activating: false) { return error }
+        if let error = store.addCollection(named: name) { return error }
         let rendered = document.render()
         let result = CollectionApply.apply(rendered: rendered, current: [:], previousNeeds: [:])
         store.collections[name] = Collection(mcps: result.entries)
@@ -1427,7 +1427,7 @@ public final class AppState: ObservableObject {
     /// is off, so switching would empty Claude's config. nil on success, else the message.
     public func makeLocalCopyOfCollection(_ source: String, named newName: String) -> String? {
         guard let held = store.collections[source] else { return nil }
-        if let error = store.addCollection(named: newName, copyingCurrent: false, activating: false) { return error }
+        if let error = store.addCollection(named: newName) { return error }
         let name = newName.trimmingCharacters(in: .whitespaces)
         let date = today
         var entries: [String: MCPEntry] = [:]
@@ -1450,7 +1450,7 @@ public final class AppState: ObservableObject {
     /// nil on success, else the message.
     public func duplicateCollection(_ source: String, named newName: String) -> String? {
         guard let held = store.collections[source], !isSynced(source) else { return nil }
-        if let error = store.addCollection(named: newName, copyingCurrent: false, activating: false) { return error }
+        if let error = store.addCollection(named: newName) { return error }
         let name = MasterStore.collectionName(newName)
         store.collections[name] = held
         let provenance = collectionsFile.collections[source]?.provenance ?? [:]
@@ -1466,7 +1466,7 @@ public final class AppState: ObservableObject {
     /// collection: switching to an empty one would empty Claude's config, so nothing is applied
     /// either. nil on success, else the message.
     public func addEmptyCollection(named name: String) -> String? {
-        if let error = store.addCollection(named: name, copyingCurrent: false, activating: false) { return error }
+        if let error = store.addCollection(named: name) { return error }
         persistStore()
         return nil
     }

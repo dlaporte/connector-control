@@ -33,8 +33,7 @@ final class ConfigServiceTests: XCTestCase {
 
         // Claude's file holds Team's connectors and one an installer wrote while the app was off.
         var store = try service.loadAndReconcile().store
-        XCTAssertNil(store.addCollection(named: "Team", copyingCurrent: true))
-        store.activeCollection = "Default"
+        store.collections["Team"] = store.collections["Default"]
         store.collections["Team"]?.mcps.removeValue(forKey: "scoutbook")
         store.collections["Default"]?.mcps.removeValue(forKey: "aws-mcp")
         try service.saveStore(store)
@@ -206,7 +205,7 @@ final class ConfigServiceTests: XCTestCase {
     /// config. The unreadable file is kept aside either way.
     func testACorruptStoreIsRestoredFromTheNewestBackupThatDecodes() throws {
         var saved = try service.loadAndReconcile().store
-        XCTAssertNil(saved.addCollection(named: "Team", copyingCurrent: true, activating: false))
+        saved.collections["Team"] = saved.collections["Default"]
         try service.saveStore(saved)            // backs up the first store, which has no Team
         saved.collections["Team"]?.mcps.removeValue(forKey: "scoutbook")
         try service.saveStore(saved)            // backs up the store with Team in it
@@ -229,7 +228,7 @@ final class ConfigServiceTests: XCTestCase {
 
     func testACorruptStoreSkipsANewestBackupThatIsCorruptToo() throws {
         var saved = try service.loadAndReconcile().store
-        XCTAssertNil(saved.addCollection(named: "Team", copyingCurrent: true, activating: false))
+        saved.collections["Team"] = saved.collections["Default"]
         try service.saveStore(saved)            // backs up the first store, which has no Team
         try service.saveStore(saved)            // backs up the store with Team in it
         let backups = try service.backups.backups(series: "mcps")
@@ -266,7 +265,7 @@ final class ConfigServiceTests: XCTestCase {
 
     func testACorruptStoreWithNoBackupThatDecodesIsRebuiltFromClaudesConfig() throws {
         var saved = try service.loadAndReconcile().store
-        XCTAssertNil(saved.addCollection(named: "Team", copyingCurrent: true, activating: false))
+        saved.collections["Team"] = saved.collections["Default"]
         try service.saveStore(saved)
         for backup in try service.backups.backups(series: "mcps") { try Data("garbage".utf8).write(to: backup) }
         try Data("garbage".utf8).write(to: paths.masterStoreURL)

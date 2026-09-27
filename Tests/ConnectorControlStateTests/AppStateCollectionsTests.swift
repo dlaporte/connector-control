@@ -40,7 +40,7 @@ final class AppStateCollectionsTests: XCTestCase {
     /// A store on disk with the named collections, so a sidecar entry has something to annotate.
     private func seedStore(_ h: AppStateHarness, collections: [String], active: String = "Default") throws {
         var store = MasterStore.empty
-        for name in collections { XCTAssertNil(store.addCollection(named: name, copyingCurrent: false)) }
+        for name in collections { XCTAssertNil(store.addCollection(named: name)) }
         store.activeCollection = active
         try MasterStoreIO.save(store, to: h.masterStoreURL)
     }
@@ -2129,7 +2129,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let folder = try publishThenDeleteTeam(h, state)
         // The other machine makes a collection called Team again, and the store syncs here.
         try h.editStoreOnDisk { store in
-            XCTAssertNil(store.addCollection(named: "Team", copyingCurrent: false))
+            XCTAssertNil(store.addCollection(named: "Team"))
             store.activeCollection = state.activeCollection
         }
         state.reload()

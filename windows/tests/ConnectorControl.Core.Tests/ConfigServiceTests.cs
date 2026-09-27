@@ -35,8 +35,7 @@ public class ConfigServiceTests : IDisposable
 
         // Claude's file holds Team's connectors and one an installer wrote while the app was off.
         var store = service.LoadAndReconcile().Store;
-        Assert.Null(store.AddCollection("Team", copyingCurrent: true));
-        store.ActiveCollection = "Default";
+        store.Collections["Team"] = store.Collections["Default"].Clone();
         store.Collections["Team"].Mcps.Remove("scoutbook");
         store.Collections["Default"].Mcps.Remove("aws-mcp");
         service.SaveStore(store);
@@ -232,7 +231,7 @@ public class ConfigServiceTests : IDisposable
     public void ACorruptStoreIsRestoredFromTheNewestBackupThatDecodes()
     {
         var saved = service.LoadAndReconcile().Store;
-        Assert.Null(saved.AddCollection("Team", copyingCurrent: true, activating: false));
+        saved.Collections["Team"] = saved.Collections["Default"].Clone();
         service.SaveStore(saved);            // backs up the first store, which has no Team
         saved.Collections["Team"].Mcps.Remove("scoutbook");
         service.SaveStore(saved);            // backs up the store with Team in it
@@ -258,7 +257,7 @@ public class ConfigServiceTests : IDisposable
     public void ACorruptStoreSkipsANewestBackupThatIsCorruptToo()
     {
         var saved = service.LoadAndReconcile().Store;
-        Assert.Null(saved.AddCollection("Team", copyingCurrent: true, activating: false));
+        saved.Collections["Team"] = saved.Collections["Default"].Clone();
         service.SaveStore(saved);            // backs up the first store, which has no Team
         service.SaveStore(saved);            // backs up the store with Team in it
         var backups = service.Backups.Backups("mcps");
@@ -305,7 +304,7 @@ public class ConfigServiceTests : IDisposable
     public void ACorruptStoreWithNoBackupThatDecodesIsRebuiltFromClaudesConfig()
     {
         var saved = service.LoadAndReconcile().Store;
-        Assert.Null(saved.AddCollection("Team", copyingCurrent: true, activating: false));
+        saved.Collections["Team"] = saved.Collections["Default"].Clone();
         service.SaveStore(saved);
         foreach (var backup in service.Backups.Backups("mcps"))
         {

@@ -47,7 +47,7 @@ public class AppStateCollectionsTests
         var store = MasterStore.Empty();
         foreach (var name in collections)
         {
-            Assert.Null(store.AddCollection(name, copyingCurrent: false));
+            Assert.Null(store.AddCollection(name));
         }
         store.ActiveCollection = "Default";
         MasterStoreIO.Save(store, h.MasterStorePath);
@@ -2495,7 +2495,7 @@ public class AppStateCollectionsTests
         // The other machine makes a collection called Team again, and the store syncs here.
         h.EditStoreOnDisk(store =>
         {
-            Assert.Null(store.AddCollection("Team", copyingCurrent: false));
+            Assert.Null(store.AddCollection("Team"));
             store.ActiveCollection = state.ActiveCollection;
         });
         state.Reload();

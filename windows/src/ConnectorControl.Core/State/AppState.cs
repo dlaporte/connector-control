@@ -1641,7 +1641,7 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         var requested = requestedName?.TrimSpaces() ?? string.Empty;
         var name = requested.Length == 0 ? document.Name : requested;
-        if (Store.AddCollection(name, copyingCurrent: false, activating: false) is { } error)
+        if (Store.AddCollection(name) is { } error)
         {
             return error;
         }
@@ -2162,7 +2162,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return null;
         }
-        if (Store.AddCollection(newName, copyingCurrent: false, activating: false) is { } error)
+        if (Store.AddCollection(newName) is { } error)
         {
             return error;
         }
@@ -2195,7 +2195,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return null;
         }
-        if (Store.AddCollection(newName, copyingCurrent: false, activating: false) is { } error)
+        if (Store.AddCollection(newName) is { } error)
         {
             return error;
         }
@@ -2219,7 +2219,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// </summary>
     public string? AddEmptyCollection(string name)
     {
-        if (Store.AddCollection(name, copyingCurrent: false, activating: false) is { } error)
+        if (Store.AddCollection(name) is { } error)
         {
             return error;
         }

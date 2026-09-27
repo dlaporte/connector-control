@@ -439,10 +439,10 @@ public class StringCatalogTests
         // each store is set up so that mutation fails for exactly the reason this key names.
 
         var nameEmptyStore = MasterStore.Empty();
-        actual["MasterStore.nameEmptyError"] = nameEmptyStore.AddCollection("   ", false)!;
+        actual["MasterStore.nameEmptyError"] = nameEmptyStore.AddCollection("   ")!;
         var duplicateStore = new MasterStore(MasterStore.CurrentVersion, "X",
             [new KeyValuePair<string, Collection>("X", new Collection())]);
-        actual["MasterStore.duplicateCollectionNameError"] = duplicateStore.AddCollection("X", false)!;
+        actual["MasterStore.duplicateCollectionNameError"] = duplicateStore.AddCollection("X")!;
         var deleteLastStore = MasterStore.Empty();
         actual["MasterStore.deleteLastCollectionError"] = deleteLastStore.DeleteCollection(deleteLastStore.ActiveCollection)!;
         var unknownCollectionStore = MasterStore.Empty();
