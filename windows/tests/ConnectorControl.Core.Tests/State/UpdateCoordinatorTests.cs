@@ -197,9 +197,13 @@ public class UpdateCoordinatorTests
         Assert.Equal("1.3.0", coordinator.NotifiedVersion);
         Assert.Single(notifier.Sent);
 
-        // The outcome lands one marshalled action later (the in-flight clear), so keep pumping.
-        Assert.True(ui.PumpUntil(() => checkTask.IsCompleted, TimeSpan.FromSeconds(5)));
-        Assert.Equal(UpdateOutcome.StagedForQuit, await checkTask);
+        // The outcome lands one marshalled action later: the in-flight clear, posted from the pool
+        // continuation the staging block released. Await that post (holding no thread), pump it,
+        // and the outcome follows on the pool again.
+        await ui.WhenPostedAsync().WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken);
+        Assert.False(checkTask.IsCompleted);   // not before the clear has run on the UI thread
+        ui.Pump();
+        Assert.Equal(UpdateOutcome.StagedForQuit, await checkTask.WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -215,8 +219,11 @@ public class UpdateCoordinatorTests
         var first = coordinator.CheckAsync(interactive: false);
         Assert.Same(first, coordinator.CheckAsync(interactive: false));   // joined while in flight
         Assert.Equal(1, updater.Checks);
-        Assert.True(ui.PumpUntil(() => first.IsCompleted, TimeSpan.FromSeconds(5)));
-        Assert.Equal(UpdateOutcome.StagedForQuit, await first);
+        ui.Pump();   // the staging block, posted before CheckAsync returned (the fakes are synchronous)
+        await ui.WhenPostedAsync().WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken);   // the clear, from the pool
+        Assert.False(first.IsCompleted);
+        ui.Pump();
+        Assert.Equal(UpdateOutcome.StagedForQuit, await first.WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken));
 
         // Two marshalled actions reached the UI thread: the staging block, then the in-flight
         // clear — and the task completed only after the pump ran the second one. (A clear on
@@ -228,8 +235,9 @@ public class UpdateCoordinatorTests
         var second = coordinator.CheckAsync(interactive: false);
         Assert.NotSame(first, second);
         Assert.Equal(2, updater.Checks);
-        Assert.True(ui.PumpUntil(() => second.IsCompleted, TimeSpan.FromSeconds(5)));
-        Assert.Equal(UpdateOutcome.StagedForQuit, await second);   // already staged: no second download
+        await ui.WhenPostedAsync().WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken);
+        ui.Pump();
+        Assert.Equal(UpdateOutcome.StagedForQuit, await second.WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken));   // already staged: no second download
         Assert.Equal(1, updater.Downloads);
         Assert.Equal(3, Volatile.Read(ref posted));   // only the clear this time
     }

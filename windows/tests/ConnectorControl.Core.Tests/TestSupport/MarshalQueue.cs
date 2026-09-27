@@ -10,10 +10,30 @@ namespace ConnectorControl.Core.Tests.TestSupport;
 public sealed class MarshalQueue
 {
     private readonly ConcurrentQueue<Action> queue = new();
+    private TaskCompletionSource posted = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public int Pending => queue.Count;
 
-    public void Post(Action action) => queue.Enqueue(action);
+    public void Post(Action action)
+    {
+        queue.Enqueue(action);
+        Interlocked.Exchange(ref posted, new(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult();
+    }
+
+    /// <summary>
+    /// Completes once something is waiting to be pumped: at once if something already is, else at
+    /// the next <see cref="Post"/>. C#-only: for a post that arrives from a pool continuation (the
+    /// update coordinator's), which no seam runs for the test. Awaiting it holds no thread, where
+    /// <see cref="PumpUntil"/> sleeps on one, so the waiting test does not add to the starvation
+    /// that delays that continuation.
+    /// </summary>
+    public Task WhenPostedAsync()
+    {
+        // The signal is read before the queue: a Post racing this call either enqueued before the
+        // count (seen as pending) or completes the very signal read here.
+        var signal = Volatile.Read(ref posted);
+        return queue.IsEmpty ? signal.Task : Task.CompletedTask;
+    }
 
     /// <summary>Runs everything queued so far; returns how many actions ran.</summary>
     public int Pump()
