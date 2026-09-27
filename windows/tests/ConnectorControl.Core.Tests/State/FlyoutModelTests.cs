@@ -20,26 +20,6 @@ public class FlyoutModelTests
         Assert.False(flyout.IsEmpty);
     }
 
-    /// <summary>
-    /// An empty active collection is a normal state now that New Collection makes empty ones, so the
-    /// flyout names it and offers the way forward: Manage Collections, on that collection.
-    /// </summary>
-    [Fact]
-    public void TheEmptyStateNamesTheCollectionAndOpensItsWindow()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        Assert.Null(state.AddEmptyCollection("Home"));
-        state.SwitchCollection("Home");
-        using var flyout = new FlyoutModel(state, h.Settings);
-        Assert.True(flyout.IsEmpty);
-        Assert.Equal("No connectors in “Home”.", flyout.EmptyMessage);
-        Assert.Equal(FlyoutModel.EmptyText("Home"), flyout.EmptyMessage);
-
-        flyout.ManageActiveCollection();
-        Assert.Equal(new CollectionsWindowRequest.Select("Home"), state.TakeCollectionsWindowRequest());
-    }
-
     [Fact]
     public void RowsAreSortedOrdinally()
     {
@@ -485,6 +465,27 @@ public class FlyoutModelTests
         // The document in the folder stays: a folder this machine cannot reach is not one to delete from.
         Assert.True(System.IO.File.Exists(Path.Combine(folder, "default.json")));
     }
+
+    /// <summary>
+    /// An empty active collection is a normal state now that New Collection makes empty ones, so the
+    /// flyout names it and offers the way forward: Manage Collections, on that collection.
+    /// </summary>
+    [Fact]
+    public void TheEmptyStateNamesTheCollectionAndOpensItsWindow()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.AddEmptyCollection("Home"));
+        state.SwitchCollection("Home");
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.True(flyout.IsEmpty);
+        Assert.Equal("No connectors in “Home”.", flyout.EmptyMessage);
+        Assert.Equal(FlyoutModel.EmptyText("Home"), flyout.EmptyMessage);
+
+        flyout.ManageActiveCollection();
+        Assert.Equal(new CollectionsWindowRequest.Select("Home"), state.TakeCollectionsWindowRequest());
+    }
+
     [Fact]
     public void TheCollectionsWindowRequestsRoundTripThroughAppState()
     {
