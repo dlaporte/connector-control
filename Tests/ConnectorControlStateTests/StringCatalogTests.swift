@@ -108,6 +108,9 @@ final class StringCatalogTests: XCTestCase {
         "CopyModel.title": ["X"],
         "EditTarget.editTitle": ["X"],
         "EditorModel.additionalTitle": ["3", "a, b"],
+        // Called with the row's index, 2: the text counts from one.
+        "EditorModel.argumentLabel": ["3"],
+        "EditorModel.argumentNumber": ["3"],
         "EditorModel.changedOutsideMessage": ["X"],
         "EditorModel.duplicateEnvError": ["X"],
         "EditorModel.importedNote": ["X", "Y"],
@@ -312,6 +315,8 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.addArgumentTitle"] = EditorModel.addArgumentTitle
         actual["EditorModel.addVariableTitle"] = EditorModel.addVariableTitle
         actual["EditorModel.additionalTitle"] = EditorModel.additionalTitle(count: 3, keys: ["a", "b"])
+        actual["EditorModel.argumentLabel"] = EditorModel.argumentLabel(2)
+        actual["EditorModel.argumentNumber"] = EditorModel.argumentNumber(2)
         actual["EditorModel.argumentPrompt"] = EditorModel.argumentPrompt
         actual["EditorModel.argumentsHeader"] = EditorModel.argumentsHeader
         actual["EditorModel.authenticationHeader"] = EditorModel.authenticationHeader

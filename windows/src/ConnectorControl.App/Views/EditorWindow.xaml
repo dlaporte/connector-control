@@ -347,10 +347,18 @@
                     <DataTemplate>
                       <Grid Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="Auto" />
                           <ColumnDefinition />
                           <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel>
+                        <!-- The row's number, so "argument 2" in a refusal is the row marked 2. It
+                             sits level with the box, whatever lines open up beneath it, and the
+                             box's spoken name says it too. -->
+                        <Grid Height="{Binding ActualHeight, ElementName=ArgMark}" VerticalAlignment="Top" Margin="0,0,8,0">
+                          <TextBlock x:Name="ArgNumber" Text="{Binding Number}" MinWidth="16" TextAlignment="Right"
+                                     VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </Grid>
+                        <StackPanel Grid.Column="1">
                           <Border x:Name="ArgMark" Style="{StaticResource RowMark}">
                             <Grid>
                               <!-- A path the document asks this machine for: live even here, and
@@ -359,11 +367,11 @@
                                    the form aloud. -->
                               <TextBox x:Name="ArgPlaceholder" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}"
                                        Style="{StaticResource Watermarked}" Tag="{x:Static state:EditorModel.NeedsPath}"
-                                       AutomationProperties.HelpText="{Binding Hint}"
+                                       AutomationProperties.Name="{Binding Label}" AutomationProperties.HelpText="{Binding Hint}"
                                        Visibility="{Binding Asks, Converter={StaticResource Vis}}" />
                               <TextBox x:Name="ArgValue" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}"
                                        Style="{StaticResource FilledArg}" Tag="{x:Static state:EditorModel.ArgumentPrompt}"
-                                       IsEnabled="{Binding Live}" />
+                                       AutomationProperties.Name="{Binding Label}" IsEnabled="{Binding Live}" />
                             </Grid>
                           </Border>
                           <StackPanel x:Name="ArgNeeds" Margin="0,2,0,0" Visibility="{Binding Owed, Converter={StaticResource Vis}}">
@@ -378,7 +386,7 @@
                           <TextBlock x:Name="ArgPublishedHint" Text="{Binding PublishedHint}" Style="{StaticResource HintLine}"
                                      Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,2,0,0" />
                         </StackPanel>
-                        <Button x:Name="DeleteArgButton" Grid.Column="1" Style="{StaticResource IconButton}" Content="&#xE711;" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnDeleteArg"
+                        <Button x:Name="DeleteArgButton" Grid.Column="2" Style="{StaticResource IconButton}" Content="&#xE711;" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnDeleteArg"
                                 ToolTip="{x:Static state:EditorModel.DeleteArgumentLabel}" AutomationProperties.Name="{x:Static state:EditorModel.DeleteArgumentLabel}"
                                 IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
                       </Grid>

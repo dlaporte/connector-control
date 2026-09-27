@@ -31,7 +31,8 @@ wiped or mangled config is always one click from restored.
   restarts).
 - **Full editor** — form view for the common cases (remote `mcp-remote`
   servers get a simple Name + URL form; local servers get command/args/env
-  editors with secret masking), plus a raw JSON view with live validation and
+  editors with secret masking, the arguments numbered from 1 as messages count
+  them), plus a raw JSON view with live validation and
   paste-a-README-snippet support. The two views stay in sync, and switching
   never silently loses fields the form can't represent.
 - **Self-healing** — the app watches Claude's config; if connectors vanish

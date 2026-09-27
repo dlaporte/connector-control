@@ -201,14 +201,25 @@ struct EditorWindowView: View {
             let index = model.args.firstIndex { $0.id == row.id } ?? -1
             let asks = model.asksFor(arg: index)
             HStack(alignment: .top) {
-                PlaceholderField(marked: model.isOwed(arg: index),
-                                 needs: EditorModel.needsPath,
-                                 hint: model.placeholderHint(arg: index),
-                                 published: model.publishedHint(arg: index)) {
-                    TextField(EditorModel.argumentPrompt, text: $row.value,
-                              prompt: asks ? Text(EditorModel.needsPath) : nil)
-                        .font(.system(.body, design: .monospaced))
-                        .disabled(!model.isLive(arg: index))
+                // The row's number, so "argument 2" in a refusal is the row marked 2. On the
+                // field's own baseline, whatever lines open up beneath it; the field's spoken name
+                // says it too, so the number itself is not read out.
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(EditorModel.argumentNumber(index))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(minWidth: 16, alignment: .trailing)
+                        .accessibilityHidden(true)
+                    PlaceholderField(marked: model.isOwed(arg: index),
+                                     needs: EditorModel.needsPath,
+                                     hint: model.placeholderHint(arg: index),
+                                     published: model.publishedHint(arg: index)) {
+                        TextField(EditorModel.argumentPrompt, text: $row.value,
+                                  prompt: asks ? Text(EditorModel.needsPath) : nil)
+                            .font(.system(.body, design: .monospaced))
+                            .disabled(!model.isLive(arg: index))
+                            .accessibilityLabel(EditorModel.argumentLabel(index))
+                    }
                 }
                 Button { model.deleteArg(id: row.id) } label: {
                     Image(systemName: "xmark.circle")

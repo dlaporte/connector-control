@@ -114,6 +114,9 @@ public class StringCatalogTests
         ["CopyModel.title"] = ["X"],
         ["EditTarget.editTitle"] = ["X"],
         ["EditorModel.additionalTitle"] = ["3", "a, b"],
+        // Called with the row's index, 2: the text counts from one.
+        ["EditorModel.argumentLabel"] = ["3"],
+        ["EditorModel.argumentNumber"] = ["3"],
         ["EditorModel.changedOutsideMessage"] = ["X"],
         ["EditorModel.cmdUnsafeError"] = ["X"],
         ["EditorModel.duplicateEnvError"] = ["X"],
@@ -335,6 +338,8 @@ public class StringCatalogTests
         actual["EditorModel.addArgumentTitle"] = EditorModel.AddArgumentTitle;
         actual["EditorModel.addVariableTitle"] = EditorModel.AddVariableTitle;
         actual["EditorModel.additionalTitle"] = EditorModel.AdditionalTitleFor(3, ["a", "b"]);
+        actual["EditorModel.argumentLabel"] = EditorModel.ArgumentLabel(2);
+        actual["EditorModel.argumentNumber"] = EditorModel.ArgumentNumber(2);
         actual["EditorModel.argumentPrompt"] = EditorModel.ArgumentPrompt;
         actual["EditorModel.argumentsHeader"] = EditorModel.ArgumentsHeader;
         actual["EditorModel.authenticationHeader"] = EditorModel.AuthenticationHeader;

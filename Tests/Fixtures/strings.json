@@ -241,6 +241,12 @@
   "EditorModel.additionalTitle": {
     "format": "{0} field(s) not editable here: {1} — switch to JSON to edit"
   },
+  "EditorModel.argumentLabel": {
+    "format": "Argument {0}"
+  },
+  "EditorModel.argumentNumber": {
+    "format": "{0}"
+  },
   "EditorModel.argumentPrompt": "argument",
   "EditorModel.argumentsHeader": "Arguments",
   "EditorModel.authenticationHeader": "Authentication",

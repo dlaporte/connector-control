@@ -65,6 +65,19 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public const string CommandPrompt = "npx";
     public const string ArgumentsHeader = "Arguments";
     public const string ArgumentPrompt = "argument";
+
+    /// <summary>
+    /// What an argument's row shows beside its field, from the row's index: counted from one, as
+    /// a refusal names the argument (<see cref="FieldName.Argument"/>), so "argument 2" is the row
+    /// marked 2.
+    /// </summary>
+    public static string ArgumentNumber(int index) => (index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// A screen reader's name for an argument's field, from the row's index: the number beside it,
+    /// which the field carries no other label for.
+    /// </summary>
+    public static string ArgumentLabel(int index) => "Argument " + ArgumentNumber(index);
     public const string EnvironmentHeader = "Environment Variables";
     public const string ValueLabel = "Value";
     public const string TokenLabel = "Token";
@@ -904,7 +917,10 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     private void OnArgsChanged(object? sender, NotifyCollectionChangedEventArgs e) => EvaluateRequiredTool();
 
-    /// <summary>A row joining either list answers with this model's rules from then on.</summary>
+    /// <summary>
+    /// A row joining either list answers with this model's rules from then on, and any change to
+    /// the arguments may move every argument's number.
+    /// </summary>
     private void OnRowsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         foreach (var row in e.NewItems ?? Array.Empty<object>())
@@ -917,6 +933,13 @@ public sealed class EditorModel : ObservableObject, IDisposable
                 case EnvRow env:
                     env.Attach(this);
                     break;
+            }
+        }
+        if (ReferenceEquals(sender, Args))
+        {
+            foreach (var arg in Args)
+            {
+                arg.RaisePosition();
             }
         }
     }

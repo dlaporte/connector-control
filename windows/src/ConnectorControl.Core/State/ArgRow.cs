@@ -46,11 +46,24 @@ public sealed class ArgRow : ObservableObject
     /// <summary><see cref="EditorModel.PublishedHintForArg"/>: what a published collection sends in its place.</summary>
     public string? PublishedHint => editor?.PublishedHint(this);
 
+    /// <summary><see cref="EditorModel.ArgumentNumber"/> for where the row sits now: what it shows beside its box.</summary>
+    public string Number => editor?.Args.IndexOf(this) is { } index and >= 0 ? EditorModel.ArgumentNumber(index) : string.Empty;
+
+    /// <summary><see cref="EditorModel.ArgumentLabel"/> for where the row sits now: its box's spoken name.</summary>
+    public string Label => editor?.Args.IndexOf(this) is { } index and >= 0 ? EditorModel.ArgumentLabel(index) : string.Empty;
+
     /// <summary>The editor whose rules this row answers with, set as the row joins its list.</summary>
     internal void Attach(EditorModel owner)
     {
         editor = owner;
         RaiseRules();
+    }
+
+    /// <summary>A row joined, left or moved, so every row's position may have changed.</summary>
+    internal void RaisePosition()
+    {
+        Raise(nameof(Number));
+        Raise(nameof(Label));
     }
 
     internal void RaiseRules()

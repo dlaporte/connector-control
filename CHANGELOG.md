@@ -163,6 +163,8 @@ bullet once the section is about to ship.
   list, with the button that answers it.
 - Saving a connector that another local collection holds an identical copy of offers, in
   one checkbox, to apply the same change there too.
+- The editor numbers its argument rows from 1, so a message naming "argument 2" points at
+  the row marked 2; a screen reader names each field "Argument 2" and so on.
 - Restoring a backup of Claude's configuration puts it back into the collection it was
   taken from, and makes that collection active. A backup from an earlier version carries
   no record, and goes into the active collection.

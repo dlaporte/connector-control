@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using ConnectorControl.App.Tests.TestSupport;
@@ -211,6 +212,41 @@ public class EditorWindowTests
             box.Password = "typed-into-the-mask";
             window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
             Assert.Equal("typed-into-the-mask", row.Value);
+        }, rows: true));
+    }
+
+    /// <summary>
+    /// Each argument row shows its number, counted from one as a refusal counts them ("argument
+    /// 2"), and its box is named by it; the numbers follow the rows as they come and go.
+    /// </summary>
+    [Fact]
+    public void ArgumentRowsAreNumberedAndTheirBoxesNamedByTheNumber()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var entry = AppStateHarness.LocalConnector("node", "server.js", "--port", "8080");
+        var target = EditTarget.Existing("local", entry, "Default");
+        WpfApp.Invoke(() => Editing(state, target, window =>
+        {
+            string Number(ArgRow row) => RowElements.Find<TextBlock>(window.ArgList, row, "ArgNumber").Text;
+            string Name(ArgRow row) => AutomationProperties.GetName(RowElements.Find<TextBox>(window.ArgList, row, "ArgValue"));
+
+            Assert.Equal(["1", "2", "3"], window.Model.Args.Select(Number));
+            Assert.Equal([EditorModel.ArgumentLabel(0), EditorModel.ArgumentLabel(1), EditorModel.ArgumentLabel(2)],
+                         window.Model.Args.Select(Name));
+            Assert.Equal("Argument 2", Name(window.Model.Args[1]));
+
+            // Deleting the first moves every other row up a number.
+            var second = window.Model.Args[1];
+            window.Model.DeleteArg(window.Model.Args[0]);
+            Layout(window);
+            Assert.Equal(["1", "2"], window.Model.Args.Select(Number));
+            Assert.Equal("Argument 1", Name(second));
+
+            // A row added at the end takes the next.
+            window.Model.AddArg();
+            Layout(window);
+            Assert.Equal(["1", "2", "3"], window.Model.Args.Select(Number));
         }, rows: true));
     }
 

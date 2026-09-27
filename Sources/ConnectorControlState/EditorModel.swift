@@ -56,6 +56,14 @@ public final class EditorModel: ObservableObject {
     public static let commandPrompt = "npx"
     public static let argumentsHeader = "Arguments"
     public static let argumentPrompt = "argument"
+
+    /// What an argument's row shows beside its field, from the row's index: counted from one, as
+    /// a refusal names the argument (`FieldName.argument`), so "argument 2" is the row marked 2.
+    public static func argumentNumber(_ index: Int) -> String { "\(index + 1)" }
+
+    /// A screen reader's name for an argument's field, from the row's index: the number beside
+    /// it, which the field carries no other label for.
+    public static func argumentLabel(_ index: Int) -> String { "Argument \(index + 1)" }
     public static let environmentHeader = "Environment Variables"
     public static let valueLabel = "Value"
     public static let tokenLabel = "Token"
