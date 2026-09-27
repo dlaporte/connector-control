@@ -1391,12 +1391,17 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     }
 
     /// <summary>
-    /// "args[N] looks like a credential" / "env.NAME looks like a credential" lines for the
-    /// publish preview; never an edit. Each arg is tested whole and, for a literal "key: value"
-    /// pair such as a <c>--header</c> flag's argument, on the text after the colon too, since the
-    /// heuristic's own space check would otherwise hide a credential sitting right after one. Env
-    /// is only tested for names in <paramref name="sharedEnv"/> — the ones the author ticked to
-    /// travel as a value rather than a hint — since a hint-only value never leaves this machine.
+    /// "args[N] looks like a credential" / "env.NAME looks like a credential" /
+    /// "headers.NAME looks like a credential" / "url.userinfo looks like a credential" /
+    /// "url.query.NAME looks like a credential" lines for the publish preview; never an edit. Each
+    /// arg is tested whole and, for a literal "key: value" pair such as a <c>--header</c> flag's
+    /// argument, on the text after the colon too, since the heuristic's own space check would
+    /// otherwise hide a credential sitting right after one; an arg that is a URL is read as
+    /// <c>url</c> is. Env is only tested for names in <paramref name="sharedEnv"/> — the ones the
+    /// author ticked to travel as a value rather than a hint — since a hint-only value never leaves
+    /// this machine. A connector Claude reaches by URL keeps its secret in <c>headers</c> or in
+    /// <c>url</c>: a header named for a secret (<see cref="CredentialHeuristics.NamesASecret"/>) or
+    /// holding one, and the URL parts <see cref="CredentialPartsOfUrl"/> names.
     /// </summary>
     public static IReadOnlyList<string> CredentialWarnings(JsonValue config, IReadOnlySet<string> sharedEnv)
     {
@@ -1417,7 +1422,8 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                 var s = item.StringValue;
                 var colon = s.IndexOf(": ", StringComparison.Ordinal);
                 var afterColon = colon >= 0 ? s[(colon + 2)..] : null;
-                if (CredentialHeuristics.LooksLikeCredential(s) || (afterColon is not null && CredentialHeuristics.LooksLikeCredential(afterColon)))
+                if (CredentialHeuristics.LooksLikeCredential(s) || (afterColon is not null && CredentialHeuristics.LooksLikeCredential(afterColon))
+                    || CredentialPartsOfUrl(s).Count > 0)
                 {
                     warnings.Add($"args[{i}] looks like a credential");
                 }
@@ -1433,7 +1439,65 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                 }
             }
         }
+        if (config["headers"] is { Kind: JsonKind.Object } headers)
+        {
+            foreach (var name in headers.ObjectProperties.Keys.Order(StringComparer.Ordinal))
+            {
+                if (headers[name] is { Kind: JsonKind.String } header && header.StringValue.Length > 0
+                    && !Placeholder.ContainsMarker(header.StringValue)
+                    && (CredentialHeuristics.NamesASecret(name) || CredentialHeuristics.LooksLikeCredential(header.StringValue)))
+                {
+                    warnings.Add($"headers.{name} looks like a credential");
+                }
+            }
+        }
+        if (config["url"] is { Kind: JsonKind.String } url)
+        {
+            warnings.AddRange(CredentialPartsOfUrl(url.StringValue).Select(part => $"{part} looks like a credential"));
+        }
         return warnings;
+    }
+
+    /// <summary>
+    /// The parts of a URL that can carry a secret, as a warning names them: <c>url.userinfo</c> for a
+    /// user part before the host, and <c>url.query.NAME</c> for a query parameter named for a secret
+    /// with a value, or holding a value that looks like one. None for text with no <c>://</c>. Split by
+    /// hand, one UTF-16 unit at a time as the Mac walks Unicode scalars, rather than by a URL parser:
+    /// both platforms split it the same way, and a URL a parser would refuse can still carry a token.
+    /// </summary>
+    internal static IReadOnlyList<string> CredentialPartsOfUrl(string text)
+    {
+        var start = text.IndexOf("://", StringComparison.Ordinal);
+        if (start < 0)
+        {
+            return [];
+        }
+        var rest = text[(start + 3)..];
+        var authorityEnd = rest.IndexOfAny(['/', '?', '#']);
+        var parts = new List<string>();
+        if ((authorityEnd < 0 ? rest : rest[..authorityEnd]).Contains('@'))
+        {
+            parts.Add("url.userinfo");
+        }
+        var question = rest.IndexOf('?');
+        if (question < 0)
+        {
+            return parts;
+        }
+        var query = rest[(question + 1)..];
+        var fragment = query.IndexOf('#');
+        foreach (var pair in (fragment < 0 ? query : query[..fragment]).Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var equals = pair.IndexOf('=');
+            var name = equals < 0 ? pair : pair[..equals];
+            var value = equals < 0 ? pair : pair[(equals + 1)..];
+            var named = equals >= 0 && value.Length > 0 && !Placeholder.ContainsMarker(value) && CredentialHeuristics.NamesASecret(name);
+            if (named || CredentialHeuristics.LooksLikeCredential(value))
+            {
+                parts.Add($"url.query.{name}");
+            }
+        }
+        return parts;
     }
 
     // MARK: Decoding helpers

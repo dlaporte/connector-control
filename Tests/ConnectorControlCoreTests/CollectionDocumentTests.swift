@@ -395,4 +395,35 @@ final class CollectionDocumentTests: XCTestCase {
         XCTAssertEqual(CollectionDocument.credentialWarnings(config, sharedEnv: ["API_TOKEN"]),
                        ["args[1] looks like a credential", "env.API_TOKEN looks like a credential"])
     }
+
+    /// A connector Claude reaches by URL keeps its secret in its headers or its URL: a header named
+    /// for a secret, or holding one, a user part before the host, and a query parameter named for a
+    /// secret, or holding one. A URL argument is read the same way. A plain header, a plain query, a
+    /// placeholder and an empty value are not flagged.
+    func testCredentialWarningsCoverHeadersAndTheURL() {
+        let config: JSONValue = .object([
+            "type": .string("http"),
+            "url": .string("https://user:pw@mcp.example.com/mcp?region=us&api_key=abc&sig=ghp_q&token=&page=2#top"),
+            "headers": .object([
+                "Authorization": .string("Bearer abc"), "X-Api-Key": .string("k1"), "Accept": .string("application/json"),
+                "X-Trace": .string("sk-live-1"), "X-Auth-Empty": .string(""),
+                "X-Token-Later": .string("${CC_NEEDS:TOKEN}"), "X-Number": .int(3),
+            ]),
+        ])
+        XCTAssertEqual(CollectionDocument.credentialWarnings(config, sharedEnv: []), [
+            "headers.Authorization looks like a credential", "headers.X-Api-Key looks like a credential",
+            "headers.X-Trace looks like a credential",
+            "url.userinfo looks like a credential", "url.query.api_key looks like a credential",
+            "url.query.sig looks like a credential",
+        ])
+        let plain: JSONValue = .object(["type": .string("sse"), "url": .string("https://mcp.example.com/sse?region=us#token=x"),
+                                        "headers": .object(["Accept": .string("text/event-stream")])])
+        XCTAssertEqual(CollectionDocument.credentialWarnings(plain, sharedEnv: []), [])
+        let arguments: JSONValue = .object(["command": .string("npx"), "args": .array([
+            .string("mcp-remote"), .string("https://mcp.example.com/sse?access_token=abc"),
+            .string("postgres://me:pw@localhost/db"), .string("https://mcp.example.com/sse?page=2"),
+        ])])
+        XCTAssertEqual(CollectionDocument.credentialWarnings(arguments, sharedEnv: []),
+                       ["args[1] looks like a credential", "args[2] looks like a credential"])
+    }
 }

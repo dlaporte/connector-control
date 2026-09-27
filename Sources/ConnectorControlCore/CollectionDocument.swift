@@ -754,12 +754,17 @@ public struct CollectionDocument: Equatable, Sendable {
         }
     }
 
-    /// "args[N] looks like a credential" / "env.NAME looks like a credential" lines for the
-    /// publish preview; never an edit. Each arg is tested whole and, for a literal "key: value"
-    /// pair such as a `--header` flag's argument, on the text after the colon too, since the
-    /// heuristic's own space check would otherwise hide a credential sitting right after one.
-    /// Env is only tested for names in `sharedEnv` — the ones the author ticked to travel as a
-    /// value rather than a hint — since a hint-only value never leaves this machine.
+    /// "args[N] looks like a credential" / "env.NAME looks like a credential" /
+    /// "headers.NAME looks like a credential" / "url.userinfo looks like a credential" /
+    /// "url.query.NAME looks like a credential" lines for the publish preview; never an edit. Each
+    /// arg is tested whole and, for a literal "key: value" pair such as a `--header` flag's
+    /// argument, on the text after the colon too, since the heuristic's own space check would
+    /// otherwise hide a credential sitting right after one; an arg that is a URL is read as `url`
+    /// is. Env is only tested for names in `sharedEnv` — the ones the author ticked to travel as a
+    /// value rather than a hint — since a hint-only value never leaves this machine. A connector
+    /// Claude reaches by URL keeps its secret in `headers` or in `url`: a header named for a secret
+    /// (`CredentialHeuristics.namesASecret`) or holding one, and the URL parts `credentialParts(ofURL:)`
+    /// names.
     public static func credentialWarnings(_ config: JSONValue, sharedEnv: Set<String>) -> [String] {
         guard case .object(let object) = config else { return [] }
         var warnings: [String] = []
@@ -767,7 +772,8 @@ public struct CollectionDocument: Equatable, Sendable {
             for (index, value) in args.enumerated() {
                 guard case .string(let s) = value else { continue }
                 let afterColon = s.range(of: ": ").map { String(s[$0.upperBound...]) }
-                if CredentialHeuristics.looksLikeCredential(s) || (afterColon.map(CredentialHeuristics.looksLikeCredential) ?? false) {
+                if CredentialHeuristics.looksLikeCredential(s) || (afterColon.map(CredentialHeuristics.looksLikeCredential) ?? false)
+                    || !credentialParts(ofURL: s).isEmpty {
                     warnings.append("args[\(index)] looks like a credential")
                 }
             }
@@ -778,7 +784,41 @@ public struct CollectionDocument: Equatable, Sendable {
                 warnings.append("env.\(name) looks like a credential")
             }
         }
+        if case .object(let headers)? = object["headers"] {
+            for name in headers.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+                guard case .string(let value)? = headers[name], !value.isEmpty, !Placeholder.containsMarker(value),
+                      CredentialHeuristics.namesASecret(name) || CredentialHeuristics.looksLikeCredential(value) else { continue }
+                warnings.append("headers.\(name) looks like a credential")
+            }
+        }
+        if case .string(let url)? = object["url"] {
+            warnings += credentialParts(ofURL: url).map { "\($0) looks like a credential" }
+        }
         return warnings
+    }
+
+    /// The parts of a URL that can carry a secret, as a warning names them: `url.userinfo` for a
+    /// user part before the host, and `url.query.NAME` for a query parameter named for a secret
+    /// with a value, or holding a value that looks like one. None for text with no `://`. Split by
+    /// hand, one Unicode scalar at a time as the Windows mirror walks UTF-16 units, rather than by
+    /// a URL parser: both platforms split it the same way, and a URL a parser would refuse can
+    /// still carry a token.
+    static func credentialParts(ofURL text: String) -> [String] {
+        let scalars = Array(text.unicodeScalars)
+        guard let start = scalars.indices.first(where: {
+            $0 + 2 < scalars.count && scalars[$0] == ":" && scalars[$0 + 1] == "/" && scalars[$0 + 2] == "/"
+        }) else { return [] }
+        let rest = scalars[(start + 3)...]
+        var parts: [String] = rest.prefix { $0 != "/" && $0 != "?" && $0 != "#" }.contains("@") ? ["url.userinfo"] : []
+        guard let question = rest.firstIndex(of: "?") else { return parts }
+        for pair in rest[(question + 1)...].prefix(while: { $0 != "#" }).split(separator: "&") {
+            let equals = pair.firstIndex(of: "=")
+            let name = String(String.UnicodeScalarView(pair[..<(equals ?? pair.endIndex)]))
+            let value = equals.map { String(String.UnicodeScalarView(pair[($0 + 1)...])) } ?? name
+            let named = equals != nil && !value.isEmpty && !Placeholder.containsMarker(value) && CredentialHeuristics.namesASecret(name)
+            if named || CredentialHeuristics.looksLikeCredential(value) { parts.append("url.query.\(name)") }
+        }
+        return parts
     }
 
     // MARK: Decoding helpers

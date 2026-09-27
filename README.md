@@ -247,7 +247,9 @@ The sheet decides what leaves the machine:
   it travels as a placeholder every subscriber fills in for themselves.
 - **Document preview** is the document itself, exactly as it will be
   written. An argument or shared value that looks like a credential is
-  listed under the preview, each line naming the connector it came from.
+  listed under the preview, each line naming the connector it came from,
+  and so are a header or a URL query parameter named like a secret or
+  holding one, and a URL with a user name or password in it.
   Nothing is ever edited on your behalf; the preview is there so you see
   every byte before it leaves.
 
@@ -296,10 +298,11 @@ retries at once; otherwise the next change retries the write.
 Nothing reaches the folder that you haven't reviewed in the Publish sheet.
 A connector added to a published collection, copied or imported into it, or
 added on your other machine, and a connector edited so that it now holds
-something that looks like a credential, stop the automatic publish: the
-banner names the connector and offers Publishing Settings, and the document
-in the folder stays as it was until you press Publish there. Other edits,
-renames and deletions publish on their own as before.
+something that looks like a credential (in an argument, a shared value, a
+header or its URL), stop the automatic publish: the banner names the
+connector and offers Publishing Settings, and the document in the folder
+stays as it was until you press Publish there. Other edits, renames and
+deletions publish on their own as before.
 
 Export writes the same document once, wherever you choose, with the same
 preview and warnings. The **⋯** menu's **Export All** writes the whole

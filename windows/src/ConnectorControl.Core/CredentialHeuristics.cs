@@ -26,4 +26,18 @@ public static class CredentialHeuristics
         // By general category: a letter is L*, a digit is a decimal digit (Nd), as the Mac reads them.
         return value.Any(char.IsLetter) && value.Any(char.IsDigit);
     }
+
+    /// <summary>
+    /// Whether a name says what it names is a secret, whatever its case: a flag's (<c>--api-key</c>), a
+    /// header's (<c>Authorization</c>, <c>X-Api-Key</c>) or a URL parameter's (<c>access_token</c>). The
+    /// Collections window's target column leaves out whatever follows a flag named so, and the publish
+    /// preview flags a header or a URL parameter named so.
+    /// </summary>
+    public static bool NamesASecret(string name)
+    {
+        var lowered = name.ToLowerInvariant();
+        return SecretNames.Any(lowered.Contains);
+    }
+
+    private static readonly string[] SecretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"];
 }

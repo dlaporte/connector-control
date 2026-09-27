@@ -588,11 +588,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             return false;
         }
-        var name = arg.ToLowerInvariant();
-        return SecretNames.Any(name.Contains);
+        return CredentialHeuristics.NamesASecret(arg);
     }
-
-    private static readonly string[] SecretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"];
 
     /// <summary>
     /// Starts with <c>/</c>, <c>~</c>, <c>./</c>, <c>../</c> or a drive root (<c>X:\</c> or <c>X:/</c>).

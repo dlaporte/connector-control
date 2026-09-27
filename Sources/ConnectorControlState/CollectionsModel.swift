@@ -468,11 +468,8 @@ public final class CollectionsModel: ObservableObject {
     /// its dashes and case.
     private static func isSecretNamedFlag(_ arg: String) -> Bool {
         guard startsWith(arg, "-"), !arg.contains("=") else { return false }
-        let name = arg.lowercased()
-        return secretNames.contains { name.contains($0) }
+        return CredentialHeuristics.namesASecret(arg)
     }
-
-    private static let secretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"]
 
     /// Starts with `/`, `~`, `./`, `../` or a drive root (`X:\` or `X:/`). Internal rather than
     /// private because the Publish sheet offers a path row by the same rule.

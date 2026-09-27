@@ -3966,6 +3966,32 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// A connector Claude reaches by URL keeps its secret in a header or in the URL itself. One that
+    /// gains a bearer token in its headers, or a key in its URL's query, after it was reviewed waits
+    /// for review as one that gains it in an argument does.
+    /// </summary>
+    [Fact]
+    public void ATokenAddedToAReviewedUrlConnectorWaitsForReview()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        static McpEntry Api(string url, params (string Name, string Value)[] headers) => new(headers.Length == 0
+            ? JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String(url)))
+            : JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String(url)),
+                ("headers", JsonValue.Object(headers.Select(p => (p.Name, JsonValue.String(p.Value))).ToArray()))));
+        Assert.Null(state.Upsert("api", Api("https://mcp.example.com/mcp"), null));
+        var file = h.Publish(state, "Default");
+        var before = File.ReadAllBytes(file);
+
+        Assert.Null(state.Upsert("api", Api("https://mcp.example.com/mcp", ("Authorization", $"Bearer {LongToken}")), "api"));
+        Assert.Equal(AppState.NewCredentialError("api"), state.PublishError?.Message);   // a header
+        Assert.Null(state.Upsert("api", Api($"https://mcp.example.com/mcp?api_key={LongToken}"), "api"));
+        Assert.Equal(AppState.NewCredentialError("api"), state.PublishError?.Message);   // the URL's query
+        Assert.Equal(before, File.ReadAllBytes(file));
+        Assert.False(JsonText.FileContains(file, LongToken));
+    }
+
+    /// <summary>
     /// A binding from before reviews were kept has reviewed what it already published: at the first
     /// load that finds the folder holding what the collection renders, all of it. One that meets a
     /// change it never published has reviewed only what the folder holds unchanged.

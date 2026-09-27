@@ -17,4 +17,15 @@ public enum CredentialHeuristics {
         let digits = value.unicodeScalars.contains { $0.properties.generalCategory == .decimalNumber }
         return letters && digits
     }
+
+    /// Whether a name says what it names is a secret, whatever its case: a flag's (`--api-key`), a
+    /// header's (`Authorization`, `X-Api-Key`) or a URL parameter's (`access_token`). The
+    /// Collections window's target column leaves out whatever follows a flag named so, and the
+    /// publish preview flags a header or a URL parameter named so.
+    public static func namesASecret(_ name: String) -> Bool {
+        let lowered = name.lowercased()
+        return secretNames.contains { lowered.contains($0) }
+    }
+
+    private static let secretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"]
 }

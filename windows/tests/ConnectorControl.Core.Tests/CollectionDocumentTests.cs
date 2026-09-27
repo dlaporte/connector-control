@@ -535,4 +535,43 @@ public class CollectionDocumentTests
             ["args[1] looks like a credential", "env.API_TOKEN looks like a credential"],
             CollectionDocument.CredentialWarnings(config, new HashSet<string>(StringComparer.Ordinal) { "API_TOKEN" }));
     }
+
+    /// <summary>
+    /// A connector Claude reaches by URL keeps its secret in its headers or its URL: a header named for
+    /// a secret, or holding one, a user part before the host, and a query parameter named for a secret,
+    /// or holding one. A URL argument is read the same way. A plain header, a plain query, a
+    /// placeholder and an empty value are not flagged.
+    /// </summary>
+    [Fact]
+    public void CredentialWarningsCoverHeadersAndTheUrl()
+    {
+        var none = new HashSet<string>(StringComparer.Ordinal);
+        var config = JsonValue.Object(
+            ("type", JsonValue.String("http")),
+            ("url", JsonValue.String("https://user:pw@mcp.example.com/mcp?region=us&api_key=abc&sig=ghp_q&token=&page=2#top")),
+            ("headers", JsonValue.Object(
+                ("Authorization", JsonValue.String("Bearer abc")), ("X-Api-Key", JsonValue.String("k1")),
+                ("Accept", JsonValue.String("application/json")), ("X-Trace", JsonValue.String("sk-live-1")),
+                ("X-Auth-Empty", JsonValue.String("")), ("X-Token-Later", JsonValue.String("${CC_NEEDS:TOKEN}")),
+                ("X-Number", JsonValue.Int(3)))));
+        Assert.Equal(
+            [
+                "headers.Authorization looks like a credential", "headers.X-Api-Key looks like a credential",
+                "headers.X-Trace looks like a credential",
+                "url.userinfo looks like a credential", "url.query.api_key looks like a credential",
+                "url.query.sig looks like a credential",
+            ],
+            CollectionDocument.CredentialWarnings(config, none));
+        var plain = JsonValue.Object(
+            ("type", JsonValue.String("sse")), ("url", JsonValue.String("https://mcp.example.com/sse?region=us#token=x")),
+            ("headers", JsonValue.Object(("Accept", JsonValue.String("text/event-stream")))));
+        Assert.Empty(CollectionDocument.CredentialWarnings(plain, none));
+        var arguments = JsonValue.Object(
+            ("command", JsonValue.String("npx")),
+            ("args", JsonValue.Array([
+                JsonValue.String("mcp-remote"), JsonValue.String("https://mcp.example.com/sse?access_token=abc"),
+                JsonValue.String("postgres://me:pw@localhost/db"), JsonValue.String("https://mcp.example.com/sse?page=2"),
+            ])));
+        Assert.Equal(["args[1] looks like a credential", "args[2] looks like a credential"], CollectionDocument.CredentialWarnings(arguments, none));
+    }
 }

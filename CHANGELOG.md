@@ -98,7 +98,8 @@ bullet once the section is about to ship.
   travels as written unless you tick it to become a placeholder. The token, header value
   or client secret in a remote connector's Authentication fields always travels as a
   placeholder, and a preview shows every byte before it leaves, flagging any argument or
-  shared value that looks like a credential.
+  shared value that looks like a credential, a header or URL query parameter named like a
+  secret or holding one, and a URL with a user name or password in it.
 - The sheet also lists every mark it could not place and every path this machine keeps
   back that the document would otherwise carry as written, a copy of a ticked path in any
   field included, all at once, each with its connector and field; Publish and Export wait until every one is ticked where it now sits, forgotten
@@ -118,7 +119,7 @@ bullet once the section is about to ship.
 - A publish that happens on its own no longer sends what you haven't reviewed. A connector
   added to a published collection, copied or imported into it, or added on your other
   machine, and a connector edited so it now holds something that looks like a credential,
-  hold the publish with "“<connector>” hasn’t been reviewed for publishing." or
+  in an argument, a shared value, a header or its URL, hold the publish with "“<connector>” hasn’t been reviewed for publishing." or
   "“<connector>” may now carry a credential." and Publishing Settings; the folder keeps its
   document until you press Publish in the sheet, and automatic publishing then resumes.
   Other edits, renames and deletions publish on their own as before. Before, all of it

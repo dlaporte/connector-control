@@ -3411,6 +3411,30 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertTrue(try jsonFile(file, contains: "--verbose"))
     }
 
+    /// A connector Claude reaches by URL keeps its secret in a header or in the URL itself. One that
+    /// gains a bearer token in its headers, or a key in its URL's query, after it was reviewed waits
+    /// for review as one that gains it in an argument does.
+    func testATokenAddedToAReviewedURLConnectorWaitsForReview() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        func api(_ url: String, headers: [String: String] = [:]) -> MCPEntry {
+            var object: [String: JSONValue] = ["type": .string("http"), "url": .string(url)]
+            if !headers.isEmpty { object["headers"] = .object(headers.mapValues(JSONValue.string)) }
+            return MCPEntry(config: .object(object))
+        }
+        XCTAssertNil(state.upsert(name: "api", entry: api("https://mcp.example.com/mcp"), renamedFrom: nil))
+        let file = try h.publish(state, "Default")
+        let before = try Data(contentsOf: file)
+
+        XCTAssertNil(state.upsert(name: "api", entry: api("https://mcp.example.com/mcp", headers: ["Authorization": "Bearer \(longToken)"]),
+                                  renamedFrom: "api"))
+        XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("api"), "a header")
+        XCTAssertNil(state.upsert(name: "api", entry: api("https://mcp.example.com/mcp?api_key=\(longToken)"), renamedFrom: "api"))
+        XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("api"), "the URL's query")
+        XCTAssertEqual(try Data(contentsOf: file), before)
+        XCTAssertFalse(try jsonFile(file, contains: longToken))
+    }
+
     /// A binding from before reviews were kept has reviewed what it already published: at the
     /// first load that finds the folder holding what the collection renders, all of it. One that
     /// meets a change it never published has reviewed only what the folder holds unchanged.
