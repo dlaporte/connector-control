@@ -12,6 +12,9 @@ public sealed class MasterStore : IEquatable<MasterStore>
     // corrupt-file path: moved aside and rebuilt fresh from Claude's config.
     public const long CurrentVersion = 2;
 
+    /// <summary>The collection a fresh store holds, and the one a store left with none makes.</summary>
+    public const string DefaultCollectionName = "Default";
+
     public long Version { get; }
     public string ActiveCollection { get; set; }
     public Dictionary<string, Collection> Collections { get; }
@@ -33,20 +36,20 @@ public sealed class MasterStore : IEquatable<MasterStore>
         }
         else
         {
-            Collections["Default"] = new Collection();
-            ActiveCollection = "Default";
+            Collections[DefaultCollectionName] = new Collection();
+            ActiveCollection = DefaultCollectionName;
         }
     }
 
     /// <summary>Swift <c>MasterStore(version:mcps:)</c>: a single "Default" collection; always v2.</summary>
     public MasterStore(IEnumerable<KeyValuePair<string, McpEntry>> mcps)
-        : this(CurrentVersion, "Default", [new KeyValuePair<string, Collection>("Default", new Collection(mcps))])
+        : this(CurrentVersion, DefaultCollectionName, [new KeyValuePair<string, Collection>(DefaultCollectionName, new Collection(mcps))])
     {
     }
 
     /// <summary>Swift <c>.empty</c>. A fresh instance every call — this type is mutable.</summary>
     public static MasterStore Empty() =>
-        new(CurrentVersion, "Default", [new KeyValuePair<string, Collection>("Default", new Collection())]);
+        new(CurrentVersion, DefaultCollectionName, [new KeyValuePair<string, Collection>(DefaultCollectionName, new Collection())]);
 
     /// <summary>
     /// The active collection's connectors — the view the entire app operates on. Side-effect free:
@@ -138,7 +141,7 @@ public sealed class MasterStore : IEquatable<MasterStore>
         Collections.Remove(name);
         if (ActiveCollection == name)
         {
-            ActiveCollection = successor ?? "Default";
+            ActiveCollection = successor ?? DefaultCollectionName;
         }
         return null;
     }

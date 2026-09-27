@@ -145,10 +145,10 @@ public struct ConfigService: Sendable {
             .min(by: { $0.ordinallyPrecedes($1) }) {
             return first
         }
-        var name = MasterStore.empty.activeCollection
+        var name = MasterStore.defaultCollectionName
         var suffix = 2
         while store.collections[name] != nil {
-            name = "\(MasterStore.empty.activeCollection) \(suffix)"
+            name = "\(MasterStore.defaultCollectionName) \(suffix)"
             suffix += 1
         }
         return name

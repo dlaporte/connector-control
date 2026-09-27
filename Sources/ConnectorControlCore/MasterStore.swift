@@ -51,9 +51,12 @@ public struct MasterStore: Equatable, Codable, Sendable {
         mcps.filter(\.value.enabled).mapValues(\.config)
     }
 
+    /// The collection a fresh store holds, and the one a store left with none makes.
+    public static let defaultCollectionName = "Default"
+
     public static let empty = MasterStore(
-        activeCollection: "Default",
-        collections: ["Default": Collection()])
+        activeCollection: defaultCollectionName,
+        collections: [defaultCollectionName: Collection()])
 
     public init(activeCollection: String, collections: [String: Collection]) {
         self.init(version: 2, activeCollection: activeCollection, collections: collections)
@@ -71,7 +74,7 @@ public struct MasterStore: Equatable, Codable, Sendable {
             if let fallback = collections.keys.min(by: { $0.ordinallyPrecedes($1) }) {
                 active = fallback
             } else {
-                active = "Default"
+                active = Self.defaultCollectionName
                 collections[active] = Collection()
             }
         }
@@ -128,7 +131,7 @@ public struct MasterStore: Equatable, Codable, Sendable {
         guard collections.count > 1 else { return "Can\u{2019}t delete the last collection." }
         let successor = activeAfterDeleting(name, isLocal: isLocal)
         collections.removeValue(forKey: name)
-        if activeCollection == name { activeCollection = successor ?? "Default" }
+        if activeCollection == name { activeCollection = successor ?? Self.defaultCollectionName }
         return nil
     }
 
