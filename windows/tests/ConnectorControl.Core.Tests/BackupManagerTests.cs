@@ -167,6 +167,19 @@ public class BackupManagerTests : IDisposable
         Assert.Equal(Enumerable.Range(0, 11).Reverse().Select(i => $"v{i}"), roomy.Backups(Series).Select(File.ReadAllText));
     }
 
+    /// <summary>
+    /// A counter is digits and nothing else, as on the Mac: a hand-made name with a sign after the
+    /// stamp carries no counter, so its stamp is not one and nothing reads a time from it.
+    /// </summary>
+    [Fact]
+    public void ACounterWithASignIsNotACounter()
+    {
+        var stamp = BackupTimestamp.From(At(1_752_600_000.123));
+        Assert.NotNull(BackupManager.TakenAt(dir.File($"mcps.{stamp}-5.json")));
+        Assert.Null(BackupManager.TakenAt(dir.File($"mcps.{stamp}-+5.json")));
+        Assert.Null(BackupManager.TakenAt(dir.File($"mcps.{stamp}--5.json")));
+    }
+
     [Fact]
     [SupportedOSPlatform("windows")]
     public void BackupsArePrivate()

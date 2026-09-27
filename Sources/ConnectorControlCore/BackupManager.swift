@@ -110,7 +110,10 @@ public struct BackupManager: Sendable {
         let base = name.hasSuffix(".json") ? String(name.dropLast(".json".count)) : name
         guard let z = base.lastIndex(of: "Z") else { return (base, 1) }
         let rest = base[base.index(after: z)...]
-        guard rest.hasPrefix("-"), let counter = Int(rest.dropFirst()) else { return (base, 1) }
+        // Digits only, as Windows parses it: Int alone would take a sign.
+        let digits = rest.dropFirst()
+        guard rest.hasPrefix("-"), !digits.isEmpty, digits.allSatisfy({ ("0"..."9").contains($0) }),
+              let counter = Int(digits) else { return (base, 1) }
         return (String(base[...z]), counter)
     }
 

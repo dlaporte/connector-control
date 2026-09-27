@@ -175,6 +175,15 @@ final class BackupManagerTests: XCTestCase {
                        (0..<11).reversed().map { "v\($0)" })
     }
 
+    /// A counter is digits and nothing else, as on Windows: a hand-made name with a sign after the
+    /// stamp carries no counter, so its stamp is not one and nothing reads a time from it.
+    func testACounterWithASignIsNotACounter() {
+        let stamp = BackupTimestamp.string(from: Date(timeIntervalSince1970: 1_752_600_000.123))
+        XCTAssertNotNil(BackupManager.takenAt(dir.appendingPathComponent("mcps.\(stamp)-5.json")))
+        XCTAssertNil(BackupManager.takenAt(dir.appendingPathComponent("mcps.\(stamp)-+5.json")))
+        XCTAssertNil(BackupManager.takenAt(dir.appendingPathComponent("mcps.\(stamp)--5.json")))
+    }
+
     func testBackupsArePrivate() throws {
         let made = try XCTUnwrap(manager.backUp(fileAt: source, series: "mcps"))
         let mode = try XCTUnwrap(FileManager.default
