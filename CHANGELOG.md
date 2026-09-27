@@ -195,8 +195,13 @@ bullet once the section is about to ship.
 - Deleting the active collection makes the first local collection with connectors active,
   by name, and falls back to the first remaining collection by name only when there is
   none. Before, the first remaining collection by name took over even when it was
-  subscribed or empty, which emptied Claude's config. The Delete confirmation names the
-  collection that takes over.
+  subscribed or empty, which emptied Claude's config.
+- Delete Collection asks "Delete Collection “<name>”?" and says what goes with it: its
+  connectors ("Its 3 connectors are deleted with it.", or "It has no connectors."), but not
+  their copies in other collections, nor a subscribed collection's source file; the
+  collection that becomes active, when it is the active one; and, when it held connectors,
+  that a copy remains in Backups. Before, it said only "Its connector list is removed;
+  backups keep prior states."
 - A master list that can't be read is restored from its newest backup that can be, so
   every collection, subscription and published setting survives. It is still kept aside
   as `mcps.corrupt.<time>.json`, and the banner says "…and restored from the backup of
