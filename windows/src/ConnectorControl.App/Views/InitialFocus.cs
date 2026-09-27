@@ -13,8 +13,9 @@ internal static class InitialFocus
 {
     /// <summary>
     /// On the window's first activation, and only when nothing inside it has claimed the keyboard
-    /// already, as a dialog that focuses its own field on load does. Activation rather than load:
-    /// focusing a window that is not active would activate it.
+    /// already. Activation rather than load: focusing a window that is not active would activate
+    /// it. WPF raises Activated before Loaded, so a dialog that focuses its own field on load, as
+    /// the name prompt does, focuses it after this and wins; it is the same field.
     /// </summary>
     public static void OnFirstActivation(Window window)
     {
@@ -33,11 +34,12 @@ internal static class InitialFocus
     /// <summary>
     /// The first editable text or password box in the tree, in layout order, that is shown and
     /// enabled; a read-only box, such as a preview, is not a field. The window's own visibility is
-    /// not asked: it is Collapsed until it is shown, and what matters is what it holds.
+    /// not asked: the App test searches a window laid out before it is shown, while it is still
+    /// Collapsed. At the one call above, on activation, the window is always visible.
     /// </summary>
     internal static Control? FirstField(DependencyObject root)
     {
-        if (root is UIElement { Visibility: not Visibility.Visible } and not Window or UIElement { IsEnabled: false })
+        if ((root is UIElement { Visibility: not Visibility.Visible } and not Window) || root is UIElement { IsEnabled: false })
         {
             return null;
         }
