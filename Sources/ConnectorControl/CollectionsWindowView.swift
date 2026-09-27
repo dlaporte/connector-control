@@ -512,9 +512,8 @@ struct CollectionsWindowView: View {
         .frame(width: CollectionsWindowView.tickSlotWidth)
         .frame(maxHeight: .infinity)
         .contentShape(Rectangle())
-        .onTapGesture {
-            if !row.isLocked { model.toggleChecked(row.name) }
-        }
+        // The model leaves a locked row as it is, as it does for Space and on Windows.
+        .onTapGesture { model.toggleChecked(row.name) }
     }
 
     private func openEditor(_ connector: String) {
