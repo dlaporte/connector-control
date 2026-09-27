@@ -43,12 +43,15 @@ public struct ConfigService: Sendable {
     /// the active collection over the file.
     ///
     /// What is taken in lands where `ingestTarget(store:collections:lastApplied:)` says, and
-    /// `ingestedElsewhere` names it when that is not the active collection.
+    /// `ingestedElsewhere` names it when that is not the active collection. `collections` is the
+    /// sidecar the caller read for this load, or the one it already holds when this read failed:
+    /// the reroute and the sidecar the caller reconciles then come from one file.
     ///
     /// A master list that cannot be read is moved aside and replaced by the newest `mcps` backup
     /// that decodes (`newestReadableStoreBackup()`), so every collection it held survives; only when
     /// none does is it rebuilt from Claude's config alone. Either way the note says which.
-    public func loadAndReconcile(baseline: [String: JSONValue]? = nil,
+    public func loadAndReconcile(collections: CollectionsFile?,
+                                 baseline: [String: JSONValue]? = nil,
                                  storeAuthoritative: Bool = false,
                                  lastAppliedCollection: String? = nil,
                                  lastAppliedNames: Set<String>? = nil) throws
@@ -107,7 +110,7 @@ public struct ConfigService: Sendable {
         } else {
             effectiveBaseline = baseline
         }
-        let target = ConfigService.ingestTarget(store: loaded.store, collections: loadCollections(),
+        let target = ConfigService.ingestTarget(store: loaded.store, collections: collections,
                                                 lastApplied: lastAppliedCollection)
         let outcome = Reconciler.reconcile(
             store: loaded.store,

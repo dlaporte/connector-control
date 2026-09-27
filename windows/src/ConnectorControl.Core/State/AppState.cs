@@ -654,13 +654,18 @@ public sealed class AppState : ObservableObject, IDisposable
             }
 
             var applied = LastApplied;
+            // The sidecar is read once per load, and a load that cannot read it still knows the kinds
+            // from the last one that could: the reroute away from a subscribed collection holds while a
+            // sync tool is halfway through writing the file.
+            var sidecar = Service.LoadCollections();
             var result = Service.LoadAndReconcile(
+                collections: sidecar ?? (hasLoadedCollectionsOnce ? CollectionsFile : null),
                 baseline: hasLoadedOnce ? AppliedServers : null,
                 storeAuthoritative: trigger != ReloadTrigger.Routine,
                 lastAppliedCollection: applied.Collection,
                 lastAppliedNames: applied.Names);
             Store = result.Store;
-            LoadCollections();
+            LoadCollections(sidecar);
             var claudeConfigChangedExternally = false;
             if (result.ClaudeServers is { } servers)
             {
@@ -2738,15 +2743,16 @@ public sealed class AppState : ObservableObject, IDisposable
     /// The sidecar and the cache follow the store on every load: the master list decides which
     /// collections exist, the sidecar annotates them, and the cache binds what this machine has
     /// found. Runs after the store is assigned, so both reconcile against the list just loaded.
+    /// <paramref name="loaded"/> is the sidecar <see cref="Reload"/> read for this load.
     /// </summary>
-    private void LoadCollections()
+    private void LoadCollections(CollectionsFile? loaded)
     {
         // An unreadable sidecar loads as null (see CollectionsFile.LoadIfReadable). Reconciling the
         // cache against it would drop every binding on this machine over a file a sync tool is
         // halfway through writing, so it is left alone and whatever is already in memory stands.
         // A sidecar with no entries is not that file: it loads as empty, and saves go ahead.
         collectionsNote = null;
-        if (Service.LoadCollections() is not { } loaded)
+        if (loaded is null)
         {
             collectionsLoaded = false;
             // At launch there is no in-memory state to stand yet, so the cache is taken as it

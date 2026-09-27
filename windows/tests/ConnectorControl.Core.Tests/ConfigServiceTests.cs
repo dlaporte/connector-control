@@ -495,3 +495,18 @@ public class ConfigServiceTests : IDisposable
         Assert.Empty(ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath));
     }
 }
+
+internal static class ConfigServiceLoads
+{
+    /// <summary>
+    /// A load that reads the sidecar itself, as the app's first load does. The app passes the file it
+    /// read, or the one it already holds (<c>AppState.Reload</c>).
+    /// </summary>
+    public static LoadResult LoadAndReconcile(
+        this ConfigService service,
+        IReadOnlyDictionary<string, JsonValue>? baseline = null,
+        bool storeAuthoritative = false,
+        string? lastAppliedCollection = null,
+        IReadOnlySet<string>? lastAppliedNames = null) =>
+        service.LoadAndReconcile(service.LoadCollections(), baseline, storeAuthoritative, lastAppliedCollection, lastAppliedNames);
+}

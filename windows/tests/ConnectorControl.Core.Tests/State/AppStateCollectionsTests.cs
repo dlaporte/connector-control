@@ -3720,6 +3720,34 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// A sidecar a sync tool is halfway through writing cannot be read, but a reload after the first
+    /// already knows which collections are subscribed: the addition still goes into a local collection
+    /// rather than the subscribed active one.
+    /// </summary>
+    [Fact]
+    public void AnExternalAdditionWhileTheSidecarIsUnreadableStillAvoidsTheSubscribedCollection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam);
+        state.SwitchCollection("Data team");
+        var authored = state.Store.Collections["Data team"].Clone();
+        File.WriteAllText(state.Service.Paths.CollectionsFilePath, "{ half-written");
+
+        var servers = new Dictionary<string, JsonValue>(h.ClaudeServers(), StringComparer.Ordinal)
+        {
+            ["installer"] = NodeWith("/opt/installer/srv.js"),
+        };
+        h.WriteClaudeServers(servers.Select(p => (p.Key, p.Value)).ToArray());
+        state.Reload();
+
+        // The subscribed collection is untouched.
+        Assert.Equal(authored, state.Store.Collections["Data team"]);
+        Assert.True(state.Store.Collections["Default"].Mcps["installer"].Enabled);
+        Assert.True(h.StoreOnDisk().Collections["Default"].Mcps["installer"].Enabled);
+    }
+
+    /// <summary>
     /// With no local collection left — a 1.3 app sharing the store can delete the last one — the
     /// addition goes into a new, empty "Default", which does not become active.
     /// </summary>

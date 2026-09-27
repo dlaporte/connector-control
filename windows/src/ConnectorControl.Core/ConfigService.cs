@@ -37,13 +37,16 @@ public sealed class ConfigService
     /// the file.
     ///
     /// What is taken in lands where <see cref="IngestTarget"/> says, and <c>IngestedElsewhere</c> names it
-    /// when that is not the active collection.
+    /// when that is not the active collection. <paramref name="collections"/> is the sidecar the caller
+    /// read for this load, or the one it already holds when this read failed: the reroute and the
+    /// sidecar the caller reconciles then come from one file.
     ///
     /// A master list that cannot be read is moved aside and replaced by the newest <c>mcps</c> backup
     /// that decodes (<see cref="NewestReadableStoreBackup"/>), so every collection it held survives; only
     /// when none does is it rebuilt from Claude's config alone. Either way the note says which.
     /// </remarks>
     public LoadResult LoadAndReconcile(
+        CollectionsFile? collections,
         IReadOnlyDictionary<string, JsonValue>? baseline = null,
         bool storeAuthoritative = false,
         string? lastAppliedCollection = null,
@@ -114,7 +117,7 @@ public sealed class ConfigService
         {
             effectiveBaseline = baseline;
         }
-        var target = IngestTarget(store, LoadCollections(), lastAppliedCollection);
+        var target = IngestTarget(store, collections, lastAppliedCollection);
         var outcome = Reconciler.Reconcile(
             store, Ingestible(servers, lastAppliedCollection, lastAppliedNames, rebuilt, store),
             effectiveBaseline, target);

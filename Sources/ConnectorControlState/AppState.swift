@@ -536,13 +536,18 @@ public final class AppState: ObservableObject {
             }
 
             let applied = lastApplied
+            // The sidecar is read once per load, and a load that cannot read it still knows the
+            // kinds from the last one that could: the reroute away from a subscribed collection
+            // holds while a sync tool is halfway through writing the file.
+            let sidecar = service.loadCollections()
             let result = try service.loadAndReconcile(
+                collections: sidecar ?? (hasLoadedCollectionsOnce ? collectionsFile : nil),
                 baseline: hasLoadedOnce ? appliedServers : nil,
                 storeAuthoritative: trigger != .routine,
                 lastAppliedCollection: applied.collection,
                 lastAppliedNames: applied.names)
             store = result.store
-            loadCollections()
+            loadCollections(sidecar)
             var claudeConfigChangedExternally = false
             if let servers = result.claudeServers {
                 claudeConfigChangedExternally = wasLoaded && servers != previousApplied
@@ -1994,13 +1999,14 @@ public final class AppState: ObservableObject {
     /// The sidecar and the cache follow the store on every load: the master list decides which
     /// collections exist, the sidecar annotates them, and the cache binds what this machine has
     /// found. Runs after the store is assigned, so both reconcile against the list just loaded.
-    private func loadCollections() {
+    /// `loaded` is the sidecar `reload` read for this load.
+    private func loadCollections(_ loaded: CollectionsFile?) {
         // An unreadable sidecar loads as nil (see CollectionsFile.loadIfReadable). Reconciling the
         // cache against it would drop every binding on this machine over a file a sync tool is
         // halfway through writing, so it is left alone and whatever is already in memory stands.
         // A sidecar with no entries is not that file: it loads as empty, and saves go ahead.
         collectionsNote = nil
-        guard let loaded = service.loadCollections() else {
+        guard let loaded else {
             collectionsLoaded = false
             // At launch there is no in-memory state to stand yet, so the cache is taken as it
             // stands — unreconciled, since the sidecar that would vouch for it is the file that

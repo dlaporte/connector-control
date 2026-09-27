@@ -472,3 +472,18 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL), [:])
     }
 }
+
+private extension ConfigService {
+    /// A load that reads the sidecar itself, as the app's first load does. The app passes the file it
+    /// read, or the one it already holds (`AppState.reload`).
+    func loadAndReconcile(baseline: [String: JSONValue]? = nil,
+                          storeAuthoritative: Bool = false,
+                          lastAppliedCollection: String? = nil,
+                          lastAppliedNames: Set<String>? = nil) throws
+        -> (store: MasterStore, notes: [String],
+            claudeServers: [String: JSONValue]?, ingestedElsewhere: IngestedElsewhere?) {
+        try loadAndReconcile(collections: loadCollections(), baseline: baseline,
+                             storeAuthoritative: storeAuthoritative,
+                             lastAppliedCollection: lastAppliedCollection, lastAppliedNames: lastAppliedNames)
+    }
+}

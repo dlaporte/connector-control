@@ -3189,6 +3189,27 @@ final class AppStateCollectionsTests: XCTestCase {
         ])
     }
 
+    /// A sidecar a sync tool is halfway through writing cannot be read, but a reload after the
+    /// first already knows which collections are subscribed: the addition still goes into a local
+    /// collection rather than the subscribed active one.
+    func testAnExternalAdditionWhileTheSidecarIsUnreadableStillAvoidsTheSubscribedCollection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
+        state.switchCollection(to: "Data team")
+        let authored = try XCTUnwrap(state.store.collections["Data team"])
+        try Data("{ half-written".utf8).write(to: state.service.paths.collectionsFileURL)
+
+        var servers = try h.claudeServers()
+        servers["installer"] = .object(["command": .string("node"), "args": .array([.string("/opt/installer/srv.js")])])
+        try h.writeClaudeServers(servers.map { ($0.key, $0.value) })
+        state.reload()
+
+        XCTAssertEqual(state.store.collections["Data team"], authored, "the subscribed collection is untouched")
+        XCTAssertEqual(state.store.collections["Default"]?.mcps["installer"]?.enabled, true)
+        XCTAssertEqual(try h.storeOnDisk().collections["Default"]?.mcps["installer"]?.enabled, true)
+    }
+
     /// With no local collection left — a 1.3 app sharing the store can delete the last one — the
     /// addition goes into a new, empty "Default", which does not become active.
     func testAnExternalAdditionWithNoLocalCollectionMakesOne() throws {
