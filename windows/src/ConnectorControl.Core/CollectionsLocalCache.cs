@@ -163,7 +163,9 @@ public sealed record CollectionsLocalCache
         /// before origins were kept are read as one collection's. Otherwise the record is another
         /// collection's, one that bore the name and left, and its folders go to
         /// <see cref="DepartedFolders"/> with whatever it already held there: the next publish must
-        /// not take them as its own.
+        /// not take them as its own. Its releases do not merge at all: a Release is the author's word for
+        /// the collection they gave it in, and filed with this binding's origin it would read as this
+        /// collection's own.
         /// </remarks>
         public static KeptRecord Remembering(PublishBinding binding, KeptRecord? earlier)
         {
@@ -171,7 +173,7 @@ public sealed record CollectionsLocalCache
             var earlierFolders = earlier?.PublishedFolders ?? Enumerable.Empty<string>();
             return new(
                 binding.MarkedValues.Concat(earlier?.MarkedValues ?? Enumerable.Empty<string>()),
-                binding.ReleasedValues.Concat(earlier?.ReleasedValues ?? Enumerable.Empty<string>()),
+                binding.ReleasedValues.Concat(own ? earlier?.ReleasedValues ?? Enumerable.Empty<string>() : Enumerable.Empty<string>()),
                 binding.PublishedFolders.Append(binding.Folder)
                     .Concat(own ? earlierFolders : Enumerable.Empty<string>()),
                 (earlier?.DepartedFolders ?? Enumerable.Empty<string>())
@@ -197,7 +199,8 @@ public sealed record CollectionsLocalCache
         /// or one written before origins were kept, read the same way, and the collection taking
         /// the name is a different one. Its folders are departed to it, as they would be to a
         /// collection made with the name, and its paths are inherited, as a re-used name inherits
-        /// them; the moving record's own folders and origin stay its own, so the collection goes
+        /// them, but not its releases, which were the author's word for the collection that left;
+        /// the moving record's own folders, releases and origin stay its own, so the collection goes
         /// on being the one that published under them. A collection that never published moves no
         /// record, and leaves the one under the name as it found it, belonging to none.
         /// </summary>
@@ -206,7 +209,7 @@ public sealed record CollectionsLocalCache
                 ? displaced
                 : new(
                     moving.MarkedValues.Concat(displaced.MarkedValues),
-                    moving.ReleasedValues.Concat(displaced.ReleasedValues),
+                    moving.ReleasedValues,
                     moving.PublishedFolders,
                     moving.DepartedFolders.Concat(displaced.PublishedFolders).Concat(displaced.DepartedFolders),
                     moving.Origin);

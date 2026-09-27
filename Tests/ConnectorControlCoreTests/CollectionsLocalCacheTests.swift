@@ -144,11 +144,12 @@ final class CollectionsLocalCacheTests: XCTestCase {
     /// An earlier record's folders are the binding's own only where the two published under one
     /// origin. A record of another origin, or of none — a collection that left the store — belongs
     /// to another collection, and its folders are kept apart as departed so the next publish does
-    /// not take them as its own.
+    /// not take them as its own; its releases, that collection's author's word, do not come at all.
     func testRememberingKeepsAnotherCollectionsFoldersApartFromTheBindingsOwn() {
         let binding = CollectionsLocalCache.PublishBinding(folder: "/Users/d/new", lastWrittenHash: nil,
                                                            publishedFolders: ["/Users/d/new"], origin: "0c9b7d1e")
-        let departed = CollectionsLocalCache.KeptRecord(publishedFolders: ["/Users/d/old"], departedFolders: ["/Users/d/older"])
+        let departed = CollectionsLocalCache.KeptRecord(releasedValues: ["/r"], publishedFolders: ["/Users/d/old"],
+                                                        departedFolders: ["/Users/d/older"])
         XCTAssertEqual(CollectionsLocalCache.KeptRecord.remembering(binding, after: departed),
                        .init(publishedFolders: ["/Users/d/new"], departedFolders: ["/Users/d/old", "/Users/d/older"],
                              origin: "0c9b7d1e"),
@@ -160,15 +161,16 @@ final class CollectionsLocalCacheTests: XCTestCase {
     }
 
     /// A record of the binding's own origin is the same collection's, stopped before: its folders
-    /// merge into the binding's own, and what it held as departed stays departed. A binding and a
-    /// record written before origins were kept, with none on either side, are read the same way.
+    /// and releases merge into the binding's own, and what it held as departed stays departed. A
+    /// binding and a record written before origins were kept, with none on either side, are read the
+    /// same way.
     func testRememberingMergesTheFoldersOfARecordOfTheSameOrigin() {
         let binding = CollectionsLocalCache.PublishBinding(folder: "/Users/d/new", lastWrittenHash: nil,
                                                            publishedFolders: ["/Users/d/new"], origin: "0c9b7d1e")
-        let own = CollectionsLocalCache.KeptRecord(publishedFolders: ["/Users/d/old"], departedFolders: ["/Users/d/older"],
-                                                   origin: "0c9b7d1e")
+        let own = CollectionsLocalCache.KeptRecord(releasedValues: ["/r"], publishedFolders: ["/Users/d/old"],
+                                                   departedFolders: ["/Users/d/older"], origin: "0c9b7d1e")
         XCTAssertEqual(CollectionsLocalCache.KeptRecord.remembering(binding, after: own),
-                       .init(publishedFolders: ["/Users/d/old", "/Users/d/new"], departedFolders: ["/Users/d/older"],
+                       .init(releasedValues: ["/r"], publishedFolders: ["/Users/d/old", "/Users/d/new"], departedFolders: ["/Users/d/older"],
                              origin: "0c9b7d1e"))
         let legacy = CollectionsLocalCache.PublishBinding(folder: "/Users/d/new", lastWrittenHash: nil)
         XCTAssertEqual(CollectionsLocalCache.KeptRecord.remembering(legacy, after: .init(publishedFolders: ["/Users/d/old"])),
@@ -185,9 +187,10 @@ final class CollectionsLocalCacheTests: XCTestCase {
     }
 
     /// A live collection's name is refused, so a record displaced by a rename is a departed
-    /// collection's: its paths are inherited, as a re-used name inherits them, and its folders,
-    /// own and departed alike, are departed to the collection now bearing the name, whose own
-    /// folders and origin the merged record keeps.
+    /// collection's: its paths are inherited, as a re-used name inherits them, but not its releases,
+    /// which were the author's word for the collection that left; and its folders, own and departed
+    /// alike, are departed to the collection now bearing the name, whose own folders, releases and
+    /// origin the merged record keeps.
     func testRenamedFilesTheDisplacedRecordsFoldersAsDeparted() {
         let moving = CollectionsLocalCache.KeptRecord(markedValues: ["/c"], releasedValues: ["/d"],
                                                       publishedFolders: ["/Users/d/squad"], departedFolders: ["/Users/d/gone"],
@@ -195,7 +198,7 @@ final class CollectionsLocalCacheTests: XCTestCase {
         let displaced = CollectionsLocalCache.KeptRecord(markedValues: ["/a"], releasedValues: ["/b"],
                                                          publishedFolders: ["/Users/d/old"], departedFolders: ["/Users/d/older"])
         XCTAssertEqual(CollectionsLocalCache.KeptRecord.renamed(moving, over: displaced),
-                       .init(markedValues: ["/a", "/c"], releasedValues: ["/b", "/d"], publishedFolders: ["/Users/d/squad"],
+                       .init(markedValues: ["/a", "/c"], releasedValues: ["/d"], publishedFolders: ["/Users/d/squad"],
                              departedFolders: ["/Users/d/gone", "/Users/d/old", "/Users/d/older"], origin: "0c9b7d1e"))
     }
 

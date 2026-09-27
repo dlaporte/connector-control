@@ -447,6 +447,9 @@ machines that follow it, including the one that publishes it.
 - A path stays kept back until you **Release** it. Unticking its row is not
   enough, and neither is deleting the argument or the connector that held
   it and pressing Publish: put back later, it is refused and listed again.
+  A Release belongs to the collection you gave it in: a collection made
+  later under a deleted one's name, or renamed onto it, starts with none,
+  and its sheet lists the path again.
 - A differently spelled version of a marked path is a different path to the
   app — another case, `~` in place of your home folder, a trailing slash.
   It is not recognised as the one you marked, so it travels as written;

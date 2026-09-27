@@ -1764,6 +1764,73 @@ public class AppStateCollectionsTests
         Assert.Equal([MarkedPath], LedgerArgs(file));
     }
 
+    /// <summary>
+    /// A Release is the author's word for the collection they gave it in. One given in a collection since
+    /// deleted does not pass to a later collection bearing its name — made here, renamed onto it, or one
+    /// that has published and stopped since — though the name's marks do. The new collection's dialog
+    /// ticks the path and lists it, and Release there lets it travel.
+    /// </summary>
+    [Theory]
+    [InlineData("made again")]
+    [InlineData("renamed onto the name")]
+    [InlineData("published and stopped")]
+    public void AReleaseDoesNotPassToALaterCollectionOfTheSameName(string route)
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath)), null));
+        var home = new PublishModel(state, state.ActiveCollection) { Folder = PublishFolder(h, "pubDefault") };
+        foreach (var row in home.PathRows.Where(r => r.Value == MarkedPath))
+        {
+            row.Marked = true;
+        }
+        Assert.Null(home.Publish());
+        Assert.Null(state.AddEmptyCollection("Team"));
+        Assert.Null(state.Upsert("t", new McpEntry(NodeWith(MarkedPath)), null, "Team"));
+        var team = new PublishModel(state, "Team") { Folder = PublishFolder(h, "pubTeam") };
+        foreach (var row in team.PathRows.Where(r => r.Value == MarkedPath))
+        {
+            row.Marked = false;
+        }
+        Assert.Null(team.ReleaseKeptPath(MarkedPath));
+        Assert.Null(team.Publish());
+        Assert.Null(state.DeleteCollection("Team"));
+
+        switch (route)
+        {
+            case "made again":
+                Assert.Null(state.AddEmptyCollection("Team"));
+                break;
+            case "renamed onto the name":
+                // Squad published and stopped, so the record the rename carries is its own.
+                Assert.Null(state.AddEmptyCollection("Squad"));
+                Assert.Null(new PublishModel(state, "Squad") { Folder = PublishFolder(h, "pubSquad") }.Publish());
+                state.StopPublishing("Squad", deleteFile: false);
+                Assert.Null(state.RenameCollection("Squad", "Team"));
+                break;
+            default:
+                Assert.Null(state.AddEmptyCollection("Team"));
+                Assert.Null(new PublishModel(state, "Team") { Folder = PublishFolder(h, "pubTeam2") }.Publish());
+                state.StopPublishing("Team", deleteFile: false);
+                break;
+        }
+        Assert.Null(state.Upsert("t2", new McpEntry(NodeWith("--data", MarkedPath)), null, "Team"));
+        var folder = PublishFolder(h, "pubTeam3");
+        var fresh = new PublishModel(state, "Team") { Folder = folder };
+        // The row holding the path starts ticked.
+        Assert.Contains(fresh.PathRows, r => r.Value == MarkedPath && r.Marked);
+        foreach (var row in fresh.PathRows.Where(r => r.Value == MarkedPath))
+        {
+            row.Marked = false;
+        }
+        Assert.Contains(fresh.KeptPaths, k => k.Value == MarkedPath);   // listed as kept back
+        Assert.False(fresh.CanPublish);
+        Assert.Null(fresh.ReleaseKeptPath(MarkedPath));
+        Assert.Null(fresh.Publish());
+        var doc = Path.Combine(folder, CollectionDocument.FileName(state.CollectionsFile.Collections["Team"].Publish!.Slug));
+        Assert.True(JsonText.FileContains(doc, MarkedPath));   // released here, it travels
+    }
+
     [Fact]
     public void TheSheetsExportRefusesACopyOfAPathItMarks()
     {

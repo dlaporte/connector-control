@@ -2408,7 +2408,11 @@ public sealed class AppState : ObservableObject, IDisposable
         var marked = (previous?.MarkedValues ?? Enumerable.Empty<string>())
             .Concat(own || previous is null ? remembered?.MarkedValues ?? Enumerable.Empty<string>() : Enumerable.Empty<string>())
             .ToHashSet(StringComparer.Ordinal);
-        var released = Released(previous?.ReleasedValues ?? remembered?.ReleasedValues, releasedValues, reviewedValues ?? marked);
+        // The paths the author released: the binding's, or an own record's. A record another collection
+        // bearing the name left behind hands on its marks, never its releases: a Release is the author's
+        // word for the collection they gave it in, which has gone.
+        var released = Released(previous?.ReleasedValues ?? (own ? remembered?.ReleasedValues : null), releasedValues,
+                                reviewedValues ?? marked);
         // What the dialog's Publish showed is what it reviewed. Choose Folder moves a binding and
         // reviews nothing, so it carries the review it had; it never makes a first one
         // (ChangePublishFolder), so a first binding with no dialog is a caller vouching for what the
@@ -3259,8 +3263,11 @@ public sealed class AppState : ObservableObject, IDisposable
                 values.Add(folder);
             }
         }
+        // Released for this collection: by its binding, or by its own record. A record a collection that
+        // bore the name and left behind lets nothing go here (StartPublishing).
+        var leftBehind = CollectionsCache.Kept.GetValueOrDefault(collection);
         var letGo = Released(CollectionsCache.Published.GetValueOrDefault(collection)?.ReleasedValues
-                             ?? CollectionsCache.Kept.GetValueOrDefault(collection)?.ReleasedValues, released, reviewed);
+                             ?? (IsOwn(leftBehind, collection, collection, ownOrigin) ? leftBehind?.ReleasedValues : null), released, reviewed);
         values.ExceptWith(folders);
         values.ExceptWith(letGo);
         // The collection's own folders are never let go: the token stands for them, and writing it in

@@ -82,13 +82,15 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         /// under one origin, none on either side counting as one — a binding and a record written
         /// before origins were kept are read as one collection's. Otherwise the record is another
         /// collection's, one that bore the name and left, and its folders go to `departedFolders`
-        /// with whatever it already held there: the next publish must not take them as its own.
+        /// with whatever it already held there: the next publish must not take them as its own. Its
+        /// releases do not merge at all: a Release is the author's word for the collection they gave
+        /// it in, and filed with this binding's origin it would read as this collection's own.
         public static func remembering(_ binding: PublishBinding, after earlier: KeptRecord?) -> KeptRecord {
             let own = earlier?.origin == binding.origin
             let earlierFolders = earlier?.publishedFolders ?? []
             return KeptRecord(
                 markedValues: binding.markedValues.union(earlier?.markedValues ?? []),
-                releasedValues: binding.releasedValues.union(earlier?.releasedValues ?? []),
+                releasedValues: binding.releasedValues.union(own ? earlier?.releasedValues ?? [] : []),
                 publishedFolders: binding.publishedFolders.union([binding.folder])
                     .union(own ? earlierFolders : []),
                 departedFolders: (earlier?.departedFolders ?? []).union(own ? [] : earlierFolders),
@@ -111,14 +113,15 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         /// or one written before origins were kept, read the same way, and the collection taking
         /// the name is a different one. Its folders are departed to it, as they would be to a
         /// collection made with the name, and its paths are inherited, as a re-used name inherits
-        /// them; the moving record's own folders and origin stay its own, so the collection goes
+        /// them, but not its releases, which were the author's word for the collection that left;
+        /// the moving record's own folders, releases and origin stay its own, so the collection goes
         /// on being the one that published under them. A collection that never published moves no
         /// record, and leaves the one under the name as it found it, belonging to none.
         public static func renamed(_ moving: KeptRecord?, over displaced: KeptRecord) -> KeptRecord {
             guard let moving else { return displaced }
             return KeptRecord(
                 markedValues: moving.markedValues.union(displaced.markedValues),
-                releasedValues: moving.releasedValues.union(displaced.releasedValues),
+                releasedValues: moving.releasedValues,
                 publishedFolders: moving.publishedFolders,
                 departedFolders: moving.departedFolders.union(displaced.publishedFolders).union(displaced.departedFolders),
                 origin: moving.origin)

@@ -1530,6 +1530,61 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(try ledgerArgs(in: file), [markedPath])
     }
 
+    /// A Release is the author's word for the collection they gave it in. One given in a collection
+    /// since deleted does not pass to a later collection bearing its name — made here, renamed onto
+    /// it, or one that has published and stopped since — though the name's marks do. The new
+    /// collection's sheet ticks the path and lists it, and Release there lets it travel.
+    func testAReleaseDoesNotPassToALaterCollectionOfTheSameName() throws {
+        for route in ["made again", "renamed onto the name", "published and stopped"] {
+            let (h, state) = AppStateHarness.started()
+            defer { h.dispose() }
+            XCTAssertNil(state.upsert(name: "ledger", entry: node([markedPath]), renamedFrom: nil))
+            let home = PublishModel(state: state, collection: state.activeCollection)
+            home.folder = try publishFolder(h, "pubDefault").path
+            for index in home.pathRows.indices where home.pathRows[index].value == markedPath { home.pathRows[index].marked = true }
+            XCTAssertNil(home.publish(), route)
+            XCTAssertNil(state.addEmptyCollection(named: "Team"))
+            XCTAssertNil(state.upsert(name: "t", entry: node([markedPath]), renamedFrom: nil, in: "Team"))
+            let team = PublishModel(state: state, collection: "Team")
+            team.folder = try publishFolder(h, "pubTeam").path
+            for index in team.pathRows.indices where team.pathRows[index].value == markedPath { team.pathRows[index].marked = false }
+            XCTAssertNil(team.releaseKeptPath(markedPath), route)
+            XCTAssertNil(team.publish(), route)
+            XCTAssertNil(state.deleteCollection(named: "Team"))
+
+            switch route {
+            case "made again":
+                XCTAssertNil(state.addEmptyCollection(named: "Team"))
+            case "renamed onto the name":
+                // Squad published and stopped, so the record the rename carries is its own.
+                XCTAssertNil(state.addEmptyCollection(named: "Squad"))
+                let squad = PublishModel(state: state, collection: "Squad")
+                squad.folder = try publishFolder(h, "pubSquad").path
+                XCTAssertNil(squad.publish(), route)
+                state.stopPublishing("Squad", deleteFile: false)
+                XCTAssertNil(state.renameCollection("Squad", to: "Team"))
+            default:
+                XCTAssertNil(state.addEmptyCollection(named: "Team"))
+                let first = PublishModel(state: state, collection: "Team")
+                first.folder = try publishFolder(h, "pubTeam2").path
+                XCTAssertNil(first.publish(), route)
+                state.stopPublishing("Team", deleteFile: false)
+            }
+            XCTAssertNil(state.upsert(name: "t2", entry: node(["--data", markedPath]), renamedFrom: nil, in: "Team"))
+            let fresh = PublishModel(state: state, collection: "Team")
+            fresh.folder = try publishFolder(h, "pubTeam3").path
+            XCTAssertTrue(fresh.pathRows.contains { $0.value == markedPath && $0.marked }, "\(route): the row holding the path starts ticked")
+            for index in fresh.pathRows.indices where fresh.pathRows[index].value == markedPath { fresh.pathRows[index].marked = false }
+            XCTAssertTrue(fresh.keptPaths.contains { $0.value == markedPath }, "\(route): the path is listed as kept back")
+            XCTAssertFalse(fresh.canPublish, route)
+            XCTAssertNil(fresh.releaseKeptPath(markedPath), route)
+            XCTAssertNil(fresh.publish(), route)
+            let slug = try XCTUnwrap(state.collectionsFile.collections["Team"]?.publish?.slug)
+            let doc = try publishFolder(h, "pubTeam3").appendingPathComponent(CollectionDocument.fileName(slug: slug))
+            XCTAssertTrue(try jsonFile(doc, contains: markedPath), "\(route): released here, it travels")
+        }
+    }
+
     func testTheSheetsExportRefusesACopyOfAPathItMarks() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

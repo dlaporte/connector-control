@@ -1583,7 +1583,10 @@ public final class AppState: ObservableObject {
         // The paths already on the list: the binding's, and an own record's that this call spends,
         // or the record's a first binding inherits. Only a Release in the sheet takes one off.
         let marked = (previous?.markedValues ?? []).union(own || previous == nil ? remembered?.markedValues ?? [] : [])
-        let released = AppState.released(previous?.releasedValues ?? remembered?.releasedValues ?? [],
+        // The paths the author released: the binding's, or an own record's. A record another
+        // collection bearing the name left behind hands on its marks, never its releases: a Release is
+        // the author's word for the collection they gave it in, which has gone.
+        let released = AppState.released(previous?.releasedValues ?? (own ? remembered?.releasedValues : nil) ?? [],
                                           adding: releasedValues, marked: reviewedValues ?? marked)
         // What the sheet's Publish showed is what it reviewed. Choose Folder moves a binding and
         // reviews nothing, so it carries the review it had; it never makes a first one
@@ -1859,8 +1862,12 @@ public final class AppState: ObservableObject {
         for name in collectionsCache.synced.keys where isSynced(name) {
             if let folder = sourceFolder(of: name) { values.insert(folder) }
         }
+        // Released for this collection: by its binding, or by its own record. A record a collection
+        // that bore the name and left behind lets nothing go here (`startPublishing`).
+        let leftBehind = collectionsCache.kept[collection]
         let letGo = AppState.released(collectionsCache.published[collection]?.releasedValues
-                                        ?? collectionsCache.kept[collection]?.releasedValues ?? [],
+                                        ?? (AppState.isOwn(leftBehind, filedUnder: collection, of: collection, publishing: ownOrigin)
+                                            ? leftBehind?.releasedValues : nil) ?? [],
                                       adding: released, marked: reviewed ?? [])
         // The collection's own folders are never let go: the token stands for them, and writing it
         // in their place is the one answer.

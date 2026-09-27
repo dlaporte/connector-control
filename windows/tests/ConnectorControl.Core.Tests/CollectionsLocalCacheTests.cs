@@ -220,13 +220,13 @@ public sealed class CollectionsLocalCacheTests : IDisposable
     /// An earlier record's folders are the binding's own only where the two published under one
     /// origin. A record of another origin, or of none — a collection that left the store — belongs
     /// to another collection, and its folders are kept apart as departed so the next publish does
-    /// not take them as its own.
+    /// not take them as its own; its releases, that collection's author's word, do not come at all.
     /// </summary>
     [Fact]
     public void RememberingKeepsAnotherCollectionsFoldersApartFromTheBindingsOwn()
     {
         var binding = new CollectionsLocalCache.PublishBinding("/Users/d/new", null, null, null, ["/Users/d/new"], "0c9b7d1e");
-        var departed = new CollectionsLocalCache.KeptRecord(null, null, ["/Users/d/old"], ["/Users/d/older"]);
+        var departed = new CollectionsLocalCache.KeptRecord(null, ["/r"], ["/Users/d/old"], ["/Users/d/older"]);
         // A record with no origin belongs to no collection here.
         Assert.Equal(new CollectionsLocalCache.KeptRecord(null, null, ["/Users/d/new"], ["/Users/d/old", "/Users/d/older"], "0c9b7d1e"),
                      CollectionsLocalCache.KeptRecord.Remembering(binding, departed));
@@ -237,16 +237,16 @@ public sealed class CollectionsLocalCacheTests : IDisposable
     }
 
     /// <summary>
-    /// A record of the binding's own origin is the same collection's, stopped before: its folders
-    /// merge into the binding's own, and what it held as departed stays departed. A binding and a
-    /// record written before origins were kept, with none on either side, are read the same way.
+    /// A record of the binding's own origin is the same collection's, stopped before: its folders and
+    /// releases merge into the binding's own, and what it held as departed stays departed. A binding and
+    /// a record written before origins were kept, with none on either side, are read the same way.
     /// </summary>
     [Fact]
     public void RememberingMergesTheFoldersOfARecordOfTheSameOrigin()
     {
         var binding = new CollectionsLocalCache.PublishBinding("/Users/d/new", null, null, null, ["/Users/d/new"], "0c9b7d1e");
-        var own = new CollectionsLocalCache.KeptRecord(null, null, ["/Users/d/old"], ["/Users/d/older"], "0c9b7d1e");
-        Assert.Equal(new CollectionsLocalCache.KeptRecord(null, null, ["/Users/d/old", "/Users/d/new"], ["/Users/d/older"], "0c9b7d1e"),
+        var own = new CollectionsLocalCache.KeptRecord(null, ["/r"], ["/Users/d/old"], ["/Users/d/older"], "0c9b7d1e");
+        Assert.Equal(new CollectionsLocalCache.KeptRecord(null, ["/r"], ["/Users/d/old", "/Users/d/new"], ["/Users/d/older"], "0c9b7d1e"),
                      CollectionsLocalCache.KeptRecord.Remembering(binding, own));
         var legacy = new CollectionsLocalCache.PublishBinding("/Users/d/new", null);
         Assert.Equal(new CollectionsLocalCache.KeptRecord(null, null, ["/Users/d/old", "/Users/d/new"], null),
@@ -267,9 +267,10 @@ public sealed class CollectionsLocalCacheTests : IDisposable
 
     /// <summary>
     /// A live collection's name is refused, so a record displaced by a rename is a departed
-    /// collection's: its paths are inherited, as a re-used name inherits them, and its folders, own
-    /// and departed alike, are departed to the collection now bearing the name, whose own folders
-    /// and origin the merged record keeps.
+    /// collection's: its paths are inherited, as a re-used name inherits them, but not its releases,
+    /// which were the author's word for the collection that left; and its folders, own and departed
+    /// alike, are departed to the collection now bearing the name, whose own folders, releases and
+    /// origin the merged record keeps.
     /// </summary>
     [Fact]
     public void RenamedFilesTheDisplacedRecordsFoldersAsDeparted()
@@ -277,7 +278,7 @@ public sealed class CollectionsLocalCacheTests : IDisposable
         var moving = new CollectionsLocalCache.KeptRecord(["/c"], ["/d"], ["/Users/d/squad"], ["/Users/d/gone"], "0c9b7d1e");
         var displaced = new CollectionsLocalCache.KeptRecord(["/a"], ["/b"], ["/Users/d/old"], ["/Users/d/older"]);
         Assert.Equal(
-            new CollectionsLocalCache.KeptRecord(["/a", "/c"], ["/b", "/d"], ["/Users/d/squad"],
+            new CollectionsLocalCache.KeptRecord(["/a", "/c"], ["/d"], ["/Users/d/squad"],
                                                  ["/Users/d/gone", "/Users/d/old", "/Users/d/older"], "0c9b7d1e"),
             CollectionsLocalCache.KeptRecord.Renamed(moving, displaced));
     }

@@ -119,6 +119,9 @@ bullet once the section is about to ship.
   connector that held it is deleted and the sheet is published again with no row for it:
   put back later, it is refused and listed in the sheet. Before, that Publish forgot it, so
   the path travelled as written once it came back.
+- A Release belongs to the collection it was given in. A collection made later under a
+  deleted one's name, or renamed onto it, no longer inherits it: its sheet lists the path
+  and Release answers it there. Before, the path travelled in the new collection unlisted.
 - A publish that fails says so on the collection banner, with Choose Folder and Stop
   Publishing, and pressing Publish again retries the write at once. The banner goes if the
   collection stops publishing, or is deleted, on your other machine. A path marked for
