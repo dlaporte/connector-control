@@ -698,21 +698,23 @@ The Mac job runs in the `signing` environment, whose deployment branch policy mu
 `preview-*` tags and any branch previews are cut from.
 
 The release, preview and Windows CI workflows all call one Windows build definition,
-[`windows-build.yml`](.github/workflows/windows-build.yml), and every
-workflow's own YAML and shell/PowerShell scripts are linted by
-[`infra-ci.yml`](.github/workflows/infra-ci.yml).
+[`windows-build.yml`](.github/workflows/windows-build.yml); the release and
+preview workflows call one Mac signing build,
+[`mac-build.yml`](.github/workflows/mac-build.yml), which alone runs in the
+`signing` environment; and every workflow's own YAML and shell/PowerShell
+scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
 
 ### Scripts
 
 | Script | What it does | Who calls it |
 | --- | --- | --- |
-| `scripts/build-app.sh` | Assembles `build/Connector Control.app` from the SwiftPM build products, embedding Sparkle and the app icon. | `mac-ci.yml`, `preview.yml`, `release.yml` |
-| `scripts/make-dmg.sh` | Packages the app bundle into a drag-to-Applications DMG. | `mac-ci.yml`, `preview.yml`, `release.yml` |
+| `scripts/build-app.sh` | Assembles `build/Connector Control.app` from the SwiftPM build products, embedding Sparkle and the app icon. | `mac-ci.yml`, `mac-build.yml` |
+| `scripts/make-dmg.sh` | Packages the app bundle into a drag-to-Applications DMG. | `mac-ci.yml`, `mac-build.yml` |
 | `scripts/test-mac.sh` | Runs the Swift suite the way CI gates it (no test may skip or fail). | `mac-ci.yml`, `preview.yml`, `release.yml` |
 | `scripts/generate-icon.swift` | Renders the app icon — macOS `.icns` or Windows `.ico`, chosen by the output extension. | `scripts/build-app.sh`; the `.ico` path is run by hand, on a Mac |
-| `scripts/mac/import-signing-cert.sh` | Imports the Developer ID certificate into a throwaway CI keychain. | `preview.yml`, `release.yml` |
-| `scripts/mac/notarize.sh` | Submits a binary or app bundle for Apple notarization and staples the ticket. | `preview.yml`, `release.yml` |
-| `scripts/mac/make-appcast.sh` | Builds and EdDSA-signs the Sparkle appcast for one release. | `release.yml` |
+| `scripts/mac/import-signing-cert.sh` | Imports the Developer ID certificate into a throwaway CI keychain. | `mac-build.yml` |
+| `scripts/mac/notarize.sh` | Submits a binary or app bundle for Apple notarization and staples the ticket. | `mac-build.yml` |
+| `scripts/mac/make-appcast.sh` | Builds and EdDSA-signs the Sparkle appcast for one release. | `mac-build.yml`, for `release.yml` only |
 | `scripts/release/changelog-section.sh` | Prints one version's CHANGELOG.md section. | `release.yml`, `scripts/release/preview-notes.sh` |
 | `scripts/release/preview-notes.sh` | Prints the release notes for a joint preview build. | `preview.yml` |
 | `scripts/release/ensure-release.sh` | Creates a GitHub release, or reuses one a previous run already created. | `release.yml`, `preview.yml` |
