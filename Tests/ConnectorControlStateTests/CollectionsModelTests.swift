@@ -186,6 +186,31 @@ final class CollectionsModelTests: XCTestCase {
                      is: "h.example", hides: "abc")
     }
 
+    /// A connector Claude reaches by URL, with no command at all, shows the URL's scheme and host
+    /// through the same strict reading as a URL argument; one whose host is in doubt, or that has
+    /// no URL to read, shows only that it is remote.
+    func testTargetShowsAURLOnlyConnectorsSchemeAndHost() {
+        let cases: [(JSONValue, String)] = [
+            (.object(["url": .string("https://mcp.example.com/mcp")]), "https://mcp.example.com"),
+            (.object(["type": .string("http"), "url": .string("https://u:SECRET@h.example:8443/mcp")]), "https://h.example:8443"),
+            (.object(["url": .string("https://u:p@SECRET@h.example/mcp")]), "https://h.example"),
+            (.object(["url": .string("https://u:p/SECRET@h.example/mcp")]), CollectionsModel.remoteType),
+            (.object(["url": .string("https://u:p?SECRET@h.example/mcp")]), CollectionsModel.remoteType),
+            (.object(["url": .string("https://u:p#SECRET@h.example/mcp")]), CollectionsModel.remoteType),
+            (.object(["url": .string("https://h.example/mcp?api_key=SECRET")]), "https://h.example"),
+            (.object(["type": .string("sse"), "url": .string("https://h.example/sse"),
+                      "headers": .object(["Authorization": .string("Bearer SECRET")])]), "https://h.example"),
+            (.object(["type": .string("http"), "url": .string("h.example/SECRET")]), CollectionsModel.remoteType),
+            (.object(["url": .int(5)]), CollectionsModel.remoteType),
+            (.object(["type": .string("http")]), CollectionsModel.remoteType),
+        ]
+        for (config, expected) in cases {
+            let target = CollectionsModel.target(of: config, home: "/Users/x")
+            XCTAssertEqual(target, expected, "\(config)")
+            XCTAssertFalse(target.contains("SECRET"), target)
+        }
+    }
+
     func testTargetShortensAScopedPackageAndTheHomeFolder() {
         XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("npx", ["-y", "@modelcontextprotocol/server-filesystem", "/Users/x/Documents"]).config, home: "/Users/x"),
                        "npx …/server-filesystem ~/Documents")

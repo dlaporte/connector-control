@@ -204,6 +204,37 @@ public class CollectionsModelTests
         AssertTarget(AppStateHarness.LocalConnector("npx", "-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"),
             "h.example", "abc");
 
+    /// <summary>
+    /// A connector Claude reaches by URL, with no command at all, shows the URL's scheme and host
+    /// through the same strict reading as a URL argument; one whose host is in doubt, or that has no
+    /// URL to read, shows only that it is remote.
+    /// </summary>
+    [Fact]
+    public void TargetShowsAUrlOnlyConnectorsSchemeAndHost()
+    {
+        (JsonValue Config, string Expected)[] cases =
+        [
+            (JsonValue.Object(("url", JsonValue.String("https://mcp.example.com/mcp"))), "https://mcp.example.com"),
+            (JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String("https://u:SECRET@h.example:8443/mcp"))), "https://h.example:8443"),
+            (JsonValue.Object(("url", JsonValue.String("https://u:p@SECRET@h.example/mcp"))), "https://h.example"),
+            (JsonValue.Object(("url", JsonValue.String("https://u:p/SECRET@h.example/mcp"))), CollectionsModel.RemoteType),
+            (JsonValue.Object(("url", JsonValue.String("https://u:p?SECRET@h.example/mcp"))), CollectionsModel.RemoteType),
+            (JsonValue.Object(("url", JsonValue.String("https://u:p#SECRET@h.example/mcp"))), CollectionsModel.RemoteType),
+            (JsonValue.Object(("url", JsonValue.String("https://h.example/mcp?api_key=SECRET"))), "https://h.example"),
+            (JsonValue.Object(("type", JsonValue.String("sse")), ("url", JsonValue.String("https://h.example/sse")),
+                ("headers", JsonValue.Object(("Authorization", JsonValue.String("Bearer SECRET"))))), "https://h.example"),
+            (JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String("h.example/SECRET"))), CollectionsModel.RemoteType),
+            (JsonValue.Object(("url", JsonValue.Int(5))), CollectionsModel.RemoteType),
+            (JsonValue.Object(("type", JsonValue.String("http"))), CollectionsModel.RemoteType),
+        ];
+        foreach (var (config, expected) in cases)
+        {
+            var target = CollectionsModel.TargetOf(config, "/Users/x");
+            Assert.Equal(expected, target);
+            Assert.DoesNotContain("SECRET", target);
+        }
+    }
+
     [Fact]
     public void TargetShortensAScopedPackageAndTheHomeFolder()
     {

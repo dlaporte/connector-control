@@ -355,6 +355,15 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public static string TargetOf(JsonValue config, string? home = null)
     {
         home ??= Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        // A connector Claude reaches by URL has no command to read: its URL's scheme and host, as a
+        // URL argument shows them, or only that it is remote when that host is in doubt.
+        if (config.Kind == JsonKind.Object && config["command"] is null
+            && (config["url"] is not null || config["type"] == JsonValue.String("http") || config["type"] == JsonValue.String("sse")))
+        {
+            return config["url"] is { Kind: JsonKind.String } url && UrlOrigin(url.StringValue) is { } origin
+                ? $"{origin.Scheme}://{origin.Host}"
+                : RemoteType;
+        }
         var model = FormMapper.Analyze(config).Model;
         var (command, commandArgs) = SplitCommandLine(model.Command, model.Args);
         // Windows' `cmd /c npx …`: what cmd runs is the launcher, and the rule applies to what

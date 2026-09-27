@@ -297,6 +297,13 @@ public final class CollectionsModel: ObservableObject {
     /// whatever follows a flag named for a secret is left out too, since a password can look
     /// like a package.
     public static func target(of config: JSONValue, home: String = NSHomeDirectory()) -> String {
+        // A connector Claude reaches by URL has no command to read: its URL's scheme and host, as
+        // a URL argument shows them, or only that it is remote when that host is in doubt.
+        if case .object(let object) = config, object["command"] == nil,
+           object["url"] != nil || [.string("http"), .string("sse")].contains(object["type"]) {
+            guard case .string(let url)? = object["url"], let origin = urlOrigin(url) else { return remoteType }
+            return "\(origin.scheme)://\(origin.host)"
+        }
         let model = FormMapper.analyze(config).model
         var (command, commandArgs) = splitCommandLine(model.command, model.args)
         // Windows' `cmd /c npx …`: what cmd runs is the launcher, and the rule applies to what

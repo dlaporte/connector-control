@@ -124,7 +124,8 @@ bullet once the section is about to ship.
   active one does nothing.
 - A change that alters nothing Claude runs, such as renaming or deleting a collection
   other than the active one, leaves Claude's config alone and raises no Restart Required.
-- Each row says what its connector runs: a remote connector's host, or a local one's
+- Each row says what its connector runs: a remote connector's host (with its scheme for
+  one Claude reaches by URL alone, rather than through mcp-remote), or a local one's
   program, paths, URLs and package names. The column leaves out the values of flags named
   for secrets, `KEY=value` words, a URL's user and query, random-looking strings and
   anything it does not recognise. It is a best-effort mask, not a guarantee.
