@@ -99,12 +99,13 @@ bullet once the section is about to ship.
   or client secret in a remote connector's Authentication fields always travels as a
   placeholder, and a preview shows every byte before it leaves, flagging any argument or
   shared value that looks like a credential, a header or URL query or fragment parameter
-  named like a secret or holding one, a URL path segment that looks like a key, and a URL
-  with a user name or password in it. A value that only refers to a credential kept elsewhere
-  (`Bearer ${API_TOKEN}`, `Bearer $API_TOKEN`, a placeholder) "refers to a credential", and a
-  URL user with no password "names a user"; either one later given the credential itself
-  waits for review. Each URL path segment and bare parameter is a line of its own, so a new
-  one that looks like a key waits for review too.
+  named like a secret or holding one, a URL parameter whose name is itself a token, a URL
+  path segment that looks like a key, and a URL with a user name or password in it. A
+  value that only refers to a credential kept elsewhere (`Bearer ${API_TOKEN}`,
+  `Bearer $API_TOKEN` with the name in capitals, a placeholder) "refers to a credential",
+  and a URL user with no password "names a user"; either one later given the credential
+  itself waits for review. Each URL path segment and bare parameter is a line of its own,
+  so a new one that looks like a key waits for review too.
   A header passed as an argument is read as a header, with or without a space after the
   colon (`Authorization:Bearer …`), so mcp-remote's `--header "Authorization:${AUTH}"`
   reads "refers to a credential".

@@ -249,14 +249,16 @@ The sheet decides what leaves the machine:
   written. An argument or shared value that looks like a credential is
   listed under the preview, each line naming the connector it came from,
   and so are a header or a URL query or fragment parameter named like a
-  secret or holding one, a URL path segment that looks like a key, and a
-  URL with a user name or password in it. Each line says how the value is
-  held: one that only refers to a credential kept elsewhere, such as
-  `Bearer ${API_TOKEN}`, `Bearer $API_TOKEN` or a placeholder, "refers to a
-  credential", and a URL user with no password "names a user". A connector
-  whose value then holds the credential itself waits for review again, and
-  so does one given a new path segment or bare parameter that looks like a
-  key: each position is a line of its own.
+  secret or holding one, a URL parameter whose name is itself a token, a URL
+  path segment that looks like a key, and a URL with a user name or password
+  in it. Each line says how the value is held: one that only refers to a
+  credential kept elsewhere, such as `Bearer ${API_TOKEN}`,
+  `Bearer $API_TOKEN` (without braces, only a name in capitals, as a shell
+  writes its variables) or a placeholder, "refers to a credential", and a
+  URL user with no password "names a user". A connector whose value then
+  holds the credential itself waits for review again, and so does one given
+  a new path segment or bare parameter that looks like a key: each position
+  is a line of its own.
   Nothing is ever edited on your behalf; the preview is there so you see
   every byte before it leaves.
 
