@@ -1560,6 +1560,15 @@ public class CollectionsModelTests
         Assert.Equal(["alpha"], model.CheckedNames);   // both are unreachable early-outs, so the ticks stand
         Assert.Null(model.LastError);   // the earlier error is not shown again
         Assert.False(state.Store.Collections["Team"].Mcps.ContainsKey("alpha"));   // nothing landed in Team
+
+        // The empty tick set, into a target that is enabled.
+        Assert.Null(state.AddEmptyCollection("Other"));
+        var idle = h.CollectionsModel(state, "Default");
+        Assert.Contains(new CollectionsModel.CopyDestination("Other", true), idle.CopyDestinations);   // the target itself is open
+        PresetError(idle, h);
+        Assert.False(idle.CopyChecked("Other"));   // nothing ticked, so nothing to copy
+        Assert.Null(idle.LastError);   // the earlier error is not shown again here either
+        Assert.Empty(state.Store.Collections["Other"].Mcps);   // nothing landed in Other
     }
 
     [Fact]

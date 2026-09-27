@@ -1335,6 +1335,15 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.checkedNames, ["alpha"], "both are unreachable early-outs, so the ticks stand")
         XCTAssertNil(model.lastError, "the earlier error is not shown again")
         XCTAssertNil(state.store.collections["Team"]?.mcps["alpha"], "nothing landed in Team")
+
+        // The empty tick set, into a target that is enabled.
+        XCTAssertNil(state.addEmptyCollection(named: "Other"))
+        let idle = h.collectionsModel(state, selecting: "Default")
+        XCTAssertTrue(idle.copyDestinations.contains(.init(name: "Other", isEnabled: true)), "the target itself is open")
+        presetError(idle, h)
+        XCTAssertFalse(idle.copyChecked(into: "Other"), "nothing ticked, so nothing to copy")
+        XCTAssertNil(idle.lastError, "the earlier error is not shown again here either")
+        XCTAssertEqual(state.store.collections["Other"]?.mcps, [:], "nothing landed in Other")
     }
 
     func testCopyCheckedRefusesWhenNothingIsTicked() throws {
