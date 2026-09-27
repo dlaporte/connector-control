@@ -427,6 +427,11 @@ machines that follow it, including the one that publishes it.
   preview. This machine's publish folder: **Use ${COLLECTION_DIR}** alone,
   which rewrites that connector to the token. A folder is never released,
   because a document that would carry it is never written.
+- A path your other machine marks, in a collection published from there, is
+  kept back from every collection this machine publishes. It stays kept back
+  once that machine drops the mark, stops publishing the collection or
+  deletes it, even when the change syncs in while this machine is off:
+  **Release** it in this machine's Publish sheet to let it travel.
 - A differently spelled version of a marked path is a different path to the
   app — another case, `~` in place of your home folder, a trailing slash.
   It is not recognised as the one you marked, so it travels as written;

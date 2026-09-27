@@ -155,10 +155,10 @@ public sealed record CollectionsLocalCache
         }
 
         /// <summary>
-        /// Paths a publish record in the sidecar marked, remembered under its name once the record no
-        /// longer marks them, merged with whatever is already remembered there. Only the paths: a
-        /// record names no folder this machine published into, and no origin that would make any
-        /// folder a collection's own.
+        /// Paths a publish record in the sidecar marks, remembered under its name so they outlive the
+        /// record, merged with whatever is already remembered there. Only the paths: a record names no
+        /// folder this machine published into, and no origin that would make any folder a
+        /// collection's own.
         /// </summary>
         public static KeptRecord RememberingMarks(IEnumerable<string> marks, KeptRecord? earlier) =>
             earlier is null
@@ -688,31 +688,29 @@ public sealed record CollectionsLocalCache
     }
 
     /// <summary>
-    /// Remembers the paths the sidecar's publish records mark in <paramref name="before"/> and no longer
-    /// mark in <paramref name="after"/>, for every collection this machine has no publish binding for.
-    /// A mark in the sidecar is kept back on every machine the sidecar reaches, and on one that does not
-    /// publish the collection it is the only thing that marks the path. The record losing it — the
-    /// collection deleted or unpublished, or the connector deleted, here or on another machine, or the
-    /// collection dropped by a master list restored from a backup that does not hold it — is not the
-    /// author's word that the path may travel. A collection this machine publishes is left to its
-    /// binding, whose lists the author's reviewed Publish replaces and which a binding that goes leaves
-    /// in <see cref="Kept"/> itself (<see cref="KeptRecord.Remembering"/>).
+    /// Remembers every path the sidecar's publish records in <paramref name="file"/> mark, for every
+    /// collection this machine has no publish binding for. A mark in the sidecar is kept back on every
+    /// machine the sidecar reaches, and on one that does not publish the collection it is the only thing
+    /// that marks the path. The record losing it — the collection deleted or unpublished, or the
+    /// connector deleted, here or on another machine, or the collection dropped by a master list restored
+    /// from a backup that does not hold it — is not the author's word that the path may travel. It is
+    /// remembered when a load or an edit first sees it, not when it goes: the other machine's change can
+    /// sync in while this one is off, and the launch after finds nothing left to remember it by. So a
+    /// mark the author drops on the other machine stays kept back here until it is released in this
+    /// machine's Publish dialog. A collection this machine publishes is left to its binding, whose lists
+    /// the author's reviewed Publish replaces and which a binding that goes leaves in
+    /// <see cref="Kept"/> itself (<see cref="KeptRecord.Remembering"/>).
     /// </summary>
-    public CollectionsLocalCache RememberingMarks(CollectionsFile before, CollectionsFile after)
+    public CollectionsLocalCache RememberingMarks(CollectionsFile file)
     {
         var remembered = new Dictionary<string, KeptRecord>(Kept, StringComparer.Ordinal);
-        foreach (var (name, entry) in before.Collections)
+        foreach (var (name, entry) in file.Collections)
         {
-            if (Published.ContainsKey(name) || entry.Publish is not { } record)
+            if (Published.ContainsKey(name) || entry.Publish is not { } record || record.Intent.MarkedValues.Count == 0)
             {
                 continue;
             }
-            var departed = record.Intent.MarkedValues.ToHashSet(StringComparer.Ordinal);
-            departed.ExceptWith(after.Collections.GetValueOrDefault(name)?.Publish?.Intent.MarkedValues ?? new HashSet<string>());
-            if (departed.Count > 0)
-            {
-                remembered[name] = KeptRecord.RememberingMarks(departed, remembered.GetValueOrDefault(name));
-            }
+            remembered[name] = KeptRecord.RememberingMarks(record.Intent.MarkedValues, remembered.GetValueOrDefault(name));
         }
         return this with { Kept = remembered };
     }

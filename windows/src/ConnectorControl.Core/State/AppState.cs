@@ -1517,12 +1517,12 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Keeps what the sidecar's publish records marked in <paramref name="before"/> and no longer mark
-    /// (<see cref="CollectionsLocalCache.RememberingMarks"/>). The setter skips an equal value, so
-    /// nothing is announced when nothing changed.
+    /// Keeps what the sidecar's publish records in <paramref name="before"/> marked, where an edit here
+    /// changes them (<see cref="CollectionsLocalCache.RememberingMarks"/>). The setter skips an equal
+    /// value, so nothing is announced when nothing changed.
     /// </summary>
     private void RememberMarks(CollectionsFile before) =>
-        CollectionsCache = CollectionsCache.RememberingMarks(before, CollectionsFile);
+        CollectionsCache = CollectionsCache.RememberingMarks(before);
 
     /// <summary>What a stopped publish left behind, set or dropped for one collection.</summary>
     private void SetKeptRecord(string collection, CollectionsLocalCache.KeptRecord? record) =>
@@ -2955,13 +2955,14 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         var reconciled = loaded.Reconciled(Store);
         var fromDisk = CollectionsLocalCache.Load(Service.Paths.CollectionsCachePath).Reconciled(reconciled);
-        // What the sidecar's publish records marked and no longer do is remembered: a record that went
-        // with a collection the store no longer holds and, once there is an earlier load to compare
-        // with, a record another machine's sidecar arrives without.
-        var cache = fromDisk.RememberingMarks(loaded, reconciled);
+        // Every mark the sidecar's publish records carry is remembered the moment a load sees it, the
+        // records of collections the store no longer holds included: by the next launch the record may
+        // be gone from disk, synced away while this machine was off. On a reload the sidecar in memory
+        // too, whose records an edit here may have marked since the last load.
+        var cache = fromDisk.RememberingMarks(loaded);
         if (hasLoadedCollectionsOnce)
         {
-            cache = cache.RememberingMarks(CollectionsFile, reconciled);
+            cache = cache.RememberingMarks(CollectionsFile);
         }
         var rememberedMarks = !DictionaryEquality.Equal(cache.Kept, fromDisk.Kept);
         CollectionsFile = reconciled;
@@ -3144,7 +3145,8 @@ public sealed class AppState : ObservableObject, IDisposable
         // with the master list, so a collection the author publishes from another machine of their own
         // marks its paths here too. A colleague's collection is another matter — this machine never
         // sees their sidecar — and their document reaches it as placeholders anyway.
-        // Once a record stops marking a path, Kept remembers it (CollectionsLocalCache.RememberingMarks).
+        // Kept remembers every one of them from the first load that sees it, so a record that stops
+        // marking a path still keeps it back (CollectionsLocalCache.RememberingMarks).
         foreach (var entry in CollectionsFile.Collections.Values)
         {
             if (entry.Publish is { } record)

@@ -199,11 +199,11 @@ final class CollectionsLocalCacheTests: XCTestCase {
                              departedFolders: ["/Users/d/gone", "/Users/d/old", "/Users/d/older"], origin: "0c9b7d1e"))
     }
 
-    /// A path the sidecar's records stop marking is remembered under the collection's name, merged
-    /// into what is there, for a collection this machine does not publish; a record that goes whole
-    /// leaves every path it marked. One this machine publishes is left to its binding, and a path
-    /// the record still marks has not departed.
-    func testRememberingMarksKeepsWhatAnotherMachinesRecordsStopMarking() {
+    /// Every path a sidecar record marks is remembered under the collection's name, merged into what
+    /// is there, for a collection this machine does not publish, whether or not the record still
+    /// marks it: when the record goes, this machine may not be running to see it go. One this machine
+    /// publishes is left to its binding, and a record that marks nothing leaves no record.
+    func testRememberingMarksKeepsEveryMarkOfARecordThisMachineDoesNotPublish() {
         func marking(_ values: [String]) -> CollectionsFile.Entry {
             let marks = Dictionary(uniqueKeysWithValues: values.enumerated().map {
                 (JSONPointer(["args", String($0.offset)]), PublishIntent.PathMark(name: "p\($0.offset)", hint: nil, value: $0.element))
@@ -211,16 +211,17 @@ final class CollectionsLocalCacheTests: XCTestCase {
             return .init(kind: .local, publish: .init(slug: "s", origin: "o", intent: PublishIntent(
                 shareValues: [:], pathMarks: ["c": marks], hints: [:])))
         }
-        let before = CollectionsFile(collections: ["Team": marking(["/a", "/b"]), "Gone": marking(["/g"]), "Mine": marking(["/m"])])
-        let after = CollectionsFile(collections: ["Team": marking(["/b"]), "Mine": marking([])])
+        let file = CollectionsFile(collections: ["Team": marking(["/a", "/b"]), "Gone": marking(["/g"]),
+                                                 "Mine": marking(["/m"]), "Bare": marking([])])
         let cache = CollectionsLocalCache(synced: [:], published: ["Mine": .init(folder: "/Users/d/pub", lastWrittenHash: nil)],
                                           kept: ["Team": .init(releasedValues: ["/r"], origin: "0c9b7d1e")])
-        let remembered = cache.rememberingMarks(leaving: before, for: after)
+        let remembered = cache.rememberingMarks(in: file)
         XCTAssertEqual(remembered.kept, [
-            "Team": .init(markedValues: ["/a"], releasedValues: ["/r"], origin: "0c9b7d1e"),
+            "Team": .init(markedValues: ["/a", "/b"], releasedValues: ["/r"], origin: "0c9b7d1e"),
             "Gone": .init(markedValues: ["/g"]),
         ])
         XCTAssertEqual(remembered.published, cache.published)
+        XCTAssertEqual(remembered.rememberingMarks(in: file), remembered, "remembering the same marks again changes nothing")
     }
 
     func testAnUnknownVersionDecodesAsMalformed() {

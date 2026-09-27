@@ -2985,6 +2985,50 @@ public class AppStateCollectionsTests
         AssertKeptBackBySidecarMark(state);
     }
 
+    /// <summary>
+    /// The other machine's change can sync in while this one is off, so no load here ever sees the
+    /// record lose the mark: Team deleted there, stopped publishing, or its marked connector deleted.
+    /// The marks were remembered when a load first saw them, so the launch still refuses the path, and
+    /// so does Export.
+    /// </summary>
+    [Theory]
+    [InlineData("deleted")]
+    [InlineData("unpublished")]
+    [InlineData("its connector deleted")]
+    public void AnotherMachinesMarksOutliveAChangeThatSyncsInWhileThisMachineIsOff(string route)
+    {
+        using var h = new AppStateHarness();
+        var state = h.Create();
+        var document = CopyAnotherMachinesMarkedPath(h, state);
+        state.Dispose();
+        var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
+        var all = CollectionsFile.LoadIfReadable(sidecar)!.Collections.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        switch (route)
+        {
+            case "deleted":
+                h.EditStoreOnDisk(store => store.Collections.Remove("Team"));
+                all.Remove("Team");
+                break;
+            case "unpublished":
+                all.Remove("Team");
+                break;
+            default:
+                h.EditStoreOnDisk(store => store.Collections["Team"].Mcps.Remove("ledger"));
+                all["Team"] = all["Team"] with { Publish = all["Team"].Publish! with { Intent = PublishIntent.None } };
+                break;
+        }
+        new CollectionsFile(all).Save(sidecar);
+
+        using var relaunched = h.Create();
+        Assert.False(JsonText.FileContains(document, MarkedPath));
+        AssertKeptBackBySidecarMark(relaunched);
+        var home = relaunched.ActiveCollection;
+        var exported = h.Dir.File("export.json");
+        Assert.Equal(AppState.KeptPathCarriedError("ledger", FieldName.Argument(1)),
+            relaunched.WriteExport(home, relaunched.CollectionsFile.Collections.GetValueOrDefault(home)?.Publish?.Intent ?? PublishIntent.None, exported));
+        Assert.False(File.Exists(exported));
+    }
+
     /// <summary>A copy of the marked path in an <c>additional</c> field is kept back, and the refusal says where it sits rather than that the mark moved.</summary>
     [Fact]
     public void ACopyOfAMarkedPathSaysWhereItSits()

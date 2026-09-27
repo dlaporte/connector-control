@@ -830,7 +830,7 @@ public final class AppState: ObservableObject {
     /// A collection that publishes nothing is left alone, and so is the sidecar when the edit
     /// changes nothing — every assignment announces itself to the windows watching it. A mark the
     /// edit drops from a collection another machine publishes is remembered here
-    /// (`CollectionsLocalCache.rememberingMarks(leaving:for:)`).
+    /// (`CollectionsLocalCache.rememberingMarks(in:)`).
     private func editPublishIntent(of collection: String, _ edit: (inout PublishIntent) -> Void) {
         guard var record = collectionsFile.collections[collection]?.publish else { return }
         var intent = record.intent
@@ -839,7 +839,7 @@ public final class AppState: ObservableObject {
         let before = collectionsFile
         record.intent = intent
         collectionsFile.collections[collection]?.publish = record
-        rememberMarks(leaving: before)
+        rememberMarks(in: before)
     }
 
     // MARK: - Quit
@@ -963,7 +963,7 @@ public final class AppState: ObservableObject {
         // import, a copy or an ingest. What Stop Publishing remembers, this remembers too — this
         // machine's binding, and the marks of a record another machine publishes.
         rememberWhatWasKeptBack(of: name)
-        rememberMarks(leaving: before)
+        rememberMarks(in: before)
         forgetOriginsOfDepartedCollections()
         forgetSource(name)
         if publishError?.collection == name { publishError = nil }
@@ -1665,7 +1665,7 @@ public final class AppState: ObservableObject {
             collectionsFile.collections[collection] = entry
         }
         rememberWhatWasKeptBack(of: collection)
-        rememberMarks(leaving: before)
+        rememberMarks(in: before)
         if publishError?.collection == collection { publishError = nil }
         persistStore()
         // ${COLLECTION_DIR} has no folder here any more: Claude gets the token as written, and
@@ -1812,7 +1812,8 @@ public final class AppState: ObservableObject {
         // travels with the master list, so a collection the author publishes from another machine
         // of their own marks its paths here too. A colleague's collection is another matter — this
         // machine never sees their sidecar — and their document reaches it as placeholders anyway.
-        // Once a record stops marking a path, `kept` remembers it (`rememberingMarks(leaving:for:)`).
+        // `kept` remembers every one of them from the first load that sees it, so a record that stops
+        // marking a path still keeps it back (`rememberingMarks(in:)`).
         for entry in collectionsFile.collections.values {
             guard let record = entry.publish else { continue }
             values.formUnion(record.intent.markedValues)
@@ -1879,12 +1880,11 @@ public final class AppState: ObservableObject {
         if !remembered.isEmpty { collectionsCache.kept[collection] = remembered }
     }
 
-    /// Keeps what the sidecar's publish records marked in `before` and no longer mark
-    /// (`CollectionsLocalCache.rememberingMarks(leaving:for:)`). Assigned only when that changes
-    /// something: the cache announces every assignment, where the Windows mirror's setter skips an
-    /// equal value.
-    private func rememberMarks(leaving before: CollectionsFile) {
-        let remembered = collectionsCache.rememberingMarks(leaving: before, for: collectionsFile)
+    /// Keeps what the sidecar's publish records in `before` marked, where an edit here changes them
+    /// (`CollectionsLocalCache.rememberingMarks(in:)`). Assigned only when that changes something:
+    /// the cache announces every assignment, where the Windows mirror's setter skips an equal value.
+    private func rememberMarks(in before: CollectionsFile) {
+        let remembered = collectionsCache.rememberingMarks(in: before)
         if remembered != collectionsCache { collectionsCache = remembered }
     }
 
@@ -2131,11 +2131,12 @@ public final class AppState: ObservableObject {
         }
         let reconciled = loaded.reconciled(with: store)
         let fromDisk = CollectionsLocalCache.load(from: service.paths.collectionsCacheURL).reconciled(with: reconciled)
-        // What the sidecar's publish records marked and no longer do is remembered: a record that
-        // went with a collection the store no longer holds and, once there is an earlier load to
-        // compare with, a record another machine's sidecar arrives without.
-        var cache = fromDisk.rememberingMarks(leaving: loaded, for: reconciled)
-        if hasLoadedCollectionsOnce { cache = cache.rememberingMarks(leaving: collectionsFile, for: reconciled) }
+        // Every mark the sidecar's publish records carry is remembered the moment a load sees it,
+        // the records of collections the store no longer holds included: by the next launch the
+        // record may be gone from disk, synced away while this machine was off. On a reload the
+        // sidecar in memory too, whose records an edit here may have marked since the last load.
+        var cache = fromDisk.rememberingMarks(in: loaded)
+        if hasLoadedCollectionsOnce { cache = cache.rememberingMarks(in: collectionsFile) }
         let rememberedMarks = cache.kept != fromDisk.kept
         collectionsFile = reconciled
         // Only this machine writes its cache, so a record of the last apply made in memory is never

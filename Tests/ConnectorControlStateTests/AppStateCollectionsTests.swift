@@ -2566,6 +2566,40 @@ final class AppStateCollectionsTests: XCTestCase {
         }
     }
 
+    /// The other machine's change can sync in while this one is off, so no load here ever sees the
+    /// record lose the mark: Team deleted there, stopped publishing, or its marked connector deleted.
+    /// The marks were remembered when a load first saw them, so the launch still refuses the path,
+    /// and so does Export.
+    func testAnotherMachinesMarksOutliveAChangeThatSyncsInWhileThisMachineIsOff() throws {
+        let routes: [(String, (inout MasterStore) -> Void, (inout CollectionsFile) -> Void)] = [
+            ("deleted", { $0.collections.removeValue(forKey: "Team") }, { $0.collections.removeValue(forKey: "Team") }),
+            ("unpublished", { _ in }, { $0.collections.removeValue(forKey: "Team") }),
+            ("its connector deleted", { $0.collections["Team"]?.mcps.removeValue(forKey: "ledger") },
+             { $0.collections["Team"]?.publish?.intent = .none }),
+        ]
+        for (route, editStore, editSidecar) in routes {
+            let (h, state) = AppStateHarness.started()
+            defer { h.dispose() }
+            let document = try copyAnotherMachinesMarkedPath(h, state)
+            state.dispose()
+            try h.editStoreOnDisk(editStore)
+            let sidecar = h.storeDir.appendingPathComponent(CollectionsFile.fileName)
+            var file = try XCTUnwrap(CollectionsFile.loadIfReadable(from: sidecar))
+            editSidecar(&file)
+            try file.save(to: sidecar, staging: nil)
+
+            let relaunched = h.create()
+            XCTAssertFalse(try jsonFile(document, contains: markedPath), route)
+            assertKeptBackBySidecarMark(relaunched, route)
+            let home = relaunched.activeCollection
+            let exported = h.dir.file("export.json")
+            XCTAssertEqual(relaunched.writeExport(for: home, intent: relaunched.collectionsFile.collections[home]?.publish?.intent ?? .none,
+                                                  to: exported.path),
+                           AppState.keptPathCarriedError("ledger", FieldName.argument(1)), route)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: exported.path), route)
+        }
+    }
+
     /// A copy of the marked path in an `additional` field is kept back, and the refusal says where
     /// it sits rather than that the mark moved.
     func testACopyOfAMarkedPathSaysWhereItSits() throws {

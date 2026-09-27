@@ -283,13 +283,13 @@ public sealed class CollectionsLocalCacheTests : IDisposable
     }
 
     /// <summary>
-    /// A path the sidecar's records stop marking is remembered under the collection's name, merged into
-    /// what is there, for a collection this machine does not publish; a record that goes whole leaves
-    /// every path it marked. One this machine publishes is left to its binding, and a path the record
-    /// still marks has not departed.
+    /// Every path a sidecar record marks is remembered under the collection's name, merged into what is
+    /// there, for a collection this machine does not publish, whether or not the record still marks it:
+    /// when the record goes, this machine may not be running to see it go. One this machine publishes is
+    /// left to its binding, and a record that marks nothing leaves no record.
     /// </summary>
     [Fact]
-    public void RememberingMarksKeepsWhatAnotherMachinesRecordsStopMarking()
+    public void RememberingMarksKeepsEveryMarkOfARecordThisMachineDoesNotPublish()
     {
         static KeyValuePair<string, CollectionsFile.Entry> Marking(string name, params string[] values) => new(name,
             new CollectionsFile.Entry(CollectionKind.Local, publish: new CollectionsFile.PublishRecord("s", "o", new PublishIntent(
@@ -298,15 +298,16 @@ public sealed class CollectionsLocalCacheTests : IDisposable
                     pair => new JsonPointer(["args", pair.index.ToString(System.Globalization.CultureInfo.InvariantCulture)]),
                     pair => new PublishIntent.PathMark($"p{pair.index}", null, pair.value)))],
                 []))));
-        var before = new CollectionsFile([Marking("Team", "/a", "/b"), Marking("Gone", "/g"), Marking("Mine", "/m")]);
-        var after = new CollectionsFile([Marking("Team", "/b"), Marking("Mine")]);
+        var file = new CollectionsFile([Marking("Team", "/a", "/b"), Marking("Gone", "/g"), Marking("Mine", "/m"), Marking("Bare")]);
         var cache = new CollectionsLocalCache([], [new("Mine", new CollectionsLocalCache.PublishBinding("/Users/d/pub", null))],
                                               [new("Team", new CollectionsLocalCache.KeptRecord(releasedValues: ["/r"], origin: "0c9b7d1e"))]);
-        var remembered = cache.RememberingMarks(before, after);
+        var remembered = cache.RememberingMarks(file);
         Assert.Equal(["Gone", "Team"], remembered.Kept.Keys.Order(StringComparer.Ordinal));
-        Assert.Equal(new CollectionsLocalCache.KeptRecord(["/a"], ["/r"], origin: "0c9b7d1e"), remembered.Kept["Team"]);
+        Assert.Equal(new CollectionsLocalCache.KeptRecord(["/a", "/b"], ["/r"], origin: "0c9b7d1e"), remembered.Kept["Team"]);
         Assert.Equal(new CollectionsLocalCache.KeptRecord(["/g"]), remembered.Kept["Gone"]);
         Assert.Equal(cache.Published, remembered.Published);
+        // Remembering the same marks again changes nothing.
+        Assert.Equal(remembered, remembered.RememberingMarks(file));
     }
 
     [Fact]

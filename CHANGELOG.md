@@ -104,6 +104,10 @@ bullet once the section is about to ship.
   field included, all at once, each with its connector and field; Publish and Export wait until every one is ticked where it now sits, forgotten
   or released. The folder a collection publishes into never travels: Use
   `${COLLECTION_DIR}` answers it by rewriting the connector.
+- A path marked on your other machine, in a collection published from there, is kept back
+  from every collection this machine publishes, and stays kept back once that machine drops
+  the mark, stops publishing the collection or deletes it, even when the change arrives
+  while this machine is off. Release it in this machine's Publish sheet to let it travel.
 - A publish that fails says so on the collection banner, with Choose Folder and Stop
   Publishing, and pressing Publish again retries the write at once. A path marked for
   others to supply survives added, deleted or reordered arguments, an in-place
