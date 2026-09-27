@@ -117,10 +117,11 @@ bullet once the section is about to ship.
   from every collection this machine publishes, and stays kept back once that machine drops
   the mark, stops publishing the collection or deletes it, even when the change arrives
   while this machine is off. Release it in this machine's Publish sheet to let it travel.
-- A path you marked stays kept back until you release it, even after the argument or the
-  connector that held it is deleted and the sheet is published again with no row for it:
-  put back later, it is refused and listed in the sheet. Before, that Publish forgot it, so
-  the path travelled as written once it came back.
+- A path you marked stays kept back until you release it, even after you forget its mark
+  (Forget Mark takes the mark off the record, not the path off this machine's list), or
+  the argument or the connector that held it is deleted and the sheet is published again
+  with no row for it: put back later, it is refused and listed in the sheet. Before, that
+  Publish forgot it, so the path travelled as written once it came back.
 - A Release belongs to the collection it was given in. A collection made later under a
   deleted one's name, or renamed onto it, no longer inherits it: its sheet lists the path
   and Release answers it there. Before, the path travelled in the new collection unlisted.

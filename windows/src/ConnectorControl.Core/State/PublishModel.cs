@@ -513,7 +513,8 @@ public sealed class PublishModel : ObservableObject
 
     /// <summary>
     /// Drops one lost mark by the author's explicit choice: its path then travels as the preview
-    /// shows it, as written unless a row of it is ticked.
+    /// shows it, as written unless a row of it is ticked; the path it marked stays on this machine's
+    /// list until released.
     /// </summary>
     public void ForgetUnresolvedMark(string id)
     {

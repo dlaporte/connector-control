@@ -366,7 +366,8 @@ public final class PublishModel: ObservableObject {
     }
 
     /// Drops one lost mark by the author's explicit choice: its path then travels as the preview
-    /// shows it, as written unless a row of it is ticked.
+    /// shows it, as written unless a row of it is ticked; the path it marked stays on this machine's
+    /// list until released.
     public func forgetUnresolvedMark(_ id: String) {
         forgotten.insert(id)
         answers = answers.filter { $0.value != id }
