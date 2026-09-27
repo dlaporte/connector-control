@@ -158,6 +158,12 @@ jobs:
     # build, sign, notarize, DMG, Sparkle appcast -> artifact mac-dmg-appcast: the same file
     # preview.yml calls. Its one job names the "signing" environment, and its header lists the
     # Mac secrets and says why they arrive by inherit rather than by name.
+    #
+    # Not yet proved end to end from here. A preview run proves mac-build.yml itself (preview-6
+    # is its first), but only this caller passes appcast-tag, so the notes download, the
+    # Sparkle appcast and the mac-dmg-appcast upload first run in the full release rehearsal
+    # from master that is owed before v1.4.0. The master gate above keeps a dispatch from any
+    # other branch from rehearsing it sooner, deliberately.
     uses: ./.github/workflows/mac-build.yml
     with:
       version: ${{ needs.prepare.outputs.version }}
