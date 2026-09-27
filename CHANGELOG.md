@@ -201,8 +201,8 @@ bullet once the section is about to ship.
   by name, else a new, empty one named "Default" ("Default 2" and so on if that is
   taken). Before, it went into the subscribed collection, where it could be neither
   edited nor deleted, and the next Review & Apply deleted it from Claude. The notification names where it went; at launch, when nothing is notified,
-  the banner does. The same holds while the collections file can't be read for a moment,
-  as when a sync tool is halfway through writing it.
+  the banner does. The same holds when the collections file can't be read for a moment
+  while the app is running, as when a sync tool is halfway through writing it.
 - When the active collection has no connectors, the popover (Mac) and flyout (Windows) say
   "No connectors in “<collection>”." with a Manage Collections button beneath, which opens
   the Collections window on that collection. Before, they said "No connectors configured
