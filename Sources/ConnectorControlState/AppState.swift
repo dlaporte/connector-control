@@ -2111,12 +2111,6 @@ public final class AppState: ObservableObject {
         if case PublishIntentError.keptPathCarried(let connector, let field) = error {
             return keptPathCarriedError(connector, field)
         }
-        if case RestoreError.collectionGone(let collection) = error {
-            return restoreCollectionGoneError(collection)
-        }
-        if case RestoreError.subscribedActive(let collection) = error {
-            return restoreSubscribedError(collection)
-        }
         if case PublishIntentError.publishFolderCarried(let connector, let field) = error {
             return publishFolderCarriedError(connector, field)
         }

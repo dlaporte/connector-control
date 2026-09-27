@@ -3065,8 +3065,6 @@ public sealed class AppState : ObservableObject, IDisposable
         ClaudeConfigException malformed => MalformedConfigMessage(malformed.Detail),
         PathMarkMovedException moved => PathMarkMovedError(moved.Connector),
         KeptPathCarriedException kept => KeptPathCarriedError(kept.Connector, kept.Field),
-        RestoreCollectionGoneException gone => RestoreCollectionGoneError(gone.Collection),
-        RestoreSubscribedException subscribed => RestoreSubscribedError(subscribed.Collection),
         PublishFolderCarriedException carried => PublishFolderCarriedError(carried.Connector, carried.Field),
         _ => error.Message,
     };
