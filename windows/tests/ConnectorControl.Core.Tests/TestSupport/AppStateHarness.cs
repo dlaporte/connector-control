@@ -175,9 +175,11 @@ public static class AppStateTestVerbs
 {
     /// <summary>
     /// A new local collection holding the active one's connectors exactly as they stand, enabled
-    /// flags included, made active and applied: the setup most collection tests start from. New
-    /// Collection makes an empty one and leaves the active collection alone, so this is built from
-    /// the verbs that remain. null on success, else the store's message.
+    /// flags included, made active: the setup most collection tests start from. Claude's config
+    /// already holds what the copy renders, so the switch writes nothing to it; each connector lands
+    /// with a store save of its own. New Collection makes an empty one and leaves the active
+    /// collection alone, so this is built from the verbs that remain. null on success, else the
+    /// store's message.
     /// </summary>
     public static string? CreateActiveCopy(this AppState state, string name)
     {
