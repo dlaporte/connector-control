@@ -137,8 +137,9 @@ jobs:
           ./scripts/mac/make-appcast.sh "$VERSION" "$TAG" notes/notes.md
 
       # The caller's publish job posts these; nothing is uploaded to GitHub from here. Two
-      # steps rather than one with an optional path, so a release whose appcast went missing
-      # fails here instead of uploading the DMG alone.
+      # steps, so a preview never looks for an appcast; a release without one has already
+      # failed in make-appcast.sh (its closing `cat appcast.xml`), and the publish job's
+      # ensure-release.sh refuses the missing asset.
       - name: Upload the DMG and the appcast
         if: inputs.appcast-tag != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
