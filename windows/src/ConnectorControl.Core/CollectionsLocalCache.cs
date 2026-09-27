@@ -264,19 +264,25 @@ public sealed record CollectionsLocalCache
 
     public sealed record SyncedBinding
     {
-        /// <summary>Absent means the document has not been located on this machine.</summary>
-        public string? Path { get; }
+        private readonly Dictionary<string, string> excluded = new(StringComparer.Ordinal);
 
-        public string? LastHash { get; }
+        /// <summary>Absent means the document has not been located on this machine.</summary>
+        public string? Path { get; init; }
+
+        public string? LastHash { get; init; }
 
         /// <summary>Connector → why this platform skipped it, so the pending diff can leave it out.</summary>
-        public IReadOnlyDictionary<string, string> Excluded { get; }
+        public IReadOnlyDictionary<string, string> Excluded
+        {
+            get => excluded;
+            init => excluded = new Dictionary<string, string>(value, StringComparer.Ordinal);
+        }
 
         public SyncedBinding(string? path, string? lastHash, IEnumerable<KeyValuePair<string, string>> excluded)
         {
             Path = path;
             LastHash = lastHash;
-            Excluded = new Dictionary<string, string>(excluded, StringComparer.Ordinal);
+            this.excluded = new Dictionary<string, string>(excluded, StringComparer.Ordinal);
         }
 
         public bool Equals(SyncedBinding? other) =>

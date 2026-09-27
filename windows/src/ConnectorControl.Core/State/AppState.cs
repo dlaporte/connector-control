@@ -1690,8 +1690,12 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return failure;
         }
-        SetBinding(collection, new CollectionsLocalCache.SyncedBinding(
-            full, ContentHash.Sha256(data!), SourceBinding(collection)?.Excluded ?? EmptyExcluded));
+        // A new path and its bytes' hash on the binding already here, if any, so every other field
+        // comes through; a first binding on this machine starts from nothing skipped.
+        var hash = ContentHash.Sha256(data!);
+        SetBinding(collection, SourceBinding(collection) is { } bound
+            ? bound with { Path = full, LastHash = hash }
+            : new CollectionsLocalCache.SyncedBinding(full, hash, EmptyExcluded));
         var entry = CollectionsFile.Collections[collection];
         // relativeToStore is only ever set, never cleared: where the document sits relative to
         // the store is a fact every machine shares, and this one finding it elsewhere does not
@@ -1742,8 +1746,10 @@ public sealed class AppState : ObservableObject, IDisposable
         var result = CollectionApply.Apply(source.Rendered, current, entry.Needs);
         Store.Collections[collection] = new Collection(result.Entries);
         SetSidecarEntry(collection, entry with { Origin = source.Origin, Needs = result.Needs });
-        SetBinding(collection, new CollectionsLocalCache.SyncedBinding(
-            SourceBinding(collection)?.Path, source.Hash, source.Rendered.Excluded));
+        if (SourceBinding(collection) is { } binding)
+        {
+            SetBinding(collection, binding with { LastHash = source.Hash, Excluded = source.Rendered.Excluded });
+        }
         // Cleared BEFORE the save: PersistStore re-derives what is pending from the document and
         // the store it is about to write, and clearing afterwards would throw that answer away.
         SetPending(collection, null);
@@ -1871,7 +1877,7 @@ public sealed class AppState : ObservableObject, IDisposable
         sourceFailures.Remove(collection);
         sourceRetryScheduled.Remove(collection);
         SetSourceError(collection, null);
-        SetBinding(collection, new CollectionsLocalCache.SyncedBinding(binding.Path, binding.LastHash, rendered.Excluded));
+        SetBinding(collection, binding with { Excluded = rendered.Excluded });
         var current = Store.Collections.TryGetValue(collection, out var held)
             ? held.Mcps
             : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
@@ -2997,7 +3003,10 @@ public sealed class AppState : ObservableObject, IDisposable
             {
                 continue;
             }
-            synced[name] = new CollectionsLocalCache.SyncedBinding(path, ContentHash.Sha256(data), existing?.Excluded ?? EmptyExcluded);
+            var hash = ContentHash.Sha256(data);
+            synced[name] = existing is null
+                ? new CollectionsLocalCache.SyncedBinding(path, hash, EmptyExcluded)
+                : existing with { Path = path, LastHash = hash };
             bound = true;
         }
         if (!bound)

@@ -3947,6 +3947,73 @@ public class AppStateCollectionsTests
     private static readonly System.Reflection.PropertyInfo[] BindingFields =
         typeof(CollectionsLocalCache.PublishBinding).GetProperties();
 
+    /// <summary>
+    /// A synced collection's binding is rebound by a refresh, an Apply and a Locate, and each
+    /// carries every field it does not change, so a field added later comes through without being
+    /// named. Each field is seeded first, what this platform skips included, and checked filled:
+    /// the seed's reload finds the document moved aside, so it cannot re-derive the skips, and the
+    /// document is put back before the first step.
+    /// </summary>
+    [Fact]
+    public void TheSyncedBindingKeepsEveryFieldThroughARefreshAnApplyAndALocate()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam);
+        var seeded = state.CollectionsCache.Synced["Data team"] with
+        {
+            Excluded = new Dictionary<string, string>(StringComparer.Ordinal) { ["ghost"] = "a connector this platform skips" },
+        };
+        var synced = new Dictionary<string, CollectionsLocalCache.SyncedBinding>(state.CollectionsCache.Synced) { ["Data team"] = seeded };
+        File.Move(path, path + ".aside");
+        h.Seed(state, state.CollectionsFile, state.CollectionsCache with { Synced = synced });
+        File.Move(path + ".aside", path);
+        var before = state.CollectionsCache.Synced["Data team"];
+        foreach (var property in SyncedFields)
+        {
+            var value = property.GetValue(before);
+            Assert.True(value is not null, $"{property.Name} is filled");
+            Assert.True(value is not IReadOnlyDictionary<string, string> { Count: 0 }, $"{property.Name} is filled");
+        }
+
+        // The same bytes read again: only what this platform skips is re-read from them.
+        state.RefreshSource("Data team");
+        var refreshed = state.CollectionsCache.Synced["Data team"];
+        Assert.Empty(refreshed.Excluded);   // this build skips nothing in this document
+        AssertSameFields(refreshed, before, "Excluded");
+
+        // The author changes the document, and Apply takes the new bytes' hash and skips.
+        AppStateHarness.WriteDocumentAt(ChangedSample(), path);
+        state.RefreshSource("Data team");
+        Assert.Null(state.ApplyPendingUpdate("Data team"));
+        var applied = state.CollectionsCache.Synced["Data team"];
+        Assert.NotEqual(refreshed.LastHash, applied.LastHash);
+        AssertSameFields(applied, refreshed, "LastHash", "Excluded");
+
+        // Located somewhere else: a new path and the hash of what is there.
+        var moved = h.WriteDocument(ChangedSample(), Path.Combine("elsewhere", "data-team.json"));
+        Assert.Null(state.LocateSource("Data team", moved));
+        var located = state.CollectionsCache.Synced["Data team"];
+        Assert.Equal(Path.GetFullPath(moved), located.Path);
+        AssertSameFields(located, applied, "Path", "LastHash", "Excluded");
+    }
+
+    private static readonly System.Reflection.PropertyInfo[] SyncedFields =
+        typeof(CollectionsLocalCache.SyncedBinding).GetProperties();
+
+    /// <summary>Every field of <paramref name="a"/> and <paramref name="b"/> but <paramref name="changed"/> is equal.</summary>
+    private static void AssertSameFields(CollectionsLocalCache.SyncedBinding a, CollectionsLocalCache.SyncedBinding b, params string[] changed)
+    {
+        foreach (var property in SyncedFields.Where(p => !changed.Contains(p.Name)))
+        {
+            var (x, y) = (property.GetValue(a), property.GetValue(b));
+            Assert.True(x is IReadOnlyDictionary<string, string> xs && y is IReadOnlyDictionary<string, string> ys
+                    ? DictionaryEquality.Equal(xs, ys)
+                    : Equals(x, y),
+                $"{property.Name} came through");
+        }
+    }
+
     /// <summary>Every field of <paramref name="a"/> and <paramref name="b"/> but <paramref name="changed"/> is equal.</summary>
     private static void AssertSameFields(CollectionsLocalCache.PublishBinding a, CollectionsLocalCache.PublishBinding b, params string[] changed)
     {

@@ -1103,9 +1103,13 @@ public final class AppState: ObservableObject {
         let url = URL(fileURLWithPath: path).standardizedFileURL
         let (decoded, bytes, failure) = AppState.readDocument(at: url)
         guard decoded != nil, let data = bytes else { return failure }
-        collectionsCache.synced[collection] = CollectionsLocalCache.SyncedBinding(
-            path: url.path, lastHash: ContentHash.sha256(data),
-            excluded: collectionsCache.synced[collection]?.excluded ?? [:])
+        // A new path and its bytes' hash on the binding already here, if any, so every other field
+        // comes through; a first binding on this machine starts from nothing skipped.
+        var binding = collectionsCache.synced[collection]
+            ?? CollectionsLocalCache.SyncedBinding(path: nil, lastHash: nil, excluded: [:])
+        binding.path = url.path
+        binding.lastHash = ContentHash.sha256(data)
+        collectionsCache.synced[collection] = binding
         // Only ever set, never cleared: where the document sits relative to the store is a fact
         // every machine shares, and this one finding it elsewhere does not make it untrue.
         if let relative = relativeToStore(url) {
@@ -2177,9 +2181,10 @@ public final class AppState: ObservableObject {
             // store dir only carries that slash when it already exists on disk.
             let url = service.paths.storeDirURL.appendingPathComponent(relative).standardizedFileURL
             guard let data = try? Data(contentsOf: url) else { continue }
-            cache.synced[name] = CollectionsLocalCache.SyncedBinding(
-                path: url.path, lastHash: ContentHash.sha256(data),
-                excluded: cache.synced[name]?.excluded ?? [:])
+            var binding = cache.synced[name] ?? CollectionsLocalCache.SyncedBinding(path: nil, lastHash: nil, excluded: [:])
+            binding.path = url.path
+            binding.lastHash = ContentHash.sha256(data)
+            cache.synced[name] = binding
             bound = true
         }
         guard bound else { return }

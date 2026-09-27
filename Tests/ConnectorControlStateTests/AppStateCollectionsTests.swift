@@ -3385,6 +3385,63 @@ final class AppStateCollectionsTests: XCTestCase {
         assertSameFields(published, reviewed, except: ["lastWrittenHash"])
     }
 
+    /// A synced collection's binding is rebound by a refresh, an Apply and a Locate, and each
+    /// carries every field it does not change, so a field added later comes through without being
+    /// named. Each field is seeded first, what this platform skips included, and checked filled:
+    /// the seed's reload finds the document moved aside, so it cannot re-derive the skips, and the
+    /// document is put back before the first step.
+    func testTheSyncedBindingKeepsEveryFieldThroughARefreshAnApplyAndALocate() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
+        var cache = state.collectionsCache
+        var seeded = try XCTUnwrap(cache.synced["Data team"])
+        seeded.excluded = ["ghost": "a connector this platform skips"]
+        cache.synced["Data team"] = seeded
+        let aside = url.appendingPathExtension("aside")
+        try FileManager.default.moveItem(at: url, to: aside)
+        try h.seed(state, file: state.collectionsFile, cache: cache)
+        try FileManager.default.moveItem(at: aside, to: url)
+        let before = try XCTUnwrap(state.collectionsCache.synced["Data team"])
+        for child in Mirror(reflecting: before).children {
+            let label = child.label ?? "?"
+            let value = Mirror(reflecting: child.value)
+            XCTAssertFalse(value.displayStyle == .optional && value.children.isEmpty, "\(label) is filled")
+            if let map = child.value as? [String: String] { XCTAssertFalse(map.isEmpty, "\(label) is filled") }
+        }
+
+        // The same bytes read again: only what this platform skips is re-read from them.
+        state.refreshSource(for: "Data team")
+        let refreshed = try XCTUnwrap(state.collectionsCache.synced["Data team"])
+        XCTAssertEqual(refreshed.excluded, [:], "the Mac skips nothing in this document")
+        assertSameFields(refreshed, before, except: ["excluded"])
+
+        // The author changes the document, and Apply takes the new bytes' hash and skips.
+        try h.writeDocument(changedSample(), at: url)
+        state.refreshSource(for: "Data team")
+        XCTAssertNil(state.applyPendingUpdate(for: "Data team"))
+        let applied = try XCTUnwrap(state.collectionsCache.synced["Data team"])
+        XCTAssertNotEqual(applied.lastHash, refreshed.lastHash)
+        assertSameFields(applied, refreshed, except: ["lastHash", "excluded"])
+
+        // Located somewhere else: a new path and the hash of what is there.
+        let moved = try h.writeDocument(changedSample(), named: "elsewhere/data-team.json")
+        XCTAssertNil(state.locateSource(for: "Data team", path: moved.path))
+        let located = try XCTUnwrap(state.collectionsCache.synced["Data team"])
+        XCTAssertEqual(located.path, moved.standardizedFileURL.path)
+        assertSameFields(located, applied, except: ["path", "lastHash", "excluded"])
+    }
+
+    /// Every field of `a` and `b` but those named is equal.
+    private func assertSameFields(_ a: CollectionsLocalCache.SyncedBinding, _ b: CollectionsLocalCache.SyncedBinding,
+                                  except changed: Set<String>, file: StaticString = #filePath, line: UInt = #line) {
+        for (x, y) in zip(Mirror(reflecting: a).children, Mirror(reflecting: b).children)
+        where !changed.contains(x.label ?? "") {
+            XCTAssertEqual(x.value as? AnyHashable, y.value as? AnyHashable, "\(x.label ?? "?") came through",
+                           file: file, line: line)
+        }
+    }
+
     /// Every field of `a` and `b` but those named is equal.
     private func assertSameFields(_ a: CollectionsLocalCache.PublishBinding, _ b: CollectionsLocalCache.PublishBinding,
                                   except changed: Set<String>, file: StaticString = #filePath, line: UInt = #line) {
