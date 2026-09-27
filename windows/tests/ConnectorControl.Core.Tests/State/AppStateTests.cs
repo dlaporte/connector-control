@@ -125,7 +125,7 @@ public class AppStateTests
     }
 
     [Fact]
-    public void RemovePersistsButDoesNotApply()
+    public void DeletePersistsButDoesNotApply()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();

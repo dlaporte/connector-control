@@ -110,7 +110,7 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(try h.storeOnDisk().mcps["scoutbook"])
     }
 
-    func testRemovePersistsButDoesNotApply() throws {
+    func testDeletePersistsButDoesNotApply() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         state.delete(names: ["aws-mcp"])
