@@ -8,6 +8,9 @@ public class EditorModelViewSwitchTests
 {
     private const string Url = "https://scoutbook.example.com/mcp";
 
+    // These two set and read View alone: WPF binds that property directly and its setter is the
+    // request. The Mac mirrors also assert viewSelection, the separate binding its segmented
+    // Picker needs.
     [Fact]
     public void SelectingJsonSwitchesToJson()
     {

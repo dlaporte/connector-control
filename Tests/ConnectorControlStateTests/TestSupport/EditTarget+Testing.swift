@@ -2,6 +2,9 @@ import Foundation
 import ConnectorControlCore
 @testable import ConnectorControlState
 
+/// Edit targets for tests.
+///
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/TestSupport/TestTargets.cs
 extension EditTarget {
     /// The collection a target names when a test does not say: the one every harness starts
     /// with, and active. Production always names the collection the window shows.

@@ -9,6 +9,9 @@ import ConnectorControlCore
 final class EditorModelViewSwitchTests: XCTestCase {
     private let url = "https://scoutbook.example.com/mcp"
 
+    // These two also assert `viewSelection`, the segmented Picker's binding; the C# mirrors
+    // set and read `View` alone, since WPF binds that property directly and its setter is the
+    // request.
     func testSelectingJsonSwitchesToJson() {
         let rig = EditorRig()
         defer { rig.dispose() }
