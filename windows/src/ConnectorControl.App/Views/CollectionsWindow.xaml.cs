@@ -451,13 +451,25 @@ public partial class CollectionsWindow : Window
     private void OnCanMakeActive(object sender, CanExecuteRoutedEventArgs e) =>
         e.CanExecute = e.Parameter is CollectionsModel.Item { IsActive: false };
 
+    /// <summary>
+    /// The tick changed state, which is how a screen reader's Toggle reaches it: WPF's automation
+    /// peer sets IsChecked and raises no Click. The binding catching up with the model changes it
+    /// too, so only a state the row does not already hold reaches the model.
+    /// </summary>
     private void OnRowTicked(object sender, RoutedEventArgs e)
     {
-        if (sender is CheckBox { DataContext: CollectionsModel.Row row } box)
+        if (sender is CheckBox { DataContext: CollectionsModel.Row row } box && (box.IsChecked == true) != row.Checked)
         {
             Model.SetChecked(row.Name, box.IsChecked == true);
         }
+        e.Handled = true;
     }
+
+    /// <summary>
+    /// A Click on the tick stops where it lands. ButtonBase.Click bubbles, and the row the box
+    /// sits in is a Button whose Click opens the editor: ticking must never do that too.
+    /// </summary>
+    private void OnRowTickClicked(object sender, RoutedEventArgs e) => e.Handled = true;
 
     /// <summary>
     /// A click on a row, anywhere but its tick slot: the connector's editor, read-only on a synced

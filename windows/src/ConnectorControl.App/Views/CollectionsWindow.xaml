@@ -322,7 +322,8 @@
                     <Grid Width="20">
                       <CheckBox x:Name="RowTick" Style="{StaticResource RowTickStyle}"
                                 AutomationProperties.Name="{Binding Name}" IsHitTestVisible="False" Focusable="False"
-                                IsChecked="{Binding Checked, Mode=OneWay}" Click="OnRowTicked" />
+                                IsChecked="{Binding Checked, Mode=OneWay}" Checked="OnRowTicked" Unchecked="OnRowTicked"
+                                Click="OnRowTickClicked" />
                       <TextBlock x:Name="RowLockGlyph" Style="{StaticResource RowLock}" />
                     </Grid>
                   </Border>

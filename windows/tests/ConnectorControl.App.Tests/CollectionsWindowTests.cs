@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
+using System.Windows.Automation.Provider;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -636,6 +638,8 @@ public class CollectionsWindowTests
             Tick(window, first, true);
             Tick(window, second, true);
             Assert.Equal([first, second], window.Model.CheckedNames);
+            // A tick's Click stops at the tick: it never reaches the row's, which opens the editor.
+            Assert.Empty(recorder.Editors);
             Assert.Equal(CollectionsModel.SelectedCount(2), window.SelectedCountText.Text);
             Assert.Equal(CollectionsModel.CopyToButton, window.CopyToButton.Content);
             // Export carries no count: the bar says it already.
@@ -716,6 +720,42 @@ public class CollectionsWindowTests
             Assert.True(InRow<CheckBox>(window, first, "RowTick").IsChecked);
             Assert.Empty(recorder.Editors);
             MouseClick(window, InRow<Border>(window, first, "RowTickSlot"));
+            Assert.Empty(window.Model.CheckedNames);
+            Assert.Empty(recorder.Editors);
+        });
+    }
+
+    /// <summary>
+    /// The tick keeps its own Toggle for a screen reader, which WPF's automation peer carries out
+    /// by setting IsChecked with no Click. It ticks the row as the slot does, and opens nothing;
+    /// nor does a Click raised on the tick, which stops there instead of reaching the row's.
+    /// </summary>
+    [Fact]
+    public void AScreenReadersToggleTicksTheRowAndNeverOpensTheEditor()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Showing(h, state, (window, recorder) =>
+        {
+            var first = window.Model.Rows[0].Name;
+            var box = InRow<CheckBox>(window, first, "RowTick");
+            var toggle = (IToggleProvider)UIElementAutomationPeer.CreatePeerForElement(box).GetPattern(PatternInterface.Toggle);
+            toggle.Toggle();
+            Layout(window);
+            Assert.Equal([first], window.Model.CheckedNames);
+            Assert.True(InRow<CheckBox>(window, first, "RowTick").IsChecked);
+            Assert.Empty(recorder.Editors);
+
+            var ticked = InRow<CheckBox>(window, first, "RowTick");
+            ticked.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, ticked));
+            Layout(window);
+            Assert.Empty(recorder.Editors);
+            Assert.Equal([first], window.Model.CheckedNames);
+
+            // And back: the Toggle unticks the row it ticked.
+            toggle = (IToggleProvider)UIElementAutomationPeer.CreatePeerForElement(ticked).GetPattern(PatternInterface.Toggle);
+            toggle.Toggle();
+            Layout(window);
             Assert.Empty(window.Model.CheckedNames);
             Assert.Empty(recorder.Editors);
         });
