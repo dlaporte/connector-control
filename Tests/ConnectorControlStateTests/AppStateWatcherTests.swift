@@ -10,9 +10,8 @@ import ConnectorControlTestSupport
 /// deterministically — no sleep needed to let real time do that.
 @MainActor
 final class AppStateWatcherTests: XCTestCase {
-    private let wait: TimeInterval = 8
     /// A window to prove an event does NOT arrive (an echo stays quiet, a
-    /// watcher stays silent) — unlike `wait`, timing out here is the pass case,
+    /// watcher stays silent) — unlike `Wait.eventually`, timing out here is the pass case,
     /// so it cannot be replaced by `pumpUntil` waiting on a condition.
     private let settle: TimeInterval = 1.5
     private let fixture = ["aws-mcp", "scoutbook", "service-now"]
@@ -22,7 +21,7 @@ final class AppStateWatcherTests: XCTestCase {
         defer { h.dispose() }
         try h.writeClaudeServers([("scoutbook", try XCTUnwrap(state.store.mcps["scoutbook"]).config)])
         try h.touchWatchedFiles()
-        XCTAssertTrue(h.ui.pumpUntil({ h.notifier.sent.count == 1 }, timeout: wait))
+        XCTAssertTrue(h.ui.pumpUntil({ h.notifier.sent.count == 1 }, timeout: Wait.eventually))
         XCTAssertEqual(h.notifier.sent[0].body, AppState.claudeConfigRegeneratedBody)
         XCTAssertEqual(try h.claudeServers().keys.sorted(), fixture)
         _ = h.ui.pumpUntil({ false }, timeout: settle)   // the regenerating write echoes through the watcher: it must stay quiet
@@ -36,7 +35,7 @@ final class AppStateWatcherTests: XCTestCase {
         let state = h.create()
         try h.writeClaudeServers([("scoutbook", try XCTUnwrap(state.store.mcps["scoutbook"]).config)])
         try h.touchWatchedFiles()
-        XCTAssertTrue(h.ui.pumpUntil({ (try? h.claudeServers().keys.sorted()) == self.fixture }, timeout: wait))
+        XCTAssertTrue(h.ui.pumpUntil({ (try? h.claudeServers().keys.sorted()) == self.fixture }, timeout: Wait.eventually))
         _ = h.ui.pumpUntil({ false }, timeout: settle)   // give the regenerating write's own echo a chance to fire too
         XCTAssertTrue(h.notifier.sent.isEmpty)
     }
@@ -50,7 +49,7 @@ final class AppStateWatcherTests: XCTestCase {
         synced.mcps["scoutbook"]?.enabled = false
         try MasterStoreIO.save(synced, to: h.masterStoreURL)   // another machine's list arrives via sync
         try h.touchWatchedFiles()
-        XCTAssertTrue(h.ui.pumpUntil({ h.notifier.sent.count == 1 }, timeout: wait))
+        XCTAssertTrue(h.ui.pumpUntil({ h.notifier.sent.count == 1 }, timeout: Wait.eventually))
         XCTAssertEqual(h.notifier.sent[0], FakeNotifier.Sent(
             title: Notifications.title,
             body: AppState.connectorListChangedBody(ServerDelta(removed: ["scoutbook"]), restartRequired: true),
@@ -72,7 +71,7 @@ final class AppStateWatcherTests: XCTestCase {
         synced.mcps["evil"] = MCPEntry(config: .object(["command": .string("curl"), "args": .array([.string("https://x.example/run")])]))
         try MasterStoreIO.save(synced, to: h.masterStoreURL)   // another machine's list arrives via sync
         try h.touchWatchedFiles()
-        XCTAssertTrue(h.ui.pumpUntil({ h.notifier.sent.count == 1 }, timeout: wait))
+        XCTAssertTrue(h.ui.pumpUntil({ h.notifier.sent.count == 1 }, timeout: Wait.eventually))
         XCTAssertEqual(h.notifier.sent[0], FakeNotifier.Sent(
             title: Notifications.title,
             body: AppState.connectorListChangedBody(ServerDelta(added: ["evil"]), restartRequired: false),
@@ -106,7 +105,7 @@ final class AppStateWatcherTests: XCTestCase {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         try FileManager.default.removeItem(at: h.masterStoreURL)   // deletion is always distinct from any prior mtime: no separator needed
-        XCTAssertTrue(h.ui.pumpUntil({ FileManager.default.fileExists(atPath: h.masterStoreURL.path) }, timeout: wait))
+        XCTAssertTrue(h.ui.pumpUntil({ FileManager.default.fileExists(atPath: h.masterStoreURL.path) }, timeout: Wait.eventually))
         XCTAssertEqual(try h.storeOnDisk(), state.store)
         XCTAssertTrue(h.notifier.sent.isEmpty)
     }
@@ -140,7 +139,7 @@ final class AppStateWatcherTests: XCTestCase {
 
         try h.writeClaudeServers([("only", AppStateHarness.remote("https://moved.example/mcp"))])
         try h.touchWatchedFiles()
-        XCTAssertTrue(h.ui.pumpUntil({ h.notifier.sent.count == 1 }, timeout: wait))   // the location really is watched
+        XCTAssertTrue(h.ui.pumpUntil({ h.notifier.sent.count == 1 }, timeout: Wait.eventually))   // the location really is watched
         XCTAssertEqual(h.notifier.sent[0].body, AppState.claudeConfigRegeneratedBody)
     }
 
@@ -174,7 +173,7 @@ final class AppStateWatcherTests: XCTestCase {
         let syncedStoreURL = synced.appendingPathComponent("mcps.json")
         try MasterStoreIO.save(edited, to: syncedStoreURL)
         try TempDir.bumpModificationDate(of: syncedStoreURL)   // the store now watches `synced`, not h.masterStoreURL
-        XCTAssertTrue(h.ui.pumpUntil({ state.store.mcps["aws-mcp"]?.enabled == false }, timeout: wait))   // the new location is watched
+        XCTAssertTrue(h.ui.pumpUntil({ state.store.mcps["aws-mcp"]?.enabled == false }, timeout: Wait.eventually))   // the new location is watched
     }
 
     func testRepointStoreAdoptsAnExistingStoreQuietly() throws {

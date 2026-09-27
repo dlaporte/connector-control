@@ -28,8 +28,6 @@ public class FileWatcherTests : IDisposable
         public void Hit() => Interlocked.Increment(ref count);
     }
 
-    private static readonly TimeSpan WaitTimeout = TimeSpan.FromSeconds(8);
-
     /// <summary>
     /// The one rule for sleeping here: after anything that arms a FileSystemWatcher or schedules a
     /// re-check (Start, a rebuild, HandleError), a test settles before the write whose report it
@@ -46,7 +44,7 @@ public class FileWatcherTests : IDisposable
     private static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds(1500);
 
     /// <summary>Waits for the watcher to post a callback to <paramref name="ui"/> WITHOUT running it.</summary>
-    private static bool WaitForPost(MarshalQueue ui) => Wait.Until(() => ui.Pending > 0, WaitTimeout);
+    private static bool WaitForPost(MarshalQueue ui) => Wait.Until(() => ui.Pending > 0, Wait.Eventually);
 
     [Fact]
     public void FiresOnInPlaceWrite()
@@ -58,7 +56,7 @@ public class FileWatcherTests : IDisposable
         Assert.True(watcher.IsArmed);
         Thread.Sleep(Settle);
         TempDir.Touch(path, "two");
-        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "expected a change callback after an in-place write");
+        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually), "expected a change callback after an in-place write");
     }
 
     [Fact]
@@ -71,7 +69,7 @@ public class FileWatcherTests : IDisposable
         Thread.Sleep(Settle);
         AtomicFile.Write("two"u8.ToArray(), path);
         TempDir.BumpModificationTime(path);   // the write's own mtime may tie with "one"'s on a coarse file system
-        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "expected a change callback after an atomic replace");
+        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually), "expected a change callback after an atomic replace");
     }
 
     [Fact]
@@ -83,10 +81,10 @@ public class FileWatcherTests : IDisposable
         watcher.Start();
         Thread.Sleep(Settle);
         File.Delete(path);
-        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "expected a callback for delete");
+        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually), "expected a callback for delete");
         Thread.Sleep(Settle);   // a late event for the delete can still have a re-check pending
         File.WriteAllText(path, "again");
-        Assert.True(Wait.Until(() => counter.Count >= 2, WaitTimeout), "expected a callback for recreate");
+        Assert.True(Wait.Until(() => counter.Count >= 2, Wait.Eventually), "expected a callback for recreate");
     }
 
     [Fact]
@@ -122,7 +120,7 @@ public class FileWatcherTests : IDisposable
         Assert.Equal(0, counter.Count);   // a callback from the previous generation is dropped
         Thread.Sleep(Settle);
         TempDir.Touch(path, "three");
-        Assert.True(ui.PumpUntil(() => counter.Count >= 1, WaitTimeout), "the restarted watcher is live");
+        Assert.True(ui.PumpUntil(() => counter.Count >= 1, Wait.Eventually), "the restarted watcher is live");
     }
 
     /// <summary>C#-only: this watcher debounces a burst on a timer; the Mac's kqueue source is read on
@@ -141,7 +139,7 @@ public class FileWatcherTests : IDisposable
             Thread.Sleep(20);
         }
         TempDir.BumpModificationTime(path);   // guarantee the burst's final mtime differs from "0"'s on a coarse file system
-        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout));
+        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually));
         Assert.False(Wait.Until(() => counter.Count > 2, Quiet), $"expected the burst to coalesce, got {counter.Count} callbacks");
     }
 
@@ -185,7 +183,7 @@ public class FileWatcherTests : IDisposable
         TempDir.Touch(path, "two");
         Assert.True(WaitForPost(ui), "the change is posted to marshal, not delivered inline");
         Assert.Equal(0, counter.Count);   // not delivered until the test pumps marshal's queue
-        Assert.True(ui.PumpUntil(() => counter.Count >= 1, WaitTimeout));
+        Assert.True(ui.PumpUntil(() => counter.Count >= 1, Wait.Eventually));
     }
 
     [Fact]
@@ -201,7 +199,7 @@ public class FileWatcherTests : IDisposable
         Assert.True(watcher.IsArmed);
         Thread.Sleep(Settle);
         File.WriteAllText(nested, "hello");
-        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout));
+        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually));
     }
 
     /// <summary>
@@ -276,7 +274,7 @@ public class FileWatcherTests : IDisposable
         // a condition-based wait rather than an exact synchronous count.
         // ADeletedDirectoryFiresOnceAndDisarms above is the deterministic proof
         // that exactly one callback fires.
-        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "expected the deletion to be delivered, not swallowed by Stop() (R2)");
+        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually), "expected the deletion to be delivered, not swallowed by Stop() (R2)");
         watcher.Start();            // AppState retries on each reload; the directory is still gone
         Assert.False(watcher.IsArmed);
         Directory.CreateDirectory(parent);
@@ -285,7 +283,7 @@ public class FileWatcherTests : IDisposable
         Thread.Sleep(Settle);
         var before = counter.Count;   // a possible earlier extra delivery must not mask a missing one here
         File.WriteAllText(path, "two");
-        Assert.True(Wait.Until(() => counter.Count >= before + 1, WaitTimeout), "the re-armed watcher must still report changes");
+        Assert.True(Wait.Until(() => counter.Count >= before + 1, Wait.Eventually), "the re-armed watcher must still report changes");
     }
 
     /// <summary>C#-only: the Mac's watcher has no error event.</summary>
@@ -300,7 +298,7 @@ public class FileWatcherTests : IDisposable
         Assert.True(watcher.IsArmed);
         Thread.Sleep(Settle);
         TempDir.Touch(path, "two");
-        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout));
+        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually));
     }
 
     /// <summary>
@@ -325,7 +323,7 @@ public class FileWatcherTests : IDisposable
         Thread.Sleep(Settle);
         var before = counter.Count;   // the error's own re-check may already have reported
         TempDir.Touch(path, "two");
-        Assert.True(Wait.Until(() => counter.Count >= before + 1, WaitTimeout), "the rebuilt FileSystemWatcher must still report changes");
+        Assert.True(Wait.Until(() => counter.Count >= before + 1, Wait.Eventually), "the rebuilt FileSystemWatcher must still report changes");
     }
 
     /// <summary>
@@ -353,7 +351,7 @@ public class FileWatcherTests : IDisposable
         Thread.Sleep(Settle);
         var before = counter.Count;
         TempDir.Touch(path, "two");
-        Assert.True(Wait.Until(() => counter.Count >= before + 1, WaitTimeout), "the re-armed watcher must still report changes");
+        Assert.True(Wait.Until(() => counter.Count >= before + 1, Wait.Eventually), "the re-armed watcher must still report changes");
     }
 
     /// <summary>
@@ -390,10 +388,10 @@ public class FileWatcherTests : IDisposable
         Assert.Equal(armed + 1, watcher.ArmCount);   // it swapped onto the folder that is there
         // The file is not in the replacement, and the re-arm's own re-check reports that, so
         // the count is settled before the write below rather than racing it.
-        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "the re-arm must report the file missing from the folder that is there now");
+        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually), "the re-arm must report the file missing from the folder that is there now");
         var before = counter.Count;
         TempDir.Touch(file, "two");   // creates the file in the folder that is there now
-        Assert.True(Wait.Until(() => counter.Count >= before + 1, WaitTimeout), "the watcher must follow the path, not the folder it happened to open");
+        Assert.True(Wait.Until(() => counter.Count >= before + 1, Wait.Eventually), "the watcher must follow the path, not the folder it happened to open");
     }
 
     /// <summary>
@@ -417,7 +415,7 @@ public class FileWatcherTests : IDisposable
 
         watcher.Start();
 
-        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "the re-arm must re-check the file, not wait for the next write to it");
+        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually), "the re-arm must re-check the file, not wait for the next write to it");
     }
 
     /// <summary>
@@ -467,7 +465,7 @@ public class FileWatcherTests : IDisposable
         Assert.Equal(armed, watcher.ArmCount);
         Thread.Sleep(Settle);
         TempDir.Touch(path, "two");
-        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "the re-check still reports");
+        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually), "the re-check still reports");
     }
 
     /// <summary>C#-only: the Mac's watcher has no error event.</summary>
@@ -502,7 +500,7 @@ public class FileWatcherTests : IDisposable
         Assert.False(watcher.IsArmed, "the errors the cooldown held back are owed a rebuild");
         Thread.Sleep(Settle);
         TempDir.Touch(path, "two");
-        Assert.True(Wait.Until(() => counter.Count >= 1, WaitTimeout), "the watcher it kept still reports changes meanwhile");
+        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually), "the watcher it kept still reports changes meanwhile");
         watcher.Start();
         Assert.Equal(armed + 2, watcher.ArmCount);   // the whole storm's debt, paid once
         Assert.True(watcher.IsArmed);

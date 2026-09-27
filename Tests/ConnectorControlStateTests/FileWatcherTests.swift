@@ -14,9 +14,8 @@ import ConnectorControlTestSupport
 /// watcher tells a replaced folder by device and inode, and has no error event.
 @MainActor
 final class FileWatcherTests: XCTestCase {
-    private let wait: TimeInterval = 5
     /// A window to prove an event does NOT arrive (a stopped watcher, an
-    /// unrelated file) — unlike `wait`, timing out here is the pass case, so
+    /// unrelated file) — unlike `Wait.eventually`, timing out here is the pass case, so
     /// it cannot be replaced by `pumpUntil` waiting on a condition. An event
     /// slower than the window would pass wrongly, and a real kqueue source
     /// leaves no signal to wait on instead; each use asserts that it timed out.
@@ -59,7 +58,7 @@ final class FileWatcherTests: XCTestCase {
         try Data("a".utf8).write(to: r.file)
         r.make().start()
         try TempDir.touch(r.file, "bb")   // no .atomic: truncate + write in place
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait))
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: Wait.eventually))
     }
 
     func testFiresOnAtomicReplace() throws {
@@ -69,7 +68,7 @@ final class FileWatcherTests: XCTestCase {
         r.make().start()
         try Data("bb".utf8).write(to: r.file, options: .atomic)   // a new inode under the same name
         try TempDir.bumpModificationDate(of: r.file)
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait))
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: Wait.eventually))
     }
 
     func testFiresOnDeleteAndOnRecreate() throws {
@@ -78,9 +77,9 @@ final class FileWatcherTests: XCTestCase {
         try Data("a".utf8).write(to: r.file)
         r.make().start()
         try FileManager.default.removeItem(at: r.file)   // a deletion's mtime (nil) always differs: no separator needed
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait))
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: Wait.eventually))
         try TempDir.touch(r.file, "back")
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 2 }, timeout: wait))
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 2 }, timeout: Wait.eventually))
     }
 
     func testDoesNotFireAfterStop() throws {
@@ -104,13 +103,13 @@ final class FileWatcherTests: XCTestCase {
         let watcher = r.make()
         watcher.start()
         try TempDir.touch(r.file, "bb")
-        XCTAssertTrue(r.waitForPost(timeout: wait))   // posted, not yet delivered
+        XCTAssertTrue(r.waitForPost(timeout: Wait.eventually))   // posted, not yet delivered
         watcher.stop()
         watcher.start()
         r.ui.pump()
         XCTAssertEqual(r.hits, 0, "a callback from the previous generation is dropped")
         try TempDir.touch(r.file, "ccc")
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait), "the restarted watcher is live")
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: Wait.eventually), "the restarted watcher is live")
     }
 
     func testIgnoresOtherFilesInTheDirectory() throws {
@@ -129,7 +128,7 @@ final class FileWatcherTests: XCTestCase {
         let watcher = r.make()
         watcher.start()
         try TempDir.touch(r.file, "bb")
-        XCTAssertTrue(r.waitForPost(timeout: wait))   // posted, not yet delivered
+        XCTAssertTrue(r.waitForPost(timeout: Wait.eventually))   // posted, not yet delivered
         watcher.stop()                                // before the posted callback runs
         r.ui.pump()
         XCTAssertEqual(r.hits, 0, "a callback scheduled before the stop is dropped on delivery")
@@ -141,9 +140,9 @@ final class FileWatcherTests: XCTestCase {
         try Data("a".utf8).write(to: r.file)
         r.make().start()
         try TempDir.touch(r.file, "bb")
-        XCTAssertTrue(r.waitForPost(timeout: wait), "the change is posted to marshal, not delivered inline")
+        XCTAssertTrue(r.waitForPost(timeout: Wait.eventually), "the change is posted to marshal, not delivered inline")
         XCTAssertEqual(r.hits, 0, "not delivered until the test pumps marshal's queue")
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait))
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: Wait.eventually))
     }
 
     /// Removing the watched directory is two separate disappearances on disk —
@@ -168,9 +167,9 @@ final class FileWatcherTests: XCTestCase {
         watcher.start()
         XCTAssertTrue(watcher.isArmed)
         try FileManager.default.removeItem(at: r.file)
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait), "the file's own disappearance")
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: Wait.eventually), "the file's own disappearance")
         try FileManager.default.removeItem(at: r.dir.url)
-        XCTAssertTrue(r.ui.pumpUntil({ !watcher.isArmed }, timeout: wait), "the directory's deletion disarms")
+        XCTAssertTrue(r.ui.pumpUntil({ !watcher.isArmed }, timeout: Wait.eventually), "the directory's deletion disarms")
         XCTAssertFalse(r.ui.pumpUntil({ r.hits > 2 }, timeout: settle), "a possible second event had its chance to (mis)fire")
         XCTAssertEqual(r.hits, 2, "one callback for the file, exactly one for the directory")
     }
@@ -188,7 +187,7 @@ final class FileWatcherTests: XCTestCase {
         let watcher = r.make()
         watcher.start()
         try FileManager.default.removeItem(at: r.dir.url)
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 && !watcher.isArmed }, timeout: wait))
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 && !watcher.isArmed }, timeout: Wait.eventually))
     }
 
     func testADeletedDirectoryDisarmsTheWatcherSoTheNextStartReArms() throws {
@@ -198,9 +197,9 @@ final class FileWatcherTests: XCTestCase {
         let watcher = r.make()
         watcher.start()
         try FileManager.default.removeItem(at: r.file)
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait), "the file's own disappearance")
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: Wait.eventually), "the file's own disappearance")
         try FileManager.default.removeItem(at: r.dir.url)
-        XCTAssertTrue(r.ui.pumpUntil({ !watcher.isArmed }, timeout: wait), "the directory's deletion disarms")
+        XCTAssertTrue(r.ui.pumpUntil({ !watcher.isArmed }, timeout: Wait.eventually), "the directory's deletion disarms")
         watcher.start()   // AppState retries on every reload; the directory is still gone
         XCTAssertFalse(watcher.isArmed)
     }
@@ -213,17 +212,17 @@ final class FileWatcherTests: XCTestCase {
         let watcher = r.make()
         watcher.start()
         try FileManager.default.removeItem(at: r.file)
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait), "the file's own disappearance")
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: Wait.eventually), "the file's own disappearance")
         try FileManager.default.removeItem(at: r.dir.url)
         // The disarm has to be observed before the directory comes back: a
         // watcher still armed on the deleted directory's descriptor treats the
         // next start() as a no-op and never sees the new one's contents.
-        XCTAssertTrue(r.ui.pumpUntil({ !watcher.isArmed }, timeout: wait), "the directory's deletion disarms")
+        XCTAssertTrue(r.ui.pumpUntil({ !watcher.isArmed }, timeout: Wait.eventually), "the directory's deletion disarms")
         try FileManager.default.createDirectory(at: r.dir.url, withIntermediateDirectories: true)
         watcher.start()
         XCTAssertTrue(watcher.isArmed)
         try TempDir.touch(r.file, "back")
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 3 }, timeout: wait), "the re-armed watcher still reports changes")
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 3 }, timeout: Wait.eventually), "the re-armed watcher still reports changes")
     }
 
     /// A directory replaced wholesale: a sync client swapping a folder in, or a
@@ -257,11 +256,11 @@ final class FileWatcherTests: XCTestCase {
         // re-check reports that whether or not an event ever arrives for the
         // swap, so the count is settled before the write below rather than
         // racing it.
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait),
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: Wait.eventually),
                       "the swap itself is reported: the watched file is not in the folder that is there now")
         let before = r.hits
         try TempDir.touch(r.file, "back")
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= before + 1 }, timeout: wait),
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= before + 1 }, timeout: Wait.eventually),
                       "the watcher follows the path, not the descriptor it happened to open")
     }
 
@@ -295,7 +294,7 @@ final class FileWatcherTests: XCTestCase {
                        "no inode the watcher holds was touched, so no event can fire")
         watcher.start()   // AppState re-arms on every reload
         XCTAssertTrue(watcher.isArmed)
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait),
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: Wait.eventually),
                       "the re-arm has to re-check: nothing else will ever report this change")
     }
 
@@ -341,6 +340,6 @@ final class FileWatcherTests: XCTestCase {
         XCTAssertTrue(watcher.isArmed)
         watcher.start()   // a no-op while armed
         try TempDir.touch(later, "bb")
-        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: wait))
+        XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: Wait.eventually))
     }
 }

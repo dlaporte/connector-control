@@ -1,3 +1,5 @@
+using ConnectorControl.Core.Tests.TestSupport;
+
 namespace ConnectorControl.App.Tests;
 
 public class SingleInstanceTests
@@ -18,7 +20,7 @@ public class SingleInstanceTests
             Assert.False(second.IsFirstInstance);
             second.SignalShow();
         }
-        Assert.True(shown.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        Assert.True(shown.Wait(Wait.Eventually, TestContext.Current.CancellationToken));
         Assert.False(SingleInstance.IsToastActivation([]));   // a plain double-click carries no arguments
     }
 

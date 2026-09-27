@@ -8,7 +8,6 @@ namespace ConnectorControl.Core.Tests.State;
 /// <summary>Mirror: Tests/ConnectorControlStateTests/AppStateWatcherTests.swift</summary>
 public class AppStateWatcherTests
 {
-    private static readonly TimeSpan Wait = TimeSpan.FromSeconds(8);
     private static readonly TimeSpan Settle = TimeSpan.FromMilliseconds(1500);
 
     /// <summary>Gives a just-created AppState's freshly-armed watchers a moment to finish
@@ -23,7 +22,7 @@ public class AppStateWatcherTests
         using var state = h.Create();
         Thread.Sleep(WatcherSettle);
         h.WriteClaudeServers(("scoutbook", state.Store.Mcps["scoutbook"].Config));
-        Assert.True(h.Ui.PumpUntil(() => h.Notifier.Sent.Count == 1, Wait));
+        Assert.True(h.Ui.PumpUntil(() => h.Notifier.Sent.Count == 1, Wait.Eventually));
         Assert.Equal(AppState.ClaudeConfigRegeneratedBody, h.Notifier.Sent[0].Body);
         Assert.Equal(Fixture, AppStateHarness.Keys(h.ClaudeServers().Keys));
         h.Ui.PumpUntil(() => false, Settle);   // the regenerating write echoes through the watcher: it must stay quiet
@@ -40,7 +39,7 @@ public class AppStateWatcherTests
         using var state = h.Create();
         Thread.Sleep(WatcherSettle);
         h.WriteClaudeServers(("scoutbook", state.Store.Mcps["scoutbook"].Config));
-        Assert.True(h.Ui.PumpUntil(() => AppStateHarness.Keys(h.ClaudeServers().Keys).SequenceEqual(Fixture), Wait));
+        Assert.True(h.Ui.PumpUntil(() => AppStateHarness.Keys(h.ClaudeServers().Keys).SequenceEqual(Fixture), Wait.Eventually));
         h.Ui.PumpUntil(() => false, Settle);   // give the regenerating write's own echo a chance to fire too
         Assert.Empty(h.Notifier.Sent);
     }
@@ -55,7 +54,7 @@ public class AppStateWatcherTests
         var synced = h.StoreOnDisk();
         synced.Mcps["scoutbook"] = synced.Mcps["scoutbook"] with { Enabled = false };
         MasterStoreIO.Save(synced, h.MasterStorePath);   // another machine's list arrives via sync
-        Assert.True(h.Ui.PumpUntil(() => h.Notifier.Sent.Count == 1, Wait));
+        Assert.True(h.Ui.PumpUntil(() => h.Notifier.Sent.Count == 1, Wait.Eventually));
         var expected = AppState.ConnectorListChangedBody(new ServerDelta([], ["scoutbook"], []), restartRequired: true);
         Assert.Equal((Notifications.Title, expected, (string?)Notifications.RestartCategory), h.Notifier.Sent[0]);
         Assert.False(state.Store.Mcps["scoutbook"].Enabled);
@@ -78,7 +77,7 @@ public class AppStateWatcherTests
         var synced = h.StoreOnDisk();
         synced.Mcps["evil"] = new McpEntry(JsonValue.Object(("command", JsonValue.String("curl")), ("args", JsonValue.Array([JsonValue.String("https://x.example/run")]))));
         MasterStoreIO.Save(synced, h.MasterStorePath);   // another machine's list arrives via sync
-        Assert.True(h.Ui.PumpUntil(() => h.Notifier.Sent.Count == 1, Wait));
+        Assert.True(h.Ui.PumpUntil(() => h.Notifier.Sent.Count == 1, Wait.Eventually));
         var expected = AppState.ConnectorListChangedBody(new ServerDelta(["evil"], [], []), restartRequired: false);
         Assert.Equal((Notifications.Title, expected, (string?)null), h.Notifier.Sent[0]);
         Assert.Equal(["aws-mcp", "evil", "scoutbook", "service-now"], AppStateHarness.Keys(h.ClaudeServers().Keys));
@@ -117,7 +116,7 @@ public class AppStateWatcherTests
         using var state = h.Create();
         Thread.Sleep(WatcherSettle);
         File.Delete(h.MasterStorePath);
-        Assert.True(h.Ui.PumpUntil(() => File.Exists(h.MasterStorePath), Wait));
+        Assert.True(h.Ui.PumpUntil(() => File.Exists(h.MasterStorePath), Wait.Eventually));
         Assert.Equal(state.Store, h.StoreOnDisk());
         Assert.Empty(h.Notifier.Sent);
     }
@@ -148,7 +147,7 @@ public class AppStateWatcherTests
 
         Thread.Sleep(WatcherSettle);
         ClaudeConfigIO.Write(new Dictionary<string, JsonValue> { ["only"] = AppStateHarness.Remote("https://only.example/mcp") }, later);
-        Assert.True(h.Ui.PumpUntil(() => h.Notifier.Sent.Count == 1, Wait));   // the new location really is watched
+        Assert.True(h.Ui.PumpUntil(() => h.Notifier.Sent.Count == 1, Wait.Eventually));   // the new location really is watched
         Assert.Equal(AppState.ClaudeConfigRegeneratedBody, h.Notifier.Sent[0].Body);
     }
 
@@ -170,7 +169,7 @@ public class AppStateWatcherTests
         var edited = state.Store.Clone();
         edited.Mcps["aws-mcp"] = edited.Mcps["aws-mcp"] with { Enabled = false };
         MasterStoreIO.Save(edited, Path.Combine(synced, "mcps.json"));
-        Assert.True(h.Ui.PumpUntil(() => !state.Store.Mcps["aws-mcp"].Enabled, Wait));   // the new location is watched
+        Assert.True(h.Ui.PumpUntil(() => !state.Store.Mcps["aws-mcp"].Enabled, Wait.Eventually));   // the new location is watched
     }
 
     /// <summary>A seed write that fails must not switch the store to a location with no
