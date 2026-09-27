@@ -155,7 +155,7 @@ jobs:
         with:
           global-json-file: windows/global.json
 
-      # vpk 1.2.0 is a LOCAL tool (windows/.config/dotnet-tools.json), restored from the
+      # vpk is a LOCAL tool pinned in windows/.config/dotnet-tools.json, restored from the
       # manifest rather than installed globally: a version bump is then a one-line diff reviewed
       # like any other dependency change, instead of a number buried in a workflow run step.
       - name: Restore local tools

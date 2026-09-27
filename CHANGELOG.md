@@ -42,6 +42,9 @@ bullet once the section is about to ship.
 - A connector launched through the command shell that uses `${COLLECTION_DIR}` is
   cautioned when the folder that token stands for holds `& | < > ^ "` or a space, as an
   ordinary Windows folder name may: cmd.exe would read those as commands.
+- The installer, the updater and the small launcher beside the app are built for the PC's
+  own processor, so an Arm PC runs them natively instead of under x86 emulation. They
+  come from Velopack 1.2.158, up from 1.2.0, and the app's update code moves with them.
 
 ### Both platforms
 
