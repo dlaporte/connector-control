@@ -3189,6 +3189,26 @@ final class AppStateCollectionsTests: XCTestCase {
         ])
     }
 
+    /// At launch nothing is notified, so the connector a reroute moved out of Claude's file is
+    /// accounted for in the banner instead: it went into a local collection and Claude no longer
+    /// runs it, and the user is told where it is.
+    func testAnAdditionReroutedAtLaunchIsToldInTheBanner() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
+        state.switchCollection(to: "Data team")
+        var servers = try h.claudeServers()
+        servers["installer"] = .object(["command": .string("node"), "args": .array([.string("/opt/installer/srv.js")])])
+        try h.writeClaudeServers(servers.map { ($0.key, $0.value) })
+        h.notifier.clearSent()
+
+        let later = h.create()
+        XCTAssertEqual(later.store.collections["Default"]?.mcps["installer"]?.enabled, true)
+        XCTAssertNil(try h.claudeServers()["installer"])
+        XCTAssertEqual(later.lastError, AppState.ingestedElsewhereSentence("Data team", "installer", "Default"))
+        XCTAssertTrue(h.notifier.sent.isEmpty, "nothing is notified at launch")
+    }
+
     /// A sidecar a sync tool is halfway through writing cannot be read, but a reload after the
     /// first already knows which collections are subscribed: the addition still goes into a local
     /// collection rather than the subscribed active one.

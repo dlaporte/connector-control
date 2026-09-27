@@ -566,7 +566,16 @@ public final class AppState: ObservableObject {
             // (Backups ▸ Restore is the way out). The collections load runs above and adds
             // its own note here rather than setting lastError itself, which this line would
             // then overwrite.
-            let notes = result.notes + [collectionsNote, collectionsNotSaved ? AppState.collectionsNotSavedNote : nil]
+            //
+            // What the file added and a subscribed collection could not hold went into a local
+            // collection. A notification below says which; where none fires — a first load, a
+            // quiet adoption — the banner says it instead, since Claude stops running the connector.
+            let elsewhereSentence = result.ingestedElsewhere.map {
+                AppState.ingestedElsewhereSentence(activeCollection, ServerDelta.list($0.names, limit: 4), $0.collection)
+            }
+            let unannounced = !wasLoaded || trigger == .quietStoreAdoption
+            let notes = result.notes + [collectionsNote, collectionsNotSaved ? AppState.collectionsNotSavedNote : nil,
+                                        unannounced ? elsewhereSentence : nil]
                 .compactMap { $0 }
             lastError = notes.isEmpty ? nil : notes.joined(separator: " ")
             if !isDirty { applyRetryNeeded = false }
@@ -593,11 +602,7 @@ public final class AppState: ObservableObject {
             // something to say: a master list restored from a backup is the usual reason for both.
             if regenerated, !notes.isEmpty { lastError = notes.joined(separator: " ") }
 
-            // What the file added and a subscribed collection could not hold went into a local
-            // collection, and the notification that follows says which.
-            let elsewhere = result.ingestedElsewhere.map {
-                " " + AppState.ingestedElsewhereSentence(activeCollection, ServerDelta.list($0.names, limit: 4), $0.collection)
-            } ?? ""
+            let elsewhere = elsewhereSentence.map { " " + $0 } ?? ""
 
             // Fire notifications AFTER all state above has been assigned, never
             // on first load or for quiet adoptions. At most one per reload.

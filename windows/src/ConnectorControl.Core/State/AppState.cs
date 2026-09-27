@@ -684,6 +684,14 @@ public sealed class AppState : ObservableObject, IDisposable
             // the second one is the actionable one (Backups ▸ Restore is the way out). The
             // collections load runs above and adds its own note here rather than setting
             // LastError itself, which this line would then overwrite.
+            //
+            // What the file added and a subscribed collection could not hold went into a local
+            // collection. A notification below says which; where none fires — a first load, a quiet
+            // adoption — the banner says it instead, since Claude stops running the connector.
+            var elsewhereSentence = result.IngestedElsewhere is { } ingested
+                ? IngestedElsewhereSentence(ActiveCollection, ServerDelta.List(ingested.Names, limit: 4), ingested.Collection)
+                : null;
+            var unannounced = !wasLoaded || trigger == ReloadTrigger.QuietStoreAdoption;
             List<string> notes = [.. result.Notes];
             if (collectionsNote is not null)
             {
@@ -692,6 +700,10 @@ public sealed class AppState : ObservableObject, IDisposable
             if (collectionsNotSaved)
             {
                 notes.Add(CollectionsNotSavedNote);
+            }
+            if (unannounced && elsewhereSentence is not null)
+            {
+                notes.Add(elsewhereSentence);
             }
             LastError = notes.Count > 0 ? string.Join(" ", notes) : null;
             if (!IsDirty)
@@ -726,11 +738,7 @@ public sealed class AppState : ObservableObject, IDisposable
                 LastError = string.Join(" ", notes);
             }
 
-            // What the file added and a subscribed collection could not hold went into a local
-            // collection, and the notification that follows says which.
-            var elsewhere = result.IngestedElsewhere is { } ingested
-                ? " " + IngestedElsewhereSentence(ActiveCollection, ServerDelta.List(ingested.Names, limit: 4), ingested.Collection)
-                : "";
+            var elsewhere = elsewhereSentence is null ? "" : " " + elsewhereSentence;
 
             // Fire notifications AFTER all state above has been assigned, never on first load or for
             // quiet adoptions. At most one per reload.

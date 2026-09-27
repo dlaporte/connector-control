@@ -549,7 +549,8 @@ ever being silently dropped. While a subscribed collection is active, a connecto
 added outside the app goes into a local collection instead: the one Claude's config
 was last applied from if that is local, otherwise the first local collection by name,
 or a new, empty "Default" if there is none. The subscribed collection stays as its
-author published it, and the notification names where the connector went. Claude only
+author published it, and the notification names where the connector went (at launch,
+when nothing is notified, the banner does). Claude only
 reads its config at startup, hence the Restart Required flow.
 
 On Windows, **Restart Claude** asks Claude Desktop to end its session cleanly

@@ -164,7 +164,9 @@ bullet once the section is about to ship.
   Claude's configuration was last applied from if that is local, else the first local one
   by name, else a new, empty "Default". Before, it went into the subscribed collection,
   where it could be neither edited nor deleted, and the next Review & Apply deleted it
-  from Claude. The notification names where it went.
+  from Claude. The notification names where it went; at launch, when nothing is notified,
+  the banner does. The same holds while the collections file can't be read for a moment,
+  as when a sync tool is halfway through writing it.
 - When the active collection has no connectors, the popover (Mac) and flyout (Windows) say
   "No connectors in “<collection>”." with a Manage Collections button beneath, which opens
   the Collections window on that collection. Before, they said "No connectors configured

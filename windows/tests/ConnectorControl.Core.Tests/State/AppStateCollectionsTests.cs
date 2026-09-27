@@ -3720,6 +3720,33 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// At launch nothing is notified, so the connector a reroute moved out of Claude's file is accounted
+    /// for in the banner instead: it went into a local collection and Claude no longer runs it, and the
+    /// user is told where it is.
+    /// </summary>
+    [Fact]
+    public void AnAdditionReroutedAtLaunchIsToldInTheBanner()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam);
+        state.SwitchCollection("Data team");
+        var servers = new Dictionary<string, JsonValue>(h.ClaudeServers(), StringComparer.Ordinal)
+        {
+            ["installer"] = NodeWith("/opt/installer/srv.js"),
+        };
+        h.WriteClaudeServers(servers.Select(p => (p.Key, p.Value)).ToArray());
+        h.Notifier.Sent.Clear();
+
+        using var later = h.Create();
+        Assert.True(later.Store.Collections["Default"].Mcps["installer"].Enabled);
+        Assert.False(h.ClaudeServers().ContainsKey("installer"));
+        Assert.Equal(AppState.IngestedElsewhereSentence("Data team", "installer", "Default"), later.LastError);
+        // Nothing is notified at launch.
+        Assert.Empty(h.Notifier.Sent);
+    }
+
+    /// <summary>
     /// A sidecar a sync tool is halfway through writing cannot be read, but a reload after the first
     /// already knows which collections are subscribed: the addition still goes into a local collection
     /// rather than the subscribed active one.
