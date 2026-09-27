@@ -51,6 +51,9 @@ struct CollectionsWindowView: View {
     @State private var hoveredRow: String?
     /// The row that has keyboard focus, for Return, Space and the arrows.
     @FocusState private var focusedRow: String?
+    /// Whether the keyboard moved focus to that row: only then does it show the focus ring, as
+    /// the Windows row shows its focus rectangle only once the keyboard is in use.
+    @State private var keyboardMovedFocus = false
 
     /// The model asks through AppState's dialogs, as the editor does: they are the app's one
     /// AlertDialogs.
@@ -404,8 +407,8 @@ struct CollectionsWindowView: View {
     /// focused row; Space ticks it, and Up and Down move between rows. The Windows rows behave the
     /// same, as a list of buttons. The row takes a light fill under the pointer, the Mac's hover
     /// for a clickable row, and no pointing hand, which a Mac list row never shows. The focused
-    /// row draws the system focus ring whenever it has focus; the Windows row draws its focus
-    /// rectangle only once the keyboard is in use, which is each platform's own rule.
+    /// row shows the system focus ring only once the keyboard has moved focus to it, as the
+    /// Windows row shows its focus rectangle: a click leaves no ring behind.
     private var rows: some View {
         ScrollViewReader { proxy in
             List(model.rows) { row in
@@ -429,6 +432,7 @@ struct CollectionsWindowView: View {
                     // One tap, one open: a double-click opens the same connector twice, and the
                     // editor's window group brings the one already open forward.
                     .onTapGesture {
+                        keyboardMovedFocus = false
                         focusedRow = row.name
                         openEditor(row.name)
                     }
@@ -467,6 +471,19 @@ struct CollectionsWindowView: View {
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction { openEditor(row.name) }
             }
+            // Tab into the list moves focus with no handler of ours in the way, and a click on the
+            // tick slot focuses the row on the press, before its tap: the event that moved focus
+            // says which it was. Any other event, such as the pointer entering a row, says nothing.
+            .onChange(of: focusedRow) {
+                switch NSApp.currentEvent?.type {
+                case .keyDown?:
+                    keyboardMovedFocus = true
+                case .leftMouseDown?, .leftMouseUp?, .rightMouseDown?, .otherMouseDown?:
+                    keyboardMovedFocus = false
+                default:
+                    break
+                }
+            }
             // The rows are the tall half of the window: the list takes what is left after the
             // header and the banner, and scrolls inside it.
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -495,7 +512,8 @@ struct CollectionsWindowView: View {
     /// cannot open the editor. On a read-only row a click here does nothing at all, so the part
     /// of a row that opens the editor is the same on every collection. The box keeps its own
     /// spoken name and action, and stays out of the key loop: the row is what takes focus, and
-    /// its Space is the tick.
+    /// its Space is the tick. The focused row's ring shows on the box, so the box draws it only
+    /// once the keyboard has moved focus there.
     private func tickSlot(_ row: CollectionsModel.Row) -> some View {
         ZStack {
             if row.isLocked {
@@ -505,6 +523,7 @@ struct CollectionsWindowView: View {
                     .toggleStyle(.checkbox)
                     .labelsHidden()
                     .focusable(false)
+                    .focusEffectDisabled(!keyboardMovedFocus)
                     .allowsHitTesting(false)
                     .accessibilityLabel(row.name)
             }
@@ -513,7 +532,10 @@ struct CollectionsWindowView: View {
         .frame(maxHeight: .infinity)
         .contentShape(Rectangle())
         // The model leaves a locked row as it is, as it does for Space and on Windows.
-        .onTapGesture { model.toggleChecked(row.name) }
+        .onTapGesture {
+            keyboardMovedFocus = false
+            model.toggleChecked(row.name)
+        }
     }
 
     private func openEditor(_ connector: String) {
@@ -524,6 +546,9 @@ struct CollectionsWindowView: View {
     /// it shows, and focus cannot land on one it has not made. Past either end the key stays put.
     private func move(from connector: String, by offset: Int, _ proxy: ScrollViewProxy) -> KeyPress.Result {
         guard let next = model.neighbour(of: connector, by: offset) else { return .handled }
+        // Set here, not left to the focus change: that lands after the scroll, when the key that
+        // caused it may no longer be the current event.
+        keyboardMovedFocus = true
         proxy.scrollTo(next)
         Task { @MainActor in focusedRow = next }
         return .handled

@@ -24,6 +24,9 @@ bullet once the section is about to ship.
   Cancel buttons do.
 - A connector editor left open in 1.3 that macOS reopens after the upgrade closes itself,
   rather than stand empty: it cannot say which collection it was editing.
+- In the Collections window, a click on a connector's tick or row no longer leaves the focus
+  ring around its box. The ring shows only when the keyboard moves focus to a row (Tab into
+  the list, or Up and Down), as the Windows row's focus rectangle does.
 
 ### Windows
 
