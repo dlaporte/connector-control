@@ -800,6 +800,13 @@ public struct CollectionDocument: Equatable, Sendable {
         return warnings
     }
 
+    /// What a warning says of how its field holds its credential (`CredentialKind.phrase`). Each is
+    /// part of the key a review saves, so a change of wording holds every reviewed connector that
+    /// carries one until it is reviewed again.
+    public static let credentialLiteralPhrase = "looks like a credential"
+    public static let credentialReferencePhrase = "refers to a credential"
+    public static let credentialUserOnlyPhrase = "names a user"
+
     /// How a field holds its credential, as its warning says it. Only the kind reaches the warning,
     /// and so the review's key: a field that goes from a reference, or from a user with no password,
     /// to a literal says something the review has not seen, and is held for review again.
@@ -813,9 +820,9 @@ public struct CollectionDocument: Equatable, Sendable {
 
         var phrase: String {
             switch self {
-            case .literal: return "looks like a credential"
-            case .reference: return "refers to a credential"
-            case .userOnly: return "names a user"
+            case .literal: return CollectionDocument.credentialLiteralPhrase
+            case .reference: return CollectionDocument.credentialReferencePhrase
+            case .userOnly: return CollectionDocument.credentialUserOnlyPhrase
             }
         }
     }

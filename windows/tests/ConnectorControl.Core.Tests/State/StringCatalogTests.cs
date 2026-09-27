@@ -249,6 +249,12 @@ public class StringCatalogTests
         // SubjectProblem takes the not-Anthropic branch; the echoed subject is the raw "O=Y".
         actual["ClaudePublisher.subjectNotAnthropicError"] = ClaudePublisher.SubjectProblem("O=Y", "X")!;
 
+        // MARK: CollectionDocument
+
+        actual["CollectionDocument.credentialLiteralPhrase"] = CollectionDocument.CredentialLiteralPhrase;
+        actual["CollectionDocument.credentialReferencePhrase"] = CollectionDocument.CredentialReferencePhrase;
+        actual["CollectionDocument.credentialUserOnlyPhrase"] = CollectionDocument.CredentialUserOnlyPhrase;
+
         // MARK: CollectionsModel
 
         actual["CollectionsModel.activePill"] = CollectionsModel.ActivePill;

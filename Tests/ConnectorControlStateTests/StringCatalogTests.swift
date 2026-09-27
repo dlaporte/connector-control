@@ -241,6 +241,12 @@ final class StringCatalogTests: XCTestCase {
         actual["ConfigService.malformedClaudeConfigNote"] =
             "Claude’s config file is not valid JSON. Your MCP list is safe; use Backups \u{25B8} Restore to repair the file."
 
+        // MARK: CollectionDocument
+
+        actual["CollectionDocument.credentialLiteralPhrase"] = CollectionDocument.credentialLiteralPhrase
+        actual["CollectionDocument.credentialReferencePhrase"] = CollectionDocument.credentialReferencePhrase
+        actual["CollectionDocument.credentialUserOnlyPhrase"] = CollectionDocument.credentialUserOnlyPhrase
+
         // MARK: CollectionsModel
 
         actual["CollectionsModel.activePill"] = CollectionsModel.activePill

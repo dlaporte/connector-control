@@ -138,6 +138,9 @@
       "format": "{0} is not an app bundle this app can inspect."
     }
   },
+  "CollectionDocument.credentialLiteralPhrase": "looks like a credential",
+  "CollectionDocument.credentialReferencePhrase": "refers to a credential",
+  "CollectionDocument.credentialUserOnlyPhrase": "names a user",
   "CollectionsModel.activePill": "Active",
   "CollectionsModel.addCollectionTooltip": "Add Collection",
   "CollectionsModel.addConnectorDisabledTooltip": "Additions go in a local collection.",

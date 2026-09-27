@@ -1476,11 +1476,20 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         UserOnly,
     }
 
+    /// <summary>
+    /// What a warning says of how its field holds its credential (<see cref="Phrase"/>). Each is part of
+    /// the key a review saves, so a change of wording holds every reviewed connector that carries one
+    /// until it is reviewed again.
+    /// </summary>
+    public const string CredentialLiteralPhrase = "looks like a credential";
+    public const string CredentialReferencePhrase = "refers to a credential";
+    public const string CredentialUserOnlyPhrase = "names a user";
+
     private static string Phrase(CredentialKind kind) => kind switch
     {
-        CredentialKind.Literal => "looks like a credential",
-        CredentialKind.Reference => "refers to a credential",
-        _ => "names a user",
+        CredentialKind.Literal => CredentialLiteralPhrase,
+        CredentialKind.Reference => CredentialReferencePhrase,
+        _ => CredentialUserOnlyPhrase,
     };
 
     /// <summary>
