@@ -192,7 +192,9 @@ public class UpdateCoordinatorTests
         Assert.Null(coordinator.NotifiedVersion);
         Assert.Empty(notifier.Sent);
 
-        ui.Pump();
+        // One action, the staging block: a drain could also run the clear it releases, which the
+        // pool may post while it runs, and the wait below would then find nothing to wait for.
+        Assert.Equal(1, ui.PumpOne());
         Assert.Equal("1.3.0", coordinator.StagedVersion);
         Assert.Equal("1.3.0", coordinator.NotifiedVersion);
         Assert.Single(notifier.Sent);
@@ -219,7 +221,7 @@ public class UpdateCoordinatorTests
         var first = coordinator.CheckAsync(interactive: false);
         Assert.Same(first, coordinator.CheckAsync(interactive: false));   // joined while in flight
         Assert.Equal(1, updater.Checks);
-        ui.Pump();   // the staging block, posted before CheckAsync returned (the fakes are synchronous)
+        Assert.Equal(1, ui.PumpOne());   // the staging block alone, posted before CheckAsync returned (the fakes are synchronous)
         await ui.WhenPostedAsync().WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken);   // the clear, from the pool
         Assert.False(first.IsCompleted);
         ui.Pump();

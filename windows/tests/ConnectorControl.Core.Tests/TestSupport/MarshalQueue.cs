@@ -47,6 +47,21 @@ public sealed class MarshalQueue
         return ran;
     }
 
+    /// <summary>
+    /// Runs the oldest queued action, if there is one; returns how many ran (0 or 1). For a test that
+    /// must run one post and leave the next for <see cref="WhenPostedAsync"/>: a post a pool thread
+    /// queues while that one runs would be run by <see cref="Pump"/> too.
+    /// </summary>
+    public int PumpOne()
+    {
+        if (!queue.TryDequeue(out var action))
+        {
+            return 0;
+        }
+        action();
+        return 1;
+    }
+
     /// <summary>Pumps until the condition holds or the timeout passes.</summary>
     public bool PumpUntil(Func<bool> condition, TimeSpan timeout) =>
         Wait.Until(() => { Pump(); return condition(); }, timeout);
