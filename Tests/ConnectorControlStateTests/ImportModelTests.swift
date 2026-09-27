@@ -116,6 +116,68 @@ final class ImportModelTests: XCTestCase {
         XCTAssertEqual(again.rows.map(\.present), [false, true, false, false])
     }
 
+    /// A document that cannot be read by the time Import is pressed makes nothing: the new
+    /// collection is not left behind empty, and a second Import says why again rather than that
+    /// the collection exists.
+    func testANewCollectionIsNotMadeWhenTheDocumentCannotBeReadAtImport() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "shared/data-team.json")
+        let model = ImportModel(state: state, path: url.path)
+        h.dialogs.nextPromptAnswer = "Fresh"
+        model.target = .newCollection
+        XCTAssertEqual(model.target, .newCollection)
+
+        try FileManager.default.removeItem(at: url)
+        let unreadable = try XCTUnwrap(AppState.readDocument(at: url.standardizedFileURL).failure)
+        XCTAssertEqual(model.perform(), unreadable)
+        XCTAssertEqual(model.failure, unreadable)
+        XCTAssertNil(state.store.collections["Fresh"], "nothing is made for copies that cannot land")
+        XCTAssertEqual(model.perform(), unreadable, "a retry says why again, not that Fresh exists")
+        XCTAssertNil(state.store.collections["Fresh"])
+    }
+
+    /// A New Collection name that trims to nothing is refused as Copy to ▸ New Collection refuses
+    /// it: the sheet says so, the picker goes back to the target it had, and nothing is made.
+    func testAnEmptyNewCollectionNameIsRefused() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "shared/data-team.json")
+        let model = ImportModel(state: state, path: url.path)
+        let collections = state.collectionNames
+
+        h.dialogs.nextPromptAnswer = "   "
+        model.target = .newCollection
+        XCTAssertEqual(h.dialogs.prompts.last, FakeDialogs.PromptCall(title: AppState.newCollectionTitle, initial: ""))
+        XCTAssertEqual(model.failure, AppState.nameEmptyError)
+        XCTAssertEqual(model.target, .collection("Default"), "the picker goes back to the target it had")
+        XCTAssertEqual(model.targetName, "Default")
+        XCTAssertEqual(state.collectionNames, collections)
+
+        // A name the prompt accepts answers the refusal.
+        h.dialogs.nextPromptAnswer = "Fresh"
+        model.target = .newCollection
+        XCTAssertNil(model.failure)
+        XCTAssertEqual(model.targetName, "Fresh")
+    }
+
+    /// The failure line is the model's: an Import that did not land leaves its reason there, and
+    /// only a change of mode takes it away, since the other mode is another question.
+    func testAChangeOfModeClearsTheLastFailure() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "shared/data-team.json")
+        let model = ImportModel(state: state, path: url.path)
+        model.mode = .keepInSync
+        model.syncName = state.activeCollection
+        let refusal = try XCTUnwrap(model.perform())
+        XCTAssertEqual(model.failure, refusal)
+        model.mode = .keepInSync
+        XCTAssertEqual(model.failure, refusal, "choosing the mode already chosen leaves the line alone")
+        model.mode = .addToCollection
+        XCTAssertNil(model.failure)
+    }
+
     /// The platform-forced half of a mirrored pair: the Mac never writes the `cmd /c` launcher,
     /// so a header name cmd.exe would re-parse excludes nothing here, where the Windows mirror
     /// asserts the row is excluded, uncountable and skipped.

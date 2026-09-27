@@ -8,10 +8,6 @@ struct ImportSheetView: View {
     @ObservedObject var model: ImportModel
     let onDone: () -> Void
 
-    /// What perform() answered. The model hands the message back rather than publishing a state
-    /// for it, so the sheet holds it for as long as it is on screen.
-    @State private var failure: String?
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(ImportModel.title).font(.headline)
@@ -26,7 +22,7 @@ struct ImportSheetView: View {
                 syncCard
             }
 
-            if let failure { FailureLine(failure) }
+            if let failure = model.failure { FailureLine(failure) }
 
             Divider()
             footer
@@ -35,10 +31,6 @@ struct ImportSheetView: View {
         // Wide enough for a row's badge and its Replace picker beside the name, and growable from
         // there, so a long skipped-reason can be read in full. Same width as the Windows dialog.
         .frame(minWidth: 620, idealWidth: 620, maxWidth: .infinity)
-        // Another mode is another question: what the last Import said no longer answers it. On a
-        // change of mode only, as the Windows dialog clears it, so choosing the card already
-        // chosen leaves the line alone.
-        .onChange(of: model.mode) { _, _ in failure = nil }
     }
 
     // MARK: source
@@ -203,9 +195,9 @@ struct ImportSheetView: View {
         }
     }
 
+    /// The model keeps what went wrong on its failure line, which the sheet shows while it stays.
     private func perform() {
-        failure = model.perform()
-        if failure == nil { onDone() }
+        if model.perform() == nil { onDone() }
     }
 }
 

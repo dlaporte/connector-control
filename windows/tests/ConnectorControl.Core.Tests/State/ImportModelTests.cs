@@ -139,6 +139,85 @@ public class ImportModelTests
     }
 
     /// <summary>
+    /// A document that cannot be read by the time Import is pressed makes nothing: the new
+    /// collection is not left behind empty, and a second Import says why again rather than that
+    /// the collection exists.
+    /// </summary>
+    [Fact]
+    public void ANewCollectionIsNotMadeWhenTheDocumentCannotBeReadAtImport()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, Path.Combine("shared", "data-team.json"));
+        var model = new ImportModel(state, path);
+        h.Dialogs.NextPromptAnswer = "Fresh";
+        model.ImportTarget = ImportModel.Target.NewCollection;
+        Assert.Equal(ImportModel.Target.NewCollection, model.ImportTarget);
+
+        File.Delete(path);
+        var unreadable = AppState.ReadDocument(Path.GetFullPath(path)).Failure;
+        Assert.NotNull(unreadable);
+        Assert.Equal(unreadable, model.Perform());
+        Assert.Equal(unreadable, model.Failure);
+        // Nothing is made for copies that cannot land.
+        Assert.False(state.Store.Collections.ContainsKey("Fresh"));
+        // A retry says why again, not that Fresh exists.
+        Assert.Equal(unreadable, model.Perform());
+        Assert.False(state.Store.Collections.ContainsKey("Fresh"));
+    }
+
+    /// <summary>
+    /// A New Collection name that trims to nothing is refused as Copy to ▸ New Collection refuses
+    /// it: the sheet says so, the picker goes back to the target it had, and nothing is made.
+    /// </summary>
+    [Fact]
+    public void AnEmptyNewCollectionNameIsRefused()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, Path.Combine("shared", "data-team.json"));
+        var model = new ImportModel(state, path);
+        var collections = state.CollectionNames.ToList();
+
+        h.Dialogs.NextPromptAnswer = "   ";
+        model.ImportTarget = ImportModel.Target.NewCollection;
+        Assert.Equal(new FakeDialogs.PromptCall(AppState.NewCollectionTitle, ""), h.Dialogs.Prompts[^1]);
+        Assert.Equal(AppState.NameEmptyError, model.Failure);
+        // The picker goes back to the target it had.
+        Assert.Equal(new ImportModel.Target("Default"), model.ImportTarget);
+        Assert.Equal("Default", model.TargetName);
+        Assert.Equal(collections, state.CollectionNames);
+
+        // A name the prompt accepts answers the refusal.
+        h.Dialogs.NextPromptAnswer = "Fresh";
+        model.ImportTarget = ImportModel.Target.NewCollection;
+        Assert.Null(model.Failure);
+        Assert.Equal("Fresh", model.TargetName);
+    }
+
+    /// <summary>
+    /// The failure line is the model's: an Import that did not land leaves its reason there, and
+    /// only a change of mode takes it away, since the other mode is another question.
+    /// </summary>
+    [Fact]
+    public void AChangeOfModeClearsTheLastFailure()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, Path.Combine("shared", "data-team.json"));
+        var model = new ImportModel(state, path) { ImportMode = ImportModel.Mode.KeepInSync };
+        model.SyncName = state.ActiveCollection;
+        var refusal = model.Perform();
+        Assert.NotNull(refusal);
+        Assert.Equal(refusal, model.Failure);
+        // Choosing the mode already chosen leaves the line alone.
+        model.ImportMode = ImportModel.Mode.KeepInSync;
+        Assert.Equal(refusal, model.Failure);
+        model.ImportMode = ImportModel.Mode.AddToCollection;
+        Assert.Null(model.Failure);
+    }
+
+    /// <summary>
     /// Two remote connectors, one with a header name carrying the &amp; the Windows cmd /c
     /// launcher cannot hand to cmd.exe.
     /// </summary>

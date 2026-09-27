@@ -22,10 +22,11 @@ public partial class ImportDialog : DialogWindow
         Title = ImportModel.Title;
         onModelChanged = (_, e) =>
         {
-            // Another mode is another question: what the last Import said no longer answers it.
-            if (ObservableObject.Affects(e, nameof(ImportModel.ImportMode)))
+            // The model keeps the failure line: an Import that did not land, a New Collection name
+            // it refused, and the clearing a change of mode does.
+            if (ObservableObject.Affects(e, nameof(ImportModel.Failure)))
             {
-                ShowFailure(FailureText, null);
+                ShowFailure(FailureText, Model.Failure);
             }
             Refresh();
         };
@@ -60,11 +61,9 @@ public partial class ImportDialog : DialogWindow
 
     private void OnImport(object sender, RoutedEventArgs e)
     {
-        // The model answers with the reason it could not land, or null. A failure stays on the
-        // sheet the user is looking at.
-        var failure = Model.Perform();
-        ShowFailure(FailureText, failure);
-        if (failure is null)
+        // The model answers with the reason it could not land, or null, and keeps that reason on
+        // its failure line, so a failure stays on the sheet the user is looking at.
+        if (Model.Perform() is null)
         {
             Accepted = true;
             Close();

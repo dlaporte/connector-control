@@ -178,6 +178,7 @@ public sealed class ImportModel : ObservableObject
     private string? newCollectionName;
     private string syncName;
     private IReadOnlyList<Row> rows = [];
+    private string? failure;
 
     /// <summary>
     /// <paramref name="selected"/> is the collection the Collections window is showing, which is the
@@ -237,7 +238,8 @@ public sealed class ImportModel : ObservableObject
     /// <summary>
     /// The Mac calls this <c>mode</c>; here the nested enum already owns that name. The count and
     /// the gate are the mode's, so they are raised with it; the Mac's are recomputed off the
-    /// republished model.
+    /// republished model. Another mode is another question: what the last Import said no longer
+    /// answers it, so a change of mode clears <see cref="Failure"/>.
     /// </summary>
     public Mode ImportMode
     {
@@ -246,10 +248,18 @@ public sealed class ImportModel : ObservableObject
         {
             if (Set(ref mode, value))
             {
+                Failure = null;
                 RaiseFooter();
             }
         }
     }
+
+    /// <summary>
+    /// The sheet's failure line: why the last Import did not land, or why a New Collection name
+    /// was refused. Raised rather than only handed back, because the refusal comes from the target
+    /// picker's binding, which has no caller to hand a message to.
+    /// </summary>
+    public string? Failure { get => failure; private set => Set(ref failure, value); }
 
     /// <summary>
     /// Which collection the copies land in. Changing it rebuilds the rows: a different target
@@ -320,7 +330,17 @@ public sealed class ImportModel : ObservableObject
                 RaiseTarget();
                 return;
             }
-            NewCollectionName = MasterStore.CollectionName(typed);
+            var named = MasterStore.CollectionName(typed);
+            // Refused as Copy to ▸ New Collection refuses it, and the picker goes back to the
+            // target it had: a collection with no name is not one the copies can land in.
+            if (named.Length == 0)
+            {
+                Failure = AppState.NameEmptyError;
+                RaiseTarget();
+                return;
+            }
+            Failure = null;
+            NewCollectionName = named;
             RebuildRows();
             RaiseFooter();
         }
@@ -418,10 +438,17 @@ public sealed class ImportModel : ObservableObject
 
     /// <summary>
     /// Lands what the sheet says: copies into the target, or a collection of its own bound to the
-    /// file. null on success, else the message to show. A new collection is made here, empty, local
-    /// and not active (<see cref="AppState.AddEmptyCollection"/>), and the copies go into it.
+    /// file. null on success, else the message to show, which <see cref="Failure"/> holds too. A new
+    /// collection is made here, empty, local and not active (<see cref="AppState.AddEmptyCollection"/>),
+    /// and the copies go into it.
     /// </summary>
     public string? Perform()
+    {
+        Failure = Land();
+        return Failure;
+    }
+
+    private string? Land()
     {
         if (LoadError is not null)
         {
@@ -438,6 +465,14 @@ public sealed class ImportModel : ObservableObject
         }
         if (newCollectionName is { } name)
         {
+            // The document is read again before anything is made. A file moved, deleted or
+            // rewritten while the sheet was open would otherwise leave an empty collection behind,
+            // and a second Import would be refused because that collection exists.
+            var (document, _, unreadable) = AppState.ReadDocument(System.IO.Path.GetFullPath(Path));
+            if (document is null)
+            {
+                return unreadable;
+            }
             if (state.AddEmptyCollection(name) is { } error)
             {
                 return error;

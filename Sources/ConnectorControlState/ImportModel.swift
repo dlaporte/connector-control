@@ -145,8 +145,15 @@ public final class ImportModel: ObservableObject {
     public private(set) var loadError: String?
 
     /// The Windows mirror calls this `ImportMode`: there the nested `Mode` enum already owns the
-    /// name, the same collision `PublishModel.SheetTitle` has.
-    @Published public var mode: Mode = .addToCollection
+    /// name, the same collision `PublishModel.SheetTitle` has. Another mode is another question:
+    /// what the last Import said no longer answers it, so a change of mode clears `failure`.
+    @Published public var mode: Mode = .addToCollection {
+        didSet { if mode != oldValue { failure = nil } }
+    }
+    /// The sheet's failure line: why the last Import did not land, or why a New Collection name
+    /// was refused. Published rather than only handed back, because the refusal comes from the
+    /// target picker's binding, which has no caller to hand a message to.
+    @Published public private(set) var failure: String?
     /// Which collection the copies land in. Changing it rebuilds the rows: a different target
     /// collides with different connectors, so the badges and the ticks have to follow it.
     @Published public var targetCollection: String {
@@ -223,7 +230,16 @@ public final class ImportModel: ObservableObject {
                     objectWillChange.send()
                     return
                 }
-                newCollectionName = MasterStore.collectionName(typed)
+                let name = MasterStore.collectionName(typed)
+                // Refused as Copy to ▸ New Collection refuses it, and the picker goes back to the
+                // target it had: a collection with no name is not one the copies can land in.
+                guard !name.isEmpty else {
+                    failure = AppState.nameEmptyError
+                    objectWillChange.send()
+                    return
+                }
+                failure = nil
+                newCollectionName = name
                 rebuildRows()
             }
         }
@@ -259,9 +275,16 @@ public final class ImportModel: ObservableObject {
     }
 
     /// Lands what the sheet says: copies into the target, or a collection of its own bound to
-    /// the file. nil on success, else the message to show. A new collection is made here, empty,
-    /// local and not active (`AppState.addEmptyCollection`), and the copies go into it.
+    /// the file. nil on success, else the message to show, which `failure` holds too. A new
+    /// collection is made here, empty, local and not active (`AppState.addEmptyCollection`), and
+    /// the copies go into it.
+    @discardableResult
     public func perform() -> String? {
+        failure = land()
+        return failure
+    }
+
+    private func land() -> String? {
         if let loadError { return loadError }
         switch mode {
         case .addToCollection:
@@ -270,6 +293,12 @@ public final class ImportModel: ObservableObject {
                 choices[row.name] = row.include && row.excludedReason == nil ? row.choice : .skip
             }
             if let name = newCollectionName {
+                // The document is read again before anything is made. A file moved, deleted or
+                // rewritten while the sheet was open would otherwise leave an empty collection
+                // behind, and a second Import would be refused because that collection exists.
+                let url = URL(fileURLWithPath: path).standardizedFileURL
+                let (document, _, unreadable) = AppState.readDocument(at: url)
+                if document == nil { return unreadable }
                 if let error = state.addEmptyCollection(named: name) { return error }
                 return state.importCopies(documentAt: path, into: name, choices: choices)
             }

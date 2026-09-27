@@ -201,7 +201,10 @@ bullet once the section is about to ship.
 - Import's "Add to a collection" starts on the collection selected in the Collections
   window when that one is local, rather than always on the active collection, and its
   target picker ends with New Collection, which asks for a name and imports the copies
-  into a new, empty local collection that does not become active.
+  into a new, empty local collection that does not become active. An empty name is refused,
+  as Copy to ▸ New Collection refuses it, and the collection is made only when the import
+  lands: a document that can no longer be read by then makes nothing, and the sheet says
+  why.
 - In a subscribed collection, a local server authored on the other platform is marked on
   its row; remote connectors cross either way.
 - A folder the app watches — Claude's config folder, the master list's, or a subscribed

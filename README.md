@@ -348,8 +348,12 @@ The Import sheet's other mode, **Add to a collection**, copies the
 document's connectors into a local collection of your choosing and keeps no
 link to the file afterwards. It starts on the collection selected in the
 Collections window when that one is local, and otherwise on the active
-collection. The last choice, **New Collection**, asks for a name; the copies
-then go into a new, empty local collection, which does not become active.
+collection. The last choice, **New Collection**, asks for a name; an empty
+one is refused with "Name must not be empty." and the picker goes back to
+the collection it was on. The copies then go into a new, empty local
+collection, which does not become active. It is made only when Import can
+land: a document that can no longer be read by then makes nothing, and the
+sheet says why.
 Each connector is listed as "new · arrives
 off", "already present · skipped", or "skipped: <reason>". Where the name is
 already taken you choose **Replace**, which "keeps your filled values",

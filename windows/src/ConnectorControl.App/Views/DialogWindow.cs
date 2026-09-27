@@ -22,8 +22,9 @@ public abstract class DialogWindow : Window
 
     /// <summary>
     /// The red line a dialog's verb answers on: the reason it could not act, shown, or null, which
-    /// clears whatever an earlier answer left there. The models hand the message back rather than
-    /// publishing a property for it, so neither does the line's visibility.
+    /// clears whatever an earlier answer left there. Most models hand the message back rather than
+    /// publishing a property for it, and ImportModel raises the one it keeps; either way the line's
+    /// visibility follows its text rather than a property of its own.
     /// </summary>
     protected static void ShowFailure(TextBlock line, string? failure)
     {
