@@ -13,7 +13,7 @@ public class UpdateCoordinatorTests
     private readonly DelayQueue delays = new();
 
     private UpdateCoordinator Coordinator() =>
-        new(updater, settings, notifier, dialogs, new AppHost(a => a(), delays.Add, () => DateTime.UtcNow));
+        new(updater, settings, notifier, dialogs, new AppHost(a => a(), delays.Add, () => DateTime.UtcNow, a => a()));
 
     private static UpdateCheck Update(string version = "1.3.0") => new(version, "## Fixes\n- one", new object());
 
@@ -179,7 +179,7 @@ public class UpdateCoordinatorTests
     {
         settings.AutoUpdate = true;
         var ui = new MarshalQueue();
-        var host = new AppHost(ui.Post, delays.Add, () => DateTime.UtcNow);
+        var host = new AppHost(ui.Post, delays.Add, () => DateTime.UtcNow, a => a());
         updater.Next = Update();
         using var coordinator = new UpdateCoordinator(updater, settings, notifier, dialogs, host);
 
@@ -208,7 +208,7 @@ public class UpdateCoordinatorTests
         settings.AutoUpdate = true;
         var ui = new MarshalQueue();
         var posted = 0;
-        var host = new AppHost(a => { Interlocked.Increment(ref posted); ui.Post(a); }, delays.Add, () => DateTime.UtcNow);
+        var host = new AppHost(a => { Interlocked.Increment(ref posted); ui.Post(a); }, delays.Add, () => DateTime.UtcNow, a => a());
         updater.Next = Update();
         using var coordinator = new UpdateCoordinator(updater, settings, notifier, dialogs, host);
 
@@ -240,7 +240,7 @@ public class UpdateCoordinatorTests
         // The dispatcher is gone (shutdown): Marshal throws. The outcome already computed must
         // still reach the caller and the in-flight slot must be freed, or every later
         // CheckAsync would return the same finished task for the rest of the process.
-        var host = new AppHost(_ => throw new InvalidOperationException("dispatcher shut down"), delays.Add, () => DateTime.UtcNow);
+        var host = new AppHost(_ => throw new InvalidOperationException("dispatcher shut down"), delays.Add, () => DateTime.UtcNow, a => a());
         using var coordinator = new UpdateCoordinator(updater, settings, notifier, dialogs, host);
 
         Assert.Equal(UpdateOutcome.UpToDate, await coordinator.CheckAsync(interactive: false));   // no update: nothing else to marshal

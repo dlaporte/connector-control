@@ -224,7 +224,8 @@ public class FlyoutModelTests
         Assert.All(flyout.Rows, r => Assert.Null(r.ToolWarning));
 
         state.RefreshToolsAsync([Tool.Npx]);
-        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.ContainsKey(Tool.Npx), TimeSpan.FromSeconds(5)));
+        Assert.All(flyout.Rows, r => Assert.False(r.HasToolWarning));   // probed off the UI thread: nothing yet
+        h.Drain();
         // All three seeded connectors run `npx -y mcp-remote`.
         Assert.All(flyout.Rows, r => Assert.True(r.HasToolWarning));
         Assert.All(flyout.Rows, r => Assert.Equal("Needs npx, which wasn’t found. Edit to see how to install it.", r.ToolWarning));
@@ -240,7 +241,8 @@ public class FlyoutModelTests
         // Installing npx: the next probe publishes Found and every glyph clears.
         h.Tools.Statuses[Tool.Npx] = new ToolStatus(@"C:\Program Files\nodejs\npx.cmd", "10.9.2");
         state.RefreshToolsAsync([Tool.Npx]);
-        Assert.True(h.Ui.PumpUntil(() => flyout.Rows.All(r => !r.HasToolWarning), TimeSpan.FromSeconds(5)));
+        h.Drain();
+        Assert.All(flyout.Rows, r => Assert.False(r.HasToolWarning));
         Assert.All(flyout.Rows, r => Assert.True(r.Enabled));   // the glyph never touched the switch
     }
 
@@ -253,12 +255,16 @@ public class FlyoutModelTests
         Assert.Equal(0, h.Tools.Batches);   // building the model probes nothing
 
         flyout.Opened();
-        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.ContainsKey(Tool.Npx), TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, h.Background.Pending);
+        h.Drain();
+        Assert.True(state.ToolStatuses.ContainsKey(Tool.Npx));
         // Three npx connectors: one tool, one batch — not one probe per row.
         Assert.Equal([Tool.Npx], h.Tools.Probed.ToArray());
         Assert.Equal(1, h.Tools.Batches);
 
         flyout.Opened();   // everything the rows need is cached now
+        Assert.Equal(0, h.Background.Pending);
+        h.Drain();
         Assert.Equal(1, h.Tools.Batches);
         Assert.Equal([Tool.Npx], h.Tools.Probed.ToArray());
     }
@@ -270,13 +276,15 @@ public class FlyoutModelTests
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
         flyout.Opened();   // an empty catalog
-        Assert.Equal(0, h.Tools.Batches);
+        Assert.Equal(0, h.Background.Pending);
 
         Assert.Null(state.Upsert("pathed", new McpEntry(JsonValue.Object(
             ("command", JsonValue.String(@"C:\tools\node.exe")))), null));
         Assert.Null(state.Upsert("stranger", new McpEntry(JsonValue.Object(
             ("command", JsonValue.String("python")))), null));
         flyout.Opened();   // a full path and an unknown launcher both need no PATH lookup
+        Assert.Equal(0, h.Background.Pending);
+        h.Drain();
         Assert.Equal(0, h.Tools.Batches);
         Assert.Empty(h.Tools.Probed);
         Assert.All(flyout.Rows, r => Assert.False(r.HasToolWarning));

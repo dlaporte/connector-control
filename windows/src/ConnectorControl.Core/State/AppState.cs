@@ -332,29 +332,54 @@ public sealed class AppState : ObservableObject, IDisposable
     public IReadOnlyDictionary<Tool, ToolStatus> ToolStatuses => toolStatuses;
 
     /// <summary>
-    /// Probes <paramref name="tools"/> (all four when null) off the UI thread and posts the
-    /// results to the host for publication; a tool already in flight is not probed twice. The
-    /// returned task completes once the probe batch has been posted, not once the results are
-    /// applied — when every requested tool is already in flight, it returns already completed.
+    /// Probes <paramref name="tools"/> (all four when null) off the UI thread, through the host's
+    /// <c>Background</c>, and posts the results to the host for publication; a tool already in
+    /// flight is not probed twice. The returned task completes once the probe batch has been
+    /// posted, not once the results are applied — when every requested tool is already in flight,
+    /// it returns already completed. Every production caller discards it; tests read it.
     /// </summary>
     public Task RefreshToolsAsync(IReadOnlyList<Tool>? tools = null)
     {
         var wanted = (tools ?? ToolInfo.All).Where(toolsInFlight.Add).ToArray();
-        return wanted.Length == 0 ? Task.CompletedTask : ProbeToolsAsync(wanted);
+        return wanted.Length == 0 ? Task.CompletedTask : ProbeTools(wanted);
     }
 
-    private async Task ProbeToolsAsync(Tool[] wanted)
+    /// <summary>The probe and the post both run in the one Background work item, so the batch
+    /// makes a single hop off the UI thread; the task completes on that thread, as an async
+    /// method's would, once the post is made (or faults if posting threw).</summary>
+    private Task ProbeTools(Tool[] wanted)
     {
-        IReadOnlyDictionary<Tool, ToolStatus> results;
+        var posted = new TaskCompletionSource();
+        host.Background(() =>
+        {
+            try
+            {
+                PostToolStatuses(wanted, Probe(wanted));
+                posted.SetResult();
+            }
+            catch (Exception ex)
+            {
+                posted.SetException(ex);
+            }
+        });
+        return posted.Task;
+    }
+
+    private IReadOnlyDictionary<Tool, ToolStatus> Probe(Tool[] wanted)
+    {
         try
         {
-            results = await Task.Run(() => toolProbe.Probe(wanted)).ConfigureAwait(false);
+            return toolProbe.Probe(wanted);
         }
         catch (Exception)
         {
             // IToolProbe promises never to throw; if one does anyway, "Not found" beats a dead tray app.
-            results = wanted.ToDictionary(t => t, _ => ToolStatus.NotFound);
+            return wanted.ToDictionary(t => t, _ => ToolStatus.NotFound);
         }
+    }
+
+    private void PostToolStatuses(Tool[] wanted, IReadOnlyDictionary<Tool, ToolStatus> results)
+    {
         // Everything below touches state the UI thread owns, so it is posted like every other
         // marshalled state callback (fire-and-post) rather than awaited: an exception raised inside
         // (e.g. by a throwing PropertyChanged handler) must surface as an unhandled dispatcher

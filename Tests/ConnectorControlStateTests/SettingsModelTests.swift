@@ -200,7 +200,8 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertTrue(rig.model.toolRows.allSatisfy { !$0.isProblem })
         XCTAssertTrue(rig.model.toolRows.allSatisfy { $0.note == nil })
         rig.model.refreshTools()
-        XCTAssertTrue(rig.h.ui.pumpUntil({ rig.state.toolStatuses.count == 4 }, timeout: 5))
+        XCTAssertTrue(rig.model.toolRows.allSatisfy { $0.statusText == "Checking…" })   // probed off the main thread: nothing yet
+        rig.h.drain()
         let rows = rig.model.toolRows
         XCTAssertEqual(rows.map(\.statusText), ["10.9.2", "Found", "Not found", "Not found"])
         XCTAssertEqual(rows.map(\.isProblem), [false, false, true, true])
@@ -217,7 +218,8 @@ final class SettingsModelTests: XCTestCase {
         let subscription = rig.model.objectWillChange.sink { _ in raised += 1 }
         defer { subscription.cancel() }
         rig.model.refreshTools()
-        XCTAssertTrue(rig.h.ui.pumpUntil({ rig.state.toolStatuses.count == 4 }, timeout: 5))
+        rig.h.drain()
+        XCTAssertEqual(rig.state.toolStatuses.count, 4)
         XCTAssertGreaterThan(raised, 0)
         XCTAssertEqual(rig.h.tools.batches, 1)
     }
@@ -227,7 +229,8 @@ final class SettingsModelTests: XCTestCase {
         defer { rig.dispose() }
         rig.h.tools.statuses[.npx] = .notFound
         rig.model.refreshTools()
-        XCTAssertTrue(rig.h.ui.pumpUntil({ rig.state.toolStatuses.count == 4 }, timeout: 5))
+        rig.h.drain()
+        XCTAssertEqual(rig.state.toolStatuses.count, 4)
 
         rig.model.dispose()
         var raised = 0
@@ -237,7 +240,8 @@ final class SettingsModelTests: XCTestCase {
         // Publish a change that would flip npx's row on a live (not disposed) model.
         rig.h.tools.statuses[.npx] = .found(path: "/opt/homebrew/bin/npx", version: "1.0.0")
         rig.state.refreshTools([.npx])
-        XCTAssertTrue(rig.h.ui.pumpUntil({ rig.state.toolStatuses[.npx] == .found(path: "/opt/homebrew/bin/npx", version: "1.0.0") }, timeout: 5))
+        rig.h.drain()
+        XCTAssertEqual(rig.state.toolStatuses[.npx], .found(path: "/opt/homebrew/bin/npx", version: "1.0.0"))
         XCTAssertEqual(raised, 0)   // the view was never told to re-read: dispose stopped the relay
     }
 

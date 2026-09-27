@@ -7,7 +7,7 @@ namespace ConnectorControl.App;
 /// <summary>The WPF dispatcher as an <see cref="AppHost"/>.</summary>
 public static class UiThread
 {
-    public static AppHost Host() => new(Marshal, Delay, () => DateTime.UtcNow);
+    public static AppHost Host() => new(Marshal, Delay, () => DateTime.UtcNow, Background);
 
     /// <summary>
     /// POSTS to the UI thread; never blocks. FileWatcher marshals from a timer thread and
@@ -27,6 +27,13 @@ public static class UiThread
             dispatcher.BeginInvoke(action);
         }
     }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> on the thread pool, off the UI thread. A Task.Run work item,
+    /// so a throw is captured in a task nobody reads rather than taking the process down; the
+    /// work AppState hands it catches its own failures anyway.
+    /// </summary>
+    public static void Background(Action work) => Task.Run(work);
 
     public static void Delay(TimeSpan delay, Action action)
     {

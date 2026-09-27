@@ -109,7 +109,8 @@ public class SettingsWindowTests
         WpfApp.Invoke(() =>
         {
             var window = new SettingsWindow(state, services, updates);   // opening the window starts the probe
-            Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 4, TimeSpan.FromSeconds(5)));
+            h.Drain();
+            Assert.Equal(4, state.ToolStatuses.Count);
             window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
             window.Measure(new Size(480, 500));
             window.Arrange(new Rect(0, 0, 480, 500));

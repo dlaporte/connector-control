@@ -564,7 +564,8 @@ public class FlyoutWindowTests
             ("command", JsonValue.String("node")),
             ("args", JsonValue.Array([JsonValue.String("server.js")])))), null);
         state.RefreshToolsAsync([Tool.Npx, Tool.Node]);
-        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 2, TimeSpan.FromSeconds(5)));
+        h.Drain();
+        Assert.Equal(2, state.ToolStatuses.Count);
         var services = h.Services();
         using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
         WpfApp.Invoke(() =>

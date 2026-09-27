@@ -321,8 +321,14 @@ final class AppStateTests: XCTestCase {
         let subscription = state.objectWillChange.sink { _ in raised += 1 }
         defer { subscription.cancel() }
         state.refreshTools()
+        // Handed to the host's background, not run on the calling (main) thread.
+        XCTAssertEqual(h.tools.batches, 0)
+        XCTAssertEqual(h.background.pending, 1)
         // The results are posted to the host; nothing is published until the queue is pumped.
-        XCTAssertTrue(h.ui.pumpUntil({ state.toolStatuses.count == 4 }, timeout: 5))
+        XCTAssertEqual(h.background.runAll(), 1)
+        XCTAssertTrue(state.toolStatuses.isEmpty)
+        h.ui.pump()
+        XCTAssertEqual(state.toolStatuses.count, 4)
         XCTAssertEqual(state.toolStatuses[.uvx], .notFound)
         XCTAssertEqual(state.toolStatuses[.npx], .found(path: "/fake/bin/npx", version: "1.0.0"))
         XCTAssertGreaterThan(raised, 0)
@@ -335,15 +341,18 @@ final class AppStateTests: XCTestCase {
         defer { h.dispose() }
         state.refreshTools([.npx])
         state.refreshTools([.npx, .node])   // npx joins the flight already in the air; node starts one
-        XCTAssertTrue(h.ui.pumpUntil({ state.toolStatuses.count == 2 }, timeout: 5))
+        XCTAssertEqual(h.background.pending, 2, "both asked while the first batch had not run")
+        h.drain()
+        XCTAssertEqual(state.toolStatuses.count, 2)
         XCTAssertEqual(Set(h.tools.probed), [.npx, .node])
         XCTAssertEqual(h.tools.probed.count, 2)
         XCTAssertEqual(h.tools.batches, 2)
         state.refreshTools([])   // nothing wanted: no batch
-        XCTAssertEqual(h.tools.batches, 2)
+        XCTAssertEqual(h.background.pending, 0)
         // Once published, the same tool can be probed again (the editor asks when the command changes).
         state.refreshTools([.npx])
-        XCTAssertTrue(h.ui.pumpUntil({ h.tools.probed.count == 3 }, timeout: 5))
+        h.drain()
+        XCTAssertEqual(h.tools.probed.count, 3)
     }
 
     /// The pieces StringCatalogTests can't cover: the internal notification

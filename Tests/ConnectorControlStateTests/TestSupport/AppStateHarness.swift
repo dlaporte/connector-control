@@ -8,6 +8,7 @@ import ConnectorControlTestSupport
 /// path rule, real ConfigService and FileWatchers, and fakes for the platform
 /// seams only. Marshal is a queue: watcher callbacks and probe results reach
 /// state only when a test pumps, mirroring the main actor in the app.
+/// Background is a queue too: a tool probe runs only when a test drains it.
 @MainActor
 final class AppStateHarness {
     struct HarnessError: Error {}
@@ -27,6 +28,7 @@ final class AppStateHarness {
     let tools = FakeToolProbe()
     let delays = DelayQueue()
     let ui = MarshalQueue()
+    let background = BackgroundQueue()
     /// The clock every lastApplyDate is stamped with; tests move it.
     var now = ISO8601DateFormatter().date(from: "2026-09-04T12:00:00Z")!
     private var created: [AppState] = []
@@ -36,7 +38,17 @@ final class AppStateHarness {
 
     var host: AppHost {
         AppHost(marshal: { [ui] in ui.post($0) }, delay: { [delays] in delays.add($0, $1) },
-                now: { [unowned self] in MainActor.assumeIsolated { self.now } })
+                now: { [unowned self] in MainActor.assumeIsolated { self.now } },
+                background: { [background] in background.add($0) })
+    }
+
+    /// Runs the queued background work and pumps what it posted, until
+    /// neither has anything left: everything a tool probe does, on the test's
+    /// own thread, in order.
+    func drain() {
+        while background.runAll() > 0 || ui.pending > 0 {
+            ui.pump()
+        }
     }
 
     /// `createClaudeDirectory: false` leaves even the Claude folder absent, so the

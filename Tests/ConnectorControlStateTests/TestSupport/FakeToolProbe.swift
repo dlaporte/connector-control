@@ -3,8 +3,9 @@ import ConnectorControlCore
 @testable import ConnectorControlState
 
 /// A machine with everything installed (`/fake/bin/<tool>`, version 1.0.0)
-/// unless a test sets `statuses`. AppState calls `probe` from a global queue,
-/// so every member is behind one lock.
+/// unless a test sets `statuses`. AppState calls `probe` from the host's
+/// background work, which the harness runs on whichever thread drains its
+/// queue, so every member is behind one lock.
 final class FakeToolProbe: ToolProbing, @unchecked Sendable {
     private let lock = NSLock()
     private var storedStatuses: [Tool: ToolStatus] = [:]

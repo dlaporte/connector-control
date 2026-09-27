@@ -6,7 +6,8 @@ namespace ConnectorControl.Core.Tests.TestSupport;
 /// A real on-disk layout (%LOCALAPPDATA% and %APPDATA% under one temp dir),
 /// the real path resolver, real ConfigService/FileWatcher, and fakes for the
 /// platform interfaces only. Marshal is a queue: watcher callbacks reach state
-/// only when a test pumps, mirroring the UI thread.
+/// only when a test pumps, mirroring the UI thread. Background is a queue too:
+/// a tool probe runs only when a test drains it.
 /// </summary>
 public sealed class AppStateHarness : IDisposable
 {
@@ -25,6 +26,7 @@ public sealed class AppStateHarness : IDisposable
     public FakeToolProbe Tools { get; } = new();
     public DelayQueue Delays { get; } = new();
     public MarshalQueue Ui { get; } = new();
+    public BackgroundQueue Background { get; } = new();
     private readonly List<CollectionsModel> models = [];
     public DateTime Now { get; set; } = new(2026, 9, 4, 12, 0, 0, DateTimeKind.Utc);
     public PathContext Context { get; }
@@ -39,7 +41,16 @@ public sealed class AppStateHarness : IDisposable
             File.WriteAllText(ClaudeConfigPath, Fixtures.RealisticClaudeConfig);
         }
         Context = new PathContext(new Dictionary<string, string>(StringComparer.Ordinal), new KnownFolders(Local, Roaming), new RealPathProbe());
-        Host = new AppHost(Ui.Post, Delays.Add, () => Now);
+        Host = new AppHost(Ui.Post, Delays.Add, () => Now, Background.Add);
+    }
+
+    /// <summary>Runs the queued background work and pumps what it posted, until neither has
+    /// anything left: everything a tool probe does, on the test's own thread, in order.</summary>
+    public void Drain()
+    {
+        while (Background.RunAll() + Ui.Pump() > 0)
+        {
+        }
     }
 
     public AppState Create() => new(Settings, Claude, Notifier, Dialogs, Context, Host, Tools);

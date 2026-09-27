@@ -489,14 +489,15 @@ public final class AppState: ObservableObject {
 
     // MARK: - Tools
 
-    /// Probes `tools` off the main thread and publishes the results through
-    /// the host; a tool already in flight is not probed twice.
+    /// Probes `tools` off the main thread, through the host's `background`,
+    /// and publishes the results through the host; a tool already in flight
+    /// is not probed twice.
     public func refreshTools(_ tools: [Tool] = Tool.allCases) {
         let wanted = tools.filter { toolsInFlight.insert($0).inserted }
         guard !wanted.isEmpty else { return }
         let probe = toolProbe
         let host = self.host
-        DispatchQueue.global(qos: .utility).async { [weak self] in
+        host.background { [weak self] in
             let results = probe.probe(wanted)
             host.marshal { self?.publishToolStatuses(results, probed: wanted) }
         }

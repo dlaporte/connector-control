@@ -207,7 +207,8 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == nil })   // nothing probed yet: no glyph
 
         state.refreshTools([.npx])
-        XCTAssertTrue(h.ui.pumpUntil({ state.toolStatuses[.npx] != nil }, timeout: 5))
+        XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == nil })   // probed off the main thread: nothing yet
+        h.drain()
         // All three seeded connectors run `npx -y mcp-remote`.
         XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == "Needs npx, which wasn’t found. Edit to see how to install it." })
 
@@ -220,7 +221,8 @@ final class PopoverModelTests: XCTestCase {
         // Installing npx: the next probe publishes found and every glyph clears.
         h.tools.statuses[.npx] = .found(path: "/opt/homebrew/bin/npx", version: "10.9.2")
         state.refreshTools([.npx])
-        XCTAssertTrue(h.ui.pumpUntil({ popover.rows.allSatisfy { $0.toolWarning == nil } }, timeout: 5))
+        h.drain()
+        XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == nil })
         XCTAssertTrue(popover.rows.allSatisfy(\.enabled))   // the glyph never touched the switch
     }
 
@@ -234,7 +236,7 @@ final class PopoverModelTests: XCTestCase {
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         popover.opened()
-        XCTAssertTrue(h.ui.pumpUntil({ popover.rows.allSatisfy { $0.toolWarning != nil } }, timeout: 5))
+        h.drain()
         XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == "Needs npx, which Claude Desktop may not see. Edit to see how to fix it." })
         XCTAssertTrue(popover.rows.allSatisfy(\.enabled))
     }
@@ -247,12 +249,16 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(h.tools.batches, 0)   // building the model probes nothing
 
         popover.opened()
-        XCTAssertTrue(h.ui.pumpUntil({ state.toolStatuses[.npx] != nil }, timeout: 5))
+        XCTAssertEqual(h.background.pending, 1)
+        h.drain()
+        XCTAssertNotNil(state.toolStatuses[.npx])
         // Three npx connectors: one tool, one batch — not one probe per row.
         XCTAssertEqual(h.tools.probed, [.npx])
         XCTAssertEqual(h.tools.batches, 1)
 
         popover.opened()   // everything the rows need is cached now
+        XCTAssertEqual(h.background.pending, 0)
+        h.drain()
         XCTAssertEqual(h.tools.batches, 1)
         XCTAssertEqual(h.tools.probed, [.npx])
     }
@@ -263,11 +269,13 @@ final class PopoverModelTests: XCTestCase {
         let popover = PopoverModel(state: state)
         defer { popover.dispose() }
         popover.opened()   // an empty catalog
-        XCTAssertEqual(h.tools.batches, 0)
+        XCTAssertEqual(h.background.pending, 0)
 
         XCTAssertNil(state.upsert(name: "pathed", entry: MCPEntry(config: .object(["command": .string("/usr/local/bin/node")])), renamedFrom: nil))
         XCTAssertNil(state.upsert(name: "stranger", entry: MCPEntry(config: .object(["command": .string("python")])), renamedFrom: nil))
         popover.opened()   // a full path and an unknown launcher both need no PATH lookup
+        XCTAssertEqual(h.background.pending, 0)
+        h.drain()
         XCTAssertEqual(h.tools.batches, 0)
         XCTAssertTrue(h.tools.probed.isEmpty)
         XCTAssertTrue(popover.rows.allSatisfy { $0.toolWarning == nil })

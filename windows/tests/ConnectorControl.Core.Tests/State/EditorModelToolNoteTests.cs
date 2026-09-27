@@ -16,19 +16,23 @@ public class EditorModelToolNoteTests
     {
         using var rig = new EditorRig();
         using var editor = rig.Editor(TestTargets.New(rig.Local("node", ["server.js"])));
-        Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses.ContainsKey(Tool.Node), TimeSpan.FromSeconds(5)));
+        rig.H.Drain();
+        Assert.True(rig.State.ToolStatuses.ContainsKey(Tool.Node));
         var batches = rig.H.Tools.Batches;
         editor.RequestView(EditView.Json);
         editor.JsonText = "{\"command\": \"node\", \"args\": [\"other.js\"]}";
         editor.RequestView(EditView.Form);
         Assert.Equal(EditView.Form, editor.View);
         Assert.Equal(Tool.Node, editor.RequiredTool);
+        rig.H.Drain();
         Assert.Equal(batches, rig.H.Tools.Batches);   // same tool after adoption: nothing to probe
         editor.RequestView(EditView.Json);
         editor.JsonText = "{\"command\": \"uvx\", \"args\": [\"tool\"]}";
-        Assert.True(rig.H.Ui.PumpUntil(() => rig.H.Tools.Batches == batches + 1, TimeSpan.FromSeconds(5)));   // the JSON view evaluates as it parses
+        rig.H.Drain();
+        Assert.Equal(batches + 1, rig.H.Tools.Batches);   // the JSON view evaluates as it parses
         editor.RequestView(EditView.Form);
         Assert.Equal(Tool.Uvx, editor.RequiredTool);
+        rig.H.Drain();
         Assert.Equal(batches + 1, rig.H.Tools.Batches);   // adoption of an already-evaluated config probes nothing more
     }
 
@@ -40,7 +44,8 @@ public class EditorModelToolNoteTests
         Assert.Equal(Tool.Npx, editor.RequiredTool);
         Assert.Null(editor.ToolNote);   // not probed yet: no note, and nothing blocks
         Assert.False(editor.HasToolNote);
-        Assert.True(rig.H.Ui.PumpUntil(() => editor.HasToolNote, TimeSpan.FromSeconds(5)));
+        rig.H.Drain();
+        Assert.True(editor.HasToolNote);
         Assert.Equal("npx wasn’t found, so Claude Desktop won’t be able to start this connector.", editor.ToolNote!.Text);
         Assert.Equal("Install Node.js", editor.ToolNote.LinkTitle);
         Assert.Equal("https://nodejs.org/en/download", editor.ToolNote.LinkUrl);
@@ -58,14 +63,16 @@ public class EditorModelToolNoteTests
         using var rig = new EditorRig(h => h.Tools.Statuses[Tool.Uvx] = ToolStatus.NotFound);
         using var editor = rig.Editor(TestTargets.New(rig.Local("node", ["server.js"])));
         Assert.Equal(Tool.Node, editor.RequiredTool);
-        Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses.ContainsKey(Tool.Node), TimeSpan.FromSeconds(5)));
+        rig.H.Drain();
+        Assert.True(rig.State.ToolStatuses.ContainsKey(Tool.Node));
         Assert.False(editor.HasToolNote);   // node is installed on this (fake) machine
         var raised = new List<string?>();
         editor.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
         editor.Command = "uvx";
         Assert.Equal(Tool.Uvx, editor.RequiredTool);
         Assert.Contains(nameof(EditorModel.RequiredTool), raised);
-        Assert.True(rig.H.Ui.PumpUntil(() => editor.HasToolNote, TimeSpan.FromSeconds(5)));
+        rig.H.Drain();
+        Assert.True(editor.HasToolNote);
         Assert.Contains(nameof(EditorModel.HasToolNote), raised);
         Assert.StartsWith("uvx wasn’t found", editor.ToolNote!.Text, StringComparison.Ordinal);
         editor.Command = "/usr/local/bin/uvx";   // a path is the user's deliberate choice: no PATH lookup, no note
@@ -73,10 +80,12 @@ public class EditorModelToolNoteTests
         Assert.False(editor.HasToolNote);
         editor.Command = "python";
         Assert.Null(editor.RequiredTool);
+        rig.H.Drain();
         Assert.Equal(2, rig.H.Tools.Probed.Count);   // node once, uvx once — the non-tools cost nothing
         editor.Command = "uvx";
         // Back to a tool that is cached: probed again anyway — it may have been installed meanwhile.
-        Assert.True(rig.H.Ui.PumpUntil(() => rig.H.Tools.Probed.Count == 3, TimeSpan.FromSeconds(5)));
+        rig.H.Drain();
+        Assert.Equal(3, rig.H.Tools.Probed.Count);
         Assert.True(editor.HasToolNote);
     }
 
@@ -89,7 +98,8 @@ public class EditorModelToolNoteTests
         Assert.Equal(Tool.Node, editor.RequiredTool);   // the same config, now read from the text
         editor.JsonText = "{\"command\": \"uv\", \"args\": [\"run\", \"server.py\"]}";
         Assert.Equal(Tool.Uv, editor.RequiredTool);
-        Assert.True(rig.H.Ui.PumpUntil(() => editor.HasToolNote, TimeSpan.FromSeconds(5)));
+        rig.H.Drain();
+        Assert.True(editor.HasToolNote);
         editor.JsonText = "{ not json";
         Assert.Null(editor.RequiredTool);   // unparseable: nothing to evaluate
         Assert.False(editor.HasToolNote);
@@ -106,20 +116,23 @@ public class EditorModelToolNoteTests
         using var rig = new EditorRig(h => h.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound);
         var warm = rig.State.RefreshToolsAsync();
         // The task completes once the probe batch is posted, not once it is published:
-        // pump until the cache the editor reads from is actually populated.
-        Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses.ContainsKey(Tool.Npx), TimeSpan.FromSeconds(5)));
+        // drain so the cache the editor reads from is actually populated.
+        rig.H.Drain();
+        Assert.True(rig.State.ToolStatuses.ContainsKey(Tool.Npx));
         Assert.True(warm.IsCompleted);
         var batches = rig.H.Tools.Batches;
         using var remote = rig.Editor(TestTargets.Existing("scoutbook", rig.State.Store.Mcps["scoutbook"]));   // bare npx mcp-remote
         Assert.True(remote.HasToolNote);          // straight from the cache, no wait
-        Assert.Equal(batches, rig.H.Tools.Batches);   // and no re-probe on open
+        Assert.Equal(0, rig.H.Background.Pending);   // and no re-probe on open
         using var local = rig.Editor(TestTargets.Existing("local", new McpEntry(rig.Local("node", ["x.js"]))));
         Assert.Equal(Tool.Node, local.RequiredTool);
         Assert.False(local.HasToolNote);
+        Assert.Equal(0, rig.H.Background.Pending);
         Assert.Equal(batches, rig.H.Tools.Batches);
         remote.Dispose();
         rig.State.RefreshToolsAsync([Tool.Npx]);      // a disposed editor no longer listens
-        Assert.True(rig.H.Ui.PumpUntil(() => rig.H.Tools.Batches == batches + 1, TimeSpan.FromSeconds(5)));
+        rig.H.Drain();
+        Assert.Equal(batches + 1, rig.H.Tools.Batches);
     }
 
     [Fact]
@@ -127,7 +140,8 @@ public class EditorModelToolNoteTests
     {
         using var rig = new EditorRig(h => h.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound);
         using var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
-        Assert.True(rig.H.Ui.PumpUntil(() => editor.HasToolNote, TimeSpan.FromSeconds(5)));
+        rig.H.Drain();
+        Assert.True(editor.HasToolNote);
 
         editor.Dispose();
         // Simulate a bound view: it only re-reads ToolNote when told to by a PropertyChanged event.
@@ -143,7 +157,8 @@ public class EditorModelToolNoteTests
         // Publish a change that would clear the note on a live (not disposed) editor.
         rig.H.Tools.Statuses[Tool.Npx] = new ToolStatus(@"C:\fake\npx.cmd", "1.0.0");
         rig.State.RefreshToolsAsync([Tool.Npx]);
-        Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses[Tool.Npx].Found, TimeSpan.FromSeconds(5)));
+        rig.H.Drain();
+        Assert.True(rig.State.ToolStatuses[Tool.Npx].Found);
 
         Assert.Empty(raised);
         Assert.Equal(beforeChange, lastSeenNote);   // never re-read: Dispose stopped the AppState.PropertyChanged relay

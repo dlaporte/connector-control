@@ -366,10 +366,17 @@ public class AppStateTests
         var raised = new List<string?>();
         state.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
         var task = state.RefreshToolsAsync();
-        // The task completes once the probe batch is posted, not once it is applied,
-        // so pump until the actual publication (the observable ToolStatuses count) rather than task.IsCompleted.
-        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 4, TimeSpan.FromSeconds(5)));
+        // Handed to the host's Background, not run on the calling (UI) thread.
+        Assert.Equal(0, h.Tools.Batches);
+        Assert.Equal(1, h.Background.Pending);
+        Assert.False(task.IsCompleted);
+        // The task completes once the probe batch is posted, not once it is applied: the results
+        // reach state only when the UI thread runs what was posted.
+        Assert.Equal(1, h.Background.RunAll());
         Assert.True(task.IsCompleted);
+        Assert.Empty(state.ToolStatuses);
+        h.Ui.Pump();
+        Assert.Equal(4, state.ToolStatuses.Count);
         Assert.False(state.ToolStatuses[Tool.Uvx].Found);
         Assert.Equal("1.0.0", state.ToolStatuses[Tool.Npx].Version);
         Assert.Contains(nameof(AppState.ToolStatuses), raised);
@@ -384,16 +391,19 @@ public class AppStateTests
         using var state = h.Create();
         var first = state.RefreshToolsAsync([Tool.Npx]);
         var second = state.RefreshToolsAsync([Tool.Npx, Tool.Node]);   // npx joins the flight already in the air; node starts one
-        // Pump on the observable publication AND task completion: the task completes on a pool
-        // thread once the batch is posted, which can be a moment after the marshalled queue
-        // has run it — asserting completion right after the publication is a race.
-        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 2 && first.IsCompleted && second.IsCompleted, TimeSpan.FromSeconds(5)));
+        Assert.Equal(2, h.Background.Pending);   // both asked while the first batch had not run
+        h.Drain();
+        Assert.True(first.IsCompleted);
+        Assert.True(second.IsCompleted);
+        Assert.Equal(2, state.ToolStatuses.Count);
         Assert.Equal([Tool.Npx, Tool.Node], h.Tools.Probed.Order().ToArray());
         Assert.Equal(2, h.Tools.Batches);
         Assert.True(state.RefreshToolsAsync([]).IsCompleted);   // nothing wanted: completes synchronously
-        Assert.Equal(2, h.Tools.Batches);                        // and runs no batch
+        Assert.Equal(0, h.Background.Pending);                   // and queues no batch
         // Once published, the same tool can be probed again (the editor asks when the command changes).
         var third = state.RefreshToolsAsync([Tool.Npx]);
-        Assert.True(h.Ui.PumpUntil(() => h.Tools.Probed.Count == 3 && third.IsCompleted, TimeSpan.FromSeconds(5)));
+        h.Drain();
+        Assert.True(third.IsCompleted);
+        Assert.Equal(3, h.Tools.Probed.Count);
     }
 }

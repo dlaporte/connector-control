@@ -289,7 +289,8 @@ public class EditorWindowTests
         WpfApp.Invoke(() => Editing(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle, "Default"), window =>
         {
             Assert.Equal(Visibility.Collapsed, window.RemoteToolNote.Visibility);   // not probed yet
-            Assert.True(h.Ui.PumpUntil(() => window.Model.HasToolNote, TimeSpan.FromSeconds(5)));
+            h.Drain();
+            Assert.True(window.Model.HasToolNote);
             Layout(window);
             Assert.Equal(Visibility.Visible, window.RemoteToolNote.Visibility);
             Assert.NotNull(window.RemoteToolNote.Note);
