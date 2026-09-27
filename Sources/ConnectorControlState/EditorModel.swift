@@ -70,7 +70,8 @@ public final class EditorModel: ObservableObject {
     /// buttons carry no such label.
     public static let viewPickerLabel = "View"
     /// The Mac's editor windows as a group, and what one says when SwiftUI restores it with no
-    /// connector to show. Windows opens each editor for a connector, so has neither.
+    /// connector to show, for the moment before it closes itself. Windows opens each editor for a
+    /// connector, so has neither.
     public static let windowGroupTitle = "Connector Editor"
     public static let noTargetMessage = "Choose a connector in the Collections window."
     public static let changedOutsideDetail = "Saving will overwrite that change with this editor's version."

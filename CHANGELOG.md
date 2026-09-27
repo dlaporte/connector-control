@@ -24,6 +24,8 @@ bullet once the section is about to ship.
   whether to delete its file, as it does on Windows; before, Escape did nothing there.
 - Escape cancels every sheet in the Collections window, and the connector editor, as their
   Cancel buttons do.
+- A connector editor left open in 1.3 that macOS reopens after the upgrade closes itself,
+  rather than stand empty: it cannot say which collection it was editing.
 
 ### Windows
 

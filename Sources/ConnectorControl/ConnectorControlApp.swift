@@ -23,9 +23,7 @@ struct ConnectorControlApp: App {
                 EditorWindowView(state: state, target: target)
                     .navigationTitle(target.windowTitle)
             } else {
-                Text(EditorModel.noTargetMessage)
-                    .foregroundStyle(.secondary)
-                    .padding(40)
+                NoTargetWindow()
             }
         }
         .windowResizability(.contentMinSize)
@@ -51,5 +49,22 @@ struct ConnectorControlApp: App {
             SettingsView(state: state, settings: services.settings,
                          autostart: services.autostart, updater: services.updater)
         }
+    }
+}
+
+/// An editor window with no connector to show: one SwiftUI restored from an encoding this version
+/// cannot decode, such as a 1.3 window left open over an upgrade, whose target named no
+/// collection. It closes itself rather than stand empty; the message is on screen only until it
+/// does. It never falls back to the active collection, which would edit a collection the window
+/// was never opened on. Windows reopens no editors at launch, so has no such window.
+private struct NoTargetWindow: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Text(EditorModel.noTargetMessage)
+            .foregroundStyle(.secondary)
+            .padding(40)
+            // A turn later, once the restored window is on screen and can be closed.
+            .onAppear { DispatchQueue.main.async { dismiss() } }
     }
 }
