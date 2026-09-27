@@ -72,7 +72,7 @@ public final class EditorModel: ObservableObject {
     /// The Mac's editor windows as a group, and what one says when SwiftUI restores it with no
     /// connector to show. Windows opens each editor for a connector, so has neither.
     public static let windowGroupTitle = "Connector Editor"
-    public static let noTargetMessage = "Choose a connector from the menu bar popover."
+    public static let noTargetMessage = "Choose a connector in the Collections window."
     public static let changedOutsideDetail = "Saving will overwrite that change with this editor's version."
     public static let deletedOutsideDetail = "Saving will add it back."
     public static let whatCanIChange = "What can I change?"

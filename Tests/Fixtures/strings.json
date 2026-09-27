@@ -300,7 +300,7 @@
   "EditorModel.needsPath": "needs your path",
   "EditorModel.needsValue": "needs your value",
   "EditorModel.noTargetMessage": {
-    "mac": "Choose a connector from the menu bar popover."
+    "mac": "Choose a connector in the Collections window."
   },
   "EditorModel.notValidJSON": "Not valid JSON — check for a stray brace, missing comma, or unquoted value.",
   "EditorModel.oauthSecretCaption": {
