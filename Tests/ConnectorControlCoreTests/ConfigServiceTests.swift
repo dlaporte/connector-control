@@ -245,6 +245,25 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertTrue(result.notes[0].hasSuffix(" and restored from the backup of \(IsoTimestamp.localDateTime(from: taken))."))
     }
 
+    /// A backup whose active collection names one it does not hold — a hand edit, a foreign
+    /// machine's — makes the first existing collection in ordinal order active, and the reconcile
+    /// takes Claude's connectors there rather than into a new collection under the missing name.
+    func testARestoredBackupWhoseActiveCollectionIsMissingActivatesTheOrdinalFirst() throws {
+        let saved = try service.loadAndReconcile().store
+        var ghost = MasterStore(activeCollection: "\u{FF5E} Team", collections: [
+            "\u{FF5E} Team": Collection(), "\u{1F600} Team": Collection(mcps: saved.mcps),
+        ])
+        ghost.activeCollection = "Ghost"
+        try service.saveStore(ghost)
+        try service.saveStore(ghost)            // backs up the store naming Ghost
+        try Data("garbage".utf8).write(to: paths.masterStoreURL)
+
+        let result = try service.loadAndReconcile()
+        XCTAssertEqual(result.store.activeCollection, "\u{1F600} Team")
+        XCTAssertEqual(Set(result.store.collections.keys), ["\u{FF5E} Team", "\u{1F600} Team"], "no collection is created")
+        XCTAssertEqual(result.store.collections["\u{1F600} Team"], Collection(mcps: saved.mcps))
+    }
+
     func testACorruptStoreWithNoBackupThatDecodesIsRebuiltFromClaudesConfig() throws {
         var saved = try service.loadAndReconcile().store
         XCTAssertNil(saved.addCollection(named: "Team", copyingCurrent: true, activating: false))

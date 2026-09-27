@@ -128,6 +128,21 @@ final class MasterStoreTests: XCTestCase {
         XCTAssertEqual(result.store.activeCollection, "Alpha", "sorted-first existing collection")
     }
 
+    /// `read` decodes a restored backup, so it heals as a load does: the first existing collection
+    /// in ordinal order, where the Windows mirror's constructor puts it. The two names sort the
+    /// other way by Unicode scalar, and nothing is created.
+    func testReadHealsAnActiveCollectionTheFileDoesNotHoldToTheOrdinalFirst() throws {
+        let json = """
+        {"version":2,"activeProfile":"Ghost",\
+        "profiles":{"\u{FF5E} Team":{"mcps":{}},"\u{1F600} Team":{"mcps":{}}}}
+        """
+        try Data(json.utf8).write(to: url)
+        let read = try XCTUnwrap(MasterStoreIO.read(from: url))
+        XCTAssertEqual(read.activeCollection, "\u{1F600} Team")
+        XCTAssertEqual(Set(read.collections.keys), ["\u{FF5E} Team", "\u{1F600} Team"])
+        XCTAssertEqual(MasterStoreIO.load(from: url).store.activeCollection, "\u{1F600} Team")
+    }
+
     func testV1FormatFileIsTreatedAsCorruptAndRebuilt() throws {
         // No v1 compatibility: an old-format file can't decode against the
         // v2-only schema, so it flows through the existing corrupt-file path

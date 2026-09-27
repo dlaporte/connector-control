@@ -276,6 +276,31 @@ public class ConfigServiceTests : IDisposable
         Assert.EndsWith($" and restored from the backup of {IsoTimestamp.LocalDateTime(taken.Value)}.", result.Notes[0], StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A backup whose active collection names one it does not hold — a hand edit, a foreign
+    /// machine's — makes the first existing collection in ordinal order active, and the reconcile
+    /// takes Claude's connectors there rather than into a new collection under the missing name.
+    /// </summary>
+    [Fact]
+    public void ARestoredBackupWhoseActiveCollectionIsMissingActivatesTheOrdinalFirst()
+    {
+        var saved = service.LoadAndReconcile().Store;
+        var ghost = new MasterStore(MasterStore.CurrentVersion, "～ Team", [
+            new KeyValuePair<string, Collection>("～ Team", new Collection()),
+            new KeyValuePair<string, Collection>("\U0001F600 Team", new Collection(saved.Mcps)),
+        ]);
+        ghost.ActiveCollection = "Ghost";
+        service.SaveStore(ghost);
+        service.SaveStore(ghost);            // backs up the store naming Ghost
+        File.WriteAllText(paths.MasterStorePath, "garbage");
+
+        var result = service.LoadAndReconcile();
+        Assert.Equal("\U0001F600 Team", result.Store.ActiveCollection);
+        // No collection is created.
+        Assert.Equal(["\U0001F600 Team", "～ Team"], result.Store.Collections.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(new Collection(saved.Mcps), result.Store.Collections["\U0001F600 Team"]);
+    }
+
     [Fact]
     public void ACorruptStoreWithNoBackupThatDecodesIsRebuiltFromClaudesConfig()
     {

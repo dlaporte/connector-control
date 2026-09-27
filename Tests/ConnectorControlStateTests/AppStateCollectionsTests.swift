@@ -2987,6 +2987,29 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(state.lastError).components(separatedBy: "and restored from the backup of ").count, 2)
     }
 
+    /// A backup whose active collection is one it does not hold makes the first existing collection
+    /// in ordinal order active, as it does on Windows, and Claude goes on running what that
+    /// collection renders: its config is not rewritten from an empty collection under the missing
+    /// name.
+    func testARestoredBackupNamingAMissingActiveCollectionKeepsClaudeRunning() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let running = try h.claudeServers()
+        let held = try XCTUnwrap(state.store.collections[state.activeCollection])
+        var ghost = MasterStore(activeCollection: "\u{FF5E} Team", collections: [
+            "\u{FF5E} Team": Collection(), "\u{1F600} Team": held,
+        ])
+        ghost.activeCollection = "Ghost"
+        try state.service.saveStore(ghost)
+        try state.service.saveStore(ghost)   // backs up the store naming Ghost
+        try Data("garbage".utf8).write(to: h.masterStoreURL)
+
+        state.reload()
+        XCTAssertEqual(state.activeCollection, "\u{1F600} Team")
+        XCTAssertEqual(state.collectionNames, ["\u{1F600} Team", "\u{FF5E} Team"])
+        XCTAssertEqual(try h.claudeServers(), running, "Claude's config is not rewritten")
+    }
+
     // MARK: - External changes while a subscribed collection is active
 
     /// An installer writes a connector into Claude's file while a subscribed collection is active.

@@ -3469,6 +3469,35 @@ public class AppStateCollectionsTests
         Assert.Contains("and restored from the backup of ", state.LastError);
     }
 
+    /// <summary>
+    /// A backup whose active collection is one it does not hold makes the first existing collection
+    /// in ordinal order active, as it does on the Mac, and Claude goes on running what that
+    /// collection renders: its config is not rewritten from an empty collection under the missing
+    /// name.
+    /// </summary>
+    [Fact]
+    public void ARestoredBackupNamingAMissingActiveCollectionKeepsClaudeRunning()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var running = h.ClaudeServers();
+        var held = state.Store.Collections[state.ActiveCollection];
+        var ghost = new MasterStore(MasterStore.CurrentVersion, "～ Team", [
+            new KeyValuePair<string, Collection>("～ Team", new Collection()),
+            new KeyValuePair<string, Collection>("\U0001F600 Team", held.Clone()),
+        ]);
+        ghost.ActiveCollection = "Ghost";
+        state.Service.SaveStore(ghost);
+        state.Service.SaveStore(ghost);   // backs up the store naming Ghost
+        File.WriteAllText(h.MasterStorePath, "garbage");
+
+        state.Reload();
+        Assert.Equal("\U0001F600 Team", state.ActiveCollection);
+        Assert.Equal(["\U0001F600 Team", "～ Team"], state.CollectionNames);
+        // Claude's config is not rewritten.
+        Assert.True(DictionaryEquality.Equal(running, h.ClaudeServers()));
+    }
+
 
     /// <summary>
     /// An installer writes a connector into Claude's file while a subscribed collection is active.

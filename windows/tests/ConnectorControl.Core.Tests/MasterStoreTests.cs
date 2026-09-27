@@ -141,6 +141,24 @@ public class MasterStoreTests : IDisposable
     }
 
     /// <summary>
+    /// <c>Read</c> decodes a restored backup, so it heals as a load does: the first existing
+    /// collection in ordinal order. The two names sort the other way by Unicode scalar, and nothing
+    /// is created.
+    /// </summary>
+    [Fact]
+    public void ReadHealsAnActiveCollectionTheFileDoesNotHoldToTheOrdinalFirst()
+    {
+        File.WriteAllText(Url, """
+            {"version":2,"activeProfile":"Ghost","profiles":{"～ Team":{"mcps":{}},"😀 Team":{"mcps":{}}}}
+            """);   // JSON's own escapes: a raw string passes them through to the parser
+        var read = MasterStoreIO.Read(Url);
+        Assert.NotNull(read);
+        Assert.Equal("\U0001F600 Team", read.ActiveCollection);
+        Assert.Equal(["\U0001F600 Team", "～ Team"], read.Collections.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("\U0001F600 Team", MasterStoreIO.Load(Url).Store.ActiveCollection);
+    }
+
+    /// <summary>
     /// No v1 compatibility: an old-format file can't decode against the v2-only schema, so it flows
     /// through the existing corrupt-file path (moved aside, empty store returned) rather than being
     /// migrated.

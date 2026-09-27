@@ -56,9 +56,35 @@ public struct MasterStore: Equatable, Codable, Sendable {
         collections: ["Default": Collection()])
 
     public init(activeCollection: String, collections: [String: Collection]) {
-        self.version = 2
-        self.activeCollection = activeCollection
+        self.init(version: 2, activeCollection: activeCollection, collections: collections)
+    }
+
+    /// The one place that guarantees `collections[activeCollection]` exists, as the Windows
+    /// mirror's constructor is: a store that names a collection it does not hold — a hand edit, a
+    /// backup written elsewhere — makes the first existing one in ordinal order active, or a fresh
+    /// "Default" when none remain. Every decode comes through here, so a load, the store watcher's
+    /// peek and a backup restored in place of an unreadable master list all heal alike.
+    private init(version: Int, activeCollection: String, collections: [String: Collection]) {
+        var collections = collections
+        var active = activeCollection
+        if collections[active] == nil {
+            if let fallback = collections.keys.min(by: { $0.ordinallyPrecedes($1) }) {
+                active = fallback
+            } else {
+                active = "Default"
+                collections[active] = Collection()
+            }
+        }
+        self.version = version
+        self.activeCollection = active
         self.collections = collections
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(version: try container.decode(Int.self, forKey: .version),
+                  activeCollection: try container.decode(String.self, forKey: .activeCollection),
+                  collections: try container.decode([String: Collection].self, forKey: .collections))
     }
 
     /// The name a collection is kept under for the one typed: spaces trimmed from both ends.
@@ -139,19 +165,9 @@ public enum MasterStoreIO {
         guard fm.fileExists(atPath: url.path) else { return (.empty, nil) }
         do {
             let data = try Data(contentsOf: url)
-            var store = try JSONDecoder().decode(MasterStore.self, from: data)
-            // Self-heal a decoded-but-inconsistent activeCollection (hand-edited
-            // or corrupted file) — never crash; fall back to an existing
-            // collection (sorted first), or a fresh Default if none remain.
-            if store.collections[store.activeCollection] == nil {
-                if let fallback = store.collections.keys.sorted().first {
-                    store.activeCollection = fallback
-                } else {
-                    store.collections["Default"] = Collection()
-                    store.activeCollection = "Default"
-                }
-            }
-            return (store, nil)
+            // A decoded-but-inconsistent activeCollection (hand-edited or corrupted file) is
+            // self-healed by the decoder itself — see `init(version:activeCollection:collections:)`.
+            return (try JSONDecoder().decode(MasterStore.self, from: data), nil)
         } catch {
             let stamp = BackupTimestamp.string(from: now)
             let aside = url.deletingLastPathComponent()
