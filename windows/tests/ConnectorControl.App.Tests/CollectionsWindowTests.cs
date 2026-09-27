@@ -774,6 +774,8 @@ public class CollectionsWindowTests
             var first = window.Model.Rows[0].Name;
             var second = window.Model.Rows[1].Name;
             Assert.Equal(KeyboardNavigationMode.Once, KeyboardNavigation.GetTabNavigation(window.RowList));
+            // Left and Right go nowhere, as on the Mac, rather than out of the list by position.
+            Assert.Equal(KeyboardNavigationMode.None, KeyboardNavigation.GetDirectionalNavigation(window.RowList));
 
             Press(window, InRow<Button>(window, first, "RowBody"), Key.Enter);
             Assert.Equal([window.Model.EditTargetFor(first).Id], recorder.Editors.Select(t => t.Id));

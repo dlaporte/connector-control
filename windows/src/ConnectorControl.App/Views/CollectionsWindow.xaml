@@ -297,10 +297,12 @@
            size scope over every row, so the name column is as wide as the longest name cell —
            capped, so a very long name trims and the target keeps room to say anything — and
            every target starts at the same x. The list is one stop for Tab, which returns to the
-           row it left, and the arrows move between its rows, as on the Mac. -->
+           row it left, and the arrows move between its rows, as on the Mac: Up and Down by hand,
+           in OnRowKey, and Left and Right not at all, where WPF would otherwise move the focus
+           out of the list by position. -->
       <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
         <ItemsControl x:Name="RowList" ItemsSource="{Binding Rows}" Grid.IsSharedSizeScope="True"
-                      KeyboardNavigation.TabNavigation="Once">
+                      KeyboardNavigation.TabNavigation="Once" KeyboardNavigation.DirectionalNavigation="None">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
               <!-- A click anywhere but the tick slot opens the connector's editor, as Return does
