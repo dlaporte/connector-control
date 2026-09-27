@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import ConnectorControlState
 
 /// App-modal NSAlerts, activating the app first so the alert is not hidden
@@ -28,7 +29,7 @@ final class AlertDialogs: Dialogs {
         primaryButton.keyEquivalent = ""
         cancelButton.keyEquivalent = "\r"
         let escape = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard event.keyCode == 53, event.window == alert.window else { return event }
+            guard event.keyCode == UInt16(kVK_Escape), event.window == alert.window else { return event }
             cancelButton.performClick(nil)
             return nil
         }
