@@ -534,7 +534,7 @@ public sealed record CollectionsLocalCache
 
     // MARK: Disk
 
-    /// <summary>Missing or unreadable loads as empty, for the reason <see cref="CollectionsFile.Load"/> gives: every binding here can be found again, and the Locate banner asks for the one that cannot.</summary>
+    /// <summary>Missing or unreadable loads as empty: every binding here can be found again, and the Locate banner asks for the one that cannot.</summary>
     public static CollectionsLocalCache Load(string path)
     {
         try

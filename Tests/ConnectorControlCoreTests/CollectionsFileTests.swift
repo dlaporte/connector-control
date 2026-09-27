@@ -41,14 +41,6 @@ final class CollectionsFileTests: XCTestCase {
         XCTAssertEqual(Self.sample.kind(of: "Never heard of it"), .local)
     }
 
-    func testLoadTreatsMissingAndCorruptAsEmpty() throws {
-        let url = tempDir.file("collections.json")
-        XCTAssertEqual(CollectionsFile.load(from: url), CollectionsFile(collections: [:]))
-        try Data("{not json".utf8).write(to: url)
-        XCTAssertEqual(CollectionsFile.load(from: url), CollectionsFile(collections: [:]))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "load never moves a file aside")
-    }
-
     func testLoadIfReadableTellsAnUnreadableFileFromAnEmptyOne() throws {
         let url = tempDir.file("collections.json")
         XCTAssertEqual(CollectionsFile.loadIfReadable(from: url), CollectionsFile(collections: [:]), "missing is empty")
@@ -68,7 +60,7 @@ final class CollectionsFileTests: XCTestCase {
         try Self.sample.save(to: url, staging: nil)
         let mode = try XCTUnwrap(FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions] as? Int)
         XCTAssertEqual(mode, 0o600)
-        XCTAssertEqual(CollectionsFile.load(from: url), Self.sample)
+        XCTAssertEqual(CollectionsFile.loadIfReadable(from: url), Self.sample)
     }
 
     func testReconcileDropsNamesTheStoreNoLongerHas() {

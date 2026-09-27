@@ -70,16 +70,6 @@ public sealed class CollectionsFileTests : IDisposable
     }
 
     [Fact]
-    public void LoadTreatsMissingAndCorruptAsEmpty()
-    {
-        var path = dir.File("collections.json");
-        Assert.Equal(new CollectionsFile([]), CollectionsFile.Load(path));
-        File.WriteAllText(path, "{not json");
-        Assert.Equal(new CollectionsFile([]), CollectionsFile.Load(path));
-        Assert.True(File.Exists(path), "load never moves a file aside");
-    }
-
-    [Fact]
     public void LoadIfReadableTellsAnUnreadableFileFromAnEmptyOne()
     {
         var path = dir.File("collections.json");
@@ -101,7 +91,7 @@ public sealed class CollectionsFileTests : IDisposable
     {
         var path = dir.File("collections.json");
         Assert.True(Sample.Save(path).Protected);
-        Assert.Equal(Sample, CollectionsFile.Load(path));
+        Assert.Equal(Sample, CollectionsFile.LoadIfReadable(path));
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(path));
     }

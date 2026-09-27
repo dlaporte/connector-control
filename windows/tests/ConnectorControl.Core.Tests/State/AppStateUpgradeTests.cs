@@ -103,6 +103,6 @@ public class AppStateUpgradeTests
         using var second = h.Create();
         h.Publish(second, "Work");
         Assert.Null(second.LastError);
-        Assert.NotNull(CollectionsFile.Load(sidecar).Collections["Work"].Publish);
+        Assert.NotNull(CollectionsFile.LoadIfReadable(sidecar)!.Collections["Work"].Publish);
     }
 }

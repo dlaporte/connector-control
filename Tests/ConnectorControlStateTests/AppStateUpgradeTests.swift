@@ -100,6 +100,6 @@ final class AppStateUpgradeTests: XCTestCase {
         let second = h.create()
         try h.publish(second, "Work")
         XCTAssertNil(second.lastError)
-        XCTAssertNotNil(CollectionsFile.load(from: sidecar).collections["Work"]?.publish)
+        XCTAssertNotNil(try XCTUnwrap(CollectionsFile.loadIfReadable(from: sidecar)).collections["Work"]?.publish)
     }
 }

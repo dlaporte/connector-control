@@ -241,17 +241,10 @@ public sealed record CollectionsFile
     // MARK: Disk
 
     /// <summary>
-    /// A missing or unreadable sidecar loads as empty, and the file on disk is left exactly as
-    /// it was: everything here is derived from the master list and the documents beside it, so
-    /// losing it costs hints and origins the app can rebuild — unlike a corrupt mcps.json,
-    /// there is nothing to move aside and preserve.
-    /// </summary>
-    public static CollectionsFile Load(string path) => LoadIfReadable(path) ?? new CollectionsFile([]);
-
-    /// <summary>
     /// The sidecar, or null when it exists and cannot be read, parsed or decoded — a file a sync
-    /// tool is halfway through writing, which <see cref="Load"/> cannot tell from one with no entries.
-    /// A missing sidecar loads as empty: nothing has been written yet, so nothing is being lost.
+    /// tool is halfway through writing, which must not be taken for one with no entries. The file
+    /// on disk is left exactly as it was. A missing sidecar loads as empty: nothing has been written
+    /// yet, so nothing is being lost.
     /// </summary>
     public static CollectionsFile? LoadIfReadable(string path)
     {

@@ -410,7 +410,7 @@ public class AppStateCollectionsTests
         state.Reload();
         Assert.Equal(CollectionKind.Synced, state.KindOf("Data team"));
         state.StopSyncing("Data team");
-        Assert.Empty(CollectionsFile.Load(sidecar).Collections);
+        Assert.Empty(CollectionsFile.LoadIfReadable(sidecar)!.Collections);
         Assert.Null(state.LastError);   // the save landed, so the note goes with it
     }
 
@@ -429,7 +429,7 @@ public class AppStateCollectionsTests
         h.Publish(state, state.ActiveCollection);
         Assert.Null(state.LastError);
         // A sidecar with no entries is empty, not unreadable.
-        Assert.NotNull(CollectionsFile.Load(sidecar).Collections[state.ActiveCollection].Publish);
+        Assert.NotNull(CollectionsFile.LoadIfReadable(sidecar)!.Collections[state.ActiveCollection].Publish);
     }
 
     [Fact]
@@ -443,7 +443,7 @@ public class AppStateCollectionsTests
 
         h.Publish(state, state.ActiveCollection);
         Assert.Null(state.LastError);
-        Assert.NotNull(CollectionsFile.Load(sidecar).Collections[state.ActiveCollection].Publish);
+        Assert.NotNull(CollectionsFile.LoadIfReadable(sidecar)!.Collections[state.ActiveCollection].Publish);
     }
 
     [Fact]
@@ -456,7 +456,7 @@ public class AppStateCollectionsTests
 
         h.Publish(state, state.ActiveCollection);
         Assert.Null(state.LastError);
-        Assert.NotNull(CollectionsFile.Load(sidecar).Collections[state.ActiveCollection].Publish);
+        Assert.NotNull(CollectionsFile.LoadIfReadable(sidecar)!.Collections[state.ActiveCollection].Publish);
     }
 
     [Fact]
@@ -512,7 +512,7 @@ public class AppStateCollectionsTests
         // Pointing it back at the file this machine has restores exactly the bytes we once wrote.
         Assert.Null(state.LocateSource("Data team", path));
         // What is in memory is what the file must hold, whatever this app last wrote.
-        Assert.Equal("data-team.json", CollectionsFile.Load(sidecar).Collections["Data team"].FileName);
+        Assert.Equal("data-team.json", CollectionsFile.LoadIfReadable(sidecar)!.Collections["Data team"].FileName);
     }
 
     [Fact]
@@ -2221,7 +2221,7 @@ public class AppStateCollectionsTests
             store.Collections.Remove("Team");
             store.ActiveCollection = "Default";
         });
-        var file = CollectionsFile.Load(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        var file = CollectionsFile.LoadIfReadable(Path.Combine(h.StoreDir, CollectionsFile.FileName))!;
         new CollectionsFile(file.Collections.Where(p => p.Key != "Team")
             .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal))
             .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));

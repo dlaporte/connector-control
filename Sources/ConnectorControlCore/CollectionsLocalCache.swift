@@ -223,8 +223,8 @@ public struct CollectionsLocalCache: Equatable, Sendable {
 
     // MARK: Disk
 
-    /// Missing or unreadable loads as empty, for the reason `CollectionsFile.load` gives: every
-    /// binding here can be found again, and the Locate banner asks for the one that cannot.
+    /// Missing or unreadable loads as empty: every binding here can be found again, and the Locate
+    /// banner asks for the one that cannot.
     public static func load(from url: URL) -> CollectionsLocalCache {
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONValue.parse(data),

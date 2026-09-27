@@ -361,7 +361,7 @@ final class AppStateCollectionsTests: XCTestCase {
         state.reload()
         XCTAssertEqual(state.kind(of: "Data team"), .synced)
         state.stopSyncing("Data team")
-        XCTAssertTrue(CollectionsFile.load(from: sidecar).collections.isEmpty)
+        XCTAssertTrue(try XCTUnwrap(CollectionsFile.loadIfReadable(from: sidecar)).collections.isEmpty)
         XCTAssertNil(state.lastError, "the save landed, so the note goes with it")
     }
 
@@ -378,7 +378,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let state = h.create()
         try h.publish(state, state.activeCollection)
         XCTAssertNil(state.lastError)
-        XCTAssertNotNil(CollectionsFile.load(from: sidecar).collections[state.activeCollection]?.publish,
+        XCTAssertNotNil(try XCTUnwrap(CollectionsFile.loadIfReadable(from: sidecar)).collections[state.activeCollection]?.publish,
                         "a sidecar with no entries is empty, not unreadable")
     }
 
@@ -391,7 +391,7 @@ final class AppStateCollectionsTests: XCTestCase {
 
         try h.publish(state, state.activeCollection)
         XCTAssertNil(state.lastError)
-        XCTAssertNotNil(CollectionsFile.load(from: sidecar).collections[state.activeCollection]?.publish)
+        XCTAssertNotNil(try XCTUnwrap(CollectionsFile.loadIfReadable(from: sidecar)).collections[state.activeCollection]?.publish)
     }
 
     func testNoSidecarLoadsAsEmptyAndSaves() throws {
@@ -402,7 +402,7 @@ final class AppStateCollectionsTests: XCTestCase {
 
         try h.publish(state, state.activeCollection)
         XCTAssertNil(state.lastError)
-        XCTAssertNotNil(CollectionsFile.load(from: sidecar).collections[state.activeCollection]?.publish)
+        XCTAssertNotNil(try XCTUnwrap(CollectionsFile.loadIfReadable(from: sidecar)).collections[state.activeCollection]?.publish)
     }
 
     func testAGarbledSidecarAtLaunchHoldsEverySave() throws {
@@ -452,7 +452,7 @@ final class AppStateCollectionsTests: XCTestCase {
 
         // Pointing it back at the file this machine has restores exactly the bytes we once wrote.
         XCTAssertNil(state.locateSource(for: "Data team", path: url.path))
-        XCTAssertEqual(CollectionsFile.load(from: sidecar).collections["Data team"]?.fileName, "data-team.json",
+        XCTAssertEqual(try XCTUnwrap(CollectionsFile.loadIfReadable(from: sidecar)).collections["Data team"]?.fileName, "data-team.json",
                        "what is in memory is what the file must hold, whatever this app last wrote")
     }
 
@@ -1883,7 +1883,7 @@ final class AppStateCollectionsTests: XCTestCase {
             store.collections.removeValue(forKey: "Team")
             store.activeCollection = "Default"
         }
-        var after = CollectionsFile.load(from: h.storeDir.appendingPathComponent(CollectionsFile.fileName))
+        var after = try XCTUnwrap(CollectionsFile.loadIfReadable(from: h.storeDir.appendingPathComponent(CollectionsFile.fileName)))
         after.collections.removeValue(forKey: "Team")
         try after.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
 
