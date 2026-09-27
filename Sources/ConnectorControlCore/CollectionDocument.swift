@@ -798,27 +798,50 @@ public struct CollectionDocument: Equatable, Sendable {
     }
 
     /// The parts of a URL that can carry a secret, as a warning names them: `url.userinfo` for a
-    /// user part before the host, and `url.query.NAME` for a query parameter named for a secret
-    /// with a value, or holding a value that looks like one. None for text with no `://`. Split by
-    /// hand, one Unicode scalar at a time as the Windows mirror walks UTF-16 units, rather than by
-    /// a URL parser: both platforms split it the same way, and a URL a parser would refuse can
-    /// still carry a token.
+    /// user part before the host; `url.path` for a path segment that looks like a credential or a
+    /// random token, the way some servers take their key; and `url.query.NAME` or
+    /// `url.fragment.NAME` for a parameter of the query, or of the fragment read as one, named for a
+    /// secret with a value, or holding a value that looks like a credential or a random token. None
+    /// for text with no `://`. Split by hand, one Unicode scalar at a time as the Windows mirror
+    /// walks UTF-16 units, rather than by a URL parser: both platforms split it the same way, and a
+    /// URL a parser would refuse can still carry a token.
     static func credentialParts(ofURL text: String) -> [String] {
         let scalars = Array(text.unicodeScalars)
         guard let start = scalars.indices.first(where: {
             $0 + 2 < scalars.count && scalars[$0] == ":" && scalars[$0 + 1] == "/" && scalars[$0 + 2] == "/"
         }) else { return [] }
         let rest = scalars[(start + 3)...]
-        var parts: [String] = rest.prefix { $0 != "/" && $0 != "?" && $0 != "#" }.contains("@") ? ["url.userinfo"] : []
-        guard let question = rest.firstIndex(of: "?") else { return parts }
-        for pair in rest[(question + 1)...].prefix(while: { $0 != "#" }).split(separator: "&") {
+        let authority = rest.prefix { $0 != "/" && $0 != "?" && $0 != "#" }
+        var parts: [String] = authority.contains("@") ? ["url.userinfo"] : []
+        let tail = rest[authority.endIndex...]
+        let hash = tail.firstIndex(of: "#")
+        let beforeFragment = tail[..<(hash ?? tail.endIndex)]
+        let question = beforeFragment.firstIndex(of: "?")
+        let path = beforeFragment[..<(question ?? beforeFragment.endIndex)]
+        if path.split(separator: "/").contains(where: { looksLikeSecret(String(String.UnicodeScalarView($0))) }) {
+            parts.append("url.path")
+        }
+        if let question { parts += parameters(beforeFragment[(question + 1)...], in: "url.query") }
+        if let hash { parts += parameters(tail[(hash + 1)...], in: "url.fragment") }
+        return parts
+    }
+
+    /// The `&`-separated parameters of a query or a fragment that can carry a secret, each as
+    /// `section.NAME`: named for a secret with a value, or holding one that looks like a secret. A
+    /// bare parameter is its own value.
+    private static func parameters(_ text: ArraySlice<Unicode.Scalar>, in section: String) -> [String] {
+        text.split(separator: "&").compactMap { pair in
             let equals = pair.firstIndex(of: "=")
             let name = String(String.UnicodeScalarView(pair[..<(equals ?? pair.endIndex)]))
             let value = equals.map { String(String.UnicodeScalarView(pair[($0 + 1)...])) } ?? name
             let named = equals != nil && !value.isEmpty && !Placeholder.containsMarker(value) && CredentialHeuristics.namesASecret(name)
-            if named || CredentialHeuristics.looksLikeCredential(value) { parts.append("url.query.\(name)") }
+            return named || looksLikeSecret(value) ? "\(section).\(name)" : nil
         }
-        return parts
+    }
+
+    /// A value that looks like a credential, or like a random token.
+    private static func looksLikeSecret(_ value: String) -> Bool {
+        CredentialHeuristics.looksLikeCredential(value) || CredentialHeuristics.looksLikeRandomToken(value)
     }
 
     // MARK: Decoding helpers

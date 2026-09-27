@@ -416,7 +416,7 @@ final class CollectionDocumentTests: XCTestCase {
             "url.userinfo looks like a credential", "url.query.api_key looks like a credential",
             "url.query.sig looks like a credential",
         ])
-        let plain: JSONValue = .object(["type": .string("sse"), "url": .string("https://mcp.example.com/sse?region=us#token=x"),
+        let plain: JSONValue = .object(["type": .string("sse"), "url": .string("https://mcp.example.com/v1/sse?region=us#top"),
                                         "headers": .object(["Accept": .string("text/event-stream")])])
         XCTAssertEqual(CollectionDocument.credentialWarnings(plain, sharedEnv: []), [])
         let arguments: JSONValue = .object(["command": .string("npx"), "args": .array([
@@ -425,5 +425,21 @@ final class CollectionDocumentTests: XCTestCase {
         ])])
         XCTAssertEqual(CollectionDocument.credentialWarnings(arguments, sharedEnv: []),
                        ["args[1] looks like a credential", "args[2] looks like a credential"])
+    }
+
+    /// Some remote servers take their key in the URL's path, as a long random segment, or in its
+    /// fragment, which is read as a query is.
+    func testCredentialWarningsCoverTheURLsPathAndFragment() {
+        func warnings(_ url: String) -> [String] {
+            CollectionDocument.credentialWarnings(.object(["type": .string("http"), "url": .string(url)]), sharedEnv: [])
+        }
+        XCTAssertEqual(warnings("https://actions.example.com/mcp/sk-ak-a1b2c3/sse"), ["url.path looks like a credential"])
+        XCTAssertEqual(warnings("https://mcp.example.com/s/Zq8RkT2mWx7LpN4vHc9J/mcp"), ["url.path looks like a credential"],
+                       "a random segment")
+        XCTAssertEqual(warnings("https://mcp.example.com/mcp#access_token=abc"), ["url.fragment.access_token looks like a credential"])
+        XCTAssertEqual(warnings("https://mcp.example.com/mcp#Zq8RkT2mWx7LpN4vHc9J"), ["url.fragment.Zq8RkT2mWx7LpN4vHc9J looks like a credential"])
+        XCTAssertEqual(warnings("https://mcp.example.com/mcp?k=Zq8RkT2mWx7LpN4vHc9J"), ["url.query.k looks like a credential"],
+                       "a random query value")
+        XCTAssertEqual(warnings("https://mcp.example.com/v2/servers/gmail-tools/sse#section-2"), [])
     }
 }

@@ -98,8 +98,9 @@ bullet once the section is about to ship.
   travels as written unless you tick it to become a placeholder. The token, header value
   or client secret in a remote connector's Authentication fields always travels as a
   placeholder, and a preview shows every byte before it leaves, flagging any argument or
-  shared value that looks like a credential, a header or URL query parameter named like a
-  secret or holding one, and a URL with a user name or password in it.
+  shared value that looks like a credential, a header or URL query or fragment parameter
+  named like a secret or holding one, a URL path segment that looks like a key, and a URL
+  with a user name or password in it.
 - The sheet also lists every mark it could not place and every path this machine keeps
   back that the document would otherwise carry as written, a copy of a ticked path in any
   field included, all at once, each with its connector and field; Publish and Export wait until every one is ticked where it now sits, forgotten

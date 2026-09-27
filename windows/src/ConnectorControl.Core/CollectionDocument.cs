@@ -1460,10 +1460,13 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
 
     /// <summary>
     /// The parts of a URL that can carry a secret, as a warning names them: <c>url.userinfo</c> for a
-    /// user part before the host, and <c>url.query.NAME</c> for a query parameter named for a secret
-    /// with a value, or holding a value that looks like one. None for text with no <c>://</c>. Split by
-    /// hand, one UTF-16 unit at a time as the Mac walks Unicode scalars, rather than by a URL parser:
-    /// both platforms split it the same way, and a URL a parser would refuse can still carry a token.
+    /// user part before the host; <c>url.path</c> for a path segment that looks like a credential or a
+    /// random token, the way some servers take their key; and <c>url.query.NAME</c> or
+    /// <c>url.fragment.NAME</c> for a parameter of the query, or of the fragment read as one, named for a
+    /// secret with a value, or holding a value that looks like a credential or a random token. None for
+    /// text with no <c>://</c>. Split by hand, one UTF-16 unit at a time as the Mac walks Unicode scalars,
+    /// rather than by a URL parser: both platforms split it the same way, and a URL a parser would refuse
+    /// can still carry a token.
     /// </summary>
     internal static IReadOnlyList<string> CredentialPartsOfUrl(string text)
     {
@@ -1479,26 +1482,49 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         {
             parts.Add("url.userinfo");
         }
-        var question = rest.IndexOf('?');
-        if (question < 0)
+        var tail = authorityEnd < 0 ? string.Empty : rest[authorityEnd..];
+        var hash = tail.IndexOf('#');
+        var beforeFragment = hash < 0 ? tail : tail[..hash];
+        var question = beforeFragment.IndexOf('?');
+        var path = question < 0 ? beforeFragment : beforeFragment[..question];
+        if (path.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(LooksLikeSecret))
         {
-            return parts;
+            parts.Add("url.path");
         }
-        var query = rest[(question + 1)..];
-        var fragment = query.IndexOf('#');
-        foreach (var pair in (fragment < 0 ? query : query[..fragment]).Split('&', StringSplitOptions.RemoveEmptyEntries))
+        if (question >= 0)
+        {
+            parts.AddRange(Parameters(beforeFragment[(question + 1)..], "url.query"));
+        }
+        if (hash >= 0)
+        {
+            parts.AddRange(Parameters(tail[(hash + 1)..], "url.fragment"));
+        }
+        return parts;
+    }
+
+    /// <summary>
+    /// The <c>&amp;</c>-separated parameters of a query or a fragment that can carry a secret, each as
+    /// <c>section.NAME</c>: named for a secret with a value, or holding one that looks like a secret. A
+    /// bare parameter is its own value.
+    /// </summary>
+    private static IEnumerable<string> Parameters(string text, string section)
+    {
+        foreach (var pair in text.Split('&', StringSplitOptions.RemoveEmptyEntries))
         {
             var equals = pair.IndexOf('=');
             var name = equals < 0 ? pair : pair[..equals];
             var value = equals < 0 ? pair : pair[(equals + 1)..];
             var named = equals >= 0 && value.Length > 0 && !Placeholder.ContainsMarker(value) && CredentialHeuristics.NamesASecret(name);
-            if (named || CredentialHeuristics.LooksLikeCredential(value))
+            if (named || LooksLikeSecret(value))
             {
-                parts.Add($"url.query.{name}");
+                yield return $"{section}.{name}";
             }
         }
-        return parts;
     }
+
+    /// <summary>A value that looks like a credential, or like a random token.</summary>
+    private static bool LooksLikeSecret(string value) =>
+        CredentialHeuristics.LooksLikeCredential(value) || CredentialHeuristics.LooksLikeRandomToken(value);
 
     // MARK: Decoding helpers
     // Every failure names the key it read, so a hand-edited document says what is wrong with it.

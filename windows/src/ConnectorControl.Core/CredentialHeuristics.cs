@@ -40,4 +40,20 @@ public static class CredentialHeuristics
     }
 
     private static readonly string[] SecretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"];
+
+    /// <summary>
+    /// A random token rather than a name: with its slashes removed, at least 20 characters, with
+    /// an upper-case letter, a lower-case letter and a digit, and none of <c>.</c>, <c>-</c> or
+    /// <c>_</c>. An AWS secret key has this shape and a <c>/</c>, which <see cref="LooksLikeCredential"/>
+    /// refuses to consider; a real path or package name nearly always has a dot, a hyphen or no digits.
+    /// The Collections window's target column leaves such a word out, and the publish preview flags
+    /// one in a URL.
+    /// </summary>
+    public static bool LooksLikeRandomToken(string text)
+    {
+        var body = text.Where(c => c != '/' && c != '\\').ToList();
+        return body.Count >= 20
+            && body.Any(char.IsAsciiLetterUpper) && body.Any(char.IsAsciiLetterLower)
+            && body.Any(char.IsAsciiDigit) && !body.Any(c => c is '.' or '-' or '_');
+    }
 }

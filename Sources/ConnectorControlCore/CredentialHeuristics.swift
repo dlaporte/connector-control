@@ -28,4 +28,16 @@ public enum CredentialHeuristics {
     }
 
     private static let secretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"]
+
+    /// A random token rather than a name: with its slashes removed, at least 20 characters, with
+    /// an upper-case letter, a lower-case letter and a digit, and none of `.`, `-` or `_`. An AWS
+    /// secret key has this shape and a `/`, which `looksLikeCredential` refuses to consider; a
+    /// real path or package name nearly always has a dot, a hyphen or no digits. The Collections
+    /// window's target column leaves such a word out, and the publish preview flags one in a URL.
+    public static func looksLikeRandomToken(_ text: String) -> Bool {
+        let body = text.unicodeScalars.filter { $0 != "/" && $0 != "\\" }
+        return body.count >= 20
+            && body.contains { ("A"..."Z").contains($0) } && body.contains { ("a"..."z").contains($0) }
+            && body.contains { ("0"..."9").contains($0) } && !body.contains { $0 == "." || $0 == "-" || $0 == "_" }
+    }
 }

@@ -413,7 +413,7 @@ public final class CollectionsModel: ObservableObject {
     private static func launcher(_ command: String) -> String? {
         let name = launcherName(command)
         guard !name.isEmpty, !name.contains(where: \.isWhitespace), !name.contains("="),
-              !CredentialHeuristics.looksLikeCredential(name), !looksLikeRandomToken(name) else { return nil }
+              !CredentialHeuristics.looksLikeCredential(name), !CredentialHeuristics.looksLikeRandomToken(name) else { return nil }
         return name
     }
 
@@ -425,7 +425,7 @@ public final class CollectionsModel: ObservableObject {
         if arg.contains("://") {
             return urlOrigin(arg).map { "\($0.scheme)://\($0.host)" }
         }
-        guard !CredentialHeuristics.looksLikeCredential(arg), !looksLikeRandomToken(arg) else { return nil }
+        guard !CredentialHeuristics.looksLikeCredential(arg), !CredentialHeuristics.looksLikeRandomToken(arg) else { return nil }
         if isExplicitPath(arg) {
             // A colon anywhere but a drive letter's is a Windows switch's value, `/p:secret`.
             let colonIsDrive = isDriveRoot(arg) && !arg.dropFirst(2).contains(":")
@@ -451,17 +451,6 @@ public final class CollectionsModel: ObservableObject {
     private static func trimmingOneTrailingSeparator(_ path: String) -> String {
         guard let last = path.unicodeScalars.last, last == "/" || last == "\\" else { return path }
         return String(String.UnicodeScalarView(path.unicodeScalars.dropLast()))
-    }
-
-    /// A random token rather than a name: with its slashes removed, at least 20 characters, with
-    /// an upper-case letter, a lower-case letter and a digit, and none of `.`, `-` or `_`. An AWS
-    /// secret key has this shape and a `/`, which `looksLikeCredential` refuses to consider; a
-    /// real path or package name nearly always has a dot, a hyphen or no digits.
-    private static func looksLikeRandomToken(_ text: String) -> Bool {
-        let body = text.unicodeScalars.filter { $0 != "/" && $0 != "\\" }
-        return body.count >= 20
-            && body.contains { ("A"..."Z").contains($0) } && body.contains { ("a"..."z").contains($0) }
-            && body.contains { ("0"..."9").contains($0) } && !body.contains { $0 == "." || $0 == "-" || $0 == "_" }
     }
 
     /// A flag without an attached value whose name says the next argument is a secret, whatever

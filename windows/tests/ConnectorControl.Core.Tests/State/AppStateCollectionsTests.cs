@@ -4122,8 +4122,8 @@ public class AppStateCollectionsTests
 
     /// <summary>
     /// A connector Claude reaches by URL keeps its secret in a header or in the URL itself. One that
-    /// gains a bearer token in its headers, or a key in its URL's query, after it was reviewed waits
-    /// for review as one that gains it in an argument does.
+    /// gains a bearer token in its headers, or a key in its URL's query, path or fragment, after it
+    /// was reviewed waits for review as one that gains it in an argument does.
     /// </summary>
     [Fact]
     public void ATokenAddedToAReviewedUrlConnectorWaitsForReview()
@@ -4142,6 +4142,10 @@ public class AppStateCollectionsTests
         Assert.Equal(AppState.NewCredentialError("api"), state.PublishError?.Message);   // a header
         Assert.Null(state.Upsert("api", Api($"https://mcp.example.com/mcp?api_key={LongToken}"), "api"));
         Assert.Equal(AppState.NewCredentialError("api"), state.PublishError?.Message);   // the URL's query
+        Assert.Null(state.Upsert("api", Api($"https://mcp.example.com/mcp/sk-ak-{LongToken}/sse"), "api"));
+        Assert.Equal(AppState.NewCredentialError("api"), state.PublishError?.Message);   // the URL's path
+        Assert.Null(state.Upsert("api", Api($"https://mcp.example.com/mcp#access_token={LongToken}"), "api"));
+        Assert.Equal(AppState.NewCredentialError("api"), state.PublishError?.Message);   // the URL's fragment
         Assert.Equal(before, File.ReadAllBytes(file));
         Assert.False(JsonText.FileContains(file, LongToken));
     }

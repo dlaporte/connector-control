@@ -3558,8 +3558,8 @@ final class AppStateCollectionsTests: XCTestCase {
     }
 
     /// A connector Claude reaches by URL keeps its secret in a header or in the URL itself. One that
-    /// gains a bearer token in its headers, or a key in its URL's query, after it was reviewed waits
-    /// for review as one that gains it in an argument does.
+    /// gains a bearer token in its headers, or a key in its URL's query, path or fragment, after it
+    /// was reviewed waits for review as one that gains it in an argument does.
     func testATokenAddedToAReviewedURLConnectorWaitsForReview() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
@@ -3577,6 +3577,10 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("api"), "a header")
         XCTAssertNil(state.upsert(name: "api", entry: api("https://mcp.example.com/mcp?api_key=\(longToken)"), renamedFrom: "api"))
         XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("api"), "the URL's query")
+        XCTAssertNil(state.upsert(name: "api", entry: api("https://mcp.example.com/mcp/sk-ak-\(longToken)/sse"), renamedFrom: "api"))
+        XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("api"), "the URL's path")
+        XCTAssertNil(state.upsert(name: "api", entry: api("https://mcp.example.com/mcp#access_token=\(longToken)"), renamedFrom: "api"))
+        XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("api"), "the URL's fragment")
         XCTAssertEqual(try Data(contentsOf: file), before)
         XCTAssertFalse(try jsonFile(file, contains: longToken))
     }

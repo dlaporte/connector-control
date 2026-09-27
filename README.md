@@ -248,8 +248,9 @@ The sheet decides what leaves the machine:
 - **Document preview** is the document itself, exactly as it will be
   written. An argument or shared value that looks like a credential is
   listed under the preview, each line naming the connector it came from,
-  and so are a header or a URL query parameter named like a secret or
-  holding one, and a URL with a user name or password in it.
+  and so are a header or a URL query or fragment parameter named like a
+  secret or holding one, a URL path segment that looks like a key, and a
+  URL with a user name or password in it.
   Nothing is ever edited on your behalf; the preview is there so you see
   every byte before it leaves.
 

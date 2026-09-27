@@ -506,7 +506,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     {
         var name = LauncherName(command);
         return name.Length == 0 || name.Any(char.IsWhiteSpace) || name.Contains('=')
-            || CredentialHeuristics.LooksLikeCredential(name) || LooksLikeRandomToken(name) ? null : name;
+            || CredentialHeuristics.LooksLikeCredential(name) || CredentialHeuristics.LooksLikeRandomToken(name) ? null : name;
     }
 
     /// <summary>
@@ -521,7 +521,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             return UrlOrigin(arg) is { } origin ? $"{origin.Scheme}://{origin.Host}" : null;
         }
-        if (CredentialHeuristics.LooksLikeCredential(arg) || LooksLikeRandomToken(arg))
+        if (CredentialHeuristics.LooksLikeCredential(arg) || CredentialHeuristics.LooksLikeRandomToken(arg))
         {
             return null;
         }
@@ -563,20 +563,6 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary><paramref name="path"/> without one trailing separator of either kind.</summary>
     private static string TrimmingOneTrailingSeparator(string path) =>
         path.EndsWith('/') || path.EndsWith('\\') ? path[..^1] : path;
-
-    /// <summary>
-    /// A random token rather than a name: with its slashes removed, at least 20 characters, with
-    /// an upper-case letter, a lower-case letter and a digit, and none of <c>.</c>, <c>-</c> or
-    /// <c>_</c>. An AWS secret key has this shape and a <c>/</c>, which <c>LooksLikeCredential</c>
-    /// refuses to consider; a real path or package name nearly always has a dot, a hyphen or no digits.
-    /// </summary>
-    private static bool LooksLikeRandomToken(string text)
-    {
-        var body = text.Where(c => c != '/' && c != '\\').ToList();
-        return body.Count >= 20
-            && body.Any(char.IsAsciiLetterUpper) && body.Any(char.IsAsciiLetterLower)
-            && body.Any(char.IsAsciiDigit) && !body.Any(c => c is '.' or '-' or '_');
-    }
 
     /// <summary>
     /// A flag without an attached value whose name says the next argument is a secret, whatever
