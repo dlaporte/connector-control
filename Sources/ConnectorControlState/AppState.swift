@@ -1880,6 +1880,11 @@ public final class AppState: ObservableObject {
     /// (`forgetOriginsOfDepartedCollections`), so it belongs to no collection here and whatever
     /// later bears the name inherits its paths but not its folders. One test for both readers: the
     /// union that decides what a document may carry, and the binding a new publish builds.
+    ///
+    /// A residual: a collection deleted and made again under its name on the other machine, both
+    /// landing here in one sync, never left the store as this machine saw it, so the new one is read
+    /// as the old one and keeps its releases and publish folders. Only an identity the store keeps
+    /// for each collection, beside its name, can tell the two apart.
     static func isOwn(_ record: CollectionsLocalCache.KeptRecord?, filedUnder name: String,
                       of collection: String, publishing origin: String?) -> Bool {
         guard let recorded = record?.origin else { return false }

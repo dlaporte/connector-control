@@ -1476,6 +1476,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// whatever later bears the name inherits its paths but not its folders. One test for both
     /// readers: the union that decides what a document may carry, and the binding a new publish
     /// builds.
+    /// <para>
+    /// A residual: a collection deleted and made again under its name on the other machine, both
+    /// landing here in one sync, never left the store as this machine saw it, so the new one is read
+    /// as the old one and keeps its releases and publish folders. Only an identity the store keeps
+    /// for each collection, beside its name, can tell the two apart.
+    /// </para>
     /// </summary>
     internal static bool IsOwn(CollectionsLocalCache.KeptRecord? record, string name, string collection, string? origin) =>
         record?.Origin is { } recorded

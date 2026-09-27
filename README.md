@@ -451,7 +451,11 @@ machines that follow it, including the one that publishes it.
   it and pressing Publish: put back later, it is refused and listed again.
   A Release belongs to the collection you gave it in: a collection made
   later under a deleted one's name, or renamed onto it, starts with none,
-  and its sheet lists the path again.
+  and its sheet lists the path again. One limit: if your other machine
+  deletes a collection and makes a new one with the same name, and both
+  changes reach this machine in the same sync, this machine cannot tell
+  the two apart, so the new one keeps the old one's releases and publish
+  folders.
 - A differently spelled version of a marked path is a different path to the
   app — another case, `~` in place of your home folder, a trailing slash.
   It is not recognised as the one you marked, so it travels as written;
