@@ -3696,6 +3696,35 @@ final class AppStateCollectionsTests: XCTestCase {
         }
     }
 
+    /// A `$` starts a reference only before a name in capitals, as a shell writes its variables,
+    /// that does not look like a secret itself. A random token that starts with `$`, and a password
+    /// that does where a reference was reviewed, are literals, and wait for review.
+    func testALiteralThatStartsWithADollarWaitsForReview() throws {
+        func api(_ url: String, _ headers: [String: String] = [:]) -> MCPEntry {
+            var object: [String: JSONValue] = ["type": .string("http"), "url": .string(url)]
+            if !headers.isEmpty { object["headers"] = .object(headers.mapValues(JSONValue.string)) }
+            return MCPEntry(config: .object(object))
+        }
+        for (label, reviewed, gains, secret) in [
+            ("a token under a plain header", api("https://m.example.com/mcp"),
+             api("https://m.example.com/mcp", ["X-Team": "$Zq8RkT2mWx7LpN4vHc9J01Ab"]), "Zq8RkT2mWx7LpN4vHc9J01Ab"),
+            ("a password where a reference was reviewed", api("https://m.example.com/mcp", ["Authorization": "Bearer $API_TOKEN"]),
+             api("https://m.example.com/mcp", ["Authorization": "Bearer $uperSecret99Passw0rd"]), "uperSecret99Passw0rd"),
+            ("a URL's password where a reference was reviewed", api("https://reader:${DB_PASS}@db.example.com/mcp"),
+             api("https://reader:$uperSecret99Passw0rd@db.example.com/mcp"), "uperSecret99Passw0rd"),
+        ] {
+            let (h, state) = AppStateHarness.started()
+            defer { h.dispose() }
+            XCTAssertNil(state.upsert(name: "api", entry: reviewed, renamedFrom: nil))
+            let file = try h.publish(state, "Default")
+            let before = try Data(contentsOf: file)
+            XCTAssertNil(state.upsert(name: "api", entry: gains, renamedFrom: "api"))
+            XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("api"), label)
+            XCTAssertEqual(try Data(contentsOf: file), before, label)
+            XCTAssertFalse(try jsonFile(file, contains: secret), label)
+        }
+    }
+
     /// A binding from before reviews were kept has reviewed what it already published: at the
     /// first load that finds the folder holding what the collection renders, all of it. One that
     /// meets a change it never published has reviewed only what the folder holds unchanged.

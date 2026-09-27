@@ -473,7 +473,14 @@ final class CollectionDocumentTests: XCTestCase {
         XCTAssertEqual(warnings(header("Authorization", "${CC_NEEDS:TOKEN}")), ["headers.Authorization refers to a credential"])
         XCTAssertEqual(warnings(header("Authorization", "Bearer $API_TOKEN")), ["headers.Authorization refers to a credential"],
                        "a reference without braces")
+        XCTAssertEqual(warnings(header("Authorization", "$AUTH_HEADER")), ["headers.Authorization refers to a credential"])
         XCTAssertEqual(warnings(header("Authorization", "pa$$word")), ["headers.Authorization looks like a credential"])
+        XCTAssertEqual(warnings(header("Authorization", "Bearer $uperSecret99Passw0rd")), ["headers.Authorization looks like a credential"],
+                       "a `$` before a name not in capitals is no reference")
+        XCTAssertEqual(warnings(header("Authorization", "$ABCDEFGHIJKLMNOPQRSTUVWXYZ012345")), ["headers.Authorization looks like a credential"],
+                       "nor is one before a name that looks like a secret itself")
+        XCTAssertEqual(warnings(header("X-Team", "$Zq8RkT2mWx7LpN4vHc9J01Ab")), ["headers.X-Team looks like a credential"],
+                       "a random token that starts with `$`, under a plain name")
         XCTAssertEqual(warnings(header("Authorization", "Bearer abc")), ["headers.Authorization looks like a credential"])
         XCTAssertEqual(warnings(header("Authorization", "Bearer ${A} extra")), ["headers.Authorization looks like a credential"],
                        "a reference beside more than a scheme word")
@@ -482,6 +489,8 @@ final class CollectionDocumentTests: XCTestCase {
         XCTAssertEqual(warnings(url("https://reader:@db.example.com/mcp")), ["url.userinfo names a user"])
         XCTAssertEqual(warnings(url("https://reader:${DB_PASSWORD}@db.example.com/mcp")), ["url.userinfo refers to a credential"])
         XCTAssertEqual(warnings(url("https://reader:s3cret@db.example.com/mcp")), ["url.userinfo looks like a credential"])
+        XCTAssertEqual(warnings(url("https://reader:$uperSecret99Passw0rd@db.example.com/mcp")), ["url.userinfo looks like a credential"],
+                       "a password that starts with `$`")
         XCTAssertEqual(warnings(url("https://ghp_abc@git.example.com/mcp")), ["url.userinfo looks like a credential"],
                        "a token as the user")
         XCTAssertEqual(warnings(url("https://a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6@git.example.com/mcp")), ["url.userinfo looks like a credential"],

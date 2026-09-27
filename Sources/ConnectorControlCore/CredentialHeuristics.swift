@@ -32,7 +32,8 @@ public enum CredentialHeuristics {
     /// Whether `value` takes its secret from somewhere else rather than holding it: one or more
     /// `${NAME}` or `$NAME` references — an environment variable, a `${CC_NEEDS:NAME}` placeholder —
     /// with, beside them, at most one word of letters, an authentication scheme such as `Bearer`.
-    /// Walked one Unicode scalar at a time, as the Windows mirror walks UTF-16 units.
+    /// A `$NAME` without braces counts only as `shellVariableEnd` reads one. Walked one Unicode
+    /// scalar at a time, as the Windows mirror walks UTF-16 units.
     public static func isReference(_ value: String) -> Bool {
         let scalars = Array(value.unicodeScalars)
         var rest: [Unicode.Scalar] = []
@@ -44,11 +45,7 @@ public enum CredentialHeuristics {
                scalars[(index + 2)..<close].allSatisfy({ isASCIILetterOrDigit($0) || $0 == "_" || $0 == ":" }) {
                 references += 1
                 index = close + 1
-            } else if scalars[index] == "$", index + 1 < scalars.count,
-                      ("A"..."Z").contains(scalars[index + 1]) || ("a"..."z").contains(scalars[index + 1]) || scalars[index + 1] == "_" {
-                // `$NAME`, as a shell writes a variable: a letter or `_`, then letters, digits and `_`.
-                var end = index + 2
-                while end < scalars.count, isASCIILetterOrDigit(scalars[end]) || scalars[end] == "_" { end += 1 }
+            } else if scalars[index] == "$", let end = shellVariableEnd(scalars, from: index + 1) {
                 references += 1
                 index = end
             } else {
@@ -58,6 +55,21 @@ public enum CredentialHeuristics {
         }
         let words = rest.split(separator: " ")
         return references > 0 && words.count <= 1 && words.allSatisfy { $0.allSatisfy { ("A"..."Z").contains($0) || ("a"..."z").contains($0) } }
+    }
+
+    /// Where the `$NAME` whose name starts at `start` ends, or nil where the text there is no such
+    /// reference. The name is the whole run of letters, digits and `_`, and counts only where it is
+    /// written as a shell's environment variables are, `^[A-Z_][A-Z0-9_]*$`, and does not itself look
+    /// like a credential or a random token: `$API_TOKEN` refers to a secret, while `$uperSecret99…`
+    /// or a `$` before a random token is one.
+    private static func shellVariableEnd(_ scalars: [Unicode.Scalar], from start: Int) -> Int? {
+        var end = start
+        while end < scalars.count, isASCIILetterOrDigit(scalars[end]) || scalars[end] == "_" { end += 1 }
+        let name = scalars[start..<end]
+        guard let first = name.first, ("A"..."Z").contains(first) || first == "_",
+              name.allSatisfy({ ("A"..."Z").contains($0) || ("0"..."9").contains($0) || $0 == "_" }) else { return nil }
+        let text = String(String.UnicodeScalarView(name))
+        return looksLikeCredential(text) || looksLikeRandomToken(text) ? nil : end
     }
 
     static func isASCIILetterOrDigit(_ scalar: Unicode.Scalar) -> Bool {

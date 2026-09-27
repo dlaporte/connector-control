@@ -4276,6 +4276,41 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// A <c>$</c> starts a reference only before a name in capitals, as a shell writes its variables,
+    /// that does not look like a secret itself. A random token that starts with <c>$</c>, and a password
+    /// that does where a reference was reviewed, are literals, and wait for review.
+    /// </summary>
+    [Theory]
+    [InlineData("a token under a plain header")]
+    [InlineData("a password where a reference was reviewed")]
+    [InlineData("a URL's password where a reference was reviewed")]
+    public void ALiteralThatStartsWithADollarWaitsForReview(string label)
+    {
+        static McpEntry Api(string url, params (string Name, string Value)[] headers) => new(headers.Length == 0
+            ? JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String(url)))
+            : JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String(url)),
+                ("headers", JsonValue.Object(headers.Select(p => (p.Name, JsonValue.String(p.Value))).ToArray()))));
+        var (reviewed, gains, secret) = label switch
+        {
+            "a token under a plain header" => (Api("https://m.example.com/mcp"),
+                Api("https://m.example.com/mcp", ("X-Team", "$Zq8RkT2mWx7LpN4vHc9J01Ab")), "Zq8RkT2mWx7LpN4vHc9J01Ab"),
+            "a password where a reference was reviewed" => (Api("https://m.example.com/mcp", ("Authorization", "Bearer $API_TOKEN")),
+                Api("https://m.example.com/mcp", ("Authorization", "Bearer $uperSecret99Passw0rd")), "uperSecret99Passw0rd"),
+            _ => (Api("https://reader:${DB_PASS}@db.example.com/mcp"),
+                Api("https://reader:$uperSecret99Passw0rd@db.example.com/mcp"), "uperSecret99Passw0rd"),
+        };
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.Upsert("api", reviewed, null));
+        var file = h.Publish(state, "Default");
+        var before = File.ReadAllBytes(file);
+        Assert.Null(state.Upsert("api", gains, "api"));
+        Assert.Equal(AppState.NewCredentialError("api"), state.PublishError?.Message);
+        Assert.Equal(before, File.ReadAllBytes(file));
+        Assert.False(JsonText.FileContains(file, secret));
+    }
+
+    /// <summary>
     /// A binding from before reviews were kept has reviewed what it already published: at the first
     /// load that finds the folder holding what the collection renders, all of it. One that meets a
     /// change it never published has reviewed only what the folder holds unchanged.

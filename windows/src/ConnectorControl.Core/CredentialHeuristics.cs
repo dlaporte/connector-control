@@ -45,7 +45,8 @@ public static class CredentialHeuristics
     /// Whether <paramref name="value"/> takes its secret from somewhere else rather than holding it: one
     /// or more <c>${NAME}</c> or <c>$NAME</c> references — an environment variable, a
     /// <c>${CC_NEEDS:NAME}</c> placeholder — with, beside them, at most one word of letters, an
-    /// authentication scheme such as <c>Bearer</c>. Walked one UTF-16 unit at a time, as the Mac walks
+    /// authentication scheme such as <c>Bearer</c>. A <c>$NAME</c> without braces counts only as
+    /// <see cref="ShellVariableEnd"/> reads one. Walked one UTF-16 unit at a time, as the Mac walks
     /// Unicode scalars.
     /// </summary>
     public static bool IsReference(string value)
@@ -63,14 +64,8 @@ public static class CredentialHeuristics
                 references++;
                 index = close + 1;
             }
-            else if (value[index] == '$' && index + 1 < value.Length && (char.IsAsciiLetter(value[index + 1]) || value[index + 1] == '_'))
+            else if (value[index] == '$' && ShellVariableEnd(value, index + 1) is { } end)
             {
-                // $NAME, as a shell writes a variable: a letter or _, then letters, digits and _.
-                var end = index + 2;
-                while (end < value.Length && (char.IsAsciiLetterOrDigit(value[end]) || value[end] == '_'))
-                {
-                    end++;
-                }
                 references++;
                 index = end;
             }
@@ -82,6 +77,29 @@ public static class CredentialHeuristics
         }
         var words = rest.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         return references > 0 && words.Length <= 1 && words.All(word => word.All(char.IsAsciiLetter));
+    }
+
+    /// <summary>
+    /// Where the <c>$NAME</c> whose name starts at <paramref name="start"/> ends, or null where the text
+    /// there is no such reference. The name is the whole run of letters, digits and <c>_</c>, and counts
+    /// only where it is written as a shell's environment variables are, <c>^[A-Z_][A-Z0-9_]*$</c>, and
+    /// does not itself look like a credential or a random token: <c>$API_TOKEN</c> refers to a secret,
+    /// while <c>$uperSecret99…</c> or a <c>$</c> before a random token is one.
+    /// </summary>
+    private static int? ShellVariableEnd(string value, int start)
+    {
+        var end = start;
+        while (end < value.Length && (char.IsAsciiLetterOrDigit(value[end]) || value[end] == '_'))
+        {
+            end++;
+        }
+        var name = value[start..end];
+        if (name.Length == 0 || !(char.IsAsciiLetterUpper(name[0]) || name[0] == '_')
+            || !name.All(c => char.IsAsciiLetterUpper(c) || char.IsAsciiDigit(c) || c == '_'))
+        {
+            return null;
+        }
+        return LooksLikeCredential(name) || LooksLikeRandomToken(name) ? null : end;
     }
 
     /// <summary>

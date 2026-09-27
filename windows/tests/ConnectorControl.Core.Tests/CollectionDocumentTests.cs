@@ -639,7 +639,12 @@ public class CollectionDocumentTests
         Assert.Equal(["headers.Authorization refers to a credential"], Header("Authorization", "Bearer ${API_TOKEN}"));
         Assert.Equal(["headers.Authorization refers to a credential"], Header("Authorization", "${CC_NEEDS:TOKEN}"));
         Assert.Equal(["headers.Authorization refers to a credential"], Header("Authorization", "Bearer $API_TOKEN"));   // a reference without braces
+        Assert.Equal(["headers.Authorization refers to a credential"], Header("Authorization", "$AUTH_HEADER"));
         Assert.Equal(["headers.Authorization looks like a credential"], Header("Authorization", "pa$$word"));
+        // A $ before a name not in capitals is no reference, nor is one before a name that looks like a secret itself.
+        Assert.Equal(["headers.Authorization looks like a credential"], Header("Authorization", "Bearer $uperSecret99Passw0rd"));
+        Assert.Equal(["headers.Authorization looks like a credential"], Header("Authorization", "$ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"));
+        Assert.Equal(["headers.X-Team looks like a credential"], Header("X-Team", "$Zq8RkT2mWx7LpN4vHc9J01Ab"));   // a random token that starts with $, under a plain name
         Assert.Equal(["headers.Authorization looks like a credential"], Header("Authorization", "Bearer abc"));
         // A reference beside more than a scheme word.
         Assert.Equal(["headers.Authorization looks like a credential"], Header("Authorization", "Bearer ${A} extra"));
@@ -648,6 +653,7 @@ public class CollectionDocumentTests
         Assert.Equal(["url.userinfo names a user"], Url("https://reader:@db.example.com/mcp"));
         Assert.Equal(["url.userinfo refers to a credential"], Url("https://reader:${DB_PASSWORD}@db.example.com/mcp"));
         Assert.Equal(["url.userinfo looks like a credential"], Url("https://reader:s3cret@db.example.com/mcp"));
+        Assert.Equal(["url.userinfo looks like a credential"], Url("https://reader:$uperSecret99Passw0rd@db.example.com/mcp"));   // a password that starts with $
         Assert.Equal(["url.userinfo looks like a credential"], Url("https://ghp_abc@git.example.com/mcp"));   // a token as the user
         Assert.Equal(["url.userinfo looks like a credential"], Url("https://a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6@git.example.com/mcp"));   // 32 letters and digits
         Assert.Equal(["url.userinfo looks like a credential"], Url("https://Zq8RkT2mWx7LpN4vHc9J@git.example.com/mcp"));   // a random token
