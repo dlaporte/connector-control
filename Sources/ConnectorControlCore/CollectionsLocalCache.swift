@@ -159,15 +159,56 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         /// says whose folders they were once the sidecar entry that named it is gone. Absent in a
         /// binding written before it was kept.
         public var origin: String?
+        /// The connectors the author has reviewed for publishing, by name: what the sheet's
+        /// Publish showed them in the preview. A publish that happens on its own writes nothing
+        /// about a connector outside this list, and holds for review instead. nil in a binding
+        /// written before the list was kept, which the first publish after fills in from the
+        /// document already in the folder.
+        public var reviewedConnectors: Set<String>?
+        /// What `CollectionDocument.credentialWarnings` found in each reviewed connector when it
+        /// was reviewed, as `reviewedWarning(_:_:)` keys. A warning outside this list is a
+        /// credential nobody has seen travel, and it holds the publish for review too.
+        public var reviewedWarnings: Set<String>
         public init(folder: String, lastWrittenHash: String?, markedValues: Set<String> = [],
                     releasedValues: Set<String> = [], publishedFolders: Set<String> = [],
-                    origin: String? = nil) {
+                    origin: String? = nil, reviewedConnectors: Set<String>? = nil,
+                    reviewedWarnings: Set<String> = []) {
             self.folder = folder
             self.lastWrittenHash = lastWrittenHash
             self.markedValues = markedValues
             self.releasedValues = releasedValues
             self.publishedFolders = publishedFolders
             self.origin = origin
+            self.reviewedConnectors = reviewedConnectors
+            self.reviewedWarnings = reviewedWarnings
+        }
+
+        /// One connector's credential warning, as `reviewedWarnings` holds it.
+        public static func reviewedWarning(_ connector: String, _ warning: String) -> String { connector + "\n" + warning }
+
+        /// This binding with `connector`'s review under `newName`: a rename changes nothing the
+        /// author reviewed. A connector never reviewed stays unreviewed under its new name.
+        public func movingReview(of connector: String, to newName: String) -> PublishBinding {
+            guard var names = reviewedConnectors, names.remove(connector) != nil else { return self }
+            names.insert(newName)
+            let prefix = Self.reviewedWarning(connector, "")
+            var moved = self
+            moved.reviewedConnectors = names
+            moved.reviewedWarnings = Set(reviewedWarnings.map {
+                $0.hasPrefix(prefix) ? Self.reviewedWarning(newName, String($0.dropFirst(prefix.count))) : $0
+            })
+            return moved
+        }
+
+        /// This binding's review of the connectors in `names` alone: one deleted and added again
+        /// under its old name is a new connector, and reviewed again.
+        public func keepingReview(of names: Set<String>) -> PublishBinding {
+            var kept = self
+            kept.reviewedConnectors = reviewedConnectors?.intersection(names)
+            kept.reviewedWarnings = reviewedWarnings.filter { key in
+                key.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first.map { names.contains(String($0)) } ?? false
+            }
+            return kept
         }
     }
 
@@ -320,6 +361,14 @@ extension CollectionsLocalCache.PublishBinding {
             object["publishedFolders"] = .array(publishedFolders.sorted { $0.ordinallyPrecedes($1) }.map(JSONValue.string))
         }
         if let origin { object["origin"] = .string(origin) }
+        // Written even when empty: an empty list is a review of nothing, and an absent one is a
+        // binding from before the list was kept.
+        if let reviewedConnectors {
+            object["reviewedConnectors"] = .array(reviewedConnectors.sorted { $0.ordinallyPrecedes($1) }.map(JSONValue.string))
+        }
+        if !reviewedWarnings.isEmpty {
+            object["reviewedWarnings"] = .array(reviewedWarnings.sorted { $0.ordinallyPrecedes($1) }.map(JSONValue.string))
+        }
         return .object(object)
     }
 
@@ -338,7 +387,10 @@ extension CollectionsLocalCache.PublishBinding {
             publishedFolders: try CollectionsFile.stringSet(object["publishedFolders"], "\(what) publishedFolders")
                 .union([folder]),
             // Absent in a binding written before the origin was kept: the next publish fills it in.
-            origin: try CollectionsFile.optionalString(object["origin"], "\(what) origin"))
+            origin: try CollectionsFile.optionalString(object["origin"], "\(what) origin"),
+            reviewedConnectors: object["reviewedConnectors"] == nil
+                ? nil : try CollectionsFile.stringSet(object["reviewedConnectors"], "\(what) reviewedConnectors"),
+            reviewedWarnings: try CollectionsFile.stringSet(object["reviewedWarnings"], "\(what) reviewedWarnings"))
     }
 }
 

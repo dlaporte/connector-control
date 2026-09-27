@@ -82,6 +82,10 @@ public final class AppState: ObservableObject {
 
     public static func publishFolderCarriedError(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine’s publish folder as written, in \(field). Open Publishing Settings to use ${COLLECTION_DIR} in its place." }
 
+    public static func unreviewedConnectorError(_ connector: String) -> String { "“\(connector)” hasn’t been reviewed for publishing. Open Publishing Settings to review it." }
+
+    public static func newCredentialError(_ connector: String) -> String { "“\(connector)” may now carry a credential. Open Publishing Settings to review it." }
+
     public static func keptPathCarriedError(_ connector: String, _ field: String) -> String { "“\(connector)” carries a path this machine keeps back, in \(field). Open Publishing Settings to review it." }
 
     /// The way back is the second sentence: the refusal holds whatever the user does, and a
@@ -789,6 +793,10 @@ public final class AppState: ObservableObject {
             return AppState.duplicateNameError(trimmed)
         }
         if let old = oldName, old != trimmed { store.collections[target]?.mcps.removeValue(forKey: old) }
+        // A rename changes nothing the author reviewed for publishing: the review follows it.
+        if let old = oldName, old != trimmed, let binding = collectionsCache.published[target] {
+            collectionsCache.published[target] = binding.movingReview(of: old, to: trimmed)
+        }
         store.collections[target, default: Collection()].mcps[trimmed] = entry
         editPublishIntent(of: target) { intent in
             if let old = oldName, old != trimmed { intent = intent.movingConnector(old, to: trimmed) }
@@ -1560,6 +1568,10 @@ public final class AppState: ObservableObject {
         let remembered = collectionsCache.kept[collection]
         let own = AppState.isOwn(remembered, filedUnder: collection, of: collection, publishing: record?.origin)
         let marked = previous?.markedValues ?? remembered?.markedValues ?? []
+        // What the sheet's Publish showed is what it reviewed. Choose Folder moves a binding and
+        // reviews nothing, so it carries the review it had.
+        let reviewing = reviewedValues != nil || previous == nil
+        let review = AppState.review(of: store.collections[collection]?.mcps ?? [:], intent: intent)
         collectionsCache.published[collection] = CollectionsLocalCache.PublishBinding(
             folder: url.path,
             // A new folder has nothing in it this app wrote, so the next write is unconditional.
@@ -1573,7 +1585,9 @@ public final class AppState: ObservableObject {
                 .union(previous.map { [$0.folder] } ?? []).union([url.path]),
             // Carried so what this binding leaves behind still says which collection's folders
             // they were, after the sidecar entry that names the origin has gone.
-            origin: origin)
+            origin: origin,
+            reviewedConnectors: reviewing ? review.connectors : previous?.reviewedConnectors,
+            reviewedWarnings: reviewing ? review.warnings : previous?.reviewedWarnings ?? [])
         if own {
             let departed = remembered?.departedFolders ?? []
             collectionsCache.kept[collection] = departed.isEmpty
@@ -1618,7 +1632,7 @@ public final class AppState: ObservableObject {
         if let reviewedValues, var changed = binding {
             changed.releasedValues = AppState.released(changed.releasedValues, adding: releasedValues, marked: reviewedValues)
             changed.markedValues = reviewedValues
-            binding = changed
+            binding = reviewedBy(changed, collection, intent)
         }
         let listsChanged = binding != collectionsCache.published[collection]
         guard record.intent != intent || listsChanged else { return nil }
@@ -1899,7 +1913,9 @@ public final class AppState: ObservableObject {
 
     /// Every collection this machine publishes, written when what it says has changed. Only the
     /// bindings in this machine's cache: the sidecar travels with the master list, so another
-    /// machine's publish folder is recorded there but is that machine's to write.
+    /// machine's publish folder is recorded there but is that machine's to write. A change that
+    /// brings in a connector the author has not reviewed in the sheet, or a credential one did not
+    /// hold when they did, is held for review rather than written (`refuseUnreviewed`).
     ///
     /// `forcing` names the one collection whose write happens whether or not the document
     /// changed — a retry, where the recorded hash says the bytes are in a folder they never
@@ -1918,15 +1934,36 @@ public final class AppState: ObservableObject {
                 // machine does not send it. Only the author's Publish in the sheet clears it.
                 try refuseKeptBackPaths(in: document, of: collection)
                 let hash = try AppState.publishHash(of: document)
+                let held = store.collections[collection]?.mcps ?? [:]
                 guard hash != binding.lastWrittenHash || collection == forced else {
                     // The folder already holds what the store renders — the change that failed or
                     // was refused has been undone — so nothing is failing any more.
                     if publishError?.collection == collection { publishError = nil }
+                    // A binding from before reviews were kept has reviewed what it published, and
+                    // the folder holds all of it.
+                    if binding.reviewedConnectors == nil {
+                        collectionsCache.published[collection]?.reviewedConnectors = Set(held.keys)
+                        collectionsCache.published[collection]?.reviewedWarnings = AppState.review(of: held, intent: record.intent).warnings
+                        cacheChanged = true
+                    }
                     continue
                 }
                 let target = URL(fileURLWithPath: binding.folder)
                     .appendingPathComponent(CollectionDocument.fileName(slug: record.slug))
+                // Nothing reaches the folder that the author has not reviewed: a connector added,
+                // copied or imported since the sheet's last Publish, or a credential one now holds.
+                // A binding from before reviews were kept, meeting a change it has not published,
+                // has reviewed what the folder already holds of it.
+                var reviewed = binding
+                if reviewed.reviewedConnectors == nil {
+                    let published = AppState.alreadyPublished(document, at: target)
+                    reviewed.reviewedConnectors = published
+                    reviewed.reviewedWarnings = AppState.review(of: held.filter { published.contains($0.key) },
+                                                                intent: record.intent).warnings
+                }
+                try AppState.refuseUnreviewed(held, intent: record.intent, reviewedBy: reviewed)
                 try AtomicFile.write(document.serialized(), to: target, staging: service.paths.stagingDirURL)
+                collectionsCache.published[collection] = reviewed.keepingReview(of: Set(held.keys))
                 collectionsCache.published[collection]?.lastWrittenHash = hash
                 // Only ever added to here: a publish nobody reviewed may learn a path it now
                 // keeps back, never forget one.
@@ -1952,6 +1989,52 @@ public final class AppState: ObservableObject {
         } catch {
             lastError = AppState.friendly(error)
         }
+    }
+
+    /// What the author reviews of `held` when the sheet's Publish shows it the preview under
+    /// `intent`: every connector by name, and every credential warning in them as a
+    /// `PublishBinding.reviewedWarning` key.
+    static func review(of held: [String: MCPEntry], intent: PublishIntent) -> (connectors: Set<String>, warnings: Set<String>) {
+        var warnings: Set<String> = []
+        for (name, entry) in held {
+            for warning in CollectionDocument.credentialWarnings(entry.config, sharedEnv: intent.shareValues[name] ?? []) {
+                warnings.insert(CollectionsLocalCache.PublishBinding.reviewedWarning(name, warning))
+            }
+        }
+        return (Set(held.keys), warnings)
+    }
+
+    /// `binding` with every connector the sheet showed reviewed, under what it now shares.
+    private func reviewedBy(_ binding: CollectionsLocalCache.PublishBinding, _ collection: String,
+                            _ intent: PublishIntent) -> CollectionsLocalCache.PublishBinding {
+        let review = AppState.review(of: store.collections[collection]?.mcps ?? [:], intent: intent)
+        var reviewed = binding
+        reviewed.reviewedConnectors = review.connectors
+        reviewed.reviewedWarnings = review.warnings
+        return reviewed
+    }
+
+    /// Refuses a publish nobody reviewed, naming the first connector by name that `binding` has not
+    /// reviewed, or that now holds a credential warning its review did not.
+    static func refuseUnreviewed(_ held: [String: MCPEntry], intent: PublishIntent,
+                                 reviewedBy binding: CollectionsLocalCache.PublishBinding) throws {
+        for name in held.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+            guard binding.reviewedConnectors?.contains(name) == true else {
+                throw PublishIntentError.unreviewedConnector(connector: name)
+            }
+            guard let entry = held[name] else { continue }
+            if !review(of: [name: entry], intent: intent).warnings.isSubset(of: binding.reviewedWarnings) {
+                throw PublishIntentError.newCredential(connector: name)
+            }
+        }
+    }
+
+    /// The connectors `document` holds exactly as the document already at `target` does, which a
+    /// binding from before reviews were kept has published already. None when that document cannot
+    /// be read.
+    static func alreadyPublished(_ document: CollectionDocument, at target: URL) -> Set<String> {
+        guard let data = try? Data(contentsOf: target), let published = try? CollectionDocument.decode(data) else { return [] }
+        return Set(document.connectors.keys.filter { published.connectors[$0] == document.connectors[$0] })
     }
 
     /// What a document says, with the export stamp left out. The moment it was written is not
@@ -2119,6 +2202,12 @@ public final class AppState: ObservableObject {
         }
         if case PublishIntentError.publishFolderCarried(let connector, let field) = error {
             return publishFolderCarriedError(connector, field)
+        }
+        if case PublishIntentError.unreviewedConnector(let connector) = error {
+            return unreviewedConnectorError(connector)
+        }
+        if case PublishIntentError.newCredential(let connector) = error {
+            return newCredentialError(connector)
         }
         return error.localizedDescription
     }

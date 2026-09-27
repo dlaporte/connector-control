@@ -59,6 +59,9 @@
     "format": "needs your value: {0}"
   },
   "AppState.newCollectionTitle": "New Collection",
+  "AppState.newCredentialError": {
+    "format": "“{0}” may now carry a credential. Open Publishing Settings to review it."
+  },
   "AppState.newerDocumentError": "This collection was made by a newer Connector Control.",
   "AppState.noConnectorsSubtitle": "No connectors configured",
   "AppState.ownCollectionError": "This is your own published collection.",
@@ -96,6 +99,9 @@
   "AppState.unpublishedDirectoryCaution": {
     "mac": "${COLLECTION_DIR} has no folder until this collection is published from this Mac.",
     "win": "${COLLECTION_DIR} has no folder until this collection is published from this PC."
+  },
+  "AppState.unreviewedConnectorError": {
+    "format": "“{0}” hasn’t been reviewed for publishing. Open Publishing Settings to review it."
   },
   "ClaudeConfigIO.mcpServersNotObjectError": "mcpServers is not a JSON object",
   "ClaudeConfigIO.topLevelNotObjectError": "top level is not a JSON object",

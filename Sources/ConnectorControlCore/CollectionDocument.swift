@@ -30,6 +30,12 @@ public enum PublishIntentError: Error, Equatable {
     /// path marked in it, a path on one of this machine's lists of marked paths, or a folder this
     /// machine binds another collection to.
     case keptPathCarried(connector: String, field: String)
+    /// This connector has never been reviewed for publishing on this machine: it was added,
+    /// copied or imported since the author last pressed Publish in the sheet.
+    case unreviewedConnector(connector: String)
+    /// This connector now holds something `CollectionDocument.credentialWarnings` flags that it
+    /// did not hold when the author last reviewed it.
+    case newCredential(connector: String)
 }
 
 /// A path this machine keeps back, found as written in a document.

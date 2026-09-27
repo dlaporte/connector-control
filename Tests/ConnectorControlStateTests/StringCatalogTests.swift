@@ -80,6 +80,8 @@ final class StringCatalogTests: XCTestCase {
         "AppState.needsValueCaution": ["X"],
         "AppState.keptPathCarriedError": ["X", "Y"],
         "AppState.pathMarkMovedError": ["X"],
+        "AppState.newCredentialError": ["X"],
+        "AppState.unreviewedConnectorError": ["X"],
         "AppState.publishFolderCarriedError": ["X", "Y"],
         "AppState.publishSlugTakenError": ["X"],
         "AppState.restoreCollectionGoneError": ["X"],
@@ -178,6 +180,7 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.nameEmptyError"] = AppState.nameEmptyError
         actual["AppState.needsValueCaution"] = AppState.needsValueCaution("X")
         actual["AppState.newCollectionTitle"] = AppState.newCollectionTitle
+        actual["AppState.newCredentialError"] = AppState.newCredentialError("X")
         actual["AppState.newerDocumentError"] = AppState.newerDocumentError
         actual["AppState.noConnectorsSubtitle"] = AppState.noConnectorsSubtitle
         actual["AppState.ownCollectionError"] = AppState.ownCollectionError
@@ -199,6 +202,7 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.storeChangedBody"] = AppState.storeChangedBody
         actual["AppState.targetMustBeLocalError"] = AppState.targetMustBeLocalError
         actual["AppState.unpublishedDirectoryCaution"] = AppState.unpublishedDirectoryCaution
+        actual["AppState.unreviewedConnectorError"] = AppState.unreviewedConnectorError("X")
 
         // MARK: ClaudeConfigIO
         // Both messages are inline literals inside guard/throw statements, not

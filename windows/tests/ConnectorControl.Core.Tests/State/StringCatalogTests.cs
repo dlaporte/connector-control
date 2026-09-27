@@ -86,6 +86,8 @@ public class StringCatalogTests
         ["AppState.needsValueCaution"] = ["X"],
         ["AppState.keptPathCarriedError"] = ["X", "Y"],
         ["AppState.pathMarkMovedError"] = ["X"],
+        ["AppState.newCredentialError"] = ["X"],
+        ["AppState.unreviewedConnectorError"] = ["X"],
         ["AppState.publishFolderCarriedError"] = ["X", "Y"],
         ["AppState.publishSlugTakenError"] = ["X"],
         ["AppState.restoreCollectionGoneError"] = ["X"],
@@ -194,6 +196,7 @@ public class StringCatalogTests
         actual["AppState.nameEmptyError"] = AppState.NameEmptyError;
         actual["AppState.needsValueCaution"] = AppState.NeedsValueCaution("X");
         actual["AppState.newCollectionTitle"] = AppState.NewCollectionTitle;
+        actual["AppState.newCredentialError"] = AppState.NewCredentialError("X");
         actual["AppState.newerDocumentError"] = AppState.NewerDocumentError;
         actual["AppState.noConnectorsSubtitle"] = AppState.NoConnectorsSubtitle;
         actual["AppState.ownCollectionError"] = AppState.OwnCollectionError;
@@ -216,6 +219,7 @@ public class StringCatalogTests
         actual["AppState.storeChangedBody"] = AppState.StoreChangedBody;
         actual["AppState.targetMustBeLocalError"] = AppState.TargetMustBeLocalError;
         actual["AppState.unpublishedDirectoryCaution"] = AppState.UnpublishedDirectoryCaution;
+        actual["AppState.unreviewedConnectorError"] = AppState.UnreviewedConnectorError("X");
 
         // MARK: ClaudeConfigIO
         // Both messages are inline literals inside a throw, not exposed as callable

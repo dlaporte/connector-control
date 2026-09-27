@@ -938,7 +938,8 @@ final class CollectionsModelTests: XCTestCase {
                    file: CollectionsFile(collections: ["Team": synced(fileName: "team.json"),
                                                        "Default": published(slug: "default")]),
                    cache: CollectionsLocalCache(
-                       synced: [:], published: ["Default": .init(folder: folder.path, lastWrittenHash: nil)]))
+                       synced: [:], published: ["Default": .init(folder: folder.path, lastWrittenHash: nil,
+                                                                 reviewedConnectors: Set(state.store.collections["Default"]?.mcps.keys.map { $0 } ?? []))]))
     }
 
     func testTheBannerStripSpeaksOnlyForTheSelectedCollection() throws {

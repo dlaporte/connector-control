@@ -1176,14 +1176,14 @@ public class AppStateCollectionsTests
         state.SetEnabled("aws-mcp", false);
         Assert.Equal(first, File.ReadAllBytes(file));   // toggles never change the document
 
-        Assert.Null(state.Upsert("new", NewConnector("x"), null));
+        Assert.Null(state.Upsert("aws-mcp", NewConnector("x"), "aws-mcp"));
         var second = File.ReadAllBytes(file);
         Assert.NotEqual(first, second);
         var document = CollectionDocument.Decode(second);
         Assert.NotNull(document.Origin);
         Assert.Equal(state.ActiveCollection, document.Name);
         Assert.Equal(IsoTimestamp.String(h.Now), document.Exported);
-        Assert.Empty(document.Connectors["new"].Env);   // the added connector travels, with no env to share
+        Assert.Empty(document.Connectors["aws-mcp"].Env);   // the edited connector travels, with no env to share
         Assert.Null(state.PublishError);
     }
 
@@ -1268,19 +1268,19 @@ public class AppStateCollectionsTests
         // permission games. Deleting the folder would not: the writer creates it again.
         Directory.Delete(folder, recursive: true);
         TempDir.Touch(folder, "not a folder");
-        Assert.Null(state.Upsert("new", NewConnector("x"), null));
+        Assert.Null(state.Upsert("aws-mcp", NewConnector("x"), "aws-mcp"));
         Assert.Equal(state.ActiveCollection, state.PublishError?.Collection);
         var banner = Assert.IsType<CollectionBanner.PublishFailed>(state.CollectionBanner);
         Assert.Equal(state.ActiveCollection, banner.Collection);
 
         File.Delete(folder);
         Directory.CreateDirectory(folder);
-        Assert.Null(state.Upsert("another", NewConnector("y"), null));
+        Assert.Null(state.Upsert("scoutbook", NewConnector("y"), "scoutbook"));
         Assert.Null(state.PublishError);   // a write that succeeds clears the mark
         var document = CollectionDocument.Decode(File.ReadAllBytes(file));
-        // The change the failed write held back still lands.
-        Assert.Contains("new", document.Connectors.Keys);
-        Assert.Contains("another", document.Connectors.Keys);
+        // The change the failed write held back still lands, and the next with it.
+        Assert.Equal(["x", "y"], new[] { "aws-mcp", "scoutbook" }.Select(name =>
+            Assert.IsType<CollectionDocument.Launcher.Local>(document.Connectors[name].Launcher).Command));
     }
 
     [Fact]
@@ -1371,14 +1371,15 @@ public class AppStateCollectionsTests
         Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
         var file = Path.Combine(folder, Slug.Make(state.ActiveCollection) + ".json");
 
-        // The author's other machine added a connector to the shared master list.
+        // The author's other machine edited a connector in the shared master list.
         h.EditStoreOnDisk(store =>
         {
-            store.Collections[store.ActiveCollection].Mcps["elsewhere"] = NewConnector("z");
+            store.Collections[store.ActiveCollection].Mcps["aws-mcp"] = NewConnector("z");
         });
         state.Reload(ReloadTrigger.ExternalStoreAdoption);
         // The publishing machine carries another machine's change to the team.
-        Assert.Contains("elsewhere", CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors.Keys);
+        Assert.Equal("z", Assert.IsType<CollectionDocument.Launcher.Local>(
+            CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors["aws-mcp"].Launcher).Command);
     }
 
     [Fact]
@@ -2359,9 +2360,14 @@ public class AppStateCollectionsTests
         var carrying = editor.Args.First(row => KeptValue.Holds(row.Value, bound));
         carrying.Value = """{"client_id":"${COLLECTION_DIR}","client_secret":"s"}""";
         Assert.True(editor.Save());
+        // What holds it now is only that nobody has reviewed it.
+        Assert.Equal(AppState.UnreviewedConnectorError("svc"), state.PublishError?.Message);
+        Assert.False(JsonText.FileContains(file, bound));
+        var review = new PublishModel(state, state.ActiveCollection);
+        Assert.True(review.CanPublish);
+        Assert.Null(review.Publish());
         Assert.Null(state.PublishError);
         Assert.False(JsonText.FileContains(file, bound));
-        Assert.True(new PublishModel(state, state.ActiveCollection).CanPublish);
     }
 
     /// <summary>
@@ -2622,7 +2628,9 @@ public class AppStateCollectionsTests
         // An ordinary save after it: the answer the author gave still stands, with no banner. Before
         // this round the folder came back as the new binding's own and every save failed from here.
         var before = File.ReadAllBytes(document);
-        Assert.Null(state.Upsert("other", new McpEntry(NodeWith("/tmp/other.js")), null, "Team"));
+        Assert.Null(state.Upsert("tool", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String(folder + "/bin/tool")), ("args", JsonValue.Array([JsonValue.String("/tmp/other.js")])))),
+            "tool", "Team"));
         Assert.Null(state.PublishError);
         Assert.NotEqual(before, File.ReadAllBytes(document));   // and the save reached the folder
     }
@@ -2697,7 +2705,9 @@ public class AppStateCollectionsTests
         Assert.Null(dialog.Publish());
         var document = Path.Combine(third, Slug.Make("Team") + ".json");
         Assert.True(JsonText.FileContains(document, folder));       // released, it travels as written
-        Assert.Null(state.Upsert("other", new McpEntry(NodeWith("/tmp/other.js")), null, "Team"));
+        Assert.Null(state.Upsert("tool", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String(folder + "/bin/tool")), ("args", JsonValue.Array([JsonValue.String("/tmp/other.js")])))),
+            "tool", "Team"));
         Assert.Null(state.PublishError);                            // and a later save is an ordinary one
     }
 
@@ -3139,6 +3149,9 @@ public class AppStateCollectionsTests
 
         // A sibling folder that merely begins with its name is somebody else's path, and travels.
         Assert.Null(state.Upsert("sibling", new McpEntry(NodeWith(bound + "-tools/x.js")), null));
+        // Held only for review.
+        Assert.Equal(AppState.UnreviewedConnectorError("sibling"), state.PublishError?.Message);
+        Assert.Null(new PublishModel(state, state.ActiveCollection).Publish());
         Assert.Null(state.PublishError);
         var withSibling = File.ReadAllBytes(file);
         Assert.NotEqual(before, withSibling);
@@ -3348,6 +3361,9 @@ public class AppStateCollectionsTests
         var kept = dialog.KeptPaths[0];
         Assert.Equal($"local.args[1] {oldFolder} Folder", $"{kept.Field} {kept.Value} {kept.Kind}");
         Assert.Null(dialog.UseDirectoryToken(kept));
+        // The token is written; Publish reviews.
+        Assert.Equal(AppState.UnreviewedConnectorError("old"), state.PublishError?.Message);
+        Assert.Null(dialog.Publish());
         Assert.Null(state.PublishError);
         Assert.False(JsonText.FileContains(file, oldFolder));
     }
@@ -3374,7 +3390,8 @@ public class AppStateCollectionsTests
         {
             Assert.Null(state.Upsert("py", new McpEntry(JsonValue.Object(("command", JsonValue.String("python3")),
                 ("args", JsonValue.Array([JsonValue.String("--path"), JsonValue.String(other)])))), null));
-            Assert.Null(state.PublishError);
+            // Not the folder: only the review holds it.
+            Assert.Equal(AppState.UnreviewedConnectorError("py"), state.PublishError?.Message);
             state.Delete(["py"]);
         }
     }
@@ -3695,6 +3712,160 @@ public class AppStateCollectionsTests
         Assert.Equal(before, BackupCount(h, "mcps"));
     }
 
+    // MARK: publishing waits for review
+
+    private const string LongToken = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0";
+
+    private static McpEntry Node(string[] args, params (string Name, string Value)[] env)
+    {
+        var config = NodeWith(args);
+        return new McpEntry(env.Length == 0
+            ? config
+            : config.With("env", JsonValue.Object(env.Select(e => (e.Name, JsonValue.String(e.Value))).ToArray())));
+    }
+
+    /// <summary>
+    /// A connector added to a published collection has never been in front of the author in the
+    /// Publish dialog, so the automatic publish holds it for review rather than send it: the banner
+    /// and Publishing Settings, as for every other block. The dialog's Publish sends it, and from then
+    /// on its edits and a rename publish on their own again.
+    /// </summary>
+    [Fact]
+    public void ANewConnectorInAPublishedCollectionWaitsForReview()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var file = h.Publish(state, "Default");
+        var before = File.ReadAllBytes(file);
+
+        Assert.Null(state.Upsert("new", Node(["x.js"]), null));
+        Assert.Equal(new CollectionPublishError("Default", AppState.UnreviewedConnectorError("new"), PublishErrorKind.BlockedForReview),
+            state.PublishError);
+        Assert.Equal(new CollectionBanner.PublishBlocked("Default", AppState.UnreviewedConnectorError("new")), state.CollectionBanner);
+        Assert.Equal(before, File.ReadAllBytes(file));   // nothing new is published
+
+        Assert.Null(new PublishModel(state, "Default").Publish());
+        Assert.Null(state.PublishError);
+        Assert.Contains("new", CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors.Keys);
+
+        Assert.Null(state.Upsert("new", Node(["y.js"]), "new"));
+        Assert.Null(state.PublishError);   // an edit that changes nothing risky publishes on its own
+        Assert.True(JsonText.FileContains(file, "y.js"));
+        Assert.Null(state.Upsert("renamed", Node(["y.js"]), "new"));
+        Assert.Null(state.PublishError);   // and so does a rename
+        Assert.Contains("renamed", CollectionDocument.Decode(File.ReadAllBytes(file)).Connectors.Keys);
+    }
+
+    /// <summary>
+    /// However a connector arrives — copied from another collection, imported from a document, or
+    /// added on the author's other machine — one nobody reviewed here waits; and one deleted and added
+    /// again under its old name is new again.
+    /// </summary>
+    [Fact]
+    public void ACopiedImportedOrSyncedConnectorWaitsForReview()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.AddEmptyCollection("Other"));
+        Assert.Null(state.Upsert("tool", Node(["x.js"]), null, "Other"));
+        var file = h.Publish(state, "Default");
+        var before = File.ReadAllBytes(file);
+
+        Assert.Null(state.MakeLocalCopy(["tool"], "Other", "Default"));
+        Assert.Equal(AppState.UnreviewedConnectorError("tool"), state.PublishError?.Message);
+        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+        state.Delete(["tool"], "Default");
+        Assert.Null(state.PublishError);
+
+        var document = h.WriteDocument(CollectionDocumentSamples.DataTeam, "import.json");
+        Assert.Null(state.ImportCopies(document, "Default", Choices()));
+        Assert.Equal(AppState.UnreviewedConnectorError("dbt"), state.PublishError?.Message);   // the first by name
+        state.Delete(["dbt", "github", "ledger", "notion"], "Default");
+        Assert.Null(state.PublishError);
+
+        h.EditStoreOnDisk(store => store.Collections["Default"].Mcps["elsewhere"] = Node(["z.js"]));
+        state.Reload(ReloadTrigger.ExternalStoreAdoption);
+        Assert.Equal(AppState.UnreviewedConnectorError("elsewhere"), state.PublishError?.Message);
+        Assert.Equal(before, File.ReadAllBytes(file));   // none of them was published
+
+        Assert.Null(new PublishModel(state, "Default").Publish());
+        state.Delete(["elsewhere"], "Default");
+        Assert.Null(state.Upsert("elsewhere", Node(["z.js"]), null));
+        // Deleted and added again, it is a new connector.
+        Assert.Equal(AppState.UnreviewedConnectorError("elsewhere"), state.PublishError?.Message);
+    }
+
+    /// <summary>
+    /// A reviewed connector edited so it holds something that looks like a credential — in an
+    /// argument, or in a value it shares — waits for review. Reviewed in the dialog, it travels, and
+    /// an edit that holds only what was reviewed publishes on its own again.
+    /// </summary>
+    [Fact]
+    public void ACredentialAddedToAReviewedConnectorWaitsForReview()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.Upsert("tool", Node(["x.js"], ("REGION", "us")), null));
+        var file = h.Publish(state, "Default", new PublishIntent(
+            new Dictionary<string, IReadOnlySet<string>> { ["tool"] = new HashSet<string> { "REGION" } }, [], []));
+        var before = File.ReadAllBytes(file);
+
+        Assert.Null(state.Upsert("tool", Node(["x.js", "--api-key", LongToken], ("REGION", "us")), "tool"));
+        Assert.Equal(new CollectionPublishError("Default", AppState.NewCredentialError("tool"), PublishErrorKind.BlockedForReview),
+            state.PublishError);
+        Assert.Equal(before, File.ReadAllBytes(file));
+
+        Assert.Null(state.Upsert("tool", Node(["x.js"], ("REGION", LongToken)), "tool"));
+        // A shared value, edited to a secret.
+        Assert.Equal(AppState.NewCredentialError("tool"), state.PublishError?.Message);
+        Assert.False(JsonText.FileContains(file, LongToken));
+
+        var dialog = new PublishModel(state, "Default");
+        Assert.NotEmpty(dialog.Warnings);   // the dialog shows what it flags
+        Assert.Null(dialog.Publish());
+        Assert.Null(state.PublishError);
+        Assert.True(JsonText.FileContains(file, LongToken));
+        Assert.Null(state.Upsert("tool", Node(["x.js", "--verbose"], ("REGION", LongToken)), "tool"));
+        Assert.Null(state.PublishError);
+        Assert.True(JsonText.FileContains(file, "--verbose"));
+    }
+
+    /// <summary>
+    /// A binding from before reviews were kept has reviewed what it already published: at the first
+    /// load that finds the folder holding what the collection renders, all of it. One that meets a
+    /// change it never published has reviewed only what the folder holds unchanged.
+    /// </summary>
+    [Fact]
+    public void ABindingFromBeforeReviewsWereKeptReviewsWhatItAlreadyPublished()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var file = h.Publish(state, "Default");
+        var unreviewed = new Dictionary<string, CollectionsLocalCache.PublishBinding>(state.CollectionsCache.Published)
+        {
+            ["Default"] = state.CollectionsCache.Published["Default"] with { ReviewedConnectors = null },
+        };
+        h.Seed(state, state.CollectionsFile, state.CollectionsCache with { Published = unreviewed });
+        Assert.Equal(AppStateHarness.Keys(state.Store.Mcps.Keys), AppStateHarness.Keys(state.CollectionsCache.Published["Default"].ReviewedConnectors!));
+        Assert.Null(state.Upsert("aws-mcp", Node(["a.js"]), "aws-mcp"));
+        Assert.Null(state.PublishError);
+        Assert.True(JsonText.FileContains(file, "a.js"));
+
+        unreviewed = new Dictionary<string, CollectionsLocalCache.PublishBinding>(state.CollectionsCache.Published)
+        {
+            ["Default"] = state.CollectionsCache.Published["Default"] with { ReviewedConnectors = null },
+        };
+        h.EditStoreOnDisk(store =>
+        {
+            store.Collections["Default"].Mcps["aws-mcp"] = Node(["b.js"]);
+            store.Collections["Default"].Mcps["elsewhere"] = Node(["z.js"]);
+        });
+        var before = File.ReadAllBytes(file);
+        h.Seed(state, state.CollectionsFile, state.CollectionsCache with { Published = unreviewed });
+        Assert.Equal(AppState.UnreviewedConnectorError("aws-mcp"), state.PublishError?.Message);
+        Assert.Equal(before, File.ReadAllBytes(file));
+    }
+
     // MARK: publish bindings carry every field
 
     /// <summary>
@@ -3710,8 +3881,11 @@ public class AppStateCollectionsTests
         using var state = h.Create();
         h.Publish(state, "Default");
         var bound = state.CollectionsCache.Published["Default"];
+        // Publishing reviewed every connector.
+        Assert.Equal(AppStateHarness.Keys(state.Store.Mcps.Keys), AppStateHarness.Keys(bound.ReviewedConnectors!));
         var seeded = bound with
         {
+            ReviewedWarnings = new HashSet<string>([CollectionsLocalCache.PublishBinding.ReviewedWarning("scoutbook", "args[9] looks like a credential")]),
             MarkedValues = new HashSet<string>(["/opt/marked"]),
             ReleasedValues = new HashSet<string>(["/opt/released"]),
             PublishedFolders = new HashSet<string>([.. bound.PublishedFolders, "/old/pub"]),
@@ -3730,7 +3904,9 @@ public class AppStateCollectionsTests
         Assert.Null(state.UpdatePublishIntent("Default", record.Intent, new HashSet<string>(["/opt/reviewed"])));
         var reviewed = state.CollectionsCache.Published["Default"];
         Assert.Equal(["/opt/reviewed"], reviewed.MarkedValues);
-        AssertSameFields(reviewed, before, "MarkedValues");
+        // The dialog reviews what the connectors hold now.
+        Assert.Empty(reviewed.ReviewedWarnings);
+        AssertSameFields(reviewed, before, "MarkedValues", "ReviewedWarnings");
 
         Assert.Null(state.Upsert("scoutbook", new McpEntry(AppStateHarness.Remote("https://scoutbook.example.com/v2")),
             renamedFrom: "scoutbook", collection: "Default"));
@@ -3744,9 +3920,9 @@ public class AppStateCollectionsTests
         typeof(CollectionsLocalCache.PublishBinding).GetProperties();
 
     /// <summary>Every field of <paramref name="a"/> and <paramref name="b"/> but <paramref name="changed"/> is equal.</summary>
-    private static void AssertSameFields(CollectionsLocalCache.PublishBinding a, CollectionsLocalCache.PublishBinding b, string changed)
+    private static void AssertSameFields(CollectionsLocalCache.PublishBinding a, CollectionsLocalCache.PublishBinding b, params string[] changed)
     {
-        foreach (var property in BindingFields.Where(p => p.Name != changed))
+        foreach (var property in BindingFields.Where(p => !changed.Contains(p.Name)))
         {
             var (x, y) = (property.GetValue(a), property.GetValue(b));
             Assert.True(x is IReadOnlySet<string> xs && y is IReadOnlySet<string> ys ? xs.SetEquals(ys) : Equals(x, y),

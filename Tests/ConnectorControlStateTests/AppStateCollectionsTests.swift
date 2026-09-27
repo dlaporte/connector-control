@@ -1017,14 +1017,14 @@ final class AppStateCollectionsTests: XCTestCase {
         state.setEnabled("aws-mcp", false)
         XCTAssertEqual(try Data(contentsOf: file), first, "toggles never change the document")
 
-        XCTAssertNil(state.upsert(name: "new", entry: newConnector("x"), renamedFrom: nil))
+        XCTAssertNil(state.upsert(name: "aws-mcp", entry: newConnector("x"), renamedFrom: "aws-mcp"))
         let second = try Data(contentsOf: file)
         XCTAssertNotEqual(second, first)
         let document = try CollectionDocument.decode(second)
         XCTAssertNotNil(document.origin)
         XCTAssertEqual(document.name, state.activeCollection)
         XCTAssertEqual(document.exported, IsoTimestamp.string(from: h.now))
-        XCTAssertEqual(document.connectors["new"]?.env, [:], "the added connector travels, with no env to share")
+        XCTAssertEqual(document.connectors["aws-mcp"]?.env, [:], "the edited connector travels, with no env to share")
         XCTAssertNil(state.publishError)
     }
 
@@ -1099,7 +1099,7 @@ final class AppStateCollectionsTests: XCTestCase {
         // permission games. Deleting the folder would not: the writer creates it again.
         try FileManager.default.removeItem(at: folder)
         try TempDir.touch(folder, "not a folder")
-        XCTAssertNil(state.upsert(name: "new", entry: newConnector("x"), renamedFrom: nil))
+        XCTAssertNil(state.upsert(name: "aws-mcp", entry: newConnector("x"), renamedFrom: "aws-mcp"))
         XCTAssertEqual(state.publishError?.collection, state.activeCollection)
         guard case .publishFailed(let collection, _)? = state.collectionBanner else {
             return XCTFail("a failed publish outranks every other banner")
@@ -1108,11 +1108,14 @@ final class AppStateCollectionsTests: XCTestCase {
 
         try FileManager.default.removeItem(at: folder)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        XCTAssertNil(state.upsert(name: "another", entry: newConnector("y"), renamedFrom: nil))
+        XCTAssertNil(state.upsert(name: "scoutbook", entry: newConnector("y"), renamedFrom: "scoutbook"))
         XCTAssertNil(state.publishError, "a write that succeeds clears the mark")
         let document = try CollectionDocument.decode(try Data(contentsOf: file))
-        XCTAssertNotNil(document.connectors["new"], "the change the failed write held back still lands")
-        XCTAssertNotNil(document.connectors["another"])
+        guard case .local(let held)? = document.connectors["aws-mcp"]?.launcher,
+              case .local(let next)? = document.connectors["scoutbook"]?.launcher else {
+            return XCTFail("the change the failed write held back still lands, and the next with it")
+        }
+        XCTAssertEqual([held.command, next.command], ["x", "y"])
     }
 
     func testExportStripsSecretsAndPublishedDocumentsStripThemToo() throws {
@@ -1191,13 +1194,15 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
         let file = folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json")
 
-        // The author's other machine added a connector to the shared master list.
+        // The author's other machine edited a connector in the shared master list.
         try h.editStoreOnDisk { store in
-            store.collections[store.activeCollection]?.mcps["elsewhere"] = newConnector("z")
+            store.collections[store.activeCollection]?.mcps["aws-mcp"] = newConnector("z")
         }
         state.reload(trigger: .externalStoreAdoption)
-        XCTAssertNotNil(try CollectionDocument.decode(try Data(contentsOf: file)).connectors["elsewhere"],
-                        "the publishing machine carries another machine's change to the team")
+        guard case .local(let local)? = try CollectionDocument.decode(try Data(contentsOf: file)).connectors["aws-mcp"]?.launcher else {
+            return XCTFail("the publishing machine carries another machine's change to the team")
+        }
+        XCTAssertEqual(local.command, "z")
     }
 
     func testSubscribingToWhatThisMachinePublishesIsRefused() throws {
@@ -2007,9 +2012,14 @@ final class AppStateCollectionsTests: XCTestCase {
         let carrying = try XCTUnwrap(editor.args.firstIndex { KeptValue.holds($0.value, bound) })
         editor.args[carrying].value = #"{"client_id":"${COLLECTION_DIR}","client_secret":"s"}"#
         XCTAssertTrue(editor.save())
+        XCTAssertEqual(state.publishError?.message, AppState.unreviewedConnectorError("svc"),
+                       "what holds it now is only that nobody has reviewed it")
+        XCTAssertFalse(try jsonFile(file, contains: bound))
+        let review = PublishModel(state: state, collection: state.activeCollection)
+        XCTAssertTrue(review.canPublish)
+        XCTAssertNil(review.publish())
         XCTAssertNil(state.publishError)
         XCTAssertFalse(try jsonFile(file, contains: bound))
-        XCTAssertTrue(PublishModel(state: state, collection: state.activeCollection).canPublish)
     }
 
     /// Stop Publishing gives up the folder, not this machine's memory: the paths it kept back and
@@ -2242,9 +2252,9 @@ final class AppStateCollectionsTests: XCTestCase {
         // An ordinary save after it: the answer the author gave still stands, with no banner. Before
         // this round the folder came back as the new binding's own and every save failed from here.
         let before = try Data(contentsOf: document)
-        XCTAssertNil(state.upsert(name: "other", entry: MCPEntry(config: .object([
-            "command": .string("node"), "args": .array([.string("/tmp/other.js")]),
-        ])), renamedFrom: nil, in: "Team"))
+        XCTAssertNil(state.upsert(name: "tool", entry: MCPEntry(config: .object([
+            "command": .string(folder.path + "/bin/tool"), "args": .array([.string("/tmp/other.js")]),
+        ])), renamedFrom: "tool", in: "Team"))
         XCTAssertNil(state.publishError)
         XCTAssertNotEqual(try Data(contentsOf: document), before, "and the save reached the folder")
     }
@@ -2311,9 +2321,9 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(sheet.publish())
         let document = third.appendingPathComponent(Slug.make("Team") + ".json")
         XCTAssertTrue(try jsonFile(document, contains: folder.path), "released, it travels as written")
-        XCTAssertNil(state.upsert(name: "other", entry: MCPEntry(config: .object([
-            "command": .string("node"), "args": .array([.string("/tmp/other.js")]),
-        ])), renamedFrom: nil, in: "Team"))
+        XCTAssertNil(state.upsert(name: "tool", entry: MCPEntry(config: .object([
+            "command": .string(folder.path + "/bin/tool"), "args": .array([.string("/tmp/other.js")]),
+        ])), renamedFrom: "tool", in: "Team"))
         XCTAssertNil(state.publishError, "and a later save is an ordinary one")
     }
 
@@ -2701,6 +2711,8 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.upsert(name: "sibling", entry: MCPEntry(config: .object([
             "command": .string("node"), "args": .array([.string(bound + "-tools/x.js")]),
         ])), renamedFrom: nil))
+        XCTAssertEqual(state.publishError?.message, AppState.unreviewedConnectorError("sibling"), "held only for review")
+        XCTAssertNil(PublishModel(state: state, collection: state.activeCollection).publish())
         XCTAssertNil(state.publishError)
         let withSibling = try Data(contentsOf: file)
         XCTAssertNotEqual(withSibling, before)
@@ -2885,6 +2897,8 @@ final class AppStateCollectionsTests: XCTestCase {
         let kept = try XCTUnwrap(sheet.keptPaths.first)
         XCTAssertEqual("\(kept.field) \(kept.value) \(kept.kind)", "local.args[1] \(oldFolder) folder")
         XCTAssertNil(sheet.useDirectoryToken(kept))
+        XCTAssertEqual(state.publishError?.message, AppState.unreviewedConnectorError("old"), "the token is written; Publish reviews")
+        XCTAssertNil(sheet.publish())
         XCTAssertNil(state.publishError)
         XCTAssertFalse(try jsonFile(file, contains: oldFolder))
     }
@@ -2908,7 +2922,8 @@ final class AppStateCollectionsTests: XCTestCase {
         for other in ["\(bound).bak", "\(bound)_old/x", "\(bound)é/x"] {
             XCTAssertNil(state.upsert(name: "py", entry: MCPEntry(config: .object([
                 "command": .string("python3"), "args": .array([.string("--path"), .string(other)])])), renamedFrom: nil))
-            XCTAssertNil(state.publishError, other)
+            XCTAssertEqual(state.publishError?.message, AppState.unreviewedConnectorError("py"),
+                           "not the folder: only the review holds it, \(other)")
             state.delete(names: ["py"])
         }
     }
@@ -3176,6 +3191,135 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(try backupCount(h, series: "mcps"), before, "and skipping it writes nothing either")
     }
 
+    // MARK: - Publishing waits for review
+
+    private let longToken = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0"
+
+    private func node(_ args: [String], env: [String: String] = [:]) -> MCPEntry {
+        var object: [String: JSONValue] = ["command": .string("node"), "args": .array(args.map(JSONValue.string))]
+        if !env.isEmpty { object["env"] = .object(env.mapValues(JSONValue.string)) }
+        return MCPEntry(config: .object(object))
+    }
+
+    /// A connector added to a published collection has never been in front of the author in the
+    /// Publish sheet, so the automatic publish holds it for review rather than send it: the banner
+    /// and Publishing Settings, as for every other block. The sheet's Publish sends it, and from
+    /// then on its edits and a rename publish on their own again.
+    func testANewConnectorInAPublishedCollectionWaitsForReview() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let file = try h.publish(state, "Default")
+        let before = try Data(contentsOf: file)
+
+        XCTAssertNil(state.upsert(name: "new", entry: node(["x.js"]), renamedFrom: nil))
+        XCTAssertEqual(state.publishError, CollectionPublishError(
+            collection: "Default", message: AppState.unreviewedConnectorError("new"), kind: .blockedForReview))
+        XCTAssertEqual(state.collectionBanner, .publishBlocked(collection: "Default", message: AppState.unreviewedConnectorError("new")))
+        XCTAssertEqual(try Data(contentsOf: file), before, "nothing new is published")
+
+        XCTAssertNil(PublishModel(state: state, collection: "Default").publish())
+        XCTAssertNil(state.publishError)
+        XCTAssertNotNil(try CollectionDocument.decode(try Data(contentsOf: file)).connectors["new"])
+
+        XCTAssertNil(state.upsert(name: "new", entry: node(["y.js"]), renamedFrom: "new"))
+        XCTAssertNil(state.publishError, "an edit that changes nothing risky publishes on its own")
+        XCTAssertTrue(try jsonFile(file, contains: "y.js"))
+        XCTAssertNil(state.upsert(name: "renamed", entry: node(["y.js"]), renamedFrom: "new"))
+        XCTAssertNil(state.publishError, "and so does a rename")
+        XCTAssertNotNil(try CollectionDocument.decode(try Data(contentsOf: file)).connectors["renamed"])
+    }
+
+    /// However a connector arrives — copied from another collection, imported from a document, or
+    /// added on the author's other machine — one nobody reviewed here waits; and one deleted and
+    /// added again under its old name is new again.
+    func testACopiedImportedOrSyncedConnectorWaitsForReview() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.addEmptyCollection(named: "Other"))
+        XCTAssertNil(state.upsert(name: "tool", entry: node(["x.js"]), renamedFrom: nil, in: "Other"))
+        let file = try h.publish(state, "Default")
+        let before = try Data(contentsOf: file)
+
+        XCTAssertNil(state.makeLocalCopy(of: ["tool"], from: "Other", into: "Default"))
+        XCTAssertEqual(state.publishError?.message, AppState.unreviewedConnectorError("tool"))
+        XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+        state.delete(names: ["tool"], in: "Default")
+        XCTAssertNil(state.publishError)
+
+        let document = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "import.json")
+        XCTAssertNil(state.importCopies(documentAt: document.path, into: "Default", choices: [:]))
+        XCTAssertEqual(state.publishError?.message, AppState.unreviewedConnectorError("dbt"), "the first by name")
+        state.delete(names: ["dbt", "github", "ledger", "notion"], in: "Default")
+        XCTAssertNil(state.publishError)
+
+        try h.editStoreOnDisk { $0.collections["Default"]?.mcps["elsewhere"] = self.node(["z.js"]) }
+        state.reload(trigger: .externalStoreAdoption)
+        XCTAssertEqual(state.publishError?.message, AppState.unreviewedConnectorError("elsewhere"))
+        XCTAssertEqual(try Data(contentsOf: file), before, "none of them was published")
+
+        XCTAssertNil(PublishModel(state: state, collection: "Default").publish())
+        state.delete(names: ["elsewhere"], in: "Default")
+        XCTAssertNil(state.upsert(name: "elsewhere", entry: node(["z.js"]), renamedFrom: nil))
+        XCTAssertEqual(state.publishError?.message, AppState.unreviewedConnectorError("elsewhere"),
+                       "deleted and added again, it is a new connector")
+    }
+
+    /// A reviewed connector edited so it holds something that looks like a credential — in an
+    /// argument, or in a value it shares — waits for review. Reviewed in the sheet, it travels, and
+    /// an edit that holds only what was reviewed publishes on its own again.
+    func testACredentialAddedToAReviewedConnectorWaitsForReview() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.upsert(name: "tool", entry: node(["x.js"], env: ["REGION": "us"]), renamedFrom: nil))
+        let file = try h.publish(state, "Default", intent: PublishIntent(shareValues: ["tool": ["REGION"]], pathMarks: [:], hints: [:]))
+        let before = try Data(contentsOf: file)
+
+        XCTAssertNil(state.upsert(name: "tool", entry: node(["x.js", "--api-key", longToken], env: ["REGION": "us"]), renamedFrom: "tool"))
+        XCTAssertEqual(state.publishError, CollectionPublishError(
+            collection: "Default", message: AppState.newCredentialError("tool"), kind: .blockedForReview))
+        XCTAssertEqual(try Data(contentsOf: file), before)
+
+        XCTAssertNil(state.upsert(name: "tool", entry: node(["x.js"], env: ["REGION": longToken]), renamedFrom: "tool"))
+        XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("tool"), "a shared value, edited to a secret")
+        XCTAssertFalse(try jsonFile(file, contains: longToken))
+
+        let sheet = PublishModel(state: state, collection: "Default")
+        XCTAssertFalse(sheet.warnings.isEmpty, "the sheet shows what it flags")
+        XCTAssertNil(sheet.publish())
+        XCTAssertNil(state.publishError)
+        XCTAssertTrue(try jsonFile(file, contains: longToken))
+        XCTAssertNil(state.upsert(name: "tool", entry: node(["x.js", "--verbose"], env: ["REGION": longToken]), renamedFrom: "tool"))
+        XCTAssertNil(state.publishError)
+        XCTAssertTrue(try jsonFile(file, contains: "--verbose"))
+    }
+
+    /// A binding from before reviews were kept has reviewed what it already published: at the
+    /// first load that finds the folder holding what the collection renders, all of it. One that
+    /// meets a change it never published has reviewed only what the folder holds unchanged.
+    func testABindingFromBeforeReviewsWereKeptReviewsWhatItAlreadyPublished() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let file = try h.publish(state, "Default")
+        var cache = state.collectionsCache
+        cache.published["Default"]?.reviewedConnectors = nil
+        try h.seed(state, file: state.collectionsFile, cache: cache)
+        XCTAssertEqual(state.collectionsCache.published["Default"]?.reviewedConnectors, Set(state.store.mcps.keys))
+        XCTAssertNil(state.upsert(name: "aws-mcp", entry: node(["a.js"]), renamedFrom: "aws-mcp"))
+        XCTAssertNil(state.publishError)
+        XCTAssertTrue(try jsonFile(file, contains: "a.js"))
+
+        cache = state.collectionsCache
+        cache.published["Default"]?.reviewedConnectors = nil
+        try h.editStoreOnDisk {
+            $0.collections["Default"]?.mcps["aws-mcp"] = self.node(["b.js"])
+            $0.collections["Default"]?.mcps["elsewhere"] = self.node(["z.js"])
+        }
+        let before = try Data(contentsOf: file)
+        try h.seed(state, file: state.collectionsFile, cache: cache)
+        XCTAssertEqual(state.publishError?.message, AppState.unreviewedConnectorError("aws-mcp"))
+        XCTAssertEqual(try Data(contentsOf: file), before)
+    }
+
     // MARK: - Publish bindings carry every field
 
     /// The sheet's reviewed lists and an automatic publish each change one part of this machine's
@@ -3188,6 +3332,8 @@ final class AppStateCollectionsTests: XCTestCase {
         try h.publish(state, "Default")
         var cache = state.collectionsCache
         var seeded = try XCTUnwrap(cache.published["Default"])
+        XCTAssertEqual(seeded.reviewedConnectors, Set(state.store.mcps.keys), "publishing reviewed every connector")
+        seeded.reviewedWarnings = [CollectionsLocalCache.PublishBinding.reviewedWarning("scoutbook", "args[9] looks like a credential")]
         seeded.markedValues = ["/opt/marked"]
         seeded.releasedValues = ["/opt/released"]
         seeded.publishedFolders.insert("/old/pub")
@@ -3205,7 +3351,8 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.updatePublishIntent("Default", intent: record.intent, reviewedValues: ["/opt/reviewed"]))
         let reviewed = try XCTUnwrap(state.collectionsCache.published["Default"])
         XCTAssertEqual(reviewed.markedValues, ["/opt/reviewed"])
-        assertSameFields(reviewed, before, except: ["markedValues"])
+        XCTAssertEqual(reviewed.reviewedWarnings, [], "the sheet reviews what the connectors hold now")
+        assertSameFields(reviewed, before, except: ["markedValues", "reviewedWarnings"])
 
         XCTAssertNil(state.upsert(name: "scoutbook", entry: MCPEntry(config: AppStateHarness.remote("https://scoutbook.example.com/v2")),
                                   renamedFrom: "scoutbook", in: "Default"))

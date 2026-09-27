@@ -110,6 +110,14 @@ bullet once the section is about to ship.
   would carry a kept-back path or the publish folder in another connector, publishing
   stops rather than write it, the document already in the folder is left as it was, and
   the banner names the connector to open Publishing Settings for.
+- A publish that happens on its own no longer sends what you haven't reviewed. A connector
+  added to a published collection, copied or imported into it, or added on your other
+  machine, and a connector edited so it now holds something that looks like a credential,
+  hold the publish with "“<connector>” hasn’t been reviewed for publishing." or
+  "“<connector>” may now carry a credential." and Publishing Settings; the folder keeps its
+  document until you press Publish in the sheet, and automatic publishing then resumes.
+  Other edits, renames and deletions publish on their own as before. Before, all of it
+  was published on the next save without a preview.
 - The Collections window lists every collection beside its connectors, and every control
   in it sits on what it acts on. The sidebar's + offers New Collection, Import ("Adds
   copies you own") and Subscribe ("Stays in sync, read-only"). The header shows the

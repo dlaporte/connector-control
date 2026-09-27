@@ -1073,7 +1073,8 @@ public class CollectionsModelTests
         state.SwitchCollection("Default");
         Directory.CreateDirectory(folder);
         h.Seed(state, File_(("Team", Synced("team.json")), ("Default", Published("default"))),
-             Cache(published: [new("Default", new CollectionsLocalCache.PublishBinding(folder, null))]));
+             Cache(published: [new("Default", new CollectionsLocalCache.PublishBinding(folder, null,
+                 reviewedConnectors: state.Store.Collections["Default"].Mcps.Keys))]));
     }
 
     [Fact]

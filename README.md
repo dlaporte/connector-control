@@ -285,6 +285,14 @@ window, Stop Publishing is in the **⋯**). The Publish sheet stays open on
 a failure, and pressing Publish there, or in the sheet opened again later,
 retries at once; otherwise the next change retries the write.
 
+Nothing reaches the folder that you haven't reviewed in the Publish sheet.
+A connector added to a published collection, copied or imported into it, or
+added on your other machine, and a connector edited so that it now holds
+something that looks like a credential, stop the automatic publish: the
+banner names the connector and offers Publishing Settings, and the document
+in the folder stays as it was until you press Publish there. Other edits,
+renames and deletions publish on their own as before.
+
 Export writes the same document once, wherever you choose, with the same
 preview and warnings. The **⋯** menu's **Export All** writes the whole
 selected collection; the selection bar's **Export** writes only the rows you

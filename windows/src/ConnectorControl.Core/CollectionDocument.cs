@@ -94,6 +94,26 @@ public sealed class KeptPathCarriedException(string connector, string field)
     public string Field { get; } = field;
 }
 
+/// <summary>
+/// <see cref="PublishIntentException.Connector"/> has never been reviewed for publishing on this machine: it was
+/// added, copied or imported since the author last pressed Publish in the dialog. What the user
+/// reads is <c>AppState.UnreviewedConnectorError</c>.
+///
+/// Mirror: <c>PublishIntentError.unreviewedConnector</c> in Sources/ConnectorControlCore/CollectionDocument.swift
+/// </summary>
+public sealed class UnreviewedConnectorException(string connector)
+    : PublishIntentException($"\"{connector}\" has not been reviewed for publishing", connector);
+
+/// <summary>
+/// <see cref="PublishIntentException.Connector"/> now holds something <see cref="CollectionDocument.CredentialWarnings"/>
+/// flags that it did not hold when the author last reviewed it. What the user reads is
+/// <c>AppState.NewCredentialError</c>.
+///
+/// Mirror: <c>PublishIntentError.newCredential</c> in Sources/ConnectorControlCore/CollectionDocument.swift
+/// </summary>
+public sealed class NewCredentialException(string connector)
+    : PublishIntentException($"\"{connector}\" holds a credential nobody has reviewed", connector);
+
 /// <summary>A path this machine keeps back, found as written in a document.</summary>
 /// <param name="Field">Its place in the connector's document form, e.g. <c>local.args[1]</c> or <c>additional.cwd</c>.</param>
 public sealed record KeptValueFinding(string Connector, string Field, string Value);

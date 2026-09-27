@@ -60,6 +60,8 @@ public sealed class AppState : ObservableObject, IDisposable
     public static string PublishSlugTakenError(string fileName) => $"{fileName} already exists there and belongs to a different collection.";
     public static string PathMarkMovedError(string connector) => $"A path marked in “{connector}” has moved. Open Publishing Settings to mark it again.";
     public static string PublishFolderCarriedError(string connector, string field) => $"“{connector}” carries this machine’s publish folder as written, in {field}. Open Publishing Settings to use ${{COLLECTION_DIR}} in its place.";
+    public static string UnreviewedConnectorError(string connector) => $"“{connector}” hasn’t been reviewed for publishing. Open Publishing Settings to review it.";
+    public static string NewCredentialError(string connector) => $"“{connector}” may now carry a credential. Open Publishing Settings to review it.";
     public static string KeptPathCarriedError(string connector, string field) => $"“{connector}” carries a path this machine keeps back, in {field}. Open Publishing Settings to review it.";
     /// <summary>The way back is the second sentence: the refusal holds whatever the user does, and a collection of that name makes the same backup restorable.</summary>
     public static string RestoreCollectionGoneError(string collection) => $"This backup was taken from “{collection}”, which no longer exists. Nothing was restored. Create a collection named “{collection}” again, and this backup goes back into it.";
@@ -1057,6 +1059,11 @@ public sealed class AppState : ObservableObject, IDisposable
         if (renamedFrom is { } old && old != trimmed)
         {
             existing?.Remove(old);
+        }
+        // A rename changes nothing the author reviewed for publishing: the review follows it.
+        if (renamedFrom is { } moved && moved != trimmed && CollectionsCache.Published.GetValueOrDefault(target) is { } binding)
+        {
+            SetPublishBinding(target, binding.MovingReview(moved, trimmed));
         }
         McpsIn(target)[trimmed] = entry;
         EditPublishIntent(target, intent =>
@@ -2350,6 +2357,10 @@ public sealed class AppState : ObservableObject, IDisposable
         var remembered = CollectionsCache.Kept.GetValueOrDefault(collection);
         var own = IsOwn(remembered, collection, collection, previousOrigin);
         var marked = previous?.MarkedValues ?? remembered?.MarkedValues;
+        // What the dialog's Publish showed is what it reviewed. Choose Folder moves a binding and
+        // reviews nothing, so it carries the review it had.
+        var reviewing = reviewedValues is not null || previous is null;
+        var review = Review(Store.Collections.GetValueOrDefault(collection)?.Mcps ?? [], intent);
         SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(
             full,
             // A new folder has nothing in it this app wrote, so the next write is unconditional.
@@ -2363,7 +2374,9 @@ public sealed class AppState : ObservableObject, IDisposable
                 .Concat(previous is null ? [] : [previous.Folder]).Append(full),
             // Carried so what this binding leaves behind still says which collection's folders they
             // were, after the sidecar entry that names the origin has gone.
-            origin));
+            origin,
+            reviewing ? review.Connectors : previous?.ReviewedConnectors,
+            reviewing ? review.Warnings : previous?.ReviewedWarnings));
         if (own)
         {
             var departed = remembered?.DepartedFolders ?? new HashSet<string>(StringComparer.Ordinal);
@@ -2427,10 +2440,10 @@ public sealed class AppState : ObservableObject, IDisposable
         // The lists are this machine's: another machine's publish record has no binding here.
         var binding = CollectionsCache.Published.GetValueOrDefault(collection);
         var changed = reviewedValues is not null && binding is not null
-            ? binding with
+            ? ReviewedBy(binding with
             {
                 MarkedValues = reviewedValues, ReleasedValues = Released(binding.ReleasedValues, releasedValues, reviewedValues),
-            }
+            }, collection, intent)
             : binding;
         var listsChanged = !Equals(changed, binding);
         if (record.Intent.Equals(intent) && !listsChanged)
@@ -2594,7 +2607,9 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// Every collection this machine publishes, written when what it says has changed. Only the
     /// bindings in this machine's cache: the sidecar travels with the master list, so another
-    /// machine's publish folder is recorded there but is that machine's to write.
+    /// machine's publish folder is recorded there but is that machine's to write. A change that
+    /// brings in a connector the author has not reviewed in the dialog, or a credential one did not
+    /// hold when they did, is held for review rather than written (<see cref="RefuseUnreviewed"/>).
     /// </summary>
     /// <param name="forced">
     /// The one collection whose write happens whether or not the document changed — a retry,
@@ -2623,6 +2638,7 @@ public sealed class AppState : ObservableObject, IDisposable
                 // does not send it. Only the author's Publish in the dialog clears it.
                 RefuseKeptBackPaths(document, collection);
                 var hash = PublishHash(document);
+                var mcps = Store.Collections.GetValueOrDefault(collection)?.Mcps ?? [];
                 if (hash == binding.LastWrittenHash && collection != forced)
                 {
                     // The folder already holds what the store renders — the change that failed or
@@ -2631,17 +2647,38 @@ public sealed class AppState : ObservableObject, IDisposable
                     {
                         PublishError = null;
                     }
+                    // A binding from before reviews were kept has reviewed what it published, and the
+                    // folder holds all of it.
+                    if (binding.ReviewedConnectors is null)
+                    {
+                        var seed = Review(mcps, record.Intent);
+                        SetPublishBinding(collection, binding with { ReviewedConnectors = seed.Connectors, ReviewedWarnings = seed.Warnings });
+                        cacheChanged = true;
+                    }
                     continue;
                 }
                 var target = Path.Combine(binding.Folder, CollectionDocument.FileName(record.Slug));
+                // Nothing reaches the folder that the author has not reviewed: a connector added,
+                // copied or imported since the dialog's last Publish, or a credential one now holds.
+                // A binding from before reviews were kept, meeting a change it has not published,
+                // has reviewed what the folder already holds of it.
+                var reviewed = binding;
+                if (reviewed.ReviewedConnectors is null)
+                {
+                    var published = AlreadyPublished(document, target);
+                    reviewed = reviewed with
+                    {
+                        ReviewedConnectors = published,
+                        ReviewedWarnings = Review(mcps.Where(p => published.Contains(p.Key)), record.Intent).Warnings,
+                    };
+                }
+                RefuseUnreviewed(mcps, record.Intent, reviewed);
                 AtomicFile.Write(document.Serialize(), target);
                 // Only ever added to here: a publish nobody reviewed may learn a path it now keeps
                 // back, never forget one.
-                var held = Store.Collections.TryGetValue(collection, out var heldCollection)
-                    ? heldCollection.Mcps.ToDictionary(p => p.Key, p => p.Value.Config, StringComparer.Ordinal)
-                    : new Dictionary<string, JsonValue>(StringComparer.Ordinal);
+                var held = mcps.ToDictionary(p => p.Key, p => p.Value.Config, StringComparer.Ordinal);
                 var placed = record.Intent.PlacedArguments(held).ToHashSet(StringComparer.Ordinal);
-                SetPublishBinding(collection, binding with
+                SetPublishBinding(collection, reviewed.KeepingReview(mcps.Keys.ToHashSet(StringComparer.Ordinal)) with
                 {
                     LastWrittenHash = hash,
                     MarkedValues = binding.MarkedValues.Concat(placed).ToHashSet(StringComparer.Ordinal),
@@ -2677,6 +2714,78 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             LastError = Friendly(ex);
         }
+    }
+
+    /// <summary>
+    /// What the author reviews of <paramref name="held"/> when the dialog's Publish shows it the
+    /// preview under <paramref name="intent"/>: every connector by name, and every credential warning
+    /// in them as a <see cref="CollectionsLocalCache.PublishBinding.ReviewedWarning"/> key.
+    /// </summary>
+    internal static (IReadOnlySet<string> Connectors, IReadOnlySet<string> Warnings) Review(
+        IEnumerable<KeyValuePair<string, McpEntry>> held, PublishIntent intent)
+    {
+        var connectors = new HashSet<string>(StringComparer.Ordinal);
+        var warnings = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (name, entry) in held)
+        {
+            connectors.Add(name);
+            IReadOnlySet<string> shared = intent.ShareValues.TryGetValue(name, out var s) ? s : new HashSet<string>(StringComparer.Ordinal);
+            foreach (var warning in CollectionDocument.CredentialWarnings(entry.Config, shared))
+            {
+                warnings.Add(CollectionsLocalCache.PublishBinding.ReviewedWarning(name, warning));
+            }
+        }
+        return (connectors, warnings);
+    }
+
+    /// <summary><paramref name="binding"/> with every connector the dialog showed reviewed, under what it now shares.</summary>
+    private CollectionsLocalCache.PublishBinding ReviewedBy(CollectionsLocalCache.PublishBinding binding, string collection, PublishIntent intent)
+    {
+        var review = Review(Store.Collections.GetValueOrDefault(collection)?.Mcps ?? [], intent);
+        return binding with { ReviewedConnectors = review.Connectors, ReviewedWarnings = review.Warnings };
+    }
+
+    /// <summary>
+    /// Refuses a publish nobody reviewed, naming the first connector by name that
+    /// <paramref name="binding"/> has not reviewed, or that now holds a credential warning its review
+    /// did not.
+    /// </summary>
+    internal static void RefuseUnreviewed(IReadOnlyDictionary<string, McpEntry> held, PublishIntent intent,
+                                          CollectionsLocalCache.PublishBinding binding)
+    {
+        foreach (var name in held.Keys.Order(StringComparer.Ordinal))
+        {
+            if (binding.ReviewedConnectors?.Contains(name) != true)
+            {
+                throw new UnreviewedConnectorException(name);
+            }
+            if (!Review([new(name, held[name])], intent).Warnings.IsSubsetOf(binding.ReviewedWarnings))
+            {
+                throw new NewCredentialException(name);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The connectors <paramref name="document"/> holds exactly as the document already at
+    /// <paramref name="target"/> does, which a binding from before reviews were kept has published
+    /// already. None when that document cannot be read.
+    /// </summary>
+    internal static IReadOnlySet<string> AlreadyPublished(CollectionDocument document, string target)
+    {
+        CollectionDocument published;
+        try
+        {
+            published = CollectionDocument.Decode(File.ReadAllBytes(target));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                                   or NotSupportedException or CollectionDocumentException)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+        return document.Connectors.Keys
+            .Where(name => published.Connectors.TryGetValue(name, out var was) && was.Equals(document.Connectors[name]))
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -3079,6 +3188,8 @@ public sealed class AppState : ObservableObject, IDisposable
         PathMarkMovedException moved => PathMarkMovedError(moved.Connector),
         KeptPathCarriedException kept => KeptPathCarriedError(kept.Connector, kept.Field),
         PublishFolderCarriedException carried => PublishFolderCarriedError(carried.Connector, carried.Field),
+        UnreviewedConnectorException unreviewed => UnreviewedConnectorError(unreviewed.Connector),
+        NewCredentialException credential => NewCredentialError(credential.Connector),
         _ => error.Message,
     };
 

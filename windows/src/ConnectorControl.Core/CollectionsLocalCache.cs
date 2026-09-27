@@ -335,6 +335,8 @@ public sealed record CollectionsLocalCache
         private readonly HashSet<string> markedValues = new(StringComparer.Ordinal);
         private readonly HashSet<string> releasedValues = new(StringComparer.Ordinal);
         private readonly HashSet<string> publishedFolders = new(StringComparer.Ordinal);
+        private readonly HashSet<string>? reviewedConnectors;
+        private readonly HashSet<string> reviewedWarnings = new(StringComparer.Ordinal);
 
         public string Folder { get; init; }
 
@@ -382,9 +384,34 @@ public sealed record CollectionsLocalCache
         /// </summary>
         public string? Origin { get; init; }
 
+        /// <summary>
+        /// The connectors the author has reviewed for publishing, by name: what the sheet's Publish
+        /// showed them in the preview. A publish that happens on its own writes nothing about a
+        /// connector outside this list, and holds for review instead. Null in a binding written
+        /// before the list was kept, which the first publish after fills in from the document
+        /// already in the folder.
+        /// </summary>
+        public IReadOnlySet<string>? ReviewedConnectors
+        {
+            get => reviewedConnectors;
+            init => reviewedConnectors = value is null ? null : new HashSet<string>(value, StringComparer.Ordinal);
+        }
+
+        /// <summary>
+        /// What <see cref="CollectionDocument.CredentialWarnings"/> found in each reviewed connector
+        /// when it was reviewed, as <see cref="ReviewedWarning"/> keys. A warning outside this list is
+        /// a credential nobody has seen travel, and it holds the publish for review too.
+        /// </summary>
+        public IReadOnlySet<string> ReviewedWarnings
+        {
+            get => reviewedWarnings;
+            init => reviewedWarnings = new HashSet<string>(value, StringComparer.Ordinal);
+        }
+
         public PublishBinding(string folder, string? lastWrittenHash, IEnumerable<string>? markedValues = null,
                               IEnumerable<string>? releasedValues = null, IEnumerable<string>? publishedFolders = null,
-                              string? origin = null)
+                              string? origin = null, IEnumerable<string>? reviewedConnectors = null,
+                              IEnumerable<string>? reviewedWarnings = null)
         {
             Folder = folder;
             LastWrittenHash = lastWrittenHash;
@@ -392,7 +419,43 @@ public sealed record CollectionsLocalCache
             ReleasedValues = new HashSet<string>(releasedValues ?? [], StringComparer.Ordinal);
             PublishedFolders = new HashSet<string>(publishedFolders ?? [], StringComparer.Ordinal);
             Origin = origin;
+            ReviewedConnectors = reviewedConnectors is null ? null : new HashSet<string>(reviewedConnectors, StringComparer.Ordinal);
+            ReviewedWarnings = new HashSet<string>(reviewedWarnings ?? [], StringComparer.Ordinal);
         }
+
+        /// <summary>One connector's credential warning, as <see cref="ReviewedWarnings"/> holds it.</summary>
+        public static string ReviewedWarning(string connector, string warning) => connector + "\n" + warning;
+
+        /// <summary>
+        /// This binding with <paramref name="connector"/>'s review under <paramref name="newName"/>: a
+        /// rename changes nothing the author reviewed. A connector never reviewed stays unreviewed
+        /// under its new name.
+        /// </summary>
+        public PublishBinding MovingReview(string connector, string newName)
+        {
+            if (ReviewedConnectors is null || !ReviewedConnectors.Contains(connector))
+            {
+                return this;
+            }
+            var prefix = ReviewedWarning(connector, "");
+            return this with
+            {
+                ReviewedConnectors = ReviewedConnectors.Where(name => name != connector).Append(newName).ToHashSet(StringComparer.Ordinal),
+                ReviewedWarnings = ReviewedWarnings
+                    .Select(key => key.StartsWith(prefix, StringComparison.Ordinal) ? ReviewedWarning(newName, key[prefix.Length..]) : key)
+                    .ToHashSet(StringComparer.Ordinal),
+            };
+        }
+
+        /// <summary>
+        /// This binding's review of the connectors in <paramref name="names"/> alone: one deleted and
+        /// added again under its old name is a new connector, and reviewed again.
+        /// </summary>
+        public PublishBinding KeepingReview(IReadOnlySet<string> names) => this with
+        {
+            ReviewedConnectors = ReviewedConnectors?.Where(names.Contains).ToHashSet(StringComparer.Ordinal),
+            ReviewedWarnings = ReviewedWarnings.Where(key => names.Contains(key.Split('\n', 2)[0])).ToHashSet(StringComparer.Ordinal),
+        };
 
         public bool Equals(PublishBinding? other) =>
             other is not null
@@ -401,7 +464,11 @@ public sealed record CollectionsLocalCache
             && MarkedValues.SetEquals(other.MarkedValues)
             && ReleasedValues.SetEquals(other.ReleasedValues)
             && PublishedFolders.SetEquals(other.PublishedFolders)
-            && string.Equals(Origin, other.Origin, StringComparison.Ordinal);
+            && string.Equals(Origin, other.Origin, StringComparison.Ordinal)
+            && (ReviewedConnectors is null
+                ? other.ReviewedConnectors is null
+                : other.ReviewedConnectors is not null && ReviewedConnectors.SetEquals(other.ReviewedConnectors))
+            && ReviewedWarnings.SetEquals(other.ReviewedWarnings);
 
         public override int GetHashCode()
         {
@@ -424,6 +491,8 @@ public sealed record CollectionsLocalCache
                 hash.Add(value, StringComparer.Ordinal);
             }
             hash.Add(Origin ?? string.Empty, StringComparer.Ordinal);
+            hash.Add(ReviewedConnectors?.Count ?? -1);
+            hash.Add(ReviewedWarnings.Count);
             return hash.ToHashCode();
         }
 
@@ -454,6 +523,16 @@ public sealed record CollectionsLocalCache
             {
                 props["origin"] = JsonValue.String(Origin);
             }
+            // Written even when empty: an empty list is a review of nothing, and an absent one is a
+            // binding from before the list was kept.
+            if (ReviewedConnectors is not null)
+            {
+                props["reviewedConnectors"] = JsonValue.Array(ReviewedConnectors.Order(StringComparer.Ordinal).Select(JsonValue.String));
+            }
+            if (ReviewedWarnings.Count > 0)
+            {
+                props["reviewedWarnings"] = JsonValue.Array(ReviewedWarnings.Order(StringComparer.Ordinal).Select(JsonValue.String));
+            }
             return JsonValue.Object(props);
         }
 
@@ -475,7 +554,10 @@ public sealed record CollectionsLocalCache
                 // so: a binding written before the list was kept knows that much about itself.
                 CollectionsFile.StringSet(json["publishedFolders"], $"{what} publishedFolders").Append(folder),
                 // Absent in a binding written before the origin was kept: the next publish fills it in.
-                CollectionsFile.OptionalString(json["origin"], $"{what} origin"));
+                CollectionsFile.OptionalString(json["origin"], $"{what} origin"),
+                json["reviewedConnectors"] is null
+                    ? null : CollectionsFile.StringSet(json["reviewedConnectors"], $"{what} reviewedConnectors"),
+                CollectionsFile.StringSet(json["reviewedWarnings"], $"{what} reviewedWarnings"));
         }
     }
 
