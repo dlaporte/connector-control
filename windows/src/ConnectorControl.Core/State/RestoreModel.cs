@@ -106,9 +106,17 @@ public sealed class RestoreModel : ObservableObject
             CloseRequested?.Invoke();
             return true;
         }
-        catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException or JsonException
-                                   or RestoreCollectionGoneException or RestoreSubscribedException)
+        catch (Exception ex) when (ex is RestoreCollectionGoneException or RestoreSubscribedException)
         {
+            // A refusal is the dialog's alone, as the one before the confirmation is: nothing was
+            // restored, so there is nothing for the banner to say. It arrives here only when the
+            // collections changed while the confirmation was up.
+            RestoreError = ex.Message;
+            return false;
+        }
+        catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException or JsonException)
+        {
+            // A restore that failed is the banner's too.
             RestoreError = ex.Message;         // raw message, not Friendly()
             state.LastError = ex.Message;
             return false;

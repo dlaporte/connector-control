@@ -72,9 +72,34 @@ final class RestoreModelTests: XCTestCase {
         let model = RestoreModel(state: state)
         model.load()
         model.selection = try XCTUnwrap(state.service.backups.originalSnapshotURL(series: RestoreModel.series))
+        let banner = state.lastError
         model.requestRestore()
         XCTAssertFalse(model.confirming)
         XCTAssertEqual(model.restoreError, AppState.restoreSubscribedError("Data team"))
+        XCTAssertEqual(state.lastError, banner, "a refusal is the sheet's alone")
+        XCTAssertEqual(state.activeCollection, "Data team")
+    }
+
+    /// A refusal is the sheet's alone on either side of the confirmation: nothing was restored, so
+    /// the banner has nothing to say. The collection becomes subscribed-active while it is up.
+    func testARefusalAfterTheConfirmationIsTheSheetsAlone() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
+        // There and back, so the first apply leaves the first-run original among the backups.
+        state.switchCollection(to: "Data team")
+        state.switchCollection(to: "Default")
+        let model = RestoreModel(state: state)
+        model.load()
+        model.selection = try XCTUnwrap(state.service.backups.originalSnapshotURL(series: RestoreModel.series))
+        model.requestRestore()
+        XCTAssertTrue(model.confirming, "the active collection is local, so it asks")
+
+        state.switchCollection(to: "Data team")
+        let banner = state.lastError
+        XCTAssertFalse(model.confirmRestore())
+        XCTAssertEqual(model.restoreError, AppState.restoreSubscribedError("Data team"))
+        XCTAssertEqual(state.lastError, banner)
         XCTAssertEqual(state.activeCollection, "Data team")
     }
 

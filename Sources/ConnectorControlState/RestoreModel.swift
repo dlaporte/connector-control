@@ -73,7 +73,14 @@ public final class RestoreModel: ObservableObject {
         do {
             try state.restoreClaudeConfig(from: backup)
             return true
+        } catch let refusal as RestoreError {
+            // A refusal is the sheet's alone, as the one before the confirmation is: nothing was
+            // restored, so there is nothing for the banner to say. It arrives here only when the
+            // collections changed while the confirmation was up.
+            restoreError = refusal.localizedDescription
+            return false
         } catch {
+            // A restore that failed is the banner's too.
             restoreError = error.localizedDescription   // raw message, not friendly()
             state.lastError = error.localizedDescription
             return false

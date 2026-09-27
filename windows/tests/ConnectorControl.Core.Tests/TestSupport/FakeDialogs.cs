@@ -16,6 +16,8 @@ public sealed class FakeDialogs : IDialogs
     /// answers whatever is left. One flag cannot say "delete it, but keep the file".
     /// </summary>
     public Queue<bool> ConfirmAnswers { get; } = new();
+    /// <summary>Run while a confirmation is up, before it is answered: something that changes under a modal question.</summary>
+    public Action? DuringConfirm { get; set; }
     public string? NextPromptAnswer { get; set; }
     public bool NextOffer { get; set; }
     public Exception? OfferFailure { get; set; }
@@ -28,6 +30,7 @@ public sealed class FakeDialogs : IDialogs
                         bool cancelIsDefault)
     {
         Confirms.Add(new ConfirmCall(message, informativeText, primaryTitle, cancelTitle, destructive, cancelIsDefault));
+        DuringConfirm?.Invoke();
         return ConfirmAnswers.Count > 0 ? ConfirmAnswers.Dequeue() : NextConfirm;
     }
 
