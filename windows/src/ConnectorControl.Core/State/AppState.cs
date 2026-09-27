@@ -1349,11 +1349,11 @@ public sealed class AppState : ObservableObject, IDisposable
         // one — so the last local collection stays even when synced ones remain beside it. The
         // store still owns "no collection by that name": a name it does not have is not the last
         // anything, and its own message is the one to show.
-        if (Store.Collections.ContainsKey(name) && KindOf(name) == CollectionKind.Local && LocalCollectionNames.Count <= 1)
+        if (Store.Collections.ContainsKey(name) && IsLocal(name) && LocalCollectionNames.Count <= 1)
         {
             return LastLocalCollectionError;
         }
-        if (Store.DeleteCollection(name, c => KindOf(c) == CollectionKind.Local) is { } error)
+        if (Store.DeleteCollection(name, IsLocal) is { } error)
         {
             return error;
         }
@@ -1383,7 +1383,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// store's rule, told which collections are local. The Delete confirmation names it from here.
     /// </summary>
     public string? ActiveAfterDeleting(string name) =>
-        Store.ActiveAfterDeleting(name, c => KindOf(c) == CollectionKind.Local);
+        Store.ActiveAfterDeleting(name, IsLocal);
 
     private static Dictionary<string, TValue> Moved<TValue>(IReadOnlyDictionary<string, TValue> source, string name, string newName)
     {
@@ -1512,6 +1512,12 @@ public sealed class AppState : ObservableObject, IDisposable
 
     public bool IsSynced(string collection) => KindOf(collection) == CollectionKind.Synced;
 
+    /// <summary>
+    /// The one rule for which collections take a connector: deleting, the collection that becomes
+    /// active after a delete, and the local names all ask it.
+    /// </summary>
+    private bool IsLocal(string collection) => KindOf(collection) == CollectionKind.Local;
+
     public bool IsPublished(string collection) =>
         CollectionsFile.Collections.TryGetValue(collection, out var entry) && entry.Publish is not null;
 
@@ -1546,7 +1552,7 @@ public sealed class AppState : ObservableObject, IDisposable
     public bool ActiveCollectionIsSynced => IsSynced(ActiveCollection);
 
     public IReadOnlyList<string> LocalCollectionNames =>
-        CollectionNames.Where(n => KindOf(n) == CollectionKind.Local).ToList();
+        CollectionNames.Where(IsLocal).ToList();
 
     /// <summary>What the last Apply asked the user to fill in for one connector, by marker name.</summary>
     public IReadOnlyDictionary<string, CollectionsFile.Need> Needs(string connector, string collection) =>

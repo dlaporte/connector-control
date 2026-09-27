@@ -942,10 +942,10 @@ public final class AppState: ObservableObject {
         // one — so the last local collection stays even when synced ones remain beside it. The
         // store still owns "no collection by that name": a name it does not have is not the
         // last anything, and its own message is the one to show.
-        if store.collections[name] != nil, kind(of: name) == .local, localCollectionNames.count <= 1 {
+        if store.collections[name] != nil, isLocal(name), localCollectionNames.count <= 1 {
             return AppState.lastLocalCollectionError
         }
-        if let error = store.deleteCollection(named: name, isLocal: { kind(of: $0) == .local }) { return error }
+        if let error = store.deleteCollection(named: name, isLocal: isLocal) { return error }
         let before = collectionsFile
         collectionsFile.collections.removeValue(forKey: name)
         collectionsCache.synced.removeValue(forKey: name)
@@ -966,7 +966,7 @@ public final class AppState: ObservableObject {
     /// The collection that becomes active if `name`, the active one, is deleted — the store's rule,
     /// told which collections are local. The Delete confirmation names it from here.
     public func activeAfterDeleting(_ name: String) -> String? {
-        store.activeAfterDeleting(name, isLocal: { kind(of: $0) == .local })
+        store.activeAfterDeleting(name, isLocal: isLocal)
     }
 
     private func move<Value>(_ dictionary: inout [String: Value], from name: String, to newName: String) {
@@ -978,6 +978,10 @@ public final class AppState: ObservableObject {
     public func kind(of collection: String) -> CollectionKind { collectionsFile.kind(of: collection) }
 
     public func isSynced(_ collection: String) -> Bool { kind(of: collection) == .synced }
+
+    /// The one rule for which collections take a connector: deleting, the collection that becomes
+    /// active after a delete, and the local names all ask it.
+    private func isLocal(_ collection: String) -> Bool { kind(of: collection) == .local }
 
     public func isPublished(_ collection: String) -> Bool { collectionsFile.collections[collection]?.publish != nil }
 
@@ -1004,7 +1008,7 @@ public final class AppState: ObservableObject {
 
     public var activeCollectionIsSynced: Bool { isSynced(activeCollection) }
 
-    public var localCollectionNames: [String] { collectionNames.filter { kind(of: $0) == .local } }
+    public var localCollectionNames: [String] { collectionNames.filter(isLocal) }
 
     /// What the last Apply asked the user to fill in for one connector, by marker name.
     public func needs(of connector: String, in collection: String) -> [String: CollectionsFile.Need] {
