@@ -2826,8 +2826,10 @@ public class AppStateCollectionsTests
 
     /// <summary>
     /// Team, published from the author's other machine, marks <c>MarkedPath</c> in the sidecar. This
-    /// machine publishes its active collection, and a copy of the marked connector lands there and is
-    /// refused. Returns the active collection's document.
+    /// machine publishes its active collection, whose <c>ledger</c> the author reviews in the Publish
+    /// dialog while it holds a path of its own, and then edits to hold the marked path. Only the
+    /// sidecar's mark keeps that path back — the review holds nothing, <c>ledger</c> having been
+    /// reviewed — so the refusal is the kept-path one. Returns the active collection's document.
     /// </summary>
     private static string CopyAnotherMachinesMarkedPath(AppStateHarness h, AppState state)
     {
@@ -2845,14 +2847,20 @@ public class AppStateCollectionsTests
         state.Reload();
         // The folder is the other machine's.
         Assert.False(state.CollectionsCache.Published.ContainsKey("Team"));
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith("/tmp/own-ledger.js")), null, home));
         var folder = PublishFolder(h);
-        Assert.Null(state.StartPublishing(home, folder, PublishIntent.None, new HashSet<string>(StringComparer.Ordinal)));
-        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath)), null, home));
-        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+        // The dialog's Publish reviews ledger.
+        Assert.Null(new PublishModel(state, home) { Folder = folder }.Publish());
+        Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(MarkedPath)), "ledger", home));
+        AssertKeptBackBySidecarMark(state);
         var document = Path.Combine(folder, Slug.Make(home) + ".json");
         Assert.False(JsonText.FileContains(document, MarkedPath));
         return document;
     }
+
+    /// <summary>The reviewed <c>ledger</c> is held by the path another machine's mark keeps back, not by review.</summary>
+    private static void AssertKeptBackBySidecarMark(AppState state) =>
+        Assert.Equal(AppState.KeptPathCarriedError("ledger", FieldName.Argument(1)), state.PublishError?.Message);
 
     /// <summary>
     /// A master list restored from a backup older than Team drops Team's sidecar entry, and the other
@@ -2876,7 +2884,7 @@ public class AppStateCollectionsTests
         Assert.False(state.Store.Collections.ContainsKey("Team"));
         Assert.False(state.CollectionsFile.Collections.ContainsKey("Team"));
         Assert.False(JsonText.FileContains(document, MarkedPath));
-        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+        AssertKeptBackBySidecarMark(state);
     }
 
     /// <summary>
@@ -2897,12 +2905,12 @@ public class AppStateCollectionsTests
         state.Reload();
         Assert.False(state.CollectionsFile.Collections.ContainsKey("Team"));
         Assert.False(JsonText.FileContains(document, MarkedPath));
-        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+        AssertKeptBackBySidecarMark(state);
         state.Dispose();
         using var relaunched = h.Create();
         // A later launch still refuses it.
         Assert.False(JsonText.FileContains(document, MarkedPath));
-        Assert.Equal(PublishErrorKind.BlockedForReview, relaunched.PublishError?.Kind);
+        AssertKeptBackBySidecarMark(relaunched);
     }
 
     /// <summary>And when the other machine stops publishing Team: the collection stays, its record goes.</summary>
@@ -2920,7 +2928,7 @@ public class AppStateCollectionsTests
         Assert.True(state.Store.Collections.ContainsKey("Team"));
         Assert.False(state.IsPublished("Team"));
         Assert.False(JsonText.FileContains(document, MarkedPath));
-        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+        AssertKeptBackBySidecarMark(state);
     }
 
     /// <summary>
@@ -2945,7 +2953,7 @@ public class AppStateCollectionsTests
         }
         Assert.False(state.IsPublished("Team"));
         Assert.False(JsonText.FileContains(document, MarkedPath));
-        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+        AssertKeptBackBySidecarMark(state);
     }
 
     /// <summary>
@@ -2974,7 +2982,7 @@ public class AppStateCollectionsTests
         }
         Assert.Equal(PublishIntent.None, state.CollectionsFile.Collections["Team"].Publish?.Intent);
         Assert.False(JsonText.FileContains(document, MarkedPath));
-        Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+        AssertKeptBackBySidecarMark(state);
     }
 
     /// <summary>A copy of the marked path in an <c>additional</c> field is kept back, and the refusal says where it sits rather than that the mark moved.</summary>

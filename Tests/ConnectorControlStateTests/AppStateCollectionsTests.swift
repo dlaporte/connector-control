@@ -2429,8 +2429,10 @@ final class AppStateCollectionsTests: XCTestCase {
     // MARK: - Another machine's marks outlive its record
 
     /// Team, published from the author's other machine, marks `markedPath` in the sidecar. This
-    /// machine publishes its active collection, and a copy of the marked connector lands there and
-    /// is refused. Returns the active collection's document.
+    /// machine publishes its active collection, whose `ledger` the author reviews in the Publish
+    /// sheet while it holds a path of its own, and then edits to hold the marked path. Only the
+    /// sidecar's mark keeps that path back — the review holds nothing, `ledger` having been reviewed
+    /// — so the refusal is the kept-path one. Returns the active collection's document.
     private func copyAnotherMachinesMarkedPath(_ h: AppStateHarness, _ state: AppState) throws -> URL {
         let home = state.activeCollection
         let ledger = MCPEntry(config: .object(["command": .string("node"), "args": .array([.string(markedPath)])]))
@@ -2445,13 +2447,25 @@ final class AppStateCollectionsTests: XCTestCase {
         try file.save(to: h.storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
         state.reload()
         XCTAssertNil(state.collectionsCache.published["Team"], "the folder is the other machine's")
+        XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string("/tmp/own-ledger.js")]),
+        ])), renamedFrom: nil, in: home))
         let folder = try publishFolder(h)
-        XCTAssertNil(state.startPublishing(home, to: folder.path, intent: .none, reviewedValues: []))
-        XCTAssertNil(state.upsert(name: "ledger", entry: ledger, renamedFrom: nil, in: home))
-        XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+        let sheet = PublishModel(state: state, collection: home)
+        sheet.folder = folder.path
+        XCTAssertNil(sheet.publish(), "the sheet's Publish reviews ledger")
+        XCTAssertNil(state.upsert(name: "ledger", entry: ledger, renamedFrom: "ledger", in: home))
+        assertKeptBackBySidecarMark(state)
         let document = folder.appendingPathComponent(Slug.make(home) + ".json")
         XCTAssertFalse(try jsonFile(document, contains: markedPath))
         return document
+    }
+
+    /// The reviewed `ledger` is held by the path another machine's mark keeps back, not by review.
+    private func assertKeptBackBySidecarMark(_ state: AppState, _ route: String = "",
+                                             file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(state.publishError?.message, AppState.keptPathCarriedError("ledger", FieldName.argument(1)), route,
+                       file: file, line: line)
     }
 
     /// A master list restored from a backup older than Team drops Team's sidecar entry, and the
@@ -2471,7 +2485,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.store.collections["Team"], "restored from the backup without it")
         XCTAssertNil(state.collectionsFile.collections["Team"])
         XCTAssertFalse(try jsonFile(document, contains: markedPath))
-        XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+        assertKeptBackBySidecarMark(state)
     }
 
     /// The same once the other machine deletes Team and the sidecar arrives without it. The marks
@@ -2488,11 +2502,11 @@ final class AppStateCollectionsTests: XCTestCase {
         state.reload()
         XCTAssertNil(state.collectionsFile.collections["Team"])
         XCTAssertFalse(try jsonFile(document, contains: markedPath))
-        XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+        assertKeptBackBySidecarMark(state)
         state.dispose()
         let relaunched = h.create()
         XCTAssertFalse(try jsonFile(document, contains: markedPath), "a later launch still refuses it")
-        XCTAssertEqual(relaunched.publishError?.kind, .blockedForReview)
+        assertKeptBackBySidecarMark(relaunched, "a later launch")
     }
 
     /// And when the other machine stops publishing Team: the collection stays, its record goes.
@@ -2508,7 +2522,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNotNil(state.store.collections["Team"])
         XCTAssertFalse(state.isPublished("Team"))
         XCTAssertFalse(try jsonFile(document, contains: markedPath))
-        XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+        assertKeptBackBySidecarMark(state)
     }
 
     /// A delete or a Stop Publishing made here, of the collection the other machine publishes, is
@@ -2525,7 +2539,7 @@ final class AppStateCollectionsTests: XCTestCase {
             }
             XCTAssertFalse(state.isPublished("Team"))
             XCTAssertFalse(try jsonFile(document, contains: markedPath), deleting ? "deleted" : "unpublished")
-            XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+            assertKeptBackBySidecarMark(state)
         }
     }
 
@@ -2548,7 +2562,7 @@ final class AppStateCollectionsTests: XCTestCase {
             let route = here ? "deleted here" : "deleted elsewhere"
             XCTAssertEqual(state.collectionsFile.collections["Team"]?.publish?.intent, PublishIntent.none, route)
             XCTAssertFalse(try jsonFile(document, contains: markedPath), route)
-            XCTAssertEqual(state.publishError?.kind, .blockedForReview, route)
+            assertKeptBackBySidecarMark(state, route)
         }
     }
 
