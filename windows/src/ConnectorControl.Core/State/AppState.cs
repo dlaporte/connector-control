@@ -2427,9 +2427,10 @@ public sealed class AppState : ObservableObject, IDisposable
         // The lists are this machine's: another machine's publish record has no binding here.
         var binding = CollectionsCache.Published.GetValueOrDefault(collection);
         var changed = reviewedValues is not null && binding is not null
-            ? new CollectionsLocalCache.PublishBinding(binding.Folder, binding.LastWrittenHash, reviewedValues,
-                                                       Released(binding.ReleasedValues, releasedValues, reviewedValues),
-                                                       binding.PublishedFolders, binding.Origin)
+            ? binding with
+            {
+                MarkedValues = reviewedValues, ReleasedValues = Released(binding.ReleasedValues, releasedValues, reviewedValues),
+            }
             : binding;
         var listsChanged = !Equals(changed, binding);
         if (record.Intent.Equals(intent) && !listsChanged)
@@ -2635,11 +2636,13 @@ public sealed class AppState : ObservableObject, IDisposable
                     ? heldCollection.Mcps.ToDictionary(p => p.Key, p => p.Value.Config, StringComparer.Ordinal)
                     : new Dictionary<string, JsonValue>(StringComparer.Ordinal);
                 var placed = record.Intent.PlacedArguments(held).ToHashSet(StringComparer.Ordinal);
-                SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(
-                    binding.Folder, hash, binding.MarkedValues.Concat(placed),
+                SetPublishBinding(collection, binding with
+                {
+                    LastWrittenHash = hash,
+                    MarkedValues = binding.MarkedValues.Concat(placed).ToHashSet(StringComparer.Ordinal),
                     // A path written as a placeholder is kept back again, so it is released no longer.
-                    binding.ReleasedValues.Where(value => !placed.Contains(value)),
-                    binding.PublishedFolders, binding.Origin));
+                    ReleasedValues = binding.ReleasedValues.Where(value => !placed.Contains(value)).ToHashSet(StringComparer.Ordinal),
+                });
                 cacheChanged = true;
                 if (PublishError?.Collection == collection)
                 {

@@ -3136,6 +3136,54 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(try backupCount(h, series: "mcps"), before, "and skipping it writes nothing either")
     }
 
+    // MARK: - Publish bindings carry every field
+
+    /// The sheet's reviewed lists and an automatic publish each change one part of this machine's
+    /// publish binding, and every other field comes through: the lists they carry are the deny-list.
+    /// Every field is filled, and a field added later fails the first check until it is filled
+    /// here too; the comparisons then walk every field, so it is checked without being named.
+    func testThePublishBindingKeepsEveryFieldThroughTheReviewedListsAndAPublish() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        try h.publish(state, "Default")
+        var cache = state.collectionsCache
+        var seeded = try XCTUnwrap(cache.published["Default"])
+        seeded.markedValues = ["/opt/marked"]
+        seeded.releasedValues = ["/opt/released"]
+        seeded.publishedFolders.insert("/old/pub")
+        cache.published["Default"] = seeded
+        try h.seed(state, file: state.collectionsFile, cache: cache)
+        let before = try XCTUnwrap(state.collectionsCache.published["Default"])
+        for child in Mirror(reflecting: before).children {
+            let label = child.label ?? "?"
+            let value = Mirror(reflecting: child.value)
+            XCTAssertFalse(value.displayStyle == .optional && value.children.isEmpty, "\(label) is filled")
+            if let set = child.value as? Set<String> { XCTAssertFalse(set.isEmpty, "\(label) is filled") }
+        }
+
+        let record = try XCTUnwrap(state.collectionsFile.collections["Default"]?.publish)
+        XCTAssertNil(state.updatePublishIntent("Default", intent: record.intent, reviewedValues: ["/opt/reviewed"]))
+        let reviewed = try XCTUnwrap(state.collectionsCache.published["Default"])
+        XCTAssertEqual(reviewed.markedValues, ["/opt/reviewed"])
+        assertSameFields(reviewed, before, except: ["markedValues"])
+
+        XCTAssertNil(state.upsert(name: "scoutbook", entry: MCPEntry(config: AppStateHarness.remote("https://scoutbook.example.com/v2")),
+                                  renamedFrom: "scoutbook", in: "Default"))
+        let published = try XCTUnwrap(state.collectionsCache.published["Default"])
+        XCTAssertNotEqual(published.lastWrittenHash, reviewed.lastWrittenHash, "the automatic publish wrote")
+        assertSameFields(published, reviewed, except: ["lastWrittenHash"])
+    }
+
+    /// Every field of `a` and `b` but those named is equal.
+    private func assertSameFields(_ a: CollectionsLocalCache.PublishBinding, _ b: CollectionsLocalCache.PublishBinding,
+                                  except changed: Set<String>, file: StaticString = #filePath, line: UInt = #line) {
+        for (x, y) in zip(Mirror(reflecting: a).children, Mirror(reflecting: b).children)
+        where !changed.contains(x.label ?? "") {
+            XCTAssertEqual(x.value as? AnyHashable, y.value as? AnyHashable, "\(x.label ?? "?") came through",
+                           file: file, line: line)
+        }
+    }
+
     // MARK: - A corrupt master list
 
     /// A master list that cannot be read comes back from its newest backup, subscriptions and all:

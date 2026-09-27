@@ -325,11 +325,20 @@ public sealed record CollectionsLocalCache
         }
     }
 
+    /// <summary>
+    /// Every property is <c>init</c>, so a change to one field is <c>binding with { … }</c> and a field
+    /// added later comes through every change that does not name it. The sets are copied ordinally
+    /// however they are given.
+    /// </summary>
     public sealed record PublishBinding
     {
-        public string Folder { get; }
+        private readonly HashSet<string> markedValues = new(StringComparer.Ordinal);
+        private readonly HashSet<string> releasedValues = new(StringComparer.Ordinal);
+        private readonly HashSet<string> publishedFolders = new(StringComparer.Ordinal);
 
-        public string? LastWrittenHash { get; }
+        public string Folder { get; init; }
+
+        public string? LastWrittenHash { get; init; }
 
         /// <summary>
         /// Every path this machine has written into the document as a placeholder, which must never
@@ -338,21 +347,33 @@ public sealed record CollectionsLocalCache
         /// it, and only the author, pressing Publish in the sheet after reading the preview,
         /// replaces it.
         /// </summary>
-        public IReadOnlySet<string> MarkedValues { get; }
+        public IReadOnlySet<string> MarkedValues
+        {
+            get => markedValues;
+            init => markedValues = new HashSet<string>(value, StringComparer.Ordinal);
+        }
 
         /// <summary>
         /// Paths the author let travel as written in this collection's document, pressing Release
         /// and then Publish in the sheet after reading the preview, although this machine keeps them
         /// back elsewhere: on another collection's list, or as a folder it binds.
         /// </summary>
-        public IReadOnlySet<string> ReleasedValues { get; }
+        public IReadOnlySet<string> ReleasedValues
+        {
+            get => releasedValues;
+            init => releasedValues = new HashSet<string>(value, StringComparer.Ordinal);
+        }
 
         /// <summary>
         /// Every folder this binding has published into, the current one included. A connector can
         /// bring an earlier one back as written — a backup taken before the folder moved — and the
         /// author's old folder is no more a subscriber's than the current one.
         /// </summary>
-        public IReadOnlySet<string> PublishedFolders { get; }
+        public IReadOnlySet<string> PublishedFolders
+        {
+            get => publishedFolders;
+            init => publishedFolders = new HashSet<string>(value, StringComparer.Ordinal);
+        }
 
         /// <summary>
         /// The origin the collection publishes under, so what this binding leaves behind still says
@@ -367,15 +388,9 @@ public sealed record CollectionsLocalCache
         {
             Folder = folder;
             LastWrittenHash = lastWrittenHash;
-            MarkedValues = markedValues is null
-                ? new HashSet<string>(StringComparer.Ordinal)
-                : new HashSet<string>(markedValues, StringComparer.Ordinal);
-            ReleasedValues = releasedValues is null
-                ? new HashSet<string>(StringComparer.Ordinal)
-                : new HashSet<string>(releasedValues, StringComparer.Ordinal);
-            PublishedFolders = publishedFolders is null
-                ? new HashSet<string>(StringComparer.Ordinal)
-                : new HashSet<string>(publishedFolders, StringComparer.Ordinal);
+            MarkedValues = new HashSet<string>(markedValues ?? [], StringComparer.Ordinal);
+            ReleasedValues = new HashSet<string>(releasedValues ?? [], StringComparer.Ordinal);
+            PublishedFolders = new HashSet<string>(publishedFolders ?? [], StringComparer.Ordinal);
             Origin = origin;
         }
 

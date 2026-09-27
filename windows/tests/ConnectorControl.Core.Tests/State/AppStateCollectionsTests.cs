@@ -3654,6 +3654,65 @@ public class AppStateCollectionsTests
         Assert.Equal(before, BackupCount(h, "mcps"));
     }
 
+    // MARK: publish bindings carry every field
+
+    /// <summary>
+    /// The sheet's reviewed lists and an automatic publish each change one part of this machine's
+    /// publish binding, and every other field comes through: the lists they carry are the deny-list.
+    /// Every field is filled, and a field added later fails the first check until it is filled here
+    /// too; the comparisons then walk every field, so it is checked without being named.
+    /// </summary>
+    [Fact]
+    public void ThePublishBindingKeepsEveryFieldThroughTheReviewedListsAndAPublish()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Publish(state, "Default");
+        var bound = state.CollectionsCache.Published["Default"];
+        var seeded = bound with
+        {
+            MarkedValues = new HashSet<string>(["/opt/marked"]),
+            ReleasedValues = new HashSet<string>(["/opt/released"]),
+            PublishedFolders = new HashSet<string>([.. bound.PublishedFolders, "/old/pub"]),
+        };
+        var published = new Dictionary<string, CollectionsLocalCache.PublishBinding>(state.CollectionsCache.Published) { ["Default"] = seeded };
+        h.Seed(state, state.CollectionsFile, state.CollectionsCache with { Published = published });
+        var before = state.CollectionsCache.Published["Default"];
+        foreach (var property in BindingFields)
+        {
+            var value = property.GetValue(before);
+            Assert.True(value is not null, $"{property.Name} is filled");
+            Assert.True(value is not IReadOnlySet<string> { Count: 0 }, $"{property.Name} is filled");
+        }
+
+        var record = state.CollectionsFile.Collections["Default"].Publish!;
+        Assert.Null(state.UpdatePublishIntent("Default", record.Intent, new HashSet<string>(["/opt/reviewed"])));
+        var reviewed = state.CollectionsCache.Published["Default"];
+        Assert.Equal(["/opt/reviewed"], reviewed.MarkedValues);
+        AssertSameFields(reviewed, before, "MarkedValues");
+
+        Assert.Null(state.Upsert("scoutbook", new McpEntry(AppStateHarness.Remote("https://scoutbook.example.com/v2")),
+            renamedFrom: "scoutbook", collection: "Default"));
+        var written = state.CollectionsCache.Published["Default"];
+        // The automatic publish wrote.
+        Assert.NotEqual(reviewed.LastWrittenHash, written.LastWrittenHash);
+        AssertSameFields(written, reviewed, "LastWrittenHash");
+    }
+
+    private static readonly System.Reflection.PropertyInfo[] BindingFields =
+        typeof(CollectionsLocalCache.PublishBinding).GetProperties();
+
+    /// <summary>Every field of <paramref name="a"/> and <paramref name="b"/> but <paramref name="changed"/> is equal.</summary>
+    private static void AssertSameFields(CollectionsLocalCache.PublishBinding a, CollectionsLocalCache.PublishBinding b, string changed)
+    {
+        foreach (var property in BindingFields.Where(p => p.Name != changed))
+        {
+            var (x, y) = (property.GetValue(a), property.GetValue(b));
+            Assert.True(x is IReadOnlySet<string> xs && y is IReadOnlySet<string> ys ? xs.SetEquals(ys) : Equals(x, y),
+                $"{property.Name} came through");
+        }
+    }
+
     // MARK: a corrupt master list
 
     /// <summary>
