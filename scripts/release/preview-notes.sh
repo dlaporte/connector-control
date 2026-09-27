@@ -69,10 +69,12 @@ echo
 # than publishing notes without their changes.
 #
 # A sub-heading with no bullets yet stays in CHANGELOG.md until the version ships, but a
-# tester reading these notes should not meet an empty heading, so drop those here.
+# tester reading these notes should not meet an empty heading, so drop those here. The ones
+# kept are demoted to ####, so they sit under this section's own ### heading rather than
+# beside it.
 scripts/release/changelog-section.sh "v$NEXT" \
   | awk '
-      /^### / { if (heading != "" && body != "") printf "%s", held; heading = $0; held = $0 ORS; body = ""; next }
+      /^### / { if (heading != "" && body != "") printf "%s", held; heading = $0; sub(/^### /, "#### ", heading); held = heading ORS; body = ""; next }
       heading != "" { held = held $0 ORS; if ($0 ~ /[^[:space:]]/) body = body $0; next }
       { print }
       END { if (heading != "" && body != "") printf "%s", held }
