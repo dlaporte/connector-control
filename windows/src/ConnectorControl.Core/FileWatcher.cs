@@ -24,10 +24,14 @@ public sealed class FileWatcher : IDisposable
     private readonly TimeSpan debounce;
     private readonly TimeSpan rebuildCooldown;
     private readonly IPathProbe probe;
+    /// <summary>Makes the debounce timer. <c>TimeProvider.System</c> everywhere but the tests that
+    /// fire a pending re-check by hand; its timer is the same timer-queue timer a
+    /// <c>new Timer(…)</c> is, so production timing is unchanged.</summary>
+    private readonly TimeProvider time;
     private readonly object gate = new();
 
     private FileSystemWatcher? watcher;
-    private Timer? timer;
+    private ITimer? timer;
     private DateTime? lastModified;
     private bool disposed;
     private int generation;
@@ -46,7 +50,7 @@ public sealed class FileWatcher : IDisposable
     /// That bounds these rebuilds by the reload rate without a timer.</summary>
     private bool rebuildOwed;
 
-    public FileWatcher(string path, Action<Action> marshal, Action onChange, TimeSpan? debounce = null, IPathProbe? probe = null, TimeSpan? rebuildCooldown = null)
+    public FileWatcher(string path, Action<Action> marshal, Action onChange, TimeSpan? debounce = null, IPathProbe? probe = null, TimeSpan? rebuildCooldown = null, TimeProvider? time = null)
     {
         this.path = Path.GetFullPath(path);
         directory = Path.GetDirectoryName(this.path) ?? throw new ArgumentException("Path has no parent directory.", nameof(path));
@@ -56,6 +60,7 @@ public sealed class FileWatcher : IDisposable
         this.debounce = debounce ?? DefaultDebounce;
         this.rebuildCooldown = rebuildCooldown ?? DefaultRebuildCooldown;
         this.probe = probe ?? new RealPathProbe();
+        this.time = time ?? TimeProvider.System;
     }
 
     /// <summary>
@@ -168,7 +173,7 @@ public sealed class FileWatcher : IDisposable
     public void Stop()
     {
         FileSystemWatcher? fsw;
-        Timer? t;
+        ITimer? t;
         lock (gate)
         {
             fsw = watcher;
@@ -453,7 +458,7 @@ public sealed class FileWatcher : IDisposable
             {
                 return;
             }
-            timer ??= new Timer(_ => CheckForChange(), null, Timeout.Infinite, Timeout.Infinite);
+            timer ??= time.CreateTimer(_ => CheckForChange(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             timer.Change(debounce, Timeout.InfiniteTimeSpan);
         }
     }

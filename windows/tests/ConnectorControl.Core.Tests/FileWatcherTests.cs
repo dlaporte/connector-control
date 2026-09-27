@@ -29,14 +29,27 @@ public class FileWatcherTests : IDisposable
     }
 
     /// <summary>
-    /// The one rule for sleeping here: after anything that arms a FileSystemWatcher or schedules a
-    /// re-check (Start, a rebuild, HandleError), a test settles before the write whose report it
-    /// relies on. A FileSystemWatcher arms on a background thread on the Mac, so a write made at
-    /// once can be missed; and a re-check still pending (the 200 ms debounce, under this) could
-    /// report the write for the wrong reason. Neither leaves a signal to wait on, so this is a
-    /// fixed wait; nothing else here sleeps before a write.
+    /// The one rule for sleeping here: after anything that arms a FileSystemWatcher (Start, a
+    /// rebuild), a test calls <see cref="SettleArming"/> before the write whose report it relies
+    /// on. On the Mac the runtime's FileSystemWatcher arms on a background thread (FSEvents), so a
+    /// write made at once can be missed, and nothing signals when it is ready, so this is a fixed
+    /// wait there. On Windows <c>EnableRaisingEvents</c> issues ReadDirectoryChangesW before it
+    /// returns, so there is nothing to wait for and no sleep. A re-check still pending (the 200 ms
+    /// debounce) could report the write for the wrong reason, so it is not slept past either: the
+    /// tests that schedule one (an error, a swap) run their watcher on <see cref="ManualTimers"/>
+    /// and fire it by hand before the write. The one exception is a FileSystemWatcher event still
+    /// in flight, which no seam can see (FiresOnDeleteAndOnRecreate); nothing else sleeps before a
+    /// write.
     /// </summary>
     private static readonly TimeSpan Settle = TimeSpan.FromMilliseconds(300);
+
+    private static void SettleArming()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Thread.Sleep(Settle);
+        }
+    }
 
     /// <summary>A window to prove a callback does NOT arrive (a stopped watcher, an unrelated file,
     /// a burst already reported). Timing out is the pass case, so it cannot be a wait on a
@@ -54,7 +67,7 @@ public class FileWatcherTests : IDisposable
         using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
         Assert.True(watcher.IsArmed);
-        Thread.Sleep(Settle);
+        SettleArming();
         TempDir.Touch(path, "two");
         Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually), "expected a change callback after an in-place write");
     }
@@ -66,7 +79,7 @@ public class FileWatcherTests : IDisposable
         var counter = new Counter();
         using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
-        Thread.Sleep(Settle);
+        SettleArming();
         AtomicFile.Write("two"u8.ToArray(), path);
         TempDir.BumpModificationTime(path);   // the write's own mtime may tie with "one"'s on a coarse file system
         Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually), "expected a change callback after an atomic replace");
@@ -79,7 +92,7 @@ public class FileWatcherTests : IDisposable
         var counter = new Counter();
         using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
-        Thread.Sleep(Settle);
+        SettleArming();
         File.Delete(path);
         Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually), "expected a callback for delete");
         Thread.Sleep(Settle);   // a late event for the delete can still have a re-check pending
@@ -111,14 +124,14 @@ public class FileWatcherTests : IDisposable
         var ui = new MarshalQueue();
         using var watcher = new FileWatcher(path, ui.Post, counter.Hit);
         watcher.Start();
-        Thread.Sleep(Settle);
+        SettleArming();
         TempDir.Touch(path, "two");
         Assert.True(WaitForPost(ui));   // posted, not yet delivered
         watcher.Stop();
         watcher.Start();
         ui.Pump();
         Assert.Equal(0, counter.Count);   // a callback from the previous generation is dropped
-        Thread.Sleep(Settle);
+        SettleArming();
         TempDir.Touch(path, "three");
         Assert.True(ui.PumpUntil(() => counter.Count >= 1, Wait.Eventually), "the restarted watcher is live");
     }
@@ -132,7 +145,7 @@ public class FileWatcherTests : IDisposable
         var counter = new Counter();
         using var watcher = new FileWatcher(path, a => a(), counter.Hit, debounce: TimeSpan.FromMilliseconds(400));
         watcher.Start();
-        Thread.Sleep(Settle);
+        SettleArming();
         for (int i = 1; i <= 5; i++)
         {
             File.WriteAllText(path, i.ToString());
@@ -150,7 +163,7 @@ public class FileWatcherTests : IDisposable
         var counter = new Counter();
         using var watcher = new FileWatcher(path, a => a(), counter.Hit);
         watcher.Start();
-        Thread.Sleep(Settle);
+        SettleArming();
         File.WriteAllText(dir.File("other.json"), "x");
         Assert.False(Wait.Until(() => counter.Count > 0, Quiet));
     }
@@ -163,7 +176,7 @@ public class FileWatcherTests : IDisposable
         var ui = new MarshalQueue();
         using var watcher = new FileWatcher(path, ui.Post, counter.Hit);
         watcher.Start();
-        Thread.Sleep(Settle);
+        SettleArming();
         TempDir.Touch(path, "two");
         Assert.True(WaitForPost(ui));   // posted, not yet delivered
         watcher.Stop();                 // before the posted callback runs
@@ -179,7 +192,7 @@ public class FileWatcherTests : IDisposable
         var ui = new MarshalQueue();
         using var watcher = new FileWatcher(path, ui.Post, counter.Hit);
         watcher.Start();
-        Thread.Sleep(Settle);
+        SettleArming();
         TempDir.Touch(path, "two");
         Assert.True(WaitForPost(ui), "the change is posted to marshal, not delivered inline");
         Assert.Equal(0, counter.Count);   // not delivered until the test pumps marshal's queue
@@ -197,7 +210,7 @@ public class FileWatcherTests : IDisposable
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(nested)!);
         watcher.Start();   // re-arm attempt, as AppState does on each reload
         Assert.True(watcher.IsArmed);
-        Thread.Sleep(Settle);
+        SettleArming();
         File.WriteAllText(nested, "hello");
         Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually));
     }
@@ -280,7 +293,7 @@ public class FileWatcherTests : IDisposable
         Directory.CreateDirectory(parent);
         watcher.Start();
         Assert.True(watcher.IsArmed);
-        Thread.Sleep(Settle);
+        SettleArming();
         var before = counter.Count;   // a possible earlier extra delivery must not mask a missing one here
         File.WriteAllText(path, "two");
         Assert.True(Wait.Until(() => counter.Count >= before + 1, Wait.Eventually), "the re-armed watcher must still report changes");
@@ -292,13 +305,20 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
+        var timers = new ManualTimers();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, time: timers);
         watcher.Start();
-        watcher.HandleError();      // a buffer overflow: re-check, but stay armed
+        watcher.HandleError();      // the directory is still there: rebuild, re-check, stay armed
         Assert.True(watcher.IsArmed);
-        Thread.Sleep(Settle);
+        Assert.True(timers.Pending, "the error schedules a re-check");
+        timers.FireAll();
+        Assert.Equal(0, counter.Count);   // nothing changed, so the re-check reports nothing
+        Assert.False(timers.Pending);
+        SettleArming();
         TempDir.Touch(path, "two");
-        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually));
+        Assert.True(Wait.Until(() => timers.Pending, Wait.Eventually), "the write's event schedules a re-check");
+        timers.FireAll();
+        Assert.True(counter.Count >= 1);
     }
 
     /// <summary>
@@ -314,16 +334,21 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
+        var timers = new ManualTimers();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, time: timers);
         watcher.Start();
         var armed = watcher.ArmCount;
         watcher.HandleError();
         Assert.True(watcher.IsArmed);
         Assert.Equal(armed + 1, watcher.ArmCount);
-        Thread.Sleep(Settle);
-        var before = counter.Count;   // the error's own re-check may already have reported
+        timers.FireAll();   // the error's own re-check, run now rather than slept past
+        Assert.Equal(0, counter.Count);
+        Assert.False(timers.Pending);
+        SettleArming();
         TempDir.Touch(path, "two");
-        Assert.True(Wait.Until(() => counter.Count >= before + 1, Wait.Eventually), "the rebuilt FileSystemWatcher must still report changes");
+        Assert.True(Wait.Until(() => timers.Pending, Wait.Eventually), "the rebuilt FileSystemWatcher must still report changes");
+        timers.FireAll();
+        Assert.True(counter.Count >= 1);
     }
 
     /// <summary>
@@ -341,17 +366,22 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
+        var timers = new ManualTimers();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, time: timers);
         watcher.Start();
         Assert.True(watcher.IsArmed);
         Directory.SetCreationTimeUtc(dir.Path, Directory.GetCreationTimeUtc(dir.Path).AddHours(-1));
         Assert.False(watcher.IsArmed, "the folder at the path is not the one being watched");
         watcher.Start();   // AppState re-arms on every reload: this is where recovery happens
         Assert.True(watcher.IsArmed);
-        Thread.Sleep(Settle);
+        Assert.True(timers.Pending, "the swap re-checks the file");
+        timers.FireAll();
+        SettleArming();
         var before = counter.Count;
         TempDir.Touch(path, "two");
-        Assert.True(Wait.Until(() => counter.Count >= before + 1, Wait.Eventually), "the re-armed watcher must still report changes");
+        Assert.True(Wait.Until(() => timers.Pending, Wait.Eventually), "the re-armed watcher must still report changes");
+        timers.FireAll();
+        Assert.True(counter.Count >= before + 1);
     }
 
     /// <summary>
@@ -374,7 +404,8 @@ public class FileWatcherTests : IDisposable
         var file = System.IO.Path.Combine(folder, "watched.json");
         File.WriteAllText(file, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(file, a => a(), counter.Hit);
+        var timers = new ManualTimers();
+        using var watcher = new FileWatcher(file, a => a(), counter.Hit, time: timers);
         watcher.Start();
         Assert.True(watcher.IsArmed);
         var armed = watcher.ArmCount;
@@ -386,12 +417,17 @@ public class FileWatcherTests : IDisposable
         watcher.Start();
         Assert.True(watcher.IsArmed);
         Assert.Equal(armed + 1, watcher.ArmCount);   // it swapped onto the folder that is there
-        // The file is not in the replacement, and the re-arm's own re-check reports that, so
-        // the count is settled before the write below rather than racing it.
-        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually), "the re-arm must report the file missing from the folder that is there now");
+        // The file is not in the replacement, and the re-arm's own re-check reports that; fired
+        // here, the count is settled before the write below rather than racing it.
+        Assert.True(timers.Pending, "the swap re-checks the file");
+        timers.FireAll();
+        Assert.True(counter.Count >= 1, "the re-arm must report the file missing from the folder that is there now");
+        SettleArming();
         var before = counter.Count;
         TempDir.Touch(file, "two");   // creates the file in the folder that is there now
-        Assert.True(Wait.Until(() => counter.Count >= before + 1, Wait.Eventually), "the watcher must follow the path, not the folder it happened to open");
+        Assert.True(Wait.Until(() => timers.Pending, Wait.Eventually), "the watcher must follow the path, not the folder it happened to open");
+        timers.FireAll();
+        Assert.True(counter.Count >= before + 1);
     }
 
     /// <summary>
@@ -407,7 +443,8 @@ public class FileWatcherTests : IDisposable
     {
         var probe = new FakePathProbe().AddFile(path, DateTime.UnixEpoch);
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, a => a(), counter.Hit, probe: probe);
+        var timers = new ManualTimers();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, probe: probe, time: timers);
         watcher.Start();
         probe.AddFile(path, DateTime.UnixEpoch.AddHours(1));
         Directory.SetCreationTimeUtc(dir.Path, Directory.GetCreationTimeUtc(dir.Path).AddHours(-1));
@@ -415,7 +452,9 @@ public class FileWatcherTests : IDisposable
 
         watcher.Start();
 
-        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually), "the re-arm must re-check the file, not wait for the next write to it");
+        Assert.True(timers.Pending, "the re-arm must re-check the file, not wait for the next write to it");
+        timers.FireAll();
+        Assert.Equal(1, counter.Count);
     }
 
     /// <summary>
@@ -457,15 +496,22 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, a => a(), counter.Hit);
+        var timers = new ManualTimers();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, time: timers);
         watcher.Start();
+        SettleArming();
         var armed = watcher.ArmCount;
         watcher.HandleError(rebuild: false);   // what OnError passes for an InternalBufferOverflowException
         Assert.True(watcher.IsArmed);
         Assert.Equal(armed, watcher.ArmCount);
-        Thread.Sleep(Settle);
+        Assert.True(timers.Pending, "a lost buffer re-checks");
+        timers.FireAll();
+        Assert.Equal(0, counter.Count);
+        Assert.False(timers.Pending);
         TempDir.Touch(path, "two");
-        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually), "the re-check still reports");
+        Assert.True(Wait.Until(() => timers.Pending, Wait.Eventually), "the watcher it kept still reports");
+        timers.FireAll();
+        Assert.True(counter.Count >= 1);
     }
 
     /// <summary>C#-only: the Mac's watcher has no error event.</summary>
@@ -489,7 +535,8 @@ public class FileWatcherTests : IDisposable
     {
         File.WriteAllText(path, "one");
         var counter = new Counter();
-        using var watcher = new FileWatcher(path, a => a(), counter.Hit, rebuildCooldown: TimeSpan.FromMinutes(5));
+        var timers = new ManualTimers();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, rebuildCooldown: TimeSpan.FromMinutes(5), time: timers);
         watcher.Start();
         var armed = watcher.ArmCount;
         for (var i = 0; i < 25; i++)
@@ -498,9 +545,14 @@ public class FileWatcherTests : IDisposable
         }
         Assert.Equal(armed + 1, watcher.ArmCount);
         Assert.False(watcher.IsArmed, "the errors the cooldown held back are owed a rebuild");
-        Thread.Sleep(Settle);
+        Assert.Equal(1, timers.FireAll());   // twenty-five re-checks asked for, one debounced re-check run
+        Assert.Equal(0, counter.Count);
+        Assert.False(timers.Pending);
+        SettleArming();
         TempDir.Touch(path, "two");
-        Assert.True(Wait.Until(() => counter.Count >= 1, Wait.Eventually), "the watcher it kept still reports changes meanwhile");
+        Assert.True(Wait.Until(() => timers.Pending, Wait.Eventually), "the watcher it kept still reports changes meanwhile");
+        timers.FireAll();
+        Assert.True(counter.Count >= 1);
         watcher.Start();
         Assert.Equal(armed + 2, watcher.ArmCount);   // the whole storm's debt, paid once
         Assert.True(watcher.IsArmed);
