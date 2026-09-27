@@ -413,8 +413,7 @@ public final class EditorModel: ObservableObject {
         Set(args.indices.filter { Placeholder.containsMarker(args[$0].value) })
     }
 
-    /// EditorModel.cs calls this `PlaceholderHintForArg`: C# has no argument labels to tell it
-    /// apart from the env-row overload.
+    /// EditorModel.cs asks it by the row instead (`ArgRow.Hint`), which is what its view binds.
     public func placeholderHint(arg index: Int) -> String? {
         args.indices.contains(index) ? hint(in: args[index].value) : nil
     }
@@ -456,15 +455,14 @@ public final class EditorModel: ObservableObject {
 
     /// The same question for an argument. Takes an index because that is what a view has, and
     /// resolves it through the row's identity so a row inserted above does not move the answer.
-    /// EditorModel.cs calls this `AsksForArg`: C# has no argument labels to tell it apart from
-    /// the env-row overload.
+    /// EditorModel.cs asks it by the row instead (`ArgRow.Asks`), which is what its view binds.
     public func asksFor(arg index: Int) -> Bool {
         args.indices.contains(index) && askedArgs.contains(args[index].id)
     }
 
     /// Whether an argument's field takes typing: always in a form that is the user's, and in a
     /// read-only one only where the document asks this machine for the value. EditorModel.cs
-    /// calls this `IsLiveArg`, as it names `AsksForArg`.
+    /// asks it by the row (`ArgRow.Live`).
     public func isLive(arg index: Int) -> Bool { !isReadOnly || asksFor(arg: index) }
 
     public var asksForBearerToken: Bool { askedBearerToken }
@@ -496,7 +494,7 @@ public final class EditorModel: ObservableObject {
                                 value: row.value)
     }
 
-    /// EditorModel.cs calls this `IsOwedArg`, as it names `AsksForArg`.
+    /// EditorModel.cs asks it by the row (`ArgRow.Owed`).
     public func isOwed(arg index: Int) -> Bool {
         guard args.indices.contains(index) else { return false }
         let value = args[index].value
@@ -538,7 +536,7 @@ public final class EditorModel: ObservableObject {
     /// opened, which the published document has never described.
     /// The mark is placed on the opened arguments the way the exporter places it, so a mark that
     /// moved before the window opened still shows its hint beside the argument it stands for.
-    /// EditorModel.cs calls this `PublishedHintForArg`, as it names `PlaceholderHintForArg`.
+    /// EditorModel.cs asks it by the row (`ArgRow.PublishedHint`).
     public func publishedHint(arg index: Int) -> String? {
         guard state.collectionsCache.published[collectionName] != nil, args.indices.contains(index),
               let published = openArgIndexByRow[args[index].id] else { return nil }

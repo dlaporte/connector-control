@@ -691,10 +691,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
             .Select(pair => pair.index)
             .ToHashSet();
 
-    /// <summary>EditorModel.swift's <c>placeholderHint(arg:)</c>; C# has no argument labels to tell the two apart.</summary>
-    public string? PlaceholderHintForArg(int index) =>
-        index >= 0 && index < Args.Count ? PlaceholderHint(Args[index]) : null;
-
+    /// <summary>EditorModel.swift's <c>placeholderHint(arg:)</c>, asked by the row: what <see cref="ArgRow.Hint"/> binds.</summary>
     internal string? PlaceholderHint(ArgRow row) => Hint(row.Value);
 
     public bool BearerTokenIsPlaceholder => Placeholder.ContainsMarker(bearerToken);
@@ -715,20 +712,18 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public bool AsksFor(EnvRow row) => askedEnvRows.Contains(row);
 
     /// <summary>
-    /// The same question for an argument. Takes an index because that is what a view has, and
-    /// resolves it through the row's identity so a row inserted above does not move the answer.
+    /// The same question for an argument, asked by its row, which is what <see cref="ArgRow.Asks"/>
+    /// binds: keyed by the row object, a row inserted above does not move the answer. The Mac's
+    /// <c>asksFor(arg:)</c> takes an index, which is what its view has, and resolves it through the
+    /// row's id.
     /// </summary>
-    public bool AsksForArg(int index) => index >= 0 && index < Args.Count && AsksFor(Args[index]);
-
-    /// <summary>The row the index above resolves to, asked directly: what an <see cref="ArgRow"/> binds.</summary>
     internal bool AsksFor(ArgRow row) => askedArgs.Contains(row);
 
     /// <summary>
     /// Whether an argument's box takes typing: always in a form that is the user's, and in a
-    /// read-only one only where the document asks this machine for the value.
+    /// read-only one only where the document asks this machine for the value. What
+    /// <see cref="ArgRow.Live"/> binds; the Mac's <c>isLive(arg:)</c>.
     /// </summary>
-    public bool IsLiveArg(int index) => !IsReadOnly || AsksForArg(index);
-
     internal bool IsLive(ArgRow row) => !IsReadOnly || AsksFor(row);
 
     public bool AsksForBearerToken { get; private set; }
@@ -757,9 +752,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// <summary>Takes the row, for the reason <see cref="IsPlaceholder"/> gives.</summary>
     public bool IsOwed(EnvRow row) => Owed(AsksFor(row), IsPlaceholder(row), row.Value);
 
-    /// <summary>EditorModel.swift's <c>isOwed(arg:)</c>; C# has no argument labels to tell the two apart.</summary>
-    public bool IsOwedArg(int index) => index >= 0 && index < Args.Count && IsOwed(Args[index]);
-
+    /// <summary>EditorModel.swift's <c>isOwed(arg:)</c>, asked by the row: what <see cref="ArgRow.Owed"/> binds.</summary>
     internal bool IsOwed(ArgRow row) => Owed(AsksFor(row), Placeholder.ContainsMarker(row.Value), row.Value);
 
     public bool BearerTokenOwed => Owed(AsksForBearerToken, BearerTokenIsPlaceholder, bearerToken);
@@ -797,15 +790,12 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public string? PublishedHint(EnvRow row) => PublishedEnvHints.GetValueOrDefault(row.Name);
 
     /// <summary>
-    /// An argument's hint, which the record keys by where the marker sits rather than by name.
-    /// Resolved through the row's identity, as <see cref="AsksForArg"/> is: a published
-    /// collection's editor adds and removes arguments freely, and a hint read by today's
-    /// position would sit beside whichever row happened to slide into it. Null for a row added
-    /// since the window opened, which the published document has never described.
+    /// An argument's hint, which the record keys by where the marker sits rather than by name: what
+    /// <see cref="ArgRow.PublishedHint"/> binds. Asked by the row, as <see cref="AsksFor(ArgRow)"/>
+    /// is: a published collection's editor adds and removes arguments freely, and a hint read by
+    /// today's position would sit beside whichever row happened to slide into it. Null for a row
+    /// added since the window opened, which the published document has never described.
     /// </summary>
-    public string? PublishedHintForArg(int index) =>
-        index >= 0 && index < Args.Count ? PublishedHint(Args[index]) : null;
-
     internal string? PublishedHint(ArgRow row)
     {
         if (!state.CollectionsCache.Published.ContainsKey(CollectionName)

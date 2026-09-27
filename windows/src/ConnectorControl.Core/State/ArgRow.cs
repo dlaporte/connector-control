@@ -28,22 +28,22 @@ public sealed class ArgRow : ObservableObject
     // MARK: the editor's rules
 
     // What EditorModel says about this argument, as properties the row's template binds, for the
-    // reason EnvRow gives. The model indexes arguments by position for the Mac's sake; a row asks
-    // by itself, which is the identity those answers resolve through anyway.
+    // reason EnvRow gives. The Mac's model takes an argument's index, which is what its view has,
+    // and resolves it through the row's id; here a row asks by itself.
 
-    /// <summary><see cref="EditorModel.AsksForArg"/>: the box is the live placeholder one.</summary>
+    /// <summary><see cref="EditorModel.AsksFor(ArgRow)"/>: the box is the live placeholder one.</summary>
     public bool Asks => editor?.AsksFor(this) ?? false;
 
-    /// <summary><see cref="EditorModel.IsLiveArg"/>: whether the box takes typing in this form.</summary>
+    /// <summary><see cref="EditorModel.IsLive"/>: whether the box takes typing in this form.</summary>
     public bool Live => editor?.IsLive(this) ?? true;
 
-    /// <summary><see cref="EditorModel.IsOwedArg"/>: the caution ring and the phrase under the box.</summary>
+    /// <summary><see cref="EditorModel.IsOwed(ArgRow)"/>: the caution ring and the phrase under the box.</summary>
     public bool Owed => editor?.IsOwed(this) ?? false;
 
-    /// <summary><see cref="EditorModel.PlaceholderHintForArg"/>: what the document said about finding the path.</summary>
+    /// <summary><see cref="EditorModel.PlaceholderHint(ArgRow)"/>: what the document said about finding the path.</summary>
     public string? Hint => editor?.PlaceholderHint(this);
 
-    /// <summary><see cref="EditorModel.PublishedHintForArg"/>: what a published collection sends in its place.</summary>
+    /// <summary><see cref="EditorModel.PublishedHint(ArgRow)"/>: what a published collection sends in its place.</summary>
     public string? PublishedHint => editor?.PublishedHint(this);
 
     /// <summary><see cref="EditorModel.ArgumentNumber"/> for where the row sits now: what it shows beside its box.</summary>

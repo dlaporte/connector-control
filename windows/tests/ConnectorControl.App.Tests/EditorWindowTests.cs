@@ -507,7 +507,7 @@ public class EditorWindowTests
 
                     // ledger's marker survives, so its box stays the live one — but the needs the
                     // hint came from went with the subscription, and the hint must not outlive them.
-                    Assert.True(ledger.Model.AsksForArg(0));
+                    Assert.True(ledger.Model.Args[0].Asks);
                     Assert.Equal(Visibility.Visible, RowElements.Find<TextBox>(ledger.ArgList, arg, "ArgPlaceholder").Visibility);
                     Assert.Equal("", RowElements.Find<TextBlock>(ledger.ArgList, arg, "ArgHint").Text);
                 }, rows: true);

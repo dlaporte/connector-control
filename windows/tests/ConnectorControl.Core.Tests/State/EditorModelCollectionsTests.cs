@@ -51,9 +51,7 @@ public class EditorModelCollectionsTests
 
         using var ledger = rig.Editor("ledger", "Data team");
         Assert.Equal([0], ledger.ArgsWithPlaceholders);
-        Assert.Equal("your ledger clone, then dist/index.js", ledger.PlaceholderHintForArg(0));
-        // An index past the end has nothing to say.
-        Assert.Null(ledger.PlaceholderHintForArg(7));
+        Assert.Equal("your ledger clone, then dist/index.js", ledger.Args[0].Hint);
 
         using var notion = rig.Editor("notion", "Data team");
         Assert.True(notion.BearerTokenIsPlaceholder);
@@ -230,7 +228,7 @@ public class EditorModelCollectionsTests
         Assert.Equal("the billing console", billing.ClientSecretHint);
         var openedBilling = state.Store.Collections["Data team"].Mcps["billing"].Config;
         var blob = Assert.Single(billing.ArgsWithPlaceholders);
-        Assert.Equal("the billing console", billing.PlaceholderHintForArg(blob));
+        Assert.Equal("the billing console", billing.Args[blob].Hint);
         billing.Args[blob].Value = """{"client_id":"cc-app","client_secret":"shh"}""";
         Assert.True(billing.Save());
         var savedBilling = state.Store.Collections["Data team"].Mcps["billing"].Config;
@@ -585,16 +583,14 @@ public class EditorModelCollectionsTests
 
         using var ledger = rig.Editor("ledger", "Data team");
         Assert.Equal([0], ledger.ArgsWithPlaceholders);
-        Assert.True(ledger.AsksForArg(0));
+        Assert.True(ledger.Args[0].Asks);
         ledger.Args[0].Value = "/Users/d/ledger/dist/index.js";
         Assert.Empty(ledger.ArgsWithPlaceholders);
-        Assert.True(ledger.AsksForArg(0));
-        // An index past the end asks for nothing.
-        Assert.False(ledger.AsksForArg(7));
+        Assert.True(ledger.Args[0].Asks);
         // Keyed by the row, not the position: a row inserted above carries the answer with it.
         ledger.Args.Insert(0, new ArgRow("--quiet"));
-        Assert.False(ledger.AsksForArg(0));
-        Assert.True(ledger.AsksForArg(1));
+        Assert.False(ledger.Args[0].Asks);
+        Assert.True(ledger.Args[1].Asks);
 
         using var notion = rig.Editor("notion", "Data team");
         Assert.True(notion.AsksForBearerToken);
@@ -628,12 +624,11 @@ public class EditorModelCollectionsTests
         Assert.False(dbt.IsOwed(region));   // a field that never asked owes nothing, empty or not
 
         using var ledger = rig.Editor("ledger", "Data team");
-        Assert.True(ledger.IsOwedArg(0));
+        Assert.True(ledger.Args[0].Owed);
         ledger.Args[0].Value = "/Users/d/ledger/dist/index.js";
-        Assert.False(ledger.IsOwedArg(0));
+        Assert.False(ledger.Args[0].Owed);
         ledger.Args[0].Value = "";
-        Assert.True(ledger.IsOwedArg(0));
-        Assert.False(ledger.IsOwedArg(7));   // an index past the end owes nothing
+        Assert.True(ledger.Args[0].Owed);
 
         using var notion = rig.Editor("notion", "Data team");
         Assert.True(notion.BearerTokenOwed);
@@ -660,12 +655,11 @@ public class EditorModelCollectionsTests
 
         using var ledger = rig.Editor("ledger", "Data team");
         Assert.True(ledger.IsReadOnly);
-        Assert.True(ledger.IsLiveArg(0));   // the path the document asks for
+        Assert.True(ledger.Args[0].Live);   // the path the document asks for
         ledger.Args[0].Value = "/Users/d/ledger/dist/index.js";
-        Assert.True(ledger.IsLiveArg(0));   // filling it does not lock it
+        Assert.True(ledger.Args[0].Live);   // filling it does not lock it
         ledger.Args.Add(new ArgRow("--quiet"));
-        Assert.False(ledger.IsLiveArg(1));   // an argument the document did not ask for is the author's
-        Assert.False(ledger.IsLiveArg(7));   // an index past the end is the author's too
+        Assert.False(ledger.Args[1].Live);   // an argument the document did not ask for is the author's
 
         using var notion = rig.Editor("notion", "Data team");
         Assert.True(notion.BearerTokenIsLive);
@@ -675,8 +669,7 @@ public class EditorModelCollectionsTests
         // A form that stops being the author's locks nothing.
         rig.State.StopSyncing("Data team");
         Assert.False(ledger.IsReadOnly);
-        Assert.True(ledger.IsLiveArg(1));
-        Assert.True(ledger.IsLiveArg(7));
+        Assert.True(ledger.Args[1].Live);
         Assert.True(notion.HeaderValueIsLive);
         Assert.True(notion.ClientSecretIsLive);
     }
@@ -712,8 +705,7 @@ public class EditorModelCollectionsTests
         Assert.True(arg.Asks);
         Assert.True(arg.Live);
         Assert.True(arg.Owed);
-        Assert.Equal(ledger.PlaceholderHintForArg(0), arg.Hint);
-        Assert.NotNull(arg.Hint);
+        Assert.Equal("your ledger clone, then dist/index.js", arg.Hint);
         // A row added since the window opened answers too, from the moment it joins the list.
         ledger.Args.Add(new ArgRow("--quiet"));
         var added = ledger.Args[1];
@@ -768,24 +760,23 @@ public class EditorModelCollectionsTests
         Assert.Equal("acme.example ▸ API tokens", editor.PublishedHint(token));
         // A shared value is not stripped, so the author owes no explanation for it.
         Assert.Null(editor.PublishedHint(EnvRow(editor, "REGION")));
-        Assert.Equal("your clone, then dist/index.js", editor.PublishedHintForArg(0));
-        Assert.Null(editor.PublishedHintForArg(7));
+        Assert.Equal("your clone, then dist/index.js", editor.Args[0].PublishedHint);
 
         // A published collection's editor adds and deletes arguments freely, and the record
         // keys the hint by where the marker sat, so the answer follows the row rather than the
         // position it happens to hold now.
         editor.Args.Insert(0, new ArgRow("--quiet"));
-        Assert.Null(editor.PublishedHintForArg(0));   // a row added since the window opened
-        Assert.Equal("your clone, then dist/index.js", editor.PublishedHintForArg(1));
+        Assert.Null(editor.Args[0].PublishedHint);   // a row added since the window opened
+        Assert.Equal("your clone, then dist/index.js", editor.Args[1].PublishedHint);
         editor.Args.RemoveAt(0);
-        Assert.Equal("your clone, then dist/index.js", editor.PublishedHintForArg(0));
+        Assert.Equal("your clone, then dist/index.js", editor.Args[0].PublishedHint);
         // A different question from the synced sidecar's needs, which say nothing here.
         Assert.Null(editor.PlaceholderHint(token));
 
         // A local collection nobody publishes has none of this to say.
         using var plain = rig.Editor("scoutbook", "Default");
         Assert.False(plain.HasPublishedHints);
-        Assert.Null(plain.PublishedHintForArg(0));
+        Assert.Null(plain.Args[0].PublishedHint);
 
         // The record without this machine's binding is another machine's publish, and the hints
         // are that machine's business, not this editor's.
@@ -795,7 +786,7 @@ public class EditorModelCollectionsTests
         Assert.True(state.IsPublished("Team"), "the sidecar still carries the record");
         Assert.False(elsewhere.HasPublishedHints);
         Assert.Null(elsewhere.PublishedHint(EnvRow(elsewhere, "TOKEN")));
-        Assert.Null(elsewhere.PublishedHintForArg(0));
+        Assert.Null(elsewhere.Args[0].PublishedHint);
     }
 
     /// <summary>
@@ -900,7 +891,7 @@ public class EditorModelCollectionsTests
         using var ledger = rig.Editor("ledger", "Data team");
         ledger.RequestView(EditView.Json);
         ledger.RequestView(EditView.Form);
-        Assert.True(ledger.AsksForArg(0));
+        Assert.True(ledger.Args[0].Asks);
 
         // Carried, not retaken: a value filled before the trip keeps its field live.
         EnvRow(dbt, "DBT_TOKEN").Value = "secret_abc";
@@ -934,11 +925,11 @@ public class EditorModelCollectionsTests
         rig.H.Publish(state, "Team", intent, "share");
 
         using var editor = rig.Editor("svc", "Team");
-        Assert.Equal("your clone", editor.PublishedHintForArg(0));
+        Assert.Equal("your clone", editor.Args[0].PublishedHint);
         editor.RequestView(EditView.Json);
         editor.RequestView(EditView.Form);
         // The hint survives an unchanged round trip.
-        Assert.Equal("your clone", editor.PublishedHintForArg(0));
+        Assert.Equal("your clone", editor.Args[0].PublishedHint);
     }
 
     // MARK: saving a published connector moves its path marks with their rows
