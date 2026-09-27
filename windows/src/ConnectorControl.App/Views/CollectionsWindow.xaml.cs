@@ -5,7 +5,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.Core.State;
 
@@ -505,9 +504,7 @@ public partial class CollectionsWindow : Window
                 break;
             case Key.Up:
             case Key.Down:
-                if (Model.Neighbour(row.Name, e.Key == Key.Up ? -1 : 1) is { } next
-                    && RowList.ItemContainerGenerator.ContainerFromItem(Model.Rows.Single(r => r.Name == next)) is DependencyObject container
-                    && RowBodyIn(container) is { } body)
+                if (Model.Neighbour(row.Name, e.Key == Key.Up ? -1 : 1) is { } next && RowBodyFor(next) is { } body)
                 {
                     FocusRow(body);
                 }
@@ -524,7 +521,7 @@ public partial class CollectionsWindow : Window
     /// </summary>
     private void OnTickSlotDown(object sender, MouseButtonEventArgs e)
     {
-        if (sender is DependencyObject slot && FindAncestor<Button>(slot) is { } body)
+        if (sender is DependencyObject slot && VisualTree.FindAncestor<Button>(slot) is { } body)
         {
             FocusRow(body);
         }
@@ -556,34 +553,15 @@ public partial class CollectionsWindow : Window
         body.BringIntoView();
     }
 
-    private static Button? RowBodyIn(DependencyObject container)
-    {
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(container); i++)
-        {
-            var child = VisualTreeHelper.GetChild(container, i);
-            if (child is Button { Name: "RowBody" } body)
-            {
-                return body;
-            }
-            if (RowBodyIn(child) is { } found)
-            {
-                return found;
-            }
-        }
-        return null;
-    }
-
-    private static T? FindAncestor<T>(DependencyObject start) where T : DependencyObject
-    {
-        for (var node = VisualTreeHelper.GetParent(start); node is not null; node = VisualTreeHelper.GetParent(node))
-        {
-            if (node is T found)
-            {
-                return found;
-            }
-        }
-        return null;
-    }
+    /// <summary>
+    /// The row of that name as the list draws it, or null when it has none. RowBody is its
+    /// template's root, so it is the first Button under the container.
+    /// </summary>
+    private Button? RowBodyFor(string name) =>
+        Model.Rows.FirstOrDefault(r => r.Name == name) is { } row
+        && RowList.ItemContainerGenerator.ContainerFromItem(row) is DependencyObject container
+            ? VisualTree.FindDescendant<Button>(container)
+            : null;
 
     // MARK: banner strip
 
