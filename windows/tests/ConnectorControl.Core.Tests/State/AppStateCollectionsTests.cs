@@ -644,8 +644,6 @@ public class AppStateCollectionsTests
 
     // MARK: synced collections
 
-    private static readonly TimeSpan Wait = TimeSpan.FromSeconds(8);
-
     /// <summary>Gives a just-armed source watcher a moment before a test relies on it seeing the
     /// very next write — the same arming race AppStateWatcherTests waits out. A FileSystemWatcher
     /// arms on a background thread on the Mac and leaves no signal to wait on, so only the one test
@@ -771,7 +769,7 @@ public class AppStateCollectionsTests
 
         AppStateHarness.WriteDocumentAt(ChangedSample(), path);
         TempDir.BumpModificationTime(path);
-        Assert.True(h.Ui.PumpUntil(() => state.PendingUpdates.ContainsKey("Data team"), Wait));
+        Assert.True(h.Ui.PumpUntil(() => state.PendingUpdates.ContainsKey("Data team"), Wait.Eventually));
         Assert.Equal("deletes github; changes dbt", state.PendingUpdates["Data team"].Summary());
         Assert.Equal(AppState.CollectionUpdateNotificationBody("Data team", "deletes github; changes dbt"), h.Notifier.Sent[^1].Body);
         var announced = h.Notifier.Sent.Count;

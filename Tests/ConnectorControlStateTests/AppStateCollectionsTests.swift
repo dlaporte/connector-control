@@ -675,7 +675,7 @@ final class AppStateCollectionsTests: XCTestCase {
         // source watcher to deliver it; the others read the source through recomputePending.
         try h.writeDocument(changedSample(), at: url)
         try TempDir.bumpModificationDate(of: url)
-        XCTAssertTrue(h.ui.pumpUntil({ state.pendingUpdates["Data team"] != nil }, timeout: 8))
+        XCTAssertTrue(h.ui.pumpUntil({ state.pendingUpdates["Data team"] != nil }, timeout: Wait.eventually))
         XCTAssertEqual(state.pendingUpdates["Data team"]?.summary(), "deletes github; changes dbt")
         XCTAssertEqual(h.notifier.sent.last?.body,
                        AppState.collectionUpdateNotificationBody("Data team", "deletes github; changes dbt"))
