@@ -184,9 +184,11 @@ jobs:
     with:
       version: ${{ needs.prepare.outputs.version }}
       require-signing: true
-    # Only the six Windows signing secrets, by name. `secrets: inherit` would
-    # also hand the called workflow the Apple certificate and the Sparkle key,
-    # which no Windows job has any use for.
+    # Only the six Windows signing secrets, by name. `secrets: inherit` would hand
+    # the called workflow every repository secret, where these six are all it uses.
+    # (The Apple ones are "signing" environment secrets, which no Windows job names;
+    # mac-build.yml takes inherit because an environment's secrets reach a called
+    # workflow no other way.)
     secrets:
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
