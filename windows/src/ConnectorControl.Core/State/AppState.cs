@@ -2344,8 +2344,13 @@ public sealed class AppState : ObservableObject, IDisposable
     /// The paths the author released in the dialog, let travel in this collection's document
     /// although this machine keeps them back elsewhere.
     /// </param>
+    /// <param name="shown">
+    /// Each connector the dialog showed, as it showed it: its Publish reviews those alone
+    /// (<see cref="SheetReview"/>).
+    /// </param>
     public string? StartPublishing(string collection, string folder, PublishIntent intent,
-                                   IReadOnlySet<string>? reviewedValues = null, IReadOnlySet<string>? releasedValues = null)
+                                   IReadOnlySet<string>? reviewedValues = null, IReadOnlySet<string>? releasedValues = null,
+                                   IReadOnlyDictionary<string, JsonValue>? shown = null)
     {
         // A synced collection has an author elsewhere, and a name that is not a collection has
         // nothing to publish. Nothing offers either, so both get the silence LocateSource gives a
@@ -2399,7 +2404,7 @@ public sealed class AppState : ObservableObject, IDisposable
         // What the dialog's Publish showed is what it reviewed. Choose Folder moves a binding and
         // reviews nothing, so it carries the review it had.
         var reviewing = reviewedValues is not null || previous is null;
-        var review = Review(Store.Collections.GetValueOrDefault(collection)?.Mcps ?? [], intent);
+        var review = SheetReview(collection, intent, shown, previous);
         SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(
             full,
             // A new folder has nothing in it this app wrote, so the next write is unconditional.
@@ -2469,8 +2474,9 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <see cref="StartPublishing"/> describes. It is the one way a path leaves that list.
     /// </param>
     /// <param name="releasedValues">As <see cref="StartPublishing"/> takes them.</param>
+    /// <param name="shown">What the dialog showed, as <see cref="StartPublishing"/> takes it.</param>
     public string? UpdatePublishIntent(string collection, PublishIntent intent, IReadOnlySet<string>? reviewedValues = null,
-                                       IReadOnlySet<string>? releasedValues = null)
+                                       IReadOnlySet<string>? releasedValues = null, IReadOnlyDictionary<string, JsonValue>? shown = null)
     {
         if (CollectionsFile.Collections.GetValueOrDefault(collection) is not { Publish: { } record } entry)
         {
@@ -2482,7 +2488,7 @@ public sealed class AppState : ObservableObject, IDisposable
             ? ReviewedBy(binding with
             {
                 MarkedValues = reviewedValues, ReleasedValues = Released(binding.ReleasedValues, releasedValues, reviewedValues),
-            }, collection, intent)
+            }, collection, intent, shown)
             : binding;
         var listsChanged = !Equals(changed, binding);
         if (record.Intent.Equals(intent) && !listsChanged)
@@ -2800,11 +2806,39 @@ public sealed class AppState : ObservableObject, IDisposable
         SetPublishBinding(collection, binding.KeepingReview(names.Where(name => name != connector).ToHashSet(StringComparer.Ordinal)));
     }
 
-    /// <summary><paramref name="binding"/> with every connector the dialog showed reviewed, under what it now shares.</summary>
-    private CollectionsLocalCache.PublishBinding ReviewedBy(CollectionsLocalCache.PublishBinding binding, string collection, PublishIntent intent)
+    /// <summary><paramref name="binding"/> with what the dialog's Publish reviewed (<see cref="SheetReview"/>).</summary>
+    private CollectionsLocalCache.PublishBinding ReviewedBy(CollectionsLocalCache.PublishBinding binding, string collection, PublishIntent intent,
+                                                            IReadOnlyDictionary<string, JsonValue>? shown)
     {
-        var review = Review(Store.Collections.GetValueOrDefault(collection)?.Mcps ?? [], intent);
+        var review = SheetReview(collection, intent, shown, binding);
         return binding with { ReviewedConnectors = review.Connectors, ReviewedWarnings = review.Warnings };
+    }
+
+    /// <summary>
+    /// What the dialog's Publish reviews of <paramref name="collection"/> under <paramref name="intent"/>:
+    /// every connector the dialog showed that still stands as it showed it (<paramref name="shown"/>,
+    /// name → config), and for every other one the review <paramref name="previous"/> already gave it. A
+    /// connector that arrived under the open dialog — synced in, or added in an editor — has none, so it
+    /// stays unreviewed and holds the next publish; one changed there keeps the review it had, as any edit
+    /// of a reviewed connector does, credential check and all. Null <paramref name="shown"/>, from a
+    /// caller with no dialog, is everything the collection holds.
+    /// </summary>
+    private (IReadOnlySet<string> Connectors, IReadOnlySet<string> Warnings) SheetReview(
+        string collection, PublishIntent intent, IReadOnlyDictionary<string, JsonValue>? shown,
+        CollectionsLocalCache.PublishBinding? previous)
+    {
+        var held = Store.Collections.GetValueOrDefault(collection)?.Mcps ?? [];
+        var seen = shown is null
+            ? held
+            : held.Where(p => shown.TryGetValue(p.Key, out var config) && config.Equals(p.Value.Config))
+                .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        var review = Review(seen, intent);
+        if (previous?.KeepingReview(held.Keys.Where(name => !seen.ContainsKey(name)).ToHashSet(StringComparer.Ordinal)) is not { } earlier)
+        {
+            return review;
+        }
+        return (review.Connectors.Concat(earlier.ReviewedConnectors ?? new HashSet<string>(StringComparer.Ordinal)).ToHashSet(StringComparer.Ordinal),
+                review.Warnings.Concat(earlier.ReviewedWarnings).ToHashSet(StringComparer.Ordinal));
     }
 
     /// <summary>

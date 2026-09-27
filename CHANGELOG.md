@@ -122,7 +122,9 @@ bullet once the section is about to ship.
   in an argument, a shared value, a header or its URL, hold the publish with "“<connector>” hasn’t been reviewed for publishing." or
   "“<connector>” may now carry a credential." and Publishing Settings; the folder keeps its
   document until you press Publish in the sheet, and automatic publishing then resumes.
-  Other edits, renames and deletions publish on their own as before. Before, all of it
+  Publish reviews only what the sheet showed, so a connector that arrives while the sheet
+  is open waits until the sheet is opened again. Other edits, renames and deletions
+  publish on their own as before. Before, all of it
   was published on the next save without a preview.
 - The Collections window lists every collection beside its connectors, and every control
   in it sits on what it acts on. The sidebar's + offers New Collection, Import ("Adds

@@ -3411,6 +3411,33 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertTrue(try jsonFile(file, contains: "--verbose"))
     }
 
+    /// The sheet's Publish reviews what the sheet showed. A connector that arrives from the other
+    /// machine while it is open was never in front of the author, so it stays unreviewed and holds
+    /// the publish; one changed there under the sheet keeps the review it had, and publishes as any
+    /// edit of a reviewed connector does. The next sheet shows the newcomer, and its Publish reviews it.
+    func testTheSheetsPublishReviewsOnlyWhatTheSheetShowed() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let file = try h.publish(state, "Default")
+        let sheet = PublishModel(state: state, collection: "Default")
+        try h.editStoreOnDisk {
+            $0.collections["Default"]?.mcps["n"] = self.node(["/opt/n/srv.js", self.longToken])
+            $0.collections["Default"]?.mcps["aws-mcp"] = self.node(["/opt/aws/changed.js"])
+        }
+        state.reload(trigger: .externalStoreAdoption)
+        XCTAssertEqual(state.publishError?.message, AppState.unreviewedConnectorError("n"))
+
+        XCTAssertEqual(sheet.publish(), AppState.unreviewedConnectorError("n"), "the sheet never showed n")
+        XCTAssertFalse(try jsonFile(file, contains: longToken))
+        state.delete(names: ["n"])
+        XCTAssertNil(state.publishError, "aws-mcp kept the review it had")
+        XCTAssertTrue(try jsonFile(file, contains: "/opt/aws/changed.js"))
+
+        XCTAssertNil(state.upsert(name: "n", entry: node(["/opt/n/srv.js", longToken]), renamedFrom: nil))
+        XCTAssertNil(PublishModel(state: state, collection: "Default").publish(), "a sheet that shows n reviews it")
+        XCTAssertTrue(try jsonFile(file, contains: longToken))
+    }
+
     /// A connector Claude reaches by URL keeps its secret in a header or in the URL itself. One that
     /// gains a bearer token in its headers, or a key in its URL's query, after it was reviewed waits
     /// for review as one that gains it in an argument does.

@@ -1528,9 +1528,12 @@ public final class AppState: ObservableObject {
     /// written: it replaces this machine's list of marked paths (`PublishBinding.markedValues`).
     /// nil — the banner's Choose Folder, which nobody reviewed — keeps the list the collection
     /// already had. `releasedValues` are the paths the author released in the sheet, let travel
-    /// in this collection's document although this machine keeps them back elsewhere.
+    /// in this collection's document although this machine keeps them back elsewhere. `shown` is
+    /// each connector the sheet showed, as it showed it: its Publish reviews those alone
+    /// (`sheetReview(of:intent:shown:after:)`).
     public func startPublishing(_ collection: String, to folder: String, intent: PublishIntent,
-                                reviewedValues: Set<String>? = nil, releasedValues: Set<String> = []) -> String? {
+                                reviewedValues: Set<String>? = nil, releasedValues: Set<String> = [],
+                                shown: [String: JSONValue]? = nil) -> String? {
         // A synced collection has an author elsewhere, and a name that is not a collection has
         // nothing to publish. Nothing offers either, so both get the silence `locateSource` gives
         // a collection that is not synced.
@@ -1578,7 +1581,7 @@ public final class AppState: ObservableObject {
         // What the sheet's Publish showed is what it reviewed. Choose Folder moves a binding and
         // reviews nothing, so it carries the review it had.
         let reviewing = reviewedValues != nil || previous == nil
-        let review = AppState.review(of: store.collections[collection]?.mcps ?? [:], intent: intent)
+        let review = sheetReview(of: collection, intent: intent, shown: shown, after: previous)
         collectionsCache.published[collection] = CollectionsLocalCache.PublishBinding(
             folder: url.path,
             // A new folder has nothing in it this app wrote, so the next write is unconditional.
@@ -1630,16 +1633,18 @@ public final class AppState: ObservableObject {
     /// is rewritten if the change makes it say something different. nil on success.
     ///
     /// `reviewedValues`, from the sheet's Publish, replaces this machine's list of marked paths as
-    /// `startPublishing` describes; it is the one way a path leaves that list.
+    /// `startPublishing` describes; it is the one way a path leaves that list. `shown` is what the
+    /// sheet showed, as `startPublishing` takes it.
     public func updatePublishIntent(_ collection: String, intent: PublishIntent,
-                                    reviewedValues: Set<String>? = nil, releasedValues: Set<String> = []) -> String? {
+                                    reviewedValues: Set<String>? = nil, releasedValues: Set<String> = [],
+                                    shown: [String: JSONValue]? = nil) -> String? {
         guard var entry = collectionsFile.collections[collection], let record = entry.publish else { return nil }
         // The lists are this machine's: another machine's publish record has no binding here.
         var binding = collectionsCache.published[collection]
         if let reviewedValues, var changed = binding {
             changed.releasedValues = AppState.released(changed.releasedValues, adding: releasedValues, marked: reviewedValues)
             changed.markedValues = reviewedValues
-            binding = reviewedBy(changed, collection, intent)
+            binding = reviewedBy(changed, collection, intent, shown: shown)
         }
         let listsChanged = binding != collectionsCache.published[collection]
         guard record.intent != intent || listsChanged else { return nil }
@@ -2028,14 +2033,30 @@ public final class AppState: ObservableObject {
         collectionsCache.published[collection] = binding.keepingReview(of: names.subtracting([connector]))
     }
 
-    /// `binding` with every connector the sheet showed reviewed, under what it now shares.
+    /// `binding` with what the sheet's Publish reviewed (`sheetReview(of:intent:shown:after:)`).
     private func reviewedBy(_ binding: CollectionsLocalCache.PublishBinding, _ collection: String,
-                            _ intent: PublishIntent) -> CollectionsLocalCache.PublishBinding {
-        let review = AppState.review(of: store.collections[collection]?.mcps ?? [:], intent: intent)
+                            _ intent: PublishIntent, shown: [String: JSONValue]?) -> CollectionsLocalCache.PublishBinding {
+        let review = sheetReview(of: collection, intent: intent, shown: shown, after: binding)
         var reviewed = binding
         reviewed.reviewedConnectors = review.connectors
         reviewed.reviewedWarnings = review.warnings
         return reviewed
+    }
+
+    /// What the sheet's Publish reviews of `collection` under `intent`: every connector the sheet
+    /// showed that still stands as it showed it (`shown`, name → config), and for every other one
+    /// the review `previous` already gave it. A connector that arrived under the open sheet —
+    /// synced in, or added in an editor — has none, so it stays unreviewed and holds the next
+    /// publish; one changed there keeps the review it had, as any edit of a reviewed connector does,
+    /// credential check and all. nil `shown`, from a caller with no sheet, is everything the
+    /// collection holds.
+    private func sheetReview(of collection: String, intent: PublishIntent, shown: [String: JSONValue]?,
+                             after previous: CollectionsLocalCache.PublishBinding?) -> (connectors: Set<String>, warnings: Set<String>) {
+        let held = store.collections[collection]?.mcps ?? [:]
+        let seen = shown.map { shown in held.filter { shown[$0.key] == $0.value.config } } ?? held
+        let review = AppState.review(of: seen, intent: intent)
+        guard let earlier = previous?.keepingReview(of: Set(held.keys).subtracting(seen.keys)) else { return review }
+        return (review.connectors.union(earlier.reviewedConnectors ?? []), review.warnings.union(earlier.reviewedWarnings))
     }
 
     /// Refuses a publish nobody reviewed, naming the first connector by name that `binding` has not

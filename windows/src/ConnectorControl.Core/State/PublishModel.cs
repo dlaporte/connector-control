@@ -169,6 +169,13 @@ public sealed class PublishModel : ObservableObject
     private readonly HashSet<string> tickedAtOpen = new(StringComparer.Ordinal);
     /// <summary>Each row's name as the dialog opened it, so a tick that answers a lost mark gives it that mark's name only while the author has not typed one of their own.</summary>
     private readonly Dictionary<string, string> namesAtOpen = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Each connector as the dialog showed it, by name: what its Publish reviews. One that arrives or
+    /// changes under the open dialog — from the other machine, or an editor — was never in front of the
+    /// author as it stands (<c>AppState.SheetReview</c>). The dialog's own rewrite of a connector
+    /// refreshes its entry, as it refreshes the rows.
+    /// </summary>
+    private readonly Dictionary<string, JsonValue> shown = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Publishing binds the collection to a folder it rewrites on every change; exporting writes
@@ -269,6 +276,10 @@ public sealed class PublishModel : ObservableObject
         foreach (var row in paths)
         {
             namesAtOpen[row.Id] = row.Name;
+        }
+        foreach (var (name, entry) in seeded)
+        {
+            shown[name] = entry.Config;
         }
         ReplaceRows(env, paths);
     }
@@ -685,6 +696,7 @@ public sealed class PublishModel : ObservableObject
         {
             return;
         }
+        shown[connector] = entry.Config;
         var variables = Env(entry.Config);
         var env = EnvRows.Select(row => row.Connector == connector && variables.TryGetValue(row.Name, out var value) && value != row.Value
             ? new EnvRow(row.Connector, row.Name, value, row.Share, row.Hint)
@@ -879,7 +891,7 @@ public sealed class PublishModel : ObservableObject
         if (!state.IsPublished(Collection)
             || !string.Equals(state.CollectionsCache.Published.GetValueOrDefault(Collection)?.Folder, chosen, StringComparison.Ordinal))
         {
-            var failure = state.StartPublishing(Collection, chosen, Intent, ReviewedValues, LetGo);
+            var failure = state.StartPublishing(Collection, chosen, Intent, ReviewedValues, LetGo, shown);
             // Starting to publish mints the collection's origin, even when the write it then
             // attempts fails, and the footer is the one line that shows it.
             Raise(nameof(OriginShort));
@@ -889,7 +901,7 @@ public sealed class PublishModel : ObservableObject
         // The same folder, already publishing: the ticks go on record, and then the document is
         // written whether or not it changed. Pressing Publish again is how a write that failed is
         // retried, and by then nothing about the document is different — only the folder is.
-        state.UpdatePublishIntent(Collection, Intent, ReviewedValues, LetGo);
+        state.UpdatePublishIntent(Collection, Intent, ReviewedValues, LetGo, shown);
         return state.Republish(Collection);
     }
 

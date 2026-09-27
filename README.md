@@ -301,8 +301,10 @@ added on your other machine, and a connector edited so that it now holds
 something that looks like a credential (in an argument, a shared value, a
 header or its URL), stop the automatic publish: the banner names the
 connector and offers Publishing Settings, and the document in the folder
-stays as it was until you press Publish there. Other edits, renames and
-deletions publish on their own as before.
+stays as it was until you press Publish there. Publish reviews what the
+sheet showed you: a connector that arrives while the sheet is open waits
+until you open it again. Other edits, renames and deletions publish on
+their own as before.
 
 Export writes the same document once, wherever you choose, with the same
 preview and warnings. The **⋯** menu's **Export All** writes the whole

@@ -3966,6 +3966,38 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
+    /// The dialog's Publish reviews what the dialog showed. A connector that arrives from the other
+    /// machine while it is open was never in front of the author, so it stays unreviewed and holds the
+    /// publish; one changed there under the dialog keeps the review it had, and publishes as any edit of
+    /// a reviewed connector does. The next dialog shows the newcomer, and its Publish reviews it.
+    /// </summary>
+    [Fact]
+    public void TheDialogsPublishReviewsOnlyWhatTheDialogShowed()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var file = h.Publish(state, "Default");
+        var dialog = new PublishModel(state, "Default");
+        h.EditStoreOnDisk(store =>
+        {
+            store.Collections["Default"].Mcps["n"] = Node(["/opt/n/srv.js", LongToken]);
+            store.Collections["Default"].Mcps["aws-mcp"] = Node(["/opt/aws/changed.js"]);
+        });
+        state.Reload(ReloadTrigger.ExternalStoreAdoption);
+        Assert.Equal(AppState.UnreviewedConnectorError("n"), state.PublishError?.Message);
+
+        Assert.Equal(AppState.UnreviewedConnectorError("n"), dialog.Publish());   // the dialog never showed n
+        Assert.False(JsonText.FileContains(file, LongToken));
+        state.Delete(["n"]);
+        Assert.Null(state.PublishError);   // aws-mcp kept the review it had
+        Assert.True(JsonText.FileContains(file, "/opt/aws/changed.js"));
+
+        Assert.Null(state.Upsert("n", Node(["/opt/n/srv.js", LongToken]), null));
+        Assert.Null(new PublishModel(state, "Default").Publish());   // a dialog that shows n reviews it
+        Assert.True(JsonText.FileContains(file, LongToken));
+    }
+
+    /// <summary>
     /// A connector Claude reaches by URL keeps its secret in a header or in the URL itself. One that
     /// gains a bearer token in its headers, or a key in its URL's query, after it was reviewed waits
     /// for review as one that gains it in an argument does.

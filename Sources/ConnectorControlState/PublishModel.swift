@@ -202,6 +202,11 @@ public final class PublishModel: ObservableObject {
     /// Each row's name as the sheet opened it, so a tick that answers a lost mark gives it that
     /// mark's name only while the author has not typed one of their own.
     private let namesAtOpen: [String: String]
+    /// Each connector as the sheet showed it, by name: what its Publish reviews. One that arrives or
+    /// changes under the open sheet — from the other machine, or an editor — was never in front of
+    /// the author as it stands (`AppState.sheetReview(of:intent:shown:after:)`). The sheet's own
+    /// rewrite of a connector refreshes its entry, as it refreshes the rows.
+    private var shown: [String: JSONValue]
     private var answering = false
 
     public init(state: AppState, collection: String, connectors: [String]? = nil, mode: Mode = .publish) {
@@ -276,6 +281,7 @@ public final class PublishModel: ObservableObject {
         }
         tickedAtOpen = Set(paths.filter(\.marked).map(\.id))
         namesAtOpen = Dictionary(uniqueKeysWithValues: paths.map { ($0.id, $0.name) })
+        shown = held.mapValues(\.config)
     }
 
     private static func lost(_ connector: String, _ pointer: JSONPointer, _ mark: PublishIntent.PathMark) -> UnresolvedMark {
@@ -464,6 +470,7 @@ public final class PublishModel: ObservableObject {
     /// it showed is not in the connector any more.
     private func refreshRows(of connector: String) {
         guard let config = state.store.collections[collection]?.mcps[connector]?.config else { return }
+        shown[connector] = config
         let variables = PublishModel.env(of: config)
         envRows = envRows.map { row in
             guard row.connector == connector, let value = variables[row.name], value != row.value else { return row }
@@ -626,12 +633,13 @@ public final class PublishModel: ObservableObject {
             // FooterSentence.
             objectWillChange.send()
             return state.startPublishing(collection, to: chosen, intent: intent, reviewedValues: reviewedValues,
-                                         releasedValues: letGo)
+                                         releasedValues: letGo, shown: shown)
         }
         // The same folder, already publishing: the ticks go on record, and then the document is
         // written whether or not it changed. Pressing Publish again is how a write that failed is
         // retried, and by then nothing about the document is different — only the folder is.
-        _ = state.updatePublishIntent(collection, intent: intent, reviewedValues: reviewedValues, releasedValues: letGo)
+        _ = state.updatePublishIntent(collection, intent: intent, reviewedValues: reviewedValues, releasedValues: letGo,
+                                      shown: shown)
         return state.republish(collection)
     }
 
