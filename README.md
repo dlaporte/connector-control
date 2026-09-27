@@ -293,7 +293,9 @@ write that fails puts "Couldn’t publish …" on the banner with **Choose
 Folder**, and in the popover or flyout **Stop Publishing** beside it (in the
 window, Stop Publishing is in the **⋯**). The Publish sheet stays open on
 a failure, and pressing Publish there, or in the sheet opened again later,
-retries at once; otherwise the next change retries the write.
+retries at once; otherwise the next change retries the write. The banner
+goes if the collection stops publishing, or is deleted, on your other
+machine.
 
 Nothing reaches the folder that you haven't reviewed in the Publish sheet.
 A connector added to a published collection, copied or imported into it, or

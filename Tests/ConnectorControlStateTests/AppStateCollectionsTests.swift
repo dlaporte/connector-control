@@ -1118,6 +1118,40 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual([held.command, next.command], ["x", "y"])
     }
 
+    /// A failed write's banner goes when the other machine stops publishing the collection: it
+    /// names a folder and a write this machine no longer makes. Choose Folder has no binding left to
+    /// move, so it starts nothing — publishing here again is the sheet's, which shows what it
+    /// reviews — and a connector added there meanwhile, credential and all, is never sent.
+    func testAFailedWritesBannerGoesWhenTheCollectionStopsPublishingElsewhere() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        try FileManager.default.removeItem(at: folder)
+        try TempDir.touch(folder, "not a folder")
+        XCTAssertNil(state.upsert(name: "aws-mcp", entry: newConnector("x"), renamedFrom: "aws-mcp"))
+        XCTAssertEqual(state.publishError?.kind, .writeFailed)
+
+        let sidecar = h.storeDir.appendingPathComponent(CollectionsFile.fileName)
+        var file = try XCTUnwrap(CollectionsFile.loadIfReadable(from: sidecar))
+        file.collections.removeValue(forKey: state.activeCollection)
+        try file.save(to: sidecar, staging: nil)
+        let token = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0"
+        try h.editStoreOnDisk { $0.collections["Default"]?.mcps["n"] = MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string("/opt/n/srv.js"), .string(token)]),
+        ])) }
+        state.reload()
+        XCTAssertFalse(state.isPublished("Default"))
+        XCTAssertNil(state.publishError)
+        XCTAssertNil(state.collectionBanner)
+
+        let other = try publishFolder(h, "pub2")
+        XCTAssertNil(state.changePublishFolder("Default", to: other.path))
+        XCTAssertFalse(state.isPublished("Default"), "Choose Folder starts nothing")
+        XCTAssertNil(state.collectionsCache.published["Default"])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: other.path), [])
+    }
+
     func testExportStripsSecretsAndPublishedDocumentsStripThemToo() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

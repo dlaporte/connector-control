@@ -1283,6 +1283,42 @@ public class AppStateCollectionsTests
             Assert.IsType<CollectionDocument.Launcher.Local>(document.Connectors[name].Launcher).Command));
     }
 
+    /// <summary>
+    /// A failed write's banner goes when the other machine stops publishing the collection: it names a
+    /// folder and a write this machine no longer makes. Choose Folder has no binding left to move, so it
+    /// starts nothing — publishing here again is the dialog's, which shows what it reviews — and a
+    /// connector added there meanwhile, credential and all, is never sent.
+    /// </summary>
+    [Fact]
+    public void AFailedWritesBannerGoesWhenTheCollectionStopsPublishingElsewhere()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        Directory.Delete(folder, recursive: true);
+        TempDir.Touch(folder, "not a folder");
+        Assert.Null(state.Upsert("aws-mcp", NewConnector("x"), "aws-mcp"));
+        Assert.Equal(PublishErrorKind.WriteFailed, state.PublishError?.Kind);
+
+        var sidecar = Path.Combine(h.StoreDir, CollectionsFile.FileName);
+        var all = CollectionsFile.LoadIfReadable(sidecar)!.Collections.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        all.Remove(state.ActiveCollection);
+        new CollectionsFile(all).Save(sidecar);
+        const string token = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0";
+        h.EditStoreOnDisk(store => store.Collections["Default"].Mcps["n"] = new McpEntry(NodeWith("/opt/n/srv.js", token)));
+        state.Reload();
+        Assert.False(state.IsPublished("Default"));
+        Assert.Null(state.PublishError);
+        Assert.Null(state.CollectionBanner);
+
+        var other = PublishFolder(h, "pub2");
+        Assert.Null(state.ChangePublishFolder("Default", other));
+        Assert.False(state.IsPublished("Default"));   // Choose Folder starts nothing
+        Assert.False(state.CollectionsCache.Published.ContainsKey("Default"));
+        Assert.Empty(Directory.GetFileSystemEntries(other));
+    }
+
     [Fact]
     public void ExportStripsSecretsAndPublishedDocumentsStripThemToo()
     {

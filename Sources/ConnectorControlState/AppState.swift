@@ -1579,7 +1579,9 @@ public final class AppState: ObservableObject {
         let own = AppState.isOwn(remembered, filedUnder: collection, of: collection, publishing: record?.origin)
         let marked = previous?.markedValues ?? remembered?.markedValues ?? []
         // What the sheet's Publish showed is what it reviewed. Choose Folder moves a binding and
-        // reviews nothing, so it carries the review it had.
+        // reviews nothing, so it carries the review it had; it never makes a first one
+        // (`changePublishFolder`), so a first binding with no sheet is a caller vouching for what
+        // the collection holds — only the tests start publishing that way.
         let reviewing = reviewedValues != nil || previous == nil
         let review = sheetReview(of: collection, intent: intent, shown: shown, after: previous)
         collectionsCache.published[collection] = CollectionsLocalCache.PublishBinding(
@@ -1621,10 +1623,16 @@ public final class AppState: ObservableObject {
     /// intent carried here is the one that blocked, so the new folder would be bound, receive
     /// nothing, and leave the old folder's document behind. The Publish sheet is the way out, and
     /// it goes through `startPublishing` with the intent the author has just corrected.
+    ///
+    /// Nothing happens without a binding here to move — the collection stopped publishing or was
+    /// deleted on the other machine under a banner that has since gone. Publishing here again is
+    /// the sheet's, which shows the author what it reviews; a Choose Folder that started it would
+    /// review every connector the collection holds, unseen.
     public func changePublishFolder(_ collection: String, to folder: String) -> String? {
         if let blocked = publishError, blocked.collection == collection, blocked.kind == .blockedForReview {
             return blocked.message
         }
+        guard collectionsCache.published[collection] != nil else { return nil }
         return startPublishing(collection, to: folder,
                                intent: collectionsFile.collections[collection]?.publish?.intent ?? .none)
     }
@@ -2179,6 +2187,10 @@ public final class AppState: ObservableObject {
             cache.lastAppliedNames = collectionsCache.lastAppliedNames
         }
         collectionsCache = cache
+        // A failure is this machine's binding's to report. One whose binding this load dropped — the
+        // collection stopped or deleted on the other machine — names a folder and a write this
+        // machine no longer makes, and its Choose Folder would have nothing to move.
+        if let failure = publishError, collectionsCache.published[failure.collection] == nil { publishError = nil }
         forgetOriginsOfDepartedCollections()
         collectionsLoaded = true
         hasLoadedCollectionsOnce = true

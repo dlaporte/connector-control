@@ -110,7 +110,8 @@ bullet once the section is about to ship.
   the mark, stops publishing the collection or deletes it, even when the change arrives
   while this machine is off. Release it in this machine's Publish sheet to let it travel.
 - A publish that fails says so on the collection banner, with Choose Folder and Stop
-  Publishing, and pressing Publish again retries the write at once. A path marked for
+  Publishing, and pressing Publish again retries the write at once. The banner goes if the
+  collection stops publishing, or is deleted, on your other machine. A path marked for
   others to supply survives added, deleted or reordered arguments, an in-place
   correction and a connector rename; if the app can no longer place it, or the document
   would carry a kept-back path or the publish folder in another connector, publishing

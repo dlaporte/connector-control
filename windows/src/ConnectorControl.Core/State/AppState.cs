@@ -2402,7 +2402,9 @@ public sealed class AppState : ObservableObject, IDisposable
         var own = IsOwn(remembered, collection, collection, previousOrigin);
         var marked = previous?.MarkedValues ?? remembered?.MarkedValues;
         // What the dialog's Publish showed is what it reviewed. Choose Folder moves a binding and
-        // reviews nothing, so it carries the review it had.
+        // reviews nothing, so it carries the review it had; it never makes a first one
+        // (ChangePublishFolder), so a first binding with no dialog is a caller vouching for what the
+        // collection holds — only the tests start publishing that way.
         var reviewing = reviewedValues is not null || previous is null;
         var review = SheetReview(collection, intent, shown, previous);
         SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(
@@ -2451,6 +2453,11 @@ public sealed class AppState : ObservableObject, IDisposable
     /// nothing, and leave the old folder's document behind. The Publish dialog is the way out,
     /// and it goes through <see cref="StartPublishing"/> with the intent the author has just
     /// corrected.
+    ///
+    /// Nothing happens without a binding here to move — the collection stopped publishing or was
+    /// deleted on the other machine under a banner that has since gone. Publishing here again is the
+    /// dialog's, which shows the author what it reviews; a Choose Folder that started it would review
+    /// every connector the collection holds, unseen.
     /// </summary>
     public string? ChangePublishFolder(string collection, string folder)
     {
@@ -2458,6 +2465,10 @@ public sealed class AppState : ObservableObject, IDisposable
             && blocked.Kind == PublishErrorKind.BlockedForReview)
         {
             return blocked.Message;
+        }
+        if (!CollectionsCache.Published.ContainsKey(collection))
+        {
+            return null;
         }
         return StartPublishing(collection, folder,
             CollectionsFile.Collections.TryGetValue(collection, out var entry) && entry.Publish is { } record
@@ -3017,6 +3028,13 @@ public sealed class AppState : ObservableObject, IDisposable
         CollectionsCache = CollectionsCache.LastAppliedCollection is { } applied
             ? cache with { LastAppliedCollection = applied, LastAppliedNames = CollectionsCache.LastAppliedNames }
             : cache;
+        // A failure is this machine's binding's to report. One whose binding this load dropped — the
+        // collection stopped or deleted on the other machine — names a folder and a write this machine
+        // no longer makes, and its Choose Folder would have nothing to move.
+        if (PublishError is { } failure && !CollectionsCache.Published.ContainsKey(failure.Collection))
+        {
+            PublishError = null;
+        }
         ForgetOriginsOfDepartedCollections();
         collectionsLoaded = true;
         hasLoadedCollectionsOnce = true;
