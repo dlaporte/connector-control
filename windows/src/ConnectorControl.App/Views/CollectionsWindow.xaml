@@ -131,8 +131,8 @@
   <!-- The native title bar stays, the platform's idiom here; the Mac scene hides its bar and is one
        surface, which is that platform's (ConnectorControlApp.swift). -->
   <!-- Two panes: the collections, and the selected one. Everything done to a collection is in the
-       sidebar's plus or the header's More, and everything done to its connectors is in the list
-       header's Add or the selection bar. -->
+       sidebar's plus or the header's More, and everything done to its connectors is in the plus
+       under the More or the selection bar. -->
   <Grid Margin="10">
     <Grid.ColumnDefinitions>
       <!-- Resizable, as the Mac's split view is: a long collection name is otherwise elided

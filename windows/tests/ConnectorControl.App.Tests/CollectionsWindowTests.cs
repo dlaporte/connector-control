@@ -661,7 +661,7 @@ public class CollectionsWindowTests
             Tick(window, second, false);
             Assert.Equal(CollectionsModel.SelectedCount(1), window.SelectedCountText.Text);
 
-            // Remove asks first, and deletes what is ticked.
+            // Delete asks first, and deletes what is ticked.
             h.Dialogs.NextConfirm = true;
             Click(window.DeleteCheckedButton);
             Layout(window);

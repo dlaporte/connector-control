@@ -1191,7 +1191,7 @@ final class CollectionsModelTests: XCTestCase {
     }
 
     /// Remove needs something ticked.
-    func testTheRemovePredicateFollowsTheTicks() throws {
+    func testTheDeletePredicateFollowsTheTicks() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Default"))
@@ -1209,7 +1209,7 @@ final class CollectionsModelTests: XCTestCase {
     /// `isSynced` term — the empty tick set alone would explain it. Reload does not clear ticks,
     /// so ticking first and letting the *same* collection turn synced underneath is the one path
     /// that isolates the guard.
-    func testTheRemovePredicateIsGatedBySyncSpecifically() throws {
+    func testTheDeletePredicateIsGatedBySyncSpecifically() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createActiveCopy(named: "Team"))
@@ -1225,7 +1225,7 @@ final class CollectionsModelTests: XCTestCase {
 
     /// Removing the ticked rows asks first, names the connector when there is one and the count
     /// when there are more, and always says a copy remains in Backups.
-    func testRemoveCheckedConfirmsAndCarriesTheBackupsSentence() throws {
+    func testDeleteCheckedConfirmsAndCarriesTheBackupsSentence() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         for name in ["alpha", "beta"] {
@@ -1256,9 +1256,9 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNil(model.lastError, "a removal that lands clears the stale error")
     }
 
-    /// `remove(names:in:)` persists but never applies on its own; the caller applies only when
+    /// `delete(names:in:)` persists but never applies on its own; the caller applies only when
     /// the collection losing rows is the active one — the same rule `AppState.setEnabled` follows.
-    func testRemoveCheckedAppliesOnlyWhenTheActiveCollectionLosesRows() throws {
+    func testDeleteCheckedAppliesOnlyWhenTheActiveCollectionLosesRows() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(state.createActiveCopy(named: "Work"))
@@ -1642,7 +1642,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.sourceFilePath, document.path)
     }
 
-    // MARK: - Sidebar and connectors header
+    // MARK: - Sidebar and the header's +
 
     func testAddConnectorAffordanceFollowsSyncAndTargetsTheSelectedCollection() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)

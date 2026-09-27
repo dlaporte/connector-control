@@ -1393,7 +1393,7 @@ public class CollectionsModelTests
 
     /// <summary>Remove needs something ticked.</summary>
     [Fact]
-    public void TheRemovePredicateFollowsTheTicks()
+    public void TheDeletePredicateFollowsTheTicks()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -1414,7 +1414,7 @@ public class CollectionsModelTests
     /// *same* collection turn synced underneath is the one path that isolates the guard.
     /// </summary>
     [Fact]
-    public void TheRemovePredicateIsGatedBySyncSpecifically()
+    public void TheDeletePredicateIsGatedBySyncSpecifically()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -1434,7 +1434,7 @@ public class CollectionsModelTests
     /// when there are more, and always says a copy remains in Backups.
     /// </summary>
     [Fact]
-    public void RemoveCheckedConfirmsAndCarriesTheBackupsSentence()
+    public void DeleteCheckedConfirmsAndCarriesTheBackupsSentence()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -1468,11 +1468,11 @@ public class CollectionsModelTests
     }
 
     /// <summary>
-    /// Remove(names, collection) persists but never applies on its own; the caller applies only
+    /// Delete(names, collection) persists but never applies on its own; the caller applies only
     /// when the collection losing rows is the active one — the same rule AppState.SetEnabled follows.
     /// </summary>
     [Fact]
-    public void RemoveCheckedAppliesOnlyWhenTheActiveCollectionLosesRows()
+    public void DeleteCheckedAppliesOnlyWhenTheActiveCollectionLosesRows()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -1921,7 +1921,7 @@ public class CollectionsModelTests
         Assert.Equal(document, model.SourceFilePath);
     }
 
-    // MARK: sidebar and connectors header
+    // MARK: sidebar and the header's +
 
     [Fact]
     public void AddConnectorAffordanceFollowsSyncAndTargetsTheSelectedCollection()

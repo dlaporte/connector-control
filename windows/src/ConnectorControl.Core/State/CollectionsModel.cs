@@ -5,7 +5,7 @@ namespace ConnectorControl.Core.State;
 /// <summary>
 /// The Collections window, minus pixels: the collections as items in the left pane, the selected
 /// collection's connectors as rows in the right one, the connector count below them, and the controls
-/// that follow the selection: the sidebar's +, the header's ⋯ menu, the list header's + and the
+/// that follow the selection: the sidebar's +, the header's ⋯ menu and the + under it, and the
 /// selection bar. Everything is derived from AppState; the model owns only what the window itself
 /// knows — which collection is showing and which rows are ticked.
 ///
@@ -35,7 +35,9 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public const string UpdateAvailableStatus = "update available";
     /// <summary>
     /// The two answers to the published-document question. Keep is the default, on Return and on
-    /// Escape: a file the team reads is not something to delete by pressing a key.
+    /// Escape: a file the team reads is not something to delete by pressing a key. The same word
+    /// as <see cref="DeleteAction"/>, kept apart because it answers a different question, about a
+    /// file rather than a collection, whose button could come to say something else.
     /// </summary>
     public const string DeleteFileButton = "Delete";
     public const string KeepFileButton = "Keep";
@@ -61,14 +63,14 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// Names the connector when there is exactly one ticked, and states the count otherwise: a
-    /// removal of one row deserves the same specificity the editor's own Remove used to give it,
+    /// removal of one row deserves the same specificity the editor's old delete confirmation gave it,
     /// and a removal of several would only get longer for naming them all.
     /// </summary>
     public static string DeleteCheckedMessage(IReadOnlyList<string> names) =>
         names.Count == 1 ? $"Delete “{names[0]}”?" : $"Delete {names.Count} connectors?";
 
     /// <summary>
-    /// Lifted from the editor's Remove confirmation, which the list now replaces: the sentence —
+    /// Lifted from the editor's old delete confirmation, which the list now replaces: the sentence —
     /// the most useful thing in that confirmation — survives here unchanged. Delete Collection's
     /// confirmation ends with it too.
     /// </summary>
@@ -897,8 +899,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public const string ShowSourceFileAction = "Show Source File";
 
     /// <summary>
-    /// The row's pencil, as its tooltip and its spoken name. It names the connector, so a screen
-    /// reader moving down the list hears which one each pencil edits rather than "Edit" each time.
+    /// The row's spoken name. A click or Return on the row opens its editor, so a screen reader
+    /// moving down the list hears which connector each row edits rather than "Edit" each time.
     /// </summary>
     public static string EditLabel(string connector) => $"Edit “{connector}”";
 
@@ -1029,7 +1031,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// </summary>
     public string? SourceFilePath => LocatedSource(SelectedCollection);
 
-    // MARK: sidebar and connectors header
+    // MARK: sidebar and the header's +
 
     /// <summary>
     /// The sidebar +'s tooltip and accessibility name: its glyph alone does not say that what it
@@ -1048,7 +1050,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public string AddConnectorTooltipText => CanAddConnector ? AddConnectorTooltip : AddConnectorDisabledTooltip;
 
     /// <summary>
-    /// The + button on the connector list header: an Add-Remote target in the collection the
+    /// The + under the header's ⋯: an Add-Remote target in the collection the
     /// window is showing. The Mac's <c>EditTarget.newRemote(in:)</c> takes no style; Windows
     /// always launches a new remote connector through <c>cmd /c npx</c>, the same forced style
     /// <c>EditorWindow.NewRemoteStyle</c> uses.
@@ -1216,7 +1218,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             return;
         }
         state.Delete(names, SelectedCollection);
-        // Remove(names, collection) persists but does not apply, as its single-name sibling does not.
+        // Delete(names, collection) persists but does not apply, as its single-name sibling does not.
         if (SelectedCollection == state.ActiveCollection)
         {
             state.ApplyInteractively();

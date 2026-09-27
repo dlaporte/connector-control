@@ -6,9 +6,10 @@ using ConnectorControl.Core.State;
 namespace ConnectorControl.App;
 
 /// <summary>
-/// One editor window per target id (an existing connector's id is
-/// its name; a new one gets a fresh GUID each time), brought forward if
-/// already open; one Settings window, and one Collections window.
+/// One editor window per target id, brought forward if already open: an existing connector's id
+/// is its collection, U+001F, then its name (<see cref="EditTarget.Id"/>), so it is one editor per
+/// connector per collection, and a new one gets a fresh GUID each time. One Settings window, and
+/// one Collections window.
 /// </summary>
 public sealed class WindowRegistry
 {

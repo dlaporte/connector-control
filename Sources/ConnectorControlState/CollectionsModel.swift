@@ -4,7 +4,7 @@ import ConnectorControlCore
 
 /// The Collections window, minus pixels: the collections as items in the left pane, the selected
 /// collection's connectors as rows in the right one, the connector count below them, and the controls
-/// that follow the selection: the sidebar's +, the header's ⋯ menu, the list header's + and the
+/// that follow the selection: the sidebar's +, the header's ⋯ menu and the + under it, and the
 /// selection bar. Everything is derived from AppState; the model owns only what the window itself
 /// knows — which collection is showing and which rows are ticked.
 ///
@@ -30,7 +30,9 @@ public final class CollectionsModel: ObservableObject {
     /// what is true of the file, not how long ago it last changed.
     public static let updateAvailableStatus = "update available"
     /// The two answers to the published-document question. Keep is the default, on Return and on
-    /// Escape: a file the team reads is not something to delete by pressing a key.
+    /// Escape: a file the team reads is not something to delete by pressing a key. The same word
+    /// as `deleteAction`, kept apart because it answers a different question, about a file rather
+    /// than a collection, whose button could come to say something else.
     public static let deleteFileButton = "Delete"
     public static let keepFileButton = "Keep"
     public static let remoteType = "remote"
@@ -51,13 +53,13 @@ public final class CollectionsModel: ObservableObject {
     public static func selectedCount(_ n: Int) -> String { "\(n) selected" }
 
     /// Names the connector when there is exactly one ticked, and states the count otherwise: a
-    /// removal of one row deserves the same specificity the editor's own Remove used to give it,
+    /// removal of one row deserves the same specificity the editor's old delete confirmation gave it,
     /// and a removal of several would only get longer for naming them all.
     public static func deleteCheckedMessage(_ names: [String]) -> String {
         names.count == 1 ? "Delete “\(names[0])”?" : "Delete \(names.count) connectors?"
     }
 
-    /// Lifted from the editor's Remove confirmation, which the list now replaces: the sentence —
+    /// Lifted from the editor's old delete confirmation, which the list now replaces: the sentence —
     /// the most useful thing in that confirmation — survives here unchanged. Delete Collection's
     /// confirmation ends with it too.
     public static let deleteCheckedInformative = "A copy remains in Backups."
@@ -689,8 +691,8 @@ public final class CollectionsModel: ObservableObject {
     public static let showPublishedFileAction = "Show Published File"
     public static let showSourceFileAction = "Show Source File"
 
-    /// The row's pencil, as its tooltip and its spoken name. It names the connector, so a screen
-    /// reader moving down the list hears which one each pencil edits rather than "Edit" each time.
+    /// The row's spoken name. A click or Return on the row opens its editor, so a screen reader
+    /// moving down the list hears which connector each row edits rather than "Edit" each time.
     public static func editLabel(for connector: String) -> String { "Edit “\(connector)”" }
 
     public static func title(for entry: MenuEntry) -> String {
@@ -783,7 +785,7 @@ public final class CollectionsModel: ObservableObject {
     /// located on this machine.
     public var sourceFilePath: String? { locatedSource(of: selectedCollection) }
 
-    // MARK: - Sidebar and connectors header
+    // MARK: - Sidebar and the header's +
 
     /// The sidebar `+`'s tooltip and accessibility label: its glyph alone does not say that
     /// what it adds is a collection.
@@ -801,7 +803,7 @@ public final class CollectionsModel: ObservableObject {
         canAddConnector ? CollectionsModel.addConnectorTooltip : CollectionsModel.addConnectorDisabledTooltip
     }
 
-    /// The `+` button on the connector list header: an Add-Remote target in the collection the
+    /// The `+` under the header's `⋯`: an Add-Remote target in the collection the
     /// window is showing.
     public func newConnectorTarget() -> EditTarget { EditTarget.newRemote(in: selectedCollection) }
 

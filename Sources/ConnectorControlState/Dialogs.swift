@@ -1,6 +1,6 @@
 /// The NSAlert surfaces as a seam the app implements with `NSAlert` and tests
 /// script with a fake. The sheet-style
-/// confirmations (loss warning, remove, restore) are not here: their models
+/// confirmations (loss warning, restore) are not here: their models
 /// publish a pending state the SwiftUI `confirmationDialog` binds to.
 @MainActor
 public protocol Dialogs: AnyObject {

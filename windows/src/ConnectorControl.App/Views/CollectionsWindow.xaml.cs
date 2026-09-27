@@ -297,7 +297,7 @@ public partial class CollectionsWindow : Window
         }
     }
 
-    // MARK: connector list header
+    // MARK: the header's plus
 
     /// <summary>
     /// A new connector in the collection on show, through the same editor a row opens.

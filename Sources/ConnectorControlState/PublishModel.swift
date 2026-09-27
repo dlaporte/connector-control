@@ -56,12 +56,12 @@ public final class PublishModel: ObservableObject {
     /// is the platform-forced half of this sentence; the Windows mirror says "dialog".
     public static func publishFolderEditNote(_ connector: String, _ field: String) -> String { "“\(connector)” carries this machine’s publish folder as written, in \(field), which this sheet cannot write over. Open “\(connector)” and write ${COLLECTION_DIR} there." }
 
-    /// Another collection's folder, or a synced collection's: whose it is, since releasing it
-    /// sends one of this machine's own folders.
     /// Publish with no folder chosen. The button is disabled then, so only a caller that skips
     /// it hears this.
     public static let noFolderError = "Choose a folder to publish to."
 
+    /// Another collection's folder, or a synced collection's: whose it is, since releasing it
+    /// sends one of this machine's own folders.
     public static func otherFolderNote(_ connector: String, _ field: String, _ collection: String) -> String { "“\(connector)” carries, in \(field), the folder this machine keeps “\(collection)” in. Tick it where it sits, or release it." }
 
     /// A path mark that lost its argument: its text is held by no argument now. It waits for the

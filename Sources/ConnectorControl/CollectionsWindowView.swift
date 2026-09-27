@@ -468,7 +468,7 @@ struct CollectionsWindowView: View {
                 .accessibilityAction { openEditor(row.name) }
             }
             // The rows are the tall half of the window: the list takes what is left after the
-            // header, the banner and the list's own title, and scrolls inside it.
+            // header and the banner, and scrolls inside it.
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // Every row's name cell measured at its natural width, off screen rows included,
             // since the list lays out only the rows it shows.

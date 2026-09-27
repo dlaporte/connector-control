@@ -34,7 +34,7 @@ public class DialogTests
         WpfApp.Invoke(() =>
         {
             // The published-file question: Return and Escape both answer Keep, the accent goes with
-            // the default, and Remove keeps its red but answers only a click.
+            // the default, and Delete keeps its red but answers only a click.
             var dialog = new ConfirmDialog(CollectionsModel.DeletePublishedFileQuestion("team.json"), null,
                 CollectionsModel.DeleteFileButton, CollectionsModel.KeepFileButton, destructive: true, cancelIsDefault: true);
             Assert.True(dialog.CancelButton.IsDefault);
