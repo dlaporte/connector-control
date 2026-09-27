@@ -1527,13 +1527,12 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     /// like a token; a reference; or a user alone); <c>path[i]</c>, the i-th path segment where it looks
     /// like a credential or a random token, the way some servers take their key; and <c>query.NAME</c> or
     /// <c>fragment.NAME</c>, a parameter of the query, or of the fragment read as one
-    /// (<see cref="CredentialKindOf"/>; a bare parameter only when it looks like a secret, keyed
-    /// <c>query[i]</c> or <c>fragment[i]</c> by its position). A key is a field, a section and a position,
-    /// never a value, and each position is a key of its own, so a review of one segment or parameter
-    /// approves no other. None for text
-    /// with no <c>://</c>. Split by hand, one UTF-16 unit at a time as the Mac walks Unicode scalars,
-    /// rather than by a URL parser: both platforms split it the same way, and a URL a parser would refuse
-    /// can still carry a token.
+    /// (<see cref="CredentialKindOf"/>; a bare parameter only when it looks like a secret, and one whose
+    /// name does whatever its value, each keyed <c>query[i]</c> or <c>fragment[i]</c> by its position).
+    /// A key is a field, a section and a position, never a value, and each position is a key of its own,
+    /// so a review of one segment or parameter approves no other. None for text with no <c>://</c>. Split
+    /// by hand, one UTF-16 unit at a time as the Mac walks Unicode scalars, rather than by a URL parser:
+    /// both platforms split it the same way, and a URL a parser would refuse can still carry a token.
     /// </summary>
     internal static IReadOnlyList<(string Part, CredentialKind Kind)> CredentialPartsOfUrl(string text)
     {
@@ -1595,8 +1594,10 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     /// <summary>
     /// The <c>&amp;</c>-separated parameters of a query or a fragment that can carry a secret, each as
     /// <c>section.NAME</c> with how it holds it. A bare parameter is its own value, and counts only when
-    /// it looks like a secret. It, and a parameter whose name looks like one, is keyed <c>section[i]</c>
-    /// by its position, as a path segment is: the key must hold nothing derived from a secret.
+    /// it looks like a secret. A parameter whose name looks like a secret holds one there, whatever its
+    /// value (<c>?&lt;token&gt;=1</c>, or a padded base64 token, which its first <c>=</c> splits into a
+    /// name). Either is keyed <c>section[i]</c> by its position, as a path segment is: the key must hold
+    /// nothing derived from a secret.
     /// </summary>
     private static IEnumerable<(string Part, CredentialKind Kind)> Parameters(string text, string section)
     {
@@ -1606,8 +1607,8 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
             var pair = pairs[index];
             var equals = pair.IndexOf('=');
             var name = equals < 0 ? pair : pair[..equals];
-            var kind = equals >= 0 ? CredentialKindOf(name, pair[(equals + 1)..])
-                : LooksLikeSecret(name) ? CredentialKind.Literal : null;
+            var kind = LooksLikeSecret(name) ? CredentialKind.Literal
+                : equals >= 0 ? CredentialKindOf(name, pair[(equals + 1)..]) : null;
             if (kind is { } found)
             {
                 yield return (equals < 0 || LooksLikeSecret(name) ? $"{section}[{index}]" : $"{section}.{name}", found);

@@ -4216,6 +4216,10 @@ public class AppStateCollectionsTests
         Assert.Equal(AppState.NewCredentialError("api"), state.PublishError?.Message);   // the URL's path
         Assert.Null(state.Upsert("api", Api($"https://mcp.example.com/mcp#access_token={LongToken}"), "api"));
         Assert.Equal(AppState.NewCredentialError("api"), state.PublishError?.Message);   // the URL's fragment
+        Assert.Null(state.Upsert("api", Api($"https://mcp.example.com/mcp?{LongToken}=1"), "api"));
+        Assert.Equal(AppState.NewCredentialError("api"), state.PublishError?.Message);   // a parameter's name
+        Assert.Null(state.Upsert("api", Api("https://mcp.example.com/mcp?dGhpc2lzYXNlY3JldHRva2VuMTIzNDU2Nzg5MA=="), "api"));
+        Assert.Equal(AppState.NewCredentialError("api"), state.PublishError?.Message);   // a padded base64 token
         Assert.Equal(before, File.ReadAllBytes(file));
         Assert.False(JsonText.FileContains(file, LongToken));
     }

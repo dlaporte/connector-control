@@ -847,13 +847,13 @@ public struct CollectionDocument: Equatable, Sendable {
     /// like a token; a reference; or a user alone); `path[i]`, the i-th path segment where it looks
     /// like a credential or a random token, the way some servers take their key; and `query.NAME` or
     /// `fragment.NAME`, a parameter of the query, or of the fragment read as one
-    /// (`credentialKind(named:holding:)`; a bare parameter only when it looks like a secret, keyed
-    /// `query[i]` or `fragment[i]` by its position). A key is a field, a section and a position,
-    /// never a value, and each position is a key of its own, so a review of one segment or parameter
-    /// approves no other. None
-    /// for text with no `://`. Split by hand, one Unicode scalar at a time as the Windows mirror walks
-    /// UTF-16 units, rather than by a URL parser: both platforms split it the same way, and a URL a
-    /// parser would refuse can still carry a token.
+    /// (`credentialKind(named:holding:)`; a bare parameter only when it looks like a secret, and one
+    /// whose name does whatever its value, each keyed `query[i]` or `fragment[i]` by its position).
+    /// A key is a field, a section and a position, never a value, and each position is a key of its
+    /// own, so a review of one segment or parameter approves no other. None for text with no `://`.
+    /// Split by hand, one Unicode scalar at a time as the Windows mirror walks UTF-16 units, rather
+    /// than by a URL parser: both platforms split it the same way, and a URL a parser would refuse
+    /// can still carry a token.
     static func credentialParts(ofURL text: String) -> [(part: String, kind: CredentialKind)] {
         let scalars = Array(text.unicodeScalars)
         guard let start = scalars.indices.first(where: {
@@ -893,14 +893,16 @@ public struct CollectionDocument: Equatable, Sendable {
 
     /// The `&`-separated parameters of a query or a fragment that can carry a secret, each as
     /// `section.NAME` with how it holds it. A bare parameter is its own value, and counts only when it
-    /// looks like a secret. It, and a parameter whose name looks like one, is keyed `section[i]` by its
-    /// position, as a path segment is: the key must hold nothing derived from a secret.
+    /// looks like a secret. A parameter whose name looks like a secret holds one there, whatever its
+    /// value (`?<token>=1`, or a padded base64 token, which its first `=` splits into a name). Either
+    /// is keyed `section[i]` by its position, as a path segment is: the key must hold nothing derived
+    /// from a secret.
     private static func parameters(_ text: ArraySlice<Unicode.Scalar>, in section: String) -> [(part: String, kind: CredentialKind)] {
         text.split(separator: "&").enumerated().compactMap { index, pair in
             let equals = pair.firstIndex(of: "=")
             let name = String(String.UnicodeScalarView(pair[..<(equals ?? pair.endIndex)]))
-            let kind: CredentialKind? = equals.map { credentialKind(named: name, holding: String(String.UnicodeScalarView(pair[($0 + 1)...]))) }
-                ?? (looksLikeSecret(name) ? .literal : nil)
+            let kind: CredentialKind? = looksLikeSecret(name) ? .literal
+                : equals.flatMap { credentialKind(named: name, holding: String(String.UnicodeScalarView(pair[($0 + 1)...]))) }
             let part = equals == nil || looksLikeSecret(name) ? "\(section)[\(index)]" : "\(section).\(name)"
             return kind.map { (part: part, kind: $0) }
         }

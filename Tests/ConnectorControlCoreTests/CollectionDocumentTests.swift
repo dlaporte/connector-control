@@ -437,7 +437,7 @@ final class CollectionDocumentTests: XCTestCase {
         let warnings = CollectionDocument.credentialWarnings(.object(["type": .string("http"), "url": .string(url)]), sharedEnv: [])
         XCTAssertEqual(warnings, [
             "url.userinfo looks like a credential", "url.path[1] looks like a credential", "url.path[3] looks like a credential",
-            "url.query.api_key looks like a credential", "url.query[1] looks like a credential",
+            "url.query.api_key looks like a credential", "url.query[1] looks like a credential", "url.query[2] looks like a credential",
             "url.fragment[0] looks like a credential", "url.fragment.t looks like a credential",
         ])
         for secret in secrets {
@@ -520,6 +520,11 @@ final class CollectionDocumentTests: XCTestCase {
         XCTAssertEqual(warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J"), ["url.query[0] looks like a credential"])
         XCTAssertEqual(warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J=ghp_q"), ["url.query[0] looks like a credential"],
                        "and so is one whose name looks like a secret")
+        XCTAssertEqual(warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J=1"), ["url.query[0] looks like a credential"],
+                       "a name that looks like a secret is one, whatever its value")
+        XCTAssertEqual(warnings("https://mcp.example.com/mcp#Zq8RkT2mWx7LpN4vHc9J=${KEY}"), ["url.fragment[0] looks like a credential"])
+        XCTAssertEqual(warnings("https://mcp.example.com/mcp?dGhpc2lzYXNlY3JldHRva2VuMTIzNDU2Nzg5MA=="), ["url.query[0] looks like a credential"],
+                       "a padded base64 token, which its first `=` makes a name")
         XCTAssertEqual(warnings("https://mcp.example.com/mcp?k=Zq8RkT2mWx7LpN4vHc9J"), ["url.query.k looks like a credential"],
                        "a random query value")
         XCTAssertEqual(warnings("https://mcp.example.com/v2/servers/gmail-tools/sse#section-2"), [])

@@ -3639,6 +3639,11 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("api"), "the URL's path")
         XCTAssertNil(state.upsert(name: "api", entry: api("https://mcp.example.com/mcp#access_token=\(longToken)"), renamedFrom: "api"))
         XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("api"), "the URL's fragment")
+        XCTAssertNil(state.upsert(name: "api", entry: api("https://mcp.example.com/mcp?\(longToken)=1"), renamedFrom: "api"))
+        XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("api"), "a parameter's name")
+        XCTAssertNil(state.upsert(name: "api", entry: api("https://mcp.example.com/mcp?dGhpc2lzYXNlY3JldHRva2VuMTIzNDU2Nzg5MA=="),
+                                  renamedFrom: "api"))
+        XCTAssertEqual(state.publishError?.message, AppState.newCredentialError("api"), "a padded base64 token")
         XCTAssertEqual(try Data(contentsOf: file), before)
         XCTAssertFalse(try jsonFile(file, contains: longToken))
     }

@@ -592,7 +592,7 @@ public class CollectionDocumentTests
         Assert.Equal(
             [
                 "url.userinfo looks like a credential", "url.path[1] looks like a credential", "url.path[3] looks like a credential",
-                "url.query.api_key looks like a credential", "url.query[1] looks like a credential",
+                "url.query.api_key looks like a credential", "url.query[1] looks like a credential", "url.query[2] looks like a credential",
                 "url.fragment[0] looks like a credential", "url.fragment.t looks like a credential",
             ],
             warnings);
@@ -682,6 +682,11 @@ public class CollectionDocumentTests
         Assert.Equal(["url.query[0] looks like a credential"], Warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J"));
         // And so is one whose name looks like a secret.
         Assert.Equal(["url.query[0] looks like a credential"], Warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J=ghp_q"));
+        // A name that looks like a secret is one, whatever its value.
+        Assert.Equal(["url.query[0] looks like a credential"], Warnings("https://mcp.example.com/mcp?Zq8RkT2mWx7LpN4vHc9J=1"));
+        Assert.Equal(["url.fragment[0] looks like a credential"], Warnings("https://mcp.example.com/mcp#Zq8RkT2mWx7LpN4vHc9J=${KEY}"));
+        // A padded base64 token, which its first = makes a name.
+        Assert.Equal(["url.query[0] looks like a credential"], Warnings("https://mcp.example.com/mcp?dGhpc2lzYXNlY3JldHRva2VuMTIzNDU2Nzg5MA=="));
         Assert.Equal(["url.query.k looks like a credential"], Warnings("https://mcp.example.com/mcp?k=Zq8RkT2mWx7LpN4vHc9J"));   // a random query value
         Assert.Empty(Warnings("https://mcp.example.com/v2/servers/gmail-tools/sse#section-2"));
     }
