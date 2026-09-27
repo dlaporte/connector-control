@@ -278,8 +278,9 @@ public sealed class ConfigService
     /// touched. Returns the restored file's servers (the caller's new baseline).
     /// </summary>
     /// <param name="publishFolder">
-    /// The folder this machine publishes the active collection into; a connector whose store copy
-    /// renders exactly as the snapshot keeps the store copy (<see cref="Reconciler.AdoptSnapshot"/>).
+    /// The folder <c>${COLLECTION_DIR}</c> stands for in the active collection on this machine — the
+    /// folder it publishes into, or a synced collection's document folder; a connector whose store
+    /// copy renders exactly as the snapshot keeps the store copy (<see cref="Reconciler.AdoptSnapshot"/>).
     /// </param>
     /// <param name="backedUpFrom">As <see cref="Apply(IReadOnlyDictionary{string,JsonValue},string?)"/> takes it: records the file this restore overwrites.</param>
     /// <param name="activating">

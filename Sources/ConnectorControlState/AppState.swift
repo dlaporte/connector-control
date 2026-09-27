@@ -446,14 +446,16 @@ public final class AppState: ObservableObject {
         if let recorded = BackupCollections.collection(of: backup, in: service.paths.backupsDirURL) {
             target.activeCollection = recorded
         }
-        // Every apply backed Claude's file up with this machine's publish folder where the store
-        // holds ${COLLECTION_DIR}: a connector that renders just as the backup does keeps its
-        // token, with the folder of the day, the current one or one the collection has since left.
-        // Only this machine's own binding counts; another machine's record has no folder here.
+        // Every apply backed Claude's file up with ${COLLECTION_DIR} resolved where the store holds
+        // it (`collectionDirectory(of:)`): against a synced collection's document folder, or this
+        // machine's publish folder. A connector that renders just as the backup does keeps its
+        // token, and a published one also with a folder the collection has since left. Only this
+        // machine's own binding counts; another machine's record has no folder here.
         let collection = target.activeCollection
         let binding = isPublished(collection) ? collectionsCache.published[collection] : nil
         let earlier = (binding?.publishedFolders ?? []).subtracting([binding?.folder ?? ""]).sorted { $0.ordinallyPrecedes($1) }
-        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: target, publishFolder: binding?.folder,
+        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: target,
+                                                      publishFolder: collectionDirectory(of: collection),
                                                       earlierFolders: earlier,
                                                       backedUpFrom: collectionsCache.lastAppliedCollection,
                                                       activating: target.activeCollection != store.activeCollection)

@@ -585,14 +585,15 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             target.ActiveCollection = recorded;
         }
-        // Every apply backed Claude's file up with this machine's publish folder where the store
-        // holds ${COLLECTION_DIR}: a connector that renders just as the backup does keeps its token,
-        // with the folder of the day, the current one or one the collection has since left. Only
-        // this machine's own binding counts; another machine's record has no folder here.
+        // Every apply backed Claude's file up with ${COLLECTION_DIR} resolved where the store holds it
+        // (CollectionDirectory): against a synced collection's document folder, or this machine's
+        // publish folder. A connector that renders just as the backup does keeps its token, and a
+        // published one also with a folder the collection has since left. Only this machine's own
+        // binding counts; another machine's record has no folder here.
         var collection = target.ActiveCollection;
         var binding = IsPublished(collection) ? CollectionsCache.Published.GetValueOrDefault(collection) : null;
         var earlier = binding is null ? [] : binding.PublishedFolders.Where(f => f != binding.Folder).Order(StringComparer.Ordinal).ToList();
-        var servers = Service.RestoreClaudeConfig(backupPath, target, binding?.Folder, earlier,
+        var servers = Service.RestoreClaudeConfig(backupPath, target, CollectionDirectory(collection), earlier,
             backedUpFrom: CollectionsCache.LastAppliedCollection,
             activating: !string.Equals(collection, Store.ActiveCollection, StringComparison.Ordinal));
         RecordApplied(collection, servers.Keys);

@@ -240,7 +240,8 @@ public struct ConfigService: Sendable {
     /// The backup's content is validated BEFORE the live file is touched.
     /// Returns the restored file's servers so the caller can sync its
     /// reconciliation baseline to them.
-    /// `publishFolder` is the folder this machine publishes the active collection into, and
+    /// `publishFolder` is the folder `${COLLECTION_DIR}` stands for in the active collection on this
+    /// machine — the folder it publishes into, or a synced collection's document folder — and
     /// `earlierFolders` the ones it published into before; a
     /// connector whose store copy renders exactly as the snapshot keeps the store copy
     /// (`Reconciler.adoptSnapshot`).

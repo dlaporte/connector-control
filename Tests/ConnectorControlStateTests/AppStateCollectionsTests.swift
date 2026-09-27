@@ -1737,6 +1737,28 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNotNil(try h.claudeServers()["github"])
     }
 
+    /// The same for a document that uses `${COLLECTION_DIR}`. Every apply wrote the token resolved
+    /// against the document's folder, and the restore reads that folder back to the token, so the
+    /// collection holds what its author wrote and nothing shows as changed at its source.
+    func testARecordedBackupOfASubscribedCollectionUsingTheDirectoryTokenRestoresAsAuthored() throws {
+        let (h, s) = AppStateHarness.started()
+        defer { h.dispose() }
+        try h.subscribe(s, to: oneLocalConnector("x", command: "node", args: ["\(Placeholder.directoryToken)/srv.js"]),
+                        at: "tools/servers.json")
+        s.setEnabled("x", true, in: "Tools")
+        s.switchCollection(to: "Tools")
+        let authored = try XCTUnwrap(s.store.collections["Tools"])
+        s.switchCollection(to: "Default")   // backs up Tools' file, recorded as Tools'
+        let backup = try XCTUnwrap(try s.service.backups.backups(series: "claude_desktop_config").first)
+        XCTAssertEqual(BackupCollections.collection(of: backup, in: h.backupsDir), "Tools")
+
+        try s.restoreClaudeConfig(from: backup)
+        XCTAssertEqual(s.activeCollection, "Tools")
+        XCTAssertEqual(s.store.collections["Tools"], authored, "the author's token, not the folder it resolved to")
+        XCTAssertTrue(s.pendingUpdates.isEmpty)
+        XCTAssertNil(s.collectionBanner, "no update is announced for a change nobody made")
+    }
+
     /// A connector an installer wrote straight into Claude's config while the app was off, and the
     /// other machine switched collections meanwhile: the collection that was applied keeps its own,
     /// and the new name still comes in to the collection now active.

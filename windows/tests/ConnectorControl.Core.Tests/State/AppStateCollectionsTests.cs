@@ -2010,6 +2010,33 @@ public class AppStateCollectionsTests
         Assert.True(h.ClaudeServers().ContainsKey("github"));
     }
 
+    /// <summary>
+    /// The same for a document that uses <c>${COLLECTION_DIR}</c>. Every apply wrote the token
+    /// resolved against the document's folder, and the restore reads that folder back to the token,
+    /// so the collection holds what its author wrote and nothing shows as changed at its source.
+    /// </summary>
+    [Fact]
+    public void ARecordedBackupOfASubscribedCollectionUsingTheDirectoryTokenRestoresAsAuthored()
+    {
+        using var h = new AppStateHarness();
+        using var s = h.Create();
+        h.Subscribe(s, OneLocalConnector("x", "node", [$"{Placeholder.DirectoryToken}/srv.js"]), Path.Combine("tools", "servers.json"));
+        s.SetEnabled("x", true, "Tools");
+        s.SwitchCollection("Tools");
+        var authored = s.Store.Collections["Tools"].Clone();
+        s.SwitchCollection("Default");   // backs up Tools' file, recorded as Tools'
+        var backup = s.Service.Backups.Backups("claude_desktop_config")[0];
+        Assert.Equal("Tools", BackupCollections.CollectionOf(backup, h.BackupsDir));
+
+        s.RestoreClaudeConfig(backup);
+        Assert.Equal("Tools", s.ActiveCollection);
+        // The author's token, not the folder it resolved to.
+        Assert.Equal(authored, s.Store.Collections["Tools"]);
+        Assert.Empty(s.PendingUpdates);
+        // No update is announced for a change nobody made.
+        Assert.Null(s.CollectionBanner);
+    }
+
     [Fact]
     public void ARestoreWithNoRecordIsRefusedWhileASubscribedCollectionIsActive()
     {
