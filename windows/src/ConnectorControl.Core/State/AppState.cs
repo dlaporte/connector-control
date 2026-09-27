@@ -1114,7 +1114,7 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         var before = CollectionsFile;
         SetSidecarEntry(collection, entry with { Publish = record with { Intent = intent } });
-        CollectionsCache = CollectionsCache.RememberingMarks(before, CollectionsFile);
+        RememberMarks(before);
     }
 
     /// <summary>
@@ -1352,7 +1352,7 @@ public sealed class AppState : ObservableObject, IDisposable
         // copy or an ingest. What Stop Publishing remembers, this remembers too — this machine's
         // binding, and the marks of a record another machine publishes.
         RememberWhatWasKeptBack(name);
-        CollectionsCache = CollectionsCache.RememberingMarks(before, CollectionsFile);
+        RememberMarks(before);
         ForgetOriginsOfDepartedCollections();
         ForgetSource(name);
         if (PublishError is { } failure && failure.Collection == name)
@@ -1470,6 +1470,14 @@ public sealed class AppState : ObservableObject, IDisposable
         SetPublishBinding(collection, null);
         SetKeptRecord(collection, remembered.IsEmpty ? null : remembered);
     }
+
+    /// <summary>
+    /// Keeps what the sidecar's publish records marked in <paramref name="before"/> and no longer mark
+    /// (<see cref="CollectionsLocalCache.RememberingMarks"/>). The setter skips an equal value, so
+    /// nothing is announced when nothing changed.
+    /// </summary>
+    private void RememberMarks(CollectionsFile before) =>
+        CollectionsCache = CollectionsCache.RememberingMarks(before, CollectionsFile);
 
     /// <summary>What a stopped publish left behind, set or dropped for one collection.</summary>
     private void SetKeptRecord(string collection, CollectionsLocalCache.KeptRecord? record) =>
@@ -2431,7 +2439,7 @@ public sealed class AppState : ObservableObject, IDisposable
         // and how the next load reads it back.
         SetSidecarEntry(collection, stripped.Equals(CollectionsFile.Entry.Local) ? null : stripped);
         RememberWhatWasKeptBack(collection);
-        CollectionsCache = CollectionsCache.RememberingMarks(before, CollectionsFile);
+        RememberMarks(before);
         if (PublishError?.Collection == collection)
         {
             PublishError = null;

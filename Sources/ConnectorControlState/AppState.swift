@@ -820,7 +820,7 @@ public final class AppState: ObservableObject {
         let before = collectionsFile
         record.intent = intent
         collectionsFile.collections[collection]?.publish = record
-        collectionsCache = collectionsCache.rememberingMarks(leaving: before, for: collectionsFile)
+        rememberMarks(leaving: before)
     }
 
     // MARK: - Quit
@@ -944,7 +944,7 @@ public final class AppState: ObservableObject {
         // import, a copy or an ingest. What Stop Publishing remembers, this remembers too — this
         // machine's binding, and the marks of a record another machine publishes.
         rememberWhatWasKeptBack(of: name)
-        collectionsCache = collectionsCache.rememberingMarks(leaving: before, for: collectionsFile)
+        rememberMarks(leaving: before)
         forgetOriginsOfDepartedCollections()
         forgetSource(name)
         if publishError?.collection == name { publishError = nil }
@@ -1628,7 +1628,7 @@ public final class AppState: ObservableObject {
             collectionsFile.collections[collection] = entry
         }
         rememberWhatWasKeptBack(of: collection)
-        collectionsCache = collectionsCache.rememberingMarks(leaving: before, for: collectionsFile)
+        rememberMarks(leaving: before)
         if publishError?.collection == collection { publishError = nil }
         persistStore()
         // ${COLLECTION_DIR} has no folder here any more: Claude gets the token as written, and
@@ -1836,6 +1836,15 @@ public final class AppState: ObservableObject {
         guard let binding = collectionsCache.published.removeValue(forKey: collection) else { return }
         let remembered = CollectionsLocalCache.KeptRecord.remembering(binding, after: collectionsCache.kept[collection])
         if !remembered.isEmpty { collectionsCache.kept[collection] = remembered }
+    }
+
+    /// Keeps what the sidecar's publish records marked in `before` and no longer mark
+    /// (`CollectionsLocalCache.rememberingMarks(leaving:for:)`). Assigned only when that changes
+    /// something: the cache announces every assignment, where the Windows mirror's setter skips an
+    /// equal value.
+    private func rememberMarks(leaving before: CollectionsFile) {
+        let remembered = collectionsCache.rememberingMarks(leaving: before, for: collectionsFile)
+        if remembered != collectionsCache { collectionsCache = remembered }
     }
 
     /// The collection this machine binds `folder` to: the one it publishes there, now or before,
