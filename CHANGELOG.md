@@ -27,6 +27,8 @@ bullet once the section is about to ship.
 - In the Collections window, a click on a connector's tick or row no longer leaves the focus
   ring around its box. The ring shows only when the keyboard moves focus to a row (Tab into
   the list, or Up and Down), as the Windows row's focus rectangle does.
+- The app updates itself with Sparkle 2.10.0, up from 2.9.6, and the release's update feed is
+  signed with the Sparkle 2.10.0 tools to match.
 
 ### Windows
 
