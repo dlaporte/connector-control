@@ -64,9 +64,6 @@ struct SettingsView: View {
 
             Section {
                 Toggle(SettingsModel.notifyTitle, isOn: $model.notifyExternalChanges)
-                Text(SettingsModel.notifyCaption)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
             Section(SettingsModel.updatesHeader) {
@@ -110,7 +107,7 @@ struct SettingsView: View {
                     Button(SettingsModel.revealInFinderTitle) {
                         NSWorkspace.shared.activateFileViewerSelecting([model.backupsDir])
                     }
-                    Button(SettingsModel.restoreTitle) { showRestore = true }
+                    Button(RestoreModel.restoreTitle) { showRestore = true }
                 }
             }
         }
@@ -178,13 +175,8 @@ struct SettingsView: View {
     }
 
     private func chooseStoreDir() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Choose"
-        if panel.runModal() == .OK, let url = panel.url {
-            model.chooseStoreDir(url)
+        if let folder = FilePanels.chooseFolder() {
+            model.chooseStoreDir(URL(fileURLWithPath: folder, isDirectory: true))
         }
     }
 
@@ -195,32 +187,24 @@ struct SettingsView: View {
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.applicationBundle]
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
-        panel.prompt = "Choose"
+        panel.prompt = SettingsModel.chooseTitle
         if panel.runModal() == .OK, let url = panel.url {
             // The path is trusted at every Restart Claude from now on, so a
             // bundle that is not Claude signed by Anthropic is refused here,
             // with the reason, rather than at the next restart click. The
             // check reads the whole bundle; the model is updated when it is done.
             let model = self.model
+            let dialogs = state.dialogs
             DispatchQueue.global().async {
                 let problem = ClaudeRestarter.verifyIsClaude(at: url)
                 DispatchQueue.main.async {
                     if let problem {
-                        SettingsView.showRejectedClaudeApp(problem)
+                        dialogs.inform(message: SettingsModel.claudeAppRejectedTitle, informative: problem)
                     } else {
                         model.chooseClaudeApp(url)
                     }
                 }
             }
         }
-    }
-
-    private static func showRejectedClaudeApp(_ problem: String) {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = SettingsModel.claudeAppRejectedTitle
-        alert.informativeText = problem
-        alert.addButton(withTitle: AlertDialogs.okTitle)
-        alert.runModal()
     }
 }

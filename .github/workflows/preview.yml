@@ -27,13 +27,14 @@
 # that ships (between previews, Mac testers download again). A Windows preview install
 # (prerelease version) follows prereleases and the final release (VelopackUpdater).
 #
-# The mac job reads the Apple certificate and notarization account from the "signing" GitHub
-# Environment, whose deployment branch policy must therefore allow the ref a preview is cut
-# from: the tag pattern preview-* and any branch previews are dispatched from, beside master
-# and v*. The Windows build — test, package (win-x64, win-arm64), smoke — is
-# .github/workflows/windows-build.yml, the same file release.yml calls; its own gate job proves
-# all six Azure Artifact Signing secrets are there before the signed packaging jobs start, so a
-# preview is signed exactly like a release. Nothing here is ever unsigned.
+# The mac job, .github/workflows/mac-build.yml (the same file release.yml calls), reads the
+# Apple certificate and notarization account from the "signing" GitHub Environment, whose
+# deployment branch policy must therefore allow the ref a preview is cut from: the tag pattern
+# preview-* and any branch previews are dispatched from, beside master and v*. The Windows
+# build — test, package (win-x64, win-arm64), smoke — is .github/workflows/windows-build.yml,
+# the same file release.yml calls; its own gate job proves all six Azure Artifact Signing
+# secrets are there before the signed packaging jobs start, so a preview is signed exactly like
+# a release. Nothing here is ever unsigned.
 #   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SIGNING_ENDPOINT,
 #   AZURE_SIGNING_ACCOUNT, AZURE_SIGNING_PROFILE — documented once, with windows-build.yml's gate.
 name: Preview
@@ -98,7 +99,8 @@ jobs:
         run: |
           # Three sources, one result: a dispatch takes <n> and dry_run from its inputs;
           # preview-dry-<n> is a dry run (publish skipped); preview-<n> is a real preview. All
-          # three build <next>-preview.<n> under the tag preview-<n>.
+          # three build <next>-preview.<n>; the tag is preview-<n>, or preview-dry-<n> for a dry
+          # tag push.
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             N="$INPUT_NUMBER"; DRY="$INPUT_DRY_RUN"; TAG="preview-$N"
             # GitHub ignores `gh release create --target` when the tag already exists, so a
@@ -165,78 +167,16 @@ jobs:
         run: ./scripts/test-mac.sh
 
   mac:
-    name: macOS build, sign, notarize
+    name: macOS
     needs: [prepare, mac-test]
-    runs-on: macos-15
-    # The Apple certificate is read here and nowhere else; it lives in the "signing"
-    # Environment (required reviewers, deployment branch policy), exactly as in release.yml.
-    environment: signing
-    # `notarytool submit --wait` blocks on Apple's service twice (app, then DMG). 12-20 min is
-    # normal; 60 is a hang, not a queue.
-    timeout-minutes: 60
-    env:
-      # Interpolated once here rather than inside run: blocks (injection hygiene).
-      VERSION: ${{ needs.prepare.outputs.version }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Import signing certificate
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: ./scripts/mac/import-signing-cert.sh
-
-      - name: Build and sign
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/build.keychain-db"
-          # BUILD_NUMBER deliberately not set: build-app.sh derives it from the version, and for
-          # a -preview.<n> version picks the number just below <next>'s, so Sparkle never offers
-          # this build an older stable release and does offer <next> once it ships.
-          VERSION="$VERSION" \
-            UNIVERSAL=1 SIGNING_IDENTITY="$APPLE_SIGNING_IDENTITY" \
-            ./scripts/build-app.sh
-
-      - name: Notarize and staple the app
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          ./scripts/mac/notarize.sh "build/Connector Control.app"
-          spctl --assess --type execute --verbose=2 "build/Connector Control.app"
-
-      - name: Package and notarize DMG
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        run: |
-          ./scripts/make-dmg.sh "ConnectorControl_${VERSION}.dmg"
-          # Sign and notarize the DMG too, so Gatekeeper trusts the download end-to-end
-          # (hdiutil does not sign what it creates).
-          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" \
-            "ConnectorControl_${VERSION}.dmg"
-          ./scripts/mac/notarize.sh "ConnectorControl_${VERSION}.dmg"
-
-      # The publish job posts this; nothing is uploaded to GitHub from here.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: mac-dmg
-          path: ConnectorControl_*.dmg
-          if-no-files-found: error
-          retention-days: 14
-
-      # The signing identity must not outlive the job, whether it passed or failed.
-      - name: Remove the signing keychain
-        if: always()
-        run: |
-          security delete-keychain "$RUNNER_TEMP/build.keychain-db" 2>/dev/null || true
-          rm -f "$RUNNER_TEMP/certificate.p12"
+    # build, sign, notarize, DMG -> artifact mac-dmg, with no Sparkle appcast: the same file
+    # release.yml calls. Its one job names the "signing" environment, and its header lists the
+    # Mac secrets and says why they arrive by inherit rather than by name.
+    uses: ./.github/workflows/mac-build.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      artifact: mac-dmg
+    secrets: inherit
 
   windows:
     name: Windows

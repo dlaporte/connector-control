@@ -1,5 +1,6 @@
 namespace ConnectorControl.Core.Tests;
 
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/RemotePatternTests.swift</summary>
 public class RemotePatternTests
 {
     private static JsonValue Config(string[] args, string command = "npx") =>

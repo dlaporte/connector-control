@@ -8,7 +8,12 @@ public sealed class RestoreModel : ObservableObject
     public const string Headline = "Restore Claude config from a backup";
     public const string Caption = "The current file is backed up first, then replaced by the selected backup.";
     public const string CancelTitle = "Cancel";
-    public const string RestoreTitle = "Restore…";
+    /// <summary>
+    /// The button that opens this dialog from Settings and the dialog's own Restore, on both
+    /// platforms; <see cref="RestoreButton"/> is the confirmation's, a separate question with its
+    /// own title.
+    /// </summary>
+    public const string RestoreTitle = "Restore";
     public const string RestoreButton = "Restore";
     private const string Series = "claude_desktop_config";
 
@@ -84,6 +89,13 @@ public sealed class RestoreModel : ObservableObject
         {
             return false;
         }
+        // A restore AppState would refuse says why at once, rather than after a confirmation it
+        // could never honour.
+        if (state.RestoreRefusal(backup) is { } refusal)
+        {
+            RestoreError = refusal.Message;
+            return false;
+        }
         if (!dialogs.Confirm(ConfirmMessage(Path.GetFileName(backup)), null, RestoreButton, destructive: true))
         {
             return false;
@@ -94,8 +106,17 @@ public sealed class RestoreModel : ObservableObject
             CloseRequested?.Invoke();
             return true;
         }
+        catch (Exception ex) when (ex is RestoreCollectionGoneException or RestoreSubscribedException)
+        {
+            // A refusal is the dialog's alone, as the one before the confirmation is: nothing was
+            // restored, so there is nothing for the banner to say. It arrives here only when the
+            // collections changed while the confirmation was up.
+            RestoreError = ex.Message;
+            return false;
+        }
         catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException or JsonException)
         {
+            // A restore that failed is the banner's too.
             RestoreError = ex.Message;         // raw message, not Friendly()
             state.LastError = ex.Message;
             return false;

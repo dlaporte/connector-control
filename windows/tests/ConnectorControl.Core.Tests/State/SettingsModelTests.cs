@@ -4,6 +4,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/SettingsModelTests.swift</summary>
 public class SettingsModelTests
 {
     private sealed class Rig : IDisposable
@@ -203,7 +204,8 @@ public class SettingsModelTests
         Assert.All(rig.Model.ToolRows, r => Assert.False(r.IsProblem));
         Assert.All(rig.Model.ToolRows, r => Assert.Null(r.Note));
         rig.Model.RefreshTools();
-        Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses.Count == 4, TimeSpan.FromSeconds(5)));
+        Assert.All(rig.Model.ToolRows, r => Assert.Equal("Checking…", r.StatusText));   // probed off the UI thread: nothing yet
+        rig.H.Drain();
         var rows = rig.Model.ToolRows;
         Assert.Equal(["10.9.2", "Found", "Not found", "Not found"], rows.Select(r => r.StatusText).ToArray());
         Assert.Equal([false, false, true, true], rows.Select(r => r.IsProblem).ToArray());
@@ -220,7 +222,8 @@ public class SettingsModelTests
         var raised = new List<string?>();
         rig.Model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
         rig.Model.RefreshTools();
-        Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses.Count == 4, TimeSpan.FromSeconds(5)));
+        rig.H.Drain();
+        Assert.Equal(4, rig.State.ToolStatuses.Count);
         Assert.Contains(nameof(SettingsModel.ToolRows), raised);
         Assert.Equal(1, rig.H.Tools.Batches);
     }
@@ -231,7 +234,8 @@ public class SettingsModelTests
         using var rig = new Rig();
         rig.H.Tools.Statuses[Tool.Npx] = ToolStatus.NotFound;
         rig.Model.RefreshTools();
-        Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses.Count == 4, TimeSpan.FromSeconds(5)));
+        rig.H.Drain();
+        Assert.Equal(4, rig.State.ToolStatuses.Count);
 
         rig.Model.Dispose();
         // Simulate a bound view: it only re-reads ToolRows when told to by a PropertyChanged event.
@@ -247,7 +251,8 @@ public class SettingsModelTests
         // Publish a change that would flip npx's row on a live (not disposed) model.
         rig.H.Tools.Statuses[Tool.Npx] = new ToolStatus(@"C:\fake\npx.cmd", "1.0.0");
         rig.State.RefreshToolsAsync([Tool.Npx]);
-        Assert.True(rig.H.Ui.PumpUntil(() => rig.State.ToolStatuses[Tool.Npx].Found, TimeSpan.FromSeconds(5)));
+        rig.H.Drain();
+        Assert.True(rig.State.ToolStatuses[Tool.Npx].Found);
 
         Assert.Empty(raised);
         Assert.Equal(beforeChange, lastSeenRows);   // never re-read: Dispose stopped the AppState.PropertyChanged relay

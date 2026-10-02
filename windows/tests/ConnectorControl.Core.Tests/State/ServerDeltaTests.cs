@@ -1,7 +1,9 @@
+using ConnectorControl.Core.Services;
 using ConnectorControl.Core.State;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/ServerDeltaTests.swift</summary>
 public class ServerDeltaTests
 {
     private static JsonValue Server(string command) => JsonValue.Object(("command", JsonValue.String(command)));
@@ -19,7 +21,7 @@ public class ServerDeltaTests
         Assert.Equal(["a"], delta.Removed);
         Assert.Equal(["c"], delta.Changed);
         Assert.False(delta.IsEmpty);
-        Assert.Equal("adds d; removes a; changes c", delta.Summary());
+        Assert.Equal("adds d; deletes a; changes c", delta.Summary());
     }
 
     [Fact]
@@ -39,11 +41,17 @@ public class ServerDeltaTests
         Assert.Equal("adds a, b, c, d, e, f", delta.Summary(limit: 6));
     }
 
+    /// <summary>The Mac pins the same body, the notification identifiers and the recheck delay in
+    /// AppStateTests.swift's testConnectorListChangedBodySummarizesTheDeltaAndInternalIdentifiersStayStable.</summary>
     [Fact]
     public void BodyNamesTheChangeAndWhatToDoNext()
     {
+        // Internal identifiers, kept out of the shared string catalog on purpose.
+        Assert.Equal("restartPending", Notifications.RestartCategory);
+        Assert.Equal("restartClaude", Notifications.RestartAction);
+        Assert.Equal(TimeSpan.FromSeconds(3), AppState.RestartRecheckDelay);
         Assert.Equal(
-            "The connector list changed outside Connector Control — Claude's config now adds evil; removes fs. Restart Claude to pick it up.",
+            "The connector list changed outside Connector Control — Claude's config now adds evil; deletes fs. Restart Claude to pick it up.",
             AppState.ConnectorListChangedBody(new ServerDelta(["evil"], ["fs"], []), restartRequired: true));
         Assert.Equal(
             "The connector list changed outside Connector Control — Claude's config was regenerated. Claude will use it the next time it starts.",

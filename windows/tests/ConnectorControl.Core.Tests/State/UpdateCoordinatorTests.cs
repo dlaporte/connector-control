@@ -13,7 +13,7 @@ public class UpdateCoordinatorTests
     private readonly DelayQueue delays = new();
 
     private UpdateCoordinator Coordinator() =>
-        new(updater, settings, notifier, dialogs, new AppHost(a => a(), delays.Add, () => DateTime.UtcNow));
+        new(updater, settings, notifier, dialogs, new AppHost(a => a(), delays.Add, () => DateTime.UtcNow, a => a()));
 
     private static UpdateCheck Update(string version = "1.3.0") => new(version, "## Fixes\n- one", new object());
 
@@ -179,7 +179,7 @@ public class UpdateCoordinatorTests
     {
         settings.AutoUpdate = true;
         var ui = new MarshalQueue();
-        var host = new AppHost(ui.Post, delays.Add, () => DateTime.UtcNow);
+        var host = new AppHost(ui.Post, delays.Add, () => DateTime.UtcNow, a => a());
         updater.Next = Update();
         using var coordinator = new UpdateCoordinator(updater, settings, notifier, dialogs, host);
 
@@ -192,14 +192,20 @@ public class UpdateCoordinatorTests
         Assert.Null(coordinator.NotifiedVersion);
         Assert.Empty(notifier.Sent);
 
-        ui.Pump();
+        // One action, the staging block: a drain could also run the clear it releases, which the
+        // pool may post while it runs, and the wait below would then find nothing to wait for.
+        Assert.Equal(1, ui.PumpOne());
         Assert.Equal("1.3.0", coordinator.StagedVersion);
         Assert.Equal("1.3.0", coordinator.NotifiedVersion);
         Assert.Single(notifier.Sent);
 
-        // The outcome lands one marshalled action later (the in-flight clear), so keep pumping.
-        Assert.True(ui.PumpUntil(() => checkTask.IsCompleted, TimeSpan.FromSeconds(5)));
-        Assert.Equal(UpdateOutcome.StagedForQuit, await checkTask);
+        // The outcome lands one marshalled action later: the in-flight clear, posted from the pool
+        // continuation the staging block released. Await that post (holding no thread), pump it,
+        // and the outcome follows on the pool again.
+        await ui.WhenPostedAsync().WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken);
+        Assert.False(checkTask.IsCompleted);   // not before the clear has run on the UI thread
+        ui.Pump();
+        Assert.Equal(UpdateOutcome.StagedForQuit, await checkTask.WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -208,15 +214,18 @@ public class UpdateCoordinatorTests
         settings.AutoUpdate = true;
         var ui = new MarshalQueue();
         var posted = 0;
-        var host = new AppHost(a => { Interlocked.Increment(ref posted); ui.Post(a); }, delays.Add, () => DateTime.UtcNow);
+        var host = new AppHost(a => { Interlocked.Increment(ref posted); ui.Post(a); }, delays.Add, () => DateTime.UtcNow, a => a());
         updater.Next = Update();
         using var coordinator = new UpdateCoordinator(updater, settings, notifier, dialogs, host);
 
         var first = coordinator.CheckAsync(interactive: false);
         Assert.Same(first, coordinator.CheckAsync(interactive: false));   // joined while in flight
         Assert.Equal(1, updater.Checks);
-        Assert.True(ui.PumpUntil(() => first.IsCompleted, TimeSpan.FromSeconds(5)));
-        Assert.Equal(UpdateOutcome.StagedForQuit, await first);
+        Assert.Equal(1, ui.PumpOne());   // the staging block alone, posted before CheckAsync returned (the fakes are synchronous)
+        await ui.WhenPostedAsync().WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken);   // the clear, from the pool
+        Assert.False(first.IsCompleted);
+        ui.Pump();
+        Assert.Equal(UpdateOutcome.StagedForQuit, await first.WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken));
 
         // Two marshalled actions reached the UI thread: the staging block, then the in-flight
         // clear — and the task completed only after the pump ran the second one. (A clear on
@@ -228,8 +237,9 @@ public class UpdateCoordinatorTests
         var second = coordinator.CheckAsync(interactive: false);
         Assert.NotSame(first, second);
         Assert.Equal(2, updater.Checks);
-        Assert.True(ui.PumpUntil(() => second.IsCompleted, TimeSpan.FromSeconds(5)));
-        Assert.Equal(UpdateOutcome.StagedForQuit, await second);   // already staged: no second download
+        await ui.WhenPostedAsync().WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken);
+        ui.Pump();
+        Assert.Equal(UpdateOutcome.StagedForQuit, await second.WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken));   // already staged: no second download
         Assert.Equal(1, updater.Downloads);
         Assert.Equal(3, Volatile.Read(ref posted));   // only the clear this time
     }
@@ -240,7 +250,7 @@ public class UpdateCoordinatorTests
         // The dispatcher is gone (shutdown): Marshal throws. The outcome already computed must
         // still reach the caller and the in-flight slot must be freed, or every later
         // CheckAsync would return the same finished task for the rest of the process.
-        var host = new AppHost(_ => throw new InvalidOperationException("dispatcher shut down"), delays.Add, () => DateTime.UtcNow);
+        var host = new AppHost(_ => throw new InvalidOperationException("dispatcher shut down"), delays.Add, () => DateTime.UtcNow, a => a());
         using var coordinator = new UpdateCoordinator(updater, settings, notifier, dialogs, host);
 
         Assert.Equal(UpdateOutcome.UpToDate, await coordinator.CheckAsync(interactive: false));   // no update: nothing else to marshal
@@ -366,7 +376,7 @@ public class UpdateCoordinatorTests
         Assert.Equal("1.3.0", coordinator.DeclinedVersion);
         Assert.Equal("1.3.0", settings.DeclinedUpdateVersion);   // persisted, not just in-memory
 
-        // Settings ▸ Check for Updates… always offers, even a version the user already declined.
+        // Settings ▸ Check for Updates always offers, even a version the user already declined.
         Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: true));
         Assert.Equal(2, dialogs.Offers.Count);
     }

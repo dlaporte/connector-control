@@ -1,4 +1,5 @@
 import Foundation
+import XCTest
 import ConnectorControlCore
 @testable import ConnectorControlState
 
@@ -26,8 +27,24 @@ final class EditorRig {
         return .object(object)
     }
 
+    /// A copy of the active collection named `name`, left inactive: each of its connectors is an
+    /// identical twin of the active collection's.
+    func twin(_ name: String, file: StaticString = #filePath, line: UInt = #line) {
+        let active = state.activeCollection
+        XCTAssertNil(state.createActiveCopy(named: name), file: file, line: line)
+        state.switchCollection(to: active)
+    }
+
     func editor(_ target: EditTarget) -> EditorModel {
         EditorModel(state: state, target: target, dialogs: h.dialogs)
+    }
+
+    /// An editor on a named collection's copy of a connector, read out of the store the way the
+    /// Collections window's row will. A name that collection does not hold is a test bug, so it
+    /// trips the force-unwrap rather than quietly opening an empty window.
+    func editor(_ name: String, in collection: String) -> EditorModel {
+        editor(EditTarget.existing(name: name, entry: state.store.collections[collection]!.mcps[name]!,
+                                   in: collection))
     }
 
     func dispose() {

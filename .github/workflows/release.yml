@@ -6,7 +6,9 @@
 #                               the tagged commit is on master (gate 2)
 #   mac-test         (macos-15) swift test; a failed test, or a skipped one other than the
 #                               deliberate goldens-regeneration skip, stops the run here
-#   mac              (macos-15) build, sign, notarize, DMG, appcast   -> artifact "mac"
+#   mac              (macos-15) .github/workflows/mac-build.yml: build, sign, notarize, DMG,
+#                               appcast -> artifact "mac-dmg-appcast". preview.yml calls the
+#                               same file, without the appcast.
 #   windows          (windows)  .github/workflows/windows-build.yml with require-signing: true —
 #                               that file's own gate job proves all six Windows signing secrets
 #                               exist (a release is never unsigned) before test, then matrix
@@ -25,11 +27,11 @@
 # CHANGELOG section and stamps the packages; the artifacts are the only output).
 #
 # Required secrets. The Mac set belongs in the "signing" GitHub Environment (Settings ▸
-# Environments), which only the mac job names: with required reviewers and a deployment
-# policy of the master branch plus v* tags on that environment, no job GitHub has not shown
-# a human can read them. The Windows set stays a repository secret set: windows-build.yml's
-# own gate job checks for it before the signed packaging jobs start (the unsigned test job
-# runs in parallel), and a preview may be cut from any branch.
+# Environments), which only mac-build.yml's job names: with required reviewers and a
+# deployment branch policy on that environment, no job GitHub has not shown a human can read
+# them. The Windows set stays a repository secret set: windows-build.yml's own gate job checks
+# for it before the signed packaging jobs start (the unsigned test job runs in parallel), and a
+# preview may be cut from any branch.
 #   Mac (same names as the trailcache repo):
 #   APPLE_CERTIFICATE          base64-encoded Developer ID Application .p12
 #   APPLE_CERTIFICATE_PASSWORD password for the .p12
@@ -145,108 +147,29 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Same gate as mac-ci.yml (scripts/test-mac.sh): no test may skip or fail
+      # Same gate as mac-ci.yml and preview.yml (scripts/test-mac.sh): no test may skip or fail
       # before any signing or notarization minutes are spent.
       - name: Test
         run: ./scripts/test-mac.sh
 
   mac:
-    name: macOS build, sign, notarize
+    name: macOS
     needs: [prepare, mac-test]
-    runs-on: macos-15
-    # The Apple certificate and the Sparkle key are read here and nowhere else.
-    # Keep them as secrets of the "signing" GitHub Environment (with required
-    # reviewers and a v* tag policy) rather than as repository secrets: a job
-    # that does not name this environment then cannot read them at all, which
-    # is what stops a workflow file edited on some other branch from ever
-    # holding them. GitHub creates the environment unprotected on first use;
-    # the protection rules live in repository settings.
-    environment: signing
-    # Longest job on the slowest runner: `notarytool submit --wait` blocks on Apple's
-    # service twice (app, then DMG). 12-20 min is normal; 60 is a hang, not a queue.
-    timeout-minutes: 60
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Interpolated once here rather than inside run: blocks (injection hygiene).
-      TAG: ${{ needs.prepare.outputs.tag }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      # notes/notes.md is read directly by the appcast step below.
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: notes
-          path: notes
-
-      - name: Import signing certificate
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: ./scripts/mac/import-signing-cert.sh
-
-      - name: Build and sign
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/build.keychain-db"
-          # BUILD_NUMBER deliberately not set: build-app.sh derives it from
-          # the version (monotonic across releases — Sparkle's comparison
-          # key), where the old run-number scheme let a re-tagged older
-          # version outrank newer ones.
-          VERSION="${TAG#v}" \
-            UNIVERSAL=1 SIGNING_IDENTITY="$APPLE_SIGNING_IDENTITY" \
-            ./scripts/build-app.sh
-
-      - name: Notarize and staple the app
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          ./scripts/mac/notarize.sh "build/Connector Control.app"
-          spctl --assess --type execute --verbose=2 "build/Connector Control.app"
-
-      - name: Package and notarize DMG
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        run: |
-          VERSION="${TAG#v}"
-          ./scripts/make-dmg.sh "ConnectorControl_${VERSION}.dmg"
-          # Sign and notarize the DMG too, so Gatekeeper trusts the download
-          # end-to-end (hdiutil does not sign what it creates).
-          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" \
-            "ConnectorControl_${VERSION}.dmg"
-          ./scripts/mac/notarize.sh "ConnectorControl_${VERSION}.dmg"
-
-      - name: Generate Sparkle appcast
-        env:
-          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
-        run: |
-          VERSION="${TAG#v}"
-          # Must run AFTER stapling — the EdDSA signature covers the final DMG bytes.
-          ./scripts/mac/make-appcast.sh "$VERSION" "$TAG" notes/notes.md
-
-      # The publish job posts these; nothing is uploaded to GitHub from here.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: mac-dmg-appcast
-          path: |
-            ConnectorControl_*.dmg
-            appcast.xml
-          if-no-files-found: error
-          retention-days: 14
-
-      # The signing identity must not outlive the job, whether it passed or failed.
-      - name: Remove the signing keychain
-        if: always()
-        run: |
-          security delete-keychain "$RUNNER_TEMP/build.keychain-db" 2>/dev/null || true
-          rm -f "$RUNNER_TEMP/certificate.p12"
+    # build, sign, notarize, DMG, Sparkle appcast -> artifact mac-dmg-appcast: the same file
+    # preview.yml calls. Its one job names the "signing" environment, and its header lists the
+    # Mac secrets and says why they arrive by inherit rather than by name.
+    #
+    # Not yet proved end to end from here. A preview run proves mac-build.yml itself (preview-6
+    # is its first), but only this caller passes appcast-tag, so the notes download, the
+    # Sparkle appcast and the mac-dmg-appcast upload first run in the full release rehearsal
+    # from master that is owed before v1.4.0. The master gate above keeps a dispatch from any
+    # other branch from rehearsing it sooner, deliberately.
+    uses: ./.github/workflows/mac-build.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      appcast-tag: ${{ needs.prepare.outputs.tag }}
+      artifact: mac-dmg-appcast
+    secrets: inherit
 
   windows:
     name: Windows
@@ -261,9 +184,11 @@ jobs:
     with:
       version: ${{ needs.prepare.outputs.version }}
       require-signing: true
-    # Only the six Windows signing secrets, by name. `secrets: inherit` would
-    # also hand the called workflow the Apple certificate and the Sparkle key,
-    # which no Windows job has any use for.
+    # Only the six Windows signing secrets, by name. `secrets: inherit` would hand
+    # the called workflow every repository secret, where these six are all it uses.
+    # (The Apple ones are "signing" environment secrets, which no Windows job names;
+    # mac-build.yml takes inherit because an environment's secrets reach a called
+    # workflow no other way.)
     secrets:
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}

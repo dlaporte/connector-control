@@ -1,5 +1,6 @@
 namespace ConnectorControl.Core.Tests;
 
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/ToolNoteTests.swift</summary>
 public class ToolNoteTests
 {
     [Fact]

@@ -10,7 +10,11 @@ namespace ConnectorControl.Core;
 /// neither exists, or both are exactly as old as each other, we fall back to the real AppData
 /// (Roaming) path.
 /// </summary>
-public sealed record AppPaths(string ClaudeConfigPath, string StoreDir, string BackupsDir)
+/// <param name="CollectionsCachePath">
+/// The machine-local bindings cache. Like backups, it never follows a chosen (synced) store
+/// dir: the paths in it are true on this machine only.
+/// </param>
+public sealed record AppPaths(string ClaudeConfigPath, string StoreDir, string BackupsDir, string CollectionsCachePath)
 {
     /// <summary>
     /// A folder name, not a display string: it happens to match <see cref="Product.Name"/> today,
@@ -26,7 +30,15 @@ public sealed record AppPaths(string ClaudeConfigPath, string StoreDir, string B
     {
     }
 
+    public AppPaths(string claudeConfigPath, string storeDir, string backupsDir)
+        : this(claudeConfigPath, storeDir, backupsDir, Path.Combine(storeDir, CollectionsLocalCache.FileName))
+    {
+    }
+
     public string MasterStorePath => Path.Combine(StoreDir, "mcps.json");
+
+    /// <summary>The sidecar travels with the master list, so it sits beside it wherever that is.</summary>
+    public string CollectionsFilePath => Path.Combine(StoreDir, CollectionsFile.FileName);
 
     public static AppPaths Resolve(
         IReadOnlyDictionary<string, string> environment,
@@ -35,6 +47,9 @@ public sealed record AppPaths(string ClaudeConfigPath, string StoreDir, string B
         IPathProbe probe)
     {
         var defaultStore = Path.Combine(folders.LocalAppData, DataDirName);
+        // Computed from the default store dir, never an overridden one, so a store dir pointed
+        // at a synced folder still leaves the per-machine bindings here.
+        var collectionsCache = Path.Combine(defaultStore, CollectionsLocalCache.FileName);
 
         string claude;
         if (environment.TryGetValue(ClaudeConfigEnv, out var envClaude) && envClaude.Length > 0)
@@ -52,14 +67,15 @@ public sealed record AppPaths(string ClaudeConfigPath, string StoreDir, string B
 
         if (environment.TryGetValue(StoreDirEnv, out var envStore) && envStore.Length > 0)
         {
-            return new AppPaths(claude, envStore);                     // backups under it (dev sandbox)
+            // Backups under it (dev sandbox); the cache stays where it was computed.
+            return new AppPaths(claude, envStore, Path.Combine(envStore, "backups"), collectionsCache);
         }
         if (overrides.MasterStoreDir is { Length: > 0 } customStore)
         {
             // Backups never follow a custom (possibly synced) store dir.
-            return new AppPaths(claude, customStore, Path.Combine(defaultStore, "backups"));
+            return new AppPaths(claude, customStore, Path.Combine(defaultStore, "backups"), collectionsCache);
         }
-        return new AppPaths(claude, defaultStore);
+        return new AppPaths(claude, defaultStore, Path.Combine(defaultStore, "backups"), collectionsCache);
     }
 
     /// <summary>

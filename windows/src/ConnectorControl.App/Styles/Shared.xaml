@@ -7,6 +7,42 @@
   <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
   <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas, Courier New</FontFamily>
 
+  <!-- Collection marks, glyphs only: a chain for a synced collection, a lock on a read-only row,
+       a share arrow for a published one where a view needs it. Same code points in both Segoe fonts. -->
+  <system:String x:Key="ChainGlyph">&#xE71B;</system:String>
+  <system:String x:Key="LockGlyph">&#xE72E;</system:String>
+  <system:String x:Key="ShareGlyph">&#xE72D;</system:String>
+
+  <!-- The lock on a read-only row or field: the glyph, dimmed so it reads as a mark rather than as
+       a control. A private-use glyph reads as nothing, so every use gives it a sentence to say. -->
+  <Style x:Key="LockMark" TargetType="TextBlock">
+    <Setter Property="Text" Value="{StaticResource LockGlyph}" />
+    <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    <Setter Property="Opacity" Value="0.55" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- The chain beside a synced collection's name, wherever the name is shown. Like the lock, it
+       is given the sentence it stands for where it is used. -->
+  <Style x:Key="ChainMark" TargetType="TextBlock">
+    <Setter Property="Text" Value="{StaticResource ChainGlyph}" />
+    <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- The amber dot that says an update is waiting for review; the caution colour, so it reads as
+       "look here" without being an error. -->
+  <Style x:Key="PendingDot" TargetType="Ellipse">
+    <Setter Property="Width" Value="6" />
+    <Setter Property="Height" Value="6" />
+    <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
   <!-- Every window used its own local copy of this; one instance, shared app-wide. -->
   <BooleanToVisibilityConverter x:Key="Vis" />
 
@@ -166,6 +202,9 @@
     <Setter Property="MinWidth" Value="{DynamicResource TextControlThemeMinWidth}" />
     <Setter Property="VerticalContentAlignment" Value="Top" />
     <Setter Property="SelectionBrush" Value="{DynamicResource TextControlSelectionHighlightColor}" />
+    <!-- UI Automation does not read a watermark, so the Tag is also the field's name unless the
+         field sets one of its own: a box named only by its watermark is otherwise nameless. -->
+    <Setter Property="AutomationProperties.Name" Value="{Binding Tag, RelativeSource={RelativeSource Self}}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="TextBox">

@@ -29,6 +29,27 @@ public class DialogTests
     }
 
     [Fact]
+    public void AConfirmDialogCanMakeItsCancelButtonTheDefault()
+    {
+        WpfApp.Invoke(() =>
+        {
+            // The published-file question: Return and Escape both answer Keep, the accent goes with
+            // the default, and Delete keeps its red but answers only a click.
+            var dialog = new ConfirmDialog(CollectionsModel.DeletePublishedFileQuestion("team.json"), null,
+                CollectionsModel.DeleteFileButton, CollectionsModel.KeepFileButton, destructive: true, cancelIsDefault: true);
+            Assert.True(dialog.CancelButton.IsDefault);
+            Assert.True(dialog.CancelButton.IsCancel);
+            Assert.False(dialog.PrimaryButton.IsDefault);
+            Assert.Same(dialog.TryFindResource("DestructiveButton"), dialog.PrimaryButton.Style);
+            Assert.Same(dialog.TryFindResource("AccentButtonStyle"), dialog.CancelButton.Style);
+            // Every other question keeps Return on its primary.
+            var usual = new ConfirmDialog("Restart Claude Desktop now?", null, "Restart", "Cancel", destructive: false);
+            Assert.True(usual.PrimaryButton.IsDefault);
+            Assert.False(usual.CancelButton.IsDefault);
+        });
+    }
+
+    [Fact]
     public void ConfirmDialogWithoutInformativeTextOrCancelHidesThem()
     {
         WpfApp.Invoke(() =>
@@ -36,7 +57,10 @@ public class DialogTests
             var dialog = new ConfirmDialog("You're up to date.", null, "OK", null, destructive: false);
             Assert.Equal(Visibility.Collapsed, dialog.InformativeText.Visibility);
             Assert.Equal(Visibility.Collapsed, dialog.CancelButton.Visibility);
-            var destructive = new ConfirmDialog("Delete Profile “Work”?", "Its connector list is removed; backups keep prior states.", "Delete", "Cancel", destructive: true);
+            // Delete Collection's own question, informative and button, as CollectionsModel.Delete asks it.
+            var informative = string.Join(" ", CollectionsModel.DeleteConnectorsSentence(2), CollectionsModel.DeleteCopiesSentence,
+                CollectionsModel.DeleteCheckedInformative);
+            var destructive = new ConfirmDialog(AppState.DeleteCollectionMessage("Work"), informative, AppState.DeleteButton, "Cancel", destructive: true);
             Assert.Same(destructive.TryFindResource("DestructiveButton"), destructive.PrimaryButton.Style);
         });
     }
@@ -46,8 +70,8 @@ public class DialogTests
     {
         WpfApp.Invoke(() =>
         {
-            var dialog = new NamePromptDialog("Rename Profile", "Default");
-            Assert.Equal("Rename Profile", dialog.Title);
+            var dialog = new NamePromptDialog("Rename Collection", "Default");
+            Assert.Equal("Rename Collection", dialog.Title);
             Assert.Equal("Default", dialog.NameBox.Text);
             Assert.Null(dialog.Result);
         });
@@ -95,7 +119,7 @@ public class DialogTests
         using var state = h.Create();
         WpfApp.Invoke(() =>
         {
-            var model = new EditorModel(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle), h.Dialogs, EditorWindow.NewRemoteStyle);
+            var model = new EditorModel(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle, "Default"), h.Dialogs, EditorWindow.NewRemoteStyle);
             Assert.Equal("", model.BearerToken);
             var box = new PasswordBox();
             BindingOperations.SetBinding(box, PasswordBoxHelper.BoundPasswordProperty,
@@ -133,10 +157,10 @@ public class DialogTests
             Assert.Null(dialogs.ResolveOwner());   // nothing of ours is up: centred on screen, topmost
 
             // The flyout hides itself the moment something takes the focus, which is exactly what
-            // showing a modal does — so Quit / Restart Required / the profile prompts must never
+            // showing a modal does — so Quit / Restart Required / the collection prompts must never
             // be owned by it, however visible and active it is when they are raised.
             using var model = new FlyoutModel(state, h.Settings);
-            var flyout = new FlyoutWindow(model, new WindowRegistry(state, services, updates)) { TrayAnchor = () => null };
+            var flyout = new FlyoutWindow(model, new WindowRegistry(state, services, updates, h.Dialogs)) { TrayAnchor = () => null };
             flyout.Show();
             flyout.Activate();
             Assert.True(flyout.IsVisible);
@@ -145,7 +169,7 @@ public class DialogTests
             var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = FlyoutWindow.OffScreen, Top = FlyoutWindow.OffScreen };
             window.Show();
             window.Activate();
-            // Settings ▸ Check for Updates… reaches the coordinator's ownerless WpfDialogs;
+            // Settings ▸ Check for Updates reaches the coordinator's ownerless WpfDialogs;
             // the dialog must still centre on Settings rather than on the screen.
             Assert.Same(window, dialogs.ResolveOwner());
             window.Close();

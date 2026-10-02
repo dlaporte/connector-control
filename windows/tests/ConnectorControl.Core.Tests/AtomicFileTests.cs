@@ -4,6 +4,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
 
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/AtomicFileTests.swift</summary>
 public class AtomicFileTests : IDisposable
 {
     private readonly TempDir dir = new("atomic");

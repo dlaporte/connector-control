@@ -1,6 +1,7 @@
 import XCTest
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/ToolNoteTests.cs
 final class ToolNoteTests: XCTestCase {
     func testMissingToolNoteCarriesTheInstallLinkAndCommand() {
         let note = ToolNote.make(tool: .npx, status: .notFound)

@@ -28,17 +28,50 @@ public sealed class ConfigService
     /// servers act as the baseline, so every reconciliation rule resolves
     /// store-wins — used when adopting a pre-existing (e.g. synced) store that
     /// must not be overwritten by this machine's state.
+    ///
+    /// <paramref name="lastAppliedCollection"/> is the collection Claude's file was last written from
+    /// on this machine, and <paramref name="lastAppliedNames"/> the connector names that apply wrote.
+    /// Once the active collection has changed elsewhere, the names that collection renders are left
+    /// where they are rather than poured into the active one; everything else the file holds is
+    /// still taken in (<see cref="Ingestible"/>). The caller then applies the active collection over
+    /// the file.
+    ///
+    /// What is taken in lands where <see cref="IngestTarget"/> says, and <c>IngestedElsewhere</c> names it
+    /// when that is not the active collection. <paramref name="collections"/> is the sidecar the caller
+    /// read for this load, or the one it already holds when this read failed: the reroute and the
+    /// sidecar the caller reconciles then come from one file.
+    ///
+    /// A master list that cannot be read is moved aside and replaced by the newest <c>mcps</c> backup
+    /// that decodes (<see cref="NewestReadableStoreBackup"/>), so every collection it held survives; only
+    /// when none does is it rebuilt from Claude's config alone. Either way the note says which.
     /// </remarks>
     public LoadResult LoadAndReconcile(
+        CollectionsFile? collections,
         IReadOnlyDictionary<string, JsonValue>? baseline = null,
-        bool storeAuthoritative = false)
+        bool storeAuthoritative = false,
+        string? lastAppliedCollection = null,
+        IReadOnlySet<string>? lastAppliedNames = null)
     {
         var notes = new List<string>();
         var (store, corruptPath) = MasterStoreIO.Load(Paths.MasterStorePath);
+        // A store restored from a backup is a real one again: the record of the last apply means
+        // what it says about it, where an empty rebuild has nothing to compare the record with.
+        var rebuilt = corruptPath is not null;
         if (corruptPath is not null)
         {
-            notes.Add("The MCP list file was unreadable; it was preserved as "
-                + $"{Path.GetFileName(corruptPath)} and rebuilt from Claude's config.");
+            if (NewestReadableStoreBackup() is ({ } restored, { } backup))
+            {
+                store = restored;
+                rebuilt = false;
+                var taken = BackupManager.TakenAt(backup) is { } at ? IsoTimestamp.LocalDateTime(at) : Path.GetFileName(backup);
+                notes.Add("The MCP list file was unreadable; it was preserved as "
+                    + $"{Path.GetFileName(corruptPath)} and restored from the backup of {taken}.");
+            }
+            else
+            {
+                notes.Add("The MCP list file was unreadable; it was preserved as "
+                    + $"{Path.GetFileName(corruptPath)} and rebuilt from Claude’s config.");
+            }
         }
         IReadOnlyDictionary<string, JsonValue> servers;
         try
@@ -47,14 +80,22 @@ public sealed class ConfigService
         }
         catch (ClaudeConfigException)
         {
-            notes.Add("Claude's config file is not valid JSON. Your MCP list is safe; "
-                + "use Backups ▸ Restore… to repair the file.");
+            // Nothing below runs to save it, and the unreadable file has already been moved aside: a
+            // restored store is written now, or the next load would find no master list at all.
+            if (corruptPath is not null && !rebuilt)
+            {
+                SaveStore(store);
+            }
+            notes.Add("Claude’s config file is not valid JSON. Your MCP list is safe; "
+                + "use Backups ▸ Restore to repair the file.");
             return new LoadResult(store, notes, null);
         }
         // A corrupt store is rebuilt with fresh-launch (null-baseline) import
         // semantics: reconciling the empty replacement against a baseline would
         // classify every server as a pending removal, rebuild an empty list,
-        // and set up the next apply to wipe Claude's config.
+        // and set up the next apply to wipe Claude's config. A store restored
+        // from a backup gets the same: the backup predates the last save, and
+        // a connector added since is in Claude's file and nowhere else.
         IReadOnlyDictionary<string, JsonValue>? effectiveBaseline;
         if (corruptPath is not null)
         {
@@ -76,12 +117,116 @@ public sealed class ConfigService
         {
             effectiveBaseline = baseline;
         }
-        var outcome = Reconciler.Reconcile(store, servers, effectiveBaseline);
+        var target = IngestTarget(store, collections, lastAppliedCollection);
+        var outcome = Reconciler.Reconcile(
+            store, Ingestible(servers, lastAppliedCollection, lastAppliedNames, rebuilt, store),
+            effectiveBaseline, target);
         if (outcome.StoreChanged || corruptPath is not null)
         {
             SaveStore(outcome.Store);
         }
-        return new LoadResult(outcome.Store, notes, servers);
+        var elsewhere = target == outcome.Store.ActiveCollection || outcome.Ingested.Count == 0
+            ? null : new IngestedElsewhere(target, outcome.Ingested);
+        return new LoadResult(outcome.Store, notes, servers, elsewhere);
+    }
+
+    /// <summary>
+    /// The collection a load takes Claude's new connectors into: the active one, unless it is
+    /// subscribed. A subscribed collection holds what its author published and nothing more — a
+    /// connector taken into it could be neither edited nor deleted, and the next Apply would delete
+    /// it from Claude. It goes into a local collection instead: the one Claude's file was last
+    /// applied from when that is local, else the first local one by name, else a new, empty
+    /// "Default" (under a free name, should a subscribed collection bear that one), which the
+    /// reconcile creates as the first addition lands in it and which does not become active.
+    /// <para>
+    /// <paramref name="collections"/> is null when the sidecar cannot be read, and then nothing says which
+    /// collections are subscribed: the active collection takes the additions, as it always has.
+    /// </para>
+    /// </summary>
+    internal static string IngestTarget(MasterStore store, CollectionsFile? collections, string? lastApplied)
+    {
+        if (collections is null || collections.KindOf(store.ActiveCollection) != CollectionKind.Synced)
+        {
+            return store.ActiveCollection;
+        }
+        if (lastApplied is not null && store.Collections.ContainsKey(lastApplied)
+            && collections.KindOf(lastApplied) == CollectionKind.Local)
+        {
+            return lastApplied;
+        }
+        if (store.Collections.Keys.Where(k => collections.KindOf(k) == CollectionKind.Local)
+            .Order(StringComparer.Ordinal).FirstOrDefault() is { } first)
+        {
+            return first;
+        }
+        var name = MasterStore.DefaultCollectionName;
+        var suffix = 2;
+        while (store.Collections.ContainsKey(name))
+        {
+            name = $"{MasterStore.DefaultCollectionName} {suffix}";
+            suffix++;
+        }
+        return name;
+    }
+
+    /// <summary>
+    /// What a load may take out of Claude's file and into the active collection.
+    /// <para>
+    /// All of it while the record of the last apply is the active collection, is missing — a first
+    /// launch — or the store was corrupt and is being rebuilt from the file. Otherwise the file holds
+    /// another collection's connectors, and the names that collection renders are left alone:
+    /// pouring them into the active collection is what the record is for. Everything else is
+    /// genuinely new — an installer's connector, a hand edit — and belongs to the collection the app
+    /// is about to apply, whichever that is.
+    /// </para>
+    /// <para>
+    /// A record naming a collection the store no longer has — deleted here, or on another machine,
+    /// which is how a collection disappears from a store that syncs — has no render to compare
+    /// against. The names the last apply wrote are that render, so those are left alone and
+    /// everything else comes in: a connector an installer or a hand edit added survives, and a
+    /// deleted collection's own connectors are not poured into the active one. Without those names —
+    /// a cache written before they were kept — nothing here tells the two apart, and nothing is taken
+    /// in rather than all of it.
+    /// </para>
+    /// </summary>
+    internal static IReadOnlyDictionary<string, JsonValue> Ingestible(
+        IReadOnlyDictionary<string, JsonValue> servers, string? lastApplied, IReadOnlySet<string>? lastAppliedNames,
+        bool corrupt, MasterStore store)
+    {
+        if (corrupt || lastApplied is null || string.Equals(lastApplied, store.ActiveCollection, StringComparison.Ordinal))
+        {
+            return servers;
+        }
+        if (!store.Collections.TryGetValue(lastApplied, out var collection))
+        {
+            // Nothing here says what that collection rendered, so nothing in the file can be told
+            // from it: taking it all in would pour a deleted collection's connectors, marked paths
+            // and all, into the active one. Taking none is the safe half of that trade, and costs
+            // only a hand-added connector, in the one state that reaches it — a cache from a build
+            // that recorded the collection without the names.
+            return lastAppliedNames is null
+                ? new Dictionary<string, JsonValue>(StringComparer.Ordinal)
+                : servers.Where(p => !lastAppliedNames.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        }
+        var rendered = collection.Mcps.Where(p => p.Value.Enabled).Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
+        return servers.Where(p => !rendered.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// The newest <c>mcps</c> backup that decodes, with the file it came from, or null when none does.
+    /// Newest first by stamp and then by counter (<see cref="BackupManager.Backups"/>), so of two
+    /// taken in one millisecond the later is tried first.
+    /// </summary>
+    internal (MasterStore Store, string Backup)? NewestReadableStoreBackup()
+    {
+        foreach (var backup in Backups.Backups("mcps"))
+        {
+            if (MasterStoreIO.Read(backup) is { } store)
+            {
+                return (store, backup);
+            }
+        }
+        return null;
     }
 
     /// <summary>Backup mcps.json (if present), then atomically save the store. Reports whether the file is owner-only.</summary>
@@ -91,12 +236,43 @@ public sealed class ConfigService
         return MasterStoreIO.Save(store, Paths.MasterStorePath);
     }
 
-    /// <summary>Snapshot original (first run), backup Claude's config, then write the enabled subset into it.</summary>
-    public void Apply(MasterStore store)
+    /// <summary>Snapshot original (first run), backup Claude's config, then write the given servers into it.</summary>
+    /// <param name="backedUpFrom">
+    /// The collection the file being backed up was last applied from, recorded against the backup
+    /// (<see cref="BackupCollections"/>) so a restore of it goes back into that collection. A failed
+    /// record never fails the apply: the backup then restores as an unrecorded one.
+    /// </param>
+    public void Apply(IReadOnlyDictionary<string, JsonValue> servers, string? backedUpFrom = null)
     {
         Backups.EnsureOriginalSnapshot(Paths.ClaudeConfigPath);
-        Backups.BackUp(Paths.ClaudeConfigPath, "claude_desktop_config");
-        ClaudeConfigIO.Write(store.EnabledServers, Paths.ClaudeConfigPath);
+        RecordBackup(Backups.BackUp(Paths.ClaudeConfigPath, "claude_desktop_config"), backedUpFrom);
+        ClaudeConfigIO.Write(servers, Paths.ClaudeConfigPath);
+    }
+
+    private void RecordBackup(string? backup, string? collection)
+    {
+        if (backup is null || collection is null)
+        {
+            return;
+        }
+        try
+        {
+            BackupCollections.Record(collection, backup, Paths.BackupsDir);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Best effort, as the summary says: the backup itself is already written.
+        }
+    }
+
+    /// <summary>The sidecar beside the master list; a missing file loads as empty, and one that exists but cannot be read loads as null (see <see cref="CollectionsFile.LoadIfReadable"/>), so the caller can tell a file with no entries from one it must not save over.</summary>
+    public CollectionsFile? LoadCollections() => CollectionsFile.LoadIfReadable(Paths.CollectionsFilePath);
+
+    /// <summary>Backup the existing sidecar (skipped when it doesn't exist yet), then atomically save the new one.</summary>
+    public AtomicWriteResult SaveCollections(CollectionsFile file)
+    {
+        Backups.BackUp(Paths.CollectionsFilePath, "collections");
+        return file.Save(Paths.CollectionsFilePath);
     }
 
     /// <summary>
@@ -104,7 +280,23 @@ public sealed class ConfigService
     /// snapshot into the store. The backup is validated BEFORE the live file is
     /// touched. Returns the restored file's servers (the caller's new baseline).
     /// </summary>
-    public IReadOnlyDictionary<string, JsonValue> RestoreClaudeConfig(string backupPath, MasterStore store)
+    /// <param name="publishFolder">
+    /// The folder <c>${COLLECTION_DIR}</c> stands for in the active collection on this machine — the
+    /// folder it publishes into, or a synced collection's document folder; a connector whose store
+    /// copy renders exactly as the snapshot keeps the store copy (<see cref="Reconciler.AdoptSnapshot"/>).
+    /// </param>
+    /// <param name="backedUpFrom">As <see cref="Apply(IReadOnlyDictionary{string,JsonValue},string?)"/> takes it: records the file this restore overwrites.</param>
+    /// <param name="activating">
+    /// The snapshot is adopted into <paramref name="store"/>'s active collection; the caller makes that
+    /// the collection the backup was taken from, and says so here when that is not the collection the
+    /// saved store has active.
+    /// </param>
+    /// <param name="earlierFolders">The folders it published into before, which <see cref="Reconciler.AdoptSnapshot"/> counts the same way.</param>
+    public IReadOnlyDictionary<string, JsonValue> RestoreClaudeConfig(string backupPath, MasterStore store,
+                                                                     string? publishFolder = null,
+                                                                     IReadOnlyList<string>? earlierFolders = null,
+                                                                     string? backedUpFrom = null,
+                                                                     bool activating = false)
     {
         var data = File.ReadAllBytes(backupPath);
         var name = Path.GetFileName(backupPath);
@@ -122,15 +314,18 @@ public sealed class ConfigService
         {
             throw new ClaudeConfigException($"backup {name} has an invalid mcpServers section");
         }
-        Backups.BackUp(Paths.ClaudeConfigPath, "claude_desktop_config");
+        RecordBackup(Backups.BackUp(Paths.ClaudeConfigPath, "claude_desktop_config"), backedUpFrom);
         AtomicFile.Write(data, Paths.ClaudeConfigPath);
         // The bytes just written are what was already parsed above — reading the servers back off
         // the disk file would just reparse the same bytes a second time.
         IReadOnlyDictionary<string, JsonValue> servers = rawServers is null
             ? new Dictionary<string, JsonValue>(StringComparer.Ordinal)
             : rawServers.ObjectProperties;
-        var outcome = Reconciler.AdoptSnapshot(store, servers);
-        if (outcome.StoreChanged)
+        var outcome = Reconciler.AdoptSnapshot(store, servers, publishFolder, earlierFolders);
+        // A backup restored into a collection other than the active one makes that collection
+        // active, so Claude's file and the store agree on where its connectors live — even when the
+        // adoption itself changed nothing.
+        if (outcome.StoreChanged || activating)
         {
             SaveStore(outcome.Store);
         }

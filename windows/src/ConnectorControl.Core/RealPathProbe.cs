@@ -8,6 +8,8 @@ public sealed class RealPathProbe : IPathProbe
 
     public DateTime? LastWriteTimeUtc(string path) => File.Exists(path) ? File.GetLastWriteTimeUtc(path) : null;
 
+    public DateTime CreationTimeUtc(string path) => Directory.GetCreationTimeUtc(path);
+
     public IEnumerable<string> EnumerateDirectories(string path)
     {
         if (!Directory.Exists(path))

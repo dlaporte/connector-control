@@ -1,6 +1,7 @@
 import XCTest
 @testable import ConnectorControlState
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/PathContextTests.cs
 final class PathContextTests: XCTestCase {
     func testLiveReadsTheProcessEnvironmentAndApplicationSupport() {
         setenv("CONNECTOR_CONTROL_PLAN_PROBE", "yes", 1)

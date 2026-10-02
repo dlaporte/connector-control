@@ -3,25 +3,29 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/EditorModelViewSwitchTests.swift</summary>
 public class EditorModelViewSwitchTests
 {
     private const string Url = "https://scoutbook.example.com/mcp";
 
+    // These two set and read View alone: WPF binds that property directly and its setter is the
+    // request. The Mac mirrors also assert viewSelection, the separate binding its segmented
+    // Picker needs.
     [Fact]
-    public void SettingIsJsonViewSwitchesToJsonAndClearsIsFormView()
+    public void SelectingJsonSwitchesToJson()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         Assert.Equal(EditView.Form, editor.View);
         editor.View = EditView.Json;
         Assert.Equal(EditView.Json, editor.View);
     }
 
     [Fact]
-    public void SettingIsFormViewFromValidJsonSwitchesBack()
+    public void SelectingFormFromValidJsonSwitchesBack()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         editor.RequestView(EditView.Json);
         editor.JsonText = "{\"command\": \"node\", \"args\": [\"y.js\"]}";
         editor.View = EditView.Form;
@@ -31,12 +35,11 @@ public class EditorModelViewSwitchTests
 
     /// <summary>An unparseable JSON text refuses the switch and snaps the segmented control back
     /// via PropertyChanged for View, without ever reaching the loss-warning dialog.</summary>
-
     [Fact]
-    public void SettingIsFormViewWithUnrecoverableJsonIsRefusedAndSnapsBack()
+    public void SelectingFormWithUnrecoverableJsonIsRefusedAndSnapsBack()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         editor.RequestView(EditView.Json);
         editor.JsonText = "{\"command\": ";
         var raised = new List<string?>();
@@ -48,19 +51,18 @@ public class EditorModelViewSwitchTests
         Assert.Empty(rig.H.Dialogs.Confirms);
     }
 
-    /// <summary>Save() with unrecoverable JSON returns false and writes nothing.</summary>
-
     [Fact]
     public void FormToJsonSyncsTheTextAndJsonToFormAdoptsIt()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         editor.RemoteUrl = Url;
         editor.RequestView(EditView.Json);
         Assert.Equal(EditView.Json, editor.View);
         Assert.Equal("{\n  \"args\" : [\n    \"/c\",\n    \"npx\",\n    \"-y\",\n    \"mcp-remote\",\n    \"" + Url + "\"\n  ],\n  \"command\" : \"cmd\"\n}", editor.JsonText);
         Assert.Null(editor.JsonError);
-        Assert.Equal(EditorModel.JsonTip, editor.JsonStatusText);
+        // No error, so the pane offers the paste tip.
+        Assert.True(editor.ShowJsonTip);
 
         editor.JsonText = "{\"command\": \"node\", \"args\": [\"x.js\"], \"env\": {\"K\": \"v\"}}";
         editor.RequestView(EditView.Form);
@@ -75,20 +77,20 @@ public class EditorModelViewSwitchTests
     public void FormToJsonIsBlockedByEnvValidation()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         editor.AddEnvRow();
         editor.EnvRows[0].Value = "orphan";
         editor.RequestView(EditView.Json);
         Assert.Equal(EditView.Form, editor.View);
         Assert.Equal("An environment variable value is missing its name.", editor.ValidationError);
-        Assert.Equal(EditView.Form, editor.View);
+        Assert.Equal(["orphan"], editor.EnvRows.Select(r => r.Value).ToArray());   // left as typed, for the user to name
     }
 
     [Fact]
     public void JsonToFormWithLossPromptsAndStaysUnlessForced()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         editor.RequestView(EditView.Json);
         editor.JsonText = "{\"command\": 1, \"args\": [\"a\", 2], \"env\": {\"K\": true}}";
         rig.H.Dialogs.NextConfirm = false;
@@ -102,6 +104,7 @@ public class EditorModelViewSwitchTests
 
         rig.H.Dialogs.NextConfirm = true;
         editor.RequestView(EditView.Form);
+        Assert.Equal(2, rig.H.Dialogs.Confirms.Count);   // the second attempt asks again
         Assert.Equal(EditView.Form, editor.View);
         Assert.Equal("", editor.Command);
         Assert.Equal(["a"], editor.Args.Select(a => a.Value).ToArray());
@@ -114,7 +117,7 @@ public class EditorModelViewSwitchTests
     public void TogglingTheTypeTwiceKeepsATypedLocalCommand()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         editor.IsRemote = false;
         editor.Command = "node";
         editor.Args.Clear();
@@ -136,7 +139,7 @@ public class EditorModelViewSwitchTests
     public void ATemplateEditedInJsonKeepsItsCommandOnSwitchToLocal()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         editor.RequestView(EditView.Json);
         editor.JsonText = "{\"command\":\"node\",\"args\":[\"server.js\"]}";
         editor.RequestView(EditView.Form);
@@ -154,7 +157,7 @@ public class EditorModelViewSwitchTests
     public void AnUnchangedJsonRoundTripStillDiscardsTheTemplateOnSwitchToLocal()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         editor.RequestView(EditView.Json);
         editor.RequestView(EditView.Form);
         Assert.Equal(EditView.Form, editor.View);
@@ -167,11 +170,12 @@ public class EditorModelViewSwitchTests
     public void JsonValidationErrorDisablesSave()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.New(rig.Local("node", ["x.js"])));
+        var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         editor.RequestView(EditView.Json);
         editor.JsonText = "{\"command\": ";
         Assert.Equal("Not valid JSON — check for a stray brace, missing comma, or unquoted value.", editor.JsonError);
-        Assert.Equal(editor.JsonError, editor.JsonStatusText);
+        // The error takes the tip's place.
+        Assert.False(editor.ShowJsonTip);
         Assert.True(editor.HasJsonError);
         Assert.False(editor.CanSave);
         editor.JsonText = "{\"command\": \"node\"}";
@@ -179,11 +183,13 @@ public class EditorModelViewSwitchTests
         Assert.True(editor.CanSave);
     }
 
+    /// <summary>Adopting a config with a different auth kind must clear the previous kind's
+    /// fields — otherwise a bearer token typed earlier stays readable behind Header auth.</summary>
     [Fact]
     public void AdoptingAHeaderConfigClearsTheOldBearerToken()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         editor.RemoteUrl = Url;
         editor.AuthKindIndex = EditorRig.AuthKindIndexOf(RemoteAuthKind.Bearer);
         editor.BearerToken = "tok";

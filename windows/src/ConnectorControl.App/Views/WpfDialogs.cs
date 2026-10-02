@@ -4,9 +4,12 @@ using ConnectorControl.Core.State;
 namespace ConnectorControl.App.Views;
 
 /// <summary>
-/// IDialogs on WPF. Owned by a window (editor, settings, restore) the dialogs
-/// center on it; tray-initiated dialogs have no owner and are centered on
-/// screen and forced to the front, like the Mac's NSApp.activate before NSAlert.
+/// IDialogs on WPF. Given a window — the editor's, whose dialogs center on it — or given none,
+/// which is App's instance, shared by AppState, the update coordinator and the Collections window's
+/// model: that one centers on whichever of our windows is active, and with none of ours up it
+/// centers on screen and is forced to the front, like the Mac's NSApp.activate before NSAlert.
+/// <see cref="Present"/> is also how every dialog here is shown, Settings' Restore and the
+/// Collections window's five among them.
 /// </summary>
 public sealed class WpfDialogs : IDialogs
 {
@@ -20,17 +23,18 @@ public sealed class WpfDialogs : IDialogs
     /// <summary>
     /// The window to centre on: the one that asked, or — for the tray-initiated
     /// instance that passes none — whichever of our windows is active, so
-    /// Settings ▸ Check for Updates… centres on Settings and not on the screen.
+    /// Settings ▸ Check for Updates centres on Settings and not on the screen.
     /// Null means there is nothing of ours on screen: centre and force to front.
     /// Never the flyout: it hides itself on Deactivated, which is exactly what
-    /// showing a modal over it does, so Quit / Restart Required / the profile
+    /// showing a modal over it does, so Quit / Restart Required / the collection
     /// prompts would end up owned by a hidden window instead.
     /// </summary>
     internal Window? ResolveOwner() =>
         owner() ?? Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsVisible && w.IsActive && w is not FlyoutWindow);
 
-    public bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle, bool destructive) =>
-        ConfirmDialog.Show(ResolveOwner(), message, informativeText, primaryTitle, cancelTitle, destructive);
+    public bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle, bool destructive,
+                        bool cancelIsDefault) =>
+        ConfirmDialog.Show(ResolveOwner(), message, informativeText, primaryTitle, cancelTitle, destructive, cancelIsDefault);
 
     public string? PromptForName(string title, string initial) => NamePromptDialog.Show(ResolveOwner(), title, initial);
 

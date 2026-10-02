@@ -8,11 +8,12 @@ using JsonTextValue = System.Text.Json.Nodes.JsonValue;
 namespace ConnectorControl.Core.Tests.State;
 
 /// <summary>
+/// Mirror: Tests/ConnectorControlStateTests/StringCatalogTests.swift
+///
 /// Guards every user-facing string this app and the Mac app are meant to carry
 /// byte-for-byte, against the shared fixture both suites read:
-/// Tests/Fixtures/strings.json. Tests/ConnectorControlStateTests/StringCatalogTests.swift
-/// is this test's mirror; a wording change on either side that the other side
-/// does not also make fails exactly one of the two suites.
+/// Tests/Fixtures/strings.json. A wording change on either side that the other
+/// side does not also make fails exactly one of the two suites.
 /// </summary>
 public class StringCatalogTests
 {
@@ -73,31 +74,89 @@ public class StringCatalogTests
     /// </summary>
     private static readonly Dictionary<string, string[]> ArgsByKey = new(StringComparer.Ordinal)
     {
-        ["AppState.deleteProfileMessage"] = ["X"],
+        ["AppState.collectionLocateBanner"] = ["X"],
+        ["AppState.collectionPublishFailedBanner"] = ["X", "Y", "Z"],
+        ["AppState.collectionUpdateBanner"] = ["X", "Y"],
+        ["AppState.collectionUpdateNotificationBody"] = ["X", "Y"],
+        ["AppState.deleteCollectionMessage"] = ["X"],
         ["AppState.duplicateNameError"] = ["X"],
         ["AppState.enabledSubtitle"] = ["3", "7"],
+        ["AppState.ingestedElsewhereSentence"] = ["X", "Y", "Z"],
+        ["AppState.keptPathCarriedError"] = ["X", "Y"],
         ["AppState.malformedConfigMessage"] = ["X"],
+        ["AppState.needsValueCaution"] = ["X"],
+        ["AppState.newCredentialError"] = ["X"],
+        ["AppState.pathMarkMovedError"] = ["X"],
+        ["AppState.publishFolderCarriedError"] = ["X", "Y"],
+        ["AppState.publishSlugTakenError"] = ["X"],
+        ["AppState.restoreCollectionGoneError"] = ["X"],
+        ["AppState.restoreSubscribedError"] = ["X"],
+        ["AppState.sourceUnreadableError"] = ["X", "Y"],
+        ["AppState.unreviewedConnectorError"] = ["X"],
         ["ClaudeProcess.notAClaudePackageError"] = ["X"],
         ["ClaudePublisher.subjectNoOrganizationError"] = ["X", "Y"],
         ["ClaudeSignature.notFoundMessage"] = ["X"],
+        ["CollectionsModel.connectorTally.many"] = ["3"],
+        ["CollectionsModel.connectorTally.one"] = ["1"],
+        ["CollectionsModel.deleteCheckedMessage.many"] = ["3"],
+        ["CollectionsModel.deleteCheckedMessage.one"] = ["X"],
+        ["CollectionsModel.deleteConnectorsSentence.many"] = ["3"],
+        ["CollectionsModel.deleteConnectorsSentence.one"] = ["1"],
+        ["CollectionsModel.deleteNextActiveSentence"] = ["X"],
+        ["CollectionsModel.deletePublishedFileQuestion"] = ["X"],
+        ["CollectionsModel.editLabel"] = ["X"],
+        ["CollectionsModel.selectedCount"] = ["3"],
+        ["CollectionsModel.stopSyncingMessage"] = ["X"],
         ["ConfigService.corruptStoreNote"] = ["X"],
+        ["ConfigService.corruptStoreRestoredNote"] = ["X", "Y"],
         ["ConfigService.invalidBackupError"] = ["X", "Y"],
         ["ConfigService.invalidBackupMcpServersError"] = ["X"],
-        ["ConnectorRow.editTooltip"] = ["X"],
+        ["CopyModel.title"] = ["X"],
         ["EditTarget.editTitle"] = ["X"],
         ["EditorModel.additionalTitle"] = ["3", "a, b"],
+        // Called with the row's index, 2: the text counts from one.
+        ["EditorModel.argumentLabel"] = ["3"],
+        ["EditorModel.argumentNumber"] = ["3"],
         ["EditorModel.changedOutsideMessage"] = ["X"],
         ["EditorModel.cmdUnsafeError"] = ["X"],
+        ["EditorModel.deletedOutsideMessage"] = ["X"],
         ["EditorModel.duplicateEnvError"] = ["X"],
-        ["EditorModel.removeMessage"] = ["X"],
-        ["EditorModel.removedOutsideMessage"] = ["X"],
+        ["EditorModel.importedNote"] = ["X", "Y"],
+        ["EditorModel.lockedFieldsNote"] = ["X"],
+        ["EditorModel.propagateLabel"] = ["X", "Y"],
+        ["EditorModel.propagateLabelMany"] = ["X", "Y"],
+        ["EditorModel.publishedNote"] = ["X"],
+        ["FieldName.argument"] = ["1"],
+        ["FieldName.document"] = ["X"],
+        ["FieldName.envValue"] = ["X"],
+        ["FieldName.hint"] = ["X"],
         ["FlyoutModel.settingsNotSavedCaution"] = ["X"],
-        ["MasterStore.duplicateProfileNameError"] = ["X"],
-        ["MasterStore.unknownProfileError"] = ["X"],
-        ["PopoverModel.deleteProfileTitle"] = ["X"],
-        ["PopoverModel.profileChipText"] = ["X"],
-        ["PopoverModel.renameProfileTitle"] = ["X"],
+        ["ImportModel.addModeTitle"] = ["X"],
+        ["ImportModel.collisionPickerLabel"] = ["X"],
+        ["ImportModel.importButton"] = ["3"],
+        ["ImportModel.includeLabel"] = ["X"],
+        ["ImportModel.skippedBadge"] = ["X"],
+        ["ImportModel.sourceLine"] = ["X", "Y", "3"],
+        ["MasterStore.duplicateCollectionNameError"] = ["X"],
+        ["MasterStore.unknownCollectionError"] = ["X"],
+        ["PopoverModel.emptyText"] = ["X"],
+        ["PopoverModel.locateButton"] = ["X"],
+        ["PopoverModel.sourceTooltipFormat"] = ["X"],
+        ["PublishModel.exportTitle"] = ["X"],
+        ["PublishModel.folderLine"] = ["X"],
+        ["PublishModel.footerLine"] = ["X", "Y"],
+        ["PublishModel.keptPathNote"] = ["X", "Y"],
+        ["PublishModel.otherFolderNote"] = ["X", "Y", "Z"],
+        ["PublishModel.publishFolderEditNote"] = ["X", "Y"],
+        ["PublishModel.publishFolderNote"] = ["X", "Y"],
+        ["PublishModel.title"] = ["X"],
+        ["PublishModel.unresolvedMarkNote"] = ["X", "Y"],
+        ["PublishModel.warningLine"] = ["X", "Y"],
+        // The parameter here is a RemoteField, not free text, so the fixed argument is the
+        // label one of them renders as rather than the usual "X".
+        ["RemotePattern.cmdUnsafeReason"] = ["Server URL"],
         ["RestoreModel.confirmMessage"] = ["X"],
+        ["ReviewModel.title"] = ["X"],
         ["SettingsModel.keepCountLabel"] = ["3"],
         ["SettingsModel.loginItemFailureNote"] = ["X"],
         ["SettingsModel.versionText"] = ["X"],
@@ -112,36 +171,58 @@ public class StringCatalogTests
         var root = JsonNode.Parse(json)!.AsObject();
 
         var actual = new Dictionary<string, string>(StringComparer.Ordinal);
-        using var harness = new AppStateHarness(seedClaudeConfig: false);
-        using var state = harness.Create();
 
         // MARK: AppState
 
+        actual["AppState.authoredElsewhereCaution"] = AppState.AuthoredElsewhereCaution;
         actual["AppState.chooseClaude"] = ClaudePublisher.ChooseClaude;
         actual["AppState.claudeConfigChangedBody"] = AppState.ClaudeConfigChangedBody;
         actual["AppState.claudeConfigRegeneratedBody"] = AppState.ClaudeConfigRegeneratedBody;
+        actual["AppState.collectionDirCmdUnsafeCaution"] = AppState.CollectionDirCmdUnsafeCaution;
+        actual["AppState.collectionLocateBanner"] = AppState.CollectionLocateBanner("X");
+        actual["AppState.collectionPublishFailedBanner"] = AppState.CollectionPublishFailedBanner("X", "Y", "Z");
+        actual["AppState.collectionUpdateBanner"] = AppState.CollectionUpdateBanner("X", "Y");
+        actual["AppState.collectionUpdateNotificationBody"] = AppState.CollectionUpdateNotificationBody("X", "Y");
+        actual["AppState.collectionsNotSavedNote"] = AppState.CollectionsNotSavedNote;
         actual["AppState.connectorListChangedBody.noRestart"] =
             AppState.ConnectorListChangedBody(new ServerDelta([], [], []), restartRequired: false);
         actual["AppState.connectorListChangedBody.restart"] =
             AppState.ConnectorListChangedBody(new ServerDelta([], [], []), restartRequired: true);
         actual["AppState.deleteButton"] = AppState.DeleteButton;
-        actual["AppState.deleteProfileInformative"] = AppState.DeleteProfileInformative;
-        actual["AppState.deleteProfileMessage"] = AppState.DeleteProfileMessage("X");
+        actual["AppState.deleteCollectionMessage"] = AppState.DeleteCollectionMessage("X");
         actual["AppState.duplicateNameError"] = AppState.DuplicateNameError("X");
         actual["AppState.enabledSubtitle"] = AppState.EnabledSubtitle(3, 7);
+        actual["AppState.ingestedElsewhereSentence"] = AppState.IngestedElsewhereSentence("X", "Y", "Z");
+        actual["AppState.lastLocalCollectionError"] = AppState.LastLocalCollectionError;
+        actual["AppState.locateCaution"] = AppState.LocateCaution;
         actual["AppState.malformedConfigMessage"] = AppState.MalformedConfigMessage("X");
         actual["AppState.nameEmptyError"] = AppState.NameEmptyError;
-        actual["AppState.newProfileTitle"] = AppState.NewProfileTitle;
+        actual["AppState.needsValueCaution"] = AppState.NeedsValueCaution("X");
+        actual["AppState.newCollectionTitle"] = AppState.NewCollectionTitle;
+        actual["AppState.newCredentialError"] = AppState.NewCredentialError("X");
+        actual["AppState.newerDocumentError"] = AppState.NewerDocumentError;
         actual["AppState.noConnectorsSubtitle"] = AppState.NoConnectorsSubtitle;
+        actual["AppState.ownCollectionError"] = AppState.OwnCollectionError;
+        actual["AppState.keptPathCarriedError"] = AppState.KeptPathCarriedError("X", "Y");
+        actual["AppState.pathMarkMovedError"] = AppState.PathMarkMovedError("X");
+        actual["AppState.publishFolderCarriedError"] = AppState.PublishFolderCarriedError("X", "Y");
+        actual["AppState.publishIntoStoreError"] = AppState.PublishIntoStoreError;
+        actual["AppState.publishSlugTakenError"] = AppState.PublishSlugTakenError("X");
         actual["AppState.quitButton"] = AppState.QuitButton;
         actual["AppState.quitMessage"] = AppState.QuitMessage;
         actual["AppState.regenerationFailedBody"] = AppState.RegenerationFailedBody;
         actual["AppState.relaunchFailedMessage"] = AppState.RelaunchFailedMessage;
-        actual["AppState.renameProfileTitle"] = AppState.RenameProfileTitle;
+        actual["AppState.renameCollectionTitle"] = AppState.RenameCollectionTitle;
         actual["AppState.restartButton"] = AppState.RestartButton;
         actual["AppState.restartInformative"] = AppState.RestartInformative;
         actual["AppState.restartMessage"] = AppState.RestartMessage;
+        actual["AppState.restoreCollectionGoneError"] = AppState.RestoreCollectionGoneError("X");
+        actual["AppState.restoreSubscribedError"] = AppState.RestoreSubscribedError("X");
+        actual["AppState.sourceUnreadableError"] = AppState.SourceUnreadableError("X", "Y");
         actual["AppState.storeChangedBody"] = AppState.StoreChangedBody;
+        actual["AppState.targetMustBeLocalError"] = AppState.TargetMustBeLocalError;
+        actual["AppState.unpublishedDirectoryCaution"] = AppState.UnpublishedDirectoryCaution;
+        actual["AppState.unreviewedConnectorError"] = AppState.UnreviewedConnectorError("X");
 
         // MARK: ClaudeConfigIO
         // Both messages are inline literals inside a throw, not exposed as callable
@@ -168,22 +249,88 @@ public class StringCatalogTests
         // SubjectProblem takes the not-Anthropic branch; the echoed subject is the raw "O=Y".
         actual["ClaudePublisher.subjectNotAnthropicError"] = ClaudePublisher.SubjectProblem("O=Y", "X")!;
 
+        // MARK: CollectionDocument
+
+        actual["CollectionDocument.credentialLiteralPhrase"] = CollectionDocument.CredentialLiteralPhrase;
+        actual["CollectionDocument.credentialReferencePhrase"] = CollectionDocument.CredentialReferencePhrase;
+        actual["CollectionDocument.credentialUserOnlyPhrase"] = CollectionDocument.CredentialUserOnlyPhrase;
+
+        // MARK: CollectionsModel
+
+        actual["CollectionsModel.activePill"] = CollectionsModel.ActivePill;
+        actual["CollectionsModel.addCollectionTooltip"] = CollectionsModel.AddCollectionTooltip;
+        actual["CollectionsModel.addConnectorDisabledTooltip"] = CollectionsModel.AddConnectorDisabledTooltip;
+        actual["CollectionsModel.addConnectorTooltip"] = CollectionsModel.AddConnectorTooltip;
+        actual["CollectionsModel.connectorTally.many"] = CollectionsModel.ConnectorTally(3);
+        actual["CollectionsModel.connectorTally.one"] = CollectionsModel.ConnectorTally(1);
+        actual["CollectionsModel.copyToButton"] = CollectionsModel.CopyToButton;
+        actual["CollectionsModel.deleteAction"] = CollectionsModel.DeleteAction;
+        actual["CollectionsModel.deleteConnectorsSentence.many"] = CollectionsModel.DeleteConnectorsSentence(3);
+        actual["CollectionsModel.deleteConnectorsSentence.none"] = CollectionsModel.DeleteConnectorsSentence(0);
+        actual["CollectionsModel.deleteConnectorsSentence.one"] = CollectionsModel.DeleteConnectorsSentence(1);
+        actual["CollectionsModel.deleteCopiesSentence"] = CollectionsModel.DeleteCopiesSentence;
+        actual["CollectionsModel.deleteNextActiveSentence"] = CollectionsModel.DeleteNextActiveSentence("X");
+        actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.DeletePublishedFileQuestion("X");
+        actual["CollectionsModel.deleteSourceSentence"] = CollectionsModel.DeleteSourceSentence;
+        actual["CollectionsModel.documentFilter"] = CollectionsModel.DocumentFilter;
+        actual["CollectionsModel.duplicateAction"] = CollectionsModel.DuplicateAction;
+        actual["CollectionsModel.editLabel"] = CollectionsModel.EditLabel("X");
+        actual["CollectionsModel.exportAllAction"] = CollectionsModel.ExportAllAction;
+        actual["CollectionsModel.exportCheckedButton"] = CollectionsModel.ExportCheckedButton;
+        actual["CollectionsModel.importButton"] = CollectionsModel.ImportButton;
+        actual["CollectionsModel.importSubtitle"] = CollectionsModel.ImportSubtitle;
+        actual["CollectionsModel.keepFileButton"] = CollectionsModel.KeepFileButton;
+        actual["CollectionsModel.lockedGlyphTooltip"] = CollectionsModel.LockedGlyphTooltip;
+        actual["CollectionsModel.makeActiveAction"] = CollectionsModel.MakeActiveAction;
+        actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.MakeLocalCopyButton;
+        actual["CollectionsModel.moreActionsLabel"] = CollectionsModel.MoreActionsLabel;
+        actual["CollectionsModel.newButton"] = CollectionsModel.NewButton;
+        actual["CollectionsModel.publishButton"] = CollectionsModel.PublishButton;
+        actual["CollectionsModel.publishSettingsButton"] = CollectionsModel.PublishSettingsButton;
+        actual["CollectionsModel.publishedPill"] = CollectionsModel.PublishedPill;
+        actual["CollectionsModel.readOnlyNote"] = CollectionsModel.ReadOnlyNote;
+        actual["CollectionsModel.refreshButton"] = CollectionsModel.RefreshButton;
+        actual["CollectionsModel.remoteType"] = CollectionsModel.RemoteType;
+        actual["CollectionsModel.deleteCheckedButton"] = CollectionsModel.DeleteCheckedButton;
+        actual["CollectionsModel.deleteCheckedInformative"] = CollectionsModel.DeleteCheckedInformative;
+        actual["CollectionsModel.deleteCheckedMessage.many"] = CollectionsModel.DeleteCheckedMessage(["X", "Y", "Z"]);
+        actual["CollectionsModel.deleteCheckedMessage.one"] = CollectionsModel.DeleteCheckedMessage(["X"]);
+        actual["CollectionsModel.deleteFileButton"] = CollectionsModel.DeleteFileButton;
+        actual["CollectionsModel.renameAction"] = CollectionsModel.RenameAction;
+        actual["CollectionsModel.selectedCount"] = CollectionsModel.SelectedCount(3);
+        actual["CollectionsModel.showPublishedFileAction"] = CollectionsModel.ShowPublishedFileAction;
+        actual["CollectionsModel.showSourceFileAction"] = CollectionsModel.ShowSourceFileAction;
+        actual["CollectionsModel.stopPublishingAction"] = CollectionsModel.StopPublishingAction;
+        actual["CollectionsModel.stopSyncingAction"] = CollectionsModel.StopSyncingAction;
+        actual["CollectionsModel.stopSyncingInformative"] = CollectionsModel.StopSyncingInformative;
+        actual["CollectionsModel.stopSyncingMessage"] = CollectionsModel.StopSyncingMessage("X");
+        actual["CollectionsModel.subscribeButton"] = CollectionsModel.SubscribeButton;
+        actual["CollectionsModel.subscribeSubtitle"] = CollectionsModel.SubscribeSubtitle;
+        actual["CollectionsModel.subscribedPill"] = CollectionsModel.SubscribedPill;
+        actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.UpdateAvailableStatus;
+        actual["CollectionsModel.windowTitle"] = CollectionsModel.WindowTitle;
+
+        // MARK: CopyModel
+
+        actual["CopyModel.copyButton"] = CopyModel.CopyButton;
+        actual["CopyModel.title"] = CopyModel.Title("X");
+
         // MARK: ConfigService
         // Every one of these is an inline literal built inside a throw or a notes list,
         // not a callable factory; pinned here to match ConfigService.cs and cross-checked
         // against ConfigServiceTests.cs's real-I/O assertions.
 
         actual["ConfigService.corruptStoreNote"] =
-            "The MCP list file was unreadable; it was preserved as X and rebuilt from Claude's config.";
+            "The MCP list file was unreadable; it was preserved as X and rebuilt from Claude’s config.";
+        actual["ConfigService.corruptStoreRestoredNote"] =
+            "The MCP list file was unreadable; it was preserved as X and restored from the backup of Y.";
         actual["ConfigService.invalidBackupError"] = "backup X is not a valid config file (Y)";
         actual["ConfigService.invalidBackupMcpServersError"] = "backup X has an invalid mcpServers section";
         actual["ConfigService.malformedClaudeConfigNote"] =
-            "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore… to repair the file.";
+            "Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.";
 
-        // MARK: ConnectorRow / Dialogs / AlertDialogs
+        // MARK: Dialogs / AlertDialogs
 
-        var row = new ConnectorRow(state, "X", true, null);
-        actual["ConnectorRow.editTooltip"] = row.EditTooltip;
         // IDialogs.Confirm's cancelTitle default parameter value — not a retrievable symbol.
         actual["Dialogs.cancelTitle"] = "Cancel";
         // WpfDialogs.cs / NamePromptDialog.xaml live in ConnectorControl.App, which this
@@ -197,70 +344,169 @@ public class StringCatalogTests
         actual["EditorModel.addArgumentTitle"] = EditorModel.AddArgumentTitle;
         actual["EditorModel.addVariableTitle"] = EditorModel.AddVariableTitle;
         actual["EditorModel.additionalTitle"] = EditorModel.AdditionalTitleFor(3, ["a", "b"]);
+        actual["EditorModel.argumentLabel"] = EditorModel.ArgumentLabel(2);
+        actual["EditorModel.argumentNumber"] = EditorModel.ArgumentNumber(2);
+        actual["EditorModel.argumentPrompt"] = EditorModel.ArgumentPrompt;
+        actual["EditorModel.argumentsHeader"] = EditorModel.ArgumentsHeader;
+        actual["EditorModel.authenticationHeader"] = EditorModel.AuthenticationHeader;
         actual["EditorModel.automaticCaption"] = EditorModel.AutomaticCaption;
         actual["EditorModel.bearerCaption"] = EditorModel.BearerCaption;
         actual["EditorModel.bearerTokenError"] = EditorModel.BearerTokenError;
+        actual["EditorModel.cancelButton"] = EditorModel.CancelButton;
         actual["EditorModel.changedOutsideDetail"] = EditorModel.ChangedOutsideDetail;
         actual["EditorModel.changedOutsideMessage"] = EditorModel.ChangedOutsideMessage("X");
         actual["EditorModel.clientIDError"] = EditorModel.ClientIdError;
+        actual["EditorModel.clientIDLabel"] = EditorModel.ClientIdLabel;
+        actual["EditorModel.clientSecretLabel"] = EditorModel.ClientSecretLabel;
         actual["EditorModel.cmdPercentCaution"] = EditorModel.CmdPercentCaution;
         actual["EditorModel.cmdUnsafeError"] = EditorModel.CmdUnsafeError("X");
         actual["EditorModel.commandError"] = EditorModel.CommandError;
+        actual["EditorModel.commandLabel"] = EditorModel.CommandLabel;
+        actual["EditorModel.commandPrompt"] = EditorModel.CommandPrompt;
         actual["EditorModel.duplicateEnvError"] = EditorModel.DuplicateEnvError("X");
         actual["EditorModel.envNamelessError"] = EditorModel.EnvNamelessError;
+        actual["EditorModel.environmentHeader"] = EditorModel.EnvironmentHeader;
+        actual["EditorModel.formTab"] = EditorModel.FormTab;
         actual["EditorModel.headerNameError"] = EditorModel.HeaderNameError;
+        actual["EditorModel.headerNameLabel"] = EditorModel.HeaderNameLabel;
+        actual["EditorModel.headerNamePrompt"] = EditorModel.HeaderNamePrompt;
         actual["EditorModel.headerValueError"] = EditorModel.HeaderValueError;
+        actual["EditorModel.headerValueLabel"] = EditorModel.HeaderValueLabel;
+        actual["EditorModel.hideValueLabel"] = EditorModel.HideValueLabel;
+        actual["EditorModel.importedNote"] = EditorModel.ImportedNote("X", "Y");
         actual["EditorModel.invalidURLError"] = EditorModel.InvalidUrlError;
+        actual["EditorModel.jsonTab"] = EditorModel.JsonTab;
         actual["EditorModel.jsonTip"] = EditorModel.JsonTip;
+        actual["EditorModel.localTypeTitle"] = EditorModel.LocalTypeTitle;
+        actual["EditorModel.lockedFieldsNote"] = EditorModel.LockedFieldsNote("X");
         actual["EditorModel.lossWarningPrefix"] = EditorModel.LossWarningPrefix;
+        actual["EditorModel.nameLabel"] = EditorModel.NameLabel;
+        actual["EditorModel.namePrompt"] = EditorModel.NamePrompt;
+        actual["EditorModel.needsPath"] = EditorModel.NeedsPath;
+        actual["EditorModel.needsValue"] = EditorModel.NeedsValue;
         actual["EditorModel.notValidJSON"] = EditorModel.NotValidJson;
         actual["EditorModel.oauthSecretCaption"] = EditorModel.OAuthSecretCaption;
+        actual["EditorModel.propagateLabel"] = EditorModel.PropagateLabel("X", "Y");
+        actual["EditorModel.propagateLabelMany"] = EditorModel.PropagateLabelMany("X", "Y");
+        actual["EditorModel.publishedNote"] = EditorModel.PublishedNote("X");
         actual["EditorModel.remoteFooter"] = EditorModel.RemoteFooter;
-        actual["EditorModel.removeButton"] = EditorModel.RemoveButton;
-        actual["EditorModel.removeInformative"] = EditorModel.RemoveInformative;
-        actual["EditorModel.removeMessage"] = EditorModel.RemoveMessage("X");
-        actual["EditorModel.removedOutsideDetail"] = EditorModel.RemovedOutsideDetail;
-        actual["EditorModel.removedOutsideMessage"] = EditorModel.RemovedOutsideMessage("X");
+        actual["EditorModel.remoteTypeTitle"] = EditorModel.RemoteTypeTitle;
+        actual["EditorModel.deleteArgumentLabel"] = EditorModel.DeleteArgumentLabel;
+        actual["EditorModel.deleteVariableLabel"] = EditorModel.DeleteVariableLabel;
+        actual["EditorModel.deletedOutsideDetail"] = EditorModel.DeletedOutsideDetail;
+        actual["EditorModel.deletedOutsideMessage"] = EditorModel.DeletedOutsideMessage("X");
         actual["EditorModel.saveAnywayButton"] = EditorModel.SaveAnywayButton;
+        actual["EditorModel.saveButton"] = EditorModel.SaveButton;
+        actual["EditorModel.scopesLabel"] = EditorModel.ScopesLabel;
+        actual["EditorModel.scopesPrompt"] = EditorModel.ScopesPrompt;
+        actual["EditorModel.serverURLLabel"] = EditorModel.ServerUrlLabel;
+        actual["EditorModel.serverURLPrompt"] = EditorModel.ServerUrlPrompt;
+        actual["EditorModel.showValueLabel"] = EditorModel.ShowValueLabel;
         actual["EditorModel.stayInJSONButton"] = EditorModel.StayInJsonButton;
         actual["EditorModel.switchAnywayButton"] = EditorModel.SwitchAnywayButton;
+        actual["EditorModel.tokenLabel"] = EditorModel.TokenLabel;
+        actual["EditorModel.typeLabel"] = EditorModel.TypeLabel;
         actual["EditorModel.urlHint"] = EditorModel.UrlHint;
+        actual["EditorModel.valueLabel"] = EditorModel.ValueLabel;
+        actual["EditorModel.whatCanIChange"] = EditorModel.WhatCanIChange;
+        actual["EditorModel.whatCanIChangeAnswer"] = EditorModel.WhatCanIChangeAnswer;
+
+        // MARK: FieldName
+
+        actual["FieldName.argument"] = FieldName.Argument(1);
+        actual["FieldName.command"] = FieldName.Command;
+        actual["FieldName.document"] = FieldName.Document("X");
+        actual["FieldName.envValue"] = FieldName.EnvValue("X");
+        actual["FieldName.hint"] = FieldName.Hint("X");
 
         // MARK: FirstRunTip / FlyoutModel
 
         actual["FirstRunTip.body"] = FirstRunTip.Body;
         actual["FlyoutModel.settingsNotSavedCaution"] = FlyoutModel.SettingsNotSavedCaution("X");
         actual["FlyoutModel.storeNotPrivateCaution"] = FlyoutModel.StoreNotPrivateCaution;
+        actual["FlyoutModel.trayOpenTitle"] = FlyoutModel.TrayOpenTitle;
+
+        // MARK: ImportModel
+
+        actual["ImportModel.addModeDetail"] = ImportModel.AddModeDetail;
+        actual["ImportModel.addModeTitle"] = ImportModel.AddModeTitle("X");
+        actual["ImportModel.addTitle"] = ImportModel.AddTitle;
+        actual["ImportModel.cancelButton"] = ImportModel.CancelButton;
+        actual["ImportModel.collisionPickerLabel"] = ImportModel.CollisionPickerLabel("X");
+        actual["ImportModel.importButton"] = ImportModel.ImportButton(3);
+        actual["ImportModel.includeLabel"] = ImportModel.IncludeLabel("X");
+        actual["ImportModel.keepBothTitle"] = ImportModel.KeepBothTitle;
+        actual["ImportModel.newBadge"] = ImportModel.NewBadge;
+        actual["ImportModel.presentBadge"] = ImportModel.PresentBadge;
+        actual["ImportModel.replaceKeepsValues"] = ImportModel.ReplaceKeepsValues;
+        actual["ImportModel.replaceTitle"] = ImportModel.ReplaceTitle;
+        actual["ImportModel.skipTitle"] = ImportModel.SkipTitle;
+        actual["ImportModel.skippedBadge"] = ImportModel.SkippedBadge("X");
+        actual["ImportModel.sourceLine"] = ImportModel.SourceLine("X", "Y", 3);
+        actual["ImportModel.syncModeDetail"] = ImportModel.SyncModeDetail;
+        actual["ImportModel.syncModeTitle"] = ImportModel.SyncModeTitle;
+        actual["ImportModel.syncNameLabel"] = ImportModel.SyncNameLabel;
+        actual["ImportModel.title"] = ImportModel.Title;
+        actual["ImportModel.unknownAuthor"] = ImportModel.UnknownAuthor;
 
         // MARK: MasterStore
         // Every message below is returned by a real mutation, not a bare constant —
         // each store is set up so that mutation fails for exactly the reason this key names.
 
         var nameEmptyStore = MasterStore.Empty();
-        actual["MasterStore.nameEmptyError"] = nameEmptyStore.AddProfile("   ", false)!;
+        actual["MasterStore.nameEmptyError"] = nameEmptyStore.AddCollection("   ")!;
         var duplicateStore = new MasterStore(MasterStore.CurrentVersion, "X",
-            [new KeyValuePair<string, Profile>("X", new Profile())]);
-        actual["MasterStore.duplicateProfileNameError"] = duplicateStore.AddProfile("X", false)!;
+            [new KeyValuePair<string, Collection>("X", new Collection())]);
+        actual["MasterStore.duplicateCollectionNameError"] = duplicateStore.AddCollection("X")!;
         var deleteLastStore = MasterStore.Empty();
-        actual["MasterStore.deleteLastProfileError"] = deleteLastStore.DeleteActiveProfile()!;
-        var unknownProfileStore = MasterStore.Empty();
-        actual["MasterStore.unknownProfileError"] = unknownProfileStore.SwitchProfile("X")!;
+        actual["MasterStore.deleteLastCollectionError"] = deleteLastStore.DeleteCollection(deleteLastStore.ActiveCollection)!;
+        var unknownCollectionStore = MasterStore.Empty();
+        actual["MasterStore.unknownCollectionError"] = unknownCollectionStore.SwitchCollection("X")!;
 
         // MARK: Notifications / PopoverModel (FlyoutModel on Windows)
 
         actual["Notifications.restartToastButton"] = Notifications.RestartToastButton;
         actual["Notifications.title"] = Notifications.Title;
-        actual["PopoverModel.addTooltip"] = FlyoutModel.AddTooltip;
-        actual["PopoverModel.deleteProfileTitle"] = FlyoutModel.DeleteProfileTitle("X");
-        actual["PopoverModel.emptyText"] = FlyoutModel.EmptyText;
-        actual["PopoverModel.newProfileTitle"] = FlyoutModel.NewProfileMenuItem;
-        actual["PopoverModel.profileChipText"] = FlyoutModel.ProfileChipTextFor("X");
+        actual["PopoverModel.chooseFolderButton"] = FlyoutModel.ChooseFolderButton;
+        actual["PopoverModel.emptyText"] = FlyoutModel.EmptyText("X");
+        actual["PopoverModel.locateButton"] = FlyoutModel.LocateButton("X");
+        actual["PopoverModel.manageTitle"] = FlyoutModel.ManageTitle;
+        actual["PopoverModel.pendingMenuMark"] = FlyoutModel.PendingMenuMark;
         actual["PopoverModel.quitTooltip"] = FlyoutModel.QuitTooltip;
-        actual["PopoverModel.renameProfileTitle"] = FlyoutModel.RenameProfileTitle("X");
         actual["PopoverModel.restartTitle"] = FlyoutModel.RestartTitle;
         actual["PopoverModel.retryTitle"] = FlyoutModel.RetryTitle;
+        actual["PopoverModel.reviewAndApplyButton"] = FlyoutModel.ReviewAndApplyButton;
         actual["PopoverModel.settingsTooltip"] = FlyoutModel.SettingsTooltip;
+        actual["PopoverModel.sourceTooltipFormat"] = FlyoutModel.SourceTooltipFormat("X");
         actual["PopoverModel.title"] = FlyoutModel.Title;
+
+        // MARK: PublishModel
+
+        actual["PublishModel.cancelButton"] = PublishModel.CancelButton;
+        actual["PublishModel.chooseFolderButton"] = PublishModel.ChooseFolderButton;
+        actual["PublishModel.envSectionTitle"] = PublishModel.EnvSectionTitle;
+        actual["PublishModel.exportButton"] = PublishModel.ExportButton;
+        actual["PublishModel.exportTitle"] = PublishModel.ExportTitle("X");
+        actual["PublishModel.folderLine"] = PublishModel.FolderLine("X");
+        actual["PublishModel.footerLine"] = PublishModel.FooterLine("X", "Y");
+        actual["PublishModel.forgetMarkButton"] = PublishModel.ForgetMarkButton;
+        actual["PublishModel.hintPlaceholder"] = PublishModel.HintPlaceholder;
+        actual["PublishModel.markPathLabel"] = PublishModel.MarkPathLabel;
+        actual["PublishModel.noFolderError"] = PublishModel.NoFolderError;
+        actual["PublishModel.pathNamePlaceholder"] = PublishModel.PathNamePlaceholder;
+        actual["PublishModel.pathsSectionTitle"] = PublishModel.PathsSectionTitle;
+        actual["PublishModel.previewTitle"] = PublishModel.PreviewTitle;
+        actual["PublishModel.publishButton"] = PublishModel.PublishButton;
+        actual["PublishModel.shareValueLabel"] = PublishModel.ShareValueLabel;
+        actual["PublishModel.title"] = PublishModel.Title("X");
+        actual["PublishModel.keptPathNote"] = PublishModel.KeptPathNote("X", "Y");
+        actual["PublishModel.releaseValueButton"] = PublishModel.ReleaseValueButton;
+        actual["PublishModel.publishFolderNote"] = PublishModel.PublishFolderNote("X", "Y");
+        actual["PublishModel.publishFolderEditNote"] = PublishModel.PublishFolderEditNote("X", "Y");
+        actual["PublishModel.otherFolderNote"] = PublishModel.OtherFolderNote("X", "Y", "Z");
+        actual["PublishModel.useDirectoryTokenButton"] = PublishModel.UseDirectoryTokenButton;
+        actual["PublishModel.unresolvedMarkNote"] = PublishModel.UnresolvedMarkNote("X", "Y");
+        actual["PublishModel.warningLine"] = PublishModel.WarningLine("X", "Y");
 
         // MARK: RemoteAuthKind
 
@@ -268,6 +514,12 @@ public class StringCatalogTests
         actual["RemoteAuthKind.bearer.title"] = RemoteAuthKind.Bearer.Title();
         actual["RemoteAuthKind.header.title"] = RemoteAuthKind.Header.Title();
         actual["RemoteAuthKind.oauthClient.title"] = RemoteAuthKind.OAuthClient.Title();
+
+        // MARK: RemotePattern
+        // Windows-only: the Mac never writes the cmd /c launcher, so it never excludes a
+        // connector for this reason.
+
+        actual["RemotePattern.cmdUnsafeReason"] = RemotePattern.CmdUnsafeReason(RemoteField.Url);
 
         // MARK: RestoreModel
 
@@ -277,6 +529,17 @@ public class StringCatalogTests
         actual["RestoreModel.headline"] = RestoreModel.Headline;
         actual["RestoreModel.restoreButton"] = RestoreModel.RestoreButton;
         actual["RestoreModel.restoreTitle"] = RestoreModel.RestoreTitle;
+
+        // MARK: ReviewModel
+
+        actual["ReviewModel.addedLabel"] = ReviewModel.AddedLabel;
+        actual["ReviewModel.applyButton"] = ReviewModel.ApplyButton;
+        actual["ReviewModel.cancelButton"] = ReviewModel.CancelButton;
+        actual["ReviewModel.changedLabel"] = ReviewModel.ChangedLabel;
+        actual["ReviewModel.refreshButton"] = ReviewModel.RefreshButton;
+        actual["ReviewModel.deletedLabel"] = ReviewModel.DeletedLabel;
+        actual["ReviewModel.sourceMovedMessage"] = ReviewModel.SourceMovedMessage;
+        actual["ReviewModel.title"] = ReviewModel.Title("X");
 
         // MARK: SettingsModel
 
@@ -300,7 +563,6 @@ public class StringCatalogTests
         actual["SettingsModel.launchTargetLabel"] = SettingsModel.LaunchTargetLabel;
         actual["SettingsModel.loginItemFailureNote"] = SettingsModel.StartupEntryFailureNote("X");
         actual["SettingsModel.masterListHeader"] = SettingsModel.MasterListHeader;
-        actual["SettingsModel.notifyCaption"] = SettingsModel.NotifyCaption;
         actual["SettingsModel.notifyTitle"] = SettingsModel.NotifyTitle;
         actual["SettingsModel.revealInFinderTitle"] = SettingsModel.ShowInExplorerTitle;
         actual["SettingsModel.storageTab"] = SettingsModel.StorageTab;

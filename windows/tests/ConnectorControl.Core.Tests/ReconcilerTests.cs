@@ -1,5 +1,6 @@
 namespace ConnectorControl.Core.Tests;
 
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/ReconcilerTests.swift</summary>
 public class ReconcilerTests
 {
     private static readonly JsonValue ConfigA = JsonValue.Object(("command", JsonValue.String("a")));
@@ -123,6 +124,52 @@ public class ReconcilerTests
         Assert.False(outcome.StoreChanged);
     }
 
+    // ingestion into another collection
+
+    [Fact]
+    public void AnAdditionCanLandInACollectionOtherThanTheActiveOne()
+    {
+        var s = Store(("team", new McpEntry(false, ConfigB)));
+        s.Collections["Personal"] = new Collection();
+        var outcome = Reconciler.Reconcile(s, Servers(("new", ConfigA), ("team", ConfigA)), target: "Personal");
+        Assert.Equal(new McpEntry(true, ConfigA), outcome.Store.Collections["Personal"].Mcps["new"]);
+        // The active collection is left exactly as it was, and a name it holds is not new.
+        Assert.False(outcome.Store.Mcps.ContainsKey("new"));
+        Assert.Equal(ConfigB, outcome.Store.Mcps["team"].Config);
+        Assert.False(outcome.Store.Collections["Personal"].Mcps.ContainsKey("team"));
+        Assert.Equal(["new"], outcome.Ingested);
+        Assert.True(outcome.StoreChanged);
+    }
+
+    [Fact]
+    public void AnAdditionCreatesTheCollectionItLandsIn()
+    {
+        var outcome = Reconciler.Reconcile(Store(), Servers(("new", ConfigA)), target: "Default 2");
+        Assert.Equal(new McpEntry(true, ConfigA), outcome.Store.Collections["Default 2"].Mcps["new"]);
+        Assert.Equal("Default", outcome.Store.ActiveCollection);
+        // Nothing to take in creates nothing.
+        Assert.False(Reconciler.Reconcile(Store(), Servers(), target: "Default 2").Store.Collections.ContainsKey("Default 2"));
+    }
+
+    [Fact]
+    public void AnAdditionNeverOverwritesWhatTheOtherCollectionHolds()
+    {
+        var s = Store();
+        s.Collections["Personal"] = new Collection([
+            new KeyValuePair<string, McpEntry>("same", new McpEntry(false, ConfigA)),
+            new KeyValuePair<string, McpEntry>("other", new McpEntry(false, ConfigB)),
+        ]);
+        var outcome = Reconciler.Reconcile(s, Servers(("same", ConfigA), ("other", ConfigA)), target: "Personal");
+        // The same connector is already there.
+        Assert.Equal(new McpEntry(false, ConfigA), outcome.Store.Collections["Personal"].Mcps["same"]);
+        Assert.Equal(ConfigB, outcome.Store.Collections["Personal"].Mcps["other"].Config);
+        // A different one under a taken name lands beside it.
+        Assert.Equal(new McpEntry(true, ConfigA), outcome.Store.Collections["Personal"].Mcps["other 2"]);
+        Assert.Equal(["other 2", "same"], outcome.Ingested);
+    }
+
+    /// <summary>C#-only: MasterStore is a class here, so Reconcile could edit its argument; a Swift
+    /// struct is copied on the way in.</summary>
     [Fact]
     public void InputStoreIsNeverMutated()
     {
@@ -146,5 +193,30 @@ public class ReconcilerTests
         Assert.False(outcome.Store.Mcps["gone"].Enabled);
         Assert.False(outcome.Store.Mcps["off"].Enabled);
         Assert.True(outcome.StoreChanged);
+    }
+
+    // the collection folder written back as the token
+
+    private static JsonValue NodeAt(string arg) =>
+        JsonValue.Object(("command", JsonValue.String("node")), ("args", JsonValue.Array([JsonValue.String(arg)])));
+
+    private static readonly JsonValue Tokened = NodeAt("${COLLECTION_DIR}/x.js");
+    private static readonly JsonValue Expanded = NodeAt("/Users/d/share/x.js");
+
+    [Fact]
+    public void ARestoredSnapshotKeepsTheStoresTokenOnlyWhereItRendersTheSame()
+    {
+        var s = Store(("x", new McpEntry(true, Tokened)), ("edited", new McpEntry(true, Tokened)));
+        var edit = NodeAt("/Users/d/share/y.js");
+        var outcome = Reconciler.AdoptSnapshot(s, Servers(("x", Expanded), ("edited", edit), ("back", Expanded)), "/Users/d/share");
+        // The store's copy already renders as the snapshot does.
+        Assert.Equal(Tokened, outcome.Store.Mcps["x"].Config);
+        // A genuine edit is adopted as written, and a name the store does not hold has nothing to keep.
+        Assert.Equal(edit, outcome.Store.Mcps["edited"].Config);
+        Assert.Equal(Expanded, outcome.Store.Mcps["back"].Config);
+        // Restoring what the store already renders changes nothing.
+        Assert.False(Reconciler.AdoptSnapshot(Store(("x", new McpEntry(true, Tokened))), Servers(("x", Expanded)), "/Users/d/share").StoreChanged);
+        // With no folder published from here, the snapshot is adopted as written.
+        Assert.Equal(Expanded, Reconciler.AdoptSnapshot(s, Servers(("x", Expanded))).Store.Mcps["x"].Config);
     }
 }

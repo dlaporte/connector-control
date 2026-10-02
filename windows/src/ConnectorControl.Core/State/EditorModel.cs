@@ -4,7 +4,14 @@ using System.ComponentModel;
 
 namespace ConnectorControl.Core.State;
 
-/// <summary>The edit-sheet view without the pixels: every field, switch rule, validation string, and save/remove flow.</summary>
+/// <summary>
+/// The editor window without the pixels: every field, switch rule, validation string, and the
+/// save flow. The loss warning and the save-conflict question both go through
+/// <see cref="IDialogs.Confirm"/>; the Mac's loss warning is published state its view binds to
+/// as a sheet instead, because WPF has no sheet.
+///
+/// Mirror: Sources/ConnectorControlState/EditorModel.swift
+/// </summary>
 public sealed class EditorModel : ObservableObject, IDisposable
 {
     public const string NotValidJson = "Not valid JSON — check for a stray brace, missing comma, or unquoted value.";
@@ -20,8 +27,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// </summary>
     public const string OAuthSecretCaption = "Passed to mcp-remote on its command line, which other programs running on this PC can read.";
     public const string InvalidUrlError = "Server URL must be a valid http(s) URL.";
-    /// <summary>Under the cmd /c launcher cmd.exe re-parses every argument.</summary>
-    public const string CmdUnsafeSuffix = " must not contain & | < > ^ \" or spaces: on Windows the cmd /c launcher hands it to cmd.exe, which treats those as commands.";
+    /// <summary>Under the cmd /c launcher cmd.exe re-parses every argument. The collection renderer says the same thing, so the wording lives beside the check.</summary>
+    public const string CmdUnsafeSuffix = RemotePattern.CmdUnsafeSuffix;
     public static string CmdUnsafeError(string field) => field + CmdUnsafeSuffix;
     public const string CmdPercentCaution = "This URL has more than one %, which cmd.exe can expand as a variable. If the connector fails to start, check its JSON view.";
     public const string BearerTokenError = "Enter a bearer token.";
@@ -34,21 +41,118 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public const string SwitchAnywayButton = "Switch Anyway";
     public const string StayInJsonButton = "Stay in JSON";
     public const string SaveAnywayButton = "Save Anyway";
-    public const string RemoveButton = "Remove";
-    public const string RemoveInformative = "A copy remains in Backups.";
     public const string AddArgumentTitle = "＋ Add argument";
     public const string AddVariableTitle = "＋ Add variable";
+    /// <summary>The icon buttons' names: the eye beside a value, and the × after an argument or a variable.</summary>
+    public const string ShowValueLabel = "Show value";
+    public const string HideValueLabel = "Hide value";
+    public const string DeleteArgumentLabel = "Delete argument";
+    public const string DeleteVariableLabel = "Delete variable";
+    /// <summary>The form's labels, prompts and buttons, as both editors show them.</summary>
+    public const string FormTab = "Form";
+    public const string JsonTab = "JSON";
+    public const string SaveButton = "Save";
+    public const string CancelButton = "Cancel";
+    public const string TypeLabel = "Type";
+    public const string RemoteTypeTitle = "Remote";
+    public const string LocalTypeTitle = "Local";
+    public const string NameLabel = "Name";
+    public const string NamePrompt = "my-mcp";
+    public const string ServerUrlLabel = "Server URL";
+    public const string ServerUrlPrompt = "https://example.com/mcp";
+    public const string AuthenticationHeader = "Authentication";
+    public const string CommandLabel = "Command";
+    public const string CommandPrompt = "npx";
+    public const string ArgumentsHeader = "Arguments";
+    public const string ArgumentPrompt = "argument";
+
+    /// <summary>
+    /// What an argument's row shows beside its field, from the row's index: counted from one, as
+    /// a refusal names the argument (<see cref="FieldName.Argument"/>), so "argument 2" is the row
+    /// marked 2.
+    /// </summary>
+    public static string ArgumentNumber(int index) => (index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// A screen reader's name for an argument's field, from the row's index: the number beside it,
+    /// which the field carries no other label for.
+    /// </summary>
+    public static string ArgumentLabel(int index) => "Argument " + ArgumentNumber(index);
+    public const string EnvironmentHeader = "Environment Variables";
+    public const string ValueLabel = "Value";
+    public const string TokenLabel = "Token";
+    public const string HeaderNameLabel = "Header name";
+    public const string HeaderNamePrompt = "X-API-Key";
+    public const string HeaderValueLabel = "Header value";
+    public const string ClientIdLabel = "Client ID";
+    public const string ClientSecretLabel = "Client Secret";
+    public const string ScopesLabel = "Scopes (optional)";
+    public const string ScopesPrompt = "space separated";
     public const string ChangedOutsideDetail = "Saving will overwrite that change with this editor's version.";
-    public const string RemovedOutsideDetail = "Saving will add it back.";
+    public const string DeletedOutsideDetail = "Saving will add it back.";
+    public const string WhatCanIChange = "What can I change?";
+    public const string WhatCanIChangeAnswer = "Fill in the highlighted values and switch it on or off. Everything else follows the source; make a local copy to change it.";
+    public const string NeedsValue = "needs your value";
+    public const string NeedsPath = "needs your path";
+
+    public static string LockedFieldsNote(string collection) => $"Synced from {collection} · read-only";
+
+    public static string PublishedNote(string folder) =>
+        $"Published to {folder} — saving updates the file your team reads. Secrets stay here.";
+
+    public static string ImportedNote(string collection, string date) =>
+        $"Imported from “{collection}” on {date}. Edits stay here.";
+
+    public static string PropagateLabel(string collections, string connector) =>
+        $"Also apply this change to {collections}, which has an identical {connector}";
+
+    /// <summary><see cref="PropagateLabel"/> for more than one collection, whose verb agrees with the list.</summary>
+    public static string PropagateLabelMany(string collections, string connector) =>
+        $"Also apply this change to {collections}, which have an identical {connector}";
 
     public static string DuplicateEnvError(string name) => $"Duplicate environment variable name: {name}";
-    public static string RemoveMessage(string name) => $"Remove “{name}”? {RemoveInformative}";
     public static string ChangedOutsideMessage(string name) => $"“{name}” changed outside this editor.";
-    public static string RemovedOutsideMessage(string name) => $"“{name}” was removed outside this editor.";
+    public static string DeletedOutsideMessage(string name) => $"“{name}” was deleted outside this editor.";
 
     /// <summary>The Mac's static and an instance property of the same name can coexist there; C# forbids that, so the instance property below calls this.</summary>
     public static string AdditionalTitleFor(int count, IEnumerable<string> keys) =>
         $"{count} field(s) not editable here: {string.Join(", ", keys)} — switch to JSON to edit";
+
+    /// <summary>
+    /// The grey line above the fields, and what it means for what the window may change.
+    ///
+    /// Mirror: Sources/ConnectorControlState/EditorModel.swift
+    /// </summary>
+    public abstract record HeaderState
+    {
+        private HeaderState()
+        {
+        }
+
+        /// <summary>An ordinary connector in an ordinary local collection: today's editor, unchanged.</summary>
+        public sealed record None : HeaderState;
+
+        /// <summary>Somebody else's collection: everything but the placeholders belongs to its author.</summary>
+        public sealed record Synced(string Collection) : HeaderState;
+
+        /// <summary>A local collection whose document this machine writes: saving rewrites it.</summary>
+        public sealed record Published(string Folder) : HeaderState;
+
+        /// <summary>A copy taken from another collection, which has gone its own way since.</summary>
+        public sealed record Imported(string From, string Date) : HeaderState;
+
+        /// <summary>
+        /// Which state this is, as three bools. XAML cannot pattern match, and a string in a
+        /// converter parameter collapses a header on a typo with nothing to catch it; the auth
+        /// kinds carry the same trio one screen below for the same reason. The Mac needs none of
+        /// these — SwiftUI switches on the enum itself.
+        /// </summary>
+        public bool IsSynced => this is Synced;
+
+        public bool IsPublished => this is Published;
+
+        public bool IsImported => this is Imported;
+    }
 
     /// <summary>The picker's order, as an array so <see cref="AuthKindIndex"/> can search it without allocating.</summary>
     private static readonly RemoteAuthKind[] AuthKindOrder =
@@ -68,6 +172,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// typed. An unchanged JSON round trip (open JSON, switch straight back) leaves it set.
     /// </summary>
     private bool isUntouchedTemplate;
+    private bool propagate;
 
     private EditView view;
     private string name;
@@ -90,6 +195,41 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// <summary>`jsonText` recovered once per edit, in its setter below; ValidateJson and ComputeRequiredTool read this instead of recovering it again.</summary>
     private PasteResult? recoveredJson;
     private string? jsonError;
+    /// <summary>
+    /// What the connector was asking this machine for when the window opened; see
+    /// <see cref="AsksFor"/> for why it is fixed rather than re-read.
+    /// </summary>
+    private HashSet<EnvRow> askedEnvRows;
+    private HashSet<ArgRow> askedArgs;
+    /// <summary>
+    /// Whether the form was read-only when the snapshot above was taken. One transition retakes
+    /// it: a collection that stops syncing turns every field into an ordinary editable one, and
+    /// a field still rendered as the unmasked placeholder control would be a secret in the clear
+    /// in a form that no longer locks anything.
+    /// </summary>
+    private bool snapshotWasReadOnly;
+    /// <summary>
+    /// Where each argument sat in the config the window opened on, by row. The publish record
+    /// keys a path mark by its pointer, so a hint belongs to a position in the document that was
+    /// published, not to whatever position the row holds now — and a published collection's
+    /// editor is fully editable, so rows move. Fixed at open and never retaken, unlike the
+    /// asked-for snapshot, on the assumption that the published document does not change under
+    /// the window. A republish from the Collections window while this editor is open breaks that
+    /// assumption: the hints then describe the document as it was at open.
+    /// </summary>
+    private Dictionary<ArgRow, int> openArgIndexByRow = [];
+    /// <summary>
+    /// The arguments the window opened on, which the publish record's path marks are placed
+    /// against. Fixed with <see cref="openArgIndexByRow"/>, for the same reason.
+    /// </summary>
+    private readonly List<string> openedArgs = [];
+    /// <summary>
+    /// Whether every argument row still traces back to the config the window opened on. A JSON
+    /// edit that changed the arguments rebuilds the rows and carries their open positions by
+    /// position alone (<see cref="CarriedRecords"/>), which is a guess a path mark must not bet a
+    /// path on: from then on a save leaves the marks for publishing to place by their values.
+    /// </summary>
+    private bool argRowsFollowOpen = true;
     private string? validationError;
     private Tool? requiredTool;
     private bool suppressToolEvaluation;
@@ -100,6 +240,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         this.dialogs = dialogs;
         Target = target;
         isUntouchedTemplate = target.IsNew && target.ForcesRemote;
+        PropagateTargets = TwinsOf(state, target);
         name = target.Name;
         view = target.Entry.LastEditView;
         var config = target.Entry.Config;
@@ -109,6 +250,9 @@ public sealed class EditorModel : ObservableObject, IDisposable
         command = "";
         Args = [];
         EnvRows = [];
+        // Before Load, so every row that ever joins either list answers with this model's rules.
+        Args.CollectionChanged += OnRowsChanged;
+        EnvRows.CollectionChanged += OnRowsChanged;
         additional = new Dictionary<string, JsonValue>(StringComparer.Ordinal);
         jsonText = config.EditorText();
         recoveredJson = PasteRecovery.Recover(jsonText);
@@ -116,6 +260,14 @@ public sealed class EditorModel : ObservableObject, IDisposable
         Load(config);
         // On open, a cached status shows its note at once; an
         // unknown one is probed now. Later changes go through EvaluateRequiredTool.
+        askedEnvRows = [];
+        askedArgs = [];
+        TakeAskedSnapshot();
+        for (var i = 0; i < Args.Count; i++)
+        {
+            openArgIndexByRow[Args[i]] = i;
+            openedArgs.Add(Args[i].Value);
+        }
         state.PropertyChanged += OnStateChanged;
         Args.CollectionChanged += OnArgsChanged;
         requiredTool = ComputeRequiredTool();
@@ -281,11 +433,60 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public bool IsHeader => authKind == RemoteAuthKind.Header;
     public bool IsOAuth => authKind == RemoteAuthKind.OAuthClient;
 
-    public string BearerToken { get => bearerToken; set => Set(ref bearerToken, value); }
+    /// <summary>
+    /// The three secret fields raise what is read off their text as well as the text itself: the
+    /// caution ring and the author's hint under a field follow whether its value is still a
+    /// placeholder or owed, so they have to move together. Whether the field is locked does not: that
+    /// is the asked-for snapshot taken when the window opened, so typing over the marker never
+    /// locks the field again. The Mac needs none of this — there these are <c>@Published</c>, and
+    /// a change to one republishes the whole object.
+    /// </summary>
+    public string BearerToken
+    {
+        get => bearerToken;
+        set
+        {
+            if (Set(ref bearerToken, value))
+            {
+                Raise(nameof(BearerTokenIsPlaceholder));
+                Raise(nameof(BearerTokenOwed));
+                Raise(nameof(BearerTokenHint));
+            }
+        }
+    }
+
     public string HeaderName { get => headerName; set => Set(ref headerName, value); }
-    public string HeaderValue { get => headerValue; set => Set(ref headerValue, value); }
+
+    public string HeaderValue
+    {
+        get => headerValue;
+        set
+        {
+            if (Set(ref headerValue, value))
+            {
+                Raise(nameof(HeaderValueIsPlaceholder));
+                Raise(nameof(HeaderValueOwed));
+                Raise(nameof(HeaderValueHint));
+            }
+        }
+    }
+
     public string OAuthClientId { get => oauthClientId; set => Set(ref oauthClientId, value); }
-    public string OAuthClientSecret { get => oauthClientSecret; set => Set(ref oauthClientSecret, value); }
+
+    public string OAuthClientSecret
+    {
+        get => oauthClientSecret;
+        set
+        {
+            if (Set(ref oauthClientSecret, value))
+            {
+                Raise(nameof(ClientSecretIsPlaceholder));
+                Raise(nameof(ClientSecretOwed));
+                Raise(nameof(ClientSecretHint));
+            }
+        }
+    }
+
     public string OAuthScopes { get => oauthScopes; set => Set(ref oauthScopes, value); }
 
     public string Command
@@ -334,15 +535,14 @@ public sealed class EditorModel : ObservableObject, IDisposable
             if (Set(ref jsonError, value))
             {
                 Raise(nameof(HasJsonError));
-                Raise(nameof(JsonStatusText));
                 Raise(nameof(CanSave));
+                // The paste tip offers what a JSON view with an error in it cannot do.
+                Raise(nameof(ShowJsonTip));
             }
         }
     }
 
     public bool HasJsonError => jsonError is not null;
-
-    public string JsonStatusText => jsonError ?? JsonTip;
 
     public string? ValidationError
     {
@@ -358,10 +558,306 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public bool HasValidationError => validationError is not null;
 
-    /// <summary>Save is disabled with a JSON error, or in the remote form without a valid, cmd-safe URL.</summary>
-    public bool CanSave => !((view == EditView.Json && jsonError is not null) || (view == EditView.Form && isRemote && !(RemoteUrlValid && RemoteUrlCmdSafe)));
+    /// <summary>
+    /// Save is disabled with a JSON error, or in the remote form without a valid, cmd-safe URL.
+    /// A read-only window saves only the placeholders, none of which can put it in either state,
+    /// so its Save stays enabled.
+    /// </summary>
+    public bool CanSave => IsReadOnly || !((view == EditView.Json && jsonError is not null) || (view == EditView.Form && isRemote && !(RemoteUrlValid && RemoteUrlCmdSafe)));
 
-    public bool CanRemove => !Target.IsNew;
+    // MARK: collection
+
+    /// <summary>The collection this window edits.</summary>
+    public string CollectionName => Target.Collection;
+
+    /// <summary>
+    /// A synced collection's connectors belong to the author of its document. Everything but the
+    /// values the document asks this machine for is locked, and a save may move only those.
+    /// </summary>
+    public bool IsReadOnly => state.IsSynced(CollectionName);
+
+    /// <summary>
+    /// EditorModel.swift calls this <c>headerState</c>: C# forbids a property and a nested type
+    /// of the same name on one class, and the type is the one both sides spell HeaderState.
+    /// </summary>
+    public HeaderState Header
+    {
+        get
+        {
+            var collection = CollectionName;
+            if (state.IsSynced(collection))
+            {
+                return new HeaderState.Synced(collection);
+            }
+            // Publishing is per machine: a collection somebody else publishes says nothing here,
+            // because this machine writes no file for it.
+            if (state.CollectionsCache.Published.TryGetValue(collection, out var binding))
+            {
+                return new HeaderState.Published(binding.Folder);
+            }
+            if (state.CollectionsFile.Collections.TryGetValue(collection, out var entry)
+                && entry.Provenance.TryGetValue(Target.Name, out var provenance))
+            {
+                return new HeaderState.Imported(provenance.From, provenance.Date);
+            }
+            return new HeaderState.None();
+        }
+    }
+
+    /// <summary>The one grey line the header shows, or null for an ordinary local connector.</summary>
+    public string? HeaderNote => Header switch
+    {
+        HeaderState.Synced synced => LockedFieldsNote(synced.Collection),
+        HeaderState.Published published => PublishedNote(published.Folder),
+        HeaderState.Imported imported => ImportedNote(imported.From, imported.Date),
+        _ => null,
+    };
+
+    public bool HasHeaderNote => HeaderNote is not null;
+
+    /// <summary>The paste tip offers something a read-only JSON view cannot do.</summary>
+    public bool ShowJsonTip => !IsReadOnly && jsonError is null;
+
+    /// <summary>
+    /// The other local collections that held a byte-identical copy of this connector when the
+    /// window opened. Fixed there rather than re-derived: the checkbox names them, and the save
+    /// that follows must write to the collections the user was shown, not to whatever matches by
+    /// the time they click.
+    /// </summary>
+    public IReadOnlyList<string> PropagateTargets { get; }
+
+    public bool ShowPropagate => PropagateTargets.Count > 0;
+
+    public string PropagateMessage => PropagateTargets.Count == 1
+        ? PropagateLabel(string.Join(", ", PropagateTargets), Target.Name)
+        : PropagateLabelMany(string.Join(", ", PropagateTargets), Target.Name);
+
+    /// <summary>The propagate checkbox: off unless the user ticks it.</summary>
+    public bool Propagate { get => propagate; set => Set(ref propagate, value); }
+
+    private static IReadOnlyList<string> TwinsOf(AppState state, EditTarget target)
+    {
+        var collection = target.Collection;
+        // A connector that does not exist yet has no twins, and a synced collection's copy is its
+        // author's — neither offers the checkbox.
+        if (target.IsNew || state.KindOf(collection) != CollectionKind.Local)
+        {
+            return [];
+        }
+        return state.LocalCollectionNames
+            .Where(other => other != collection
+                && state.Store.Collections.TryGetValue(other, out var held)
+                && held.Mcps.TryGetValue(target.Name, out var twin)
+                && twin.Config == target.Entry.Config)
+            .ToList();
+    }
+
+    // MARK: placeholders
+
+    /// <summary>What the last Apply recorded this connector asking this machine for, by marker name.</summary>
+    private IReadOnlyDictionary<string, CollectionsFile.Need> CollectionNeeds => state.Needs(Target.Name, CollectionName);
+
+    /// <summary>
+    /// The hint for the first marker still standing in <paramref name="text"/>, if the document
+    /// supplied one. A filled field carries no marker, so it asks for nothing and says nothing.
+    /// </summary>
+    private string? Hint(string text)
+    {
+        var needs = CollectionNeeds;
+        foreach (var marker in Placeholder.NamesIn(text))
+        {
+            if (needs.TryGetValue(marker, out var need) && need.Hint is { } hint)
+            {
+                return hint;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Takes the row itself where EditorModel.swift takes an id: this EnvRow is an ObservableObject
+    /// the view holds on to, so its live value is right here, while Swift's is a struct in an array
+    /// that has to be looked up by id.
+    /// </summary>
+    public bool IsPlaceholder(EnvRow row) => Placeholder.ContainsMarker(row.Value);
+
+    /// <summary>The row's hint, live; see IsPlaceholder for why this side takes the row.</summary>
+    public string? PlaceholderHint(EnvRow row) => Hint(row.Value);
+
+    /// <summary>Argument indexes still carrying a marker: locked in a synced collection, but live.</summary>
+    public IReadOnlySet<int> ArgsWithPlaceholders =>
+        Args.Select((row, index) => (row, index))
+            .Where(pair => Placeholder.ContainsMarker(pair.row.Value))
+            .Select(pair => pair.index)
+            .ToHashSet();
+
+    /// <summary>EditorModel.swift's <c>placeholderHint(arg:)</c>, asked by the row: what <see cref="ArgRow.Hint"/> binds.</summary>
+    internal string? PlaceholderHint(ArgRow row) => Hint(row.Value);
+
+    public bool BearerTokenIsPlaceholder => Placeholder.ContainsMarker(bearerToken);
+
+    public bool HeaderValueIsPlaceholder => Placeholder.ContainsMarker(headerValue);
+
+    public bool ClientSecretIsPlaceholder => Placeholder.ContainsMarker(oauthClientSecret);
+
+    /// <summary>
+    /// Whether this row was asking for a value when the window opened, which is what unlocks it
+    /// in a read-only form. Stays true after the value is filled in, unlike
+    /// <see cref="IsPlaceholder"/>: a field being typed into must not turn into a locked one
+    /// between two keystrokes. Keyed by the row object, so inserting a row above it changes
+    /// nothing — by the row object here, where the Mac's rows are structs and carry a UUID for
+    /// the same purpose. The Mac also takes an id rather than the row, as <see cref="IsPlaceholder"/>
+    /// explains.
+    /// </summary>
+    public bool AsksFor(EnvRow row) => askedEnvRows.Contains(row);
+
+    /// <summary>
+    /// The same question for an argument, asked by its row, which is what <see cref="ArgRow.Asks"/>
+    /// binds: keyed by the row object, a row inserted above does not move the answer. The Mac's
+    /// <c>asksFor(arg:)</c> takes an index, which is what its view has, and resolves it through the
+    /// row's id.
+    /// </summary>
+    internal bool AsksFor(ArgRow row) => askedArgs.Contains(row);
+
+    /// <summary>
+    /// Whether an argument's box takes typing: always in a form that is the user's, and in a
+    /// read-only one only where the document asks this machine for the value. What
+    /// <see cref="ArgRow.Live"/> binds; the Mac's <c>isLive(arg:)</c>.
+    /// </summary>
+    internal bool IsLive(ArgRow row) => !IsReadOnly || AsksFor(row);
+
+    public bool AsksForBearerToken { get; private set; }
+
+    public bool AsksForHeaderValue { get; private set; }
+
+    public bool AsksForClientSecret { get; private set; }
+
+    /// <summary>The same question for the three secret fields, whose boxes the view enables by it.</summary>
+    public bool BearerTokenIsLive => !IsReadOnly || AsksForBearerToken;
+
+    public bool HeaderValueIsLive => !IsReadOnly || AsksForHeaderValue;
+
+    public bool ClientSecretIsLive => !IsReadOnly || AsksForClientSecret;
+
+    // MARK: owed values
+
+    /// <summary>
+    /// A value the document asked for and has not been given: asked for when the window opened,
+    /// and either still the author's marker or emptied since. What the caution ring and the phrase
+    /// under a field follow; a field that never asked owes nothing, however empty.
+    /// </summary>
+    private static bool Owed(bool asks, bool isPlaceholder, string value) =>
+        asks && (isPlaceholder || value.Length == 0);
+
+    /// <summary>Takes the row, for the reason <see cref="IsPlaceholder"/> gives.</summary>
+    public bool IsOwed(EnvRow row) => Owed(AsksFor(row), IsPlaceholder(row), row.Value);
+
+    /// <summary>EditorModel.swift's <c>isOwed(arg:)</c>, asked by the row: what <see cref="ArgRow.Owed"/> binds.</summary>
+    internal bool IsOwed(ArgRow row) => Owed(AsksFor(row), Placeholder.ContainsMarker(row.Value), row.Value);
+
+    public bool BearerTokenOwed => Owed(AsksForBearerToken, BearerTokenIsPlaceholder, bearerToken);
+
+    public bool HeaderValueOwed => Owed(AsksForHeaderValue, HeaderValueIsPlaceholder, headerValue);
+
+    public bool ClientSecretOwed => Owed(AsksForClientSecret, ClientSecretIsPlaceholder, oauthClientSecret);
+
+    // MARK: published hints
+
+    /// <summary>
+    /// The author's hints for the values publishing strips, by environment variable name. Empty
+    /// unless this machine is the one publishing the collection: another machine's record says
+    /// what it strips, not what this editor is looking at.
+    /// </summary>
+    private IReadOnlyDictionary<string, string> PublishedEnvHints
+    {
+        get
+        {
+            if (!state.CollectionsCache.Published.ContainsKey(CollectionName))
+            {
+                return new Dictionary<string, string>(StringComparer.Ordinal);
+            }
+            return state.CollectionsFile.Collections.GetValueOrDefault(CollectionName)?.Publish?.Intent
+                       .Hints.GetValueOrDefault(Target.Name)
+                   ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// The author's hint beside a value publishing strips. Distinct from
+    /// <see cref="PlaceholderHint"/>, which reads the synced sidecar's needs and is therefore
+    /// always null in the published state.
+    /// </summary>
+    public string? PublishedHint(EnvRow row) => PublishedEnvHints.GetValueOrDefault(row.Name);
+
+    /// <summary>
+    /// An argument's hint, which the record keys by where the marker sits rather than by name: what
+    /// <see cref="ArgRow.PublishedHint"/> binds. Asked by the row, as <see cref="AsksFor(ArgRow)"/>
+    /// is: a published collection's editor adds and removes arguments freely, and a hint read by
+    /// today's position would sit beside whichever row happened to slide into it. Null for a row
+    /// added since the window opened, which the published document has never described.
+    /// </summary>
+    internal string? PublishedHint(ArgRow row)
+    {
+        if (!state.CollectionsCache.Published.ContainsKey(CollectionName)
+            || !openArgIndexByRow.TryGetValue(row, out var published))
+        {
+            return null;
+        }
+        // Placed on the opened arguments the way the exporter places it, so a mark that moved
+        // before the window opened still shows its hint beside the argument it stands for.
+        var marks = state.CollectionsFile.Collections.GetValueOrDefault(CollectionName)?.Publish?.Intent
+            .PathMarks.GetValueOrDefault(Target.Name);
+        return marks is null ? null : PlacedOnOpen(marks).GetValueOrDefault(published)?.Hint;
+    }
+
+    /// <summary>
+    /// The last marks placed on the opened arguments, and where they went. Each row asks for its
+    /// hint whenever its rules are raised, and the placement changes only with the record. Kept by
+    /// reference, where the Mac compares values: a publish record's dictionaries are replaced
+    /// whole, never edited in place.
+    /// </summary>
+    private (IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> Marks, IReadOnlyDictionary<int, PublishIntent.PathMark> Placed)? lastPlacement;
+
+    private IReadOnlyDictionary<int, PublishIntent.PathMark> PlacedOnOpen(IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> marks)
+    {
+        if (lastPlacement is { } last && ReferenceEquals(last.Marks, marks))
+        {
+            return last.Placed;
+        }
+        var placed = PublishIntent.PlacePathMarks(marks, openedArgs).Placed;
+        lastPlacement = (marks, placed);
+        return placed;
+    }
+
+    /// <summary>
+    /// Whether this connector has any author's hint to show at all, so the view can leave the
+    /// column out rather than reserve space for nothing.
+    /// </summary>
+    public bool HasPublishedHints
+    {
+        get
+        {
+            if (!state.CollectionsCache.Published.ContainsKey(CollectionName))
+            {
+                return false;
+            }
+            if (PublishedEnvHints.Count > 0)
+            {
+                return true;
+            }
+            var marks = state.CollectionsFile.Collections.GetValueOrDefault(CollectionName)?.Publish?.Intent
+                .PathMarks.GetValueOrDefault(Target.Name);
+            return marks is not null && marks.Values.Any(m => m.Hint is not null);
+        }
+    }
+
+    // MARK: live placeholder flags
+
+    public string? BearerTokenHint => Hint(bearerToken);
+
+    public string? HeaderValueHint => Hint(headerValue);
+
+    public string? ClientSecretHint => Hint(oauthClientSecret);
 
     // MARK: tool note
 
@@ -411,6 +907,50 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     private void OnArgsChanged(object? sender, NotifyCollectionChangedEventArgs e) => EvaluateRequiredTool();
 
+    /// <summary>
+    /// A row joining either list answers with this model's rules from then on, and any change to
+    /// the arguments may move every argument's number.
+    /// </summary>
+    private void OnRowsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        foreach (var row in e.NewItems ?? Array.Empty<object>())
+        {
+            switch (row)
+            {
+                case ArgRow arg:
+                    arg.Attach(this);
+                    break;
+                case EnvRow env:
+                    env.Attach(this);
+                    break;
+            }
+        }
+        if (ReferenceEquals(sender, Args))
+        {
+            foreach (var arg in Args)
+            {
+                arg.RaisePosition();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Every row's rules asked again: what the rows ask for, owe and are hinted with follow the
+    /// snapshot, the form's lock, the sidecar's needs and the publish record, none of which a row
+    /// hears about itself.
+    /// </summary>
+    private void RaiseRowRules()
+    {
+        foreach (var row in Args)
+        {
+            row.RaiseRules();
+        }
+        foreach (var row in EnvRows)
+        {
+            row.RaiseRules();
+        }
+    }
+
     private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (Affects(e, nameof(AppState.ToolStatuses)))
@@ -418,6 +958,75 @@ public sealed class EditorModel : ObservableObject, IDisposable
             Raise(nameof(ToolNote));
             Raise(nameof(HasToolNote));
         }
+        // Everything the collection decides: its kind, the grey line above the fields, what the
+        // footer offers, and whether the author left a hint beside a stripped value. The window
+        // used to re-seat its DataContext to pick these up, which regenerated every row and took
+        // the caret with it. The Mac model relays only the sidecar and tool statuses, and its
+        // editor view observes AppState itself for the cache and the store.
+        if (Affects(e, nameof(AppState.CollectionsFile)) || Affects(e, nameof(AppState.CollectionsCache))
+            || Affects(e, nameof(AppState.Store)))
+        {
+            // The retake comes first, so the record is already the new one by the time anything
+            // hears that the form unlocked. A binding that transfers inline off IsReadOnly would
+            // otherwise read the record this is about to replace; WPF's DataBind priority hides
+            // that today, which is not a thing to depend on.
+            var retook = RetakeSnapshotIfUnlocked();
+            Raise(nameof(IsReadOnly));
+            Raise(nameof(Header));
+            Raise(nameof(HeaderNote));
+            Raise(nameof(HasHeaderNote));
+            Raise(nameof(CanSave));
+            Raise(nameof(ShowJsonTip));
+            Raise(nameof(HasPublishedHints));
+            Raise(nameof(BearerTokenIsLive));
+            Raise(nameof(HeaderValueIsLive));
+            Raise(nameof(ClientSecretIsLive));
+            // A hint belongs to the subscription that asked for the value, so it must not
+            // outlive it.
+            Raise(nameof(BearerTokenHint));
+            Raise(nameof(HeaderValueHint));
+            Raise(nameof(ClientSecretHint));
+            if (retook)
+            {
+                Raise(nameof(AsksForBearerToken));
+                Raise(nameof(AsksForHeaderValue));
+                Raise(nameof(AsksForClientSecret));
+                Raise(nameof(BearerTokenOwed));
+                Raise(nameof(HeaderValueOwed));
+                Raise(nameof(ClientSecretOwed));
+            }
+            RaiseRowRules();
+        }
+    }
+
+    /// <summary>What every field is asking for right now, recorded as the answer the locks will use.</summary>
+    private void TakeAskedSnapshot()
+    {
+        askedEnvRows = EnvRows.Where(r => Placeholder.ContainsMarker(r.Value)).ToHashSet();
+        askedArgs = Args.Where(r => Placeholder.ContainsMarker(r.Value)).ToHashSet();
+        AsksForBearerToken = Placeholder.ContainsMarker(bearerToken);
+        AsksForHeaderValue = Placeholder.ContainsMarker(headerValue);
+        AsksForClientSecret = Placeholder.ContainsMarker(oauthClientSecret);
+        snapshotWasReadOnly = IsReadOnly;
+    }
+
+    /// <summary>
+    /// Stop Syncing under an open window: the form stops locking anything, so the snapshot taken
+    /// against a locked form has nothing left to protect and a field the user has since filled
+    /// must go back to being an ordinary masked secret. Taken from the values as they stand, so
+    /// a field still holding a marker keeps asking. The values are read as they stand now, not
+    /// from the config the window opened on. The view gates its control choice on
+    /// <see cref="IsReadOnly"/> too, so this only decides which fields stay live inside a form
+    /// that still locks the rest. True when it retook.
+    /// </summary>
+    private bool RetakeSnapshotIfUnlocked()
+    {
+        if (!snapshotWasReadOnly || IsReadOnly)
+        {
+            return false;
+        }
+        TakeAskedSnapshot();
+        return true;
     }
 
     /// <summary>Stops listening to AppState; the window calls this from Closed.</summary>
@@ -425,13 +1034,15 @@ public sealed class EditorModel : ObservableObject, IDisposable
     {
         state.PropertyChanged -= OnStateChanged;
         Args.CollectionChanged -= OnArgsChanged;
+        Args.CollectionChanged -= OnRowsChanged;
+        EnvRows.CollectionChanged -= OnRowsChanged;
     }
 
     // MARK: list editing
 
     public void AddArg() => Args.Add(new ArgRow(""));
 
-    public void RemoveArg(ArgRow row) => Args.Remove(row);
+    public void DeleteArg(ArgRow row) => Args.Remove(row);
 
     /// <summary>A fresh row's value is shown in clear — the user is typing it, not inspecting a stored secret.</summary>
     public void AddEnvRow()
@@ -442,7 +1053,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         FocusEnvRowRequested?.Invoke(row);
     }
 
-    public void RemoveEnvRow(EnvRow row)
+    public void DeleteEnvRow(EnvRow row)
     {
         EnvRows.Remove(row);
         Raise(nameof(HasEnvRows));
@@ -515,7 +1126,14 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     private void AdoptForm(JsonValue config)
     {
+        var carried = CarriedRecords();
+        var argsBefore = Args.Select(row => row.Value).ToList();
         Load(config);
+        Restore(carried);
+        if (!Args.Select(row => row.Value).SequenceEqual(argsBefore, StringComparer.Ordinal))
+        {
+            argRowsFollowOpen = false;
+        }
         // A JSON edit that changed the config consumes the template, exactly
         // like a discard would — so a later Type toggle to Local re-derives
         // nothing and leaves what the user typed alone. An unchanged round
@@ -524,6 +1142,54 @@ public sealed class EditorModel : ObservableObject, IDisposable
         isUntouchedTemplate = isUntouchedTemplate && config == Target.Entry.Config;
         EvaluateRequiredTool();
         RaiseAll();
+        // The rows are new, and the records they answer from were carried onto them after they
+        // joined their lists.
+        RaiseRowRules();
+    }
+
+    /// <summary>
+    /// Both row-keyed records, re-keyed onto something a rebuilt row still has. Load gives every
+    /// row a new object, so without this a JSON round trip would leave the asked-for record and
+    /// the published positions recognising no row at all — a synced form's placeholders would
+    /// lock, a published form's argument hints would vanish. They are carried, never retaken: a
+    /// retake reads current values and so would unlock nothing the user has already filled.
+    ///
+    /// Env rows are keyed by name, which is unique within a connector. Arguments are keyed by
+    /// position, which is exact in a synced form — its JSON is read-only, so the round trip is
+    /// always unchanged — and approximate only in an editable published form after a JSON edit
+    /// that inserts, removes or reorders arguments, which is the one case this cannot follow.
+    /// </summary>
+    private sealed record Carried(
+        HashSet<string> AskedEnvNames, HashSet<int> AskedArgPositions, Dictionary<int, int> OpenArgIndexByPosition);
+
+    private Carried CarriedRecords()
+    {
+        var byPosition = new Dictionary<int, int>();
+        var askedPositions = new HashSet<int>();
+        for (var i = 0; i < Args.Count; i++)
+        {
+            if (askedArgs.Contains(Args[i]))
+            {
+                askedPositions.Add(i);
+            }
+            if (openArgIndexByRow.TryGetValue(Args[i], out var open))
+            {
+                byPosition[i] = open;
+            }
+        }
+        return new Carried(
+            EnvRows.Where(askedEnvRows.Contains).Select(r => r.Name).ToHashSet(StringComparer.Ordinal),
+            askedPositions,
+            byPosition);
+    }
+
+    private void Restore(Carried carried)
+    {
+        askedEnvRows = EnvRows.Where(r => carried.AskedEnvNames.Contains(r.Name)).ToHashSet();
+        askedArgs = carried.AskedArgPositions.Where(i => i < Args.Count).Select(i => Args[i]).ToHashSet();
+        openArgIndexByRow = carried.OpenArgIndexByPosition
+            .Where(pair => pair.Key < Args.Count)
+            .ToDictionary(pair => Args[pair.Key], pair => pair.Value);
     }
 
     /// <summary>
@@ -669,15 +1335,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         RemotePattern.CmdUnsafeField(CurrentRemoteConfig()) is { } field ? Label(field) : null;
 
     /// <summary>The field's caption in the Remote form, as the validation message names it.</summary>
-    private static string Label(RemoteField field) => field switch
-    {
-        RemoteField.Url => "Server URL",
-        RemoteField.HeaderName => "Header name",
-        RemoteField.ClientId => "Client ID",
-        RemoteField.ClientSecret => "Client Secret",
-        RemoteField.Scopes => "Scopes",
-        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
-    };
+    private static string Label(RemoteField field) => RemotePattern.FieldLabel(field);
 
     private JsonValue CurrentFormConfig()
     {
@@ -729,14 +1387,44 @@ public sealed class EditorModel : ObservableObject, IDisposable
         return null;
     }
 
-    // MARK: save / remove / cancel
+    // MARK: save
+
+    /// <summary>
+    /// The config this window opened on, with the <c>${CC_NEEDS:…}</c> leaves — and only those —
+    /// carrying whatever the form now holds at the same JSON pointers. Anything else the fields
+    /// have been talked into saying is dropped on the floor, which is the whole point: the author
+    /// owns every other byte, and the next refresh would overwrite it anyway.
+    /// </summary>
+    private JsonValue PlaceholdersFilledIn()
+    {
+        var original = Target.Entry.Config;
+        var candidate = view == EditView.Json
+            ? PasteRecovery.Recover(jsonText)?.Config ?? original
+            : CurrentFormConfig();
+        var result = original;
+        foreach (var (pointer, _) in Placeholder.MarkersIn(original))
+        {
+            if (candidate.ValueAt(pointer) is { Kind: JsonKind.String } filled)
+            {
+                result = result.Replacing(pointer, filled) ?? result;
+            }
+        }
+        return result;
+    }
 
     /// <summary>True when the entry was saved and the window should close.</summary>
     public bool Save()
     {
         ValidationError = null;
+        var readOnly = IsReadOnly;
         JsonValue config;
-        if (view == EditView.Json)
+        if (readOnly)
+        {
+            // Nothing a read-only window can change can be invalid: the author's own save
+            // validated everything else, and a placeholder takes any text at all.
+            config = PlaceholdersFilledIn();
+        }
+        else if (view == EditView.Json)
         {
             if (EffectiveJsonConfig() is not { } effective)
             {
@@ -787,7 +1475,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
             config = CurrentFormConfig();
         }
         // Only the canonical `[-y] mcp-remote <url>` shape must carry a valid URL; extra-args invocations pass.
-        if (RemotePattern.IsCanonicalShape(config) && RemotePattern.Detect(config) is null)
+        if (!readOnly && RemotePattern.IsCanonicalShape(config) && RemotePattern.Detect(config) is null)
         {
             ValidationError = InvalidUrlError;
             return false;
@@ -797,39 +1485,136 @@ public sealed class EditorModel : ObservableObject, IDisposable
         McpEntry? current = null;
         if (!Target.IsNew)
         {
-            state.Store.Mcps.TryGetValue(Target.Name, out current);
+            if (state.Store.Collections.TryGetValue(CollectionName, out var held))
+            {
+                held.Mcps.TryGetValue(Target.Name, out current);
+            }
             if (current?.Config != Target.Entry.Config)
             {
                 var missing = current is null;
-                var message = missing ? RemovedOutsideMessage(Target.Name) : ChangedOutsideMessage(Target.Name);
-                var detail = missing ? RemovedOutsideDetail : ChangedOutsideDetail;
+                // A read-only window owns nothing but the values it was asked for, and those were
+                // typed against a config the author has since replaced. Save Anyway would write
+                // that config back or resurrect a connector the author removed, and the question's
+                // own detail would say something untrue; the conflict is reported instead and
+                // nothing is written. Reopening the editor picks up the author's current config.
+                if (readOnly)
+                {
+                    ValidationError = missing ? DeletedOutsideMessage(Target.Name) : ChangedOutsideMessage(Target.Name);
+                    return false;
+                }
+                var message = missing ? DeletedOutsideMessage(Target.Name) : ChangedOutsideMessage(Target.Name);
+                var detail = missing ? DeletedOutsideDetail : ChangedOutsideDetail;
                 if (!dialogs.Confirm(message, detail, SaveAnywayButton))
                 {
                     return false;
                 }
             }
         }
-        var entry = new McpEntry(current?.Enabled ?? Target.Entry.Enabled, config, view);
-        if (state.Upsert(name, entry, Target.IsNew ? null : Target.Name) is { } error)
+        // The name and the remembered view are the author's too, so a read-only save leaves both
+        // where it found them. The enabled flag is this machine's and is carried over from the
+        // store, exactly as every other save does.
+        var saved = readOnly ? Target.Name : name;
+        var entry = new McpEntry(current?.Enabled ?? Target.Entry.Enabled, config, readOnly ? Target.Entry.LastEditView : view);
+        if (state.Upsert(saved, entry, Target.IsNew ? null : Target.Name, Target.Collection,
+                         FollowedPathMarks(CollectionName, config)) is { } error)
         {
             ValidationError = error;
             return false;
+        }
+        if (propagate)
+        {
+            PropagateSavedConfig(config, saved);
         }
         CloseRequested?.Invoke();
         state.ApplyInteractively();
         return true;
     }
 
-    /// <summary>Remove and apply in the same turn: a watcher-driven reload between the two once resurrected the connector.</summary>
-    public void Remove()
+    /// <summary>
+    /// The ticked checkbox: the same change again in each collection that held an identical copy
+    /// when this window opened. Each twin keeps its own on/off state, which is this machine's
+    /// business and not part of "this change"; a name already taken in one of them leaves that
+    /// collection alone rather than failing a save that has already landed.
+    /// <para>
+    /// The checkbox promised these collections held an identical copy, and that was measured when
+    /// the window opened. A twin that has moved since — a second editor window on it saved first,
+    /// or an external edit reconciled in — is no longer the connector the user agreed to change,
+    /// so it is skipped in silence. The same care the primary save takes over its own snapshot.
+    /// </para>
+    /// </summary>
+    private void PropagateSavedConfig(JsonValue config, string saved)
     {
-        if (!dialogs.Confirm(RemoveMessage(Target.Name), null, RemoveButton, destructive: true))
+        foreach (var other in PropagateTargets)
         {
-            return;
+            if (state.Store.Collections.TryGetValue(other, out var held)
+                && held.Mcps.TryGetValue(Target.Name, out var twin)
+                && twin.Config == Target.Entry.Config)
+            {
+                // The twin held this window's opening config, so its marks follow the same rows.
+                state.Upsert(saved, new McpEntry(twin.Enabled, config, view), Target.Name, other,
+                             FollowedPathMarks(other, config));
+            }
         }
-        state.Remove(Target.Name);
-        state.ApplyInteractively();
-        CloseRequested?.Invoke();
+    }
+
+    /// <summary>
+    /// The saved connector's path marks in <paramref name="collection"/>'s publish record,
+    /// re-keyed to follow the rows they were made on, or null to leave the record as it is.
+    /// <para>
+    /// Each mark is first placed on the arguments the window opened on, the way the exporter
+    /// places it, so a mark that had already moved before the window opened is followed from where
+    /// it really was. It then goes with its row: to wherever the row sits now, recording the row's
+    /// text as its value — the author may have corrected the path in place — or away with the row
+    /// when the row was deleted.
+    /// </para>
+    /// <para>
+    /// Null whenever this window cannot vouch for its rows, and publishing then places each mark by
+    /// its value, refusing any it cannot: a new or read-only connector; a remote one, whose
+    /// arguments are the launcher's; a save whose arguments are not the rows' (a JSON edit not
+    /// brought back to the form); rows rebuilt from a JSON edit that changed the arguments; or a
+    /// mark that could not be placed even on the arguments the window opened on.
+    /// </para>
+    /// </summary>
+    private IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark>? FollowedPathMarks(string collection, JsonValue config)
+    {
+        if (Target.IsNew || IsReadOnly || !argRowsFollowOpen
+            || state.CollectionsFile.Collections.GetValueOrDefault(collection)?.Publish?.Intent.PathMarks
+                   .GetValueOrDefault(Target.Name) is not { Count: > 0 } marks
+            || RemotePattern.Decode(config) is not null)
+        {
+            return null;
+        }
+        var model = FormMapper.Analyze(config).Model;
+        if (!model.Args.SequenceEqual(Args.Select(row => row.Value), StringComparer.Ordinal))
+        {
+            return null;
+        }
+        var placement = PublishIntent.PlacePathMarks(marks, openedArgs);
+        if (placement.Unresolved.Count > 0)
+        {
+            return null;
+        }
+        // A deleted row takes its mark with it only when its text is gone from the save too. The
+        // same path typed back in a new row, or moved into the command or an environment value, is
+        // still the path the author marked: the record is left for publishing to place by value, or
+        // to refuse.
+        var saved = model.Args.Append(model.Command).Concat(model.Env.Values).ToHashSet(StringComparer.Ordinal);
+        var surviving = Args.Where(openArgIndexByRow.ContainsKey).Select(row => openArgIndexByRow[row]).ToHashSet();
+        if (placement.Placed.Keys.Any(opened => !surviving.Contains(opened) && saved.Contains(openedArgs[opened])))
+        {
+            return null;
+        }
+        var followed = new Dictionary<JsonPointer, PublishIntent.PathMark>();
+        for (var position = 0; position < Args.Count; position++)
+        {
+            if (openArgIndexByRow.TryGetValue(Args[position], out var opened)
+                && placement.Placed.TryGetValue(opened, out var mark))
+            {
+                followed[new JsonPointer(["args", position.ToString(System.Globalization.CultureInfo.InvariantCulture)])] =
+                    mark with { Value = Args[position].Value };
+            }
+        }
+        return followed;
     }
 
     /// <summary>Discards all edits; nothing persisted.</summary>

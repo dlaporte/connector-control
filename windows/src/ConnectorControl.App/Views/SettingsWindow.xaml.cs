@@ -67,10 +67,9 @@ public partial class SettingsWindow : Window
 
     private void OnChooseStoreDir(object sender, RoutedEventArgs e)
     {
-        var picker = new OpenFolderDialog { Title = "Choose", Multiselect = false };
-        if (picker.ShowDialog(this) == true)
+        if (Pickers.Folder(this) is { } folder)
         {
-            Model.ChooseStoreDir(picker.FolderName);
+            Model.ChooseStoreDir(folder);
         }
     }
 
@@ -103,7 +102,7 @@ public partial class SettingsWindow : Window
 
     private void OnChooseClaudeConfig(object sender, RoutedEventArgs e)
     {
-        var picker = new OpenFileDialog { Title = "Choose", Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*", CheckFileExists = false };
+        var picker = new OpenFileDialog { Title = SettingsModel.ChooseTitle, Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*", CheckFileExists = false };
         if (picker.ShowDialog(this) == true)
         {
             Model.ChooseClaudeConfig(picker.FileName);
@@ -114,7 +113,7 @@ public partial class SettingsWindow : Window
 
     private async void OnChooseLaunchTarget(object sender, RoutedEventArgs e)
     {
-        var picker = new OpenFileDialog { Title = "Choose", Filter = "Programs (*.exe)|*.exe|All files (*.*)|*.*" };
+        var picker = new OpenFileDialog { Title = SettingsModel.ChooseTitle, Filter = "Programs (*.exe)|*.exe|All files (*.*)|*.*" };
         if (picker.ShowDialog(this) == true)
         {
             // The path is trusted at every Restart Claude from now on, so a file that is not

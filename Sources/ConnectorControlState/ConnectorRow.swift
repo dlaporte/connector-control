@@ -1,6 +1,9 @@
-/// MCPRow's data: a switch, the name, an advisory caution glyph, and a
-/// pencil button. A value: SwiftUI identifies the row by name, and toggling
-/// goes through `PopoverModel.setEnabled`.
+/// MCPRow's data: a switch, the name, and an advisory caution glyph. A value:
+/// SwiftUI identifies the row by name, and toggling goes through
+/// `PopoverModel.setEnabled`.
+///
+/// Mirror: windows/src/ConnectorControl.Core/State/ConnectorRow.cs (a class there, which
+/// toggles itself, because WPF's two-way binding needs a row that stays put)
 public struct ConnectorRow: Identifiable, Equatable, Sendable {
     public let name: String
     public let enabled: Bool
@@ -8,14 +11,20 @@ public struct ConnectorRow: Identifiable, Equatable, Sendable {
     /// launcher is not where Claude Desktop looks. Advisory only — the row
     /// still toggles.
     public let toolWarning: String?
+    /// Leads the row with a lock: this connector belongs to the author of a synced collection's
+    /// document. The switch stays live; everything else is read-only.
+    public let isLocked: Bool
 
-    public init(name: String, enabled: Bool, toolWarning: String?) {
+    public init(name: String, enabled: Bool, toolWarning: String?, isLocked: Bool = false) {
         self.name = name
         self.enabled = enabled
         self.toolWarning = toolWarning
+        self.isLocked = isLocked
     }
 
     public var id: String { name }
 
-    public var editTooltip: String { "Edit “\(name)”" }
+    /// The lock's tooltip, the same sentence the Collections window's rows show for the same
+    /// fact, borrowed rather than written twice.
+    public var lockTooltip: String { CollectionsModel.lockedGlyphTooltip }
 }

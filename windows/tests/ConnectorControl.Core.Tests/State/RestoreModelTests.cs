@@ -3,6 +3,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/RestoreModelTests.swift</summary>
 public class RestoreModelTests
 {
     [Fact]
@@ -46,6 +47,58 @@ public class RestoreModelTests
         Assert.Equal(1, closed);
         Assert.True(state.Store.Mcps["aws-mcp"].Enabled);
         Assert.Null(model.RestoreError);
+    }
+
+    /// <summary>A restore AppState would refuse is refused before the confirmation asks anything.</summary>
+    [Fact]
+    public void ARefusedRestoreSaysWhyWithoutAsking()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam);
+        state.SwitchCollection("Data team");
+        var model = new RestoreModel(state, h.Dialogs);
+        model.Load();
+        model.Selection = model.Backups[^1];   // the first-run original, which records no collection
+        Assert.EndsWith(".original.json", model.Selection, StringComparison.Ordinal);
+        var banner = state.LastError;
+        Assert.False(model.Restore());
+        Assert.Empty(h.Dialogs.Confirms);
+        Assert.Equal(AppState.RestoreSubscribedError("Data team"), model.RestoreError);
+        Assert.Equal(banner, state.LastError);   // a refusal is the dialog's alone
+        Assert.Equal("Data team", state.ActiveCollection);
+    }
+
+    /// <summary>
+    /// A refusal is the dialog's alone on either side of the confirmation: nothing was restored,
+    /// so the banner has nothing to say. The collection becomes subscribed-active while it is up;
+    /// the Mac's sheet confirms in a second call, and its test switches between the two.
+    /// </summary>
+    [Fact]
+    public void ARefusalAfterTheConfirmationIsTheSheetsAlone()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam);
+        // There and back, so the first apply leaves the first-run original among the backups.
+        state.SwitchCollection("Data team");
+        state.SwitchCollection("Default");
+        var model = new RestoreModel(state, h.Dialogs);
+        model.Load();
+        model.Selection = model.Backups[^1];   // the first-run original, which records no collection
+        Assert.EndsWith(".original.json", model.Selection, StringComparison.Ordinal);
+        string? banner = null;
+        h.Dialogs.DuringConfirm = () =>
+        {
+            state.SwitchCollection("Data team");
+            banner = state.LastError;
+        };
+        Assert.False(model.Restore());
+        // The active collection was local, so it asked.
+        Assert.Single(h.Dialogs.Confirms);
+        Assert.Equal(AppState.RestoreSubscribedError("Data team"), model.RestoreError);
+        Assert.Equal(banner, state.LastError);
+        Assert.Equal("Data team", state.ActiveCollection);
     }
 
     [Fact]

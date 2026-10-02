@@ -16,6 +16,18 @@
         </DataTrigger>
       </Style.Triggers>
     </Style>
+    <!-- The collection banner's second answer, which only a failed publish has: Stop Publishing,
+         worded as it is in the Collections window's More menu and reached from here, so it reads
+         as one. Its visibility follows the caption, because a banner with no second answer has
+         none. -->
+    <Style x:Key="BannerSecondaryButton" TargetType="Button" BasedOn="{StaticResource LinkButton}">
+      <Setter Property="Margin" Value="8,0,0,0" />
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding CollectionBannerSecondaryButton}" Value="{x:Null}">
+          <Setter Property="Visibility" Value="Collapsed" />
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
   </Window.Resources>
   <Border BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
     <StackPanel>
@@ -29,12 +41,30 @@
           <StackPanel>
             <TextBlock Text="{x:Static state:FlyoutModel.Title}" FontSize="14" FontWeight="SemiBold" />
             <TextBlock x:Name="SubtitleText" Text="{Binding Subtitle}" Style="{StaticResource CaptionText}" FontSize="11" />
-            <Button x:Name="ProfileChip" Content="{Binding ProfileChipText}" Style="{StaticResource LinkButton}" FontSize="11" FontWeight="SemiBold" Padding="0,1,0,0" Click="OnProfileChip" />
+            <!-- The active collection and what is true of it: the chain when its connectors are
+                 a document's, the amber dot when that document has news waiting. -->
+            <Button x:Name="CollectionChip" Style="{StaticResource LinkButton}" FontSize="11" FontWeight="SemiBold" Padding="0,1,0,0" Click="OnCollectionChip">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="CollectionChipName" Text="{Binding ActiveCollection}" VerticalAlignment="Center" />
+                <TextBlock x:Name="CollectionChipChain" Style="{StaticResource ChainMark}"
+                           ToolTip="{Binding SourceTooltip}" AutomationProperties.Name="{Binding SourceTooltip}"
+                           Margin="4,0,0,0"
+                           Visibility="{Binding ActiveCollectionIsSynced, Converter={StaticResource Vis}}" />
+                <Ellipse x:Name="CollectionChipDot" Style="{StaticResource PendingDot}" Margin="4,0,0,0"
+                         ToolTip="{x:Static state:FlyoutModel.PendingSpokenLabel}"
+                         AutomationProperties.Name="{x:Static state:FlyoutModel.PendingSpokenLabel}"
+                         Visibility="{Binding ActiveHasPendingUpdate, Converter={StaticResource Vis}}" />
+                <!-- U+25BE, the disclosure mark: this button's style draws no chevron of its own. -->
+                <TextBlock Text="&#x25BE;" Margin="4,0,0,0" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
           </StackPanel>
           <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="20,0,0,0">
-            <Button Style="{StaticResource IconButton}" Content="&#xE710;" ToolTip="{x:Static state:FlyoutModel.AddTooltip}" Click="OnAdd" />
-            <Button Style="{StaticResource IconButton}" Content="&#xE713;" ToolTip="{x:Static state:FlyoutModel.SettingsTooltip}" Click="OnSettings" />
-            <Button Style="{StaticResource IconButton}" Content="&#xE7E8;" ToolTip="{x:Static state:FlyoutModel.QuitTooltip}" Click="OnQuit" />
+            <!-- Icon-only: a private-use glyph reads as nothing, so each says its tooltip. -->
+            <Button x:Name="SettingsButton" Style="{StaticResource IconButton}" Content="&#xE713;" Click="OnSettings"
+                    ToolTip="{x:Static state:FlyoutModel.SettingsTooltip}" AutomationProperties.Name="{x:Static state:FlyoutModel.SettingsTooltip}" />
+            <Button x:Name="QuitButton" Style="{StaticResource IconButton}" Content="&#xE7E8;" Click="OnQuit"
+                    ToolTip="{x:Static state:FlyoutModel.QuitTooltip}" AutomationProperties.Name="{x:Static state:FlyoutModel.QuitTooltip}" />
           </StackPanel>
         </Grid>
       </Border>
@@ -52,6 +82,30 @@
         </Grid>
       </Border>
 
+      <!-- Collection banner: the one collection with news, active or not -->
+      <Border x:Name="CollectionBannerStrip" Margin="10" Padding="8" CornerRadius="6"
+              BorderThickness="1" BorderBrush="{DynamicResource SystemFillColorCautionBrush}"
+              Visibility="{Binding HasCollectionBanner, Converter={StaticResource Vis}}">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="{x:Static state:FlyoutModel.CautionGlyph}" FontFamily="{StaticResource IconFont}"
+                     Foreground="{DynamicResource SystemFillColorCautionBrush}" Margin="0,2,6,0" VerticalAlignment="Top" />
+          <StackPanel Grid.Column="1">
+            <TextBlock x:Name="CollectionBannerMessage" Text="{Binding CollectionBannerText}" Style="{StaticResource CautionText}" />
+            <!-- The buttons take a line of their own rather than a column beside the sentence:
+                 the flyout is 240–380 wide, and a failed publish offers two of them. -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">
+              <Button x:Name="CollectionBannerButton" Content="{Binding CollectionBannerButton}" Padding="10,4" Click="OnCollectionBanner" />
+              <Button x:Name="CollectionBannerSecondary" Style="{StaticResource BannerSecondaryButton}"
+                      Content="{Binding CollectionBannerSecondaryButton}" Click="OnCollectionBannerSecondary" />
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+      </Border>
+
       <!-- Connector list: grows to 420 then scrolls -->
       <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto">
         <StackPanel>
@@ -62,28 +116,41 @@
                   <Grid Margin="12,7">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
                       <ColumnDefinition Width="*" />
                       <ColumnDefinition Width="Auto" />
-                      <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <ToggleButton Style="{StaticResource Switch}" IsChecked="{Binding Enabled}" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="10,0" />
+                    <!-- The switch says whose it is, as the Mac row's does. -->
+                    <ToggleButton x:Name="RowSwitch" Style="{StaticResource Switch}" IsChecked="{Binding Enabled}" VerticalAlignment="Center"
+                                  AutomationProperties.Name="{Binding Name}" />
+                    <!-- The lock leading a synced collection's row: the switch beside it stays
+                         live. It says its sentence out loud. -->
+                    <TextBlock x:Name="RowLockGlyph" Grid.Column="1" Style="{StaticResource LockMark}"
+                               ToolTip="{Binding LockTooltip}"
+                               AutomationProperties.Name="{Binding LockTooltip}"
+                               Visibility="{Binding IsLocked, Converter={StaticResource Vis}}"
+                               Margin="10,0,0,0" />
+                    <TextBlock Grid.Column="2" Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="10,0" />
                     <!-- Caution glyph: its own Auto column, so the name column stays a star
                          column and keeps trimming. -->
-                    <TextBlock Grid.Column="2" Style="{StaticResource CautionText}"
+                    <TextBlock Grid.Column="3" Style="{StaticResource CautionText}"
                                FontFamily="{StaticResource IconFont}"
                                Text="{x:Static state:FlyoutModel.ToolWarningGlyph}"
-                               ToolTip="{Binding ToolWarning}"
+                               ToolTip="{Binding ToolWarning}" AutomationProperties.Name="{Binding ToolWarning}"
                                Visibility="{Binding HasToolWarning, Converter={StaticResource Vis}}"
                                VerticalAlignment="Center" Margin="0,0,6,0" />
-                    <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="&#xE70F;" ToolTip="{Binding EditTooltip}" Click="OnEdit" />
                   </Grid>
                   <Separator Margin="0" />
                 </StackPanel>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <TextBlock x:Name="EmptyLabel" Text="{x:Static state:FlyoutModel.EmptyText}" Style="{StaticResource CaptionText}" FontSize="13" Margin="16" Visibility="{Binding IsEmpty, Converter={StaticResource Vis}}" />
+          <!-- The empty state names the collection and offers the way forward: connectors are added
+               in the Collections window, opened on the active collection. -->
+          <StackPanel x:Name="EmptyState" Margin="16" Visibility="{Binding IsEmpty, Converter={StaticResource Vis}}">
+            <TextBlock x:Name="EmptyLabel" Text="{Binding EmptyMessage, Mode=OneWay}" Style="{StaticResource CaptionText}" FontSize="13" TextWrapping="Wrap" />
+            <Button x:Name="EmptyManageButton" Content="{x:Static state:FlyoutModel.ManageTitle}" Style="{StaticResource LinkButton}" Margin="0,4,0,0" Click="OnManageEmpty" />
+          </StackPanel>
         </StackPanel>
       </ScrollViewer>
 

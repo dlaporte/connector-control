@@ -1,4 +1,5 @@
 import Foundation
+import XCTest
 import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
@@ -7,6 +8,7 @@ import ConnectorControlTestSupport
 /// path rule, real ConfigService and FileWatchers, and fakes for the platform
 /// seams only. Marshal is a queue: watcher callbacks and probe results reach
 /// state only when a test pumps, mirroring the main actor in the app.
+/// Background is a queue too: a tool probe runs only when a test drains it.
 @MainActor
 final class AppStateHarness {
     struct HarnessError: Error {}
@@ -26,15 +28,27 @@ final class AppStateHarness {
     let tools = FakeToolProbe()
     let delays = DelayQueue()
     let ui = MarshalQueue()
+    let background = BackgroundQueue()
     /// The clock every lastApplyDate is stamped with; tests move it.
     var now = ISO8601DateFormatter().date(from: "2026-09-04T12:00:00Z")!
     private var created: [AppState] = []
+    private var models: [CollectionsModel] = []
 
     var context: PathContext { PathContext(environment: [:], appSupport: appSupport) }
 
     var host: AppHost {
         AppHost(marshal: { [ui] in ui.post($0) }, delay: { [delays] in delays.add($0, $1) },
-                now: { [unowned self] in MainActor.assumeIsolated { self.now } })
+                now: { [unowned self] in MainActor.assumeIsolated { self.now } },
+                background: { [background] in background.add($0) })
+    }
+
+    /// Runs the queued background work and pumps what it posted, until
+    /// neither has anything left: everything a tool probe does, on the test's
+    /// own thread, in order.
+    func drain() {
+        while background.runAll() > 0 || ui.pending > 0 {
+            ui.pump()
+        }
     }
 
     /// `createClaudeDirectory: false` leaves even the Claude folder absent, so the
@@ -75,8 +89,96 @@ final class AppStateHarness {
         RemotePattern.make(url: url)
     }
 
-    /// Disposes every AppState this harness created (stops their watchers) and deletes the temp dir.
+    /// A local connector running `command` with `args`.
+    static func localConnector(_ command: String, _ args: [String] = []) -> MCPEntry {
+        MCPEntry(config: .object(["command": .string(command), "args": .array(args.map(JSONValue.string))]))
+    }
+
+    /// Claude running since `hours` before the harness clock, so the next apply calls for a restart.
+    func claudeRunningSince(hours: Double) {
+        claude.isRunning = true
+        claude.launchDate = now.addingTimeInterval(-hours * 3600)
+    }
+
+    // MARK: Collections
+
+    /// The bytes an author's machine would have written, at `name` under the temp dir.
+    @discardableResult
+    func writeDocument(_ doc: CollectionDocument, named name: String) throws -> URL {
+        let url = dir.file(name)
+        try writeDocument(doc, at: url)
+        return url
+    }
+
+    /// The same, at a path the test already holds: the author's next commit to a document.
+    func writeDocument(_ doc: CollectionDocument, at url: URL) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try doc.serialized().write(to: url)
+    }
+
+    /// Writes `doc` at `name` under the temp dir and subscribes `state` to it, as `collection` or
+    /// under the document's own name; a refusal fails the test. Returns where the document is.
+    @discardableResult
+    func subscribe(_ state: AppState, to doc: CollectionDocument, at name: String = "data-team.json",
+                   as collection: String? = nil, file: StaticString = #filePath, line: UInt = #line) throws -> URL {
+        let url = try writeDocument(doc, named: name)
+        XCTAssertNil(state.subscribe(documentAt: url.path, as: collection), file: file, line: line)
+        return url
+    }
+
+    /// Writes both collection files where the app reads them, then reloads so the state picks
+    /// them up — the shape a subscribe or a publish would leave behind.
+    func seed(_ state: AppState, file: CollectionsFile, cache: CollectionsLocalCache? = nil) throws {
+        try file.save(to: storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
+        try (cache ?? CollectionsLocalCache(synced: [:], published: [:]))
+            .save(to: state.service.paths.collectionsCacheURL, staging: nil)
+        state.reload()
+    }
+
+    /// Marks `name`, already in the store, synced from `<slug>.json`: found at `path` on this
+    /// machine or, with nil, not found here. It is the only collection the sidecar describes and
+    /// the only synced binding in the cache; the rest of the cache is kept.
+    func makeSynced(_ state: AppState, _ name: String, boundTo path: String? = nil) throws {
+        let entry = CollectionsFile.Entry(kind: .synced, fileName: Slug.make(name) + ".json")
+        var cache = state.collectionsCache
+        cache.synced = path.map { [name: CollectionsLocalCache.SyncedBinding(path: $0, lastHash: nil, excluded: [:])] } ?? [:]
+        try seed(state, file: CollectionsFile(collections: [name: entry]), cache: cache)
+    }
+
+    /// Publishes `collection` into a new folder `folder` under the temp dir; a refusal fails the
+    /// test. Returns the document it wrote.
+    @discardableResult
+    func publish(_ state: AppState, _ collection: String, intent: PublishIntent = .none, folder: String = "pub",
+                 file: StaticString = #filePath, line: UInt = #line) throws -> URL {
+        let url = dir.file(folder)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        XCTAssertNil(state.startPublishing(collection, to: url.path, intent: intent), file: file, line: line)
+        return url.appendingPathComponent(CollectionDocument.fileName(slug: Slug.make(collection)))
+    }
+
+    /// Reads the store off disk, lets `edit` change it and saves it back: a write from another
+    /// machine or an older app, which the running state has not seen.
+    func editStoreOnDisk(_ edit: (inout MasterStore) throws -> Void) throws {
+        var store = try storeOnDisk()
+        try edit(&store)
+        try MasterStoreIO.save(store, to: masterStoreURL)
+    }
+
+    /// A Collections window's model on `state`, showing `selecting` (the active collection when
+    /// nil) with `ticking` ticked. The harness disposes it.
+    func collectionsModel(_ state: AppState, selecting: String? = nil, ticking: [String] = []) -> CollectionsModel {
+        let model = CollectionsModel(state: state, dialogs: dialogs)
+        models.append(model)
+        if let selecting { model.selected = selecting }
+        for name in ticking { model.setChecked(name, true) }
+        return model
+    }
+
+    /// Disposes every model and AppState this harness created (stops their watchers) and deletes
+    /// the temp dir.
     func dispose() {
+        models.forEach { $0.dispose() }
+        models.removeAll()
         created.forEach { $0.dispose() }
         created.removeAll()
         dir.dispose()
@@ -107,5 +209,24 @@ final class AppStateHarness {
         if fm.fileExists(atPath: masterStoreURL.path) {
             try TempDir.bumpModificationDate(of: masterStoreURL)
         }
+    }
+}
+
+extension AppState {
+    /// A new local collection holding the active one's connectors exactly as they stand, enabled
+    /// flags included, made active: the setup most collection tests start from. Claude's config
+    /// already holds what the copy renders, so the switch writes nothing to it; each connector lands
+    /// with a store save of its own. New Collection makes an empty one and leaves the active
+    /// collection alone, so this is built from the verbs that remain. nil on success, else the
+    /// store's message.
+    func createActiveCopy(named name: String) -> String? {
+        let source = activeCollection
+        if let error = addEmptyCollection(named: name) { return error }
+        let copy = MasterStore.collectionName(name)
+        for (connector, entry) in (store.collections[source]?.mcps ?? [:]).sorted(by: { $0.key.ordinallyPrecedes($1.key) }) {
+            if let error = upsert(name: connector, entry: entry, renamedFrom: nil, in: copy) { return error }
+        }
+        switchCollection(to: copy)
+        return nil
     }
 }

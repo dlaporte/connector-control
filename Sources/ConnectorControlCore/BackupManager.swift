@@ -86,14 +86,42 @@ public struct BackupManager: Sendable {
                 $0.lastPathComponent.hasPrefix("\(series).")
                     && !$0.lastPathComponent.contains(".original.")
             }
-            .sorted { $0.lastPathComponent > $1.lastPathComponent }
+            .sorted(by: BackupManager.newestFirst)
+    }
+
+    /// Newest first: by stamp, then by the counter a same-millisecond backup takes, a name without
+    /// one being the first of its millisecond. Sorting the names as text would not do: `-` sorts
+    /// before `.`, so `<stamp>-2.json` would list below `<stamp>.json`, and `-10` below `-2`.
+    static func newestFirst(_ a: URL, _ b: URL) -> Bool {
+        let x = order(of: a.lastPathComponent), y = order(of: b.lastPathComponent)
+        return x.stamp != y.stamp ? y.stamp.ordinallyPrecedes(x.stamp) : x.counter > y.counter
+    }
+
+    /// When a backup was taken, read from its name: `<series>.<stamp>.json`, or `-<n>` after the
+    /// stamp. nil for a name that carries no stamp, such as the first-run original.
+    public static func takenAt(_ backup: URL) -> Date? {
+        let stamp = order(of: backup.lastPathComponent).stamp
+        return stamp.split(separator: ".").last.flatMap { BackupTimestamp.date(from: String($0)) }
+    }
+
+    /// A backup name's stamp and counter: `<series>.<stamp>.json` is counter 1, and
+    /// `<series>.<stamp>-<n>.json` counter n. The stamp ends in `Z`, so the counter is what follows it.
+    private static func order(of name: String) -> (stamp: String, counter: Int) {
+        let base = name.hasSuffix(".json") ? String(name.dropLast(".json".count)) : name
+        guard let z = base.lastIndex(of: "Z") else { return (base, 1) }
+        let rest = base[base.index(after: z)...]
+        // Digits only, as Windows parses it: Int alone would take a sign.
+        let digits = rest.dropFirst()
+        guard rest.hasPrefix("-"), !digits.isEmpty, digits.allSatisfy({ ("0"..."9").contains($0) }),
+              let counter = Int(digits) else { return (base, 1) }
+        return (String(base[...z]), counter)
     }
 
     /// `listing` is the caller's own pre-write directory read plus the file it just
     /// wrote — sorted the same way `backups(series:)` would — so pruning does not
     /// re-list a directory `backUp` already just listed.
     private func prune(series: String, listing: [URL]) {
-        let all = listing.sorted { $0.lastPathComponent > $1.lastPathComponent }
+        let all = listing.sorted(by: BackupManager.newestFirst)
         for stale in all.dropFirst(keepCount) {
             // Best-effort: a locked or read-only stale backup must not fail the
             // user's save; the next rotation retries.

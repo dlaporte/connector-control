@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "jira": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://jira.example.com/mcp"
+      ]
+    },
+    "scoutbook": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://scoutbook.example.com/mcp"
+      ]
+    }
+  },
+  "preferences": {
+    "sidebarMode": "epitaxy"
+  }
+}

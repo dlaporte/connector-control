@@ -9,7 +9,8 @@ namespace ConnectorControl.App.Views;
 /// </summary>
 public partial class ConfirmDialog : DialogWindow
 {
-    public ConfirmDialog(string message, string? informativeText, string primaryTitle, string? cancelTitle, bool destructive)
+    public ConfirmDialog(string message, string? informativeText, string primaryTitle, string? cancelTitle, bool destructive,
+                         bool cancelIsDefault = false)
     {
         InitializeComponent();
         MessageText.Text = message;
@@ -23,14 +24,27 @@ public partial class ConfirmDialog : DialogWindow
         {
             PrimaryButton.Style = style;
         }
+        // Return presses the cancel button, and the primary answers only a click; the accent
+        // goes with the default, and a destructive primary keeps its red. Escape stays on Cancel.
+        if (cancelIsDefault)
+        {
+            PrimaryButton.IsDefault = false;
+            CancelButton.IsDefault = true;
+            if (!destructive)
+            {
+                PrimaryButton.ClearValue(StyleProperty);
+            }
+            CancelButton.SetResourceReference(StyleProperty, "AccentButtonStyle");
+        }
     }
 
     /// <summary>True when the primary button was chosen.</summary>
     public bool Result { get; private set; }
 
-    public static bool Show(Window? owner, string message, string? informativeText, string primaryTitle, string? cancelTitle, bool destructive)
+    public static bool Show(Window? owner, string message, string? informativeText, string primaryTitle, string? cancelTitle, bool destructive,
+                            bool cancelIsDefault = false)
     {
-        var dialog = new ConfirmDialog(message, informativeText, primaryTitle, cancelTitle, destructive);
+        var dialog = new ConfirmDialog(message, informativeText, primaryTitle, cancelTitle, destructive, cancelIsDefault);
         return Present(dialog, owner, () => dialog.Result);
     }
 

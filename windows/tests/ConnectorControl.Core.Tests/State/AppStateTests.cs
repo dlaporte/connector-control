@@ -4,6 +4,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/AppStateTests.swift</summary>
 public class AppStateTests
 {
     private static readonly string[] Fixture = ["aws-mcp", "scoutbook", "service-now"];
@@ -22,8 +23,8 @@ public class AppStateTests
         Assert.False(state.NeedsClaudeRestart);
         Assert.False(state.ApplyRetryNeeded);
         Assert.Equal("3 of 3 enabled", state.HeaderSubtitle);
-        Assert.Equal(["Default"], state.ProfileNames);
-        Assert.Equal("Default", state.ActiveProfile);
+        Assert.Equal(["Default"], state.CollectionNames);
+        Assert.Equal("Default", state.ActiveCollection);
         Assert.True(File.Exists(h.MasterStorePath));
         Assert.Equal(PermissionsSweep.CurrentVersion, h.Settings.SweepVersion);
     }
@@ -54,12 +55,11 @@ public class AppStateTests
     }
 
     [Fact]
-    public void RestartRequiredFollowsClaudeLaunchDate()
+    public void RestartRequiredFollowsClaudeLaunchTime()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        h.Claude.IsRunning = true;
-        h.Claude.LaunchDate = h.Now.AddHours(-1);
+        h.ClaudeRunningSince(1);
         state.SetEnabled("aws-mcp", false);
         Assert.True(state.NeedsClaudeRestart);
 
@@ -78,8 +78,7 @@ public class AppStateTests
     {
         using var h = new AppStateHarness();
         h.Settings.LastApplyDate = h.Now;
-        h.Claude.IsRunning = true;
-        h.Claude.LaunchDate = h.Now.AddHours(-1);
+        h.ClaudeRunningSince(1);
         using var state = h.Create();
         Assert.True(state.NeedsClaudeRestart);
     }
@@ -126,11 +125,11 @@ public class AppStateTests
     }
 
     [Fact]
-    public void RemovePersistsButDoesNotApply()
+    public void DeletePersistsButDoesNotApply()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        state.Remove("aws-mcp");
+        state.Delete(["aws-mcp"]);
         Assert.False(h.StoreOnDisk().Mcps.ContainsKey("aws-mcp"));
         Assert.True(h.ClaudeServers().ContainsKey("aws-mcp"));
         Assert.True(state.IsDirty);
@@ -154,7 +153,7 @@ public class AppStateTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        state.Remove("aws-mcp");
+        state.Delete(["aws-mcp"]);
         state.Reload();
         Assert.False(h.ClaudeServers().ContainsKey("aws-mcp"));   // regenerated from the store
         Assert.False(state.Store.Mcps.ContainsKey("aws-mcp"));    // not resurrected: it matched the baseline
@@ -200,7 +199,7 @@ public class AppStateTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        state.Remove("aws-mcp");   // pending removal: store and file now differ
+        state.Delete(["aws-mcp"]);   // pending removal: store and file now differ
         h.WriteClaudeServers(      // someone writes exactly what the store would render
             ("scoutbook", state.Store.Mcps["scoutbook"].Config),
             ("service-now", state.Store.Mcps["service-now"].Config));
@@ -232,15 +231,15 @@ public class AppStateTests
         using var state = h.Create();
         File.WriteAllText(h.ClaudeConfigPath, "{oops");
         state.Reload();
-        Assert.Equal("Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore… to repair the file.", state.LastError);
+        Assert.Equal("Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.", state.LastError);
         Assert.Equal(Fixture, state.SortedNames);
         Assert.Empty(h.Notifier.Sent);
         Assert.False(state.ApplyRetryNeeded);
 
         state.SetEnabled("aws-mcp", false);
         Assert.True(state.ApplyRetryNeeded);
-        Assert.StartsWith("Claude's config file is not valid JSON (", state.LastError, StringComparison.Ordinal);
-        Assert.EndsWith("). Nothing was written. Use Backups ▸ Restore… to recover it.", state.LastError, StringComparison.Ordinal);
+        Assert.StartsWith("Claude’s config file is not valid JSON (", state.LastError, StringComparison.Ordinal);
+        Assert.EndsWith("). Nothing was written. Use Backups ▸ Restore to recover it.", state.LastError, StringComparison.Ordinal);
         Assert.False(h.StoreOnDisk().Mcps["aws-mcp"].Enabled);   // the store change persisted even though the apply failed
         Assert.Equal("{oops", File.ReadAllText(h.ClaudeConfigPath));
 
@@ -298,7 +297,7 @@ public class AppStateTests
         state.Reload();
         // Both sentences, in reconcile order; the second is the one that says what to do.
         Assert.StartsWith("The MCP list file was unreadable; it was preserved as mcps.corrupt.", state.LastError, StringComparison.Ordinal);
-        Assert.EndsWith(" Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore… to repair the file.", state.LastError, StringComparison.Ordinal);
+        Assert.EndsWith(" Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.", state.LastError, StringComparison.Ordinal);
     }
 
     /// <summary>Reload's own catch used to filter by exception type, so a throw from
@@ -327,7 +326,7 @@ public class AppStateTests
     public void FriendlyMapsMalformedConfigAndPassesOtherMessagesThrough()
     {
         Assert.Equal(
-            "Claude's config file is not valid JSON (top level is not a JSON object). Nothing was written. Use Backups ▸ Restore… to recover it.",
+            "Claude’s config file is not valid JSON (top level is not a JSON object). Nothing was written. Use Backups ▸ Restore to recover it.",
             AppState.Friendly(new ClaudeConfigException("top level is not a JSON object")));
         Assert.Equal("disk full", AppState.Friendly(new IOException("disk full")));
     }
@@ -341,8 +340,20 @@ public class AppStateTests
         var service = AppState.MakeService(h.Settings, h.Context);
         Assert.Equal(h.Dir.File("synced"), service.Paths.StoreDir);
         Assert.Equal(h.BackupsDir, service.Paths.BackupsDir);
+        // No staging assert: Windows AppPaths has no staging folder (see AppPathsTests.swift).
         Assert.Equal(h.ClaudeConfigPath, service.Paths.ClaudeConfigPath);
         Assert.Equal(7, service.Backups.KeepCount);
+    }
+
+    /// <summary>A stored empty string (e.g. a setting cleared by hand) counts as absent, same as
+    /// null — the default location, not a literal empty path.</summary>
+    [Fact]
+    public void AnEmptyStoredStoreDirIsTheDefault()
+    {
+        using var h = new AppStateHarness();
+        h.Settings.MasterStoreDir = "";
+        using var state = h.Create();
+        Assert.Equal(h.StoreDir, state.Service.Paths.StoreDir);
     }
 
     [Fact]
@@ -355,10 +366,17 @@ public class AppStateTests
         var raised = new List<string?>();
         state.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
         var task = state.RefreshToolsAsync();
-        // The task completes once the probe batch is posted, not once it is applied,
-        // so pump until the actual publication (the observable ToolStatuses count) rather than task.IsCompleted.
-        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 4, TimeSpan.FromSeconds(5)));
+        // Handed to the host's Background, not run on the calling (UI) thread.
+        Assert.Equal(0, h.Tools.Batches);
+        Assert.Equal(1, h.Background.Pending);
+        Assert.False(task.IsCompleted);
+        // The task completes once the probe batch is posted, not once it is applied: the results
+        // reach state only when the UI thread runs what was posted.
+        Assert.Equal(1, h.Background.RunAll());
         Assert.True(task.IsCompleted);
+        Assert.Empty(state.ToolStatuses);
+        h.Ui.Pump();
+        Assert.Equal(4, state.ToolStatuses.Count);
         Assert.False(state.ToolStatuses[Tool.Uvx].Found);
         Assert.Equal("1.0.0", state.ToolStatuses[Tool.Npx].Version);
         Assert.Contains(nameof(AppState.ToolStatuses), raised);
@@ -373,14 +391,19 @@ public class AppStateTests
         using var state = h.Create();
         var first = state.RefreshToolsAsync([Tool.Npx]);
         var second = state.RefreshToolsAsync([Tool.Npx, Tool.Node]);   // npx joins the flight already in the air; node starts one
-        // Pump on the observable publication AND task completion: the task completes on a pool
-        // thread once the batch is posted, which can be a moment after the marshalled queue
-        // has run it — asserting completion right after the publication is a race.
-        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 2 && first.IsCompleted && second.IsCompleted, TimeSpan.FromSeconds(5)));
+        Assert.Equal(2, h.Background.Pending);   // both asked while the first batch had not run
+        h.Drain();
+        Assert.True(first.IsCompleted);
+        Assert.True(second.IsCompleted);
+        Assert.Equal(2, state.ToolStatuses.Count);
         Assert.Equal([Tool.Npx, Tool.Node], h.Tools.Probed.Order().ToArray());
+        Assert.Equal(2, h.Tools.Batches);
         Assert.True(state.RefreshToolsAsync([]).IsCompleted);   // nothing wanted: completes synchronously
+        Assert.Equal(0, h.Background.Pending);                   // and queues no batch
         // Once published, the same tool can be probed again (the editor asks when the command changes).
         var third = state.RefreshToolsAsync([Tool.Npx]);
-        Assert.True(h.Ui.PumpUntil(() => h.Tools.Probed.Count == 3 && third.IsCompleted, TimeSpan.FromSeconds(5)));
+        h.Drain();
+        Assert.True(third.IsCompleted);
+        Assert.Equal(3, h.Tools.Probed.Count);
     }
 }

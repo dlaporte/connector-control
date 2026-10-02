@@ -2,7 +2,7 @@ import XCTest
 import ConnectorControlCore
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/AppStateCommandTests.cs. The
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/AppStateCommandTests.cs. The
 /// restart completion is posted to the marshal queue, so every restart test
 /// pumps once where the C# awaited and pumped.
 @MainActor
@@ -70,8 +70,7 @@ final class AppStateCommandTests: XCTestCase {
         defer { h.dispose() }
         h.settings.confirmBeforeRestart = false
         h.settings.lastApplyDate = h.now
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         let state = h.create()
         XCTAssertTrue(state.needsClaudeRestart)
         h.claude.restartResult = "Claude didn’t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again."
@@ -91,8 +90,7 @@ final class AppStateCommandTests: XCTestCase {
         defer { h.dispose() }
         h.settings.confirmBeforeRestart = false
         h.settings.lastApplyDate = h.now
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         let state = h.create()
         state.lastError = "old banner"
         h.claude.onRestart = { h.claude.launchDate = h.now.addingTimeInterval(1) }
@@ -108,8 +106,7 @@ final class AppStateCommandTests: XCTestCase {
         h.notifier.activateRestart()   // stale click: nothing pending
         XCTAssertEqual(h.claude.restartCalls, 0)
 
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         state.setEnabled("aws-mcp", false)
         XCTAssertTrue(state.needsClaudeRestart)
         h.notifier.activateRestart()
@@ -120,8 +117,7 @@ final class AppStateCommandTests: XCTestCase {
     func testDisposeUnsubscribesTheNotificationRestartAction() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         state.setEnabled("aws-mcp", false)
         XCTAssertTrue(state.needsClaudeRestart)   // a pending restart, so activateRestart would act if still wired up
         state.dispose()
@@ -134,8 +130,7 @@ final class AppStateCommandTests: XCTestCase {
         defer { h.dispose() }
         h.settings.confirmBeforeRestart = false
         h.settings.lastApplyDate = h.now
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         let state = h.create()
         state.restartClaude()
         h.ui.pump()
@@ -147,99 +142,39 @@ final class AppStateCommandTests: XCTestCase {
         h.delays.runNext()   // 3 s recheck: must be a no-op post-dispose, not a crash
         XCTAssertEqual(state.lastError, errorBefore)
         XCTAssertEqual(state.needsClaudeRestart, needsRestartBefore)
+
+        // The completion block itself — not only the delayed follow-up — must be a no-op once
+        // disposed: a restart that finishes after dispose (the app quitting mid-restart) must
+        // not resurrect state or schedule a fresh delay.
+        state.lastError = "should not survive"
+        state.performRestartClaude()
+        h.ui.pump()
+        XCTAssertEqual(state.lastError, "should not survive")
+        XCTAssertTrue(h.delays.pending.isEmpty, "no new delay is scheduled on a disposed state")
     }
 
-    func testSwitchProfileAppliesImmediately() throws {
+    func testSwitchCollectionAppliesImmediately() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        h.dialogs.nextPromptAnswer = "Work"
-        state.newProfile()
-        XCTAssertEqual(state.activeProfile, "Work")
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
+        XCTAssertEqual(state.activeCollection, "Work")
         state.setEnabled("aws-mcp", false)
         XCTAssertEqual(try h.claudeServers().keys.sorted(), ["scoutbook", "service-now"])
 
         h.settings.lastApplyDate = nil
-        state.switchProfile(to: "Default")
-        XCTAssertEqual(state.activeProfile, "Default")
+        state.switchCollection(to: "Default")
+        XCTAssertEqual(state.activeCollection, "Default")
         XCTAssertEqual(try h.claudeServers().keys.sorted(), fixture)
         XCTAssertEqual(h.settings.lastApplyDate, h.now)
-        XCTAssertEqual(try h.storeOnDisk().activeProfile, "Default")
+        XCTAssertEqual(try h.storeOnDisk().activeCollection, "Default")
     }
 
-    func testSwitchProfileIgnoresAnUnknownName() {
+    func testSwitchCollectionIgnoresAnUnknownName() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        state.switchProfile(to: "Nope")
-        XCTAssertEqual(state.activeProfile, "Default")
+        state.switchCollection(to: "Nope")
+        XCTAssertEqual(state.activeCollection, "Default")
         XCTAssertNil(state.lastError)
         XCTAssertNil(h.settings.lastApplyDate)
-    }
-
-    func testNewProfilePromptTextAndCancel() {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        h.dialogs.nextPromptAnswer = nil
-        state.newProfile()
-        XCTAssertEqual(h.dialogs.prompts[0], FakeDialogs.PromptCall(title: "New Profile", initial: ""))
-        XCTAssertEqual(state.profileNames, ["Default"])
-
-        h.dialogs.nextPromptAnswer = "Work"
-        state.newProfile()
-        XCTAssertEqual(state.profileNames, ["Default", "Work"])
-        XCTAssertEqual(state.sortedNames, fixture)   // a COPY of the active profile
-        XCTAssertEqual(h.settings.lastApplyDate, h.now)
-    }
-
-    func testNewProfileErrorsGoToLastError() {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        h.dialogs.nextPromptAnswer = "Default"
-        state.newProfile()
-        XCTAssertEqual(state.lastError, "A profile named “Default” already exists.")
-        h.dialogs.nextPromptAnswer = "   "
-        state.newProfile()
-        XCTAssertEqual(state.lastError, "Name must not be empty.")
-        XCTAssertEqual(state.profileNames, ["Default"])
-    }
-
-    func testRenameProfilePrefillsTheActiveName() throws {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        h.dialogs.nextPromptAnswer = "Main"
-        state.renameProfile()
-        XCTAssertEqual(h.dialogs.prompts[0], FakeDialogs.PromptCall(title: "Rename Profile", initial: "Default"))
-        XCTAssertEqual(state.activeProfile, "Main")
-        XCTAssertEqual(try h.storeOnDisk().activeProfile, "Main")
-        XCTAssertEqual(h.settings.lastApplyDate, h.now)
-    }
-
-    func testDeleteProfileConfirmTextAndLastProfileError() {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        state.deleteProfile()
-        XCTAssertEqual(h.dialogs.confirms[0], FakeDialogs.ConfirmCall(
-            message: "Delete Profile “Default”?",
-            informative: "Its connector list is removed; backups keep prior states.",
-            primary: "Delete", cancel: "Cancel", destructive: true))
-        XCTAssertEqual(state.lastError, "Can’t delete the last profile.")
-        XCTAssertEqual(state.profileNames, ["Default"])
-    }
-
-    func testDeleteProfileSwitchesToTheAlphabeticallyFirstRemaining() throws {
-        let (h, state) = AppStateHarness.started()
-        defer { h.dispose() }
-        h.dialogs.nextPromptAnswer = "Zeta"
-        state.newProfile()
-        h.dialogs.nextPromptAnswer = "Work"
-        state.newProfile()
-        XCTAssertEqual(state.activeProfile, "Work")
-        h.dialogs.nextConfirm = false
-        state.deleteProfile()
-        XCTAssertEqual(state.profileNames, ["Default", "Work", "Zeta"])   // cancelled
-        h.dialogs.nextConfirm = true
-        state.deleteProfile()
-        XCTAssertEqual(state.profileNames, ["Default", "Zeta"])
-        XCTAssertEqual(state.activeProfile, "Default")
-        XCTAssertEqual(try h.storeOnDisk().activeProfile, "Default")
     }
 }

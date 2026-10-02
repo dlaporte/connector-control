@@ -1,0 +1,168 @@
+# The Mac half of a signed build, in one place: the universal app built and signed with the
+# Developer ID certificate, notarized and stapled; the DMG packaged, signed and notarized; and,
+# for a release, the Sparkle appcast. release.yml and preview.yml both call this, so a signing
+# or notarization fix lands once (they used to carry a copy each, kept in step by hand). It
+# publishes nothing: the one artifact it uploads is what the caller's publish job posts.
+#
+# Inputs
+#   version      the version build-app.sh stamps into the app and the DMG is named after
+#                (X.Y.Z for a release, <next>-preview.<n> for a preview).
+#   appcast-tag  release only: the tag the Sparkle appcast points at (vX.Y.Z). The appcast is
+#                built from the caller's `notes` artifact, so a caller that sets this uploads
+#                one first. Empty, the default, builds no appcast: a preview has none, since a
+#                prerelease is never releases/latest and the stable feed must not move.
+#   artifact     the name the DMG, and the appcast when there is one, are uploaded under
+#                (release.yml's publish job reads mac-dmg-appcast, preview.yml's mac-dmg).
+#
+# Secrets. The Apple certificate, the notarization account and the Sparkle key are read here
+# and nowhere else. They are secrets of the "signing" GitHub Environment, which the one job
+# below names, so its required reviewers and deployment branch policy decide which refs ever
+# hold them; a job that does not name the environment cannot read them at all. An environment's
+# secrets cannot be passed to a called workflow by name (the caller's job names no environment,
+# so its `secrets.APPLE_*` are empty), which is why both callers pass `secrets: inherit` here
+# while windows-build.yml, which needs only the six repository secrets, is handed them by name.
+#   APPLE_CERTIFICATE          base64-encoded Developer ID Application .p12
+#   APPLE_CERTIFICATE_PASSWORD password for the .p12
+#   APPLE_SIGNING_IDENTITY     e.g. "Developer ID Application: David LaPorte (TEAMID)"
+#   APPLE_ID                   Apple ID email used for notarization
+#   APPLE_PASSWORD             app-specific password for that Apple ID
+#   APPLE_TEAM_ID              10-character team identifier
+#   KEYCHAIN_PASSWORD          any string; protects the throwaway CI keychain
+#   SPARKLE_ED_PRIVATE_KEY     EdDSA private key that signs the appcast (release only)
+# GITHUB_TOKEN reaches a called workflow on its own; make-appcast.sh uses it to render the notes.
+name: macOS Build
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to stamp into the app and name the DMG after (X.Y.Z or <next>-preview.<n>).'
+        required: true
+        type: string
+      appcast-tag:
+        description: 'Release only: the tag the Sparkle appcast points at (vX.Y.Z). Empty builds no appcast.'
+        required: false
+        default: ''
+        type: string
+      artifact:
+        description: 'Name to upload the DMG (and the appcast, when built) under.'
+        required: true
+        type: string
+
+# No permissions block: a called workflow never holds more than its caller, and nothing here
+# writes to the repository.
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  mac:
+    name: Build, sign, notarize
+    runs-on: macos-15
+    # The callers' "signing" environment, named here because it is this job that reads its
+    # secrets. GitHub creates the environment unprotected on first use; the protection rules
+    # (required reviewers, a deployment policy of master, the v* and preview-* tags and any
+    # branch previews are dispatched from) live in repository settings.
+    environment: signing
+    # Longest job on the slowest runner: `notarytool submit --wait` blocks on Apple's service
+    # twice (app, then DMG). 12-20 min is normal; 60 is a hang, not a queue.
+    timeout-minutes: 60
+    env:
+      # Interpolated once here rather than inside run: blocks (injection hygiene).
+      VERSION: ${{ inputs.version }}
+      TAG: ${{ inputs.appcast-tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # notes/notes.md is read directly by the appcast step below.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: inputs.appcast-tag != ''
+        with:
+          name: notes
+          path: notes
+
+      - name: Import signing certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: ./scripts/mac/import-signing-cert.sh
+
+      - name: Build and sign
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/build.keychain-db"
+          # BUILD_NUMBER deliberately not set: build-app.sh derives it from the version. For a
+          # release that is monotonic across releases (Sparkle's comparison key), where the old
+          # run-number scheme let a re-tagged older version outrank newer ones; for a
+          # -preview.<n> version it is the number just below <next>'s, so Sparkle never offers
+          # a preview an older stable release and does offer <next> once it ships.
+          VERSION="$VERSION" \
+            UNIVERSAL=1 SIGNING_IDENTITY="$APPLE_SIGNING_IDENTITY" \
+            ./scripts/build-app.sh
+
+      - name: Notarize and staple the app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          ./scripts/mac/notarize.sh "build/Connector Control.app"
+          spctl --assess --type execute --verbose=2 "build/Connector Control.app"
+
+      - name: Package and notarize DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          ./scripts/make-dmg.sh "ConnectorControl_${VERSION}.dmg"
+          # Sign and notarize the DMG too, so Gatekeeper trusts the download end-to-end
+          # (hdiutil does not sign what it creates).
+          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" \
+            "ConnectorControl_${VERSION}.dmg"
+          ./scripts/mac/notarize.sh "ConnectorControl_${VERSION}.dmg"
+
+      - name: Generate Sparkle appcast
+        if: inputs.appcast-tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          # Must run AFTER stapling — the EdDSA signature covers the final DMG bytes.
+          ./scripts/mac/make-appcast.sh "$VERSION" "$TAG" notes/notes.md
+
+      # The caller's publish job posts these; nothing is uploaded to GitHub from here. Two
+      # steps, so a preview never looks for an appcast; a release without one has already
+      # failed in make-appcast.sh (its closing `cat appcast.xml`), and the publish job's
+      # ensure-release.sh refuses the missing asset.
+      - name: Upload the DMG and the appcast
+        if: inputs.appcast-tag != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.artifact }}
+          path: |
+            ConnectorControl_*.dmg
+            appcast.xml
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload the DMG
+        if: inputs.appcast-tag == ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.artifact }}
+          path: ConnectorControl_*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+      # The signing identity must not outlive the job, whether it passed or failed.
+      - name: Remove the signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/build.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/certificate.p12"

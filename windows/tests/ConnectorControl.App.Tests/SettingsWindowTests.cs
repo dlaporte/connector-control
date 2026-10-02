@@ -50,8 +50,10 @@ public class SettingsWindowTests
             var afterConstruction = install.DetectCalls;
             // The deferred load's Task.Run hop means one Background-priority pump only starts it;
             // pump repeatedly (a nested message loop, not a blocking wait, so its own continuation
-            // can still reach the dispatcher) until the async work actually completes.
-            Assert.True(PumpUntil(window.Dispatcher, () => install.DetectCalls > afterConstruction, TimeSpan.FromSeconds(5)),
+            // can still reach the dispatcher) until the async work actually completes. The load is
+            // view code on the real pool, not AppHost's Background, so this is a real wait, and
+            // Wait.Eventually's ceiling covers a runner slow to hand it a thread.
+            Assert.True(PumpUntil(window.Dispatcher, () => install.DetectCalls > afterConstruction, Wait.Eventually),
                 "the icon's Detect()+Load() must be deferred, not run inside the constructor");
             window.Close();
         });
@@ -109,7 +111,8 @@ public class SettingsWindowTests
         WpfApp.Invoke(() =>
         {
             var window = new SettingsWindow(state, services, updates);   // opening the window starts the probe
-            Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.Count == 4, TimeSpan.FromSeconds(5)));
+            h.Drain();
+            Assert.Equal(4, state.ToolStatuses.Count);
             window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
             window.Measure(new Size(480, 500));
             window.Arrange(new Rect(0, 0, 480, 500));

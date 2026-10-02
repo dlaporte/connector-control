@@ -1,5 +1,16 @@
 import Foundation
 
+/// Connectors a load took out of Claude's file into a collection other than the active one,
+/// because the active one is subscribed (`ConfigService.ingestTarget`).
+public struct IngestedElsewhere: Equatable, Sendable {
+    public var collection: String
+    public var names: [String]
+    public init(collection: String, names: [String]) {
+        self.collection = collection
+        self.names = names
+    }
+}
+
 /// Orchestrates every stateful operation, guaranteeing the backup-before-write
 /// invariant. The UI layer calls only this type for file operations.
 public struct ConfigService: Sendable {
@@ -23,30 +34,66 @@ public struct ConfigService: Sendable {
     /// baseline, so every reconciliation rule resolves store-wins — used when
     /// adopting a pre-existing (e.g. synced) store that must not be overwritten
     /// by this machine's state.
-    public func loadAndReconcile(baseline: [String: JSONValue]? = nil,
-                                 storeAuthoritative: Bool = false) throws
+    ///
+    /// `lastAppliedCollection` is the collection Claude's file was last written from on this
+    /// machine, and `lastAppliedNames` the connector names that apply wrote. Once the active
+    /// collection has changed elsewhere, the names that collection renders are left where they
+    /// are rather than poured into the active one; everything else the file holds is still taken
+    /// in (`ingestible(_:lastApplied:lastAppliedNames:corrupt:store:)`). The caller then applies
+    /// the active collection over the file.
+    ///
+    /// What is taken in lands where `ingestTarget(store:collections:lastApplied:)` says, and
+    /// `ingestedElsewhere` names it when that is not the active collection. `collections` is the
+    /// sidecar the caller read for this load, or the one it already holds when this read failed:
+    /// the reroute and the sidecar the caller reconciles then come from one file.
+    ///
+    /// A master list that cannot be read is moved aside and replaced by the newest `mcps` backup
+    /// that decodes (`newestReadableStoreBackup()`), so every collection it held survives; only when
+    /// none does is it rebuilt from Claude's config alone. Either way the note says which.
+    public func loadAndReconcile(collections: CollectionsFile?,
+                                 baseline: [String: JSONValue]? = nil,
+                                 storeAuthoritative: Bool = false,
+                                 lastAppliedCollection: String? = nil,
+                                 lastAppliedNames: Set<String>? = nil) throws
         -> (store: MasterStore, notes: [String],
-            claudeServers: [String: JSONValue]?) {
+            claudeServers: [String: JSONValue]?, ingestedElsewhere: IngestedElsewhere?) {
         var notes: [String] = []
-        let loaded = MasterStoreIO.load(from: paths.masterStoreURL)
+        var loaded = MasterStoreIO.load(from: paths.masterStoreURL)
+        // A store restored from a backup is a real one again: the record of the last apply means
+        // what it says about it, where an empty rebuild has nothing to compare the record with.
+        var rebuilt = loaded.corruptFileURL != nil
         if let corrupt = loaded.corruptFileURL {
-            notes.append(
-                "The MCP list file was unreadable; it was preserved as "
-                + "\(corrupt.lastPathComponent) and rebuilt from Claude's config.")
+            if let (restored, backup) = newestReadableStoreBackup() {
+                loaded.store = restored
+                rebuilt = false
+                let taken = BackupManager.takenAt(backup).map(IsoTimestamp.localDateTime) ?? backup.lastPathComponent
+                notes.append(
+                    "The MCP list file was unreadable; it was preserved as "
+                    + "\(corrupt.lastPathComponent) and restored from the backup of \(taken).")
+            } else {
+                notes.append(
+                    "The MCP list file was unreadable; it was preserved as "
+                    + "\(corrupt.lastPathComponent) and rebuilt from Claude’s config.")
+            }
         }
         let servers: [String: JSONValue]
         do {
             servers = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
         } catch is ClaudeConfigError {
+            // Nothing below runs to save it, and the unreadable file has already been moved aside:
+            // a restored store is written now, or the next load would find no master list at all.
+            if loaded.corruptFileURL != nil, !rebuilt { try saveStore(loaded.store) }
             return (loaded.store,
-                    notes + ["Claude's config file is not valid JSON. Your MCP list is safe; "
-                     + "use Backups ▸ Restore… to repair the file."],
-                    nil)
+                    notes + ["Claude’s config file is not valid JSON. Your MCP list is safe; "
+                     + "use Backups ▸ Restore to repair the file."],
+                    nil, nil)
         }
         // A corrupt store is rebuilt with fresh-launch (nil-baseline) import
         // semantics: reconciling the empty replacement against a baseline would
         // classify every server as a pending removal, rebuild an empty list,
-        // and set up the next apply to wipe Claude's config.
+        // and set up the next apply to wipe Claude's config. A store restored
+        // from a backup gets the same: the backup predates the last save, and
+        // a connector added since is in Claude's file and nowhere else.
         let effectiveBaseline: [String: JSONValue]?
         if loaded.corruptFileURL != nil {
             effectiveBaseline = nil
@@ -63,13 +110,58 @@ public struct ConfigService: Sendable {
         } else {
             effectiveBaseline = baseline
         }
+        let target = ConfigService.ingestTarget(store: loaded.store, collections: collections,
+                                                lastApplied: lastAppliedCollection)
         let outcome = Reconciler.reconcile(
-            store: loaded.store, claudeServers: servers,
-            baseline: effectiveBaseline)
+            store: loaded.store,
+            claudeServers: ConfigService.ingestible(servers, lastApplied: lastAppliedCollection,
+                                                    lastAppliedNames: lastAppliedNames,
+                                                    corrupt: rebuilt, store: loaded.store),
+            baseline: effectiveBaseline, into: target)
         if outcome.storeChanged || loaded.corruptFileURL != nil {
             try saveStore(outcome.store)
         }
-        return (outcome.store, notes, servers)
+        let elsewhere = target == outcome.store.activeCollection || outcome.ingested.isEmpty
+            ? nil : IngestedElsewhere(collection: target, names: outcome.ingested)
+        return (outcome.store, notes, servers, elsewhere)
+    }
+
+    /// The collection a load takes Claude's new connectors into: the active one, unless it is
+    /// subscribed. A subscribed collection holds what its author published and nothing more — a
+    /// connector taken into it could be neither edited nor deleted, and the next Apply would delete
+    /// it from Claude. It goes into a local collection instead: the one Claude's file was last
+    /// applied from when that is local, else the first local one by name, else a new, empty
+    /// "Default" (under a free name, should a subscribed collection bear that one), which the
+    /// reconcile creates as the first addition lands in it and which does not become active.
+    ///
+    /// `collections` is nil when the sidecar cannot be read, and then nothing says which
+    /// collections are subscribed: the active collection takes the additions, as it always has.
+    static func ingestTarget(store: MasterStore, collections: CollectionsFile?, lastApplied: String?) -> String {
+        guard let collections, collections.kind(of: store.activeCollection) == .synced else { return store.activeCollection }
+        if let lastApplied, store.collections[lastApplied] != nil, collections.kind(of: lastApplied) == .local {
+            return lastApplied
+        }
+        if let first = store.collections.keys.filter({ collections.kind(of: $0) == .local })
+            .min(by: { $0.ordinallyPrecedes($1) }) {
+            return first
+        }
+        var name = MasterStore.defaultCollectionName
+        var suffix = 2
+        while store.collections[name] != nil {
+            name = "\(MasterStore.defaultCollectionName) \(suffix)"
+            suffix += 1
+        }
+        return name
+    }
+
+    /// The newest `mcps` backup that decodes, with the file it came from, or nil when none does.
+    /// Newest first by stamp and then by counter (`BackupManager.backups(series:)`), so of two taken
+    /// in one millisecond the later is tried first.
+    func newestReadableStoreBackup() -> (store: MasterStore, backup: URL)? {
+        for backup in (try? backups.backups(series: "mcps")) ?? [] {
+            if let store = MasterStoreIO.read(from: backup) { return (store, backup) }
+        }
+        return nil
     }
 
     /// Backup mcps.json (if present), then atomically save the store.
@@ -78,13 +170,70 @@ public struct ConfigService: Sendable {
         try MasterStoreIO.save(store, to: paths.masterStoreURL, staging: paths.stagingDirURL)
     }
 
+    /// What a load may take out of Claude's file and into the active collection.
+    ///
+    /// All of it while the record of the last apply is the active collection, is missing — a first
+    /// launch — or the store was corrupt and is being rebuilt from the file. Otherwise the file
+    /// holds another collection's connectors, and the names that collection renders are left
+    /// alone: pouring them into the active collection is what the record is for. Everything else
+    /// is genuinely new — an installer's connector, a hand edit — and belongs to the collection the
+    /// app is about to apply, whichever that is.
+    ///
+    /// A record naming a collection the store no longer has — deleted here, or on another machine,
+    /// which is how a collection disappears from a store that syncs — has no render to compare
+    /// against. The names the last apply wrote are that render, so those are left alone and
+    /// everything else comes in: a connector an installer or a hand edit added survives, and a
+    /// deleted collection's own connectors are not poured into the active one. Without those names
+    /// — a cache written before they were kept — nothing here tells the two apart, and nothing is
+    /// taken in rather than all of it.
+    static func ingestible(_ servers: [String: JSONValue], lastApplied: String?,
+                           lastAppliedNames: Set<String>?, corrupt: Bool,
+                           store: MasterStore) -> [String: JSONValue] {
+        guard !corrupt, let lastApplied, lastApplied != store.activeCollection else { return servers }
+        guard let collection = store.collections[lastApplied] else {
+            // Nothing here says what that collection rendered, so nothing in the file can be told
+            // from it: taking it all in would pour a deleted collection's connectors, marked paths
+            // and all, into the active one. Taking none is the safe half of that trade, and costs
+            // only a hand-added connector, in the one state that reaches it — a cache from a build
+            // that recorded the collection without the names.
+            guard let lastAppliedNames else { return [:] }
+            return servers.filter { !lastAppliedNames.contains($0.key) }
+        }
+        let rendered = Set(collection.mcps.filter { $0.value.enabled }.keys)
+        return servers.filter { !rendered.contains($0.key) }
+    }
+
     /// Snapshot original (first run), backup Claude's config, then write the
-    /// enabled subset into it, preserving all other keys.
-    public func apply(_ store: MasterStore) throws {
+    /// given servers into it, preserving all other keys.
+    ///
+    /// `backedUpFrom` is the collection the file being backed up was last applied from, recorded
+    /// against the backup (`BackupCollections`) so a restore of it goes back into that collection.
+    /// A failed record never fails the apply: the backup then restores as an unrecorded one.
+    public func apply(servers: [String: JSONValue], backedUpFrom collection: String? = nil) throws {
         try backups.ensureOriginalSnapshot(of: paths.claudeConfigURL)
-        try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config")
-        try ClaudeConfigIO.write(mcpServers: store.enabledServers, to: paths.claudeConfigURL,
+        let backup = try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config")
+        recordBackup(backup, from: collection)
+        try ClaudeConfigIO.write(mcpServers: servers, to: paths.claudeConfigURL,
                                  staging: paths.stagingDirURL)
+    }
+
+    private func recordBackup(_ backup: URL?, from collection: String?) {
+        guard let backup, let collection else { return }
+        try? BackupCollections.record(collection, for: backup, in: paths.backupsDirURL, staging: paths.stagingDirURL)
+    }
+
+    /// The sidecar beside the master list; a missing file loads as empty, and one that exists
+    /// but cannot be read loads as nil (see `CollectionsFile.loadIfReadable`), so the caller can
+    /// tell a file with no entries from one it must not save over.
+    public func loadCollections() -> CollectionsFile? {
+        CollectionsFile.loadIfReadable(from: paths.collectionsFileURL)
+    }
+
+    /// Backup the existing sidecar (skipped when it doesn't exist yet — nothing to protect on
+    /// the very first save), then atomically save the new one.
+    public func saveCollections(_ file: CollectionsFile) throws {
+        try backups.backUp(fileAt: paths.collectionsFileURL, series: "collections")
+        try file.save(to: paths.collectionsFileURL, staging: paths.stagingDirURL)
     }
 
     /// Backup the current file, copy the chosen backup over it, then adopt the
@@ -94,9 +243,23 @@ public struct ConfigService: Sendable {
     /// The backup's content is validated BEFORE the live file is touched.
     /// Returns the restored file's servers so the caller can sync its
     /// reconciliation baseline to them.
+    /// `publishFolder` is the folder `${COLLECTION_DIR}` stands for in the active collection on this
+    /// machine — the folder it publishes into, or a synced collection's document folder — and
+    /// `earlierFolders` the ones it published into before; a
+    /// connector whose store copy renders exactly as the snapshot keeps the store copy
+    /// (`Reconciler.adoptSnapshot`).
+    ///
+    /// The snapshot is adopted into `store`'s active collection; the caller makes that the
+    /// collection the backup was taken from, and says `activating` when that is not the collection
+    /// the saved store has active. `backedUpFrom`, as `apply` takes it, records the file this
+    /// restore overwrites.
     @discardableResult
     public func restoreClaudeConfig(from backup: URL,
-                                    mergedWith store: MasterStore) throws
+                                    mergedWith store: MasterStore,
+                                    publishFolder: String? = nil,
+                                    earlierFolders: [String] = [],
+                                    backedUpFrom collection: String? = nil,
+                                    activating: Bool = false) throws
         -> [String: JSONValue] {
         let data = try Data(contentsOf: backup)
         let root: [String: Any]
@@ -113,11 +276,15 @@ public struct ConfigService: Sendable {
             throw ClaudeConfigError.malformed(
                 "backup \(backup.lastPathComponent) has an invalid mcpServers section")
         }
-        try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config")
+        recordBackup(try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config"), from: collection)
         try AtomicFile.write(data, to: paths.claudeConfigURL, staging: paths.stagingDirURL)
         let servers = (root["mcpServers"] as? [String: Any] ?? [:]).mapValues(JSONValue.init(any:))
-        let outcome = Reconciler.adoptSnapshot(store: store, servers: servers)
-        if outcome.storeChanged { try saveStore(outcome.store) }
+        let outcome = Reconciler.adoptSnapshot(store: store, servers: servers, publishFolder: publishFolder,
+                                               earlierFolders: earlierFolders)
+        // A backup restored into a collection other than the active one makes that collection
+        // active, so Claude's file and the store agree on where its connectors live — even when
+        // the adoption itself changed nothing.
+        if outcome.storeChanged || activating { try saveStore(outcome.store) }
         return servers
     }
 }

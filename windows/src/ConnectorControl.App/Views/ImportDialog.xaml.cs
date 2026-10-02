@@ -1,0 +1,96 @@
+using System.ComponentModel;
+using System.Windows;
+using System.Windows.Automation;
+using ConnectorControl.Core.State;
+
+namespace ConnectorControl.App.Views;
+
+/// <summary>
+/// The Import sheet: the document the window's file picker opened, the two exclusive things that
+/// can be done with it, and a row per connector saying what would happen to it. Layout, bindings
+/// and the refresh a tick or a mode change needs; every rule and string is ImportModel's.
+/// </summary>
+public partial class ImportDialog : DialogWindow
+{
+    private readonly PropertyChangedEventHandler onModelChanged;
+
+    public ImportDialog(ImportModel model)
+    {
+        InitializeComponent();
+        Model = model;
+        DataContext = model;
+        Title = ImportModel.Title;
+        onModelChanged = (_, e) =>
+        {
+            // The model keeps the failure line: an Import that did not land, a New Collection name
+            // it refused, and the clearing a change of mode does.
+            if (ObservableObject.Affects(e, nameof(ImportModel.Failure)))
+            {
+                ShowFailure(FailureText, Model.Failure);
+            }
+            Refresh();
+        };
+        Model.PropertyChanged += onModelChanged;
+        Closed += (_, _) => Model.PropertyChanged -= onModelChanged;
+        Refresh();
+    }
+
+    public ImportModel Model { get; }
+
+    /// <summary>
+    /// True once the import has landed. A plain property rather than DialogResult: a test presents the dialog with Show(),
+    /// where DialogResult's setter throws, so success is recorded here.
+    /// </summary>
+    public bool Accepted { get; private set; }
+
+    public static void Show(Window? owner, ImportModel model) => WpfDialogs.Present(new ImportDialog(model), owner);
+
+    /// <summary>
+    /// The two strings a binding cannot carry: the count beside Import and the mode's own sentence
+    /// are built from a value rather than being properties of their own. Everything else is bound,
+    /// Import's IsEnabled included. Reached only through the model's own notification — a row, the
+    /// mode or the target raises the count and CanImport that follow it.
+    /// </summary>
+    private void Refresh()
+    {
+        CopiesMode.Content = ImportModel.AddModeTitle(Model.TargetName);
+        // The radio's sentence is what names the target, so it is the picker's label too.
+        AutomationProperties.SetName(TargetBox, ImportModel.AddModeTitle(Model.TargetName));
+        ImportButton.Content = ImportModel.ImportButton(Model.ImportCount);
+    }
+
+    private void OnImport(object sender, RoutedEventArgs e)
+    {
+        // The model answers with the reason it could not land, or null, and keeps that reason on
+        // its failure line, so a failure stays on the sheet the user is looking at.
+        if (Model.Perform() is null)
+        {
+            Accepted = true;
+            Close();
+        }
+    }
+}
+
+/// <summary>
+/// One collision choice's picker label, from <see cref="ImportModel.ChoiceTitle"/> — the row's
+/// picker holds the choices themselves, so the titles are read off them here rather than kept as
+/// a second list beside them.
+/// </summary>
+public sealed class ImportChoiceTitleConverter : OneWayConverter<ImportChoice>
+{
+    protected override object? Map(ImportChoice choice, object? parameter) => ImportModel.ChoiceTitle(choice);
+}
+
+/// <summary>
+/// A row control's accessibility name, from the connector it acts on: the tick's
+/// <see cref="ImportModel.IncludeLabel"/>, or — with <c>choice</c> as the parameter — the collision
+/// picker's <see cref="ImportModel.CollisionPickerLabel"/>. Both are factories over the row's own
+/// name, which a DataTemplate cannot call.
+/// </summary>
+public sealed class ImportRowLabelConverter : OneWayConverter<string>
+{
+    protected override object? Map(string connector, object? parameter) =>
+        string.Equals(parameter as string, "choice", StringComparison.Ordinal)
+            ? ImportModel.CollisionPickerLabel(connector)
+            : ImportModel.IncludeLabel(connector);
+}

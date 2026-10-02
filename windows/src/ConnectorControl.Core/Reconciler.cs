@@ -11,13 +11,22 @@ namespace ConnectorControl.Core;
 /// </summary>
 public static class Reconciler
 {
+    /// <summary>
+    /// <paramref name="target"/> (null: the active collection) is where the additions land. What counts as
+    /// one is always measured against the active collection, the one Claude's file renders; another
+    /// collection is created as the first addition lands in it, and what it already holds is never
+    /// overwritten (<see cref="KeptName"/>).
+    /// </summary>
     public static ReconcileOutcome Reconcile(
         MasterStore store,
         IReadOnlyDictionary<string, JsonValue> claudeServers,
-        IReadOnlyDictionary<string, JsonValue>? baseline = null)
+        IReadOnlyDictionary<string, JsonValue>? baseline = null,
+        string? target = null)
     {
         var result = store.Clone();
         bool changed = false;
+        List<string> ingested = [];
+        var destination = target ?? store.ActiveCollection;
         foreach (var (name, config) in claudeServers)
         {
             if (result.Mcps.ContainsKey(name))
@@ -26,13 +35,41 @@ public static class Reconciler
             }
             if (IsExternalAddition(name, config, baseline))
             {
-                result.Mcps[name] = new McpEntry(true, config);
-                changed = true;
+                if (!result.Collections.TryGetValue(destination, out var held))
+                {
+                    held = new Collection();
+                }
+                var kept = KeptName(name, config, held.Mcps);
+                if (!held.Mcps.ContainsKey(kept))
+                {
+                    held.Mcps[kept] = new McpEntry(true, config);
+                    result.Collections[destination] = held;
+                    changed = true;
+                }
+                ingested.Add(kept);
             }
             // else: matches the baseline but is gone from the store — a PENDING
             // REMOVAL awaiting Apply. Re-importing would resurrect a deletion.
         }
-        return new ReconcileOutcome(result, changed);
+        return new ReconcileOutcome(result, changed) { Ingested = [.. ingested.Order(StringComparer.Ordinal)] };
+    }
+
+    /// <summary>
+    /// <paramref name="name"/>, or "name 2", "name 3", … — the first name under which <paramref name="held"/>
+    /// has nothing or has this very config. The active collection never holds the name, so there it is
+    /// <paramref name="name"/> itself; another collection may hold a connector of its own under it, which
+    /// stays as it is.
+    /// </summary>
+    private static string KeptName(string name, JsonValue config, IReadOnlyDictionary<string, McpEntry> held)
+    {
+        var candidate = name;
+        var suffix = 2;
+        while (held.TryGetValue(candidate, out var entry) && entry.Config != config)
+        {
+            candidate = $"{name} {suffix}";
+            suffix++;
+        }
+        return candidate;
     }
 
     /// <summary>
@@ -50,8 +87,22 @@ public static class Reconciler
     /// absent from it are disabled, never deleted. The result renders exactly
     /// the snapshot, so no divergence survives the restore.
     /// </summary>
-    public static ReconcileOutcome AdoptSnapshot(MasterStore store, IReadOnlyDictionary<string, JsonValue> servers)
+    /// <param name="publishFolder">
+    /// The folder this machine publishes the active collection into, which Claude's file holds where
+    /// the store holds <c>${COLLECTION_DIR}</c>: every apply backs Claude's file up first, so a
+    /// snapshot taken while the collection publishes holds the author's own folder. A connector
+    /// whose store copy expands to exactly what the snapshot holds keeps the store copy, token and
+    /// all. Anything else is the snapshot's own, a genuine edit, and is adopted as written; a publish
+    /// that would carry the folder is refused further on.
+    /// </param>
+    /// <param name="earlierFolders">
+    /// The folders the collection published into before this one, which count the same way: a backup
+    /// taken before the folder moved holds the folder it had then.
+    /// </param>
+    public static ReconcileOutcome AdoptSnapshot(MasterStore store, IReadOnlyDictionary<string, JsonValue> servers,
+                                                 string? publishFolder = null, IReadOnlyList<string>? earlierFolders = null)
     {
+        List<string> folders = publishFolder is null ? [] : [publishFolder, .. earlierFolders ?? []];
         var result = store.Clone();
         var toDisable = result.Mcps
             .Where(p => p.Value.Enabled && !servers.ContainsKey(p.Key))
@@ -63,8 +114,10 @@ public static class Reconciler
         }
         foreach (var (name, config) in servers)
         {
-            var entry = result.Mcps.TryGetValue(name, out var existing) ? existing : new McpEntry(true, config);
-            result.Mcps[name] = entry with { Config = config, Enabled = true };
+            var held = result.Mcps.TryGetValue(name, out var existing);
+            var entry = held ? existing! : new McpEntry(true, config);
+            var rendersAsSnapshot = held && folders.Any(folder => Placeholder.ExpandDirectoryToken(entry.Config, folder) == config);
+            result.Mcps[name] = entry with { Config = rendersAsSnapshot ? entry.Config : config, Enabled = true };
         }
         return new ReconcileOutcome(result, !result.Equals(store));
     }

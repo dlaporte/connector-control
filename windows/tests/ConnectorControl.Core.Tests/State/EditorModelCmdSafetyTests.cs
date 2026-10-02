@@ -11,7 +11,7 @@ public class EditorModelCmdSafetyTests
     public void CmdLauncherRefusesAUrlCmdWouldSplit()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         editor.Name = "r";
         editor.RemoteUrl = "https://127.0.0.1:1/mcp&ver";
         Assert.True(editor.RemoteUrlValid, "URL syntax alone does not catch it");
@@ -28,7 +28,7 @@ public class EditorModelCmdSafetyTests
     public void CmdLauncherCautionsAboutPercentExpansionButSaves()
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         editor.Name = "r";
         editor.RemoteUrl = "https://x.dev/%41%42";
         Assert.True(editor.RemoteUrlCmdSafe);
@@ -43,7 +43,7 @@ public class EditorModelCmdSafetyTests
     {
         // A synced Mac entry keeps its bare-npx style; cross-spawn escapes npx.cmd's own arguments.
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.Existing("scoutbook", rig.State.Store.Mcps["scoutbook"]));
+        var editor = rig.Editor(TestTargets.Existing("scoutbook", rig.State.Store.Mcps["scoutbook"]));
         editor.RemoteUrl = "https://x.dev/mcp?a=b&c=d";
         Assert.True(editor.RemoteUrlCmdSafe);
         Assert.True(editor.CanSave);
@@ -61,7 +61,7 @@ public class EditorModelCmdSafetyTests
     public void CmdLauncherRefusesAuthFieldsCmdWouldReparse(RemoteAuthKind kind, string headerName, string headerValue, string clientId, string clientSecret, string scopes, string field)
     {
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         editor.Name = "r";
         editor.RemoteUrl = Url;
         editor.AuthKindIndex = EditorRig.AuthKindIndexOf(kind);
@@ -80,7 +80,7 @@ public class EditorModelCmdSafetyTests
     {
         // Bearer tokens and header VALUES travel in env (AUTH_HEADER), which cmd.exe never parses.
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         editor.Name = "r";
         editor.RemoteUrl = Url;
         editor.AuthKindIndex = EditorRig.AuthKindIndexOf(RemoteAuthKind.Header);
@@ -95,7 +95,7 @@ public class EditorModelCmdSafetyTests
     {
         // Scopes are a space-separated list by definition; the whitespace allowance is only for them.
         using var rig = new EditorRig();
-        var editor = rig.Editor(EditTarget.NewRemote(RemoteLaunchStyle.CmdNpx));
+        var editor = rig.Editor(TestTargets.NewRemote(RemoteLaunchStyle.CmdNpx));
         editor.Name = "r";
         editor.RemoteUrl = Url;
         editor.AuthKindIndex = EditorRig.AuthKindIndexOf(RemoteAuthKind.OAuthClient);

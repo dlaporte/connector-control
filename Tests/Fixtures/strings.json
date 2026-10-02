@@ -1,17 +1,41 @@
 {
   "AlertDialogs.okTitle": "OK",
+  "AppState.authoredElsewhereCaution": {
+    "mac": "authored on Windows",
+    "win": "authored on macOS"
+  },
   "AppState.chooseClaude": "Choose the real Claude Desktop under Settings ▸ Claude.",
   "AppState.claudeConfigChangedBody": "Claude's config changed outside Connector Control.",
   "AppState.claudeConfigRegeneratedBody": "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up.",
+  "AppState.collectionDirCmdUnsafeCaution": {
+    "win": "The folder ${COLLECTION_DIR} stands for must not contain & | < > ^ \" or spaces: on Windows the cmd /c launcher hands it to cmd.exe, which treats those as commands."
+  },
+  "AppState.collectionLocateBanner": {
+    "mac": {
+      "format": "{0}’s file isn’t on this Mac yet."
+    },
+    "win": {
+      "format": "{0}’s file isn’t on this PC yet."
+    }
+  },
+  "AppState.collectionPublishFailedBanner": {
+    "format": "Couldn’t publish {0} to {1}: {2}"
+  },
+  "AppState.collectionUpdateBanner": {
+    "format": "{0} changed at its source: {1}."
+  },
+  "AppState.collectionUpdateNotificationBody": {
+    "format": "{0} changed at its source: {1}. Review it in Connector Control."
+  },
+  "AppState.collectionsNotSavedNote": "Collections could not be saved: the collections file is unreadable. Your change is not on disk and will be lost when the file is read again.",
   "AppState.connectorListChangedBody.noRestart": "The connector list changed outside Connector Control — Claude's config was regenerated. Claude will use it the next time it starts.",
   "AppState.connectorListChangedBody.restart": "The connector list changed outside Connector Control — Claude's config was regenerated. Restart Claude to pick it up.",
   "AppState.defaultClaudeAppPath": {
     "mac": "/Applications/Claude.app"
   },
   "AppState.deleteButton": "Delete",
-  "AppState.deleteProfileInformative": "Its connector list is removed; backups keep prior states.",
-  "AppState.deleteProfileMessage": {
-    "format": "Delete Profile “{0}”?"
+  "AppState.deleteCollectionMessage": {
+    "format": "Delete Collection “{0}”?"
   },
   "AppState.duplicateNameError": {
     "format": "A connector named “{0}” already exists."
@@ -19,23 +43,66 @@
   "AppState.enabledSubtitle": {
     "format": "{0} of {1} enabled"
   },
+  "AppState.ingestedElsewhereSentence": {
+    "format": "“{0}” is subscribed, so {1} went into “{2}”."
+  },
+  "AppState.keptPathCarriedError": {
+    "format": "“{0}” carries a path this machine keeps back, in {1}. Open Publishing Settings to review it."
+  },
+  "AppState.lastLocalCollectionError": "The last local collection can’t be deleted.",
+  "AppState.locateCaution": "Locate the collection file to resolve paths.",
   "AppState.malformedConfigMessage": {
-    "format": "Claude's config file is not valid JSON ({0}). Nothing was written. Use Backups ▸ Restore… to recover it."
+    "format": "Claude’s config file is not valid JSON ({0}). Nothing was written. Use Backups ▸ Restore to recover it."
   },
   "AppState.nameEmptyError": "Name must not be empty.",
-  "AppState.newProfileTitle": "New Profile",
+  "AppState.needsValueCaution": {
+    "format": "needs your value: {0}"
+  },
+  "AppState.newCollectionTitle": "New Collection",
+  "AppState.newCredentialError": {
+    "format": "“{0}” may now carry a credential. Open Publishing Settings to review it."
+  },
+  "AppState.newerDocumentError": "This collection was made by a newer Connector Control.",
   "AppState.noConnectorsSubtitle": "No connectors configured",
+  "AppState.ownCollectionError": "This is your own published collection.",
+  "AppState.pathMarkMovedError": {
+    "format": "A path marked in “{0}” has moved. Open Publishing Settings to mark it again."
+  },
+  "AppState.publishFolderCarriedError": {
+    "format": "“{0}” carries this machine’s publish folder as written, in {1}. Open Publishing Settings to use ${COLLECTION_DIR} in its place."
+  },
+  "AppState.publishIntoStoreError": "Choose a folder other than the master list folder or its backups.",
+  "AppState.publishSlugTakenError": {
+    "format": "{0} already exists there and belongs to a different collection."
+  },
   "AppState.quitButton": "Quit",
   "AppState.quitMessage": "Quit Connector Control?",
   "AppState.regenerationFailedBody": "The connector configuration changed, but Claude's config could not be updated — open Connector Control to retry.",
   "AppState.relaunchFailedMessage": {
     "win": "Claude didn’t come back after the restart. Start Claude yourself, then try again."
   },
-  "AppState.renameProfileTitle": "Rename Profile",
+  "AppState.renameCollectionTitle": "Rename Collection",
   "AppState.restartButton": "Restart",
   "AppState.restartInformative": "Any in-progress Claude conversation will be interrupted.",
   "AppState.restartMessage": "Restart Claude Desktop now?",
+  "AppState.restoreCollectionGoneError": {
+    "format": "This backup was taken from “{0}”, which no longer exists. Nothing was restored. Create a collection named “{0}” again, and this backup goes back into it."
+  },
+  "AppState.restoreSubscribedError": {
+    "format": "“{0}” is subscribed, so its connectors are the author’s. Make a local collection active, then restore."
+  },
+  "AppState.sourceUnreadableError": {
+    "format": "{0} couldn’t be read: {1}"
+  },
   "AppState.storeChangedBody": "The connector list changed outside Connector Control — review it before your next change is applied.",
+  "AppState.targetMustBeLocalError": "Copies go into a local collection.",
+  "AppState.unpublishedDirectoryCaution": {
+    "mac": "${COLLECTION_DIR} has no folder until this collection is published from this Mac.",
+    "win": "${COLLECTION_DIR} has no folder until this collection is published from this PC."
+  },
+  "AppState.unreviewedConnectorError": {
+    "format": "“{0}” hasn’t been reviewed for publishing. Open Publishing Settings to review it."
+  },
   "ClaudeConfigIO.mcpServersNotObjectError": "mcpServers is not a JSON object",
   "ClaudeConfigIO.topLevelNotObjectError": "top level is not a JSON object",
   "ClaudeProcess.notAClaudePackageError": {
@@ -71,8 +138,90 @@
       "format": "{0} is not an app bundle this app can inspect."
     }
   },
+  "CollectionDocument.credentialLiteralPhrase": "looks like a credential",
+  "CollectionDocument.credentialReferencePhrase": "refers to a credential",
+  "CollectionDocument.credentialUserOnlyPhrase": "names a user",
+  "CollectionsModel.activePill": "Active",
+  "CollectionsModel.addCollectionTooltip": "Add Collection",
+  "CollectionsModel.addConnectorDisabledTooltip": "Additions go in a local collection.",
+  "CollectionsModel.addConnectorTooltip": "Add Connector",
+  "CollectionsModel.connectorTally.many": {
+    "format": "{0} connectors"
+  },
+  "CollectionsModel.connectorTally.one": {
+    "format": "{0} connector"
+  },
+  "CollectionsModel.copyToButton": "Copy to",
+  "CollectionsModel.deleteAction": "Delete",
+  "CollectionsModel.deleteCheckedButton": "Delete",
+  "CollectionsModel.deleteCheckedInformative": "A copy remains in Backups.",
+  "CollectionsModel.deleteCheckedMessage.many": {
+    "format": "Delete {0} connectors?"
+  },
+  "CollectionsModel.deleteCheckedMessage.one": {
+    "format": "Delete “{0}”?"
+  },
+  "CollectionsModel.deleteConnectorsSentence.many": {
+    "format": "Its {0} connectors are deleted with it."
+  },
+  "CollectionsModel.deleteConnectorsSentence.none": "It has no connectors.",
+  "CollectionsModel.deleteConnectorsSentence.one": {
+    "format": "Its {0} connector is deleted with it."
+  },
+  "CollectionsModel.deleteCopiesSentence": "Copies in other collections are not affected.",
+  "CollectionsModel.deleteFileButton": "Delete",
+  "CollectionsModel.deleteNextActiveSentence": {
+    "format": "“{0}” becomes the active collection."
+  },
+  "CollectionsModel.deletePublishedFileQuestion": {
+    "format": "Also delete {0} from the folder?"
+  },
+  "CollectionsModel.deleteSourceSentence": "The source file is not changed.",
+  "CollectionsModel.documentFilter": {
+    "win": "Collection (*.json)|*.json"
+  },
+  "CollectionsModel.duplicateAction": "Duplicate",
+  "CollectionsModel.editLabel": {
+    "format": "Edit “{0}”"
+  },
+  "CollectionsModel.exportAllAction": "Export All",
+  "CollectionsModel.exportCheckedButton": "Export",
+  "CollectionsModel.importButton": "Import",
+  "CollectionsModel.importSubtitle": "Adds copies you own",
+  "CollectionsModel.keepFileButton": "Keep",
+  "CollectionsModel.lockedGlyphTooltip": "Read-only: synced from the collection’s author",
+  "CollectionsModel.makeActiveAction": "Make Active",
+  "CollectionsModel.makeLocalCopyButton": "Make Local Copy",
+  "CollectionsModel.moreActionsLabel": "More",
+  "CollectionsModel.newButton": "New Collection",
+  "CollectionsModel.publishButton": "Start Publishing",
+  "CollectionsModel.publishSettingsButton": "Publishing Settings",
+  "CollectionsModel.publishedPill": "Published",
+  "CollectionsModel.readOnlyNote": "read-only",
+  "CollectionsModel.refreshButton": "Refresh",
+  "CollectionsModel.remoteType": "remote",
+  "CollectionsModel.renameAction": "Rename",
+  "CollectionsModel.selectedCount": {
+    "format": "{0} selected"
+  },
+  "CollectionsModel.showPublishedFileAction": "Show Published File",
+  "CollectionsModel.showSourceFileAction": "Show Source File",
+  "CollectionsModel.stopPublishingAction": "Stop Publishing",
+  "CollectionsModel.stopSyncingAction": "Stop Syncing",
+  "CollectionsModel.stopSyncingInformative": "The connectors stay as a local collection you can edit.",
+  "CollectionsModel.stopSyncingMessage": {
+    "format": "Stop Syncing “{0}”?"
+  },
+  "CollectionsModel.subscribeButton": "Subscribe",
+  "CollectionsModel.subscribeSubtitle": "Stays in sync, read-only",
+  "CollectionsModel.subscribedPill": "Subscribed",
+  "CollectionsModel.updateAvailableStatus": "update available",
+  "CollectionsModel.windowTitle": "Collections",
   "ConfigService.corruptStoreNote": {
-    "format": "The MCP list file was unreadable; it was preserved as {0} and rebuilt from Claude's config."
+    "format": "The MCP list file was unreadable; it was preserved as {0} and rebuilt from Claude’s config."
+  },
+  "ConfigService.corruptStoreRestoredNote": {
+    "format": "The MCP list file was unreadable; it was preserved as {0} and restored from the backup of {1}."
   },
   "ConfigService.invalidBackupError": {
     "format": "backup {0} is not a valid config file ({1})"
@@ -80,9 +229,10 @@
   "ConfigService.invalidBackupMcpServersError": {
     "format": "backup {0} has an invalid mcpServers section"
   },
-  "ConfigService.malformedClaudeConfigNote": "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore… to repair the file.",
-  "ConnectorRow.editTooltip": {
-    "format": "Edit “{0}”"
+  "ConfigService.malformedClaudeConfigNote": "Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.",
+  "CopyModel.copyButton": "Copy",
+  "CopyModel.title": {
+    "format": "Copy to “{0}”"
   },
   "Dialogs.cancelTitle": "Cancel",
   "EditTarget.addTitle": "Add Connector",
@@ -94,14 +244,26 @@
   "EditorModel.additionalTitle": {
     "format": "{0} field(s) not editable here: {1} — switch to JSON to edit"
   },
+  "EditorModel.argumentLabel": {
+    "format": "Argument {0}"
+  },
+  "EditorModel.argumentNumber": {
+    "format": "{0}"
+  },
+  "EditorModel.argumentPrompt": "argument",
+  "EditorModel.argumentsHeader": "Arguments",
+  "EditorModel.authenticationHeader": "Authentication",
   "EditorModel.automaticCaption": "Uses the server's OAuth (a browser window opens on first use), or no auth if the server is open.",
   "EditorModel.bearerCaption": "Sent as Authorization: Bearer …",
   "EditorModel.bearerTokenError": "Enter a bearer token.",
+  "EditorModel.cancelButton": "Cancel",
   "EditorModel.changedOutsideDetail": "Saving will overwrite that change with this editor's version.",
   "EditorModel.changedOutsideMessage": {
     "format": "“{0}” changed outside this editor."
   },
   "EditorModel.clientIDError": "Enter a client ID.",
+  "EditorModel.clientIDLabel": "Client ID",
+  "EditorModel.clientSecretLabel": "Client Secret",
   "EditorModel.cmdPercentCaution": {
     "win": "This URL has more than one %, which cmd.exe can expand as a variable. If the connector fails to start, check its JSON view."
   },
@@ -111,34 +273,94 @@
     }
   },
   "EditorModel.commandError": "Command must not be empty.",
+  "EditorModel.commandLabel": "Command",
+  "EditorModel.commandPrompt": "npx",
+  "EditorModel.deleteArgumentLabel": "Delete argument",
+  "EditorModel.deleteVariableLabel": "Delete variable",
+  "EditorModel.deletedOutsideDetail": "Saving will add it back.",
+  "EditorModel.deletedOutsideMessage": {
+    "format": "“{0}” was deleted outside this editor."
+  },
   "EditorModel.duplicateEnvError": {
     "format": "Duplicate environment variable name: {0}"
   },
   "EditorModel.envNamelessError": "An environment variable value is missing its name.",
+  "EditorModel.environmentHeader": "Environment Variables",
+  "EditorModel.formTab": "Form",
   "EditorModel.headerNameError": "Enter a header name.",
+  "EditorModel.headerNameLabel": "Header name",
+  "EditorModel.headerNamePrompt": "X-API-Key",
   "EditorModel.headerValueError": "Enter a header value.",
+  "EditorModel.headerValueLabel": "Header value",
+  "EditorModel.hideValueLabel": "Hide value",
+  "EditorModel.importedNote": {
+    "format": "Imported from “{0}” on {1}. Edits stay here."
+  },
   "EditorModel.invalidURLError": "Server URL must be a valid http(s) URL.",
+  "EditorModel.jsonTab": "JSON",
   "EditorModel.jsonTip": "Tip: paste a README snippet or an mcpServers stanza — a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in.",
+  "EditorModel.localTypeTitle": "Local",
+  "EditorModel.lockedFieldsNote": {
+    "format": "Synced from {0} · read-only"
+  },
   "EditorModel.lossWarningPrefix": "Switching to Form view can’t fully represent this configuration. These elements would be lost or altered:\n",
+  "EditorModel.nameLabel": "Name",
+  "EditorModel.namePrompt": "my-mcp",
+  "EditorModel.needsPath": "needs your path",
+  "EditorModel.needsValue": "needs your value",
+  "EditorModel.noTargetMessage": {
+    "mac": "Choose a connector in the Collections window."
+  },
   "EditorModel.notValidJSON": "Not valid JSON — check for a stray brace, missing comma, or unquoted value.",
   "EditorModel.oauthSecretCaption": {
     "mac": "Passed to mcp-remote on its command line, which other programs running on this Mac can read.",
     "win": "Passed to mcp-remote on its command line, which other programs running on this PC can read."
   },
+  "EditorModel.propagateLabel": {
+    "format": "Also apply this change to {0}, which has an identical {1}"
+  },
+  "EditorModel.propagateLabelMany": {
+    "format": "Also apply this change to {0}, which have an identical {1}"
+  },
+  "EditorModel.publishedNote": {
+    "format": "Published to {0} — saving updates the file your team reads. Secrets stay here."
+  },
   "EditorModel.remoteFooter": "Runs via npx mcp-remote — managed for you.",
-  "EditorModel.removeButton": "Remove",
-  "EditorModel.removeInformative": "A copy remains in Backups.",
-  "EditorModel.removeMessage": {
-    "format": "Remove “{0}”? A copy remains in Backups."
-  },
-  "EditorModel.removedOutsideDetail": "Saving will add it back.",
-  "EditorModel.removedOutsideMessage": {
-    "format": "“{0}” was removed outside this editor."
-  },
+  "EditorModel.remoteTypeTitle": "Remote",
   "EditorModel.saveAnywayButton": "Save Anyway",
+  "EditorModel.saveButton": "Save",
+  "EditorModel.scopesLabel": "Scopes (optional)",
+  "EditorModel.scopesPrompt": "space separated",
+  "EditorModel.serverURLLabel": "Server URL",
+  "EditorModel.serverURLPrompt": "https://example.com/mcp",
+  "EditorModel.showValueLabel": "Show value",
   "EditorModel.stayInJSONButton": "Stay in JSON",
   "EditorModel.switchAnywayButton": "Switch Anyway",
+  "EditorModel.tokenLabel": "Token",
+  "EditorModel.typeLabel": "Type",
   "EditorModel.urlHint": "Enter a valid http(s) URL, e.g. https://example.com/mcp",
+  "EditorModel.valueLabel": "Value",
+  "EditorModel.viewPickerLabel": {
+    "mac": "View"
+  },
+  "EditorModel.whatCanIChange": "What can I change?",
+  "EditorModel.whatCanIChangeAnswer": "Fill in the highlighted values and switch it on or off. Everything else follows the source; make a local copy to change it.",
+  "EditorModel.windowGroupTitle": {
+    "mac": "Connector Editor"
+  },
+  "FieldName.argument": {
+    "format": "argument {0}"
+  },
+  "FieldName.command": "the command",
+  "FieldName.document": {
+    "format": "the document’s {0}"
+  },
+  "FieldName.envValue": {
+    "format": "the value of {0}"
+  },
+  "FieldName.hint": {
+    "format": "the hint for {0}"
+  },
   "FirstRunTip.body": {
     "win": "Connector Control lives in the system tray. Drag its icon out of the overflow (^) to keep it visible."
   },
@@ -150,37 +372,133 @@
   "FlyoutModel.storeNotPrivateCaution": {
     "win": "The master list could not be made private: its folder refused the permission change, so connector secrets in it are readable by anyone who can read that folder."
   },
-  "MasterStore.deleteLastProfileError": "Can’t delete the last profile.",
-  "MasterStore.duplicateProfileNameError": {
-    "format": "A profile named “{0}” already exists."
+  "FlyoutModel.trayOpenTitle": {
+    "win": "Open"
+  },
+  "ImportModel.addModeDetail": "Copies. No link to the file afterwards.",
+  "ImportModel.addModeTitle": {
+    "format": "Add to a collection: {0}"
+  },
+  "ImportModel.addTitle": "Add",
+  "ImportModel.cancelButton": "Cancel",
+  "ImportModel.collisionPickerLabel": {
+    "format": "What to do with {0}"
+  },
+  "ImportModel.importButton": {
+    "format": "Import {0}"
+  },
+  "ImportModel.includeLabel": {
+    "format": "Include {0}"
+  },
+  "ImportModel.keepBothTitle": "Keep both",
+  "ImportModel.newBadge": "new · arrives off",
+  "ImportModel.presentBadge": "already present · skipped",
+  "ImportModel.replaceKeepsValues": "keeps your filled values",
+  "ImportModel.replaceTitle": "Replace",
+  "ImportModel.skipTitle": "Skip",
+  "ImportModel.skippedBadge": {
+    "format": "skipped: {0}"
+  },
+  "ImportModel.sourceLine": {
+    "format": "“{0}” by {1} · {2} connectors"
+  },
+  "ImportModel.syncModeDetail": "Read-only except your secrets and switches. Changes at the source arrive for review.",
+  "ImportModel.syncModeTitle": "Keep as its own collection, in sync with this file",
+  "ImportModel.syncNameLabel": "Collection name",
+  "ImportModel.title": "Import connectors",
+  "ImportModel.unknownAuthor": "unknown author",
+  "MasterStore.deleteLastCollectionError": "Can’t delete the last collection.",
+  "MasterStore.duplicateCollectionNameError": {
+    "format": "A collection named “{0}” already exists."
   },
   "MasterStore.nameEmptyError": "Name must not be empty.",
-  "MasterStore.unknownProfileError": {
-    "format": "No profile named “{0}”."
+  "MasterStore.unknownCollectionError": {
+    "format": "No collection named “{0}”."
   },
   "Notifications.restartToastButton": "Restart Claude",
   "Notifications.title": "Connector Control",
-  "PopoverModel.addTooltip": "Add Connector",
-  "PopoverModel.deleteProfileTitle": {
-    "format": "Delete “{0}”…"
+  "PopoverModel.chooseFolderButton": "Choose Folder",
+  "PopoverModel.emptyText": {
+    "format": "No connectors in “{0}”."
   },
-  "PopoverModel.emptyText": "No connectors configured yet — add one below.",
-  "PopoverModel.newProfileTitle": "New Profile…",
-  "PopoverModel.profileChipText": {
-    "format": "{0} ▾"
+  "PopoverModel.locateButton": {
+    "format": "Locate {0}"
   },
+  "PopoverModel.manageTitle": "Manage Collections",
+  "PopoverModel.pendingMenuMark": " · update available",
   "PopoverModel.quitTooltip": "Quit Connector Control",
-  "PopoverModel.renameProfileTitle": {
-    "format": "Rename “{0}”…"
-  },
   "PopoverModel.restartTitle": "Restart Required",
   "PopoverModel.retryTitle": "Apply Failed — Retry",
+  "PopoverModel.reviewAndApplyButton": "Review & Apply",
   "PopoverModel.settingsTooltip": "Settings",
+  "PopoverModel.sourceTooltipFormat": {
+    "format": "Synced from {0}"
+  },
   "PopoverModel.title": "Connector Control",
+  "PublishModel.cancelButton": "Cancel",
+  "PublishModel.chooseFolderButton": "Choose Folder",
+  "PublishModel.envSectionTitle": "Environment values · stripped unless shared",
+  "PublishModel.exportButton": "Export",
+  "PublishModel.exportTitle": {
+    "format": "Export “{0}”"
+  },
+  "PublishModel.folderLine": {
+    "mac": {
+      "format": "writes {0} from this Mac on every change"
+    },
+    "win": {
+      "format": "writes {0} from this PC on every change"
+    }
+  },
+  "PublishModel.footerLine": {
+    "format": "{0} · {1}"
+  },
+  "PublishModel.forgetMarkButton": "Forget Mark",
+  "PublishModel.hintPlaceholder": "hint for recipients",
+  "PublishModel.keptPathNote": {
+    "format": "“{0}” carries a path this machine keeps back, in {1}. Tick it where it sits, or release it."
+  },
+  "PublishModel.markPathLabel": "Mark as a path this machine supplies",
+  "PublishModel.noFolderError": "Choose a folder to publish to.",
+  "PublishModel.otherFolderNote": {
+    "format": "“{0}” carries, in {1}, the folder this machine keeps “{2}” in. Tick it where it sits, or release it."
+  },
+  "PublishModel.pathNamePlaceholder": "placeholder name",
+  "PublishModel.pathsSectionTitle": "Machine-specific paths · found in arguments",
+  "PublishModel.previewTitle": "Document preview",
+  "PublishModel.publishButton": "Publish",
+  "PublishModel.publishFolderEditNote": {
+    "mac": {
+      "format": "“{0}” carries this machine’s publish folder as written, in {1}, which this sheet cannot write over. Open “{0}” and write ${COLLECTION_DIR} there."
+    },
+    "win": {
+      "format": "“{0}” carries this machine’s publish folder as written, in {1}, which this dialog cannot write over. Open “{0}” and write ${COLLECTION_DIR} there."
+    }
+  },
+  "PublishModel.publishFolderNote": {
+    "format": "“{0}” carries this machine’s publish folder as written, in {1}. Use ${COLLECTION_DIR} in its place."
+  },
+  "PublishModel.releaseValueButton": "Release",
+  "PublishModel.shareValueLabel": "share value",
+  "PublishModel.title": {
+    "format": "Publish “{0}”"
+  },
+  "PublishModel.unresolvedMarkNote": {
+    "format": "A path marked “{1}” in “{0}” has moved. Tick it where it now sits, or forget the mark."
+  },
+  "PublishModel.useDirectoryTokenButton": "Use ${COLLECTION_DIR}",
+  "PublishModel.warningLine": {
+    "format": "{0}: {1}"
+  },
   "RemoteAuthKind.automatic.title": "Automatic (OAuth / none)",
   "RemoteAuthKind.bearer.title": "Bearer token",
   "RemoteAuthKind.header.title": "Custom header",
   "RemoteAuthKind.oauthClient.title": "OAuth client ID/secret",
+  "RemotePattern.cmdUnsafeReason": {
+    "win": {
+      "format": "{0} must not contain & | < > ^ \" or spaces: on Windows the cmd /c launcher hands it to cmd.exe, which treats those as commands."
+    }
+  },
   "RestoreModel.cancelTitle": "Cancel",
   "RestoreModel.caption": "The current file is backed up first, then replaced by the selected backup.",
   "RestoreModel.confirmMessage": {
@@ -188,12 +506,22 @@
   },
   "RestoreModel.headline": "Restore Claude config from a backup",
   "RestoreModel.restoreButton": "Restore",
-  "RestoreModel.restoreTitle": "Restore…",
+  "RestoreModel.restoreTitle": "Restore",
+  "ReviewModel.addedLabel": "Added",
+  "ReviewModel.applyButton": "Apply",
+  "ReviewModel.cancelButton": "Cancel",
+  "ReviewModel.changedLabel": "Changed",
+  "ReviewModel.deletedLabel": "Deleted",
+  "ReviewModel.refreshButton": "Refresh",
+  "ReviewModel.sourceMovedMessage": "The file changed while this was open. Review it again.",
+  "ReviewModel.title": {
+    "format": "Update to {0}"
+  },
   "SettingsModel.autoUpdateTitle": "Automatically download and install updates",
-  "SettingsModel.backupsCaption": "Both config files are backed up automatically before every change.",
+  "SettingsModel.backupsCaption": "Claude’s config, the master list and collections.json are backed up automatically before every change.",
   "SettingsModel.backupsHeader": "Backups",
-  "SettingsModel.checkForUpdatesTitle": "Check for Updates…",
-  "SettingsModel.chooseTitle": "Choose…",
+  "SettingsModel.checkForUpdatesTitle": "Check for Updates",
+  "SettingsModel.chooseTitle": "Choose",
   "SettingsModel.claudeAppHeader": "Claude App",
   "SettingsModel.claudeAppRejectedTitle": {
     "mac": "That app can’t be used as Claude Desktop",
@@ -234,11 +562,7 @@
     }
   },
   "SettingsModel.masterListHeader": "Master List Location",
-  "SettingsModel.notifyCaption": "Covers edits to Claude's config and synced connector-list changes, including when a remote change needs a Claude restart.",
-  "SettingsModel.notifyTitle": "Notify about changes made outside Connector Control",
-  "SettingsModel.restoreTitle": {
-    "mac": "Restore…"
-  },
+  "SettingsModel.notifyTitle": "Notify on external changes",
   "SettingsModel.revealInFinderTitle": {
     "mac": "Reveal in Finder",
     "win": "Show in Explorer"

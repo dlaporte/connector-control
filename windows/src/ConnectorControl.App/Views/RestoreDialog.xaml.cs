@@ -4,7 +4,7 @@ using ConnectorControl.Core.State;
 
 namespace ConnectorControl.App.Views;
 
-/// <summary>Modal, 460 wide, a 180-high list of backups, Cancel / Restore…, confirmation, inline error.</summary>
+/// <summary>Modal, 460 wide, a 180-high list of backups, Cancel / Restore, confirmation, inline error.</summary>
 public partial class RestoreDialog : DialogWindow
 {
     public RestoreDialog(AppState state)
@@ -14,7 +14,7 @@ public partial class RestoreDialog : DialogWindow
         Model.Load();
         DataContext = Model;
         BackupList.ItemsSource = Model.BackupNames;
-        CloseWhenModelAsks(handler => Model.CloseRequested += handler);
+        this.CloseWhenAsked(handler => Model.CloseRequested += handler);
     }
 
     public RestoreModel Model { get; }

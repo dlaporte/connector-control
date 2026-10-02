@@ -3,7 +3,7 @@ import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/AppStateTests.cs, line for line.
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/AppStateTests.cs, line for line.
 @MainActor
 final class AppStateTests: XCTestCase {
     private let fixture = ["aws-mcp", "scoutbook", "service-now"]
@@ -20,8 +20,8 @@ final class AppStateTests: XCTestCase {
         XCTAssertFalse(state.needsClaudeRestart)
         XCTAssertFalse(state.applyRetryNeeded)
         XCTAssertEqual(state.headerSubtitle, "3 of 3 enabled")
-        XCTAssertEqual(state.profileNames, ["Default"])
-        XCTAssertEqual(state.activeProfile, "Default")
+        XCTAssertEqual(state.collectionNames, ["Default"])
+        XCTAssertEqual(state.activeCollection, "Default")
         XCTAssertTrue(FileManager.default.fileExists(atPath: h.masterStoreURL.path))
         XCTAssertEqual(h.settings.sweepVersion, PermissionsSweep.currentVersion)
     }
@@ -51,8 +51,7 @@ final class AppStateTests: XCTestCase {
     func testRestartRequiredFollowsClaudeLaunchTime() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         state.setEnabled("aws-mcp", false)
         XCTAssertTrue(state.needsClaudeRestart)
 
@@ -70,8 +69,7 @@ final class AppStateTests: XCTestCase {
         let h = AppStateHarness()
         defer { h.dispose() }
         h.settings.lastApplyDate = h.now
-        h.claude.isRunning = true
-        h.claude.launchDate = h.now.addingTimeInterval(-3600)
+        h.claudeRunningSince(hours: 1)
         let state = h.create()
         XCTAssertTrue(state.needsClaudeRestart)
     }
@@ -112,10 +110,10 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(try h.storeOnDisk().mcps["scoutbook"])
     }
 
-    func testRemovePersistsButDoesNotApply() throws {
+    func testDeletePersistsButDoesNotApply() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        state.remove(name: "aws-mcp")
+        state.delete(names: ["aws-mcp"])
         XCTAssertNil(try h.storeOnDisk().mcps["aws-mcp"])
         XCTAssertNotNil(try h.claudeServers()["aws-mcp"])
         XCTAssertTrue(state.isDirty)
@@ -135,7 +133,7 @@ final class AppStateTests: XCTestCase {
     func testPendingRemovalIsRegeneratedQuietlyOnReload() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        state.remove(name: "aws-mcp")
+        state.delete(names: ["aws-mcp"])
         state.reload()
         XCTAssertNil(try h.claudeServers()["aws-mcp"])     // regenerated from the store
         XCTAssertNil(state.store.mcps["aws-mcp"])          // not resurrected: it matched the baseline
@@ -176,7 +174,7 @@ final class AppStateTests: XCTestCase {
     func testExternalEditThatMatchesTheStoreOnlyAnnouncesTheChange() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        state.remove(name: "aws-mcp")   // pending removal: store and file now differ
+        state.delete(names: ["aws-mcp"])   // pending removal: store and file now differ
         try h.writeClaudeServers([      // someone writes exactly what the store would render
             ("scoutbook", try XCTUnwrap(state.store.mcps["scoutbook"]).config),
             ("service-now", try XCTUnwrap(state.store.mcps["service-now"]).config),
@@ -206,7 +204,7 @@ final class AppStateTests: XCTestCase {
         try Data("{oops".utf8).write(to: h.claudeConfigURL)
         state.reload()
         XCTAssertEqual(state.lastError,
-                       "Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore… to repair the file.")
+                       "Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.")
         XCTAssertEqual(state.sortedNames, fixture)
         XCTAssertTrue(h.notifier.sent.isEmpty)
         XCTAssertFalse(state.applyRetryNeeded)
@@ -214,8 +212,8 @@ final class AppStateTests: XCTestCase {
         state.setEnabled("aws-mcp", false)
         XCTAssertTrue(state.applyRetryNeeded)
         let message = try XCTUnwrap(state.lastError)
-        XCTAssertTrue(message.hasPrefix("Claude's config file is not valid JSON ("), message)
-        XCTAssertTrue(message.hasSuffix("). Nothing was written. Use Backups ▸ Restore… to recover it."), message)
+        XCTAssertTrue(message.hasPrefix("Claude’s config file is not valid JSON ("), message)
+        XCTAssertTrue(message.hasSuffix("). Nothing was written. Use Backups ▸ Restore to recover it."), message)
         XCTAssertEqual(try h.storeOnDisk().mcps["aws-mcp"]?.enabled, false)   // the store change persisted even though the apply failed
         XCTAssertEqual(try String(contentsOf: h.claudeConfigURL, encoding: .utf8), "{oops")
 
@@ -270,7 +268,7 @@ final class AppStateTests: XCTestCase {
         // Both sentences, in reconcile order; the second is the one that says what to do.
         let message = try XCTUnwrap(state.lastError)
         XCTAssertTrue(message.hasPrefix("The MCP list file was unreadable; it was preserved as mcps.corrupt."), message)
-        XCTAssertTrue(message.hasSuffix(" Claude's config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore… to repair the file."), message)
+        XCTAssertTrue(message.hasSuffix(" Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file."), message)
     }
 
     func testReloadOverwritesLastError() {
@@ -284,7 +282,7 @@ final class AppStateTests: XCTestCase {
     func testFriendlyMapsMalformedConfigAndPassesOtherMessagesThrough() {
         XCTAssertEqual(
             AppState.friendly(ClaudeConfigError.malformed("top level is not a JSON object")),
-            "Claude's config file is not valid JSON (top level is not a JSON object). Nothing was written. Use Backups ▸ Restore… to recover it.")
+            "Claude’s config file is not valid JSON (top level is not a JSON object). Nothing was written. Use Backups ▸ Restore to recover it.")
         XCTAssertEqual(
             AppState.friendly(NSError(domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "disk full"])),
             "disk full")
@@ -323,8 +321,14 @@ final class AppStateTests: XCTestCase {
         let subscription = state.objectWillChange.sink { _ in raised += 1 }
         defer { subscription.cancel() }
         state.refreshTools()
+        // Handed to the host's background, not run on the calling (main) thread.
+        XCTAssertEqual(h.tools.batches, 0)
+        XCTAssertEqual(h.background.pending, 1)
         // The results are posted to the host; nothing is published until the queue is pumped.
-        XCTAssertTrue(h.ui.pumpUntil({ state.toolStatuses.count == 4 }, timeout: 5))
+        XCTAssertEqual(h.background.runAll(), 1)
+        XCTAssertTrue(state.toolStatuses.isEmpty)
+        h.ui.pump()
+        XCTAssertEqual(state.toolStatuses.count, 4)
         XCTAssertEqual(state.toolStatuses[.uvx], .notFound)
         XCTAssertEqual(state.toolStatuses[.npx], .found(path: "/fake/bin/npx", version: "1.0.0"))
         XCTAssertGreaterThan(raised, 0)
@@ -337,27 +341,31 @@ final class AppStateTests: XCTestCase {
         defer { h.dispose() }
         state.refreshTools([.npx])
         state.refreshTools([.npx, .node])   // npx joins the flight already in the air; node starts one
-        XCTAssertTrue(h.ui.pumpUntil({ state.toolStatuses.count == 2 }, timeout: 5))
+        XCTAssertEqual(h.background.pending, 2, "both asked while the first batch had not run")
+        h.drain()
+        XCTAssertEqual(state.toolStatuses.count, 2)
         XCTAssertEqual(Set(h.tools.probed), [.npx, .node])
         XCTAssertEqual(h.tools.probed.count, 2)
         XCTAssertEqual(h.tools.batches, 2)
         state.refreshTools([])   // nothing wanted: no batch
-        XCTAssertEqual(h.tools.batches, 2)
+        XCTAssertEqual(h.background.pending, 0)
         // Once published, the same tool can be probed again (the editor asks when the command changes).
         state.refreshTools([.npx])
-        XCTAssertTrue(h.ui.pumpUntil({ h.tools.probed.count == 3 }, timeout: 5))
+        h.drain()
+        XCTAssertEqual(h.tools.probed.count, 3)
     }
 
     /// The pieces StringCatalogTests can't cover: the internal notification
     /// identifiers (excluded from the shared catalog on purpose), the delta
     /// summary's real formatting for non-empty adds/removes/changes, and the
-    /// numeric recheck delay.
+    /// numeric recheck delay. The C# mirror is ServerDeltaTests.cs's
+    /// BodyNamesTheChangeAndWhatToDoNext.
     func testConnectorListChangedBodySummarizesTheDeltaAndInternalIdentifiersStayStable() {
         XCTAssertEqual(Notifications.restartCategory, "restartPending")
         XCTAssertEqual(Notifications.restartAction, "restartClaude")
         XCTAssertEqual(
             AppState.connectorListChangedBody(ServerDelta(added: ["evil"], removed: ["fs"]), restartRequired: true),
-            "The connector list changed outside Connector Control — Claude's config now adds evil; removes fs. Restart Claude to pick it up.")
+            "The connector list changed outside Connector Control — Claude's config now adds evil; deletes fs. Restart Claude to pick it up.")
         XCTAssertEqual(
             AppState.connectorListChangedBody(ServerDelta(changed: ["aws-mcp"]), restartRequired: false),
             "The connector list changed outside Connector Control — Claude's config now changes aws-mcp. Claude will use it the next time it starts.")

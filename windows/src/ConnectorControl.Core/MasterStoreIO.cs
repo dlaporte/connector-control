@@ -17,10 +17,10 @@ public static class MasterStoreIO
         }
         try
         {
-            // A decoded-but-inconsistent activeProfile (hand-edited or corrupted
+            // A decoded-but-inconsistent activeCollection (hand-edited or corrupted
             // file) is self-healed by the MasterStore constructor itself — see
             // its comment — so FromJson always returns a store whose
-            // ActiveProfile names an existing profile.
+            // ActiveCollection names an existing collection.
             var store = MasterStore.FromJson(JsonValue.Parse(File.ReadAllBytes(path)));
             return (store, null);
         }

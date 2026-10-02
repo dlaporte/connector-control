@@ -1,0 +1,238 @@
+<views:DialogWindow x:Class="ConnectorControl.App.Views.ImportDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:state="clr-namespace:ConnectorControl.Core.State;assembly=ConnectorControl.Core"
+        xmlns:views="clr-namespace:ConnectorControl.App.Views"
+        Width="620">
+  <Window.Resources>
+    <views:ImportChoiceTitleConverter x:Key="ChoiceTitle" />
+    <views:ImportRowLabelConverter x:Key="RowLabel" />
+
+    <!-- How a collision resolves. Its own template, applied only to a row that has one: a
+         collapsed element inside a DataTemplate is still created and still binds, and a row with
+         nothing in its way holds a choice this picker does not offer. -->
+    <DataTemplate x:Key="ChoiceTemplate">
+      <StackPanel Orientation="Horizontal">
+        <ComboBox x:Name="ChoiceBox" ItemsSource="{x:Static state:ImportModel.CollisionChoices}"
+                  SelectedItem="{Binding Choice, Mode=TwoWay}" MinWidth="110" VerticalAlignment="Center"
+                  AutomationProperties.Name="{Binding Name, Converter={StaticResource RowLabel}, ConverterParameter=choice}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding Converter={StaticResource ChoiceTitle}}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <TextBlock x:Name="ReplaceNote" Text="{x:Static state:ImportModel.ReplaceKeepsValues}"
+                   VerticalAlignment="Center" Margin="8,0,0,0">
+          <TextBlock.Style>
+            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+              <Setter Property="Visibility" Value="Collapsed" />
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedItem, ElementName=ChoiceBox}" Value="{x:Static state:ImportChoice.Replace}">
+                  <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </TextBlock.Style>
+        </TextBlock>
+      </StackPanel>
+    </DataTemplate>
+  </Window.Resources>
+  <StackPanel Margin="16">
+    <!-- The sheet's own heading, as well as the title bar's: the Mac sheet has no chrome to put it
+         in, and both platforms read the same sentence. -->
+    <TextBlock Text="{x:Static state:ImportModel.Title}" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,12" />
+
+    <!-- The file the sheet was opened with, and what that file says about itself. A long path
+         loses its tail, since WPF has no middle ellipsis; the Mac sheet elides the middle and
+         keeps the file name. -->
+    <TextBlock Text="{Binding Path}" FontFamily="{StaticResource MonoFont}" FontSize="12"
+               TextTrimming="CharacterEllipsis" />
+    <TextBlock Text="{Binding SourceSentence}" Style="{StaticResource CaptionText}" Margin="0,2,0,0" />
+
+    <!-- A document this app cannot read offers nothing to choose between: the modes, the rows and
+         Import all go, and Cancel is the only way out. -->
+    <TextBlock x:Name="LoadErrorText" Text="{Binding LoadError}" Style="{StaticResource ErrorText}" Margin="0,12,0,0"
+               Visibility="{Binding HasLoadError, Converter={StaticResource Vis}}" />
+
+    <StackPanel x:Name="Body" Margin="0,12,0,0">
+      <StackPanel.Style>
+        <Style TargetType="StackPanel">
+          <Setter Property="Visibility" Value="Collapsed" />
+          <Style.Triggers>
+            <DataTrigger Binding="{Binding HasLoadError}" Value="False">
+              <Setter Property="Visibility" Value="Visible" />
+            </DataTrigger>
+          </Style.Triggers>
+        </Style>
+      </StackPanel.Style>
+      <!-- Copies into a collection the user owns: which one, and what would happen to each connector. -->
+      <Border>
+        <Border.Style>
+          <Style TargetType="Border" BasedOn="{StaticResource Card}">
+            <Style.Triggers>
+              <!-- The chosen card is the one whose radio is on, which is the one the mode is.
+                   Border and tint together, as the mockup and the Mac card both have; the tint is
+                   the theme's own subtle fill, which is the key the app already leans on. -->
+              <DataTrigger Binding="{Binding IsChecked, ElementName=CopiesMode}" Value="True">
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Border.Style>
+        <StackPanel>
+          <!-- The two headers are the platform's radio buttons, which the arrow keys move between;
+               the Mac sheet's cards are buttons, which they do not. -->
+          <RadioButton x:Name="CopiesMode" GroupName="ImportMode" FontWeight="Medium"
+                       IsChecked="{Binding ImportMode, Converter={StaticResource EnumToBool}, ConverterParameter=AddToCollection, Mode=TwoWay}" />
+          <TextBlock Text="{x:Static state:ImportModel.AddModeDetail}" Style="{StaticResource CaptionText}" Margin="20,2,0,0" />
+          <!-- The chosen mode's own controls. The mode is the model's, so which body shows is a
+               binding on it rather than something the code-behind works out. -->
+          <StackPanel x:Name="CopiesBody" Margin="20,8,0,0">
+            <StackPanel.Style>
+              <Style TargetType="StackPanel">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding ImportMode}" Value="{x:Static state:ImportModel+Mode.AddToCollection}">
+                    <Setter Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </StackPanel.Style>
+            <!-- The radio above names the collection the copies would land in; this changes it. -->
+            <ComboBox x:Name="TargetBox" ItemsSource="{Binding Targets}"
+                      SelectedItem="{Binding ImportTarget, Mode=TwoWay}"
+                      MinWidth="180" HorizontalAlignment="Left" />
+            <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+              <ItemsControl x:Name="RowList" ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid Margin="0,0,0,4">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                      </Grid.ColumnDefinitions>
+                      <!-- A connector this platform has no way to run cannot be imported at all.
+                           IsEnabled is a binding rather than a style trigger, because a local
+                           style on a CheckBox would replace the theme's own. -->
+                      <CheckBox x:Name="IncludeTick" IsChecked="{Binding Include, Mode=TwoWay}" VerticalAlignment="Center"
+                                IsEnabled="{Binding CanInclude}"
+                                AutomationProperties.Name="{Binding Name, Converter={StaticResource RowLabel}}" />
+                      <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                      <!-- Caution glyph: its own Auto column, so the badge column keeps the rest. -->
+                      <TextBlock x:Name="NeedsGlyph" Grid.Column="2"
+                                 FontFamily="{StaticResource IconFont}"
+                                 Text="{x:Static state:FlyoutModel.ToolWarningGlyph}"
+                                 ToolTip="{Binding NeedsCaution}"
+                                 AutomationProperties.Name="{Binding NeedsCaution}"
+                                 VerticalAlignment="Center" Margin="6,0,0,0">
+                        <TextBlock.Style>
+                          <Style TargetType="TextBlock" BasedOn="{StaticResource CautionText}">
+                            <Setter Property="Visibility" Value="Visible" />
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding NeedsCaution}" Value="{x:Null}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </TextBlock.Style>
+                      </TextBlock>
+
+                      <!-- What would happen to this connector: how the collision it would cause
+                           resolves, or — for every other row, and for a collision that is not
+                           coming across — the row's own badge. Which of the two is the row's
+                           ShowsPicker, which it raises as its Include changes. -->
+                      <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
+                        <!-- The badge is a row's whole point and the skipped reason is the longest
+                             of them, so the one line that shows it carries the full sentence. -->
+                        <TextBlock x:Name="BadgeText" Text="{Binding Badge}" ToolTip="{Binding Badge}"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
+                          <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                              <Setter Property="Visibility" Value="Visible" />
+                              <Style.Triggers>
+                                <DataTrigger Binding="{Binding ShowsPicker}" Value="True">
+                                  <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                              </Style.Triggers>
+                            </Style>
+                          </TextBlock.Style>
+                        </TextBlock>
+
+                        <!-- Empty, and holding nothing at all, until the row is a collision that
+                             is coming across; then the choice template above fills it. -->
+                        <ContentControl x:Name="ChoicePanel">
+                          <ContentControl.Style>
+                            <Style TargetType="ContentControl">
+                              <Style.Triggers>
+                                <DataTrigger Binding="{Binding ShowsPicker}" Value="True">
+                                  <Setter Property="Content" Value="{Binding}" />
+                                  <Setter Property="ContentTemplate" Value="{StaticResource ChoiceTemplate}" />
+                                </DataTrigger>
+                              </Style.Triggers>
+                            </Style>
+                          </ContentControl.Style>
+                        </ContentControl>
+
+                      </StackPanel>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- A collection of its own, bound to the file: what to call it. -->
+      <Border>
+        <Border.Style>
+          <Style TargetType="Border" BasedOn="{StaticResource Card}">
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding IsChecked, ElementName=SyncMode}" Value="True">
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Border.Style>
+        <StackPanel>
+          <RadioButton x:Name="SyncMode" GroupName="ImportMode" FontWeight="Medium"
+                       Content="{x:Static state:ImportModel.SyncModeTitle}"
+                       IsChecked="{Binding ImportMode, Converter={StaticResource EnumToBool}, ConverterParameter=KeepInSync, Mode=TwoWay}" />
+          <StackPanel x:Name="SyncBody" Margin="20,8,0,0">
+            <StackPanel.Style>
+              <Style TargetType="StackPanel">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding ImportMode}" Value="{x:Static state:ImportModel+Mode.KeepInSync}">
+                    <Setter Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </StackPanel.Style>
+            <TextBox x:Name="SyncNameBox" Text="{Binding SyncName, UpdateSourceTrigger=PropertyChanged}"
+                     MinWidth="240" HorizontalAlignment="Left"
+                     AutomationProperties.Name="{x:Static state:ImportModel.SyncNameLabel}" />
+          </StackPanel>
+          <TextBlock Text="{x:Static state:ImportModel.SyncModeDetail}" Style="{StaticResource CaptionText}" Margin="20,8,0,0" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+
+    <TextBlock x:Name="FailureText" Style="{StaticResource ErrorText}" Margin="0,8,0,0" Visibility="Collapsed" />
+
+    <StackPanel Style="{StaticResource DialogButtons}" Margin="0,16,0,0">
+      <Button x:Name="CancelButton" Content="{x:Static state:ImportModel.CancelButton}" MinWidth="80" IsCancel="True" />
+      <!-- Import belongs to the body it acts on, and comes and goes with it. Bound to the body
+           rather than to the flag a second time, because the accent style leaves no room for a
+           local style of its own to carry the trigger. -->
+      <Button x:Name="ImportButton" MinWidth="90" Margin="8,0,0,0" IsDefault="True"
+              IsEnabled="{Binding CanImport}" Visibility="{Binding Visibility, ElementName=Body}"
+              Style="{DynamicResource AccentButtonStyle}" Click="OnImport" />
+    </StackPanel>
+  </StackPanel>
+</views:DialogWindow>

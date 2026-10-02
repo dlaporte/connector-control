@@ -9,7 +9,7 @@ import AppKit
 ///
 /// The sizing must be IDEMPOTENT: three resize passes race here (SwiftUI's
 /// auto-grow, this shim, the measured scroll-cap feedback), and a violent
-/// content change like a profile switch interleaves them. A delta-based
+/// content change like a collection switch interleaves them. A delta-based
 /// correction that preserves the current top edge perpetuates whatever
 /// transient frame it happened to read — the frame is therefore always set
 /// to absolutes (anchored top, content-ideal height) computed from stable
@@ -81,7 +81,7 @@ struct WindowAutoSizer: NSViewRepresentable {
         }
 
         /// Coalesces to one setFrame per runloop turn: setFrame is re-entrant
-        /// with layout(), and a profile switch produces several layout passes;
+        /// with layout(), and a collection switch produces several layout passes;
         /// applying once after SwiftUI has settled avoids the frame fights.
         func scheduleResize() {
             guard !resizePending else { return }

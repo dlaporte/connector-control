@@ -1,0 +1,97 @@
+{
+  "author" : "Acme Data Platform",
+  "connectorControlCollection" : 1,
+  "connectors" : {
+    "dbt" : {
+      "additional" : {
+
+      },
+      "env" : {
+        "DBT_REGION" : {
+          "value" : "us"
+        },
+        "DBT_TOKEN" : {
+          "hint" : "cloud.getdbt.com ▸ API tokens"
+        }
+      },
+      "local" : {
+        "args" : [
+          "-y",
+          "@dbt\/mcp"
+        ],
+        "command" : "npx",
+        "platform" : "mac"
+      },
+      "needs" : {
+
+      }
+    },
+    "github" : {
+      "additional" : {
+
+      },
+      "env" : {
+
+      },
+      "needs" : {
+
+      },
+      "remote" : {
+        "auth" : {
+          "kind" : "automatic"
+        },
+        "extraArgs" : [
+
+        ],
+        "package" : "mcp-remote",
+        "url" : "https:\/\/mcp.github.com\/"
+      }
+    },
+    "ledger" : {
+      "additional" : {
+        "type" : "stdio"
+      },
+      "env" : {
+
+      },
+      "local" : {
+        "args" : [
+          "${CC_NEEDS:server_path}"
+        ],
+        "command" : "node",
+        "platform" : "mac"
+      },
+      "needs" : {
+        "server_path" : {
+          "hint" : "your ledger clone, then dist\/index.js"
+        }
+      }
+    },
+    "notion" : {
+      "additional" : {
+
+      },
+      "env" : {
+
+      },
+      "needs" : {
+        "token" : {
+          "hint" : "notion.so ▸ integrations"
+        }
+      },
+      "remote" : {
+        "auth" : {
+          "kind" : "bearer"
+        },
+        "extraArgs" : [
+
+        ],
+        "package" : "mcp-remote",
+        "url" : "https:\/\/mcp.notion.com\/"
+      }
+    }
+  },
+  "exported" : "2026-09-21T14:02:11Z",
+  "name" : "Data team",
+  "origin" : "6f1c4a2e-1b8d-4b0e-9f0a-3c2d7e8a91e2"
+}

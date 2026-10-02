@@ -15,4 +15,11 @@ public static class BackupTimestamp
         if (date.Kind == DateTimeKind.Unspecified) { date = DateTime.SpecifyKind(date, DateTimeKind.Utc); }
         return date.ToUniversalTime().ToString("yyyy-MM-dd'T'HH-mm-ss-fff'Z'", CultureInfo.InvariantCulture);
     }
+
+    /// <summary>The instant a stamp names, in UTC, or null for text that is not one.</summary>
+    public static DateTime? Parse(string stamp) =>
+        DateTime.TryParseExact(stamp, "yyyy-MM-dd'T'HH-mm-ss-fff'Z'", CultureInfo.InvariantCulture,
+            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var date)
+            ? date
+            : null;
 }

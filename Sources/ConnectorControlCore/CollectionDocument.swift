@@ -1,0 +1,1084 @@
+import Foundation
+
+public enum CollectionPlatform: String, Equatable, Sendable {
+    case mac, windows
+    /// The platform this build renders launchers for. Stated here rather than detected at run
+    /// time so the tests on either side exercise exactly one, known rendering.
+    public static let current: CollectionPlatform = .mac
+}
+
+public enum CollectionDocumentError: Error, Equatable {
+    case newerFormat(Int)
+    case malformed(String)
+}
+
+/// Why a document was not produced from a publish intent.
+///
+/// Mirror: `PublishIntentException` in windows/src/ConnectorControl.Core/CollectionDocument.cs, one
+/// subclass per case: `PathMarkMovedException`, `PublishFolderCarriedException` and
+/// `KeptPathCarriedException`.
+public enum PublishIntentError: Error, Equatable {
+    /// A path the author marked on this connector can no longer be found where it was marked.
+    /// The argument it stood for may be anywhere, so no document is written rather than one that
+    /// might carry that path as written.
+    case pathMarkMoved(connector: String)
+    /// This connector carries, as written in `field`, a folder this machine publishes the
+    /// collection into, now or before. It is the author's own folder, and a subscriber's copy
+    /// stands for it with the token.
+    case publishFolderCarried(connector: String, field: String)
+    /// This connector carries, as written in `field`, a path this machine keeps back: a copy of a
+    /// path marked in it, a path on one of this machine's lists of marked paths, or a folder this
+    /// machine binds another collection to.
+    case keptPathCarried(connector: String, field: String)
+    /// This connector has never been reviewed for publishing on this machine: it was added,
+    /// copied or imported since the author last pressed Publish in the sheet.
+    case unreviewedConnector(connector: String)
+    /// This connector now holds something `CollectionDocument.credentialWarnings` flags that it
+    /// did not hold when the author last reviewed it.
+    case newCredential(connector: String)
+}
+
+/// A path this machine keeps back, found as written in a document.
+public struct KeptValueFinding: Equatable, Sendable {
+    public var connector: String
+    /// Its place in the connector's document form, e.g. `local.args[1]` or `additional.cwd`.
+    public var field: String
+    public var value: String
+    public init(connector: String, field: String, value: String) {
+        self.connector = connector
+        self.field = field
+        self.value = value
+    }
+}
+
+/// How a path kept back is recognised in a string, and written over.
+///
+/// Both platforms walk the same UTF-16 code units, so an occurrence is found at the same place on
+/// each.
+///
+/// Mirror: `KeptValue` in windows/src/ConnectorControl.Core/CollectionDocument.cs
+public enum KeptValue {
+    /// Whether `text` holds `value` as written. Any value counts as the whole string. An absolute
+    /// or home path also counts inside a longer string wherever it stands as a path of its own:
+    /// neither the character before it nor the one after continues a file name
+    /// (`continuesAName`). So "--root=/share/x", "/share:/opt/lib" and "/share;x" hold "/share",
+    /// and "/share-tools", "/share.bak" and "/home/share" do not. A relative value such as "."
+    /// counts only as the whole string, or it would be found in every connector. The value also
+    /// counts as JSON spells it, as it reads inside a JSON blob carried as a single argument. Both
+    /// sides are compared in NFC, so an accented path matches in either normalization.
+    public static func holds(_ text: String, _ value: String) -> Bool {
+        let text = nfc(text), value = nfc(value)
+        guard !value.isEmpty else { return false }
+        if text == value { return true }
+        guard isAbsolute(value) else { return false }
+        let units = Array(text.utf16)
+        return writtenForms(value).contains { !occurrences(of: Array($0.utf16), in: units).isEmpty }
+    }
+
+    /// `text` with every occurrence `holds` finds of `value` written as `replacement` instead, the
+    /// JSON spellings first so an escaped path inside a JSON blob is replaced whole. The text comes
+    /// back in NFC.
+    public static func replacing(_ value: String, in text: String, with replacement: String) -> String {
+        let text = nfc(text), value = nfc(value)
+        guard !value.isEmpty else { return text }
+        if text == value { return replacement }
+        guard isAbsolute(value) else { return text }
+        var units = Array(text.utf16)
+        for form in writtenForms(value) {
+            for range in occurrences(of: Array(form.utf16), in: units).reversed() {
+                units.replaceSubrange(range, with: Array(replacement.utf16))
+            }
+        }
+        return String(decoding: units, as: UTF16.self)
+    }
+
+    /// `text` in Unicode NFC, the form every kept-value comparison is made in.
+    public static func nfc(_ text: String) -> String { text.precomposedStringWithCanonicalMapping }
+
+    /// An absolute or home path: `/…`, `~…`, a UNC `\\…` path, or a drive letter with `:\` or `:/`.
+    static func isAbsolute(_ value: String) -> Bool {
+        let units = Array(value.utf16)
+        guard let first = units.first else { return false }
+        if first == ascii("/") || first == ascii("~") || (units.count >= 2 && first == ascii("\\") && units[1] == ascii("\\")) {
+            return true
+        }
+        return units.count >= 3 && isASCIILetter(first) && units[1] == ascii(":") && (units[2] == ascii("\\") || units[2] == ascii("/"))
+    }
+
+    /// An ASCII letter or digit, `.`, `_`, `-`, or any character outside ASCII: one that continues
+    /// a file name, so a path beside it is part of a longer name rather than a path of its own.
+    static func continuesAName(_ unit: UInt16) -> Bool {
+        unit > 0x7F || isASCIILetter(unit) || (ascii("0")...ascii("9")).contains(unit)
+            || unit == ascii(".") || unit == ascii("_") || unit == ascii("-")
+    }
+
+    /// The UTF-16 code unit of an ASCII character, so a comparison reads as the character it means.
+    private static func ascii(_ scalar: Unicode.Scalar) -> UInt16 { UInt16(scalar.value) }
+
+    private static func isASCIILetter(_ unit: UInt16) -> Bool {
+        (ascii("A")...ascii("Z")).contains(unit) || (ascii("a")...ascii("z")).contains(unit)
+    }
+
+    /// Where `needle` stands in `haystack` as a path of its own, left to right and not overlapping.
+    private static func occurrences(of needle: [UInt16], in haystack: [UInt16]) -> [Range<Int>] {
+        guard !needle.isEmpty, needle.count <= haystack.count else { return [] }
+        var found: [Range<Int>] = []
+        var start = 0
+        while start + needle.count <= haystack.count {
+            let end = start + needle.count
+            if haystack[start..<end].elementsEqual(needle),
+               start == 0 || !continuesAName(haystack[start - 1]),
+               end == haystack.count || !continuesAName(haystack[end]) {
+                found.append(start..<end)
+                start = end
+            } else {
+                start += 1
+            }
+        }
+        return found
+    }
+
+    /// `value` as a JSON string spells it — backslashes and quotes escaped, with and without the
+    /// slash escaped too — and as written, longest first, each once.
+    static func writtenForms(_ value: String) -> [String] {
+        let escaped = value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        var forms: [String] = []
+        for form in [escaped.replacingOccurrences(of: "/", with: "\\/"), escaped,
+                     value.replacingOccurrences(of: "/", with: "\\/"), value] where !forms.contains(form) {
+            forms.append(form)
+        }
+        return forms.sorted { $0.utf16.count != $1.utf16.count ? $0.utf16.count > $1.utf16.count : $0.ordinallyPrecedes($1) }
+    }
+}
+
+/// What the author ticked in the Publish sheet: which env values travel as values rather than
+/// as stripped hints, which arguments become markers, and the hint text for each.
+public struct PublishIntent: Equatable, Sendable {
+    public struct PathMark: Equatable, Sendable {
+        public var name: String
+        public var hint: String?
+        /// The argument as it read when it was marked, so the mark can follow it when arguments
+        /// move and can tell when it no longer marks anything. nil only in a record written
+        /// before values were kept, which no release did: such a mark is placed where its
+        /// pointer points, as every mark once was.
+        public var value: String?
+        public init(name: String, hint: String?, value: String?) {
+            self.name = name
+            self.hint = hint
+            self.value = value
+        }
+    }
+    public var shareValues: [String: Set<String>]
+    public var pathMarks: [String: [JSONPointer: PathMark]]
+    public var hints: [String: [String: String]]
+    public init(shareValues: [String: Set<String>], pathMarks: [String: [JSONPointer: PathMark]], hints: [String: [String: String]]) {
+        self.shareValues = shareValues
+        self.pathMarks = pathMarks
+        self.hints = hints
+    }
+    public static let none = PublishIntent(shareValues: [:], pathMarks: [:], hints: [:])
+
+    /// Everything this intent says about `connector` said about `newName` instead, or dropped
+    /// when `newName` is nil: a renamed connector keeps its ticks, and a removed one leaves none
+    /// behind for a later connector of the same name to inherit.
+    public func movingConnector(_ connector: String, to newName: String?) -> PublishIntent {
+        var moved = self
+        let shared = moved.shareValues.removeValue(forKey: connector)
+        let marks = moved.pathMarks.removeValue(forKey: connector)
+        let connectorHints = moved.hints.removeValue(forKey: connector)
+        guard let newName else { return moved }
+        if let shared { moved.shareValues[newName] = shared }
+        if let marks { moved.pathMarks[newName] = marks }
+        if let connectorHints { moved.hints[newName] = connectorHints }
+        return moved
+    }
+
+    /// The text of every path this intent marks, whichever connector holds it: what a document
+    /// written through it carries as a placeholder, and so what must never appear in it as written.
+    public var markedValues: Set<String> { Set(pathMarks.values.flatMap { $0.values.compactMap(\.value) }) }
+
+    /// The same intent with `connector`'s path marks replaced; an empty set drops its entry.
+    public func replacingPathMarks(of connector: String, with marks: [JSONPointer: PathMark]) -> PublishIntent {
+        var replaced = self
+        replaced.pathMarks[connector] = marks.isEmpty ? nil : marks
+        return replaced
+    }
+
+    /// Where one connector's path marks sit among its arguments now.
+    ///
+    /// A mark stays on the argument at its pointer while that argument still reads as it did
+    /// when it was marked. Failing that, it follows its value to the one argument that holds it.
+    /// A mark that finds neither — its value edited away, held by two arguments, or already
+    /// claimed by another mark — is unresolved: the argument it was made on could be anywhere,
+    /// and nothing may be published over it.
+    ///
+    /// A mark with no recorded value is placed where its pointer points, and one pointing past
+    /// the arguments marks nothing, which is how every mark behaved before values were kept.
+    public static func placePathMarks(_ marks: [JSONPointer: PathMark], in args: [String]) -> PathMarkPlacement {
+        var placed: [Int: PathMark] = [:]
+        var unresolved: [JSONPointer: PathMark] = [:]
+        var following: [(JSONPointer, PathMark)] = []
+        // Pointer order on both platforms, so which of two competing marks wins is the same
+        // everywhere. Marks still on their own argument go first: a mark that stayed put keeps
+        // it, whatever another mark's value would follow onto.
+        for (pointer, mark) in marks.sorted(by: { $0.key.description.ordinallyPrecedes($1.key.description) }) {
+            let index = argumentIndex(pointer, count: args.count)
+            guard let value = mark.value else {
+                if let index {
+                    if placed[index] == nil { placed[index] = mark } else { unresolved[pointer] = mark }
+                }
+                continue
+            }
+            if let index, KeptValue.nfc(args[index]) == KeptValue.nfc(value), placed[index] == nil {
+                placed[index] = mark
+            } else {
+                following.append((pointer, mark))
+            }
+        }
+        for (pointer, mark) in following {
+            let value = KeptValue.nfc(mark.value ?? "")
+            let holders = args.indices.filter { KeptValue.nfc(args[$0]) == value }
+            if holders.count == 1, placed[holders[0]] == nil {
+                placed[holders[0]] = mark
+            } else {
+                unresolved[pointer] = mark
+            }
+        }
+        return PathMarkPlacement(placed: placed, unresolved: unresolved)
+    }
+
+    /// The text of every argument a mark in this intent is placed on, across `connectors`: what
+    /// the exporter replaces with placeholders, and so what the document must never carry as
+    /// written. A remote connector's arguments are the launcher's, and carry no mark.
+    public func placedArguments(in connectors: [String: JSONValue]) -> Set<String> {
+        var out: Set<String> = []
+        for (name, marks) in pathMarks {
+            guard let config = connectors[name], RemotePattern.decode(config) == nil else { continue }
+            let args = FormMapper.analyze(config).model.args
+            for index in PublishIntent.placePathMarks(marks, in: args).placed.keys { out.insert(args[index]) }
+        }
+        return out
+    }
+
+    /// The argument index a `/args/<n>` pointer names, when there is an argument there.
+    private static func argumentIndex(_ pointer: JSONPointer, count: Int) -> Int? {
+        guard pointer.segments.count == 2, pointer.segments[0] == "args",
+              let index = Int(pointer.segments[1]), index >= 0, index < count else { return nil }
+        return index
+    }
+}
+
+extension String {
+    /// UTF-16 code-unit order, which is what C#'s `StringComparer.Ordinal` sorts by. Swift's own
+    /// `<` orders by Unicode scalar, which puts a character beyond U+FFFF after one such as U+FF5E
+    /// where C# puts it before, so anything both platforms must list alike sorts by this.
+    public func ordinallyPrecedes(_ other: String) -> Bool {
+        utf16.lexicographicallyPrecedes(other.utf16)
+    }
+}
+
+/// One connector's path marks, placed on the arguments it holds now.
+public struct PathMarkPlacement: Equatable, Sendable {
+    /// Argument index → the mark that sits on it.
+    public var placed: [Int: PublishIntent.PathMark]
+    /// The marks that found no argument, by the pointer they were recorded at.
+    public var unresolved: [JSONPointer: PublishIntent.PathMark]
+    public init(placed: [Int: PublishIntent.PathMark], unresolved: [JSONPointer: PublishIntent.PathMark]) {
+        self.placed = placed
+        self.unresolved = unresolved
+    }
+}
+
+public struct RenderedNeed: Equatable, Sendable {
+    public var hint: String?
+    public var pointer: JSONPointer
+    public init(hint: String?, pointer: JSONPointer) { self.hint = hint; self.pointer = pointer }
+}
+
+public struct RenderedConnector: Equatable, Sendable {
+    public var config: JSONValue
+    public var needs: [String: RenderedNeed]
+    /// The platform the author's machine wrote a local launcher on; nil for a remote connector,
+    /// whose launcher each importer builds for itself.
+    public var authoredOn: CollectionPlatform?
+    public init(config: JSONValue, needs: [String: RenderedNeed], authoredOn: CollectionPlatform?) {
+        self.config = config
+        self.needs = needs
+        self.authoredOn = authoredOn
+    }
+}
+
+public struct RenderedCollection: Equatable, Sendable {
+    public var connectors: [String: RenderedConnector]
+    /// Connector name → why this platform cannot carry it; always empty on the Mac.
+    public var excluded: [String: String]
+    public init(connectors: [String: RenderedConnector], excluded: [String: String]) {
+        self.connectors = connectors
+        self.excluded = excluded
+    }
+}
+
+/// The document a collection travels as. Remote connectors are stored in the neutral form the
+/// editor already uses, so each importer renders its own launcher; secrets and marked paths are
+/// placeholders; enabled flags never travel.
+///
+/// Mirror: windows/src/ConnectorControl.Core/CollectionDocument.cs
+public struct CollectionDocument: Equatable, Sendable {
+    public static let formatVersion = 1
+    public static let fileExtension = "json"
+
+    /// The document's name in a publish folder: the slug publishing fixed, never re-derived from
+    /// the collection's current name.
+    public static func fileName(slug: String) -> String { slug + "." + fileExtension }
+    public static let tokenNeed = "token"
+    public static let headerValueNeed = "header_value"
+    public static let clientSecretNeed = "client_secret"
+
+    public var name: String
+    public var author: String?
+    public var origin: String?
+    /// ISO 8601 UTC, e.g. "2026-09-21T14:02:11Z". Stored as text: the document never does date
+    /// arithmetic, and a string cannot drift between two platforms' formatters.
+    public var exported: String
+    public var connectors: [String: Connector]
+
+    public init(name: String, author: String?, origin: String?, exported: String, connectors: [String: Connector]) {
+        self.name = name
+        self.author = author
+        self.origin = origin
+        self.exported = exported
+        self.connectors = connectors
+    }
+
+    public struct Connector: Equatable, Sendable {
+        public var launcher: Launcher
+        public var env: [String: EnvValue]
+        /// Placeholder name → hint (nil: no hint).
+        public var needs: [String: String?]
+        public var additional: [String: JSONValue]
+
+        public init(launcher: Launcher, env: [String: EnvValue] = [:],
+                    needs: [String: String?] = [:], additional: [String: JSONValue] = [:]) {
+            self.launcher = launcher
+            self.env = env
+            self.needs = needs
+            self.additional = additional
+        }
+    }
+
+    public enum Launcher: Equatable, Sendable { case remote(Remote), local(Local) }
+
+    public struct Remote: Equatable, Sendable {
+        public var url: String
+        public var auth: Auth
+        public var package: String
+        public var extraArgs: [String]
+        public init(url: String, auth: Auth, package: String, extraArgs: [String]) {
+            self.url = url
+            self.auth = auth
+            self.package = package
+            self.extraArgs = extraArgs
+        }
+    }
+
+    public enum Auth: Equatable, Sendable {
+        /// C# has no case value of this name to write — a record type's name isn't an
+        /// expression there — so it exposes the same case through a static `Auto` instead.
+        case automatic
+        case bearer
+        case header(name: String)
+        case oauthClient(clientId: String, scopes: String)
+    }
+
+    public struct Local: Equatable, Sendable {
+        public var command: String
+        public var args: [String]
+        public var platform: CollectionPlatform
+        public init(command: String, args: [String], platform: CollectionPlatform) {
+            self.command = command
+            self.args = args
+            self.platform = platform
+        }
+    }
+
+    public enum EnvValue: Equatable, Sendable { case hint(String?), value(String) }
+
+    // MARK: Encode
+
+    public func encode() -> JSONValue {
+        var root: [String: JSONValue] = [
+            "connectorControlCollection": .int(Self.formatVersion),
+            "name": .string(name),
+            "exported": .string(exported),
+            "connectors": .object(connectors.mapValues { $0.encode() }),
+        ]
+        if let author { root["author"] = .string(author) }
+        if let origin { root["origin"] = .string(origin) }
+        return .object(root)
+    }
+
+    public func serialized() throws -> Data { try encode().serialized() }
+
+    // MARK: Decode
+
+    public static func decode(_ data: Data) throws -> CollectionDocument {
+        let json: JSONValue
+        do { json = try JSONValue.parse(data) } catch { throw CollectionDocumentError.malformed("not JSON: \(error.localizedDescription)") }
+        return try decode(json)
+    }
+
+    public static func decode(_ json: JSONValue) throws -> CollectionDocument {
+        guard case .object(let root) = json else { throw CollectionDocumentError.malformed("top level is not a JSON object") }
+        guard case .int(let version)? = root["connectorControlCollection"] else {
+            throw CollectionDocumentError.malformed("connectorControlCollection is missing")
+        }
+        if version > formatVersion { throw CollectionDocumentError.newerFormat(version) }
+        let name = try requiredString(root["name"], "name")
+        let author = try optionalString(root["author"], "author")
+        let origin = try optionalString(root["origin"], "origin")
+        let exported = try requiredString(root["exported"], "exported")
+        guard let rawConnectors = root["connectors"] else { throw CollectionDocumentError.malformed("connectors is missing") }
+        guard case .object(let connectorObjects) = rawConnectors else {
+            throw CollectionDocumentError.malformed("connectors is not a JSON object")
+        }
+        var connectors: [String: Connector] = [:]
+        for (key, value) in connectorObjects {
+            connectors[key] = try Connector.decode(value, connector: key)
+        }
+        return CollectionDocument(name: name, author: author, origin: origin, exported: exported, connectors: connectors)
+    }
+
+    // MARK: Render (this platform)
+
+    public func render() -> RenderedCollection {
+        var out: [String: RenderedConnector] = [:]
+        for (name, connector) in connectors {
+            let env = connector.env.reduce(into: [String: String]()) { acc, pair in
+                switch pair.value {
+                case .hint: acc[pair.key] = Placeholder.marker(pair.key)
+                case .value(let v): acc[pair.key] = v
+                }
+            }
+            let config: JSONValue
+            var authoredOn: CollectionPlatform?
+            switch connector.launcher {
+            case .remote(let r):
+                let auth: RemoteAuth
+                switch r.auth {
+                case .automatic: auth = .automatic
+                case .bearer: auth = .bearer(token: Placeholder.marker(Self.tokenNeed))
+                case .header(let n): auth = .header(name: n, value: Placeholder.marker(Self.headerValueNeed))
+                case .oauthClient(let id, let scopes):
+                    auth = .oauthClient(clientID: id, clientSecret: Placeholder.marker(Self.clientSecretNeed), scopes: scopes)
+                }
+                let encoded = RemotePattern.encode(RemoteConfig(url: r.url, auth: auth, extraArgs: r.extraArgs,
+                                                                 passthroughEnv: env, package: r.package))
+                config = Self.merging(additional: connector.additional, into: encoded)
+            case .local(let l):
+                config = FormMapper.serialize(FormModel(command: l.command, args: l.args, env: env, additional: connector.additional))
+                authoredOn = l.platform
+            }
+            var needs: [String: RenderedNeed] = [:]
+            for (pointer, names) in Placeholder.markers(in: config) {
+                for n in names {
+                    let hint = connector.needs[n] ?? connector.env[n].flatMap { value in
+                        if case .hint(let h) = value { return h } else { return nil }
+                    }
+                    needs[n] = RenderedNeed(hint: hint, pointer: pointer)
+                }
+            }
+            out[name] = RenderedConnector(config: config, needs: needs, authoredOn: authoredOn)
+        }
+        // The Windows build excludes connectors the cmd /c launcher cannot carry safely; a Mac
+        // never writes that launcher, so nothing is excluded here.
+        return RenderedCollection(connectors: out, excluded: [:])
+    }
+
+    /// A remote connector's `additional` fields (whatever the form the config came from cannot
+    /// represent) merged into the freshly encoded launcher config; the encoded keys — always
+    /// `command`/`args`, sometimes `env` — win on a collision, since they are what makes the
+    /// connector run.
+    private static func merging(additional: [String: JSONValue], into config: JSONValue) -> JSONValue {
+        guard !additional.isEmpty, case .object(let encoded) = config else { return config }
+        return .object(additional.merging(encoded) { _, encodedValue in encodedValue })
+    }
+
+    // MARK: Export
+
+    /// Throws `PublishIntentError.pathMarkMoved` for the first connector, by name, whose path
+    /// marks cannot all be placed (`PublishIntent.placePathMarks`), and for a remote connector
+    /// that still carries a mark with a value: a remote connector's arguments are built by each
+    /// importer, so a mark there was made while it was a local one, and the path it stood for may
+    /// now be travelling in its extra arguments. Throws `PublishIntentError.keptPathCarried` for a
+    /// local connector that also holds a placed mark's text somewhere unmarked that travels —
+    /// another argument, the command, a shared environment value or a field the form has no widget
+    /// for — since a duplicate of a marked path is that path. With `refusingCopies` false the copy
+    /// travels as written instead: the Publish sheet reads such a document for what else it keeps
+    /// back, and lists the copies itself (`copiesOfMarkedPaths(in:intent:)`).
+    public static func export(name: String, author: String?, origin: String?, exported: String,
+                              connectors: [String: JSONValue], intent: PublishIntent,
+                              refusingCopies: Bool = true) throws -> CollectionDocument {
+        var out: [String: Connector] = [:]
+        // By name, in ordinal order, so the connector a refusal names is the same on both platforms.
+        for connectorName in connectors.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+            guard let config = connectors[connectorName] else { continue }
+            let marks = intent.pathMarks[connectorName] ?? [:]
+            let shared = intent.shareValues[connectorName] ?? []
+            let hints = intent.hints[connectorName] ?? [:]
+            func envValue(_ key: String, _ value: String) -> EnvValue { shared.contains(key) ? .value(value) : .hint(hints[key]) }
+            var needs: [String: String?] = [:]
+            if let remote = RemotePattern.decode(config) {
+                guard !marks.values.contains(where: { $0.value != nil }) else {
+                    throw PublishIntentError.pathMarkMoved(connector: connectorName)
+                }
+                let auth: Auth
+                switch remote.auth {
+                case .automatic:
+                    auth = .automatic
+                case .bearer:
+                    auth = .bearer
+                    needs.updateValue(hints[tokenNeed], forKey: tokenNeed)
+                case .header(let n, _):
+                    auth = .header(name: n)
+                    needs.updateValue(hints[headerValueNeed], forKey: headerValueNeed)
+                case .oauthClient(let id, _, let scopes):
+                    auth = .oauthClient(clientId: id, scopes: scopes)
+                    needs.updateValue(hints[clientSecretNeed], forKey: clientSecretNeed)
+                }
+                let env = remote.passthroughEnv.reduce(into: [String: EnvValue]()) { $0[$1.key] = envValue($1.key, $1.value) }
+                // Whatever the form has no widget for — a key `RemotePattern.decode` doesn't
+                // read — travels too, the same way a local connector's does.
+                let additional = FormMapper.analyze(config).model.additional
+                out[connectorName] = Connector(launcher: .remote(Remote(url: remote.url, auth: auth, package: remote.package,
+                                                                        extraArgs: remote.extraArgs)),
+                                               env: env, needs: needs, additional: additional)
+            } else {
+                let model = FormMapper.analyze(config).model
+                var args = model.args
+                let placement = PublishIntent.placePathMarks(marks, in: model.args)
+                guard placement.unresolved.isEmpty else { throw PublishIntentError.pathMarkMoved(connector: connectorName) }
+                if refusingCopies, let copy = CollectionDocument.copies(in: model, placed: placement.placed, shared: shared).first {
+                    throw PublishIntentError.keptPathCarried(
+                        connector: connectorName, field: FieldName.of(copy.field, in: config, holding: copy.text))
+                }
+                for i in placement.placed.keys.sorted() {
+                    guard let mark = placement.placed[i] else { continue }
+                    args[i] = Placeholder.marker(mark.name)
+                    needs.updateValue(mark.hint, forKey: mark.name)
+                }
+                // A marker the author already typed, or one an imported copy still carries, is a
+                // need too — otherwise re-exporting a collection would drop what it asks for.
+                for n in (args + [model.command]).flatMap(Placeholder.names(in:)) where needs.index(forKey: n) == nil {
+                    needs.updateValue(hints[n], forKey: n)
+                }
+                let env = model.env.reduce(into: [String: EnvValue]()) { $0[$1.key] = envValue($1.key, $1.value) }
+                out[connectorName] = Connector(launcher: .local(Local(command: model.command, args: args, platform: .current)),
+                                               env: env, needs: needs, additional: model.additional)
+            }
+        }
+        return CollectionDocument(name: name, author: author, origin: origin, exported: exported, connectors: out)
+    }
+
+    /// Every copy of a marked path that would travel as written, connector by connector in ordinal
+    /// order: another argument, the command, a shared environment value or a field the form has no
+    /// widget for holding a placed mark's text. The exporter refuses the first; the Publish sheet
+    /// lists them all.
+    public static func copiesOfMarkedPaths(in connectors: [String: JSONValue], intent: PublishIntent) -> [KeptValueFinding] {
+        connectors.keys.sorted(by: { $0.ordinallyPrecedes($1) }).flatMap { name -> [KeptValueFinding] in
+            guard let config = connectors[name], RemotePattern.decode(config) == nil else { return [] }
+            let model = FormMapper.analyze(config).model
+            let placed = PublishIntent.placePathMarks(intent.pathMarks[name] ?? [:], in: model.args).placed
+            return copies(in: model, placed: placed, shared: intent.shareValues[name] ?? []).map {
+                KeptValueFinding(connector: name, field: $0.field, value: $0.text)
+            }
+        }
+    }
+
+    /// In the order `places(in:)` walks a connector: the additional fields as it walks them, then
+    /// the shared environment values by name, then the arguments by index, then the command. The
+    /// exporter names the first of these, so both platforms refuse the same field.
+    private static func copies(in model: FormModel, placed: [Int: PublishIntent.PathMark],
+                               shared: Set<String>) -> [(field: String, text: String)] {
+        let marked = Set(placed.keys.map { KeptValue.nfc(model.args[$0]) })
+        guard !marked.isEmpty else { return [] }
+        var unmarked = places(in: .object(["additional": .object(model.additional)]))
+        unmarked += model.env.keys.sorted { $0.ordinallyPrecedes($1) }
+            .filter(shared.contains).map { ("env.\($0).value", model.env[$0] ?? "") }
+        unmarked += model.args.indices.filter { placed[$0] == nil }.map { ("local.args[\($0)]", model.args[$0]) }
+        unmarked.append(("local.command", model.command))
+        return unmarked.filter { marked.contains(KeptValue.nfc($0.text)) }
+    }
+
+    /// Every place, connector by connector in ordinal order and field by field, where one of
+    /// `values` stands as written (`KeptValue.holds`). The field is the place in the connector's
+    /// document form — `local.command`, `local.args[1]`, `env.LOG_DIR.value`, `env.LOG_DIR.hint`,
+    /// `needs.server_path.hint`, `additional.cwd`, `remote.extraArgs[0]` — so the author can find it
+    /// in the preview; an environment variable's, a need's or an additional field's own name counts
+    /// as a place too. Empty values are ignored.
+    public func findings(of values: Set<String>) -> [KeptValueFinding] {
+        let kept = values.filter { !$0.isEmpty }.sorted { $0.ordinallyPrecedes($1) }
+        guard !kept.isEmpty else { return [] }
+        var out: [KeptValueFinding] = []
+        for name in connectors.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+            guard let encoded = connectors[name]?.encode() else { continue }
+            for place in CollectionDocument.places(in: encoded) {
+                for value in kept where KeptValue.holds(place.text, value) {
+                    out.append(KeptValueFinding(connector: name, field: place.field, value: value))
+                }
+            }
+        }
+        return out
+    }
+
+    /// Every string in a connector's document form with the field it sits in. One order, and the
+    /// only one any refusal or sheet entry names a field in, so the two platforms always name the
+    /// same one: the connector's own keys in ordinal order (`additional`, `env`, `local`, `needs`,
+    /// `remote`), each object's keys in ordinal order under them, and each array by index. Keys
+    /// count as places only below `env`, `needs` and `additional`, the objects whose names the
+    /// author chose; the rest are the format's own.
+    static func places(in json: JSONValue) -> [(field: String, text: String)] {
+        walk(json).map { ($0.field, $0.text) }
+    }
+
+    private enum Step: Equatable {
+        case key(String)
+        case index(Int)
+    }
+
+    private struct Place {
+        let field: String
+        let text: String
+        let path: [Step]
+        /// The text is a key's own name, not a value under it.
+        let isName: Bool
+    }
+
+    private static func walk(_ json: JSONValue) -> [Place] {
+        var out: [Place] = []
+        func visit(_ value: JSONValue, _ field: String, _ path: [Step], namesCount: Bool) {
+            switch value {
+            case .string(let text):
+                out.append(Place(field: field, text: text, path: path, isName: false))
+            case .array(let items):
+                for (index, item) in items.enumerated() {
+                    visit(item, field + "[\(index)]", path + [.index(index)], namesCount: false)
+                }
+            case .object(let object):
+                for key in object.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+                    guard let child = object[key] else { continue }
+                    let name = field.isEmpty ? key : field + "." + key
+                    if namesCount { out.append(Place(field: name, text: key, path: path + [.key(key)], isName: true)) }
+                    visit(child, name, path + [.key(key)], namesCount: field.isEmpty && ["env", "needs", "additional"].contains(key))
+                }
+            default:
+                break
+            }
+        }
+        visit(json, "", [], namesCount: false)
+        return out
+    }
+
+    /// `config`, a connector as the store holds it, with `folder` written as `${COLLECTION_DIR}`
+    /// in the place `field` names in the connector's document form (`findings(of:)`), or nil when
+    /// the stored config has no such place holding the folder: a hint, which is the Publish sheet's
+    /// own, or a field the rewrite cannot reach. A remote connector's `remote.url`,
+    /// `remote.package` and `remote.extraArgs[N]` are rewritten in every argument that reads the
+    /// same, since each importer builds that command line again from the document.
+    public static func usingDirectoryToken(in config: JSONValue, field: String, folder: String) -> JSONValue? {
+        guard case .object(let object) = config else { return nil }
+        var targets: [(path: [Step], isName: Bool)] = []
+        func consider(_ candidate: String, _ text: String, _ path: [Step], isName: Bool = false) {
+            if candidate == field, KeptValue.holds(text, folder) { targets.append((path, isName)) }
+        }
+        // The additional fields sit at the top of the stored config, under their own names.
+        for place in walk(.object(["additional": .object(FormMapper.analyze(config).model.additional)])) {
+            consider(place.field, place.text, Array(place.path.dropFirst()), isName: place.isName)
+        }
+        if case .object(let env)? = object["env"] {
+            for key in env.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+                consider("env.\(key)", key, [.key("env"), .key(key)], isName: true)
+                if case .string(let text)? = env[key] { consider("env.\(key).value", text, [.key("env"), .key(key)]) }
+            }
+        }
+        var line: [(text: String, path: [Step])] = []
+        if case .string(let command)? = object["command"] { line.append((command, [.key("command")])) }
+        if case .array(let items)? = object["args"] {
+            for (index, item) in items.enumerated() {
+                if case .string(let text) = item { line.append((text, [.key("args"), .index(index)])) }
+            }
+        }
+        if let remote = RemotePattern.decode(config) {
+            let fields = [("remote.url", remote.url), ("remote.package", remote.package)]
+                + remote.extraArgs.enumerated().map { ("remote.extraArgs[\($0.offset)]", $0.element) }
+            for (candidate, text) in fields where candidate == field {
+                for part in line where part.text == text { consider(candidate, part.text, part.path) }
+            }
+        } else {
+            for part in line where part.path == [.key("command")] { consider("local.command", part.text, part.path) }
+            // The document numbers only the arguments that are strings, as the form does.
+            for (number, part) in line.filter({ $0.path.first == .key("args") }).enumerated() {
+                consider("local.args[\(number)]", part.text, part.path)
+            }
+        }
+        guard !targets.isEmpty else { return nil }
+        let token = Placeholder.directoryToken
+        let rewritten = targets.reduce(config) { json, target in
+            rewriting(json, at: target.path[...], isName: target.isName) { KeptValue.replacing(folder, in: $0, with: token) }
+        }
+        return rewritten == config ? nil : rewritten
+    }
+
+    private static func rewriting(_ json: JSONValue, at path: ArraySlice<Step>, isName: Bool,
+                                  _ transform: (String) -> String) -> JSONValue {
+        guard let step = path.first else {
+            if case .string(let text) = json { return .string(transform(text)) }
+            return json
+        }
+        switch (step, json) {
+        case (.key(let key), .object(var object)):
+            guard let child = object[key] else { return json }
+            if isName, path.count == 1 {
+                let renamed = transform(key)
+                guard renamed != key, object[renamed] == nil else { return json }
+                object.removeValue(forKey: key)
+                object[renamed] = child
+            } else {
+                object[key] = rewriting(child, at: path.dropFirst(), isName: isName, transform)
+            }
+            return .object(object)
+        case (.index(let index), .array(var items)) where items.indices.contains(index):
+            items[index] = rewriting(items[index], at: path.dropFirst(), isName: isName, transform)
+            return .array(items)
+        default:
+            return json
+        }
+    }
+
+    /// "args[N] looks like a credential" / "env.NAME looks like a credential" /
+    /// "headers.NAME refers to a credential" / "url.userinfo names a user" /
+    /// "args[N].query.NAME looks like a credential" … lines for the publish preview; never an edit.
+    /// Each names the field and how it holds its credential (`CredentialKind`), and nothing else, so
+    /// a review keyed on the lines holds nothing derived from a secret. Each arg is tested whole and,
+    /// for a literal "key: value" pair such as a `--header` flag's argument, on the text after the
+    /// colon too, since the heuristic's own space check would otherwise hide a credential sitting
+    /// right after one; an arg that is a header, with or without that space (`headerArgument`), is
+    /// read as a header is; and an arg that is a URL is read part by part as `url` is. Env is only
+    /// tested for names in `sharedEnv` — the ones the author ticked to travel as a value rather than a
+    /// hint — since a hint-only value never leaves this machine. A connector Claude reaches by URL
+    /// keeps its secret in `headers` or in `url`: a header is read as `credentialKind(named:holding:)`
+    /// reads it, and the URL's parts are those `credentialParts(ofURL:)` names.
+    public static func credentialWarnings(_ config: JSONValue, sharedEnv: Set<String>) -> [String] {
+        guard case .object(let object) = config else { return [] }
+        var warnings: [String] = []
+        if case .array(let args)? = object["args"] {
+            for (index, value) in args.enumerated() {
+                guard case .string(let s) = value else { continue }
+                let afterColon = s.range(of: ": ").map { String(s[$0.upperBound...]) }
+                let literal = CredentialHeuristics.looksLikeCredential(s) || (afterColon.map(CredentialHeuristics.looksLikeCredential) ?? false)
+                let header = headerArgument(s).flatMap { credentialKind(named: $0.name, holding: $0.value) }
+                if let kind = literal ? CredentialKind.literal : header {
+                    warnings.append("args[\(index)] \(kind.phrase)")
+                }
+                warnings += credentialParts(ofURL: s).map { "args[\(index)].\($0.part) \($0.kind.phrase)" }
+            }
+        }
+        if case .object(let env)? = object["env"] {
+            for name in sharedEnv.sorted(by: { $0.ordinallyPrecedes($1) }) {
+                guard case .string(let value)? = env[name], CredentialHeuristics.looksLikeCredential(value) else { continue }
+                warnings.append("env.\(name) \(CredentialKind.literal.phrase)")
+            }
+        }
+        if case .object(let headers)? = object["headers"] {
+            for name in headers.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+                guard case .string(let value)? = headers[name], let kind = credentialKind(named: name, holding: value) else { continue }
+                warnings.append("headers.\(name) \(kind.phrase)")
+            }
+        }
+        if case .string(let url)? = object["url"] {
+            warnings += credentialParts(ofURL: url).map { "url.\($0.part) \($0.kind.phrase)" }
+        }
+        return warnings
+    }
+
+    /// What a warning says of how its field holds its credential (`CredentialKind.phrase`). Each is
+    /// part of the key a review saves, so a change of wording holds every reviewed connector that
+    /// carries one until it is reviewed again.
+    public static let credentialLiteralPhrase = "looks like a credential"
+    public static let credentialReferencePhrase = "refers to a credential"
+    public static let credentialUserOnlyPhrase = "names a user"
+
+    /// How a field holds its credential, as its warning says it. Only the kind reaches the warning,
+    /// and so the review's key: a field that goes from a reference, or from a user with no password,
+    /// to a literal says something the review has not seen, and is held for review again.
+    enum CredentialKind {
+        /// Written out, as it travels.
+        case literal
+        /// A `${…}` reference: the secret itself is supplied from somewhere else.
+        case reference
+        /// A URL's user part with no password.
+        case userOnly
+
+        var phrase: String {
+            switch self {
+            case .literal: return CollectionDocument.credentialLiteralPhrase
+            case .reference: return CollectionDocument.credentialReferencePhrase
+            case .userOnly: return CollectionDocument.credentialUserOnlyPhrase
+            }
+        }
+    }
+
+    /// How a value under `name` — a header, or a URL parameter — holds a credential, or nil when it
+    /// holds none: a reference where it only refers to one under a name named for a secret, a literal
+    /// where it looks like one or its name is named for one.
+    static func credentialKind(named name: String, holding value: String) -> CredentialKind? {
+        guard !value.isEmpty else { return nil }
+        if CredentialHeuristics.isReference(value) { return CredentialHeuristics.namesASecret(name) ? .reference : nil }
+        if looksLikeSecret(value) { return .literal }
+        return CredentialHeuristics.namesASecret(name) && !Placeholder.containsMarker(value) ? .literal : nil
+    }
+
+    /// A `Name:value` header written as an argument, as a `--header` flag takes it, with or without a
+    /// space after the colon: a name of letters, digits, `-` and `_`, and the value after the colon and
+    /// any spaces. nil for anything else, a URL's `scheme://` included.
+    static func headerArgument(_ text: String) -> (name: String, value: String)? {
+        let scalars = Array(text.unicodeScalars)
+        guard let colon = scalars.firstIndex(of: ":"), colon > 0,
+              scalars[..<colon].allSatisfy({ CredentialHeuristics.isASCIILetterOrDigit($0) || $0 == "-" || $0 == "_" }) else { return nil }
+        let value = scalars[(colon + 1)...].drop { $0 == " " }
+        guard !value.starts(with: ["/", "/"]) else { return nil }
+        return (String(String.UnicodeScalarView(scalars[..<colon])), String(String.UnicodeScalarView(value)))
+    }
+
+    /// The parts of a URL that can carry a secret, each named as a warning names it with how it holds
+    /// it: `userinfo`, a user part before the host (a literal with a password, or a user that looks
+    /// like a token; a reference; or a user alone); `path[i]`, the i-th path segment where it looks
+    /// like a credential or a random token, the way some servers take their key; and `query.NAME` or
+    /// `fragment.NAME`, a parameter of the query, or of the fragment read as one
+    /// (`credentialKind(named:holding:)`; a bare parameter only when it looks like a secret, and one
+    /// whose name does whatever its value, each keyed `query[i]` or `fragment[i]` by its position).
+    /// A key is a field, a section and a position, never a value, and each position is a key of its
+    /// own, so a review of one segment or parameter approves no other. None for text with no `://`.
+    /// Split by hand, one Unicode scalar at a time as the Windows mirror walks UTF-16 units, rather
+    /// than by a URL parser: both platforms split it the same way, and a URL a parser would refuse
+    /// can still carry a token.
+    static func credentialParts(ofURL text: String) -> [(part: String, kind: CredentialKind)] {
+        let scalars = Array(text.unicodeScalars)
+        guard let start = scalars.indices.first(where: {
+            $0 + 2 < scalars.count && scalars[$0] == ":" && scalars[$0 + 1] == "/" && scalars[$0 + 2] == "/"
+        }) else { return [] }
+        let rest = scalars[(start + 3)...]
+        let authority = rest.prefix { $0 != "/" && $0 != "?" && $0 != "#" }
+        var parts: [(part: String, kind: CredentialKind)] = []
+        if let at = authority.lastIndex(of: "@") {
+            let userinfo = authority[..<at]
+            if let colon = userinfo.firstIndex(of: ":") {
+                let password = String(String.UnicodeScalarView(userinfo[(colon + 1)...]))
+                parts.append(("userinfo", password.isEmpty ? .userOnly : CredentialHeuristics.isReference(password) ? .reference : .literal))
+            } else {
+                // A user alone is a literal only where the credential heuristics tell it from a name: a
+                // known prefix, 32 or more letters and digits, or a random token of 20 or more. A shorter
+                // token with no known prefix reads as a user name, so one put where a user was reviewed
+                // keeps the reviewed "names a user" key and publishes: a residual, since nothing but its
+                // text tells such a token from a name.
+                let user = String(String.UnicodeScalarView(userinfo))
+                parts.append(("userinfo", CredentialHeuristics.isReference(user) ? .reference : looksLikeSecret(user) ? .literal : .userOnly))
+            }
+        }
+        let tail = rest[authority.endIndex...]
+        let hash = tail.firstIndex(of: "#")
+        let beforeFragment = tail[..<(hash ?? tail.endIndex)]
+        let question = beforeFragment.firstIndex(of: "?")
+        let path = beforeFragment[..<(question ?? beforeFragment.endIndex)]
+        for (index, segment) in path.split(separator: "/").enumerated()
+        where looksLikeSecret(String(String.UnicodeScalarView(segment))) {
+            parts.append(("path[\(index)]", .literal))
+        }
+        if let question { parts += parameters(beforeFragment[(question + 1)...], in: "query") }
+        if let hash { parts += parameters(tail[(hash + 1)...], in: "fragment") }
+        return parts
+    }
+
+    /// The `&`-separated parameters of a query or a fragment that can carry a secret, each as
+    /// `section.NAME` with how it holds it. A bare parameter is its own value, and counts only when it
+    /// looks like a secret. A parameter whose name looks like a secret holds one there, whatever its
+    /// value (`?<token>=1`, or a padded base64 token, which its first `=` splits into a name). Either
+    /// is keyed `section[i]` by its position, as a path segment is: the key must hold nothing derived
+    /// from a secret.
+    private static func parameters(_ text: ArraySlice<Unicode.Scalar>, in section: String) -> [(part: String, kind: CredentialKind)] {
+        text.split(separator: "&").enumerated().compactMap { index, pair in
+            let equals = pair.firstIndex(of: "=")
+            let name = String(String.UnicodeScalarView(pair[..<(equals ?? pair.endIndex)]))
+            let kind: CredentialKind? = looksLikeSecret(name) ? .literal
+                : equals.flatMap { credentialKind(named: name, holding: String(String.UnicodeScalarView(pair[($0 + 1)...]))) }
+            let part = equals == nil || looksLikeSecret(name) ? "\(section)[\(index)]" : "\(section).\(name)"
+            return kind.map { (part: part, kind: $0) }
+        }
+    }
+
+    /// A value that looks like a credential, or like a random token.
+    private static func looksLikeSecret(_ value: String) -> Bool {
+        CredentialHeuristics.looksLikeCredential(value) || CredentialHeuristics.looksLikeRandomToken(value)
+    }
+
+    // MARK: Decoding helpers
+    // Every failure names the key it read, so a hand-edited document says what is wrong with it.
+
+    static func requiredString(_ value: JSONValue?, _ what: String) throws -> String {
+        guard let value else { throw CollectionDocumentError.malformed("\(what) is missing") }
+        guard case .string(let s) = value else { throw CollectionDocumentError.malformed("\(what) is not a string") }
+        return s
+    }
+
+    static func optionalString(_ value: JSONValue?, _ what: String) throws -> String? {
+        guard let value, value != .null else { return nil }
+        guard case .string(let s) = value else { throw CollectionDocumentError.malformed("\(what) is not a string") }
+        return s
+    }
+
+    static func stringArray(_ value: JSONValue?, _ what: String) throws -> [String] {
+        guard let value else { return [] }
+        guard case .array(let items) = value else { throw CollectionDocumentError.malformed("\(what) is not an array") }
+        return try items.enumerated().map { index, item in
+            guard case .string(let s) = item else { throw CollectionDocumentError.malformed("\(what)[\(index)] is not a string") }
+            return s
+        }
+    }
+
+    static func objectValue(_ value: JSONValue?, _ what: String) throws -> [String: JSONValue] {
+        guard let value else { return [:] }
+        guard case .object(let object) = value else { throw CollectionDocumentError.malformed("\(what) is not a JSON object") }
+        return object
+    }
+}
+
+// MARK: - Nested encode / decode
+
+extension CollectionDocument.Connector {
+    func encode() -> JSONValue {
+        var object: [String: JSONValue] = [:]
+        switch launcher {
+        case .remote(let r): object["remote"] = r.encode()
+        case .local(let l): object["local"] = l.encode()
+        }
+        object["env"] = .object(env.mapValues { $0.encode() })
+        object["needs"] = .object(needs.mapValues { .object(["hint": $0.map(JSONValue.string) ?? .null]) })
+        object["additional"] = .object(additional)
+        return .object(object)
+    }
+
+    static func decode(_ json: JSONValue, connector: String) throws -> CollectionDocument.Connector {
+        let what = "connector \"\(connector)\""
+        guard case .object(let object) = json else { throw CollectionDocumentError.malformed("\(what) is not a JSON object") }
+        let launcher: CollectionDocument.Launcher
+        switch (object["remote"], object["local"]) {
+        case (.some(let remote), .none):
+            launcher = .remote(try CollectionDocument.Remote.decode(remote, what: "\(what) remote"))
+        case (.none, .some(let local)):
+            launcher = .local(try CollectionDocument.Local.decode(local, what: "\(what) local"))
+        default:
+            throw CollectionDocumentError.malformed("\(what) needs exactly one of remote or local")
+        }
+        var env: [String: CollectionDocument.EnvValue] = [:]
+        for (key, value) in try CollectionDocument.objectValue(object["env"], "\(what) env") {
+            env[key] = try CollectionDocument.EnvValue.decode(value, what: "\(what) env \"\(key)\"")
+        }
+        var needs: [String: String?] = [:]
+        for (key, value) in try CollectionDocument.objectValue(object["needs"], "\(what) needs") {
+            let entryWhat = "\(what) need \"\(key)\""
+            let entry = try CollectionDocument.objectValue(value, entryWhat)
+            needs.updateValue(try CollectionDocument.optionalString(entry["hint"], "\(entryWhat) hint"), forKey: key)
+        }
+        let additional = try CollectionDocument.objectValue(object["additional"], "\(what) additional")
+        return CollectionDocument.Connector(launcher: launcher, env: env, needs: needs, additional: additional)
+    }
+}
+
+extension CollectionDocument.Remote {
+    func encode() -> JSONValue {
+        .object([
+            "url": .string(url),
+            "auth": auth.encode(),
+            "package": .string(package),
+            "extraArgs": .array(extraArgs.map(JSONValue.string)),
+        ])
+    }
+
+    static func decode(_ json: JSONValue, what: String) throws -> CollectionDocument.Remote {
+        guard case .object(let object) = json else { throw CollectionDocumentError.malformed("\(what) is not a JSON object") }
+        guard let rawAuth = object["auth"] else { throw CollectionDocumentError.malformed("\(what) auth is missing") }
+        return CollectionDocument.Remote(
+            url: try CollectionDocument.requiredString(object["url"], "\(what) url"),
+            auth: try CollectionDocument.Auth.decode(rawAuth, what: "\(what) auth"),
+            package: try CollectionDocument.requiredString(object["package"], "\(what) package"),
+            extraArgs: try CollectionDocument.stringArray(object["extraArgs"], "\(what) extraArgs"))
+    }
+}
+
+extension CollectionDocument.Auth {
+    func encode() -> JSONValue {
+        switch self {
+        case .automatic: return .object(["kind": .string("automatic")])
+        case .bearer: return .object(["kind": .string("bearer")])
+        case .header(let name): return .object(["kind": .string("header"), "name": .string(name)])
+        case .oauthClient(let clientId, let scopes):
+            return .object(["kind": .string("oauthClient"), "clientId": .string(clientId), "scopes": .string(scopes)])
+        }
+    }
+
+    static func decode(_ json: JSONValue, what: String) throws -> CollectionDocument.Auth {
+        guard case .object(let object) = json else { throw CollectionDocumentError.malformed("\(what) is not a JSON object") }
+        let kind = try CollectionDocument.requiredString(object["kind"], "\(what) kind")
+        switch kind {
+        case "automatic": return .automatic
+        case "bearer": return .bearer
+        case "header": return .header(name: try CollectionDocument.requiredString(object["name"], "\(what) name"))
+        case "oauthClient":
+            return .oauthClient(clientId: try CollectionDocument.requiredString(object["clientId"], "\(what) clientId"),
+                                scopes: try CollectionDocument.optionalString(object["scopes"], "\(what) scopes") ?? "")
+        default:
+            throw CollectionDocumentError.malformed("\(what) kind \"\(kind)\" is not automatic, bearer, header or oauthClient")
+        }
+    }
+}
+
+extension CollectionDocument.Local {
+    func encode() -> JSONValue {
+        .object([
+            "command": .string(command),
+            "args": .array(args.map(JSONValue.string)),
+            "platform": .string(platform.rawValue),
+        ])
+    }
+
+    static func decode(_ json: JSONValue, what: String) throws -> CollectionDocument.Local {
+        guard case .object(let object) = json else { throw CollectionDocumentError.malformed("\(what) is not a JSON object") }
+        let rawPlatform = try CollectionDocument.requiredString(object["platform"], "\(what) platform")
+        guard let platform = CollectionPlatform(rawValue: rawPlatform) else {
+            throw CollectionDocumentError.malformed("\(what) platform \"\(rawPlatform)\" is not mac or windows")
+        }
+        return CollectionDocument.Local(
+            command: try CollectionDocument.requiredString(object["command"], "\(what) command"),
+            args: try CollectionDocument.stringArray(object["args"], "\(what) args"),
+            platform: platform)
+    }
+}
+
+extension CollectionDocument.EnvValue {
+    func encode() -> JSONValue {
+        switch self {
+        case .hint(let hint): return .object(["hint": hint.map(JSONValue.string) ?? .null])
+        case .value(let value): return .object(["value": .string(value)])
+        }
+    }
+
+    static func decode(_ json: JSONValue, what: String) throws -> CollectionDocument.EnvValue {
+        guard case .object(let object) = json else { throw CollectionDocumentError.malformed("\(what) is not a JSON object") }
+        if let value = object["value"] {
+            return .value(try CollectionDocument.requiredString(value, "\(what) value"))
+        }
+        guard object.index(forKey: "hint") != nil else {
+            throw CollectionDocumentError.malformed("\(what) has neither hint nor value")
+        }
+        return .hint(try CollectionDocument.optionalString(object["hint"], "\(what) hint"))
+    }
+}

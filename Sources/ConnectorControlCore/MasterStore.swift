@@ -17,7 +17,7 @@ public struct MCPEntry: Equatable, Hashable, Codable, Sendable {
 }
 
 /// A full, independent snapshot of connectors: its own configs + enabled flags.
-public struct Profile: Equatable, Codable, Sendable {
+public struct Collection: Equatable, Codable, Sendable {
     public var mcps: [String: MCPEntry]
     public init(mcps: [String: MCPEntry] = [:]) { self.mcps = mcps }
 }
@@ -27,13 +27,21 @@ public struct Profile: Equatable, Codable, Sendable {
 /// corrupt-file path: moved aside and rebuilt fresh from Claude's config.
 public struct MasterStore: Equatable, Codable, Sendable {
     public var version: Int
-    public var activeProfile: String
-    public var profiles: [String: Profile]
+    public var activeCollection: String
+    public var collections: [String: Collection]
 
-    /// The active profile's connectors — the view the entire app operates on.
+    // The file keeps the v2 key names: machines on the current release share it through the
+    // synced master-list folder, and their decoder knows only these two keys.
+    enum CodingKeys: String, CodingKey {
+        case version
+        case activeCollection = "activeProfile"
+        case collections = "profiles"
+    }
+
+    /// The active collection's connectors — the view the entire app operates on.
     public var mcps: [String: MCPEntry] {
-        get { profiles[activeProfile]?.mcps ?? [:] }
-        set { profiles[activeProfile, default: Profile()].mcps = newValue }
+        get { collections[activeCollection]?.mcps ?? [:] }
+        set { collections[activeCollection, default: Collection()].mcps = newValue }
     }
 
     /// Claude's `mcpServers` section rendered from this store — the enabled
@@ -43,52 +51,108 @@ public struct MasterStore: Equatable, Codable, Sendable {
         mcps.filter(\.value.enabled).mapValues(\.config)
     }
 
+    /// The collection a fresh store holds, and the one a store left with none makes.
+    public static let defaultCollectionName = "Default"
+
     public static let empty = MasterStore(
-        activeProfile: "Default",
-        profiles: ["Default": Profile()])
+        activeCollection: defaultCollectionName,
+        collections: [defaultCollectionName: Collection()])
 
-    public init(activeProfile: String, profiles: [String: Profile]) {
-        self.version = 2
-        self.activeProfile = activeProfile
-        self.profiles = profiles
+    public init(activeCollection: String, collections: [String: Collection]) {
+        self.init(version: 2, activeCollection: activeCollection, collections: collections)
     }
 
-    /// nil on success, else a user-facing error message.
-    public mutating func addProfile(named name: String, copyingCurrent: Bool) -> String? {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
+    /// The one place that guarantees `collections[activeCollection]` exists, as the Windows
+    /// mirror's constructor is: a store that names a collection it does not hold — a hand edit, a
+    /// backup written elsewhere — makes the first existing one in ordinal order active, or a fresh
+    /// "Default" when none remain. Every decode comes through here, so a load, the store watcher's
+    /// peek and a backup restored in place of an unreadable master list all heal alike.
+    private init(version: Int, activeCollection: String, collections: [String: Collection]) {
+        var collections = collections
+        var active = activeCollection
+        if collections[active] == nil {
+            if let fallback = collections.keys.min(by: { $0.ordinallyPrecedes($1) }) {
+                active = fallback
+            } else {
+                active = Self.defaultCollectionName
+                collections[active] = Collection()
+            }
+        }
+        self.version = version
+        self.activeCollection = active
+        self.collections = collections
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(version: try container.decode(Int.self, forKey: .version),
+                  activeCollection: try container.decode(String.self, forKey: .activeCollection),
+                  collections: try container.decode([String: Collection].self, forKey: .collections))
+    }
+
+    /// The name a collection is kept under for the one typed: spaces trimmed from both ends.
+    /// Adding and renaming both apply it, so a caller that follows the collection it just named
+    /// asks here rather than trimming again.
+    public static func collectionName(_ typed: String) -> String { typed.trimmingCharacters(in: .whitespaces) }
+
+    /// nil on success, else a user-facing error message. The new collection is empty and does not
+    /// become active: a new collection never clones another, and switching to it is the caller's
+    /// own step.
+    public mutating func addCollection(named name: String) -> String? {
+        let trimmed = Self.collectionName(name)
         guard !trimmed.isEmpty else { return "Name must not be empty." }
-        guard profiles[trimmed] == nil else {
-            return "A profile named \u{201C}\(trimmed)\u{201D} already exists."
+        guard collections[trimmed] == nil else {
+            return "A collection named \u{201C}\(trimmed)\u{201D} already exists."
         }
-        profiles[trimmed] = copyingCurrent ? Profile(mcps: mcps) : Profile()
-        activeProfile = trimmed
+        collections[trimmed] = Collection()
         return nil
     }
 
-    public mutating func renameActiveProfile(to name: String) -> String? {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
+    /// nil on success, else a user-facing error message. Renaming the active
+    /// collection keeps it active under its new name.
+    public mutating func renameCollection(_ name: String, to newName: String) -> String? {
+        guard collections[name] != nil else { return Self.noCollectionError(name) }
+        let trimmed = Self.collectionName(newName)
         guard !trimmed.isEmpty else { return "Name must not be empty." }
-        if trimmed != activeProfile, profiles[trimmed] != nil {
-            return "A profile named \u{201C}\(trimmed)\u{201D} already exists."
+        if trimmed != name, collections[trimmed] != nil {
+            return "A collection named \u{201C}\(trimmed)\u{201D} already exists."
         }
-        guard let current = profiles.removeValue(forKey: activeProfile) else { return nil }
-        profiles[trimmed] = current
-        activeProfile = trimmed
+        guard let current = collections.removeValue(forKey: name) else { return nil }
+        collections[trimmed] = current
+        if activeCollection == name { activeCollection = trimmed }
         return nil
     }
 
-    public mutating func deleteActiveProfile() -> String? {
-        guard profiles.count > 1 else { return "Can\u{2019}t delete the last profile." }
-        profiles.removeValue(forKey: activeProfile)
-        activeProfile = profiles.keys.min() ?? "Default"
+    /// nil on success, else a user-facing error message. Refuses to delete the
+    /// last remaining collection. Deleting the active collection hands the active
+    /// spot to `activeAfterDeleting(_:isLocal:)`'s choice.
+    public mutating func deleteCollection(named name: String, isLocal: (String) -> Bool = { _ in true }) -> String? {
+        guard collections[name] != nil else { return Self.noCollectionError(name) }
+        guard collections.count > 1 else { return "Can\u{2019}t delete the last collection." }
+        let successor = activeAfterDeleting(name, isLocal: isLocal)
+        collections.removeValue(forKey: name)
+        if activeCollection == name { activeCollection = successor ?? Self.defaultCollectionName }
         return nil
     }
 
-    public mutating func switchProfile(to name: String) -> String? {
-        guard profiles[name] != nil else {
-            return "No profile named \u{201C}\(name)\u{201D}."
-        }
-        activeProfile = name
+    /// The collection that takes the active spot if `name` is deleted: the first local collection,
+    /// by name, that holds a connector, else the sorted-first of the rest, or nil when none remain.
+    /// A subscribed collection's connectors arrive off and an empty one runs nothing, so either
+    /// would empty Claude's config. The store does not know which collections are subscribed:
+    /// `isLocal` says, and with nothing said every collection is local, as the sidecar reads a
+    /// collection it has no entry for. The one rule, so the Delete confirmation that names it
+    /// cannot disagree with the delete that picks it.
+    public func activeAfterDeleting(_ name: String, isLocal: (String) -> Bool = { _ in true }) -> String? {
+        let rest = collections.keys.filter { $0 != name }.sorted { $0.ordinallyPrecedes($1) }
+        return rest.first { isLocal($0) && !(collections[$0]?.mcps.isEmpty ?? true) } ?? rest.first
+    }
+
+    /// The one wording for a name no collection has, shared by switch, rename and delete.
+    public static func noCollectionError(_ name: String) -> String { "No collection named \u{201C}\(name)\u{201D}." }
+
+    public mutating func switchCollection(to name: String) -> String? {
+        guard collections[name] != nil else { return Self.noCollectionError(name) }
+        activeCollection = name
         return nil
     }
 }
@@ -104,19 +168,9 @@ public enum MasterStoreIO {
         guard fm.fileExists(atPath: url.path) else { return (.empty, nil) }
         do {
             let data = try Data(contentsOf: url)
-            var store = try JSONDecoder().decode(MasterStore.self, from: data)
-            // Self-heal a decoded-but-inconsistent activeProfile (hand-edited
-            // or corrupted file) — never crash; fall back to an existing
-            // profile (sorted first), or a fresh Default if none remain.
-            if store.profiles[store.activeProfile] == nil {
-                if let fallback = store.profiles.keys.sorted().first {
-                    store.activeProfile = fallback
-                } else {
-                    store.profiles["Default"] = Profile()
-                    store.activeProfile = "Default"
-                }
-            }
-            return (store, nil)
+            // A decoded-but-inconsistent activeCollection (hand-edited or corrupted file) is
+            // self-healed by the decoder itself — see `init(version:activeCollection:collections:)`.
+            return (try JSONDecoder().decode(MasterStore.self, from: data), nil)
         } catch {
             let stamp = BackupTimestamp.string(from: now)
             let aside = url.deletingLastPathComponent()

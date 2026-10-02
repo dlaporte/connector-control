@@ -1,5 +1,6 @@
 namespace ConnectorControl.Core.Tests;
 
+/// <summary>Mirror: Tests/ConnectorControlCoreTests/RemoteAuthTests.swift</summary>
 public class RemoteAuthTests
 {
     private const string Url = "https://x.dev/mcp";

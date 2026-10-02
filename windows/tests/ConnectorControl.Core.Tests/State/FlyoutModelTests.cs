@@ -3,6 +3,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/PopoverModelTests.swift</summary>
 public class FlyoutModelTests
 {
     [Fact]
@@ -11,25 +12,22 @@ public class FlyoutModelTests
         using var h = new AppStateHarness(seedClaudeConfig: false);
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
-        Assert.Equal("Connector Control", FlyoutModel.Title);
         Assert.Equal("No connectors configured", flyout.Subtitle);
-        Assert.Equal("Default ▾", flyout.ProfileChipText);
+        Assert.Equal("Default", flyout.ActiveCollection);
         Assert.True(flyout.IsEmpty);
-        Assert.Equal("No connectors configured yet — add one below.", FlyoutModel.EmptyText);
-        state.Upsert("z", new McpEntry(AppStateHarness.Remote("https://z.example/mcp")), null);
+        Assert.Null(state.Upsert("z", new McpEntry(AppStateHarness.Remote("https://z.example/mcp")), null));
         Assert.Equal("1 of 1 enabled", flyout.Subtitle);
         Assert.False(flyout.IsEmpty);
     }
 
     [Fact]
-    public void RowsAreSortedOrdinallyWithEditTooltips()
+    public void RowsAreSortedOrdinally()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        state.Upsert("Zebra", new McpEntry(AppStateHarness.Remote("https://zebra.example/mcp")), null);
+        Assert.Null(state.Upsert("Zebra", new McpEntry(AppStateHarness.Remote("https://zebra.example/mcp")), null));
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal(["Zebra", "aws-mcp", "scoutbook", "service-now"], flyout.Rows.Select(r => r.Name).ToArray());   // uppercase first: ordinal
-        Assert.Equal("Edit “aws-mcp”", flyout.Rows[1].EditTooltip);
         Assert.All(flyout.Rows, r => Assert.True(r.Enabled));
     }
 
@@ -53,42 +51,118 @@ public class FlyoutModelTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
+        // The raise is what makes the flyout repaint, and it is the one line a passthrough cannot
+        // prove.
+        var repaints = 0;
+        flyout.PropertyChanged += (_, _) => repaints++;
         var row = flyout.Rows.Single(r => r.Name == "aws-mcp");
         state.SetEnabled("aws-mcp", false);
         Assert.False(row.Enabled);
-        state.Remove("scoutbook");
+        Assert.True(repaints > 0, "an AppState change is raised to the view");
+        state.Delete(["scoutbook"]);
         Assert.Equal(["aws-mcp", "service-now"], flyout.Rows.Select(r => r.Name).ToArray());
-        state.Upsert("alpha", new McpEntry(AppStateHarness.Remote("https://alpha.example/mcp")), null);
+        Assert.Null(state.Upsert("alpha", new McpEntry(AppStateHarness.Remote("https://alpha.example/mcp")), null));
         Assert.Equal(["alpha", "aws-mcp", "service-now"], flyout.Rows.Select(r => r.Name).ToArray());
+        // Dispose cuts the raise: nothing repaints.
+        flyout.Dispose();
+        var before = repaints;
+        state.SetEnabled("alpha", false);
+        Assert.Equal(before, repaints);
     }
 
     [Fact]
-    public void ProfileMenuItemsAndTitles()
+    public void TheChipMenuHasNoHousekeepingItems()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
-        Assert.Equal([new ProfileMenuItem("Default", true)], flyout.ProfileItems);
-        Assert.Equal("New Profile…", FlyoutModel.NewProfileMenuItem);
-        Assert.Equal("Rename “Default”…", flyout.RenameProfileMenuItem);
-        Assert.Equal("Delete “Default”…", flyout.DeleteProfileMenuItem);
-        Assert.False(flyout.CanDeleteProfile);
+        Assert.Equal([new CollectionMenuItem("Default", true)], flyout.CollectionItems);
 
-        h.Dialogs.NextPromptAnswer = "Work";
-        flyout.NewProfile();
-        Assert.Equal([new ProfileMenuItem("Default", false), new ProfileMenuItem("Work", true)], flyout.ProfileItems);
-        Assert.Equal("Work ▾", flyout.ProfileChipText);
-        Assert.True(flyout.CanDeleteProfile);
-        flyout.SwitchProfile("Default");
-        Assert.Equal("Default ▾", flyout.ProfileChipText);
+        Assert.Null(state.CreateActiveCopy("Work"));
+        // Switching only — New, Rename and Delete live in the window.
+        Assert.Equal(
+            [new CollectionMenuItem("Default", false), new CollectionMenuItem("Work", true)],
+            flyout.CollectionItems);
+        Assert.Equal("Work", flyout.ActiveCollection);
+        flyout.SwitchCollection("Default");
+        Assert.Equal("Default", flyout.ActiveCollection);
     }
+
+    /// <summary>
+    /// Choosing the ticked row: nothing to switch, so nothing is saved. The store file gone from
+    /// disk is the witness, since any save would write it back.
+    /// </summary>
+    [Fact]
+    public void SwitchingToTheActiveCollectionSavesNothing()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        using var flyout = new FlyoutModel(state, h.Settings);
+        File.Delete(h.MasterStorePath);
+
+        flyout.SwitchCollection("Default");
+        Assert.False(File.Exists(h.MasterStorePath));
+        Assert.Equal("Default", flyout.ActiveCollection);
+    }
+
+    [Fact]
+    public void ASyncedCollectionIsMarkedInTheMenu()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateActiveCopy("Team"));
+        h.MakeSynced(state, "Team");
+        using var flyout = new FlyoutModel(state, h.Settings);
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
+        {
+            ["Team"] = new CollectionDiff(["jira"], [], []),
+        };
+        Assert.Equal(
+            [new CollectionMenuItem("Default", false),
+             new CollectionMenuItem("Team", true, IsSynced: true, HasPendingUpdate: true, Source: "team.json")],
+            flyout.CollectionItems);
+    }
+
+    [Fact]
+    public void TheCollectionBannerCarriesItsTextAndButton()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateActiveCopy("Team"));
+        h.MakeSynced(state, "Team");
+        var folder = Path.GetDirectoryName(h.Publish(state, "Default"))!;
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
+        Assert.True(flyout.HasCollectionBanner);
+        Assert.Equal("Team’s file isn’t on this PC yet.", flyout.CollectionBannerText);
+        Assert.Equal("Locate team.json", flyout.CollectionBannerButton);
+
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
+        {
+            ["Team"] = new CollectionDiff(["jira"], ["confluence"], []),
+        };
+        Assert.Equal("Team changed at its source: adds jira; deletes confluence.", flyout.CollectionBannerText);
+        Assert.Equal("Review & Apply", flyout.CollectionBannerButton);
+
+        state.PublishError = new CollectionPublishError("Default", "the folder is read-only");
+        Assert.Equal($"Couldn’t publish Default to {folder}: the folder is read-only", flyout.CollectionBannerText);
+        Assert.Equal("Choose Folder", flyout.CollectionBannerButton);
+
+        state.PublishError = null;
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal);
+        flyout.SwitchCollection("Default");
+        // Another collection's unlocated file still gets the slot.
+        Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
+    }
+
+    private static KeyValuePair<string, CollectionsFile.Entry> Sidecar(string name, CollectionsFile.Entry entry) => new(name, entry);
 
     [Fact]
     public void FooterPrefersRetryOverRestart()
     {
         using var h = new AppStateHarness();
-        h.Claude.IsRunning = true;
-        h.Claude.LaunchDate = h.Now.AddHours(-1);
+        h.ClaudeRunningSince(1);
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
         Assert.Equal(FooterKind.Hidden, flyout.Footer);
@@ -97,12 +171,14 @@ public class FlyoutModelTests
         state.SetEnabled("aws-mcp", false);
         Assert.Equal(FooterKind.RestartRequired, flyout.Footer);
         Assert.Equal("Restart Required", flyout.FooterTitle);
+        Assert.Equal(FlyoutModel.RestartGlyph, flyout.FooterGlyph);
         Assert.True(flyout.ShowFooter);
 
         File.WriteAllText(h.ClaudeConfigPath, "{oops");
         state.SetEnabled("scoutbook", false);   // apply fails
         Assert.Equal(FooterKind.RetryApply, flyout.Footer);
         Assert.Equal("Apply Failed — Retry", flyout.FooterTitle);
+        Assert.Equal(FlyoutModel.RetryGlyph, flyout.FooterGlyph);
         Assert.True(flyout.HasError);
 
         File.WriteAllText(h.ClaudeConfigPath, Fixtures.RealisticClaudeConfig);
@@ -116,8 +192,7 @@ public class FlyoutModelTests
     {
         using var h = new AppStateHarness();
         h.Settings.ConfirmBeforeRestart = false;
-        h.Claude.IsRunning = true;
-        h.Claude.LaunchDate = h.Now.AddHours(-1);
+        h.ClaudeRunningSince(1);
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
         state.SetEnabled("aws-mcp", false);
@@ -139,16 +214,6 @@ public class FlyoutModelTests
     }
 
     [Fact]
-    public void EntryForReturnsTheLiveEntryOrNull()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        using var flyout = new FlyoutModel(state, h.Settings);
-        Assert.Equal(state.Store.Mcps["scoutbook"], flyout.EntryFor("scoutbook"));
-        Assert.Null(flyout.EntryFor("gone"));
-    }
-
-    [Fact]
     public void RowsCarryTheToolWarningAndFollowLaterProbeResults()
     {
         using var h = new AppStateHarness();
@@ -159,14 +224,15 @@ public class FlyoutModelTests
         Assert.All(flyout.Rows, r => Assert.Null(r.ToolWarning));
 
         state.RefreshToolsAsync([Tool.Npx]);
-        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.ContainsKey(Tool.Npx), TimeSpan.FromSeconds(5)));
+        Assert.All(flyout.Rows, r => Assert.False(r.HasToolWarning));   // probed off the UI thread: nothing yet
+        h.Drain();
         // All three seeded connectors run `npx -y mcp-remote`.
         Assert.All(flyout.Rows, r => Assert.True(r.HasToolWarning));
         Assert.All(flyout.Rows, r => Assert.Equal("Needs npx, which wasn’t found. Edit to see how to install it.", r.ToolWarning));
 
         // A connector whose command is a full path needs no PATH lookup, so it never warns.
-        state.Upsert("pathed", new McpEntry(JsonValue.Object(
-            ("command", JsonValue.String(@"C:\Program Files\nodejs\node.exe")))), null);
+        Assert.Null(state.Upsert("pathed", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String(@"C:\Program Files\nodejs\node.exe")))), null));
         var pathed = flyout.Rows.Single(r => r.Name == "pathed");
         Assert.False(pathed.HasToolWarning);
         Assert.Null(pathed.ToolWarning);
@@ -175,7 +241,8 @@ public class FlyoutModelTests
         // Installing npx: the next probe publishes Found and every glyph clears.
         h.Tools.Statuses[Tool.Npx] = new ToolStatus(@"C:\Program Files\nodejs\npx.cmd", "10.9.2");
         state.RefreshToolsAsync([Tool.Npx]);
-        Assert.True(h.Ui.PumpUntil(() => flyout.Rows.All(r => !r.HasToolWarning), TimeSpan.FromSeconds(5)));
+        h.Drain();
+        Assert.All(flyout.Rows, r => Assert.False(r.HasToolWarning));
         Assert.All(flyout.Rows, r => Assert.True(r.Enabled));   // the glyph never touched the switch
     }
 
@@ -188,12 +255,16 @@ public class FlyoutModelTests
         Assert.Equal(0, h.Tools.Batches);   // building the model probes nothing
 
         flyout.Opened();
-        Assert.True(h.Ui.PumpUntil(() => state.ToolStatuses.ContainsKey(Tool.Npx), TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, h.Background.Pending);
+        h.Drain();
+        Assert.True(state.ToolStatuses.ContainsKey(Tool.Npx));
         // Three npx connectors: one tool, one batch — not one probe per row.
         Assert.Equal([Tool.Npx], h.Tools.Probed.ToArray());
         Assert.Equal(1, h.Tools.Batches);
 
         flyout.Opened();   // everything the rows need is cached now
+        Assert.Equal(0, h.Background.Pending);
+        h.Drain();
         Assert.Equal(1, h.Tools.Batches);
         Assert.Equal([Tool.Npx], h.Tools.Probed.ToArray());
     }
@@ -205,18 +276,34 @@ public class FlyoutModelTests
         using var state = h.Create();
         using var flyout = new FlyoutModel(state, h.Settings);
         flyout.Opened();   // an empty catalog
-        Assert.Equal(0, h.Tools.Batches);
+        Assert.Equal(0, h.Background.Pending);
 
-        state.Upsert("pathed", new McpEntry(JsonValue.Object(
-            ("command", JsonValue.String(@"C:\tools\node.exe")))), null);
-        state.Upsert("stranger", new McpEntry(JsonValue.Object(
-            ("command", JsonValue.String("python")))), null);
+        Assert.Null(state.Upsert("pathed", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String(@"C:\tools\node.exe")))), null));
+        Assert.Null(state.Upsert("stranger", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("python")))), null));
         flyout.Opened();   // a full path and an unknown launcher both need no PATH lookup
+        Assert.Equal(0, h.Background.Pending);
+        h.Drain();
         Assert.Equal(0, h.Tools.Batches);
         Assert.Empty(h.Tools.Probed);
         Assert.All(flyout.Rows, r => Assert.False(r.HasToolWarning));
     }
 
+    /// <summary>Segoe Fluent Icons code points: platform-specific glyph identifiers, deliberately
+    /// out of the shared string catalog (the Mac uses SF Symbol names instead), so pinned here
+    /// instead.</summary>
+    [Fact]
+    public void GlyphNamesAreSessionLocalAndStable()
+    {
+        Assert.Equal("\ue7ba", FlyoutModel.RetryGlyph);
+        Assert.Equal("\ue72c", FlyoutModel.RestartGlyph);
+        Assert.Equal("\ue7ba", FlyoutModel.ToolWarningGlyph);
+        Assert.Equal(FlyoutModel.ToolWarningGlyph, FlyoutModel.CautionGlyph);   // one glyph, two names
+    }
+
+    /// <summary>C#-only: the Mac popover's banner is lastError alone; a store that is not private
+    /// and a settings save that failed are Windows banners.</summary>
     [Fact]
     public void ANotPrivateStoreShowsInTheBannerUntilAnErrorTakesPrecedence()
     {
@@ -231,6 +318,7 @@ public class FlyoutModelTests
         Assert.Equal("apply failed", flyout.ErrorMessage);
     }
 
+    /// <summary>C#-only, as the test above is.</summary>
     [Fact]
     public void ASettingsSaveFailureShowsInTheBannerBelowLastErrorAndStoreNotPrivate()
     {
@@ -249,5 +337,371 @@ public class FlyoutModelTests
 
         state.LastError = "apply failed";   // LastError outranks both
         Assert.Equal("apply failed", flyout.ErrorMessage);
+    }
+    // MARK: collection menu titles, chip marks and locks
+
+    [Fact]
+    public void TheChipMarksAndLocksFollowTheActiveCollection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var document = h.Dir.File(Path.Combine("acme", "data-team.json"));
+        Directory.CreateDirectory(Path.GetDirectoryName(document)!);
+        File.WriteAllBytes(document, CollectionDocumentSamples.DataTeam.Serialize());
+        Assert.Null(state.Subscribe(document, null));
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        // A local collection: no chain, no tooltip, no locks.
+        Assert.False(flyout.ActiveCollectionIsSynced);
+        Assert.Null(flyout.SourceTooltip);
+        Assert.False(flyout.ActiveHasPendingUpdate);
+        Assert.All(flyout.Rows, r => Assert.False(r.IsLocked));
+
+        state.SwitchCollection("Data team");
+        Assert.True(flyout.ActiveCollectionIsSynced);
+        Assert.Equal($"Synced from {document}", flyout.SourceTooltip);
+        Assert.Equal(["dbt", "github", "ledger", "notion"], flyout.Rows.Select(r => r.Name).ToArray());
+        // Every row of a synced collection is the author's.
+        Assert.All(flyout.Rows, r => Assert.True(r.IsLocked));
+
+        // The dot is the active collection's news only.
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
+        {
+            ["Default"] = new CollectionDiff(["jira"], [], []),
+        };
+        Assert.False(flyout.ActiveHasPendingUpdate);
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
+        {
+            ["Data team"] = new CollectionDiff(["jira"], [], []),
+        };
+        Assert.True(flyout.ActiveHasPendingUpdate);
+    }
+
+    [Fact]
+    public void TheSourceTooltipNamesTheSidecarFileWhileTheDocumentIsUnfound()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateActiveCopy("Team"));
+        h.MakeSynced(state, "Team");
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.Equal("Synced from team.json", flyout.SourceTooltip);
+    }
+
+    // MARK: banner actions
+
+    [Fact]
+    public void TheLocateBannerBindsTheCollectionItNames()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateActiveCopy("Team"));
+        h.MakeSynced(state, "Team");
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
+
+        // A file that is not there is not bound, and the message is the one AppState gives.
+        Assert.NotNull(flyout.LocateSource(h.Dir.File("nope.json")));
+        Assert.Null(state.SourceBinding("Team"));
+
+        var document = h.Dir.File("team.json");
+        File.WriteAllBytes(document, CollectionDocumentSamples.DataTeam.Serialize());
+        Assert.Null(flyout.LocateSource(document));
+        Assert.Equal(document, state.SourceBinding("Team")?.Path);
+
+        // The file is found, so the banner has moved on and a second locate has nothing to act on.
+        Assert.NotEqual(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
+        var elsewhere = h.Dir.File("moved.json");
+        File.WriteAllBytes(elsewhere, CollectionDocumentSamples.DataTeam.Serialize());
+        Assert.Null(flyout.LocateSource(elsewhere));
+        Assert.Equal(document, state.SourceBinding("Team")?.Path);   // no banner, no change
+    }
+
+    [Fact]
+    public void TheFailedPublishBannerRepointsTheCollectionItNames()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Publish(state, "Default", folder: "first");
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        state.PublishError = new CollectionPublishError("Default", "the folder is read-only");
+        Assert.Equal(FlyoutModel.ChooseFolderButton, flyout.CollectionBannerButton);
+
+        var second = h.Dir.File("second");
+        Directory.CreateDirectory(second);
+        Assert.Null(flyout.ChoosePublishFolder(second));
+        Assert.Equal(second, state.CollectionsCache.Published["Default"].Folder);
+        // The document lands in the folder just chosen.
+        Assert.True(File.Exists(Path.Combine(second, "default.json")));
+        Assert.Null(state.PublishError);
+
+        // With the failure gone there is no banner to act on, so the folder stays put.
+        var third = h.Dir.File("third");
+        Directory.CreateDirectory(third);
+        Assert.Null(flyout.ChoosePublishFolder(third));
+        Assert.Equal(second, state.CollectionsCache.Published["Default"].Folder);
+    }
+
+    [Fact]
+    public void OnlyTheFailedPublishBannerOffersStopPublishing()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateActiveCopy("Team"));
+        state.SwitchCollection("Default");
+        h.MakeSynced(state, "Team");
+        var folder = Path.GetDirectoryName(h.Publish(state, "Default"))!;
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        // The locate banner has one button, so there is no second one to show or to press.
+        Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
+        Assert.Null(flyout.CollectionBannerSecondaryButton);
+        flyout.CollectionBannerSecondaryAction();
+        // Nothing was stopped.
+        Assert.NotNull(state.CollectionsFile.Collections.GetValueOrDefault("Default")?.Publish);
+
+        state.PublishError = new CollectionPublishError("Default", "the folder is read-only");
+        Assert.Equal(CollectionsModel.StopPublishingAction, flyout.CollectionBannerSecondaryButton);
+        flyout.CollectionBannerSecondaryAction();
+        // The record is gone.
+        Assert.Null(state.CollectionsFile.Collections.GetValueOrDefault("Default")?.Publish);
+        // And so is this machine's binding.
+        Assert.False(state.CollectionsCache.Published.ContainsKey("Default"));
+        // With the record gone there is nothing left to have failed.
+        Assert.Null(state.PublishError);
+        // The document in the folder stays: a folder this machine cannot reach is not one to delete from.
+        Assert.True(System.IO.File.Exists(Path.Combine(folder, "default.json")));
+    }
+
+    /// <summary>
+    /// An empty active collection is a normal state now that New Collection makes empty ones, so the
+    /// flyout names it and offers the way forward: Manage Collections, on that collection.
+    /// </summary>
+    [Fact]
+    public void TheEmptyStateNamesTheCollectionAndOpensItsWindow()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.AddEmptyCollection("Home"));
+        state.SwitchCollection("Home");
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.True(flyout.IsEmpty);
+        Assert.Equal("No connectors in “Home”.", flyout.EmptyMessage);
+        Assert.Equal(FlyoutModel.EmptyText("Home"), flyout.EmptyMessage);
+
+        flyout.ManageActiveCollection();
+        Assert.Equal(new CollectionsWindowRequest.Select("Home"), state.TakeCollectionsWindowRequest());
+    }
+
+    [Fact]
+    public void TheCollectionsWindowRequestsRoundTripThroughAppState()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateActiveCopy("Team"));
+        h.MakeSynced(state, "Team");
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.Null(state.TakeCollectionsWindowRequest());
+
+        // The review request comes from the banner, and the locate banner is not one.
+        Assert.False(flyout.CollectionBannerAction());
+        Assert.Null(state.CollectionsWindowRequest);
+
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
+        {
+            ["Team"] = new CollectionDiff(["jira"], [], []),
+        };
+        Assert.True(flyout.CollectionBannerAction());
+        Assert.Equal(new CollectionsWindowRequest.Review("Team"), state.CollectionsWindowRequest);
+        Assert.Equal(new CollectionsWindowRequest.Review("Team"), state.TakeCollectionsWindowRequest());
+        Assert.Null(state.CollectionsWindowRequest);   // the window takes the request once
+        Assert.Null(state.TakeCollectionsWindowRequest());
+    }
+    [Fact]
+    public void AMenuRowSpellsOutWhatItsSingleImageCannotShow()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateActiveCopy("Team"));
+        h.MakeSynced(state, "Team");
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        // No news: the row is the name, and the chain is the one image the Mac can draw.
+        var quiet = flyout.CollectionItems.Single(i => i.Name == "Team");
+        Assert.Equal("Team", FlyoutModel.MenuTitle(quiet));
+
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
+        {
+            ["Team"] = new CollectionDiff(["jira"], [], []),
+        };
+        var pending = flyout.CollectionItems.Single(i => i.Name == "Team");
+        Assert.Equal("Team · update available", FlyoutModel.MenuTitle(pending));
+        // The mark is the dot's spoken form, so a row reads the same whether seen or heard.
+        Assert.Equal(" · " + FlyoutModel.PendingSpokenLabel, FlyoutModel.PendingMenuMark);
+        Assert.Equal("update available", FlyoutModel.PendingSpokenLabel);
+        // One owner of the words: the window's status for the same condition.
+        Assert.Equal(CollectionsModel.UpdateAvailableStatus, FlyoutModel.PendingSpokenLabel);
+
+        // A quiet row is just its name.
+        var local = flyout.CollectionItems.Single(i => i.Name == "Default");
+        Assert.Equal("Default", FlyoutModel.MenuTitle(local));
+
+        // The mark follows the news alone, not the chain: the title is pure over the flag, so a
+        // row carrying news is marked whatever else it is.
+        var unchained = new CollectionMenuItem("Default", false, IsSynced: false, HasPendingUpdate: true);
+        Assert.Equal("Default · update available", FlyoutModel.MenuTitle(unchained));
+    }
+
+    [Fact]
+    public void EverySyncedMenuRowNamesItsOwnSource()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateActiveCopy("Team"));
+        Assert.Null(state.CreateActiveCopy("Ops"));
+        state.SwitchCollection("Default");
+        new CollectionsFile([
+            Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, "team.json")),
+            Sidecar("Ops", new CollectionsFile.Entry(CollectionKind.Synced, "ops.json")),
+        ]).Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        new CollectionsLocalCache(
+            [new KeyValuePair<string, CollectionsLocalCache.SyncedBinding>(
+                "Team", new CollectionsLocalCache.SyncedBinding("/Acme/mcp/team.json", null, []))],
+            []).Save(state.Service.Paths.CollectionsCachePath);
+        state.Reload();
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        CollectionMenuItem Item(string name) => flyout.CollectionItems.Single(i => i.Name == name);
+        // Neither synced row is the active one, and each still names its own document: the bound
+        // path where there is one, the sidecar's file name where the file is still to be found.
+        Assert.Equal("/Acme/mcp/team.json", Item("Team").Source);
+        Assert.Equal("Synced from /Acme/mcp/team.json", FlyoutModel.MenuTooltip(Item("Team")));
+        Assert.Equal("ops.json", Item("Ops").Source);
+        Assert.Equal("Synced from ops.json", FlyoutModel.MenuTooltip(Item("Ops")));
+        Assert.Null(Item("Default").Source);
+        Assert.Null(FlyoutModel.MenuTooltip(Item("Default")));
+
+        // One rule for every surface: the chip, the menu and the window's sidebar all agree.
+        Assert.Equal(state.SourceLocation("Team"), Item("Team").Source);
+        state.SwitchCollection("Team");
+        Assert.Equal(FlyoutModel.MenuTooltip(Item("Team")), flyout.SourceTooltip);
+        using var window = new CollectionsModel(state, h.Dialogs);
+        var sidebar = window.Items.Single(i => i.Name == "Team");
+        Assert.Equal(FlyoutModel.MenuTooltip(Item("Team")), CollectionsModel.SyncedGlyphTooltip(sidebar));
+    }
+    [Fact]
+    public void AnEmptySidecarNameAsksForNothingAnywhere()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateActiveCopy("Team"));
+        // Only a hand-edited or malformed sidecar says this; nothing here writes an empty name.
+        new CollectionsFile([Sidecar("Team", new CollectionsFile.Entry(CollectionKind.Synced, ""))])
+            .Save(Path.Combine(h.StoreDir, CollectionsFile.FileName));
+        state.Reload();
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        // The banner, the chip and the menu agree there is nothing to name: no "Locate " over a
+        // blank while the tooltips stay silent.
+        Assert.Null(flyout.CollectionBanner);
+        Assert.Null(state.SourceLocation("Team"));
+        Assert.Null(flyout.SourceTooltip);
+        Assert.Null(FlyoutModel.MenuTooltip(flyout.CollectionItems.Single(i => i.Name == "Team")));
+        // Nothing to find, which is what located already means.
+        Assert.True(state.IsLocated("Team"));
+    }
+    // MARK: a publish blocked for review
+
+    [Fact]
+    public void ABlockedPublishOpensThePublishDialogInsteadOfAFolder()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = Path.GetDirectoryName(h.Publish(state, "Default"))!;
+        using var flyout = new FlyoutModel(state, h.Settings);
+
+        // A failed write keeps today's banner exactly: another folder is an answer to it.
+        state.PublishError = new CollectionPublishError("Default", "the folder is read-only");
+        // The default every existing caller meant.
+        Assert.Equal(PublishErrorKind.WriteFailed, state.PublishError.Kind);
+        Assert.Equal(new CollectionBanner.PublishFailed("Default", "the folder is read-only"), flyout.CollectionBanner);
+        Assert.Equal(FlyoutModel.ChooseFolderButton, flyout.CollectionBannerButton);
+
+        // Blocked for review: the message is the whole banner, the button opens the Publish dialog,
+        // and nothing offers a folder or a second button.
+        var moved = AppState.PathMarkMovedError("ledger");
+        state.PublishError = new CollectionPublishError("Default", moved, PublishErrorKind.BlockedForReview);
+        Assert.Equal(new CollectionBanner.PublishBlocked("Default", moved), flyout.CollectionBanner);
+        Assert.Equal(moved, flyout.CollectionBannerText);
+        Assert.Equal(CollectionsModel.PublishSettingsButton, flyout.CollectionBannerButton);
+        Assert.Null(flyout.CollectionBannerSecondaryButton);
+
+        // The button asks the Collections window for the Publish dialog, and true tells the view to
+        // open that window and do nothing else.
+        Assert.True(flyout.CollectionBannerAction());
+        Assert.Equal(new CollectionsWindowRequest.Publish("Default"), state.TakeCollectionsWindowRequest());
+
+        // A folder chosen anyway, or Stop Publishing reached some other way, is refused here: the
+        // banner is not asking for either, and re-binding would abandon the old folder's document.
+        var elsewhere = h.Dir.File("elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        // Refused, and it says why.
+        Assert.Equal(moved, flyout.ChoosePublishFolder(elsewhere));
+        Assert.Equal(folder, state.CollectionsCache.Published["Default"].Folder);
+        flyout.CollectionBannerSecondaryAction();
+        Assert.True(state.IsPublished("Default"));
+    }
+
+    /// <summary>
+    /// Adapted from the coll-21 review's probe P6. A real moved mark, not a hand-set error: the
+    /// folder change that follows must be refused, because the intent it would carry is the one
+    /// that blocked, so the new folder would be bound, receive nothing, and leave the old folder's
+    /// document behind.
+    /// </summary>
+    [Fact]
+    public void AFolderChangeIsRefusedWhileAMovedMarkBlocksThePublish()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var collection = state.ActiveCollection;
+        const string marked = "/Users/d/ledger/dist/index.js";
+        Assert.Null(state.Upsert("ledger", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String(marked)])))), null));
+        var a = h.Dir.File("pubA");
+        Directory.CreateDirectory(a);
+        var b = h.Dir.File("pubB");
+        Directory.CreateDirectory(b);
+        Assert.Null(state.StartPublishing(collection, a, new PublishIntent(
+            [],
+            [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark>
+            {
+                [new JsonPointer(["args", "0"])] = new("server_path", null, marked),
+            })],
+            [])));
+        var fileName = Slug.Make(collection) + "." + CollectionDocument.FileExtension;
+        var document = Path.Combine(a, fileName);
+        var published = File.ReadAllBytes(document);
+
+        // The marked path moves: publishing stops before writing, for the author to review.
+        Assert.Null(state.Upsert("ledger", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String("/Users/d/v2.js")])))), "ledger"));
+        var blocked = Assert.IsType<CollectionPublishError>(state.PublishError);
+        Assert.Equal(PublishErrorKind.BlockedForReview, blocked.Kind);
+
+        // Straight at AppState, as the probe did, and through the flyout, as a view would.
+        Assert.Equal(blocked.Message, state.ChangePublishFolder(collection, b));
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.Equal(blocked.Message, flyout.ChoosePublishFolder(b));
+
+        // Nothing moved: the binding is where it was, nothing landed in the new folder, and the old
+        // folder still holds the document it had.
+        Assert.Equal(a, state.CollectionsCache.Published[collection].Folder);
+        Assert.False(File.Exists(Path.Combine(b, fileName)));
+        Assert.Equal(published, File.ReadAllBytes(document));
+        // Refusing changes nothing, the error included.
+        Assert.Equal(blocked, state.PublishError);
     }
 }

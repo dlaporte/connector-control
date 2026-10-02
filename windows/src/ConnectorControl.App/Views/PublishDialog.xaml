@@ -1,0 +1,238 @@
+<views:DialogWindow x:Class="ConnectorControl.App.Views.PublishDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:state="clr-namespace:ConnectorControl.Core.State;assembly=ConnectorControl.Core"
+        xmlns:views="clr-namespace:ConnectorControl.App.Views"
+        Width="620">
+  <views:DialogWindow.Resources>
+    <views:UnansweredNoteConverter x:Key="UnansweredNote" />
+  </views:DialogWindow.Resources>
+  <StackPanel Margin="16">
+    <!-- The sheet's own heading, as well as the title bar's: the Mac sheet has no chrome to put
+         it in, and both platforms read the same sentence. -->
+    <TextBlock x:Name="TitleText" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,12" />
+
+    <!-- Folder row: the folder this collection would write into, and what it writes there.
+         Export needs no folder, so the code-behind collapses the whole row in the model's export
+         mode. -->
+    <StackPanel x:Name="FolderRow" Margin="0,0,0,12">
+      <StackPanel Orientation="Horizontal">
+        <!-- Trimmed at the end, as the footer is, since WPF has no middle ellipsis; the Mac sheet
+             elides the middle of both. -->
+        <TextBlock x:Name="FolderText" Text="{Binding Folder}" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                   MaxWidth="420" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <Button x:Name="ChooseFolderButton" Content="{x:Static state:PublishModel.ChooseFolderButton}" MinWidth="120" Click="OnChooseFolder" />
+      </StackPanel>
+      <TextBlock Text="{Binding FolderSentence}" Style="{StaticResource CaptionText}" Margin="0,6,0,0" />
+    </StackPanel>
+
+    <ScrollViewer MaxHeight="210" VerticalScrollBarVisibility="Auto">
+      <StackPanel>
+        <!-- Environment values: a tick per variable, and a hint for every one that stays here. -->
+        <StackPanel x:Name="EnvSection" Visibility="{Binding HasEnvRows, Converter={StaticResource Vis}}">
+          <TextBlock Text="{x:Static state:PublishModel.EnvSectionTitle}" Style="{StaticResource SectionTitle}" />
+          <ItemsControl x:Name="EnvList" ItemsSource="{Binding EnvRows}" Margin="0,0,0,10">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,0,0,6">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="210" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding Connector}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" />
+                  <!-- Variable names are short by convention but the author's to write, so a long
+                       one trims rather than crowding out the column beside it. -->
+                  <TextBlock Grid.Column="1" Text="{Binding Name}" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                             MaxWidth="180" TextTrimming="CharacterEllipsis"
+                             VerticalAlignment="Center" Margin="10,0" />
+                  <!-- Shown only on a ticked row, where the value is what travels: the tick is then
+                       a decision made with the bytes it would send in view. A stripped value is not
+                       in the document, and the hint field beside it is what that row is asking for.
+                       The model keeps the value whole and leaves the eliding here. -->
+                  <TextBlock x:Name="ValueText" Grid.Column="2" Text="{Binding Value}" Style="{StaticResource CaptionText}"
+                             FontFamily="{StaticResource MonoFont}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                             Visibility="{Binding IsChecked, ElementName=ShareTick, Converter={StaticResource Vis}}"
+                             VerticalAlignment="Center" Margin="0,0,10,0" />
+                  <CheckBox x:Name="ShareTick" Grid.Column="3" Content="{x:Static state:PublishModel.ShareValueLabel}" FontSize="12"
+                            IsChecked="{Binding Share, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                  <TextBox x:Name="HintBox" Grid.Column="4" Text="{Binding Hint, UpdateSourceTrigger=PropertyChanged}" FontSize="12"
+                           Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.HintPlaceholder}" />
+                </Grid>
+                <DataTemplate.Triggers>
+                  <!-- A shared value needs no hint: its own value is what travels. The condition is
+                       the tick's own property, so it holds whether the tick was clicked or arrived
+                       ticked from a publish record. The hint field carries no Visibility of its
+                       own, because a local value on it would outrank this setter. -->
+                  <Trigger SourceName="ShareTick" Property="ToggleButton.IsChecked" Value="True">
+                    <Setter TargetName="HintBox" Property="Visibility" Value="Collapsed" />
+                  </Trigger>
+                </DataTemplate.Triggers>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- Machine-specific paths: a tick, and under it the placeholder name and hint every
+             recipient fills in for themselves. -->
+        <StackPanel x:Name="PathsSection" Visibility="{Binding HasPathRows, Converter={StaticResource Vis}}">
+          <TextBlock Text="{x:Static state:PublishModel.PathsSectionTitle}" Style="{StaticResource SectionTitle}" />
+          <ItemsControl x:Name="PathList" ItemsSource="{Binding PathRows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Margin="0,0,0,6">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <!-- The tick carries no visible label: the row it sits on says what marking it
+                         replaces. Narrator gets the sentence the label would have been. -->
+                    <CheckBox x:Name="MarkTick" IsChecked="{Binding Marked, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,8,0"
+                              AutomationProperties.Name="{x:Static state:PublishModel.MarkPathLabel}" />
+                    <TextBlock Grid.Column="1" Text="{Binding Connector}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="{Binding Pointer}" Style="{StaticResource CaptionText}" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center" Margin="8,0" />
+                    <TextBlock Grid.Column="3" Text="{Binding Value}" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  </Grid>
+                  <StackPanel x:Name="MarkedFields" Orientation="Horizontal" Margin="28,6,0,0"
+                              Visibility="{Binding IsChecked, ElementName=MarkTick, Converter={StaticResource Vis}}">
+                    <TextBox x:Name="PathNameBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="150" FontSize="12"
+                             Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.PathNamePlaceholder}" />
+                    <TextBox x:Name="PathHintBox" Text="{Binding Hint, UpdateSourceTrigger=PropertyChanged}" Width="210" FontSize="12" Margin="8,0,0,0"
+                             Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.HintPlaceholder}" />
+                  </StackPanel>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Every entry that holds Publish and Export: a path mark this sheet could not place, and a
+         path this machine keeps back that the document would carry as written. Each line is the
+         reason and its way out besides a tick. Outside the rows' scroll region so the explanation
+         of a disabled button is never scrolled away, and capped so the footer stays on screen. A
+         connector that no longer exists has no row to tick, so its line shows even when the
+         sections above are empty. Each line carries its own top margin, so the region takes no
+         space at all when there is nothing to answer.
+
+         Every line has the same two columns: the note, and a horizontal panel of the answers that
+         entry takes. An entry that offers a second kind of answer adds a button to its panel and
+         changes nothing else. -->
+    <ScrollViewer MaxHeight="96" VerticalScrollBarVisibility="Auto">
+      <StackPanel>
+        <ItemsControl x:Name="UnresolvedList" ItemsSource="{Binding UnresolvedMarks}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="MarkNoteText" Style="{StaticResource CautionText}" VerticalAlignment="Center" Margin="0,0,12,0">
+                  <TextBlock.Text>
+                    <MultiBinding Converter="{StaticResource UnansweredNote}">
+                      <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                      <Binding />
+                    </MultiBinding>
+                  </TextBlock.Text>
+                </TextBlock>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Button x:Name="ForgetMark" Content="{x:Static state:PublishModel.ForgetMarkButton}" Click="OnForgetMark" />
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <ItemsControl x:Name="KeptList" ItemsSource="{Binding KeptPaths}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <!-- The note is the model's for this entry, never composed here: whether a folder
+                     can be rewritten from this sheet, and whose folder it is, are facts the sheet
+                     does not hold. The model comes down the second binding, as the editor's own
+                     rule bindings take it. -->
+                <TextBlock x:Name="KeptNoteText" Style="{StaticResource CautionText}" VerticalAlignment="Center" Margin="0,0,12,0">
+                  <TextBlock.Text>
+                    <MultiBinding Converter="{StaticResource UnansweredNote}">
+                      <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                      <Binding />
+                    </MultiBinding>
+                  </TextBlock.Text>
+                </TextBlock>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Button x:Name="ReleaseValue" Content="{x:Static state:PublishModel.ReleaseValueButton}" Click="OnReleaseValue" />
+                  <Button x:Name="UseDirectoryToken" Content="{x:Static state:PublishModel.UseDirectoryTokenButton}" Click="OnUseDirectoryToken" />
+                </StackPanel>
+              </Grid>
+              <DataTemplate.Triggers>
+                <!-- One answer per entry, chosen by its kind. A folder of this collection's own is
+                     answered only by writing the token in its place, never by releasing it:
+                     released, the folder would travel as written. Neither button carries a
+                     Visibility of its own, because a local value would outrank these setters. An
+                     entry is a record and never changes kind, so nothing here needs to re-evaluate. -->
+                <DataTrigger Binding="{Binding Kind}" Value="{x:Static state:PublishModel+KeptPathKind.Folder}">
+                  <Setter TargetName="ReleaseValue" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="{x:Static state:PublishModel+KeptPathKind.Path}">
+                  <Setter TargetName="UseDirectoryToken" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+              </DataTemplate.Triggers>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- The document itself: every byte that leaves this PC, read-only. -->
+    <TextBlock Text="{x:Static state:PublishModel.PreviewTitle}" Style="{StaticResource SectionTitle}" Margin="0,12,0,8" />
+    <TextBox x:Name="PreviewBox" Text="{Binding Preview, Mode=OneWay}" Height="180" IsReadOnly="True" IsReadOnlyCaretVisible="False"
+             FontFamily="{StaticResource MonoFont}" FontSize="12" TextWrapping="NoWrap"
+             HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top" />
+
+    <!-- One line per credential-looking value, and a connector that passes keys as arguments can
+         produce many: the list scrolls rather than pushing the footer buttons off a dialog that
+         sizes to its content and cannot be resized. -->
+    <ScrollViewer MaxHeight="72" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+      <ItemsControl x:Name="WarningList" ItemsSource="{Binding Warnings}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Text="{Binding}" Style="{StaticResource CautionText}" Margin="0,0,0,2" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <TextBlock x:Name="FailureText" Style="{StaticResource ErrorText}" Margin="0,8,0,0" Visibility="Collapsed" />
+
+    <!-- Two columns, because a collection's name is the user's: the footer sentence keeps to its
+         own column and trims, rather than being drawn under the buttons. -->
+    <Grid Margin="0,16,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <TextBlock x:Name="FooterText" Text="{Binding FooterSentence}" Style="{StaticResource CaptionText}"
+                 FontFamily="{StaticResource MonoFont}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                 HorizontalAlignment="Left" VerticalAlignment="Center" Margin="0,0,12,0" />
+      <StackPanel Grid.Column="1" Style="{StaticResource DialogButtons}">
+        <Button Content="{x:Static state:PublishModel.CancelButton}" MinWidth="80" IsCancel="True" />
+        <!-- One of the two shows, by the model's mode; both answer to the model's one gate and verb. -->
+        <Button x:Name="PublishButton" Content="{x:Static state:PublishModel.PublishButton}" MinWidth="90" Margin="8,0,0,0"
+                IsEnabled="{Binding CanFinish}" Style="{DynamicResource AccentButtonStyle}" Click="OnFinish" />
+        <Button x:Name="ExportButton" Content="{x:Static state:PublishModel.ExportButton}" MinWidth="90" Margin="8,0,0,0"
+                IsEnabled="{Binding CanFinish}" Style="{DynamicResource AccentButtonStyle}" Click="OnFinish" />
+      </StackPanel>
+    </Grid>
+  </StackPanel>
+</views:DialogWindow>

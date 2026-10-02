@@ -4,12 +4,20 @@ namespace ConnectorControl.Core.Tests.TestSupport;
 
 public sealed class FakeDialogs : IDialogs
 {
-    public sealed record ConfirmCall(string Message, string? Informative, string Primary, string Cancel, bool Destructive);
+    public sealed record ConfirmCall(string Message, string? Informative, string Primary, string Cancel, bool Destructive,
+                                     bool CancelIsDefault = false);
     public sealed record PromptCall(string Title, string Initial);
     public sealed record InformCall(string Message, string? Informative);
     public sealed record OfferCall(string NewVersion, string CurrentVersion, string? Notes);
 
     public bool NextConfirm { get; set; } = true;
+    /// <summary>
+    /// Answers for a flow that raises more than one confirmation, taken in order; NextConfirm
+    /// answers whatever is left. One flag cannot say "delete it, but keep the file".
+    /// </summary>
+    public Queue<bool> ConfirmAnswers { get; } = new();
+    /// <summary>Run while a confirmation is up, before it is answered: something that changes under a modal question.</summary>
+    public Action? DuringConfirm { get; set; }
     public string? NextPromptAnswer { get; set; }
     public bool NextOffer { get; set; }
     public Exception? OfferFailure { get; set; }
@@ -18,10 +26,12 @@ public sealed class FakeDialogs : IDialogs
     public List<InformCall> Informs { get; } = [];
     public List<OfferCall> Offers { get; } = [];
 
-    public bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle, bool destructive)
+    public bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle, bool destructive,
+                        bool cancelIsDefault)
     {
-        Confirms.Add(new ConfirmCall(message, informativeText, primaryTitle, cancelTitle, destructive));
-        return NextConfirm;
+        Confirms.Add(new ConfirmCall(message, informativeText, primaryTitle, cancelTitle, destructive, cancelIsDefault));
+        DuringConfirm?.Invoke();
+        return ConfirmAnswers.Count > 0 ? ConfirmAnswers.Dequeue() : NextConfirm;
     }
 
     public string? PromptForName(string title, string initial)

@@ -3,8 +3,8 @@
 # and none may fail — the Swift counterpart of windows/ci.runsettings'
 # FailSkips. The one legitimate local exception is the exFAT test, which skips
 # if hdiutil cannot attach a disk image on this machine (it attaches
-# successfully on CI). Called by mac-ci.yml and release.yml; runs locally too
-# (set DEVELOPER_DIR when the default toolchain cannot run tests).
+# successfully on CI). Called by mac-ci.yml, preview.yml and release.yml; runs
+# locally too (set DEVELOPER_DIR when the default toolchain cannot run tests).
 #
 # How the two test targets report depends on the toolchain: one .xctest bundle
 # per target with its own summary (Xcode-beta locally) or one combined

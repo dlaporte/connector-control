@@ -2,6 +2,7 @@ import XCTest
 import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/RemoteAuthTests.cs
 final class RemoteAuthTests: XCTestCase {
     private let url = "https://x.dev/mcp"
 

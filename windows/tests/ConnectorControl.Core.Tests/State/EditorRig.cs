@@ -34,7 +34,24 @@ internal sealed class EditorRig : IDisposable
         return JsonValue.Object(props.ToArray());
     }
 
+    /// <summary>A copy of the active collection named <paramref name="name"/>, left inactive: each
+    /// of its connectors is an identical twin of the active collection's.</summary>
+    public void Twin(string name)
+    {
+        var active = State.ActiveCollection;
+        Assert.Null(State.CreateActiveCopy(name));
+        State.SwitchCollection(active);
+    }
+
     public EditorModel Editor(EditTarget target) => new(State, target, H.Dialogs, RemoteLaunchStyle.CmdNpx);
+
+    /// <summary>
+    /// An editor on a named collection's copy of a connector, read out of the store the way the
+    /// Collections window's row will. A name that collection does not hold is a test bug, so it
+    /// throws rather than quietly opening an empty window.
+    /// </summary>
+    public EditorModel Editor(string name, string collection) =>
+        Editor(TestTargets.Existing(name, State.Store.Collections[collection].Mcps[name], collection));
 
     /// <summary>EditorModel.AuthKinds' index for <paramref name="kind"/> — the picker's own
     /// order, not an assumption about enum declaration order.</summary>

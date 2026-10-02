@@ -2,6 +2,7 @@ import XCTest
 import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/MasterStoreTests.cs
 final class MasterStoreTests: XCTestCase {
     var tempDir: TempDir!
     var dir: URL!
@@ -21,6 +22,27 @@ final class MasterStoreTests: XCTestCase {
             "on": MCPEntry(enabled: true, config: .object(["command": .string("a")])),
             "off": MCPEntry(enabled: false, config: .object(["command": .string("b")]))])
         XCTAssertEqual(store.enabledServers, ["on": .object(["command": .string("a")])])
+    }
+
+    func testRenamesANonActiveCollectionAndKeepsTheActiveName() {
+        var store = MasterStore(activeCollection: "A", collections: ["A": Collection(), "B": Collection()])
+        XCTAssertNil(store.renameCollection("B", to: "C"))
+        XCTAssertEqual(Set(store.collections.keys), ["A", "C"])
+        XCTAssertEqual(store.activeCollection, "A")
+        XCTAssertNil(store.renameCollection("A", to: "Z"))
+        XCTAssertEqual(store.activeCollection, "Z")
+        XCTAssertNotNil(store.renameCollection("Z", to: "C"), "a taken name is refused")
+        XCTAssertEqual(store.renameCollection("Nope", to: "Q"), "No collection named \u{201C}Nope\u{201D}.")
+        XCTAssertEqual(store.deleteCollection(named: "Nope"), "No collection named \u{201C}Nope\u{201D}.")
+    }
+
+    func testDeletesANonActiveCollectionAndRefusesTheLast() {
+        var store = MasterStore(activeCollection: "A", collections: ["A": Collection(), "B": Collection()])
+        XCTAssertNil(store.deleteCollection(named: "B"))
+        XCTAssertNotNil(store.deleteCollection(named: "A"), "the last collection stays")
+        store = MasterStore(activeCollection: "B", collections: ["A": Collection(), "B": Collection()])
+        XCTAssertNil(store.deleteCollection(named: "B"))
+        XCTAssertEqual(store.activeCollection, "A", "deleting the active one moves to the sorted-first remaining")
     }
 
     func testLoadMissingFileReturnsEmptyStore() {
@@ -95,7 +117,7 @@ final class MasterStoreTests: XCTestCase {
         }
     }
 
-    func testUnknownActiveProfileFallsBackToExistingProfile() throws {
+    func testUnknownActiveCollectionFallsBackToExistingCollection() throws {
         let json = """
         {"version":2,"activeProfile":"Ghost",\
         "profiles":{"Alpha":{"mcps":{}},"Beta":{"mcps":{}}}}
@@ -103,7 +125,22 @@ final class MasterStoreTests: XCTestCase {
         try Data(json.utf8).write(to: url)
         let result = MasterStoreIO.load(from: url)
         XCTAssertNil(result.corruptFileURL)
-        XCTAssertEqual(result.store.activeProfile, "Alpha", "sorted-first existing profile")
+        XCTAssertEqual(result.store.activeCollection, "Alpha", "sorted-first existing collection")
+    }
+
+    /// `read` decodes a restored backup, so it heals as a load does: the first existing collection
+    /// in ordinal order, where the Windows mirror's constructor puts it. The two names sort the
+    /// other way by Unicode scalar, and nothing is created.
+    func testReadHealsAnActiveCollectionTheFileDoesNotHoldToTheOrdinalFirst() throws {
+        let json = """
+        {"version":2,"activeProfile":"Ghost",\
+        "profiles":{"\u{FF5E} Team":{"mcps":{}},"\u{1F600} Team":{"mcps":{}}}}
+        """
+        try Data(json.utf8).write(to: url)
+        let read = try XCTUnwrap(MasterStoreIO.read(from: url))
+        XCTAssertEqual(read.activeCollection, "\u{1F600} Team")
+        XCTAssertEqual(Set(read.collections.keys), ["\u{FF5E} Team", "\u{1F600} Team"])
+        XCTAssertEqual(MasterStoreIO.load(from: url).store.activeCollection, "\u{1F600} Team")
     }
 
     func testV1FormatFileIsTreatedAsCorruptAndRebuilt() throws {
@@ -125,7 +162,7 @@ final class MasterStoreTests: XCTestCase {
 
     /// MasterStore has no custom `init(from:)` — decoding is exactly as
     /// strict as the synthesized Codable conformance, so every one of these
-    /// six malformed shapes fails to decode and flows through the same
+    /// malformed shapes fails to decode and flows through the same
     /// corrupt-file path as garbage bytes: moved aside, empty store returned.
     func testRequiredKeysAreStrictLikeCodable() throws {
         let malformed = [
@@ -141,6 +178,14 @@ final class MasterStoreTests: XCTestCase {
             #"{"version":2,"activeProfile":"Default","profiles":[]}"#,
             // an entry missing its required "config"
             #"{"version":2,"activeProfile":"Default","profiles":{"Default":{"mcps":{"a":{"enabled":true,"lastEditView":"form"}}}}}"#,
+            // an entry missing its required "lastEditView"
+            #"{"version":2,"activeProfile":"Default","profiles":{"Default":{"mcps":{"a":{"enabled":true,"config":{}}}}}}"#,
+            // "enabled" is not a bool
+            #"{"version":2,"activeProfile":"Default","profiles":{"Default":{"mcps":{"a":{"enabled":"yes","config":{},"lastEditView":"form"}}}}}"#,
+            // an unknown view
+            #"{"version":2,"activeProfile":"Default","profiles":{"Default":{"mcps":{"a":{"enabled":true,"config":{},"lastEditView":"grid"}}}}}"#,
+            // not an object at all
+            #"[]"#,
         ]
         for (index, json) in malformed.enumerated() {
             try Data(json.utf8).write(to: url)
@@ -156,7 +201,7 @@ final class MasterStoreTests: XCTestCase {
     func testUnknownKeysAreIgnored() throws {
         let json = """
         {"version":2,"activeProfile":"Default",\
-        "profiles":{"Default":{"mcps":{}}},"unknownField":"surprise"}
+        "profiles":{"Default":{"mcps":{},"note":"x"}},"unknownField":"surprise"}
         """
         try Data(json.utf8).write(to: url)
         let result = MasterStoreIO.load(from: url)

@@ -1,0 +1,156 @@
+using ConnectorControl.Core.State;
+using ConnectorControl.Core.Tests.TestSupport;
+
+namespace ConnectorControl.Core.Tests.State;
+
+/// <summary>
+/// Mirror: Tests/ConnectorControlStateTests/ReviewModelTests.swift.
+/// The Review &amp; Apply sheet over a real subscription: a document on disk, a change to it, and
+/// the one button that lets the change reach Claude.
+/// </summary>
+public class ReviewModelTests
+{
+
+    /// <summary>Subscribes to the sample, then publishes a version of it with github gone and
+    /// dbt's arguments changed, and reads it into a pending update. Every read here goes through
+    /// RecomputePending, the source watcher's own read, rather than waiting on the watcher:
+    /// AppStateCollectionsTests proves the watcher delivers the change.</summary>
+    private static void Pending(AppStateHarness h, AppState state)
+    {
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam);
+        var sample = CollectionDocumentSamples.DataTeam;
+        var connectors = new Dictionary<string, CollectionDocument.Connector>(sample.Connectors, StringComparer.Ordinal);
+        connectors.Remove("github");
+        var dbt = connectors["dbt"];
+        connectors["dbt"] = new CollectionDocument.Connector(
+            new CollectionDocument.Launcher.Local("npx", ["-y", "@dbt/mcp@2"], CollectionPlatform.Mac),
+            dbt.Env, dbt.Needs, dbt.Additional);
+        AppStateHarness.WriteDocumentAt(new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors), path);
+        state.RecomputePending();
+        Assert.True(state.PendingUpdates.ContainsKey("Data team"));
+    }
+
+    [Fact]
+    public void RowsDescribeTheDiffAndApplyLandsIt()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Pending(h, state);
+
+        var model = new ReviewModel(state, "Data team");
+        Assert.Equal("Update to Data team", model.SheetTitle);
+        Assert.Equal("deletes github; changes dbt", model.Summary);
+        // Added, then removed, then changed.
+        Assert.Equal(["github", "dbt"], model.Rows.Select(r => r.Name));
+        Assert.Equal([ReviewModel.Kind.Removed, ReviewModel.Kind.Changed], model.Rows.Select(r => r.Kind));
+        Assert.Equal(["github", "dbt"], model.Rows.Select(r => r.Id));
+
+        var github = model.Rows[0];
+        Assert.Equal(state.Store.Collections["Data team"].Mcps["github"].Config.EditorText(), github.Before);
+        Assert.Null(github.After);
+        var dbt = model.Rows[1];
+        Assert.Equal(state.Store.Collections["Data team"].Mcps["dbt"].Config.EditorText(), dbt.Before);
+        Assert.Equal(state.PendingDocument("Data team")!.Connectors["dbt"].Config.EditorText(), dbt.After);
+        Assert.Contains("@dbt/mcp@2", dbt.After!, StringComparison.Ordinal);
+
+        Assert.Null(model.Apply());
+        Assert.Empty(state.PendingUpdates);
+        Assert.Empty(model.Rows);
+        Assert.Equal(string.Empty, model.Summary);
+        Assert.False(state.Store.Collections["Data team"].Mcps.ContainsKey("github"));
+        // A second Apply has nothing left to do and nothing to report.
+        Assert.Null(model.Apply());
+    }
+
+    [Fact]
+    public void AnAddedConnectorHasNoBeforeSide()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam);
+        var sample = CollectionDocumentSamples.DataTeam;
+        var connectors = new Dictionary<string, CollectionDocument.Connector>(sample.Connectors, StringComparer.Ordinal)
+        {
+            ["jira"] = new(new CollectionDocument.Launcher.Remote("https://mcp.jira.example/", CollectionDocument.Auth.Auto, "mcp-remote", [])),
+        };
+        AppStateHarness.WriteDocumentAt(new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors), path);
+        state.RecomputePending();
+        Assert.True(state.PendingUpdates.ContainsKey("Data team"));
+
+        var model = new ReviewModel(state, "Data team");
+        Assert.Equal(["jira"], model.Rows.Select(r => r.Name));
+        Assert.Equal(ReviewModel.Kind.Added, model.Rows[0].Kind);
+        Assert.Null(model.Rows[0].Before);
+        Assert.Equal(state.PendingDocument("Data team")!.Connectors["jira"].Config.EditorText(), model.Rows[0].After);
+        Assert.Null(model.Apply());
+        Assert.False(state.Store.Collections["Data team"].Mcps["jira"].Enabled, "an added connector arrives off");
+    }
+
+    [Fact]
+    public void ApplyRefusesWhenTheSourceMovedUnderTheSheet()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Pending(h, state);
+        var model = new ReviewModel(state, "Data team");
+        Assert.False(model.SourceMoved);
+        Assert.Equal(["github", "dbt"], model.Rows.Select(r => r.Name));
+
+        // The author commits again while the sheet is open.
+        var sample = CollectionDocumentSamples.DataTeam;
+        var connectors = new Dictionary<string, CollectionDocument.Connector>(sample.Connectors, StringComparer.Ordinal);
+        connectors.Remove("github");
+        connectors.Remove("notion");
+        var dbt = connectors["dbt"];
+        connectors["dbt"] = new CollectionDocument.Connector(
+            new CollectionDocument.Launcher.Local("npx", ["-y", "@dbt/mcp@3"], CollectionPlatform.Mac),
+            dbt.Env, dbt.Needs, dbt.Additional);
+        var path = h.Dir.File("data-team.json");
+        AppStateHarness.WriteDocumentAt(new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors), path);
+        state.RecomputePending();
+        Assert.Equal(["github", "notion"], state.PendingUpdates["Data team"].Removed);
+
+        // The rows on screen are not what would land.
+        Assert.Equal(ReviewModel.SourceMovedMessage, model.Apply());
+        Assert.True(model.SourceMoved);
+        Assert.True(state.PendingUpdates.ContainsKey("Data team"));   // nothing was applied
+        Assert.True(state.Store.Collections["Data team"].Mcps.ContainsKey("notion"));
+
+        model.Refresh();
+        Assert.False(model.SourceMoved);
+        Assert.Equal(["github", "notion", "dbt"], model.Rows.Select(r => r.Name));
+        Assert.Null(model.Apply());
+        Assert.Empty(state.PendingUpdates);
+        Assert.Equal(JsonValue.String("@dbt/mcp@3"),
+            state.Store.Collections["Data team"].Mcps["dbt"].Config.ValueAt(JsonPointer.Parse("/args/1")!));
+    }
+
+    [Fact]
+    public void ACollectionWithNothingPendingHasNoRows()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam);
+
+        var model = new ReviewModel(state, "Data team");
+        Assert.Empty(model.Rows);
+        Assert.Equal(string.Empty, model.Summary);
+        Assert.Null(model.Apply());
+    }
+    [Fact]
+    public void TheKindsGroupTheListInTheOrderTheSummaryReads()
+    {
+        Assert.Equal([ReviewModel.Kind.Added, ReviewModel.Kind.Removed, ReviewModel.Kind.Changed], ReviewModel.Kinds);
+        Assert.Equal(["Added", "Deleted", "Changed"], ReviewModel.Kinds.Select(ReviewModel.KindLabel));
+        Assert.Equal(ReviewModel.AddedLabel, ReviewModel.KindLabel(ReviewModel.Kind.Added));
+        Assert.Equal(ReviewModel.DeletedLabel, ReviewModel.KindLabel(ReviewModel.Kind.Removed));
+        Assert.Equal(ReviewModel.ChangedLabel, ReviewModel.KindLabel(ReviewModel.Kind.Changed));
+    }
+    [Fact]
+    public void TheSheetOwnsItsFooterButtons()
+    {
+        Assert.Equal("Cancel", ReviewModel.CancelButton);
+        Assert.Equal("Refresh", ReviewModel.RefreshButton);
+        Assert.Equal("Apply", ReviewModel.ApplyButton);
+    }
+}

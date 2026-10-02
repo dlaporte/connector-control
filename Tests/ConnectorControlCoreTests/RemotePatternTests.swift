@@ -1,6 +1,7 @@
 import XCTest
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/RemotePatternTests.cs
 final class RemotePatternTests: XCTestCase {
     private func config(command: String = "npx", args: [String]) -> JSONValue {
         .object(["command": .string(command),

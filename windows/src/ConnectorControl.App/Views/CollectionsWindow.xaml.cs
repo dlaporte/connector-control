@@ -1,0 +1,757 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+using System.Windows.Threading;
+using ConnectorControl.Core.State;
+
+namespace ConnectorControl.App.Views;
+
+/// <summary>
+/// The Collections window: the collections in the left pane, the selected one's connectors in the
+/// right, the header menu and the selection bar that act on them, and the five dialogs it puts in
+/// front of itself — Import, Review, Publish, Export and Copy. Layout, bindings, the native
+/// pickers, the three menus and the two formatted captions; every rule and string is
+/// CollectionsModel's.
+/// <para>
+/// Its model asks its questions through the <see cref="IDialogs"/> App builds, which owns each
+/// dialog to whichever of our windows is active rather than to this one, as the Mac window asks
+/// through AppState's. The model asks only while the user acts in this window, when this window
+/// is the active one, so the dialog lands on it all the same.
+/// </para>
+/// </summary>
+public partial class CollectionsWindow : Window
+{
+    private readonly AppState state;
+    private readonly IDialogs dialogs;
+    private readonly PropertyChangedEventHandler onModelChanged;
+    private readonly PropertyChangedEventHandler onStateChanged;
+    /// <summary>
+    /// Set the moment this window closes. What it guards is the deferred consume: a request
+    /// raised just before the close runs after it, and a dead window taking one would swallow it
+    /// — the next window to open would find nothing waiting.
+    /// </summary>
+    private bool closed;
+    /// <summary>
+    /// True while this window is writing the sidebar's selection into the model. The model's
+    /// Selected setter raises even when nothing changed, and that raise rebuilds the sidebar's
+    /// items, which can move its selection again: without this the two would take turns until
+    /// the stack ran out.
+    /// </summary>
+    private bool writingSelection;
+    /// <summary>One resync per burst of raises: a single action can raise several times.</summary>
+    private bool selectionResyncQueued;
+
+    public CollectionsWindow(AppState state, WindowRegistry windows, IDialogs dialogs)
+    {
+        InitializeComponent();
+        this.state = state;
+        this.dialogs = dialogs;
+        OpenEditor = windows.OpenEditor;
+        Model = new CollectionsModel(state, dialogs);
+        DataContext = Model;
+        onModelChanged = (_, _) => Refresh();
+        Model.PropertyChanged += onModelChanged;
+        // WindowRegistry keeps one of these and re-activates it, so the flyout can raise a request
+        // while it is already open: read on load AND on every change, or every request after the
+        // first is stranded.
+        onStateChanged = (_, e) =>
+        {
+            if (ObservableObject.Affects(e, nameof(AppState.CollectionsWindowRequest)))
+            {
+                ScheduleConsume();
+            }
+        };
+        state.PropertyChanged += onStateChanged;
+        // In code, not in XAML: every hookup the markup compiler numbers has to sit in this
+        // window's own tree, and this one has no element to sit on.
+        CommandBindings.Add(new CommandBinding(MakeActiveCommand, OnMakeActive, OnCanMakeActive));
+        Loaded += (_, _) => ScheduleConsume();
+        Closed += (_, _) =>
+        {
+            closed = true;
+            state.PropertyChanged -= onStateChanged;
+            Model.PropertyChanged -= onModelChanged;
+            Model.Dispose();
+        };
+        Refresh();
+    }
+
+    /// <summary>
+    /// The sidebar context menu's Make Active, as a command rather than a Click handler: a
+    /// handler or an x:Name on an element inside a <c>Setter.Value</c> takes one of this
+    /// window's connection ids, and WPF builds that subtree late enough that every id after it
+    /// arrives at the wrong element. The menu passes the collection it was raised over.
+    /// </summary>
+    public static RoutedCommand MakeActiveCommand { get; } = new(nameof(MakeActiveCommand), typeof(CollectionsWindow));
+
+    public CollectionsModel Model { get; }
+
+    /// <summary>
+    /// What this window last took from <see cref="AppState.CollectionsWindowRequest"/>. The
+    /// consuming is otherwise invisible — the request is cleared as it is read — so this is how a
+    /// test sees that a request raised while the window was open reached it.
+    /// </summary>
+    internal CollectionsWindowRequest? LastRequest { get; private set; }
+
+    /// <summary>
+    /// The two pickers this window puts in front of itself, and the four ways it presents its
+    /// five dialogs: Publish and Export are one dialog in the model's two modes. One overridable
+    /// bundle, because a test drives this window on the very dispatcher it lives on: a real modal
+    /// would block the test that opened it, and a real picker would wait for a person. The Copy
+    /// dialog is handed the refusal a failed copy leaves in this window's model as well, which it
+    /// cannot reach through CopyModel. Nothing here branches on how a dialog closed: whatever it
+    /// changed reaches this window through the model.
+    /// </summary>
+    internal sealed record Presenters(
+        Func<Window, string?> ChooseDocument,
+        Func<Window, string?> ChooseFolder,
+        Action<Window, ImportModel> ShowImport,
+        Action<Window, ReviewModel> ShowReview,
+        Action<Window, PublishModel> ShowPublish,
+        Action<Window, CopyModel, Func<string?>> ShowCopy);
+
+    internal static Presenters Live { get; } = new(
+        Pickers.Document,
+        Pickers.Folder,
+        ImportDialog.Show,
+        ReviewDialog.Show,
+        PublishDialog.Show,
+        CopyDialog.Show);
+
+    internal Presenters Surfaces { get; set; } = Live;
+
+    /// <summary>
+    /// Where a connector's editor opens: the registry, which brings a connector's editor forward
+    /// when it is already open rather than opening a second. Overridable for the same reason as
+    /// <see cref="Surfaces"/>: a test reads what would have opened.
+    /// </summary>
+    internal Action<EditTarget> OpenEditor { get; set; }
+
+    /// <summary>
+    /// The one caption built from a value rather than bound — the selection bar's ticked count, a
+    /// format — and whether the bar shows its actions, which follows that same count. Everything
+    /// else on this window is a binding the model raises.
+    /// </summary>
+    private void Refresh()
+    {
+        var ticked = Model.CheckedNames.Count;
+        SelectedCountText.Text = CollectionsModel.SelectedCount(ticked);
+        TickedBar.Visibility = ticked == 0 ? Visibility.Collapsed : Visibility.Visible;
+        if (!selectionResyncQueued)
+        {
+            selectionResyncQueued = true;
+            Dispatcher.BeginInvoke(DispatcherPriority.DataBind, new Action(ResyncSelection));
+        }
+    }
+
+    /// <summary>
+    /// Puts the model's selection back on the sidebar once a raise has been delivered to
+    /// everything listening. A raise that replaces the items with records no longer equal to the
+    /// selected one — making a collection active flips IsActive on all of them — clears the
+    /// list's own selection, and whether the one-way binding has re-pushed by then depends on the
+    /// order the notification reaches its listeners in. After it, the order no longer matters.
+    /// <c>SetCurrentValue</c> keeps the binding, and the SelectionChanged it causes writes
+    /// nothing, because the name it carries is already the model's.
+    /// </summary>
+    private void ResyncSelection()
+    {
+        selectionResyncQueued = false;
+        if (!closed && !Equals(Sidebar.SelectedValue, Model.Selected))
+        {
+            Sidebar.SetCurrentValue(Selector.SelectedValueProperty, Model.Selected);
+        }
+    }
+
+    // MARK: sidebar header
+
+    private void OnAddCollection(object sender, RoutedEventArgs e) => BuildSidebarMenu().IsOpen = true;
+
+    /// <summary>
+    /// The sidebar's plus: a new collection, then the two ways to bring one in. Import and
+    /// Subscribe carry their subtitles, because which of the two to use is the one question the
+    /// words alone do not answer. Built without being shown, so a test can read it.
+    /// </summary>
+    internal ContextMenu BuildSidebarMenu()
+    {
+        var menu = Menus.Anchored(AddCollectionButton, PlacementMode.Bottom);
+        menu.Items.Add(Menus.Item(CollectionsModel.NewButton, () => Act(Model.Create)));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(TwoLine(CollectionsModel.ImportButton, CollectionsModel.ImportSubtitle, () => Import(keepInSync: false)));
+        menu.Items.Add(TwoLine(CollectionsModel.SubscribeButton, CollectionsModel.SubscribeSubtitle, () => Import(keepInSync: true)));
+        return menu;
+    }
+
+    // MARK: collection header
+
+    private void OnMore(object sender, RoutedEventArgs e) => BuildCollectionMenu().IsOpen = true;
+
+    /// <summary>
+    /// The header's More: the model's list, in its order. The entries that do not apply are
+    /// already left out, and the two it dims arrive saying so. Built without being shown, so a
+    /// test can read it.
+    /// </summary>
+    internal ContextMenu BuildCollectionMenu()
+    {
+        var menu = Menus.Anchored(MoreButton, PlacementMode.Bottom);
+        foreach (var entry in Model.CollectionMenu)
+        {
+            if (entry is CollectionsModel.MenuEntry.Separator)
+            {
+                menu.Items.Add(new Separator());
+                continue;
+            }
+            var item = Menus.Item(CollectionsModel.Title(entry), () => Run(entry));
+            item.IsEnabled = CollectionsModel.IsEnabled(entry);
+            menu.Items.Add(item);
+        }
+        return menu;
+    }
+
+    /// <summary>
+    /// One entry of the More menu. Both publish entries open the same dialog: a published
+    /// collection's is its settings.
+    /// </summary>
+    private void Run(CollectionsModel.MenuEntry entry)
+    {
+        switch (entry)
+        {
+            case CollectionsModel.MenuEntry.MakeActive:
+                if (Model.Selected is { } collection)
+                {
+                    Act(() => Model.SwitchTo(collection));
+                }
+                break;
+            case CollectionsModel.MenuEntry.Rename:
+                Act(Model.Rename);
+                break;
+            case CollectionsModel.MenuEntry.Duplicate:
+                Act(() => Model.Duplicate());
+                break;
+            case CollectionsModel.MenuEntry.StartPublishing:
+            case CollectionsModel.MenuEntry.PublishingSettings:
+                PublishSelected();
+                break;
+            case CollectionsModel.MenuEntry.StopPublishing:
+                Act(Model.StopPublishing);
+                break;
+            case CollectionsModel.MenuEntry.ShowPublishedFile:
+                Reveal(Model.PublishedFilePath);
+                break;
+            case CollectionsModel.MenuEntry.ShowSourceFile:
+                Reveal(Model.SourceFilePath);
+                break;
+            case CollectionsModel.MenuEntry.ExportAll:
+                // The whole collection: the menu acts on the collection, not on what is ticked.
+                if (Model.Selected is { } shown)
+                {
+                    Surfaces.ShowPublish(this, new PublishModel(state, shown, mode: PublishModel.Mode.Export));
+                }
+                break;
+            case CollectionsModel.MenuEntry.MakeLocalCopy:
+                Act(Model.MakeLocalCopy);
+                break;
+            case CollectionsModel.MenuEntry.Refresh:
+                Act(Model.Refresh);
+                break;
+            case CollectionsModel.MenuEntry.StopSyncing:
+                Act(Model.StopSyncing);
+                break;
+            case CollectionsModel.MenuEntry.Delete:
+                Act(Model.Delete);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The Publish dialog over the collection on show. Publishing binds the whole collection, so
+    /// this one takes no subset. Shared by the More menu and a blocked publish's banner, so both
+    /// open the same dialog the same way.
+    /// </summary>
+    private void PublishSelected()
+    {
+        if (Model.Selected is { } collection)
+        {
+            Surfaces.ShowPublish(this, new PublishModel(state, collection));
+        }
+    }
+
+    /// <summary>The Mac's "Show in Finder": the document selected in its folder.</summary>
+    private static void Reveal(string? path)
+    {
+        if (path is null)
+        {
+            return;
+        }
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
+        {
+            // Settings' Show in Explorer does the same: explorer.exe failing to launch is not
+            // worth a sentence of its own, so it is a silent no-op rather than a crash.
+        }
+    }
+
+    // MARK: the header's plus
+
+    /// <summary>
+    /// A new connector in the collection on show, through the same editor a row opens.
+    /// </summary>
+    private void OnAddConnector(object sender, RoutedEventArgs e) => OpenEditor(Model.NewConnectorTarget());
+
+    // MARK: selection bar
+
+    private void OnCopyTo(object sender, RoutedEventArgs e) => BuildCopyMenu().IsOpen = true;
+
+    /// <summary>
+    /// Copy to: every other collection, a synced one listed but dimmed with the reason under its
+    /// name — a read-only mirror cannot take copies, and the picker says so rather than the copy
+    /// refusing after the fact — then New Collection. Opens upward, from the bottom of the window.
+    /// Built without being shown, so a test can read it.
+    /// </summary>
+    internal ContextMenu BuildCopyMenu()
+    {
+        var menu = Menus.Anchored(CopyToButton, PlacementMode.Top);
+        var destinations = Model.CopyDestinations;
+        foreach (var destination in destinations)
+        {
+            var name = destination.Name;
+            var item = destination.IsEnabled
+                ? Menus.Item(name, () => Copy(name))
+                : TwoLine(name, CollectionsModel.ReadOnlyNote, () => { });
+            item.IsEnabled = destination.IsEnabled;
+            menu.Items.Add(item);
+        }
+        // A lone collection has nowhere else to copy to, and its menu does not start with a separator.
+        if (destinations.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+        }
+        menu.Items.Add(Menus.Item(CollectionsModel.NewButton, () => Act(() => Model.CopyCheckedIntoNewCollection())));
+        return menu;
+    }
+
+    /// <summary>Straight through when nothing clashes; otherwise the Copy dialog asks about the clashes first.</summary>
+    private void Copy(string destination)
+    {
+        if (Model.CheckedNamesClashing(destination).Count == 0)
+        {
+            Act(() => Model.CopyChecked(destination));
+        }
+        else
+        {
+            Surfaces.ShowCopy(this, new CopyModel(Model, destination), () => Model.LastError);
+        }
+    }
+
+    /// <summary>
+    /// Export writes only the ticked connectors — what the bar's count says. The More menu's
+    /// Export All takes the whole collection instead.
+    /// </summary>
+    private void OnExportChecked(object sender, RoutedEventArgs e)
+    {
+        if (Model.Selected is { } collection)
+        {
+            Surfaces.ShowPublish(this, new PublishModel(state, collection, Model.ExportIntentForChecked(), PublishModel.Mode.Export));
+        }
+    }
+
+    private void OnDeleteChecked(object sender, RoutedEventArgs e) => Act(Model.DeleteChecked);
+
+    // MARK: menus
+
+    /// <summary>A two-line entry, its subtitle in this window's caption style.</summary>
+    private MenuItem TwoLine(string header, string subtitle, Action action) =>
+        Menus.Item(header, subtitle, (Style)FindResource("CaptionText"), action);
+
+    // MARK: panes
+
+    /// <summary>
+    /// The view-to-model half of the sidebar's selection, which the markup deliberately does not
+    /// bind. Only a real collection, and only a different one, reaches the model: a selection the
+    /// list cleared or re-resolved while its items were being replaced says nothing about which
+    /// collection the user wants to see.
+    /// </summary>
+    private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (writingSelection
+            || Sidebar.SelectedValue is not string name
+            || string.Equals(name, Model.Selected, StringComparison.Ordinal))
+        {
+            return;
+        }
+        writingSelection = true;
+        try
+        {
+            Model.Selected = name;
+        }
+        finally
+        {
+            writingSelection = false;
+        }
+    }
+
+    /// <summary>
+    /// Double-clicking a collection makes it the active one; the click before it selected it.
+    /// Resolved to the container the click landed on, so the empty space under the last item
+    /// does nothing rather than activating whatever happens to be selected.
+    /// </summary>
+    private void OnActivate(object sender, MouseButtonEventArgs e)
+    {
+        // PreviewMouseDoubleClick fires for every button, and a double right-click over a row is
+        // not a request to activate it.
+        if (e.ChangedButton == MouseButton.Left
+            && e.OriginalSource is DependencyObject source
+            && ItemsControl.ContainerFromElement(Sidebar, source) is ListBoxItem { DataContext: CollectionsModel.Item item })
+        {
+            Act(() => Model.SwitchTo(item.Name));
+        }
+    }
+
+    /// <summary>
+    /// Return on a collection makes it the active one, as a double-click does: the Mac list's
+    /// primary action answers both.
+    /// </summary>
+    private void OnSidebarKey(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter
+            && e.OriginalSource is DependencyObject source
+            && ItemsControl.ContainerFromElement(Sidebar, source) is ListBoxItem { DataContext: CollectionsModel.Item item })
+        {
+            Act(() => Model.SwitchTo(item.Name));
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// The same action, labelled: the context menu is what a keyboard and a screen reader reach,
+    /// and it acts on the collection it was raised over — which a right-click does not select.
+    /// </summary>
+    private void OnMakeActive(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (e.Parameter is CollectionsModel.Item item)
+        {
+            Act(() => Model.SwitchTo(item.Name));
+        }
+    }
+
+    /// <summary>
+    /// Greyed out for the collection that is already active, as the Mac's menu item is. The model
+    /// would leave the active one alone anyway, so this is how the entry looks, not what guards
+    /// it. The answer comes from the parameter, never from a DataContext: one ContextMenu instance
+    /// is shared by every container the item container style makes, so its inheritance context is
+    /// whatever claimed it last.
+    /// </summary>
+    private void OnCanMakeActive(object sender, CanExecuteRoutedEventArgs e) =>
+        e.CanExecute = e.Parameter is CollectionsModel.Item { IsActive: false };
+
+    /// <summary>
+    /// The tick changed state, which is how a screen reader's Toggle reaches it: WPF's automation
+    /// peer sets IsChecked and raises no Click. The binding catching up with the model changes it
+    /// too, so only a state the row does not already hold reaches the model.
+    /// </summary>
+    private void OnRowTicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox { DataContext: CollectionsModel.Row row } box && (box.IsChecked == true) != row.Checked)
+        {
+            KeepingRowFocus(() => Model.SetChecked(row.Name, box.IsChecked == true));
+        }
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// A Click on the tick stops where it lands. ButtonBase.Click bubbles, and the row the box
+    /// sits in is a Button whose Click opens the editor: ticking must never do that too.
+    /// </summary>
+    private void OnRowTickClicked(object sender, RoutedEventArgs e) => e.Handled = true;
+
+    /// <summary>
+    /// A click on a row, anywhere but its tick slot: the connector's editor, read-only on a synced
+    /// collection. One click, one open; a double-click asks twice for the same connector, and the
+    /// registry brings the editor already open forward.
+    /// </summary>
+    private void OnRowClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: CollectionsModel.Row row })
+        {
+            OpenEditor(Model.EditTargetFor(row.Name));
+        }
+    }
+
+    /// <summary>
+    /// The keys on a focused row, the Mac row's own: Return opens the editor, Space ticks the row
+    /// rather than clicking it, which is the checkbox's convention and keeps ticking reachable
+    /// from the keyboard, and Up and Down move to the row above or below, stopping at either end.
+    /// </summary>
+    private void OnRowKey(object sender, KeyEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: CollectionsModel.Row row })
+        {
+            return;
+        }
+        switch (e.Key)
+        {
+            case Key.Enter:
+                OpenEditor(Model.EditTargetFor(row.Name));
+                break;
+            case Key.Space:
+                KeepingRowFocus(() => Model.ToggleChecked(row.Name));
+                break;
+            case Key.Up:
+            case Key.Down:
+                if (Model.Neighbour(row.Name, e.Key == Key.Up ? -1 : 1) is { } next && RowBodyFor(next) is { } body)
+                {
+                    FocusRow(body);
+                }
+                break;
+            default:
+                return;
+        }
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// The tick slot takes the press for itself, so the row under it never becomes a pressed
+    /// button and cannot open the editor. It focuses the row, as a click on the Mac row does.
+    /// </summary>
+    private void OnTickSlotDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is DependencyObject slot && VisualTree.FindAncestor<Button>(slot) is { } body)
+        {
+            FocusRow(body);
+        }
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// A click anywhere in the slot ticks the row, whether or not it landed on the box. On a
+    /// read-only row the slot holds the lock, and the model leaves the row as it is.
+    /// </summary>
+    private void OnTickSlotUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: CollectionsModel.Row row })
+        {
+            KeepingRowFocus(() => Model.ToggleChecked(row.Name));
+        }
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Every tick goes through here. The model answers one with a new list of rows, and a new list
+    /// is new elements, so the row that held the focus goes and the focus with it: Space would
+    /// then tick once and do nothing after. This puts the focus back on the row of the same name
+    /// once the new rows are laid out. The Mac list keeps its rows by name, so its focus stays.
+    /// </summary>
+    private void KeepingRowFocus(Action tick)
+    {
+        var focused = FocusManager.GetFocusedElement(FocusManager.GetFocusScope(RowList)) is FrameworkElement { DataContext: CollectionsModel.Row row }
+            ? row.Name
+            : null;
+        tick();
+        if (focused is not null)
+        {
+            RowList.UpdateLayout();
+            if (RowBodyFor(focused) is { } body)
+            {
+                FocusRow(body);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The row takes focus, scrolled into view. Logical focus first: Focus() moves it only when it
+    /// can take the keyboard's too, and the logical one is where the keyboard returns when this
+    /// window is next active.
+    /// </summary>
+    private static void FocusRow(Button body)
+    {
+        FocusManager.SetFocusedElement(FocusManager.GetFocusScope(body), body);
+        body.Focus();
+        body.BringIntoView();
+    }
+
+    /// <summary>
+    /// The row of that name as the list draws it, or null when it has none. RowBody is its
+    /// template's root, so it is the first Button under the container.
+    /// </summary>
+    private Button? RowBodyFor(string name) =>
+        Model.Rows.FirstOrDefault(r => r.Name == name) is { } row
+        && RowList.ItemContainerGenerator.ContainerFromItem(row) is DependencyObject container
+            ? VisualTree.FindDescendant<Button>(container)
+            : null;
+
+    // MARK: banner strip
+
+    /// <summary>
+    /// The strip's one button. True says the news needs nothing from the file system and the
+    /// Review dialog is the whole answer; false says this window owes something else, and what is
+    /// what the banner is: a file for a source to locate, a folder for a write that failed — the
+    /// model refuses anything that is not what it asked for — or, for a publish stopped for
+    /// review, the Publish dialog.
+    /// </summary>
+    private void OnBannerAction(object sender, RoutedEventArgs e)
+    {
+        if (Model.BannerAction())
+        {
+            if (Model.Selected is { } collection)
+            {
+                Review(collection);
+            }
+            return;
+        }
+        switch (Model.Banner)
+        {
+            case CollectionBanner.Locate:
+                if (Surfaces.ChooseDocument(this) is { } path)
+                {
+                    Report(Model.LocateSource(path));
+                }
+                break;
+            case CollectionBanner.PublishFailed:
+                if (Surfaces.ChooseFolder(this) is { } folder)
+                {
+                    Report(Model.ChoosePublishFolder(folder));
+                }
+                break;
+            case CollectionBanner.PublishBlocked:
+                // Stopped for review, not for a folder: another folder would be refused with the
+                // same reason, so the answer is the Publish dialog, where the author reviews what
+                // it carries.
+                PublishSelected();
+                break;
+        }
+    }
+
+    // MARK: requests
+
+    /// <summary>
+    /// Below layout and render, because both paths into it run at the wrong moment for a modal:
+    /// <c>Loaded</c> fires inside <see cref="Window.Show"/>, before the registry has brought the
+    /// window forward, and a change notification arrives wherever the setter was called. A
+    /// picker opened from either would stand in front of a window that is not on screen yet.
+    /// </summary>
+    private void ScheduleConsume()
+    {
+        if (!closed)
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(Consume));
+        }
+    }
+
+    /// <summary>
+    /// What the flyout asked for, taken so nothing can act on it twice. A dialog shown here is
+    /// app-modal — ShowDialog disables every window on this thread, the hidden flyout included —
+    /// so no request can arrive while one is up, and nothing here replaces an open dialog. The Mac
+    /// sheets are window-modal, and the popover stays live beside them, which is why the Mac
+    /// window replaces a pending sheet and this one has nothing to replace.
+    /// </summary>
+    private void Consume()
+    {
+        // Queued below layout, so this can run after the window has gone: leave the request for
+        // whichever window opens next rather than taking it into a closed one.
+        if (closed || state.TakeCollectionsWindowRequest() is not { } request)
+        {
+            return;
+        }
+        LastRequest = request;
+        switch (request)
+        {
+            case CollectionsWindowRequest.Review review:
+                Review(review.Collection);
+                break;
+            case CollectionsWindowRequest.Publish publish:
+                // A publish the app stopped for review, for the collection it names — which need
+                // not be the one this window is showing. The dialog is where the author answers it.
+                Model.Selected = publish.Collection;
+                Surfaces.ShowPublish(this, new PublishModel(state, publish.Collection));
+                break;
+            case CollectionsWindowRequest.Select select:
+                Model.Selected = select.Collection;
+                break;
+        }
+    }
+
+    // MARK: dialogs
+
+    /// <summary>
+    /// Import and Subscribe are the same picker: one document, and what happens to it is the
+    /// dialog's question rather than the picker's.
+    /// </summary>
+    private void Import(bool keepInSync)
+    {
+        if (Surfaces.ChooseDocument(this) is not { } path)
+        {
+            return;
+        }
+        var model = new ImportModel(state, path, Model.Selected);
+        // Subscribe is Import with the second mode already chosen: the picker that opened it
+        // said which of the two the user asked for.
+        if (keepInSync)
+        {
+            model.ImportMode = ImportModel.Mode.KeepInSync;
+        }
+        Surfaces.ShowImport(this, model);
+    }
+
+    private void Review(string collection)
+    {
+        Model.Selected = collection;
+        Surfaces.ShowReview(this, new ReviewModel(state, collection));
+    }
+
+    // MARK: refusals
+
+    /// <summary>
+    /// One collection action and the refusal it may leave behind. The model records it in
+    /// <see cref="CollectionsModel.LastError"/> rather than publishing a line for it, and this
+    /// window has no room for one, so it is said the way every other refusal here is said.
+    /// </summary>
+    private void Act(Action action)
+    {
+        action();
+        Report(Model.LastError);
+    }
+
+    private void Report(string? failure)
+    {
+        if (failure is not null)
+        {
+            dialogs.Inform(failure, null);
+        }
+    }
+}
+
+/// <summary>
+/// One header pill's words, from <see cref="CollectionsModel.Title(CollectionsModel.Pill)"/>; this
+/// exists only because XAML cannot call a method.
+/// </summary>
+public sealed class CollectionPillTitleConverter : OneWayConverter<CollectionsModel.Pill>
+{
+    protected override object? Map(CollectionsModel.Pill pill, object? parameter) => CollectionsModel.Title(pill);
+}
+
+/// <summary>
+/// One sidebar collection's chain tooltip. The rule and the wording are both
+/// <see cref="CollectionsModel.SyncedGlyphTooltip"/>'s, which answers null where there is no
+/// chain to explain; this exists only because XAML cannot call a method.
+/// </summary>
+public sealed class CollectionSourceTooltipConverter : OneWayConverter<CollectionsModel.Item>
+{
+    protected override object? Fallback => null;
+
+    protected override object? Map(CollectionsModel.Item item, object? parameter) => CollectionsModel.SyncedGlyphTooltip(item);
+}
+
+/// <summary>
+/// One connector row's spoken name, which says it opens that connector's editor, from
+/// <see cref="CollectionsModel.EditLabel"/>; this exists only because XAML cannot call a method.
+/// </summary>
+public sealed class EditLabelConverter : OneWayConverter<string>
+{
+    protected override object? Map(string connector, object? parameter) => CollectionsModel.EditLabel(connector);
+}

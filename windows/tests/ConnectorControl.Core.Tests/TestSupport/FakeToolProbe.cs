@@ -2,10 +2,10 @@ namespace ConnectorControl.Core.Tests.TestSupport;
 
 /// <summary>
 /// A machine with everything installed (<c>/fake/bin/&lt;tool&gt;</c>, version 1.0.0) unless a
-/// test sets <see cref="Statuses"/>. Records what was probed; AppState calls it from a pool
-/// thread, so <see cref="Probed"/> and <see cref="Batches"/> lock both the write inside
-/// <see cref="Probe"/> and every read a test does — a pool thread can still be inside
-/// <c>AddRange</c> when the test thread reads <c>Count</c>.
+/// test sets <see cref="Statuses"/>. Records what was probed; AppState calls it from the host's
+/// Background work, which the harness runs on whichever thread drains its queue (a WPF test's
+/// dispatcher thread, say), so <see cref="Probed"/> and <see cref="Batches"/> lock both the
+/// write inside <see cref="Probe"/> and every read a test does.
 /// </summary>
 public sealed class FakeToolProbe : IToolProbe
 {

@@ -17,9 +17,246 @@ bullet once the section is about to ship.
 
 ### macOS
 
+- Opening a connector whose editor is already open brings that editor forward even if the
+  connector was switched on or off in the meantime, rather than opening a second editor for
+  it, as on Windows.
+- Escape cancels every sheet in the Collections window, and the connector editor, as their
+  Cancel buttons do.
+- A connector editor left open in 1.3 that macOS reopens after the upgrade closes itself,
+  rather than stand empty: it cannot say which collection it was editing.
+- In the Collections window, a click on a connector's tick or row no longer leaves the focus
+  ring around its box. The ring shows only when the keyboard moves focus to a row (Tab into
+  the list, or Up and Down), as the Windows row's focus rectangle does.
+
 ### Windows
 
+- The connector editor and the Collections window's dialogs open with the keyboard in their
+  first text field, as on the Mac: the connector's name in the editor, the new collection's
+  name in Subscribe.
+- In the Collections window, Return on a collection in the sidebar makes it the active one,
+  as a double-click does and as it already did on the Mac.
+- Connectors arriving from a shared collection go through the same check as ones typed
+  into the editor: a Server URL, header name, client ID or client secret containing
+  `& | < > ^ "` or a space, or scopes containing any of those characters other than a
+  space, is refused, because Claude Desktop hands the `cmd /c npx` launcher's arguments
+  to cmd.exe unescaped. The Import sheet lists such a connector as skipped and names the
+  field, and it stays out of the import and of later updates. A Mac writes bare `npx`,
+  so the same document imports whole there.
+- A connector launched through the command shell that uses `${COLLECTION_DIR}` is
+  cautioned when the folder that token stands for holds `& | < > ^ "` or a space, as an
+  ordinary Windows folder name may: cmd.exe would read those as commands.
+- The installer, the updater and the small launcher beside the app are built for the PC's
+  own processor, so an Arm PC runs them natively instead of under x86 emulation. They
+  come from Velopack 1.2.158, up from 1.2.0, and the app's update code moves with them.
+
 ### Both platforms
+
+- New Collection, under the Collections window's sidebar +, makes an empty collection and
+  leaves the active one as it was, so Claude's config is not touched. Before, it copied the
+  active collection's connectors and switched to the copy. Add connectors with the list's +,
+  then make the new collection active once it holds what you want.
+- "Delete" is the one word for deleting: the selection bar's button and its question
+  ("Delete “<name>”?", "Delete 3 connectors?"), the published-file question and its
+  button, the editor's Delete argument and Delete variable, "was deleted outside this
+  editor", the Review sheet's **Deleted** group and the "deletes …" in a change summary
+  all say Delete where they said Remove.
+- In "Also delete <file> from the folder?", asked by Stop Publishing and by Delete of a
+  published collection, Return and Escape both answer Keep. Delete, shown as the
+  destructive answer, needs a click; before, Return deleted the file, and on the Mac
+  Escape did nothing.
+- In the Collections window, clicking a connector's row opens its editor, and the
+  pencil at the end of the row is gone, so what the connector runs has the room. A click
+  on or beside a row's tick ticks it instead. The rows highlight under the pointer, and
+  from the keyboard the arrow keys move between them, Return opens the editor and Space
+  ticks.
+- Profiles are now collections. Every profile you had is a collection with the same name
+  and connectors, and the master list file is unchanged.
+- Export writes a collection, or the connectors you tick, as a document. Import brings
+  one in as copies into a collection of your own, and Subscribe keeps it as a read-only
+  collection that follows the file. The Import sheet (a dialog on Windows, as every
+  sheet named here is) says what will happen to each connector before anything does; a
+  file it cannot read shows why, with no Import button.
+- An imported name that is already taken can replace the old connector, keeping the
+  secrets and paths you filled in, land beside it as `<name> 2`, or be left out. Copies
+  arrive switched off, and the editor names the collection each came from and the day it
+  arrived.
+- A subscribed collection is read-only apart from your secrets, your paths and which
+  connectors are on: its rows show a lock, the editor opens locked and says what you can
+  change, and Add Connector is disabled. If the author changes or deletes a connector
+  while its editor is open, Save refuses and says which, rather than write the old
+  version back. Make Local Copy takes the whole collection into one of your own.
+- A change at a subscribed collection's source arrives for review: Review & Apply shows the
+  before and after of every connector, nothing lands until you apply it, and your filled
+  values survive. Refresh re-reads at once, Locate finds the file on a new machine, and
+  Stop Syncing makes the collection yours, after asking.
+- A placeholder is a value a document asks each machine for; a connector waiting on one
+  says "needs your value" or "needs your path", with the author's hint.
+  `${COLLECTION_DIR}` is the document's folder: where a subscribed collection found it, or
+  the publish folder on the publishing machine. In a local collection this machine does
+  not publish, the connector's row says it has no folder.
+- Start Publishing writes a local collection's document to a folder in a repository or
+  synced drive and rewrites it whenever what the collection runs changes; turning a
+  connector on or off never republishes. Publishing Settings changes what a published
+  collection shares. Deleting a published collection, or Stop Publishing in the
+  Collections window, asks whether to delete the document too; Keep is the default.
+- The Publish sheet lists every environment value, which travels as a hint unless you
+  tick share value, and every argument that looks like a path on this machine, which
+  travels as written unless you tick it to become a placeholder. The token, header value
+  or client secret in a remote connector's Authentication fields always travels as a
+  placeholder, and a preview shows every byte before it leaves, flagging any argument or
+  shared value that looks like a credential, a header or URL query or fragment parameter
+  named like a secret or holding one, a URL parameter whose name is itself a token, a URL
+  path segment that looks like a key, and a URL with a user name or password in it. A
+  value that only refers to a credential kept elsewhere (`Bearer ${API_TOKEN}`,
+  `Bearer $API_TOKEN` with the name in capitals, a placeholder) "refers to a credential",
+  and a URL user with no password "names a user"; either one later given the credential
+  itself waits for review. Each URL path segment and bare parameter is a line of its own,
+  so a new one that looks like a key waits for review too.
+  A header passed as an argument is read as a header, with or without a space after the
+  colon (`Authorization:Bearer …`), so mcp-remote's `--header "Authorization:${AUTH}"`
+  reads "refers to a credential".
+- The sheet also lists every mark it could not place and every path this machine keeps
+  back that the document would otherwise carry as written, a copy of a ticked path in any
+  field included, all at once, each with its connector and field; Publish and Export wait
+  until every one is ticked where it now sits, forgotten or released. The folder a
+  collection publishes into never travels: Use `${COLLECTION_DIR}` answers it by rewriting
+  the connector.
+- A path marked on your other machine, in a collection published from there, is kept back
+  from every collection this machine publishes, and stays kept back once that machine drops
+  the mark, stops publishing the collection or deletes it, even when the change arrives
+  while this machine is off. Release it in this machine's Publish sheet to let it travel.
+- A path you marked stays kept back until you release it, even after you forget its mark
+  (Forget Mark takes the mark off the record, not the path off this machine's list), or
+  the argument or the connector that held it is deleted and the sheet is published again
+  with no row for it: put back later, it is refused and listed in the sheet. Before, that
+  Publish forgot it, so the path travelled as written once it came back.
+- A Release belongs to the collection it was given in. A collection made later under a
+  deleted one's name, or renamed onto it, no longer inherits it: its sheet lists the path
+  and Release answers it there. Before, the path travelled in the new collection unlisted.
+- A publish that fails says so on the collection banner, with Choose Folder and Stop
+  Publishing, and pressing Publish again retries the write at once. The banner goes if the
+  collection stops publishing, or is deleted, on your other machine. A path marked for
+  others to supply survives added, deleted or reordered arguments, an in-place
+  correction and a connector rename; if the app can no longer place it, or the document
+  would carry a kept-back path or the publish folder in another connector, publishing
+  stops rather than write it, the document already in the folder is left as it was, and
+  the banner names the connector to open Publishing Settings for.
+- A publish that happens on its own no longer sends a connector you haven't reviewed, or a
+  new credential in one you have. A connector added to a published collection, copied or
+  imported into it, or added on your other machine, and a connector edited so it now holds
+  something that looks like a credential, in an argument, a shared value, a header or its
+  URL, hold the publish with "“<connector>” hasn’t been reviewed for publishing." or
+  "“<connector>” may now carry a credential." and Publishing Settings; the folder keeps
+  its document until you press Publish in the sheet, and automatic publishing then
+  resumes. Publish reviews only what the sheet showed, so a connector that arrives while
+  the sheet is open waits until the sheet is opened again. Other edits, renames and
+  deletions publish on their own as before. Before, all of it was published on the next
+  save without a preview.
+- The Collections window lists every collection beside its connectors, and every control
+  in it sits on what it acts on. The sidebar's + offers New Collection, Import ("Adds
+  copies you own") and Subscribe ("Stays in sync, read-only"). The header shows the
+  collection's name, an Active, Published or Subscribed pill where one applies, and a ⋯
+  menu. Under the name it counts the collection's connectors, "14 connectors", and adds
+  why a subscribed collection's source could not be read when that is so. The ⋯ lists
+  only what applies to that collection: Make Active, Rename, Duplicate or Make Local
+  Copy, Start Publishing or Publishing Settings and Stop Publishing, Show Published File
+  or Show Source File, Refresh, Stop Syncing, Export All and Delete. The + beside the
+  count, under the ⋯, adds a connector. Double-clicking a collection in the sidebar makes
+  it active; double-clicking the active one does nothing.
+- A change that alters nothing Claude runs, such as renaming or deleting a collection
+  other than the active one, leaves Claude's config alone and raises no Restart Required.
+- Each row says what its connector runs: a remote connector's host (with its scheme for
+  one Claude reaches by URL alone, rather than through mcp-remote), or a local one's
+  program, paths, URLs and package names. The column leaves out the values of flags named
+  for secrets, `KEY=value` words, a URL's user and query, random-looking strings and
+  anything it does not recognise. It is a best-effort mask, not a guarantee.
+- Ticking rows fills the empty bar at the foot of the window with a selection bar. Copy
+  to copies the ticked connectors into another local collection, or into a new one it
+  asks you to name; a subscribed collection is listed but cannot take copies. The copies
+  arrive switched off and record where they came from, and a name the destination
+  already holds can replace the one there, land beside it as `<name> 2`, which is the
+  default, or be left out. Replacing a connector in the active collection applies at
+  once. Export writes the ticked connectors as a document.
+- Delete takes out any number of ticked connectors at once. It asks first, naming the
+  connector or the count, and says a copy remains in Backups; the connector editor no
+  longer has a Delete button of its own.
+- Duplicate copies a whole local collection into a new one exactly as it stands, each
+  connector's switch included, without marking anything as imported. The copy does not
+  become active, so Claude's config is unchanged.
+- The popover (Mac) and flyout (Windows) now only run the active collection: they switch
+  collections and turn connectors on and off. Adding and editing connectors moved to the
+  Collections window, and the chip's menu lists the collections, then Manage Collections.
+- The collection chip carries a chain when the collection you are in comes from a shared
+  document, and an amber dot when that document has changes waiting. Its menu marks
+  every subscribed collection too: on Windows with the chain and the dot; on the Mac
+  with the chain as the row's icon and "· update available" after the name, since a
+  macOS menu row draws one image. A collection with news says so above the connector
+  list, with the button that answers it.
+- Saving a connector that another local collection holds an identical copy of offers, in
+  one checkbox, to apply the same change there too.
+- The editor numbers its argument rows from 1, so a message naming "argument 2" points at
+  the row marked 2; a screen reader names each field "Argument 2" and so on.
+- Restoring a backup of Claude's configuration puts it back into the collection it was
+  taken from, and makes that collection active. A backup from an earlier version carries
+  no record, and goes into the active collection.
+- Connectors found in Claude's configuration at launch are taken into the store only
+  while the active collection is the one that file was written from, so a relaunch after
+  another machine switched collections no longer pours one collection's connectors into
+  another. Profiles have had that flaw since 1.1.
+- A connector added to Claude's configuration outside the app, by an installer or a hand
+  edit, while a subscribed collection is active goes into a local collection: the one
+  Claude's configuration was last applied from if that is local, else the first local one
+  by name, else a new, empty one named "Default" ("Default 2" and so on if that is
+  taken). Before, it went into the subscribed collection, where it could be neither
+  edited nor deleted, and the next Review & Apply deleted it from Claude. The notification
+  names where it went; at launch, when nothing is notified, the banner does. The same
+  holds when the collections file can't be read for a moment while the app is running, as
+  when a sync tool is halfway through writing it.
+- When the active collection has no connectors, the popover (Mac) and flyout (Windows) say
+  "No connectors in “<collection>”." with a Manage Collections button beneath, which opens
+  the Collections window on that collection. Before, they said "No connectors configured
+  yet." and offered nothing.
+- The Backups caption in Settings ▸ Storage names the three files backed up before every
+  change: Claude’s config, the master list and collections.json. It said "Both config
+  files".
+- A backup that records no collection, such as the first-run original or one from an
+  earlier version, is refused while a subscribed collection is active, before the
+  confirmation: "“<name>” is subscribed, so its connectors are the author’s. Make a local
+  collection active, then restore." Before, it was restored into the subscribed collection,
+  where its connectors could be neither edited nor deleted.
+- Deleting the active collection makes the first local collection with connectors active,
+  by name, and falls back to the first remaining collection by name only when there is
+  none. Before, the first remaining collection by name took over even when it was
+  subscribed or empty, which emptied Claude's config.
+- Delete Collection asks "Delete Collection “<name>”?" and says what goes with it: its
+  connectors ("Its 3 connectors are deleted with it.", or "It has no connectors."), but not
+  their copies in other collections, nor a subscribed collection's source file; the
+  collection that becomes active, when it is the active one; and, when it held connectors,
+  that a copy remains in Backups. Before, it said only "Its connector list is removed;
+  backups keep prior states."
+- A master list that can't be read is restored from its newest backup that can be, so
+  every collection, subscription and published setting survives. It is still kept aside
+  as `mcps.corrupt.<time>.json`, and the banner says "…and restored from the backup of
+  <date and time>." Only when no backup can be read is it rebuilt from Claude's config, as
+  before, which kept only the connectors Claude was running.
+- Import's "Add to a collection" starts on the collection selected in the Collections
+  window when that one is local, rather than always on the active collection, and its
+  target picker ends with New Collection, which asks for a name and imports the copies
+  into a new, empty local collection that does not become active. An empty name is refused,
+  as Copy to ▸ New Collection refuses it, and the collection is made only when the import
+  lands: a document that can no longer be read by then makes nothing, and the sheet says
+  why.
+- In a subscribed collection, a local server authored on the other platform is marked on
+  its row; remote connectors cross either way.
+- A folder the app watches — Claude's config folder, the master list's, or a subscribed
+  collection's — that is deleted and recreated, or replaced wholesale by a sync client,
+  is picked up again.
+- Two backups taken in the same millisecond list, restore and prune newest first;
+  before, the newer one could list below the older and be pruned in its place.
+- A collections file with nothing in it, which a launch writes when nothing is
+  published or subscribed, is read as empty. Before, it was taken for an unreadable
+  file from the second launch on, and Publish and Subscribe refused with "Collections
+  could not be saved: the collections file is unreadable."
 
 ### Release pipeline
 

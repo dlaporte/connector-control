@@ -3,6 +3,7 @@ using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests.State;
 
+/// <summary>Mirror: Tests/ConnectorControlStateTests/AppStateCommandTests.swift</summary>
 public class AppStateCommandTests
 {
     [Fact]
@@ -71,12 +72,12 @@ public class AppStateCommandTests
         using var h = new AppStateHarness();
         h.Settings.ConfirmBeforeRestart = false;
         h.Settings.LastApplyDate = h.Now;
-        h.Claude.IsRunning = true;
-        h.Claude.LaunchDate = h.Now.AddHours(-1);
+        h.ClaudeRunningSince(1);
         using var state = h.Create();
         Assert.True(state.NeedsClaudeRestart);
         h.Claude.RestartResult = "Claude didn’t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again.";
         await state.RestartClaudeAsync();
+        Assert.Equal(1, h.Ui.Pending);   // the completion is posted through the host, not run inline
         h.Ui.Pump();
         Assert.Equal(h.Claude.RestartResult, state.LastError);
         Assert.True(state.NeedsClaudeRestart);
@@ -88,6 +89,8 @@ public class AppStateCommandTests
         Assert.Equal(h.Claude.RestartResult, state.LastError);
     }
 
+    /// <summary>C#-only: the Mac's restart reports through a completion handler and cannot throw,
+    /// while Windows awaits a Task that can.</summary>
     [Fact]
     public async Task RestartExceptionOutsideTheLaunchGuardStillCompletesWithAMessage()
     {
@@ -103,14 +106,16 @@ public class AppStateCommandTests
         Assert.Equal([TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(20)], h.Delays.Pending.Select(d => d.Delay).ToArray());
     }
 
+    /// <summary>C#-only: Windows relaunches through explorer.exe, which reports success before Claude
+    /// appears, so it looks again 20 s later; the Mac's restarter launches Claude itself and
+    /// reports a failed launch through its completion.</summary>
     [Fact]
     public async Task ARelaunchThatSilentlyFailedIsReportedTwentySecondsLater()
     {
         using var h = new AppStateHarness();
         h.Settings.ConfirmBeforeRestart = false;
         h.Settings.LastApplyDate = h.Now;
-        h.Claude.IsRunning = true;
-        h.Claude.LaunchDate = h.Now.AddHours(-1);
+        h.ClaudeRunningSince(1);
         using var state = h.Create();
         // RestartAsync reports success: explorer.exe accepted the AUMID. Claude never appeared.
         h.Claude.OnRestart = () =>
@@ -137,8 +142,7 @@ public class AppStateCommandTests
         using var h = new AppStateHarness();
         h.Settings.ConfirmBeforeRestart = false;
         h.Settings.LastApplyDate = h.Now;
-        h.Claude.IsRunning = true;
-        h.Claude.LaunchDate = h.Now.AddHours(-1);
+        h.ClaudeRunningSince(1);
         using var state = h.Create();
         state.LastError = "old banner";
         h.Claude.OnRestart = () => h.Claude.LaunchDate = h.Now.AddSeconds(1);
@@ -156,8 +160,7 @@ public class AppStateCommandTests
         h.Notifier.ActivateRestart();   // stale click: nothing pending
         Assert.Equal(0, h.Claude.RestartCalls);
 
-        h.Claude.IsRunning = true;
-        h.Claude.LaunchDate = h.Now.AddHours(-1);
+        h.ClaudeRunningSince(1);
         state.SetEnabled("aws-mcp", false);
         Assert.True(state.NeedsClaudeRestart);
         h.Notifier.ActivateRestart();
@@ -170,8 +173,7 @@ public class AppStateCommandTests
     {
         using var h = new AppStateHarness();
         var state = h.Create();
-        h.Claude.IsRunning = true;
-        h.Claude.LaunchDate = h.Now.AddHours(-1);
+        h.ClaudeRunningSince(1);
         state.SetEnabled("aws-mcp", false);
         Assert.True(state.NeedsClaudeRestart);   // a pending restart, so ActivateRestart would act if still wired up
         state.Dispose();
@@ -185,8 +187,7 @@ public class AppStateCommandTests
         using var h = new AppStateHarness();
         h.Settings.ConfirmBeforeRestart = false;
         h.Settings.LastApplyDate = h.Now;
-        h.Claude.IsRunning = true;
-        h.Claude.LaunchDate = h.Now.AddHours(-1);
+        h.ClaudeRunningSince(1);
         var state = h.Create();
         await state.RestartClaudeAsync();
         h.Ui.Pump();
@@ -211,107 +212,31 @@ public class AppStateCommandTests
     }
 
     [Fact]
-    public void SwitchProfileAppliesImmediately()
+    public void SwitchCollectionAppliesImmediately()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        h.Dialogs.NextPromptAnswer = "Work";
-        state.NewProfile();
-        Assert.Equal("Work", state.ActiveProfile);
+        Assert.Null(state.CreateActiveCopy("Work"));
+        Assert.Equal("Work", state.ActiveCollection);
         state.SetEnabled("aws-mcp", false);
         Assert.Equal(["scoutbook", "service-now"], AppStateHarness.Keys(h.ClaudeServers().Keys));
 
         h.Settings.LastApplyDate = null;
-        state.SwitchProfile("Default");
-        Assert.Equal("Default", state.ActiveProfile);
+        state.SwitchCollection("Default");
+        Assert.Equal("Default", state.ActiveCollection);
         Assert.Equal(["aws-mcp", "scoutbook", "service-now"], AppStateHarness.Keys(h.ClaudeServers().Keys));
         Assert.Equal(h.Now, h.Settings.LastApplyDate);
-        Assert.Equal("Default", h.StoreOnDisk().ActiveProfile);
+        Assert.Equal("Default", h.StoreOnDisk().ActiveCollection);
     }
 
     [Fact]
-    public void SwitchProfileIgnoresAnUnknownName()
+    public void SwitchCollectionIgnoresAnUnknownName()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        state.SwitchProfile("Nope");
-        Assert.Equal("Default", state.ActiveProfile);
+        state.SwitchCollection("Nope");
+        Assert.Equal("Default", state.ActiveCollection);
         Assert.Null(state.LastError);
         Assert.Null(h.Settings.LastApplyDate);
-    }
-
-    [Fact]
-    public void NewProfilePromptTextAndCancel()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        h.Dialogs.NextPromptAnswer = null;
-        state.NewProfile();
-        Assert.Equal(new FakeDialogs.PromptCall("New Profile", ""), h.Dialogs.Prompts[0]);
-        Assert.Equal(["Default"], state.ProfileNames);
-
-        h.Dialogs.NextPromptAnswer = "Work";
-        state.NewProfile();
-        Assert.Equal(["Default", "Work"], state.ProfileNames);
-        Assert.Equal(["aws-mcp", "scoutbook", "service-now"], state.SortedNames);   // a COPY of the active profile
-        Assert.Equal(h.Now, h.Settings.LastApplyDate);
-    }
-
-    [Fact]
-    public void NewProfileErrorsGoToLastError()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        h.Dialogs.NextPromptAnswer = "Default";
-        state.NewProfile();
-        Assert.Equal("A profile named “Default” already exists.", state.LastError);
-        h.Dialogs.NextPromptAnswer = "   ";
-        state.NewProfile();
-        Assert.Equal("Name must not be empty.", state.LastError);
-        Assert.Equal(["Default"], state.ProfileNames);
-    }
-
-    [Fact]
-    public void RenameProfilePrefillsTheActiveName()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        h.Dialogs.NextPromptAnswer = "Main";
-        state.RenameProfile();
-        Assert.Equal(new FakeDialogs.PromptCall("Rename Profile", "Default"), h.Dialogs.Prompts[0]);
-        Assert.Equal("Main", state.ActiveProfile);
-        Assert.Equal("Main", h.StoreOnDisk().ActiveProfile);
-        Assert.Equal(h.Now, h.Settings.LastApplyDate);
-    }
-
-    [Fact]
-    public void DeleteProfileConfirmTextAndLastProfileError()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        state.DeleteProfile();
-        Assert.Equal(new FakeDialogs.ConfirmCall("Delete Profile “Default”?", "Its connector list is removed; backups keep prior states.", "Delete", "Cancel", true), h.Dialogs.Confirms[0]);
-        Assert.Equal("Can’t delete the last profile.", state.LastError);
-        Assert.Equal(["Default"], state.ProfileNames);
-    }
-
-    [Fact]
-    public void DeleteProfileSwitchesToTheAlphabeticallyFirstRemaining()
-    {
-        using var h = new AppStateHarness();
-        using var state = h.Create();
-        h.Dialogs.NextPromptAnswer = "Zeta";
-        state.NewProfile();
-        h.Dialogs.NextPromptAnswer = "Work";
-        state.NewProfile();
-        Assert.Equal("Work", state.ActiveProfile);
-        h.Dialogs.NextConfirm = false;
-        state.DeleteProfile();
-        Assert.Equal(["Default", "Work", "Zeta"], state.ProfileNames);   // cancelled
-        h.Dialogs.NextConfirm = true;
-        state.DeleteProfile();
-        Assert.Equal(["Default", "Zeta"], state.ProfileNames);
-        Assert.Equal("Default", state.ActiveProfile);
-        Assert.Equal("Default", h.StoreOnDisk().ActiveProfile);
     }
 }

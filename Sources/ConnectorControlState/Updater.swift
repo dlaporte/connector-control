@@ -12,6 +12,6 @@ public protocol Updater: AnyObject {
     var automaticallyDownloadsUpdates: Bool { get set }
     /// Fires when Sparkle changes the flag from its own dialog.
     var automaticallyDownloadsUpdatesPublisher: AnyPublisher<Bool, Never> { get }
-    /// Settings ▸ Check for Updates…; Sparkle shows the result.
+    /// Settings ▸ Check for Updates; Sparkle shows the result.
     func checkForUpdates()
 }

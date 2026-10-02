@@ -64,10 +64,21 @@ echo "- App data is left in place either way. Anything a preview feature wrote t
 echo
 echo "### Changes planned for v$NEXT (CHANGELOG.md)"
 echo
-# A preview can be cut before CHANGELOG.md grows its "## v$NEXT" section, so tolerate
-# changelog-section.sh's exit 1 for a section that doesn't exist yet rather than failing the
-# preview over it; --quiet keeps that from rendering as a GitHub error annotation.
-scripts/release/changelog-section.sh --quiet "v$NEXT" || true
+# preview.yml's derive step has already checked that "## v$NEXT" exists, so any failure here
+# (a missing section, a missing script, an awk error) fails the preview under pipefail rather
+# than publishing notes without their changes.
+#
+# A sub-heading with no bullets yet stays in CHANGELOG.md until the version ships, but a
+# tester reading these notes should not meet an empty heading, so drop those here. The ones
+# kept are demoted to ####, so they sit under this section's own ### heading rather than
+# beside it.
+scripts/release/changelog-section.sh "v$NEXT" \
+  | awk '
+      /^### / { if (heading != "" && body != "") printf "%s", held; heading = $0; sub(/^### /, "#### ", heading); held = heading ORS; body = ""; next }
+      heading != "" { held = held $0 ORS; if ($0 ~ /[^[:space:]]/) body = body $0; next }
+      { print }
+      END { if (heading != "" && body != "") printf "%s", held }
+  '
 echo
 echo "### Commits since $BASE_LABEL"
 echo

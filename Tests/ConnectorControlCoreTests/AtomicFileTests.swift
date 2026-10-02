@@ -2,6 +2,7 @@ import XCTest
 import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/AtomicFileTests.cs
 final class AtomicFileTests: XCTestCase {
     var tempDir: TempDir!
     var dir: URL!

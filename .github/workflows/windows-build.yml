@@ -18,7 +18,8 @@
 #   package          false runs the test job alone (windows-ci.yml's per-push build).
 #
 # A caller that packages passes the six AZURE_* secrets by name (declared under `secrets:`
-# below; never `secrets: inherit`, which would also hand over the Mac signing secrets).
+# below; never `secrets: inherit`, which would hand over every repository secret rather than
+# the six used here).
 # GITHUB_TOKEN reaches a called workflow on its own, so windows-ci.yml passes nothing.
 # Every job carries its own timeout-minutes: a `uses:` job in the caller cannot set one.
 #

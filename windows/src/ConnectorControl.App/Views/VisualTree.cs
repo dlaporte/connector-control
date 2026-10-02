@@ -3,9 +3,9 @@ using System.Windows.Media;
 
 namespace ConnectorControl.App.Views;
 
-/// <summary>A depth-first walk of the visual tree, shared by the code that needs it
-/// (EditorWindow's env-row focus) and the tests that reach into a rendered window's
-/// generated containers the same way.</summary>
+/// <summary>A depth-first walk of the visual tree, and the walk up it, shared by the code that
+/// needs them (EditorWindow's env-row focus, the Collections window's rows and their tick slots)
+/// and the tests that reach into a rendered window's generated containers the same way.</summary>
 internal static class VisualTree
 {
     public static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
@@ -21,6 +21,19 @@ internal static class VisualTree
             if (FindDescendant<T>(child) is { } deeper)
             {
                 return deeper;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>The nearest element above <paramref name="start"/> of type <typeparamref name="T"/>, not counting itself.</summary>
+    public static T? FindAncestor<T>(DependencyObject start) where T : DependencyObject
+    {
+        for (var node = VisualTreeHelper.GetParent(start); node is not null; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is T found)
+            {
+                return found;
             }
         }
         return null;

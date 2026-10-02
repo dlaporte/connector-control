@@ -7,7 +7,7 @@ import ConnectorControlCore
 ///
 /// The sweep touches only what this app writes. The store directory can be a
 /// folder the user chose — a git checkout, iCloud Drive, Documents — so only
-/// mcps.json and the corrupt-file asides beside it are repaired there, never
+/// the files `isStoreFile` names are repaired there, never
 /// anything else in the folder and never anything below it, and the folder's
 /// own mode is tightened only while it is the app's default location. The
 /// backups directory is always the app's own (machine-local, never the synced
@@ -90,8 +90,19 @@ public enum PermissionsSweep {
         return true
     }
 
-    /// mcps.json and the `mcps.corrupt.<timestamp>.json` asides MasterStoreIO leaves beside it.
+    /// mcps.json, the `mcps.corrupt.<timestamp>.json` asides MasterStoreIO leaves beside it, and
+    /// the collections sidecar.
+    ///
+    /// Listing the sidecar changes almost nothing today. It is new in this release and has been
+    /// written owner-only from the first, so there is nothing to repair; `currentVersion` was not
+    /// raised for it, so an install that has already swept never sweeps it; and a fresh install
+    /// sweeps before the file exists. It is listed so the next pass covers it with the store it
+    /// sits beside. The local cache, `collections-local.json`, is not listed: it too has only
+    /// ever been written owner-only.
+    /// Compared exactly, as the Mac's default file system is case-insensitive only for lookup;
+    /// the Windows mirror ignores case.
     static func isStoreFile(_ name: String) -> Bool {
-        name == "mcps.json" || (name.hasPrefix("mcps.corrupt.") && name.hasSuffix(".json"))
+        name == "mcps.json" || name == CollectionsFile.fileName
+            || (name.hasPrefix("mcps.corrupt.") && name.hasSuffix(".json"))
     }
 }

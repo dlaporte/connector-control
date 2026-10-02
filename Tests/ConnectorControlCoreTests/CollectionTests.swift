@@ -1,0 +1,145 @@
+import XCTest
+@testable import ConnectorControlCore
+
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/CollectionTests.cs
+final class CollectionTests: XCTestCase {
+    private func entry(_ url: String) -> MCPEntry {
+        MCPEntry(config: RemotePattern.make(url: url))
+    }
+
+    // MARK: - Decoding
+
+    func testV2RoundTripPreservesTwoCollections() throws {
+        let store = MasterStore(
+            activeCollection: "Work",
+            collections: [
+                "Work": Collection(mcps: ["a": entry("https://a.example/mcp")]),
+                "Personal": Collection(mcps: ["b": entry("https://b.example/mcp")]),
+            ])
+        let data = try JSONEncoder().encode(store)
+        let decoded = try JSONDecoder().decode(MasterStore.self, from: data)
+        XCTAssertEqual(decoded, store)
+        XCTAssertEqual(decoded.activeCollection, "Work")
+        XCTAssertEqual(decoded.collections["Work"]?.mcps.keys.sorted(), ["a"])
+        XCTAssertEqual(decoded.collections["Personal"]?.mcps.keys.sorted(), ["b"])
+    }
+
+    // MARK: - mcps accessor scoping
+
+    func testMcpsAccessorReadsAndWritesOnlyActiveCollection() {
+        var store = MasterStore(
+            activeCollection: "Work",
+            collections: [
+                "Work": Collection(mcps: ["a": entry("https://a.example/mcp")]),
+                "Personal": Collection(mcps: ["b": entry("https://b.example/mcp")]),
+            ])
+        store.mcps["c"] = entry("https://c.example/mcp")
+        XCTAssertEqual(store.collections["Work"]?.mcps.keys.sorted(), ["a", "c"])
+        XCTAssertEqual(store.collections["Personal"]?.mcps.keys.sorted(), ["b"], "untouched")
+    }
+
+    // MARK: - Collection management
+
+    func testAddCollectionStartsBlankAndLeavesTheActiveOne() {
+        var store = MasterStore.single(["a": entry("https://a.example/mcp")])
+        XCTAssertNil(store.addCollection(named: " Fresh "))
+        XCTAssertEqual(store.collections["Fresh"]?.mcps, [:])
+        XCTAssertEqual(store.activeCollection, "Default")
+        XCTAssertEqual(store.collections["Default"]?.mcps.keys.sorted(), ["a"])
+    }
+
+    func testAddCollectionRejectsEmptyName() {
+        var store = MasterStore.empty
+        XCTAssertEqual(store.addCollection(named: "   "), "Name must not be empty.")
+    }
+
+    func testAddCollectionRejectsDuplicateName() {
+        var store = MasterStore.empty
+        XCTAssertEqual(store.addCollection(named: "Default"),
+                       "A collection named “Default” already exists.")
+    }
+
+    func testRenameActiveCollection() {
+        var store = MasterStore.empty
+        let error = store.renameCollection(store.activeCollection, to: "Main")
+        XCTAssertNil(error)
+        XCTAssertEqual(store.activeCollection, "Main")
+        XCTAssertEqual(Array(store.collections.keys), ["Main"])
+    }
+
+    func testRenameActiveCollectionRejectsCollision() {
+        var store = MasterStore(
+            activeCollection: "Work",
+            collections: ["Work": Collection(), "Personal": Collection()])
+        XCTAssertEqual(store.renameCollection(store.activeCollection, to: "Personal"), "A collection named “Personal” already exists.")
+        XCTAssertEqual(store.activeCollection, "Work", "unchanged on error")
+    }
+
+    func testRenameActiveCollectionRejectsEmptyName() {
+        var store = MasterStore.empty
+        XCTAssertNotNil(store.renameCollection(store.activeCollection, to: "  "))
+    }
+
+    func testDeleteActiveCollectionSwitchesToFirstRemaining() {
+        var store = MasterStore(
+            activeCollection: "Work",
+            collections: ["Work": Collection(), "Alpha": Collection(), "Zeta": Collection()])
+        XCTAssertEqual(store.activeAfterDeleting("Work"), "Alpha", "the confirmation names what the delete picks")
+        XCTAssertEqual(store.activeAfterDeleting("Alpha"), "Work", "the name being deleted is never its own successor")
+        let error = store.deleteCollection(named: store.activeCollection)
+        XCTAssertNil(error)
+        XCTAssertEqual(store.activeCollection, "Alpha")
+        XCTAssertNil(store.collections["Work"])
+    }
+
+    /// The active spot goes to the first local collection, by name, that holds a connector, so a
+    /// delete does not leave Claude running nothing while such a collection exists. Only when none
+    /// does is it the sorted-first of the rest, whatever its kind.
+    func testDeletingTheActiveCollectionPrefersALocalOneWithConnectors() {
+        let one = ["x": MCPEntry(config: .object(["command": .string("x")]))]
+        let store = MasterStore(activeCollection: "Work", collections: [
+            "Work": Collection(mcps: one), "Alpha": Collection(), "Beta": Collection(mcps: one),
+            "Aaa team": Collection(mcps: one)])
+        let local: (String) -> Bool = { $0 != "Aaa team" }
+        XCTAssertEqual(store.activeAfterDeleting("Work", isLocal: local), "Beta", "a local collection with connectors")
+        var emptyLocals = store
+        emptyLocals.collections["Beta"] = Collection()
+        XCTAssertEqual(emptyLocals.activeAfterDeleting("Work", isLocal: local), "Aaa team",
+                       "only empty local collections: the sorted-first of the rest")
+        XCTAssertEqual(store.activeAfterDeleting("Work", isLocal: { _ in false }), "Aaa team", "only subscribed ones")
+        XCTAssertEqual(store.activeAfterDeleting("Work"), "Aaa team", "with nothing said, every collection is local")
+
+        var deleting = store
+        XCTAssertNil(deleting.deleteCollection(named: "Work", isLocal: local))
+        XCTAssertEqual(deleting.activeCollection, "Beta", "the delete picks what the confirmation names")
+    }
+
+    func testDeleteActiveCollectionRejectsLastCollection() {
+        var store = MasterStore.empty
+        XCTAssertNil(store.activeAfterDeleting(store.activeCollection), "nothing remains to take the active spot")
+        XCTAssertEqual(store.deleteCollection(named: store.activeCollection), "Can’t delete the last collection.")
+        XCTAssertEqual(store.collections.count, 1)
+    }
+
+    func testSwitchCollection() {
+        var store = MasterStore(
+            activeCollection: "Work",
+            collections: ["Work": Collection(), "Personal": Collection()])
+        XCTAssertNil(store.switchCollection(to: "Personal"))
+        XCTAssertEqual(store.activeCollection, "Personal")
+    }
+
+    func testSwitchCollectionRejectsUnknownName() {
+        var store = MasterStore.empty
+        XCTAssertEqual(store.switchCollection(to: "Nope"), "No collection named “Nope”.")
+        XCTAssertEqual(store.activeCollection, "Default")
+    }
+
+    func testErrorMessagesUseTypographicPunctuationLikeTheMacApp() {
+        var store = MasterStore.empty
+        let duplicate = store.addCollection(named: "Default")!
+        XCTAssertEqual(duplicate[duplicate.index(before: duplicate.range(of: "Default")!.lowerBound)], "“")
+        XCTAssertEqual(duplicate[duplicate.range(of: "Default")!.upperBound], "”")
+        XCTAssertTrue(store.deleteCollection(named: store.activeCollection)!.contains("’"))
+    }
+}

@@ -1,11 +1,13 @@
 using System.Windows;
+using System.Windows.Controls;
 
 namespace ConnectorControl.App.Views;
 
 /// <summary>
-/// What ConfirmDialog, NamePromptDialog, UpdateDialog and RestoreDialog have in common: a fixed,
-/// non-resizable, taskbar-hidden modal that sizes to its content and shares the same background,
-/// plus the two bits of code-behind machinery every one of them otherwise wrote out itself.
+/// What every modal dialog here has in common — Confirm, NamePrompt, Update, Restore, and the
+/// Collections window's Copy, Import, Publish and Review: a fixed, non-resizable, taskbar-hidden
+/// modal that sizes to its content and shares the same background, plus the bits of code-behind
+/// machinery each of them would otherwise write out itself.
 /// </summary>
 public abstract class DialogWindow : Window
 {
@@ -15,15 +17,20 @@ public abstract class DialogWindow : Window
         ResizeMode = ResizeMode.NoResize;
         SizeToContent = SizeToContent.Height;
         SetResourceReference(BackgroundProperty, "SolidBackgroundFillColorBaseBrush");
+        InitialFocus.OnFirstActivation(this);
     }
 
     /// <summary>
-    /// Wires a model event shaped like <c>CloseRequested</c> to this window's Close, marshalled
-    /// onto the UI thread the way an event raised off a background continuation needs — the same
-    /// <c>Dispatcher.BeginInvoke(new Action(Close))</c> every dialog with a model wrote by hand.
+    /// The red line a dialog's verb answers on: the reason it could not act, shown, or null, which
+    /// clears whatever an earlier answer left there. Most models hand the message back rather than
+    /// publishing a property for it, and ImportModel raises the one it keeps; either way the line's
+    /// visibility follows its text rather than a property of its own.
     /// </summary>
-    protected void CloseWhenModelAsks(Action<Action> subscribe) =>
-        subscribe(() => Dispatcher.BeginInvoke(new Action(Close)));
+    protected static void ShowFailure(TextBlock line, string? failure)
+    {
+        line.Text = failure ?? string.Empty;
+        line.Visibility = failure is null ? Visibility.Collapsed : Visibility.Visible;
+    }
 
     /// <summary>
     /// Shows <paramref name="dialog"/> via <see cref="WpfDialogs.Present"/> (owned and centered on

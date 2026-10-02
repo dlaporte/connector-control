@@ -2,10 +2,8 @@ import XCTest
 import ConnectorControlCore
 @testable import ConnectorControlState
 
-/// windows/tests/ConnectorControl.Core.Tests/State/EditorModelTests.cs — the
-/// save and remove slice. The save-conflict alert still goes through
-/// FakeDialogs; remove's confirmation is a sheet (pending state + the
-/// method the sheet's button calls).
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/EditorModelSaveTests.cs —
+/// the save slice. The save-conflict alert goes through FakeDialogs.
 @MainActor
 final class EditorModelSaveTests: XCTestCase {
     private let url = "https://scoutbook.example.com/mcp"
@@ -226,34 +224,13 @@ final class EditorModelSaveTests: XCTestCase {
         defer { rig.dispose() }
         let state = rig.state
         let editor = rig.editor(.existing(name: "scoutbook", entry: try XCTUnwrap(state.store.mcps["scoutbook"])))
-        state.remove(name: "scoutbook")
+        state.delete(names: ["scoutbook"])
         XCTAssertTrue(editor.save())
         XCTAssertEqual(rig.h.dialogs.confirms[0], FakeDialogs.ConfirmCall(
-            message: "“scoutbook” was removed outside this editor.",
+            message: "“scoutbook” was deleted outside this editor.",
             informative: "Saving will add it back.",
             primary: "Save Anyway", cancel: "Cancel", destructive: false))
         XCTAssertEqual(state.store.mcps["scoutbook"]?.enabled, true)   // a re-added entry takes the editor's snapshot enabled state
-    }
-
-    func testRemoveConfirmsThenRemovesAndAppliesInOneTurn() throws {
-        let rig = EditorRig()
-        defer { rig.dispose() }
-        let state = rig.state
-        let editor = rig.editor(.existing(name: "scoutbook", entry: try XCTUnwrap(state.store.mcps["scoutbook"])))
-        XCTAssertFalse(editor.removeConfirmationPending)
-        editor.requestRemove()
-        XCTAssertTrue(editor.removeConfirmationPending)
-        XCTAssertEqual(editor.removeConfirmationMessage, "Remove “scoutbook”? A copy remains in Backups.")
-        editor.cancelRemove()
-        XCTAssertFalse(editor.removeConfirmationPending)
-        XCTAssertNotNil(state.store.mcps["scoutbook"])
-
-        editor.requestRemove()
-        editor.confirmRemove()
-        XCTAssertFalse(editor.removeConfirmationPending)
-        XCTAssertNil(state.store.mcps["scoutbook"])
-        XCTAssertNil(try rig.h.claudeServers()["scoutbook"])
-        XCTAssertTrue(rig.h.dialogs.confirms.isEmpty)   // a sheet, not an NSAlert
     }
 
     func testAdditionalKeysAreMergedOnARemoteSave() throws {

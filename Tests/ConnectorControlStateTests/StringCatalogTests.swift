@@ -3,11 +3,12 @@ import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/StringCatalogTests.cs
+///
 /// Guards every user-facing string this app and the Windows port are meant to
 /// carry byte-for-byte, against the shared fixture both suites read:
-/// `Tests/Fixtures/strings.json`. windows/tests/ConnectorControl.Core.Tests/State/StringCatalogTests.cs
-/// is this test's mirror; a wording change on either side that the other
-/// side does not also make fails exactly one of the two suites.
+/// `Tests/Fixtures/strings.json`. A wording change on either side that the
+/// other side does not also make fails exactly one of the two suites.
 @MainActor
 final class StringCatalogTests: XCTestCase {
     /// One fixture entry's Mac-side resolution: either fully resolved text,
@@ -67,29 +68,84 @@ final class StringCatalogTests: XCTestCase {
     /// parameters, and the joined-keys rendering for a factory that takes a
     /// list of keys — matching the convention the C# test also follows.
     private static let argsByKey: [String: [String]] = [
-        "AppState.deleteProfileMessage": ["X"],
+        "AppState.collectionLocateBanner": ["X"],
+        "AppState.collectionPublishFailedBanner": ["X", "Y", "Z"],
+        "AppState.collectionUpdateBanner": ["X", "Y"],
+        "AppState.collectionUpdateNotificationBody": ["X", "Y"],
+        "AppState.deleteCollectionMessage": ["X"],
         "AppState.duplicateNameError": ["X"],
         "AppState.enabledSubtitle": ["3", "7"],
+        "AppState.ingestedElsewhereSentence": ["X", "Y", "Z"],
+        "AppState.keptPathCarriedError": ["X", "Y"],
         "AppState.malformedConfigMessage": ["X"],
+        "AppState.needsValueCaution": ["X"],
+        "AppState.newCredentialError": ["X"],
+        "AppState.pathMarkMovedError": ["X"],
+        "AppState.publishFolderCarriedError": ["X", "Y"],
+        "AppState.publishSlugTakenError": ["X"],
+        "AppState.restoreCollectionGoneError": ["X"],
+        "AppState.restoreSubscribedError": ["X"],
+        "AppState.sourceUnreadableError": ["X", "Y"],
+        "AppState.unreviewedConnectorError": ["X"],
         "ClaudeSignature.notFoundMessage": ["X"],
         "ClaudeSignature.refusalMessage": ["X", "Y"],
         "ClaudeSignature.uninspectableMessage": ["X"],
+        "CollectionsModel.connectorTally.many": ["3"],
+        "CollectionsModel.connectorTally.one": ["1"],
+        "CollectionsModel.deleteCheckedMessage.many": ["3"],
+        "CollectionsModel.deleteCheckedMessage.one": ["X"],
+        "CollectionsModel.deleteConnectorsSentence.many": ["3"],
+        "CollectionsModel.deleteConnectorsSentence.one": ["1"],
+        "CollectionsModel.deleteNextActiveSentence": ["X"],
+        "CollectionsModel.deletePublishedFileQuestion": ["X"],
+        "CollectionsModel.editLabel": ["X"],
+        "CollectionsModel.selectedCount": ["3"],
+        "CollectionsModel.stopSyncingMessage": ["X"],
         "ConfigService.corruptStoreNote": ["X"],
+        "ConfigService.corruptStoreRestoredNote": ["X", "Y"],
         "ConfigService.invalidBackupError": ["X", "Y"],
         "ConfigService.invalidBackupMcpServersError": ["X"],
-        "ConnectorRow.editTooltip": ["X"],
+        "CopyModel.title": ["X"],
         "EditTarget.editTitle": ["X"],
         "EditorModel.additionalTitle": ["3", "a, b"],
+        // Called with the row's index, 2: the text counts from one.
+        "EditorModel.argumentLabel": ["3"],
+        "EditorModel.argumentNumber": ["3"],
         "EditorModel.changedOutsideMessage": ["X"],
+        "EditorModel.deletedOutsideMessage": ["X"],
         "EditorModel.duplicateEnvError": ["X"],
-        "EditorModel.removeMessage": ["X"],
-        "EditorModel.removedOutsideMessage": ["X"],
-        "MasterStore.duplicateProfileNameError": ["X"],
-        "MasterStore.unknownProfileError": ["X"],
-        "PopoverModel.deleteProfileTitle": ["X"],
-        "PopoverModel.profileChipText": ["X"],
-        "PopoverModel.renameProfileTitle": ["X"],
+        "EditorModel.importedNote": ["X", "Y"],
+        "EditorModel.lockedFieldsNote": ["X"],
+        "EditorModel.propagateLabel": ["X", "Y"],
+        "EditorModel.propagateLabelMany": ["X", "Y"],
+        "EditorModel.publishedNote": ["X"],
+        "FieldName.argument": ["1"],
+        "FieldName.document": ["X"],
+        "FieldName.envValue": ["X"],
+        "FieldName.hint": ["X"],
+        "ImportModel.addModeTitle": ["X"],
+        "ImportModel.collisionPickerLabel": ["X"],
+        "ImportModel.importButton": ["3"],
+        "ImportModel.includeLabel": ["X"],
+        "ImportModel.skippedBadge": ["X"],
+        "ImportModel.sourceLine": ["X", "Y", "3"],
+        "MasterStore.duplicateCollectionNameError": ["X"],
+        "MasterStore.unknownCollectionError": ["X"],
+        "PopoverModel.emptyText": ["X"],
+        "PopoverModel.locateButton": ["X"],
+        "PopoverModel.sourceTooltipFormat": ["X"],
+        "PublishModel.exportTitle": ["X"],
+        "PublishModel.folderLine": ["X"],
+        "PublishModel.footerLine": ["X", "Y"],
+        "PublishModel.keptPathNote": ["X", "Y"],
+        "PublishModel.otherFolderNote": ["X", "Y", "Z"],
+        "PublishModel.publishFolderEditNote": ["X", "Y"],
+        "PublishModel.publishFolderNote": ["X", "Y"],
+        "PublishModel.title": ["X"],
+        "PublishModel.unresolvedMarkNote": ["X", "Y"],
+        "PublishModel.warningLine": ["X", "Y"],
         "RestoreModel.confirmMessage": ["X"],
+        "ReviewModel.title": ["X"],
         "SettingsModel.keepCountLabel": ["3"],
         "SettingsModel.loginItemFailureNote": ["X"],
         "SettingsModel.versionText": ["X"],
@@ -102,31 +158,54 @@ final class StringCatalogTests: XCTestCase {
 
         // MARK: AppState
 
+        actual["AppState.authoredElsewhereCaution"] = AppState.authoredElsewhereCaution
         actual["AppState.chooseClaude"] = AppState.chooseClaude
         actual["AppState.claudeConfigChangedBody"] = AppState.claudeConfigChangedBody
         actual["AppState.claudeConfigRegeneratedBody"] = AppState.claudeConfigRegeneratedBody
+        actual["AppState.collectionLocateBanner"] = AppState.collectionLocateBanner("X")
+        actual["AppState.collectionPublishFailedBanner"] = AppState.collectionPublishFailedBanner("X", "Y", "Z")
+        actual["AppState.collectionUpdateBanner"] = AppState.collectionUpdateBanner("X", "Y")
+        actual["AppState.collectionUpdateNotificationBody"] = AppState.collectionUpdateNotificationBody("X", "Y")
+        actual["AppState.collectionsNotSavedNote"] = AppState.collectionsNotSavedNote
         actual["AppState.connectorListChangedBody.noRestart"] =
             AppState.connectorListChangedBody(ServerDelta(), restartRequired: false)
         actual["AppState.connectorListChangedBody.restart"] =
             AppState.connectorListChangedBody(ServerDelta(), restartRequired: true)
         actual["AppState.defaultClaudeAppPath"] = AppState.defaultClaudeAppPath
         actual["AppState.deleteButton"] = AppState.deleteButton
-        actual["AppState.deleteProfileInformative"] = AppState.deleteProfileInformative
-        actual["AppState.deleteProfileMessage"] = AppState.deleteProfileMessage("X")
+        actual["AppState.deleteCollectionMessage"] = AppState.deleteCollectionMessage("X")
         actual["AppState.duplicateNameError"] = AppState.duplicateNameError("X")
         actual["AppState.enabledSubtitle"] = AppState.enabledSubtitle(enabled: 3, total: 7)
+        actual["AppState.ingestedElsewhereSentence"] = AppState.ingestedElsewhereSentence("X", "Y", "Z")
+        actual["AppState.lastLocalCollectionError"] = AppState.lastLocalCollectionError
+        actual["AppState.locateCaution"] = AppState.locateCaution
         actual["AppState.malformedConfigMessage"] = AppState.malformedConfigMessage(detail: "X")
         actual["AppState.nameEmptyError"] = AppState.nameEmptyError
-        actual["AppState.newProfileTitle"] = AppState.newProfileTitle
+        actual["AppState.needsValueCaution"] = AppState.needsValueCaution("X")
+        actual["AppState.newCollectionTitle"] = AppState.newCollectionTitle
+        actual["AppState.newCredentialError"] = AppState.newCredentialError("X")
+        actual["AppState.newerDocumentError"] = AppState.newerDocumentError
         actual["AppState.noConnectorsSubtitle"] = AppState.noConnectorsSubtitle
+        actual["AppState.ownCollectionError"] = AppState.ownCollectionError
+        actual["AppState.keptPathCarriedError"] = AppState.keptPathCarriedError("X", "Y")
+        actual["AppState.pathMarkMovedError"] = AppState.pathMarkMovedError("X")
+        actual["AppState.publishFolderCarriedError"] = AppState.publishFolderCarriedError("X", "Y")
+        actual["AppState.publishIntoStoreError"] = AppState.publishIntoStoreError
+        actual["AppState.publishSlugTakenError"] = AppState.publishSlugTakenError("X")
         actual["AppState.quitButton"] = AppState.quitButton
         actual["AppState.quitMessage"] = AppState.quitMessage
         actual["AppState.regenerationFailedBody"] = AppState.regenerationFailedBody
-        actual["AppState.renameProfileTitle"] = AppState.renameProfileTitle
+        actual["AppState.renameCollectionTitle"] = AppState.renameCollectionTitle
         actual["AppState.restartButton"] = AppState.restartButton
         actual["AppState.restartInformative"] = AppState.restartInformative
         actual["AppState.restartMessage"] = AppState.restartMessage
+        actual["AppState.restoreCollectionGoneError"] = AppState.restoreCollectionGoneError("X")
+        actual["AppState.restoreSubscribedError"] = AppState.restoreSubscribedError("X")
+        actual["AppState.sourceUnreadableError"] = AppState.sourceUnreadableError("X", "Y")
         actual["AppState.storeChangedBody"] = AppState.storeChangedBody
+        actual["AppState.targetMustBeLocalError"] = AppState.targetMustBeLocalError
+        actual["AppState.unpublishedDirectoryCaution"] = AppState.unpublishedDirectoryCaution
+        actual["AppState.unreviewedConnectorError"] = AppState.unreviewedConnectorError("X")
 
         // MARK: ClaudeConfigIO
         // Both messages are inline literals inside guard/throw statements, not
@@ -154,15 +233,81 @@ final class StringCatalogTests: XCTestCase {
         // and cross-checked against ConfigServiceTests.swift's real-I/O assertions.
 
         actual["ConfigService.corruptStoreNote"] =
-            "The MCP list file was unreadable; it was preserved as X and rebuilt from Claude's config."
+            "The MCP list file was unreadable; it was preserved as X and rebuilt from Claude’s config."
+        actual["ConfigService.corruptStoreRestoredNote"] =
+            "The MCP list file was unreadable; it was preserved as X and restored from the backup of Y."
         actual["ConfigService.invalidBackupError"] = "backup X is not a valid config file (Y)"
         actual["ConfigService.invalidBackupMcpServersError"] = "backup X has an invalid mcpServers section"
         actual["ConfigService.malformedClaudeConfigNote"] =
-            "Claude's config file is not valid JSON. Your MCP list is safe; use Backups \u{25B8} Restore\u{2026} to repair the file."
+            "Claude’s config file is not valid JSON. Your MCP list is safe; use Backups \u{25B8} Restore to repair the file."
 
-        // MARK: ConnectorRow / Dialogs / AlertDialogs
+        // MARK: CollectionDocument
 
-        actual["ConnectorRow.editTooltip"] = ConnectorRow(name: "X", enabled: true, toolWarning: nil).editTooltip
+        actual["CollectionDocument.credentialLiteralPhrase"] = CollectionDocument.credentialLiteralPhrase
+        actual["CollectionDocument.credentialReferencePhrase"] = CollectionDocument.credentialReferencePhrase
+        actual["CollectionDocument.credentialUserOnlyPhrase"] = CollectionDocument.credentialUserOnlyPhrase
+
+        // MARK: CollectionsModel
+
+        actual["CollectionsModel.activePill"] = CollectionsModel.activePill
+        actual["CollectionsModel.addCollectionTooltip"] = CollectionsModel.addCollectionTooltip
+        actual["CollectionsModel.addConnectorDisabledTooltip"] = CollectionsModel.addConnectorDisabledTooltip
+        actual["CollectionsModel.addConnectorTooltip"] = CollectionsModel.addConnectorTooltip
+        actual["CollectionsModel.connectorTally.many"] = CollectionsModel.connectorTally(3)
+        actual["CollectionsModel.connectorTally.one"] = CollectionsModel.connectorTally(1)
+        actual["CollectionsModel.copyToButton"] = CollectionsModel.copyToButton
+        actual["CollectionsModel.deleteAction"] = CollectionsModel.deleteAction
+        actual["CollectionsModel.deleteConnectorsSentence.many"] = CollectionsModel.deleteConnectorsSentence(3)
+        actual["CollectionsModel.deleteConnectorsSentence.none"] = CollectionsModel.deleteConnectorsSentence(0)
+        actual["CollectionsModel.deleteConnectorsSentence.one"] = CollectionsModel.deleteConnectorsSentence(1)
+        actual["CollectionsModel.deleteCopiesSentence"] = CollectionsModel.deleteCopiesSentence
+        actual["CollectionsModel.deleteNextActiveSentence"] = CollectionsModel.deleteNextActiveSentence("X")
+        actual["CollectionsModel.deletePublishedFileQuestion"] = CollectionsModel.deletePublishedFileQuestion("X")
+        actual["CollectionsModel.deleteSourceSentence"] = CollectionsModel.deleteSourceSentence
+        actual["CollectionsModel.duplicateAction"] = CollectionsModel.duplicateAction
+        actual["CollectionsModel.editLabel"] = CollectionsModel.editLabel(for: "X")
+        actual["CollectionsModel.exportAllAction"] = CollectionsModel.exportAllAction
+        actual["CollectionsModel.exportCheckedButton"] = CollectionsModel.exportCheckedButton
+        actual["CollectionsModel.importButton"] = CollectionsModel.importButton
+        actual["CollectionsModel.importSubtitle"] = CollectionsModel.importSubtitle
+        actual["CollectionsModel.keepFileButton"] = CollectionsModel.keepFileButton
+        actual["CollectionsModel.lockedGlyphTooltip"] = CollectionsModel.lockedGlyphTooltip
+        actual["CollectionsModel.makeActiveAction"] = CollectionsModel.makeActiveAction
+        actual["CollectionsModel.makeLocalCopyButton"] = CollectionsModel.makeLocalCopyButton
+        actual["CollectionsModel.moreActionsLabel"] = CollectionsModel.moreActionsLabel
+        actual["CollectionsModel.newButton"] = CollectionsModel.newButton
+        actual["CollectionsModel.publishButton"] = CollectionsModel.publishButton
+        actual["CollectionsModel.publishSettingsButton"] = CollectionsModel.publishSettingsButton
+        actual["CollectionsModel.publishedPill"] = CollectionsModel.publishedPill
+        actual["CollectionsModel.readOnlyNote"] = CollectionsModel.readOnlyNote
+        actual["CollectionsModel.refreshButton"] = CollectionsModel.refreshButton
+        actual["CollectionsModel.remoteType"] = CollectionsModel.remoteType
+        actual["CollectionsModel.deleteCheckedButton"] = CollectionsModel.deleteCheckedButton
+        actual["CollectionsModel.deleteCheckedInformative"] = CollectionsModel.deleteCheckedInformative
+        actual["CollectionsModel.deleteCheckedMessage.many"] = CollectionsModel.deleteCheckedMessage(["X", "Y", "Z"])
+        actual["CollectionsModel.deleteCheckedMessage.one"] = CollectionsModel.deleteCheckedMessage(["X"])
+        actual["CollectionsModel.deleteFileButton"] = CollectionsModel.deleteFileButton
+        actual["CollectionsModel.renameAction"] = CollectionsModel.renameAction
+        actual["CollectionsModel.selectedCount"] = CollectionsModel.selectedCount(3)
+        actual["CollectionsModel.showPublishedFileAction"] = CollectionsModel.showPublishedFileAction
+        actual["CollectionsModel.showSourceFileAction"] = CollectionsModel.showSourceFileAction
+        actual["CollectionsModel.stopPublishingAction"] = CollectionsModel.stopPublishingAction
+        actual["CollectionsModel.stopSyncingAction"] = CollectionsModel.stopSyncingAction
+        actual["CollectionsModel.stopSyncingInformative"] = CollectionsModel.stopSyncingInformative
+        actual["CollectionsModel.stopSyncingMessage"] = CollectionsModel.stopSyncingMessage("X")
+        actual["CollectionsModel.subscribeButton"] = CollectionsModel.subscribeButton
+        actual["CollectionsModel.subscribeSubtitle"] = CollectionsModel.subscribeSubtitle
+        actual["CollectionsModel.subscribedPill"] = CollectionsModel.subscribedPill
+        actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.updateAvailableStatus
+        actual["CollectionsModel.windowTitle"] = CollectionsModel.windowTitle
+
+        // MARK: CopyModel
+
+        actual["CopyModel.copyButton"] = CopyModel.copyButton
+        actual["CopyModel.title"] = CopyModel.title("X")
+
+        // MARK: Dialogs / AlertDialogs
+
         actual["Dialogs.cancelTitle"] = FakeDialogs.cancelTitle
         // AlertDialogs.swift lives in the ConnectorControl app target (AppKit),
         // which this test target cannot import; its OK button title is pinned
@@ -176,32 +321,104 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.addArgumentTitle"] = EditorModel.addArgumentTitle
         actual["EditorModel.addVariableTitle"] = EditorModel.addVariableTitle
         actual["EditorModel.additionalTitle"] = EditorModel.additionalTitle(count: 3, keys: ["a", "b"])
+        actual["EditorModel.argumentLabel"] = EditorModel.argumentLabel(2)
+        actual["EditorModel.argumentNumber"] = EditorModel.argumentNumber(2)
+        actual["EditorModel.argumentPrompt"] = EditorModel.argumentPrompt
+        actual["EditorModel.argumentsHeader"] = EditorModel.argumentsHeader
+        actual["EditorModel.authenticationHeader"] = EditorModel.authenticationHeader
         actual["EditorModel.automaticCaption"] = EditorModel.automaticCaption
         actual["EditorModel.bearerCaption"] = EditorModel.bearerCaption
         actual["EditorModel.bearerTokenError"] = EditorModel.bearerTokenError
+        actual["EditorModel.cancelButton"] = EditorModel.cancelButton
         actual["EditorModel.changedOutsideDetail"] = EditorModel.changedOutsideDetail
         actual["EditorModel.changedOutsideMessage"] = EditorModel.changedOutsideMessage("X")
         actual["EditorModel.clientIDError"] = EditorModel.clientIDError
+        actual["EditorModel.clientIDLabel"] = EditorModel.clientIDLabel
+        actual["EditorModel.clientSecretLabel"] = EditorModel.clientSecretLabel
         actual["EditorModel.commandError"] = EditorModel.commandError
+        actual["EditorModel.commandLabel"] = EditorModel.commandLabel
+        actual["EditorModel.commandPrompt"] = EditorModel.commandPrompt
         actual["EditorModel.duplicateEnvError"] = EditorModel.duplicateEnvError("X")
         actual["EditorModel.envNamelessError"] = EditorModel.envNamelessError
+        actual["EditorModel.environmentHeader"] = EditorModel.environmentHeader
+        actual["EditorModel.formTab"] = EditorModel.formTab
         actual["EditorModel.headerNameError"] = EditorModel.headerNameError
+        actual["EditorModel.headerNameLabel"] = EditorModel.headerNameLabel
+        actual["EditorModel.headerNamePrompt"] = EditorModel.headerNamePrompt
         actual["EditorModel.headerValueError"] = EditorModel.headerValueError
+        actual["EditorModel.headerValueLabel"] = EditorModel.headerValueLabel
+        actual["EditorModel.hideValueLabel"] = EditorModel.hideValueLabel
+        actual["EditorModel.importedNote"] = EditorModel.importedNote("X", "Y")
         actual["EditorModel.invalidURLError"] = EditorModel.invalidURLError
+        actual["EditorModel.jsonTab"] = EditorModel.jsonTab
         actual["EditorModel.jsonTip"] = EditorModel.jsonTip
+        actual["EditorModel.localTypeTitle"] = EditorModel.localTypeTitle
+        actual["EditorModel.lockedFieldsNote"] = EditorModel.lockedFieldsNote("X")
         actual["EditorModel.lossWarningPrefix"] = EditorModel.lossWarningPrefix
+        actual["EditorModel.nameLabel"] = EditorModel.nameLabel
+        actual["EditorModel.namePrompt"] = EditorModel.namePrompt
+        actual["EditorModel.needsPath"] = EditorModel.needsPath
+        actual["EditorModel.needsValue"] = EditorModel.needsValue
+        actual["EditorModel.noTargetMessage"] = EditorModel.noTargetMessage
         actual["EditorModel.notValidJSON"] = EditorModel.notValidJSON
         actual["EditorModel.oauthSecretCaption"] = EditorModel.oauthSecretCaption
+        actual["EditorModel.propagateLabel"] = EditorModel.propagateLabel("X", "Y")
+        actual["EditorModel.propagateLabelMany"] = EditorModel.propagateLabelMany("X", "Y")
+        actual["EditorModel.publishedNote"] = EditorModel.publishedNote("X")
         actual["EditorModel.remoteFooter"] = EditorModel.remoteFooter
-        actual["EditorModel.removeButton"] = EditorModel.removeButton
-        actual["EditorModel.removeInformative"] = EditorModel.removeInformative
-        actual["EditorModel.removeMessage"] = EditorModel.removeMessage("X")
-        actual["EditorModel.removedOutsideDetail"] = EditorModel.removedOutsideDetail
-        actual["EditorModel.removedOutsideMessage"] = EditorModel.removedOutsideMessage("X")
+        actual["EditorModel.remoteTypeTitle"] = EditorModel.remoteTypeTitle
+        actual["EditorModel.deleteArgumentLabel"] = EditorModel.deleteArgumentLabel
+        actual["EditorModel.deleteVariableLabel"] = EditorModel.deleteVariableLabel
+        actual["EditorModel.deletedOutsideDetail"] = EditorModel.deletedOutsideDetail
+        actual["EditorModel.deletedOutsideMessage"] = EditorModel.deletedOutsideMessage("X")
         actual["EditorModel.saveAnywayButton"] = EditorModel.saveAnywayButton
+        actual["EditorModel.saveButton"] = EditorModel.saveButton
+        actual["EditorModel.scopesLabel"] = EditorModel.scopesLabel
+        actual["EditorModel.scopesPrompt"] = EditorModel.scopesPrompt
+        actual["EditorModel.serverURLLabel"] = EditorModel.serverURLLabel
+        actual["EditorModel.serverURLPrompt"] = EditorModel.serverURLPrompt
+        actual["EditorModel.showValueLabel"] = EditorModel.showValueLabel
         actual["EditorModel.stayInJSONButton"] = EditorModel.stayInJSONButton
         actual["EditorModel.switchAnywayButton"] = EditorModel.switchAnywayButton
+        actual["EditorModel.tokenLabel"] = EditorModel.tokenLabel
+        actual["EditorModel.typeLabel"] = EditorModel.typeLabel
         actual["EditorModel.urlHint"] = EditorModel.urlHint
+        actual["EditorModel.valueLabel"] = EditorModel.valueLabel
+        actual["EditorModel.viewPickerLabel"] = EditorModel.viewPickerLabel
+        actual["EditorModel.whatCanIChange"] = EditorModel.whatCanIChange
+        actual["EditorModel.whatCanIChangeAnswer"] = EditorModel.whatCanIChangeAnswer
+        actual["EditorModel.windowGroupTitle"] = EditorModel.windowGroupTitle
+
+        // MARK: FieldName
+
+        actual["FieldName.argument"] = FieldName.argument(1)
+        actual["FieldName.command"] = FieldName.command
+        actual["FieldName.document"] = FieldName.document("X")
+        actual["FieldName.envValue"] = FieldName.envValue("X")
+        actual["FieldName.hint"] = FieldName.hint("X")
+
+        // MARK: ImportModel
+
+        actual["ImportModel.addModeDetail"] = ImportModel.addModeDetail
+        actual["ImportModel.addModeTitle"] = ImportModel.addModeTitle("X")
+        actual["ImportModel.addTitle"] = ImportModel.addTitle
+        actual["ImportModel.cancelButton"] = ImportModel.cancelButton
+        actual["ImportModel.collisionPickerLabel"] = ImportModel.collisionPickerLabel("X")
+        actual["ImportModel.importButton"] = ImportModel.importButton(3)
+        actual["ImportModel.includeLabel"] = ImportModel.includeLabel("X")
+        actual["ImportModel.keepBothTitle"] = ImportModel.keepBothTitle
+        actual["ImportModel.newBadge"] = ImportModel.newBadge
+        actual["ImportModel.presentBadge"] = ImportModel.presentBadge
+        actual["ImportModel.replaceKeepsValues"] = ImportModel.replaceKeepsValues
+        actual["ImportModel.replaceTitle"] = ImportModel.replaceTitle
+        actual["ImportModel.skipTitle"] = ImportModel.skipTitle
+        actual["ImportModel.skippedBadge"] = ImportModel.skippedBadge("X")
+        actual["ImportModel.sourceLine"] = ImportModel.sourceLine("X", "Y", 3)
+        actual["ImportModel.syncModeDetail"] = ImportModel.syncModeDetail
+        actual["ImportModel.syncModeTitle"] = ImportModel.syncModeTitle
+        actual["ImportModel.syncNameLabel"] = ImportModel.syncNameLabel
+        actual["ImportModel.title"] = ImportModel.title
+        actual["ImportModel.unknownAuthor"] = ImportModel.unknownAuthor
 
         // MARK: MasterStore
         // Every message below is returned by a real mutation, not a bare
@@ -209,29 +426,58 @@ final class StringCatalogTests: XCTestCase {
         // the reason this key names.
 
         var nameEmptyStore = MasterStore.empty
-        actual["MasterStore.nameEmptyError"] = nameEmptyStore.addProfile(named: "   ", copyingCurrent: false)
-        var duplicateStore = MasterStore(activeProfile: "X", profiles: ["X": Profile()])
-        actual["MasterStore.duplicateProfileNameError"] = duplicateStore.addProfile(named: "X", copyingCurrent: false)
+        actual["MasterStore.nameEmptyError"] = nameEmptyStore.addCollection(named: "   ")
+        var duplicateStore = MasterStore(activeCollection: "X", collections: ["X": Collection()])
+        actual["MasterStore.duplicateCollectionNameError"] = duplicateStore.addCollection(named: "X")
         var deleteLastStore = MasterStore.empty
-        actual["MasterStore.deleteLastProfileError"] = deleteLastStore.deleteActiveProfile()
-        var unknownProfileStore = MasterStore.empty
-        actual["MasterStore.unknownProfileError"] = unknownProfileStore.switchProfile(to: "X")
+        actual["MasterStore.deleteLastCollectionError"] = deleteLastStore.deleteCollection(named: deleteLastStore.activeCollection)
+        var unknownCollectionStore = MasterStore.empty
+        actual["MasterStore.unknownCollectionError"] = unknownCollectionStore.switchCollection(to: "X")
 
         // MARK: Notifications / PopoverModel
 
         actual["Notifications.restartToastButton"] = Notifications.restartToastButton
         actual["Notifications.title"] = Notifications.title
-        actual["PopoverModel.addTooltip"] = PopoverModel.addTooltip
-        actual["PopoverModel.deleteProfileTitle"] = PopoverModel.deleteProfileTitle("X")
-        actual["PopoverModel.emptyText"] = PopoverModel.emptyText
-        actual["PopoverModel.newProfileTitle"] = PopoverModel.newProfileTitle
-        actual["PopoverModel.profileChipText"] = PopoverModel.profileChipText("X")
+        actual["PopoverModel.chooseFolderButton"] = PopoverModel.chooseFolderButton
+        actual["PopoverModel.emptyText"] = PopoverModel.emptyText("X")
+        actual["PopoverModel.locateButton"] = PopoverModel.locateButton("X")
+        actual["PopoverModel.manageTitle"] = PopoverModel.manageTitle
+        actual["PopoverModel.pendingMenuMark"] = PopoverModel.pendingMenuMark
         actual["PopoverModel.quitTooltip"] = PopoverModel.quitTooltip
-        actual["PopoverModel.renameProfileTitle"] = PopoverModel.renameProfileTitle("X")
         actual["PopoverModel.restartTitle"] = PopoverModel.restartTitle
         actual["PopoverModel.retryTitle"] = PopoverModel.retryTitle
+        actual["PopoverModel.reviewAndApplyButton"] = PopoverModel.reviewAndApplyButton
         actual["PopoverModel.settingsTooltip"] = PopoverModel.settingsTooltip
+        actual["PopoverModel.sourceTooltipFormat"] = PopoverModel.sourceTooltipFormat("X")
         actual["PopoverModel.title"] = PopoverModel.title
+
+        // MARK: PublishModel
+
+        actual["PublishModel.cancelButton"] = PublishModel.cancelButton
+        actual["PublishModel.chooseFolderButton"] = PublishModel.chooseFolderButton
+        actual["PublishModel.envSectionTitle"] = PublishModel.envSectionTitle
+        actual["PublishModel.exportButton"] = PublishModel.exportButton
+        actual["PublishModel.exportTitle"] = PublishModel.exportTitle("X")
+        actual["PublishModel.folderLine"] = PublishModel.folderLine("X")
+        actual["PublishModel.footerLine"] = PublishModel.footerLine("X", "Y")
+        actual["PublishModel.forgetMarkButton"] = PublishModel.forgetMarkButton
+        actual["PublishModel.hintPlaceholder"] = PublishModel.hintPlaceholder
+        actual["PublishModel.markPathLabel"] = PublishModel.markPathLabel
+        actual["PublishModel.noFolderError"] = PublishModel.noFolderError
+        actual["PublishModel.pathNamePlaceholder"] = PublishModel.pathNamePlaceholder
+        actual["PublishModel.pathsSectionTitle"] = PublishModel.pathsSectionTitle
+        actual["PublishModel.previewTitle"] = PublishModel.previewTitle
+        actual["PublishModel.publishButton"] = PublishModel.publishButton
+        actual["PublishModel.shareValueLabel"] = PublishModel.shareValueLabel
+        actual["PublishModel.title"] = PublishModel.title("X")
+        actual["PublishModel.keptPathNote"] = PublishModel.keptPathNote("X", "Y")
+        actual["PublishModel.releaseValueButton"] = PublishModel.releaseValueButton
+        actual["PublishModel.publishFolderNote"] = PublishModel.publishFolderNote("X", "Y")
+        actual["PublishModel.publishFolderEditNote"] = PublishModel.publishFolderEditNote("X", "Y")
+        actual["PublishModel.otherFolderNote"] = PublishModel.otherFolderNote("X", "Y", "Z")
+        actual["PublishModel.useDirectoryTokenButton"] = PublishModel.useDirectoryTokenButton
+        actual["PublishModel.unresolvedMarkNote"] = PublishModel.unresolvedMarkNote("X", "Y")
+        actual["PublishModel.warningLine"] = PublishModel.warningLine("X", "Y")
 
         // MARK: RemoteAuthKind
 
@@ -248,6 +494,17 @@ final class StringCatalogTests: XCTestCase {
         actual["RestoreModel.headline"] = RestoreModel.headline
         actual["RestoreModel.restoreButton"] = RestoreModel.restoreButton
         actual["RestoreModel.restoreTitle"] = RestoreModel.restoreTitle
+
+        // MARK: ReviewModel
+
+        actual["ReviewModel.addedLabel"] = ReviewModel.addedLabel
+        actual["ReviewModel.applyButton"] = ReviewModel.applyButton
+        actual["ReviewModel.cancelButton"] = ReviewModel.cancelButton
+        actual["ReviewModel.changedLabel"] = ReviewModel.changedLabel
+        actual["ReviewModel.refreshButton"] = ReviewModel.refreshButton
+        actual["ReviewModel.deletedLabel"] = ReviewModel.deletedLabel
+        actual["ReviewModel.sourceMovedMessage"] = ReviewModel.sourceMovedMessage
+        actual["ReviewModel.title"] = ReviewModel.title("X")
 
         // MARK: SettingsModel
 
@@ -267,9 +524,7 @@ final class StringCatalogTests: XCTestCase {
         actual["SettingsModel.loginItemApprovalNote"] = SettingsModel.loginItemApprovalNote
         actual["SettingsModel.loginItemFailureNote"] = SettingsModel.loginItemFailureNote("X")
         actual["SettingsModel.masterListHeader"] = SettingsModel.masterListHeader
-        actual["SettingsModel.notifyCaption"] = SettingsModel.notifyCaption
         actual["SettingsModel.notifyTitle"] = SettingsModel.notifyTitle
-        actual["SettingsModel.restoreTitle"] = SettingsModel.restoreTitle
         actual["SettingsModel.revealInFinderTitle"] = SettingsModel.revealInFinderTitle
         actual["SettingsModel.storageTab"] = SettingsModel.storageTab
         actual["SettingsModel.toolsCaption"] = SettingsModel.toolsCaption
@@ -360,7 +615,9 @@ final class StringCatalogTests: XCTestCase {
     }
 
     /// The fixture has no `null` platform value today, so the rule above is
-    /// pinned here rather than by the fixture walk.
+    /// pinned here rather than by the fixture walk. Swift-only: the C# walk
+    /// inlines `is not null`, which JsonNode already gives this meaning, so it
+    /// has no helper of its own to pin.
     func testANullPlatformValueDoesNotResolve() {
         XCTAssertFalse(Self.isResolved(nil))
         XCTAssertFalse(Self.isResolved(.null))

@@ -9,7 +9,9 @@ public final class RestoreModel: ObservableObject {
     public static let headline = "Restore Claude config from a backup"
     public static let caption = "The current file is backed up first, then replaced by the selected backup."
     public static let cancelTitle = "Cancel"
-    public static let restoreTitle = "Restore…"
+    /// The button that opens this sheet from Settings and the sheet's own Restore, on both
+    /// platforms; `restoreButton` is the confirmation's, a separate question with its own title.
+    public static let restoreTitle = "Restore"
     public static let restoreButton = "Restore"
     public static let series = "claude_desktop_config"
 
@@ -46,12 +48,18 @@ public final class RestoreModel: ObservableObject {
         }
     }
 
-    /// The Restore… button. A fresh attempt starts with a clean sheet: the
+    /// The Restore button. A fresh attempt starts with a clean sheet: the
     /// previous attempt's error must not outlive a new selection or a cancelled
-    /// confirmation. Then the confirmation sheet opens.
+    /// confirmation. A restore AppState would refuse says why at once, rather
+    /// than after a confirmation it could never honour. Then the confirmation
+    /// sheet opens.
     public func requestRestore() {
         restoreError = nil
-        guard selection != nil else { return }
+        guard let backup = selection else { return }
+        if let refusal = state.restoreRefusal(for: backup) {
+            restoreError = refusal.localizedDescription
+            return
+        }
         confirming = true
     }
 
@@ -65,7 +73,14 @@ public final class RestoreModel: ObservableObject {
         do {
             try state.restoreClaudeConfig(from: backup)
             return true
+        } catch let refusal as RestoreError {
+            // A refusal is the sheet's alone, as the one before the confirmation is: nothing was
+            // restored, so there is nothing for the banner to say. It arrives here only when the
+            // collections changed while the confirmation was up.
+            restoreError = refusal.localizedDescription
+            return false
         } catch {
+            // A restore that failed is the banner's too.
             restoreError = error.localizedDescription   // raw message, not friendly()
             state.lastError = error.localizedDescription
             return false

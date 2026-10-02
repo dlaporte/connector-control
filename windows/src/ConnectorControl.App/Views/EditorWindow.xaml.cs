@@ -22,10 +22,13 @@ public partial class EditorWindow : Window
         Model = new EditorModel(state, target, new WpfDialogs(() => this), NewRemoteStyle);
         DataContext = Model;
         Title = Model.WindowTitle;
-        Model.CloseRequested += () => Dispatcher.BeginInvoke(new Action(Close));
+        this.CloseWhenAsked(handler => Model.CloseRequested += handler);
         Model.FocusEnvRowRequested += row => Dispatcher.BeginInvoke(new Action(() => FocusEnvRow(row)), DispatcherPriority.Loaded);
         PreviewKeyDown += OnPreviewKeyDown;
-        Closed += (_, _) => Model.Dispose();   // stop listening to AppState.ToolStatuses
+        InitialFocus.OnFirstActivation(this);
+        // The model watches AppState for everything the collection decides and raises it, so the
+        // window has nothing of its own to subscribe to and nothing to re-seat.
+        Closed += (_, _) => Model.Dispose();
     }
 
     public EditorModel Model { get; }
@@ -43,25 +46,23 @@ public partial class EditorWindow : Window
 
     private void OnCancel(object sender, RoutedEventArgs e) => Model.Cancel();
 
-    private void OnRemove(object sender, RoutedEventArgs e) => Model.Remove();
-
     private void OnAddArg(object sender, RoutedEventArgs e) => Model.AddArg();
 
-    private void OnRemoveArg(object sender, RoutedEventArgs e)
+    private void OnDeleteArg(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is ArgRow row)
         {
-            Model.RemoveArg(row);
+            Model.DeleteArg(row);
         }
     }
 
     private void OnAddEnv(object sender, RoutedEventArgs e) => Model.AddEnvRow();
 
-    private void OnRemoveEnv(object sender, RoutedEventArgs e)
+    private void OnDeleteEnv(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is EnvRow row)
         {
-            Model.RemoveEnvRow(row);
+            Model.DeleteEnvRow(row);
         }
     }
 
@@ -70,6 +71,16 @@ public partial class EditorWindow : Window
         if (((FrameworkElement)sender).DataContext is EnvRow row)
         {
             Model.ToggleReveal(row);
+        }
+    }
+
+    /// <summary>Clicking the link shows the same answer the button's tooltip gives on hover.</summary>
+    private void OnWhatCanIChange(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).ToolTip is ToolTip tip)
+        {
+            tip.PlacementTarget = (UIElement)sender;
+            tip.IsOpen = true;
         }
     }
 

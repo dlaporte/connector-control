@@ -1,6 +1,7 @@
 import XCTest
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/ToolRequirementTests.cs
 final class ToolRequirementTests: XCTestCase {
     func testRecognisesTheFourToolsByBasename() {
         XCTAssertEqual(ToolRequirement.requiredTool(command: "npx", args: ["-y", "mcp-remote", "https://x.dev/mcp"]), .npx)

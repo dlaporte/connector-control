@@ -20,11 +20,12 @@ struct RestoreSheetView: View {
             }
             .frame(height: 180)
             if let restoreError = model.restoreError {
-                Text(restoreError).font(.callout).foregroundStyle(.red)
+                FailureLine(restoreError)
             }
             HStack {
                 Spacer()
                 Button(RestoreModel.cancelTitle) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
                 Button(RestoreModel.restoreTitle) { model.requestRestore() }
                     .disabled(!model.canRestore)
             }

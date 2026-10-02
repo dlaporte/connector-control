@@ -2,6 +2,7 @@ import XCTest
 import ConnectorControlTestSupport
 @testable import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/ConfigServiceTests.cs
 final class ConfigServiceTests: XCTestCase {
     var tempDir: TempDir!
     var dir: URL!
@@ -24,6 +25,111 @@ final class ConfigServiceTests: XCTestCase {
         tempDir.dispose()
     }
 
+    /// Claude's file holds the collection it was last applied from, so what that collection renders
+    /// is left where it is; with nothing recorded — a first launch — everything is ingested.
+    func testTheIngestLeavesTheRecordedCollectionsOwnServersWhereTheyAre() throws {
+        XCTAssertEqual(Set(try service.loadAndReconcile(lastAppliedCollection: "Default").store.mcps.keys),
+                       ["scoutbook", "aws-mcp", "service-now"], "the recorded collection is the active one")
+
+        // Claude's file holds Team's connectors and one an installer wrote while the app was off.
+        var store = try service.loadAndReconcile().store
+        store.collections["Team"] = store.collections["Default"]
+        store.collections["Team"]?.mcps.removeValue(forKey: "scoutbook")
+        store.collections["Default"]?.mcps.removeValue(forKey: "aws-mcp")
+        try service.saveStore(store)
+        var servers = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
+        servers["installer"] = .object(["command": .string("node")])
+        try service.apply(servers: servers)
+
+        let loaded = try service.loadAndReconcile(lastAppliedCollection: "Team")
+        XCTAssertNil(loaded.store.collections[loaded.store.activeCollection]?.mcps["aws-mcp"],
+                     "Team renders it, so it is not poured into the active collection")
+        XCTAssertNotNil(loaded.store.collections[loaded.store.activeCollection]?.mcps["installer"],
+                        "a name no collection renders is genuinely new and comes in")
+        XCTAssertNil(loaded.store.collections["Team"]?.mcps["installer"], "and only into the active one")
+
+        // A record naming a collection this store does not have — deleted here, or on another
+        // machine — has no render to compare against, so the names that apply wrote stand in for it.
+        try FileManager.default.removeItem(at: paths.masterStoreURL)
+        XCTAssertEqual(Set(try service.loadAndReconcile(lastAppliedCollection: "Gone",
+                                                        lastAppliedNames: ["scoutbook", "aws-mcp"]).store.mcps.keys),
+                       ["service-now", "installer"],
+                       "what the collection that is gone rendered is left where it is, and the rest comes in")
+        // Without those names nothing in the file can be told from what that collection rendered,
+        // so none of it comes in and the store keeps exactly what the call before left it.
+        let kept = Set(try service.loadAndReconcile(lastAppliedCollection: "Gone").store.mcps.keys)
+        XCTAssertEqual(kept, ["service-now", "installer"])
+        XCTAssertFalse(kept.contains("scoutbook"), "the collection that is gone rendered it, and it is not guessed at")
+    }
+
+    /// A subscribed collection holds what its author published and nothing more, so what the file
+    /// adds while one is active goes to a local collection: the one last applied when that is local,
+    /// else the first local one by name, else a new one.
+    func testTheIngestTargetIsNeverASubscribedCollection() {
+        var store = MasterStore.single([:])
+        store.collections["Team"] = Collection()
+        store.collections["Beta"] = Collection()
+        store.activeCollection = "Team"
+        let synced = CollectionsFile.Entry(kind: .synced)
+        let teamSynced = CollectionsFile(collections: ["Team": synced])
+        XCTAssertEqual(ConfigService.ingestTarget(store: store, collections: teamSynced, lastApplied: "Team"), "Beta")
+        XCTAssertEqual(ConfigService.ingestTarget(store: store, collections: teamSynced, lastApplied: "Default"), "Default",
+                       "the local collection Claude's file was last applied from")
+        XCTAssertEqual(ConfigService.ingestTarget(store: store, collections: teamSynced, lastApplied: "Gone"), "Beta")
+        XCTAssertEqual(ConfigService.ingestTarget(store: store, collections: CollectionsFile(collections: [:]), lastApplied: nil),
+                       "Team", "a local active collection takes it as it always has")
+        XCTAssertEqual(ConfigService.ingestTarget(store: store, collections: nil, lastApplied: nil), "Team",
+                       "an unreadable sidecar says nothing about kinds")
+        let allSynced = CollectionsFile(collections: ["Team": synced, "Beta": synced, "Default": synced])
+        XCTAssertEqual(ConfigService.ingestTarget(store: store, collections: allSynced, lastApplied: "Default"), "Default 2",
+                       "no local collection: a new one, under a free name")
+        store.collections.removeValue(forKey: "Default")
+        XCTAssertEqual(ConfigService.ingestTarget(store: store, collections: allSynced, lastApplied: nil), "Default")
+    }
+
+    func testALoadWithASubscribedCollectionActiveKeepsTheAdditionsElsewhere() throws {
+        var store = MasterStore.single(["scoutbook": MCPEntry(enabled: true, config: .object(["command": .string("old")]))])
+        store.collections["Team"] = Collection(mcps: ["aws-mcp": MCPEntry(enabled: true, config: .object(["command": .string("t")]))])
+        store.activeCollection = "Team"
+        try service.saveStore(store)
+        try service.saveCollections(CollectionsFile(collections: ["Team": CollectionsFile.Entry(kind: .synced)]))
+
+        let loaded = try service.loadAndReconcile(lastAppliedCollection: "Team")
+        XCTAssertEqual(Set(try XCTUnwrap(loaded.store.collections["Team"]).mcps.keys), ["aws-mcp"],
+                       "the subscribed collection stays exactly as its author published it")
+        XCTAssertEqual(Set(try XCTUnwrap(loaded.store.collections["Default"]).mcps.keys), ["scoutbook", "scoutbook 2", "service-now"])
+        XCTAssertEqual(loaded.ingestedElsewhere, IngestedElsewhere(collection: "Default", names: ["scoutbook 2", "service-now"]))
+        XCTAssertEqual(MasterStoreIO.read(from: paths.masterStoreURL), loaded.store, "and it was saved")
+        let again = try service.loadAndReconcile(lastAppliedCollection: "Team")
+        XCTAssertEqual(again.store, loaded.store, "what is already there is not taken in twice")
+
+        // A local active collection takes what is new itself, and nothing is said about it.
+        try service.saveCollections(CollectionsFile(collections: [:]))
+        let local = try service.loadAndReconcile(lastAppliedCollection: "Team")
+        XCTAssertNil(local.ingestedElsewhere)
+        XCTAssertNotNil(local.store.collections["Team"]?.mcps["service-now"])
+    }
+
+    func testEachBackupRecordsTheCollectionItWasAppliedFrom() throws {
+        try service.apply(servers: ["x": .object(["command": .string("x")])], backedUpFrom: "Team")
+        let backup = try XCTUnwrap(try service.backups.backups(series: "claude_desktop_config").first)
+        XCTAssertEqual(BackupCollections.collection(of: backup, in: paths.backupsDirURL), "Team")
+        XCTAssertEqual(try Data(contentsOf: backup), Data(Fixtures.realisticClaudeConfig.utf8),
+                       "the backup itself stays a byte copy of Claude's file")
+        XCTAssertEqual(try service.backups.backups(series: "claude_desktop_config").count, 1,
+                       "the record is not listed as a backup")
+        try service.apply(servers: [:])
+        let after = try service.backups.backups(series: "claude_desktop_config")
+        XCTAssertEqual(after.count, 2)
+        // The second backup is the one the first listing lacks, which holds whichever millisecond
+        // the two applies land in.
+        let second = try XCTUnwrap(after.first { $0 != backup })
+        XCTAssertNil(BackupCollections.collection(of: second, in: paths.backupsDirURL),
+                     "an apply that names no collection records none")
+        XCTAssertNil(BackupCollections.collection(of: dir.appendingPathComponent(backup.lastPathComponent), in: paths.backupsDirURL),
+                     "a file of the same name elsewhere is not the backup")
+    }
+
     func testFirstLoadImportsAllServersEnabled() throws {
         let result = try service.loadAndReconcile()
         XCTAssertEqual(Set(result.store.mcps.keys),
@@ -37,7 +143,7 @@ final class ConfigServiceTests: XCTestCase {
     func testApplyWritesEnabledSubsetWithBackups() throws {
         var store = try service.loadAndReconcile().store
         store.mcps["aws-mcp"]?.enabled = false
-        try service.apply(store)
+        try service.apply(servers: store.enabledServers)
         XCTAssertEqual(Set(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL).keys),
                        ["scoutbook", "service-now"])
         // non-MCP keys survived
@@ -58,6 +164,19 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(try service.backups.backups(series: "mcps").count, 1)
     }
 
+    func testSaveCollectionsBacksUpTheSidecarAndLoadsItBack() throws {
+        let file = CollectionsFile(collections: ["X": .init(kind: .synced, fileName: "x.json", relativeToStore: nil, origin: nil, needs: [:], publish: nil, provenance: [:])])
+        try service.saveCollections(file)
+        try service.saveCollections(CollectionsFile(collections: [:]))
+        XCTAssertEqual(service.loadCollections(), CollectionsFile(collections: [:]))
+        XCTAssertEqual(try service.backups.backups(series: "collections").count, 1, "the first save had nothing to back up; the second backed up the first")
+    }
+
+    func testApplyServersWritesExactlyWhatItIsGiven() throws {
+        try service.apply(servers: ["a": .object(["command": .string("x")])])
+        XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL), ["a": .object(["command": .string("x")])])
+    }
+
     func testWipeRecoveryFlow() throws {
         let store = try service.loadAndReconcile().store
         // Claude wipes the file to a preferences-only stub (issue #32345 shape)
@@ -67,7 +186,7 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertNotEqual(result.claudeServers, result.store.enabledServers,
                           "divergence must be visible to the caller for regeneration")
         // restore: apply the store puts them back, preserving the stub's keys
-        try service.apply(store)
+        try service.apply(servers: store.enabledServers)
         XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL).count, 3)
     }
 
@@ -78,7 +197,85 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(result.store.mcps.count, 3, "rebuilt from Claude's config")
         XCTAssertEqual(result.notes.count, 1)
         XCTAssertTrue(result.notes[0].hasPrefix("The MCP list file was unreadable; it was preserved as mcps.corrupt."))
-        XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude's config."))
+        XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude’s config."))
+    }
+
+    /// A master list that cannot be read comes back from the newest `mcps` backup that can, so
+    /// every collection it held survives; only with no such backup is it rebuilt from Claude's
+    /// config. The unreadable file is kept aside either way.
+    func testACorruptStoreIsRestoredFromTheNewestBackupThatDecodes() throws {
+        var saved = try service.loadAndReconcile().store
+        saved.collections["Team"] = saved.collections["Default"]
+        try service.saveStore(saved)            // backs up the first store, which has no Team
+        saved.collections["Team"]?.mcps.removeValue(forKey: "scoutbook")
+        try service.saveStore(saved)            // backs up the store with Team in it
+        let backups = try service.backups.backups(series: "mcps")
+        XCTAssertEqual(backups.count, 2)
+        let withTeam = MasterStoreIO.read(from: backups[0])
+        XCTAssertNotNil(withTeam?.collections["Team"])
+        try Data("garbage".utf8).write(to: paths.masterStoreURL)
+
+        let result = try service.loadAndReconcile()
+        XCTAssertEqual(result.store, withTeam, "the newest backup, with every collection it held")
+        XCTAssertEqual(MasterStoreIO.read(from: paths.masterStoreURL), withTeam, "and it was saved")
+        let asides = try FileManager.default.contentsOfDirectory(atPath: paths.storeDirURL.path)
+            .filter { $0.hasPrefix("mcps.corrupt.") }
+        XCTAssertEqual(asides.count, 1, "the unreadable file is kept aside once")
+        let aside = try XCTUnwrap(asides.first)
+        XCTAssertEqual(try Data(contentsOf: paths.storeDirURL.appendingPathComponent(aside)), Data("garbage".utf8))
+        let taken = try XCTUnwrap(BackupManager.takenAt(backups[0]))
+        XCTAssertEqual(result.notes, ["The MCP list file was unreadable; it was preserved as \(aside) and restored "
+                                      + "from the backup of \(IsoTimestamp.localDateTime(from: taken))."])
+    }
+
+    func testACorruptStoreSkipsANewestBackupThatIsCorruptToo() throws {
+        var saved = try service.loadAndReconcile().store
+        saved.collections["Team"] = saved.collections["Default"]
+        try service.saveStore(saved)            // backs up the first store, which has no Team
+        try service.saveStore(saved)            // backs up the store with Team in it
+        let backups = try service.backups.backups(series: "mcps")
+        XCTAssertEqual(backups.count, 2)
+        let older = MasterStoreIO.read(from: backups[1])
+        try Data("{\"half".utf8).write(to: backups[0])
+        try Data("garbage".utf8).write(to: paths.masterStoreURL)
+
+        let result = try service.loadAndReconcile()
+        XCTAssertEqual(result.store, older, "the newest backup that decodes, which here is the older one")
+        XCTAssertNil(result.store.collections["Team"])
+        let taken = try XCTUnwrap(BackupManager.takenAt(backups[1]))
+        XCTAssertTrue(result.notes[0].hasSuffix(" and restored from the backup of \(IsoTimestamp.localDateTime(from: taken))."))
+    }
+
+    /// A backup whose active collection names one it does not hold — a hand edit, a foreign
+    /// machine's — makes the first existing collection in ordinal order active, and the reconcile
+    /// takes Claude's connectors there rather than into a new collection under the missing name.
+    func testARestoredBackupWhoseActiveCollectionIsMissingActivatesTheOrdinalFirst() throws {
+        let saved = try service.loadAndReconcile().store
+        var ghost = MasterStore(activeCollection: "\u{FF5E} Team", collections: [
+            "\u{FF5E} Team": Collection(), "\u{1F600} Team": Collection(mcps: saved.mcps),
+        ])
+        ghost.activeCollection = "Ghost"
+        try service.saveStore(ghost)
+        try service.saveStore(ghost)            // backs up the store naming Ghost
+        try Data("garbage".utf8).write(to: paths.masterStoreURL)
+
+        let result = try service.loadAndReconcile()
+        XCTAssertEqual(result.store.activeCollection, "\u{1F600} Team")
+        XCTAssertEqual(Set(result.store.collections.keys), ["\u{FF5E} Team", "\u{1F600} Team"], "no collection is created")
+        XCTAssertEqual(result.store.collections["\u{1F600} Team"], Collection(mcps: saved.mcps))
+    }
+
+    func testACorruptStoreWithNoBackupThatDecodesIsRebuiltFromClaudesConfig() throws {
+        var saved = try service.loadAndReconcile().store
+        saved.collections["Team"] = saved.collections["Default"]
+        try service.saveStore(saved)
+        for backup in try service.backups.backups(series: "mcps") { try Data("garbage".utf8).write(to: backup) }
+        try Data("garbage".utf8).write(to: paths.masterStoreURL)
+
+        let result = try service.loadAndReconcile()
+        XCTAssertEqual(Array(result.store.collections.keys), ["Default"], "rebuilt from Claude's config")
+        XCTAssertEqual(result.store.mcps.count, 3)
+        XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude’s config."))
     }
 
     func testCorruptStoreAndMalformedClaudeConfigBothNotesSurface() throws {
@@ -89,16 +286,16 @@ final class ConfigServiceTests: XCTestCase {
         // Both sentences, in reconcile order; the second is the one that says what to do.
         XCTAssertEqual(result.notes.count, 2)
         XCTAssertTrue(result.notes[0].hasPrefix("The MCP list file was unreadable; it was preserved as mcps.corrupt."))
-        XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude's config."))
+        XCTAssertTrue(result.notes[0].hasSuffix(".json and rebuilt from Claude’s config."))
         XCTAssertEqual(result.notes[1],
-                       "Claude's config file is not valid JSON. Your MCP list is safe; "
-                       + "use Backups ▸ Restore… to repair the file.")
+                       "Claude’s config file is not valid JSON. Your MCP list is safe; "
+                       + "use Backups ▸ Restore to repair the file.")
     }
 
     func testRestoreClaudeConfigFromBackup() throws {
         var store = try service.loadAndReconcile().store
         store.mcps["aws-mcp"]?.enabled = false
-        try service.apply(store)  // creates a backup of the 3-server file
+        try service.apply(servers: store.enabledServers)  // creates a backup of the 3-server file
         let backup = try XCTUnwrap(
             try service.backups.backups(series: "claude_desktop_config").first)
         try service.restoreClaudeConfig(from: backup, mergedWith: store)
@@ -108,7 +305,7 @@ final class ConfigServiceTests: XCTestCase {
     func testRestoreClaudeConfigAdoptsSnapshotIntoStore() throws {
         var store = try service.loadAndReconcile().store
         store.mcps["aws-mcp"]?.enabled = false
-        try service.apply(store)  // backup captures the original 3-server file
+        try service.apply(servers: store.enabledServers)  // backup captures the original 3-server file
         let backup = try XCTUnwrap(
             try service.backups.backups(series: "claude_desktop_config").first)
         try service.restoreClaudeConfig(from: backup, mergedWith: store)
@@ -147,8 +344,8 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(result.store.mcps.count, 3)
         XCTAssertEqual(result.notes.count, 1)
         XCTAssertEqual(result.notes[0],
-                       "Claude's config file is not valid JSON. Your MCP list is safe; "
-                       + "use Backups ▸ Restore… to repair the file.")
+                       "Claude’s config file is not valid JSON. Your MCP list is safe; "
+                       + "use Backups ▸ Restore to repair the file.")
         XCTAssertNil(result.claudeServers, "no baseline should be recorded from a failed reconcile")
         XCTAssertEqual(try service.backups.backups(series: "mcps").count, backupCountBefore,
                        "a failed reconcile pass must not save (and thus back up) the store")
@@ -212,7 +409,7 @@ final class ConfigServiceTests: XCTestCase {
 
     func testRestoreReturnsRestoredServers() throws {
         let store = try service.loadAndReconcile().store
-        try service.apply(store)
+        try service.apply(servers: store.enabledServers)
         let backup = try XCTUnwrap(
             try service.backups.backups(series: "claude_desktop_config").first)
         let servers = try service.restoreClaudeConfig(from: backup, mergedWith: store)
@@ -274,5 +471,20 @@ final class ConfigServiceTests: XCTestCase {
         let servers = try service.restoreClaudeConfig(from: empty, mergedWith: store)
         XCTAssertEqual(servers, [:])
         XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL), [:])
+    }
+}
+
+private extension ConfigService {
+    /// A load that reads the sidecar itself, as the app's first load does. The app passes the file it
+    /// read, or the one it already holds (`AppState.reload`).
+    func loadAndReconcile(baseline: [String: JSONValue]? = nil,
+                          storeAuthoritative: Bool = false,
+                          lastAppliedCollection: String? = nil,
+                          lastAppliedNames: Set<String>? = nil) throws
+        -> (store: MasterStore, notes: [String],
+            claudeServers: [String: JSONValue]?, ingestedElsewhere: IngestedElsewhere?) {
+        try loadAndReconcile(collections: loadCollections(), baseline: baseline,
+                             storeAuthoritative: storeAuthoritative,
+                             lastAppliedCollection: lastAppliedCollection, lastAppliedNames: lastAppliedNames)
     }
 }

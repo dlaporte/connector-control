@@ -6,8 +6,13 @@ namespace ConnectorControl.Core.State;
 /// </summary>
 public interface IDialogs
 {
-    /// <summary>Two-button dialog; true when the primary button was chosen.</summary>
-    bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle = "Cancel", bool destructive = false);
+    /// <summary>
+    /// Two-button dialog; true when the primary button was chosen. <paramref name="cancelIsDefault"/>
+    /// makes the cancel button the one Return presses, for a question whose primary answer is not
+    /// to be given by reflex; Escape answers the cancel button either way.
+    /// </summary>
+    bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle = "Cancel", bool destructive = false,
+                 bool cancelIsDefault = false);
 
     /// <summary>Text prompt with OK/Cancel; the raw (untrimmed) text, or null on Cancel.</summary>
     string? PromptForName(string title, string initial);
