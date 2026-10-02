@@ -36,9 +36,9 @@ wiped or mangled config is always one click from restored.
   paste-a-README-snippet support. The two views stay in sync, and switching
   never silently loses fields the form can't represent.
 - **Self-healing** — the app watches Claude's config; if connectors vanish
-  from it (Claude update, cloud sync, crash), a banner offers one-click
-  restore from the master list, and a notification fires even when the
-  app's window is closed.
+  from it (Claude update, cloud sync, crash), it writes them back from the
+  master list on its own and raises **Restart Required**, and a notification
+  says so even when the app's window is closed.
 - **Automatic backups** — timestamped copies of Claude's config, the master
   list and collections.json, each taken before that file is written
   (configurable retention, plus a permanent first-run snapshot), with in-app
@@ -113,9 +113,8 @@ collection has no connectors, the popover or flyout says "No connectors in
 “<collection>”." with a **Manage Collections** button beneath it, which
 opens the window on that collection. Every control in it
 sits on the thing it acts on. What this README calls a sheet — Import,
-Copy, Publish, Export, Review — opens as a dialog on Windows. On a Mac,
-Escape cancels any of these sheets, and the connector editor, as its
-**Cancel** button does.
+Copy, Publish, Export, Review — opens as a dialog on Windows. Escape cancels
+any of these, and the connector editor, as its **Cancel** button does.
 
 - **The sidebar** lists the collections under the heading **Collections**.
   Its **+** (tooltip "Add Collection") offers **New Collection**, which
@@ -152,7 +151,9 @@ Escape cancels any of these sheets, and the connector editor, as its
   collection that becomes active, when it is the active one; and, when it
   held connectors, that a copy remains in Backups. Duplicate copies a local
   collection into a new local one exactly as it stands, each connector's
-  switch included; it is your own copy, so nothing is marked as imported.
+  switch included; it is your own copy, so nothing new is marked as
+  imported, and a connector the source held as an imported copy keeps its
+  "Imported from" line.
   Make Local Copy copies a subscribed collection into a new local one, every
   connector switched off and marked with where it came from. Neither makes
   the copy active.
@@ -203,13 +204,20 @@ Export sheet on the ticked rows. **Delete** asks first — "Delete
 “<name>”?", or "Delete 3 connectors?" — adding "A copy remains in Backups.";
 deleting from the active collection applies at once.
 
+A connector that another local collection holds an identical copy of opens
+in the editor with a checkbox, off by default: "Also apply this change to
+<collection>, which has an identical <connector>". Tick it and saving makes
+the same change in those collections too; each copy keeps its own switch.
+
 <p align="center">
   <img src="docs/screenshots/mac-collections-window.png" width="620" alt="The Collections window on macOS: collections in the sidebar with a chain on the subscribed one; the selected collection's name with its pills and a More menu, and under it the connector count and the + that adds one; its connectors with ticks, names and what each one runs; and the selection bar along the bottom.">
 </p>
 
-The master list file (mcps.json) is v2 (collection-aware); older v1 files,
-from a build before 1.1, are simply rebuilt from Claude's current config the
-same way any corrupted file is (see How it works). Beside it, a
+The master list file (mcps.json) is v2 (collection-aware); an older v1 file,
+from a build before 1.1, is treated as any unreadable one is (see How it
+works): kept aside and replaced by the newest backup that can be read, or
+rebuilt from Claude's current config when none can, as is usual for a file
+that old. Beside it, a
 collections.json records which collection is which kind, what each one
 still needs, and each published collection's settings, including the text
 of every path you marked. **If you sync mcps.json across machines, every
@@ -242,9 +250,11 @@ The sheet decides what leaves the machine:
   travel, and each subscriber supplies the value. Ticked, the row shows the
   value that will travel, and the value goes into the document.
 - **Machine-specific paths · found in arguments** lists every argument that
-  looks like a path on this machine, each with a tick, a placeholder name
-  and a hint. Unmarked, which is the default, it travels as written. Marked,
-  it travels as a placeholder every subscriber fills in for themselves.
+  looks like a path on this machine, each with a tick that marks it; a
+  marked row asks for a placeholder name and a hint. Unmarked, which is the
+  default unless this machine already keeps that path back, it travels as
+  written. Marked, it travels as a placeholder every subscriber fills in for
+  themselves.
 - **Document preview** is the document itself, exactly as it will be
   written. An argument or shared value that looks like a credential is
   listed under the preview, each line naming the connector it came from,
@@ -293,7 +303,11 @@ published, stopped, or published from your other machine — the token has no
 folder: Claude gets it unexpanded, and the connector's row says
 "${COLLECTION_DIR} has no folder until this collection is published from
 this Mac." ("this PC" on Windows). Stop Publishing leaves the token in place
-rather than writing the folder into those connectors.
+rather than writing the folder into those connectors. A connector that moves
+from a document into a local collection — imported as a copy, copied to a
+local collection, or kept by Make Local Copy or Stop Syncing — gets the
+folder written in place of the token, once, since a local collection has no
+document to resolve it against later.
 
 The document is rewritten whenever what the collection runs changes, by the
 machine that published it. **That machine has to be running for a change to
@@ -372,23 +386,26 @@ subscribed collection never touches the source file.
 The Import sheet's other mode, **Add to a collection**, copies the
 document's connectors into a local collection of your choosing and keeps no
 link to the file afterwards. It starts on the collection selected in the
-Collections window when that one is local, and otherwise on the active
-collection. The last choice, **New Collection**, asks for a name; an empty
+Collections window when that one is local, otherwise on the active collection
+when that one is, and otherwise on the first local collection by name. The last choice, **New Collection**, asks for a name; an empty
 one is refused with "Name must not be empty." and the picker goes back to
 the collection it was on. The copies then go into a new, empty local
 collection, which does not become active. It is made only when Import can
 land: a document that can no longer be read by then makes nothing, and the
 sheet says why.
 Each connector is listed as "new · arrives
-off", "already present · skipped", or "skipped: <reason>". Where the name is
-already taken you choose **Replace**, which "keeps your filled values",
+off", "already present · skipped", or "skipped: <reason>". A name the
+collection already holds starts unticked, as "already present · skipped";
+tick it to choose **Replace**, the default, which "keeps your filled values",
 **Keep both**, which lands the new one as `<name> 2`, or **Skip**. Every
 copy arrives switched off, and its editor carries an italic line: "Imported
 from “<name>” on <date>. Edits stay here."
 
 #### Placeholders
 
-Wherever the author stripped a value, the connector waits for yours. The row
+Wherever the author stripped a value, the document carries a
+`${CC_NEEDS:<name>}` marker in its place, and the connector waits for yours.
+The row
 shows a caution, the editor marks the field "needs your value" or "needs
 your path", and the author's hint sits with it. Filled values are yours:
 they live in your master list, they never go into a document, and they
@@ -441,9 +458,13 @@ machines that follow it, including the one that publishes it.
   entry takes its own answer. A lost mark: tick the path where it now sits,
   or **Forget Mark**. A kept-back path: tick it where it sits, or
   **Release** it to let it travel as written once you have read the
-  preview. This machine's publish folder: **Use ${COLLECTION_DIR}** alone,
-  which rewrites that connector to the token. A folder is never released,
-  because a document that would carry it is never written.
+  preview. This collection's own publish folder: **Use ${COLLECTION_DIR}**
+  alone, which rewrites that connector to the token; it is never released,
+  because a document that would carry it is never written. Another folder
+  this machine keeps — one it publishes another collection into, or where a
+  subscribed collection's document sits — is kept back too: its entry names
+  that collection, and you tick it where it sits or **Release** it like any
+  other path.
 - A path your other machine marks, in a collection published from there, is
   kept back from every collection this machine publishes. It stays kept back
   once that machine drops the mark, stops publishing the collection or
@@ -497,8 +518,8 @@ runs without Gatekeeper warnings.
    [latest release](https://github.com/dlaporte/connector-control/releases/latest).
 2. Open it and drag **Connector Control** to Applications.
 3. Launch it — a plug icon appears in the menu bar. On first run it imports
-   your existing connectors from Claude's config into the master list and
-   takes a permanent snapshot of your original config.
+   your existing connectors from Claude's config into the master list; your
+   first change takes the permanent snapshot of the original config.
 
 There is no dock icon; the app lives entirely in the menu bar. Enable
 **Launch at login** in Settings (⚙︎) if you want it always available. The
@@ -511,7 +532,9 @@ automatically instead, and a **Check for Updates** button.
 Quit the app, then delete:
 
     /Applications/Connector Control.app
-    ~/Library/Application Support/Connector Control/   # master list + backups
+    ~/Library/Application Support/Connector Control/   # master list, collections, backups
+
+Then clear its settings with `defaults delete com.dlaporte.connector-control`.
 
 Your claude_desktop_config.json keeps whatever connectors were enabled at
 the time — the app leaves Claude's config valid on the way out.
@@ -519,7 +542,8 @@ the time — the app leaves Claude's config valid on the way out.
 ### Windows
 
 Requires Windows 10 version 1809 (build 17763) or later, or Windows 11, on
-an x64 or Arm64 PC. The installer and the app are code-signed. While the
+an x64 or Arm64 PC; each has its own installer and updater, built to run
+natively on it. The installer and the app are code-signed. While the
 publisher is new to Microsoft's SmartScreen, Windows may still show
 "Windows protected your PC" with the publisher named; choose **More info**,
 then **Run anyway**. The warning goes away as the signature earns reputation.
@@ -544,6 +568,7 @@ install them automatically, and a **Check for Updates** button). Turn on
 
 #### Uninstalling
 
+Turn off **Launch at startup** first, or its Startup entry stays behind.
 Settings ▸ Apps ▸ Installed apps ▸ Connector Control ▸ Uninstall removes
 the program (`%LOCALAPPDATA%\ConnectorControl`). App data is left in place;
 delete it yourself for a clean slate:
@@ -563,7 +588,8 @@ the time — the app leaves Claude's config valid on the way out.
 │                      ← this machine's document and publish folders; never synced
 └── backups/           ← timestamped copies of Claude's config, mcps.json and
                          collections.json, rotated; machine-local
-    └── claude_desktop_config.original.json   ← first-run snapshot, never pruned
+    ├── backup-collections.json               ← which collection each backup came from
+    └── claude_desktop_config.original.json   ← taken before the app first writes Claude's config; never pruned
 
 ~/Library/Application Support/Claude/claude_desktop_config.json
                        ← generated output: only enabled connectors are written;
@@ -582,23 +608,24 @@ profile, so backups stay on the machine that made them):
 ├── settings.json      ← app settings
 └── backups\           ← timestamped copies of Claude's config, mcps.json and
                          collections.json, rotated; machine-local
-    └── claude_desktop_config.original.json   ← first snapshot, never pruned
+    ├── backup-collections.json               ← which collection each backup came from
+    └── claude_desktop_config.original.json   ← taken before the app first writes Claude's config; never pruned
 
 %APPDATA%\Claude\claude_desktop_config.json   ← generated output, as above
 ```
 
-Every change (toggle, edit, add, delete, restore) writes the master list and
-regenerates the `mcpServers` section of Claude's config — atomically, after
-backing both up. Backups are named by the millisecond they were taken; two
+Every change (toggle, edit, add, delete, restore) writes the master list
+and, when it alters what Claude runs, regenerates the `mcpServers` section of
+Claude's config — atomically, after backing up each file it writes. Backups are named by the millisecond they were taken; two
 taken in the same one are numbered, and still list, restore and prune
 newest first. A master list that can't be read is kept aside as
 `mcps.corrupt.<time>.json` and replaced by its newest backup that can be
 read, so every collection survives; only when no backup can be read is it
 rebuilt from Claude's config. A banner says which happened. A reconciliation pass runs at launch, every time the popover or flyout
 opens, and whenever either file changes on disk: connectors added outside the app
-are imported into the active collection, external edits are detected (and you're notified), and
-connectors missing from Claude's config are flagged for restore rather than
-ever being silently dropped. While a subscribed collection is active, a connector
+are imported into the active collection, and an outside edit to a connector the app
+knows, or its removal, is undone by regenerating Claude's config from the master
+list, with a notification, so no connector is ever silently dropped. While a subscribed collection is active, a connector
 added outside the app goes into a local collection instead: the one Claude's config
 was last applied from if that is local, otherwise the first local collection by name,
 or, if there is none, a new, empty one named "Default" ("Default 2" and so on if that is
@@ -610,8 +637,9 @@ On Windows, **Restart Claude** asks Claude Desktop to end its session cleanly
 (the same request Windows sends at sign-out) and relaunches it from its Start
 menu entry. Older builds of Claude Desktop kept a virtualized copy of the
 config under `%LOCALAPPDATA%\Packages\Claude_…\LocalCache\Roaming\Claude\`;
-the app manages that copy only when it exists, and Settings ▸ Claude lets
-you point it at any file.
+the app manages that copy only when it exists and was written more recently
+than the one under `%APPDATA%`, and Settings ▸ Claude lets you point it at any
+file.
 
 ### Settings
 
@@ -688,7 +716,8 @@ changes live (the file is watched). Notes:
 ### macOS
 
 Requires Xcode 15.4+ (Swift 5.10). Command Line Tools alone can compile the
-app but cannot run the test suite.
+app but cannot run the test suite; if `xcode-select` points at them, set
+`DEVELOPER_DIR` to Xcode's `Contents/Developer` for `swift test`.
 
     git clone https://github.com/dlaporte/connector-control.git
     cd connector-control
@@ -704,6 +733,11 @@ For development against a throwaway config instead of your real one:
     CONNECTOR_CONTROL_STORE_DIR="$PWD/.sandbox/store" \
     swift run ConnectorControl
 
+The two overrides cover Claude's config and the store folder (the master
+list, collections.json and backups). This machine's collections-local.json is
+still the real one, and a sandbox run rewrites its record of which collection
+Claude's config came from, so quit the installed app first.
+
 ### Windows
 
 Requires the .NET SDK 10.0.400 or a later 10.0.x (`windows/global.json`).
@@ -714,17 +748,23 @@ the same SDK, which is how the shared Core tests run on both.
     dotnet run --project windows/src/ConnectorControl.App
 
 The same `CONNECTOR_CONTROL_CLAUDE_CONFIG` and `CONNECTOR_CONTROL_STORE_DIR`
-overrides point a development run at a throwaway config. Installers are
-built by `windows/scripts/package.ps1` (Velopack, `vpk` at the version
-pinned in `windows/.config/dotnet-tools.json`), which is also what the
-in-app updater consumes.
+overrides point a development run at a throwaway config; collections-local.json,
+settings.json and crash.log stay in `%LOCALAPPDATA%\Connector Control`, and
+while the installed app is running a second copy only opens its flyout, so
+quit it first. Installers are built by `windows/scripts/package.ps1`
+(Velopack, `vpk` at the version pinned in `windows/.config/dotnet-tools.json`,
+which must match the `Velopack` package in `ConnectorControl.App.csproj`; the
+Windows build fails otherwise), which is also what the in-app updater
+consumes.
 
 Releases are produced by [`.github/workflows/release.yml`](.github/workflows/release.yml)
-on version tags — both platforms from one tag, onto one GitHub release: the
+on an exact `vX.Y.Z` tag on master — both platforms from one tag, onto one GitHub release: the
 universal Mac build, Developer ID signing with hardened runtime, Apple
 notarization of both the app and the DMG, stapling, and the Sparkle
 appcast; and the Windows installers for x64 and Arm64, code-signed with
-Azure Artifact Signing and checked by a silent install on a Windows runner.
+Azure Artifact Signing and checked on a Windows runner by a silent install of
+the x64 package and a signature check of the Arm64 one. Actions ▸ Release ▸
+Run workflow rehearses a version end to end and publishes nothing.
 
 **Preview builds** (both apps): push a `preview-<n>` tag, or run Actions ▸ Preview ▸
 Run workflow with a number (a dry run by default). A preview builds `<next>-preview.<n>`,
@@ -751,6 +791,7 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
 | `scripts/build-app.sh` | Assembles `build/Connector Control.app` from the SwiftPM build products, embedding Sparkle and the app icon. | `mac-ci.yml`, `mac-build.yml` |
 | `scripts/make-dmg.sh` | Packages the app bundle into a drag-to-Applications DMG. | `mac-ci.yml`, `mac-build.yml` |
 | `scripts/test-mac.sh` | Runs the Swift suite the way CI gates it (no test may skip or fail). | `mac-ci.yml`, `preview.yml`, `release.yml` |
+| `scripts/regenerate-goldens.sh` | Rewrites the golden JSON fixtures under `Tests/Fixtures/` from the Swift Core's output after a deliberate format change; the C# tests compare against the same files. | run by hand, on a Mac |
 | `scripts/generate-icon.swift` | Renders the app icon — macOS `.icns` or Windows `.ico`, chosen by the output extension. | `scripts/build-app.sh`; the `.ico` path is run by hand, on a Mac |
 | `scripts/mac/import-signing-cert.sh` | Imports the Developer ID certificate into a throwaway CI keychain. | `mac-build.yml` |
 | `scripts/mac/notarize.sh` | Submits a binary or app bundle for Apple notarization and staples the ticket. | `mac-build.yml` |
@@ -761,7 +802,7 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
 | `scripts/release/upload-release-assets.sh` | Uploads one build's Velopack assets to an existing release. | `release.yml`, `preview.yml` |
 | `scripts/release/verify-release.sh` | Verifies a release's draft/prerelease flags and asset set. | `release.yml`, `preview.yml` |
 | `windows/scripts/package.ps1` | Publishes and Velopack-packs one Windows runtime. | `windows-build.yml` |
-| `windows/scripts/smoke-test.ps1` | Installs a packed `Setup.exe` and proves the app starts, stays up, and (with `-SignatureOnly`) is signed. | `windows-build.yml` |
+| `windows/scripts/smoke-test.ps1` | Installs a packed `Setup.exe` silently and proves the app starts and stays up (with `-ExpectSigned`, that it and its package are signed); with `-SignatureOnly`, only checks a `Setup.exe`'s signature. | `windows-build.yml` |
 | `windows/tools/probe-claude.ps1` | Manual diagnostic for how Claude Desktop installs and is found on a PC. | run by hand, on Windows |
 
 ## Scope and caveats
