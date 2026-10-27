@@ -16,6 +16,12 @@ public interface ISettings
     bool NotifyExternalChanges { get; set; }
     bool ConfirmBeforeRestart { get; set; }
     bool ConfirmBeforeQuit { get; set; }
+    /// <summary>Off by default: Connector Control's own entry is in Claude's config only while this is on.</summary>
+    bool ClaudeIntegrationEnabled { get; set; }
+    /// <summary>On by default: a gated change from Claude opens a confirmation first.</summary>
+    bool ConfirmClaudeChanges { get; set; }
+    /// <summary>The popover offers the integration once per machine; true once that offer has nothing left to ask.</summary>
+    bool ClaudeIntegrationOfferAnswered { get; set; }
     DateTime? LastApplyDate { get; set; }
     /// <summary>How far PermissionsSweep's one-time repair has gotten; see its header comment.</summary>
     int SweepVersion { get; set; }

@@ -9,6 +9,13 @@ public enum DefaultsKey: String, CaseIterable {
     case notifyExternalChanges
     case confirmBeforeRestart
     case confirmBeforeQuit
+    /// Whether Connector Control adds its own entry to Claude's config, so Claude can manage it.
+    case claudeIntegrationEnabled
+    /// Whether a change to connectors that Claude asks for waits for the user's Allow.
+    case confirmClaudeChanges
+    /// Whether the one-time offer to turn the integration on has been answered, or made moot by a
+    /// decision taken elsewhere.
+    case claudeIntegrationOfferAnswered
     /// When the app last wrote Claude's config; drives Restart Required.
     case lastApplyDate
     /// How far `PermissionsSweep`'s one-time repair has gotten; see its header comment.

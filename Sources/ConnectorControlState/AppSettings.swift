@@ -15,6 +15,12 @@ public protocol AppSettings: AnyObject {
     var notifyExternalChanges: Bool { get set }
     var confirmBeforeRestart: Bool { get set }
     var confirmBeforeQuit: Bool { get set }
+    /// Off by default: Connector Control's own entry is in Claude's config only while this is on.
+    var claudeIntegrationEnabled: Bool { get set }
+    /// On by default: a gated change from Claude opens a confirmation first.
+    var confirmClaudeChanges: Bool { get set }
+    /// The popover offers the integration once per machine; true once that offer has nothing left to ask.
+    var claudeIntegrationOfferAnswered: Bool { get set }
     var lastApplyDate: Date? { get set }
     /// How far `PermissionsSweep`'s one-time repair has gotten; see its header comment.
     var sweepVersion: Int { get set }
@@ -58,6 +64,21 @@ public final class UserDefaultsSettings: AppSettings {
     public var confirmBeforeQuit: Bool {
         get { bool(DefaultsKey.confirmBeforeQuit, default: true) }
         set { defaults.set(newValue, forKey: DefaultsKey.confirmBeforeQuit.rawValue) }
+    }
+
+    public var claudeIntegrationEnabled: Bool {
+        get { bool(DefaultsKey.claudeIntegrationEnabled, default: false) }
+        set { defaults.set(newValue, forKey: DefaultsKey.claudeIntegrationEnabled.rawValue) }
+    }
+
+    public var confirmClaudeChanges: Bool {
+        get { bool(DefaultsKey.confirmClaudeChanges, default: true) }
+        set { defaults.set(newValue, forKey: DefaultsKey.confirmClaudeChanges.rawValue) }
+    }
+
+    public var claudeIntegrationOfferAnswered: Bool {
+        get { bool(DefaultsKey.claudeIntegrationOfferAnswered, default: false) }
+        set { defaults.set(newValue, forKey: DefaultsKey.claudeIntegrationOfferAnswered.rawValue) }
     }
 
     public var lastApplyDate: Date? {

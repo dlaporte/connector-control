@@ -44,6 +44,9 @@ public sealed class SettingsStore : ISettings
     public bool NotifyExternalChanges { get => GetBool("notifyExternalChanges", true); set => Set("notifyExternalChanges", JsonValue.Bool(value)); }
     public bool ConfirmBeforeRestart { get => GetBool("confirmBeforeRestart", true); set => Set("confirmBeforeRestart", JsonValue.Bool(value)); }
     public bool ConfirmBeforeQuit { get => GetBool("confirmBeforeQuit", true); set => Set("confirmBeforeQuit", JsonValue.Bool(value)); }
+    public bool ClaudeIntegrationEnabled { get => GetBool("claudeIntegrationEnabled", false); set => Set("claudeIntegrationEnabled", JsonValue.Bool(value)); }
+    public bool ConfirmClaudeChanges { get => GetBool("confirmClaudeChanges", true); set => Set("confirmClaudeChanges", JsonValue.Bool(value)); }
+    public bool ClaudeIntegrationOfferAnswered { get => GetBool("claudeIntegrationOfferAnswered", false); set => Set("claudeIntegrationOfferAnswered", JsonValue.Bool(value)); }
     public int SweepVersion { get => GetInt("sweepVersion", 0); set => Set("sweepVersion", JsonValue.Int(value)); }
     public bool AutoUpdate { get => GetBool("autoUpdate", false); set => Set("autoUpdate", JsonValue.Bool(value)); }
     public bool TrayTipShown { get => GetBool("trayTipShown", false); set => Set("trayTipShown", JsonValue.Bool(value)); }

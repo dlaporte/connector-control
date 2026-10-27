@@ -11,6 +11,9 @@ public sealed class FakeSettings : ISettings
     public bool NotifyExternalChanges { get; set; } = true;
     public bool ConfirmBeforeRestart { get; set; } = true;
     public bool ConfirmBeforeQuit { get; set; } = true;
+    public bool ClaudeIntegrationEnabled { get; set; }
+    public bool ConfirmClaudeChanges { get; set; } = true;
+    public bool ClaudeIntegrationOfferAnswered { get; set; }
     public DateTime? LastApplyDate { get; set; }
     public int SweepVersion { get; set; }
     public bool AutoUpdate { get; set; }
