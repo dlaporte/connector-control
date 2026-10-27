@@ -111,6 +111,9 @@ public class StringCatalogTests
         ["ConfigService.corruptStoreRestoredNote"] = ["X", "Y"],
         ["ConfigService.invalidBackupError"] = ["X", "Y"],
         ["ConfigService.invalidBackupMcpServersError"] = ["X"],
+        ["ControlMasking.assignment"] = ["X", "Y"],
+        ["ControlMasking.oauthClientText"] = ["X", "Y"],
+        ["ControlMasking.remoteBridgeType"] = ["X"],
         ["CopyModel.title"] = ["X"],
         ["EditTarget.editTitle"] = ["X"],
         ["EditorModel.additionalTitle"] = ["3", "a, b"],
@@ -318,6 +321,29 @@ public class StringCatalogTests
         actual["CollectionsModel.subscribedPill"] = CollectionsModel.SubscribedPill;
         actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.UpdateAvailableStatus;
         actual["CollectionsModel.windowTitle"] = CollectionsModel.WindowTitle;
+
+        // MARK: ControlMasking / ControlText
+
+        actual["ControlMasking.addedPrefix"] = ControlMasking.AddedPrefix;
+        actual["ControlMasking.argsLabel"] = ControlMasking.ArgsLabel;
+        actual["ControlMasking.assignment"] = ControlMasking.Assignment("X", "Y");
+        actual["ControlMasking.commandLabel"] = ControlMasking.CommandLabel;
+        actual["ControlMasking.envLabel"] = ControlMasking.EnvLabel;
+        actual["ControlMasking.headersLabel"] = ControlMasking.HeadersLabel;
+        actual["ControlMasking.mask"] = ControlMasking.Mask;
+        actual["ControlMasking.nameLabel"] = ControlMasking.NameLabel;
+        actual["ControlMasking.needsValueState"] = ControlMasking.NeedsValueState;
+        actual["ControlMasking.oauthClientText"] = ControlMasking.OauthClientText("X", "Y");
+        actual["ControlMasking.oauthLabel"] = ControlMasking.OauthLabel;
+        actual["ControlMasking.otherLabel"] = ControlMasking.OtherLabel;
+        actual["ControlMasking.remoteBridgeType"] = ControlMasking.RemoteBridgeType("X");
+        actual["ControlMasking.removedPrefix"] = ControlMasking.RemovedPrefix;
+        actual["ControlMasking.scopesLabel"] = ControlMasking.ScopesLabel;
+        actual["ControlMasking.setState"] = ControlMasking.SetState;
+        actual["ControlMasking.setText"] = ControlMasking.SetText;
+        actual["ControlMasking.typeLabel"] = ControlMasking.TypeLabel;
+        actual["ControlMasking.urlLabel"] = ControlMasking.UrlLabel;
+        actual["ControlText.listAnd"] = ControlText.ListAnd;
 
         // MARK: CopyModel
 

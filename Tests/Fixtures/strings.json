@@ -236,6 +236,32 @@
     "format": "backup {0} has an invalid mcpServers section"
   },
   "ConfigService.malformedClaudeConfigNote": "Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.",
+  "ControlMasking.addedPrefix": "  + ",
+  "ControlMasking.argsLabel": "args",
+  "ControlMasking.assignment": {
+    "format": "{0} = {1}"
+  },
+  "ControlMasking.commandLabel": "command",
+  "ControlMasking.envLabel": "env",
+  "ControlMasking.headersLabel": "headers",
+  "ControlMasking.mask": "•••",
+  "ControlMasking.nameLabel": "name",
+  "ControlMasking.needsValueState": "needs value",
+  "ControlMasking.oauthClientText": {
+    "format": "client {0}, secret {1}"
+  },
+  "ControlMasking.oauthLabel": "oauth",
+  "ControlMasking.otherLabel": "other",
+  "ControlMasking.remoteBridgeType": {
+    "format": "remote, through {0}"
+  },
+  "ControlMasking.removedPrefix": "  − ",
+  "ControlMasking.scopesLabel": "scopes",
+  "ControlMasking.setState": "set",
+  "ControlMasking.setText": "••• (set)",
+  "ControlMasking.typeLabel": "type",
+  "ControlMasking.urlLabel": "url",
+  "ControlText.listAnd": " and ",
   "CopyModel.copyButton": "Copy",
   "CopyModel.title": {
     "format": "Copy to “{0}”"

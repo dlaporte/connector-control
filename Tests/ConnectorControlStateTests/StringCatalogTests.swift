@@ -105,6 +105,9 @@ final class StringCatalogTests: XCTestCase {
         "ConfigService.corruptStoreRestoredNote": ["X", "Y"],
         "ConfigService.invalidBackupError": ["X", "Y"],
         "ConfigService.invalidBackupMcpServersError": ["X"],
+        "ControlMasking.assignment": ["X", "Y"],
+        "ControlMasking.oauthClientText": ["X", "Y"],
+        "ControlMasking.remoteBridgeType": ["X"],
         "CopyModel.title": ["X"],
         "EditTarget.editTitle": ["X"],
         "EditorModel.additionalTitle": ["3", "a, b"],
@@ -309,6 +312,29 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.subscribedPill"] = CollectionsModel.subscribedPill
         actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.updateAvailableStatus
         actual["CollectionsModel.windowTitle"] = CollectionsModel.windowTitle
+
+        // MARK: ControlMasking / ControlText
+
+        actual["ControlMasking.addedPrefix"] = ControlMasking.addedPrefix
+        actual["ControlMasking.argsLabel"] = ControlMasking.argsLabel
+        actual["ControlMasking.assignment"] = ControlMasking.assignment("X", "Y")
+        actual["ControlMasking.commandLabel"] = ControlMasking.commandLabel
+        actual["ControlMasking.envLabel"] = ControlMasking.envLabel
+        actual["ControlMasking.headersLabel"] = ControlMasking.headersLabel
+        actual["ControlMasking.mask"] = ControlMasking.mask
+        actual["ControlMasking.nameLabel"] = ControlMasking.nameLabel
+        actual["ControlMasking.needsValueState"] = ControlMasking.needsValueState
+        actual["ControlMasking.oauthClientText"] = ControlMasking.oauthClientText("X", "Y")
+        actual["ControlMasking.oauthLabel"] = ControlMasking.oauthLabel
+        actual["ControlMasking.otherLabel"] = ControlMasking.otherLabel
+        actual["ControlMasking.remoteBridgeType"] = ControlMasking.remoteBridgeType("X")
+        actual["ControlMasking.removedPrefix"] = ControlMasking.removedPrefix
+        actual["ControlMasking.scopesLabel"] = ControlMasking.scopesLabel
+        actual["ControlMasking.setState"] = ControlMasking.setState
+        actual["ControlMasking.setText"] = ControlMasking.setText
+        actual["ControlMasking.typeLabel"] = ControlMasking.typeLabel
+        actual["ControlMasking.urlLabel"] = ControlMasking.urlLabel
+        actual["ControlText.listAnd"] = ControlText.listAnd
 
         // MARK: CopyModel
 
