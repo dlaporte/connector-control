@@ -524,7 +524,13 @@ final class StringCatalogTests: XCTestCase {
         actual["SettingsModel.chooseTitle"] = SettingsModel.chooseTitle
         actual["SettingsModel.claudeAppHeader"] = SettingsModel.claudeAppHeader
         actual["SettingsModel.claudeAppRejectedTitle"] = SettingsModel.claudeAppRejectedTitle
+        actual["SettingsModel.claudeIntegrationCaption"] = SettingsModel.claudeIntegrationCaption
+        actual["SettingsModel.claudeIntegrationHeader"] = SettingsModel.claudeIntegrationHeader
+        actual["SettingsModel.claudeIntegrationTitle"] = SettingsModel.claudeIntegrationTitle
         actual["SettingsModel.claudeTab"] = SettingsModel.claudeTab
+        actual["SettingsModel.confirmClaudeChangesOffCaption"] = SettingsModel.confirmClaudeChangesOffCaption
+        actual["SettingsModel.confirmClaudeChangesOnCaption"] = SettingsModel.confirmClaudeChangesOnCaption
+        actual["SettingsModel.confirmClaudeChangesTitle"] = SettingsModel.confirmClaudeChangesTitle
         actual["SettingsModel.confirmQuitTitle"] = SettingsModel.confirmQuitTitle
         actual["SettingsModel.confirmRestartTitle"] = SettingsModel.confirmRestartTitle
         actual["SettingsModel.generalTab"] = SettingsModel.generalTab

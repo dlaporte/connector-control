@@ -113,4 +113,121 @@ final class ClaudeIntegrationTests: XCTestCase {
                                 "args": .array([.string("mcp")])]))
         XCTAssertEqual(ClaudeIntegration.entryName, "connector-control")
     }
+
+    // MARK: The entry in Claude's config
+
+    private let toolPath = "/Applications/Connector Control.app/Contents/MacOS/connector-control"
+
+    func testTheEntryIsInClaudesConfigOnlyWhileTheSwitchIsOn() throws {
+        let h = AppStateHarness(); defer { h.dispose() }
+        h.controlToolPath = toolPath
+        let state = h.create()
+        XCTAssertNil(try h.claudeServers()[reserved])
+        XCTAssertNil(state.setClaudeIntegrationEnabled(true))
+        XCTAssertEqual(try h.claudeServers()[reserved], ClaudeIntegration.entry(toolPath: toolPath))
+        XCTAssertTrue(h.settings.claudeIntegrationEnabled)
+        XCTAssertTrue(state.store.collections.values.allSatisfy { $0.mcps[reserved] == nil }, "never stored")
+        XCTAssertNil(try h.storeOnDisk().mcps[reserved])
+        XCTAssertNil(state.setClaudeIntegrationEnabled(false))
+        XCTAssertNil(try h.claudeServers()[reserved])
+        XCTAssertEqual(Set(try h.claudeServers().keys), ["scoutbook", "aws-mcp", "service-now"])
+    }
+
+    func testTurningItOnWhileClaudeRunsAsksForARestart() throws {
+        let h = AppStateHarness(); defer { h.dispose() }
+        h.controlToolPath = toolPath
+        h.claudeRunningSince(hours: 1)
+        let state = h.create()
+        XCTAssertFalse(state.needsClaudeRestart)
+        state.setClaudeIntegrationEnabled(true)
+        XCTAssertTrue(state.needsClaudeRestart)
+    }
+
+    func testAReloadWithTheEntryInPlaceIsNotAChange() throws {
+        let h = AppStateHarness(); defer { h.dispose() }
+        h.controlToolPath = toolPath
+        let state = h.create()
+        state.setClaudeIntegrationEnabled(true)
+        h.notifier.clearSent()
+        state.reload()
+        XCTAssertFalse(state.isDirty, "the entry read back from Claude's file matches the one the app renders")
+        XCTAssertTrue(h.notifier.sent.isEmpty)
+        XCTAssertNil(state.store.mcps[reserved])
+    }
+
+    func testWithNoBundledToolThereIsNoEntry() throws {
+        let (h, state) = AppStateHarness.started(); defer { h.dispose() }
+        XCTAssertNil(state.setClaudeIntegrationEnabled(true))
+        XCTAssertNil(try h.claudeServers()[reserved])
+        XCTAssertFalse(state.isDirty)
+    }
+
+    func testThePathFollowsTheApp() throws {
+        let h = AppStateHarness(); defer { h.dispose() }
+        h.controlToolPath = "/old/place/connector-control"
+        h.settings.claudeIntegrationEnabled = true
+        let first = h.create()
+        XCTAssertEqual(try h.claudeServers()[reserved], ClaudeIntegration.entry(toolPath: "/old/place/connector-control"))
+        first.dispose()
+        h.controlToolPath = toolPath
+        _ = h.create()
+        XCTAssertEqual(try h.claudeServers()[reserved], ClaudeIntegration.entry(toolPath: toolPath),
+                       "the next launch writes the app's new location")
+    }
+
+    func testAClashKeepsTheEntryOutAndTheSwitchRefusesUntilItIsRenamed() throws {
+        let h = AppStateHarness(); defer { h.dispose() }
+        h.controlToolPath = toolPath
+        try MasterStoreIO.save(.single([reserved: MCPEntry(config: config)]), to: h.masterStoreURL)
+        let state = h.create()
+        XCTAssertTrue(state.claudeIntegrationClash)
+        XCTAssertFalse(state.showsClaudeIntegrationOffer)
+        XCTAssertEqual(state.setClaudeIntegrationEnabled(true), ClaudeIntegration.clashNote)
+        XCTAssertFalse(h.settings.claudeIntegrationEnabled)
+        XCTAssertEqual(try h.claudeServers()[reserved], config, "the user's own connector is what Claude runs")
+        XCTAssertNil(state.setClaudeIntegrationEnabled(false), "turning it off always goes through")
+        XCTAssertNil(state.upsert(name: "mine", entry: MCPEntry(config: config), renamedFrom: reserved))
+        state.applyInteractively()
+        XCTAssertFalse(state.claudeIntegrationClash)
+        XCTAssertNil(state.setClaudeIntegrationEnabled(true))
+        XCTAssertEqual(try h.claudeServers()[reserved], ClaudeIntegration.entry(toolPath: toolPath))
+        XCTAssertEqual(try h.claudeServers()["mine"], config)
+    }
+
+    // MARK: The one-time offer
+
+    func testTheOfferShowsUntilAnsweredAndNotNowDismissesItForGood() {
+        let h = AppStateHarness(); defer { h.dispose() }
+        h.controlToolPath = toolPath
+        let state = h.create()
+        XCTAssertTrue(state.showsClaudeIntegrationOffer)
+        state.answerClaudeIntegrationOffer(turnOn: false)
+        XCTAssertFalse(state.showsClaudeIntegrationOffer)
+        XCTAssertTrue(h.settings.claudeIntegrationOfferAnswered)
+        XCTAssertFalse(h.settings.claudeIntegrationEnabled)
+    }
+
+    func testTurnOnFromTheOfferTurnsItOn() throws {
+        let h = AppStateHarness(); defer { h.dispose() }
+        h.controlToolPath = toolPath
+        let state = h.create()
+        state.answerClaudeIntegrationOffer(turnOn: true)
+        XCTAssertFalse(state.showsClaudeIntegrationOffer)
+        XCTAssertTrue(h.settings.claudeIntegrationEnabled)
+        XCTAssertEqual(try h.claudeServers()[reserved], ClaudeIntegration.entry(toolPath: toolPath))
+    }
+
+    func testDecidingTheSettingAnywhereAnswersTheOffer() {
+        let h = AppStateHarness(); defer { h.dispose() }
+        h.controlToolPath = toolPath
+        let state = h.create()
+        state.setClaudeIntegrationEnabled(false)
+        XCTAssertFalse(state.showsClaudeIntegrationOffer, "off, decided in Settings or by the command line")
+        XCTAssertTrue(h.settings.claudeIntegrationOfferAnswered)
+    }
+
+    func testThereIsNoOfferWithoutABundledTool() {
+        let (h, state) = AppStateHarness.started(); defer { h.dispose() }
+        XCTAssertFalse(state.showsClaudeIntegrationOffer)
+    }
 }

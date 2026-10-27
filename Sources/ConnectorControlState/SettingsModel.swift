@@ -27,6 +27,13 @@ public final class SettingsModel: ObservableObject {
     public static let claudeAppRejectedTitle = "That app can’t be used as Claude Desktop"
     public static let toolsHeader = ToolNote.settingsHeader
     public static let toolsCaption = ToolNote.settingsCaption
+    /// "Claude Integration" is the Mac's title case; the Windows mirror says "Claude integration".
+    public static let claudeIntegrationHeader = "Claude Integration"
+    public static let claudeIntegrationTitle = "Let Claude manage Connector Control"
+    public static let claudeIntegrationCaption = "Adds a connector named connector-control to Claude's config, so Claude can list, switch and edit your connectors. Takes effect when Claude restarts."
+    public static let confirmClaudeChangesTitle = "Confirm changes Claude makes to connectors"
+    public static let confirmClaudeChangesOnCaption = "Adding, editing or deleting a connector, importing, subscribing and restoring a backup ask here first."
+    public static let confirmClaudeChangesOffCaption = "Claude can then change what it runs without asking here. Text Claude reads, such as a web page, could ask it to."
     public static let loginItemApprovalNote = "Approve Connector Control under System Settings → General → Login Items."
     public static let minKeepCount = 5
     public static let maxKeepCount = 100
@@ -196,6 +203,49 @@ public final class SettingsModel: ObservableObject {
         objectWillChange.send()
         settings.claudeAppPath = nil
     }
+
+    // MARK: - Claude integration
+
+    /// The switch writes through AppState, which applies at once and answers the offer.
+    public var claudeIntegrationEnabled: Bool {
+        get { settings.claudeIntegrationEnabled }
+        set {
+            objectWillChange.send()
+            state.setClaudeIntegrationEnabled(newValue)
+        }
+    }
+
+    /// Dimmed while a connector holds the name — unless the switch is on, so it can still go off.
+    public var canChangeClaudeIntegration: Bool { settings.claudeIntegrationEnabled || !state.claudeIntegrationClash }
+
+    /// The clash, named under the switch; nil while there is none.
+    public var claudeIntegrationNote: String? { state.claudeIntegrationClash ? ClaudeIntegration.clashNote : nil }
+
+    public var confirmClaudeChanges: Bool {
+        get { settings.confirmClaudeChanges }
+        set {
+            objectWillChange.send()
+            state.setConfirmClaudeChanges(newValue)
+        }
+    }
+
+    /// The checkbox keeps its value while the switch is off, dimmed.
+    public var canChangeConfirmClaudeChanges: Bool { settings.claudeIntegrationEnabled }
+
+    /// Under the checkbox: what it guards while ticked, what is at stake while not, and nothing
+    /// while the switch is off.
+    public var confirmClaudeChangesCaption: String? {
+        guard settings.claudeIntegrationEnabled else { return nil }
+        return settings.confirmClaudeChanges ? SettingsModel.confirmClaudeChangesOnCaption : SettingsModel.confirmClaudeChangesOffCaption
+    }
+
+    /// The unticked caption is a warning (amber in the view).
+    public var confirmClaudeChangesCaptionIsWarning: Bool {
+        settings.claudeIntegrationEnabled && !settings.confirmClaudeChanges
+    }
+
+    /// The running app's version, as the Updates section shows it.
+    public var version: String { updater.versionDisplay }
 
     // MARK: - Tools
 

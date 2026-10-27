@@ -265,4 +265,38 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertEqual(note.advice, ToolNote.shellOnlyAdvice)
         XCTAssertEqual(note.installCommand, "brew install node")
     }
+
+    // MARK: Claude integration
+
+    func testTheIntegrationSwitchAndTheConfirmCheckbox() throws {
+        let rig = Rig(); defer { rig.dispose() }
+        XCTAssertFalse(rig.model.claudeIntegrationEnabled)
+        XCTAssertTrue(rig.model.canChangeClaudeIntegration)
+        XCTAssertNil(rig.model.claudeIntegrationNote)
+        XCTAssertFalse(rig.model.canChangeConfirmClaudeChanges, "the checkbox works only while the switch is on")
+        XCTAssertNil(rig.model.confirmClaudeChangesCaption, "its caption hides while the switch is off")
+        rig.model.claudeIntegrationEnabled = true
+        XCTAssertTrue(rig.h.settings.claudeIntegrationEnabled)
+        XCTAssertTrue(rig.model.canChangeConfirmClaudeChanges)
+        XCTAssertEqual(rig.model.confirmClaudeChangesCaption, SettingsModel.confirmClaudeChangesOnCaption)
+        XCTAssertFalse(rig.model.confirmClaudeChangesCaptionIsWarning)
+        rig.model.confirmClaudeChanges = false
+        XCTAssertFalse(rig.h.settings.confirmClaudeChanges)
+        XCTAssertEqual(rig.model.confirmClaudeChangesCaption, SettingsModel.confirmClaudeChangesOffCaption)
+        XCTAssertTrue(rig.model.confirmClaudeChangesCaptionIsWarning)
+        rig.model.claudeIntegrationEnabled = false
+        XCTAssertFalse(rig.model.confirmClaudeChanges, "the checkbox keeps its value while dimmed")
+        XCTAssertEqual(rig.model.version, rig.updater.versionDisplay)
+    }
+
+    func testAClashDimsTheSwitchAndNamesIt() throws {
+        let h = AppStateHarness()
+        try MasterStoreIO.save(.single([ClaudeIntegration.entryName: MCPEntry(config: .object(["command": .string("x")]))]),
+                               to: h.masterStoreURL)
+        let state = h.create()
+        let model = SettingsModel(state: state, settings: h.settings, autostart: FakeAutostart(), updater: FakeUpdater())
+        defer { model.dispose(); h.dispose() }
+        XCTAssertFalse(model.canChangeClaudeIntegration)
+        XCTAssertEqual(model.claudeIntegrationNote, ClaudeIntegration.clashNote)
+    }
 }

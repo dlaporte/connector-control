@@ -125,4 +125,138 @@ public class ClaudeIntegrationTests
             ClaudeIntegration.Entry("/Applications/Connector Control.app/Contents/MacOS/connector-control"));
         Assert.Equal("connector-control", ClaudeIntegration.EntryName);
     }
+
+    // MARK: The entry in Claude's config
+
+    private const string ToolPath = "/Applications/Connector Control.app/Contents/MacOS/connector-control";
+
+    [Fact]
+    public void TheEntryIsInClaudesConfigOnlyWhileTheSwitchIsOn()
+    {
+        using var h = new AppStateHarness { ControlToolPath = ToolPath };
+        using var state = h.Create();
+        Assert.False(h.ClaudeServers().ContainsKey(Reserved));
+        Assert.Null(state.SetClaudeIntegrationEnabled(true));
+        Assert.Equal(ClaudeIntegration.Entry(ToolPath), h.ClaudeServers()[Reserved]);
+        Assert.True(h.Settings.ClaudeIntegrationEnabled);
+        Assert.All(state.Store.Collections.Values, c => Assert.False(c.Mcps.ContainsKey(Reserved)));   // never stored
+        Assert.False(h.StoreOnDisk().Mcps.ContainsKey(Reserved));
+        Assert.Null(state.SetClaudeIntegrationEnabled(false));
+        Assert.False(h.ClaudeServers().ContainsKey(Reserved));
+        Assert.Equal(["aws-mcp", "scoutbook", "service-now"], AppStateHarness.Keys(h.ClaudeServers().Keys));
+    }
+
+    [Fact]
+    public void TurningItOnWhileClaudeRunsAsksForARestart()
+    {
+        using var h = new AppStateHarness { ControlToolPath = ToolPath };
+        h.ClaudeRunningSince(1);
+        using var state = h.Create();
+        Assert.False(state.NeedsClaudeRestart);
+        state.SetClaudeIntegrationEnabled(true);
+        Assert.True(state.NeedsClaudeRestart);
+    }
+
+    [Fact]
+    public void AReloadWithTheEntryInPlaceIsNotAChange()
+    {
+        using var h = new AppStateHarness { ControlToolPath = ToolPath };
+        using var state = h.Create();
+        state.SetClaudeIntegrationEnabled(true);
+        h.Notifier.Sent.Clear();
+        state.Reload();
+        // The entry read back from Claude's file matches the one the app renders.
+        Assert.False(state.IsDirty);
+        Assert.Empty(h.Notifier.Sent);
+        Assert.False(state.Store.Mcps.ContainsKey(Reserved));
+    }
+
+    [Fact]
+    public void WithNoBundledToolThereIsNoEntry()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.SetClaudeIntegrationEnabled(true));
+        Assert.False(h.ClaudeServers().ContainsKey(Reserved));
+        Assert.False(state.IsDirty);
+    }
+
+    [Fact]
+    public void ThePathFollowsTheApp()
+    {
+        using var h = new AppStateHarness { ControlToolPath = "/old/place/connector-control" };
+        h.Settings.ClaudeIntegrationEnabled = true;
+        var first = h.Create();
+        Assert.Equal(ClaudeIntegration.Entry("/old/place/connector-control"), h.ClaudeServers()[Reserved]);
+        first.Dispose();
+        h.ControlToolPath = ToolPath;
+        using var second = h.Create();
+        // The next launch writes the app's new location.
+        Assert.Equal(ClaudeIntegration.Entry(ToolPath), h.ClaudeServers()[Reserved]);
+    }
+
+    [Fact]
+    public void AClashKeepsTheEntryOutAndTheSwitchRefusesUntilItIsRenamed()
+    {
+        using var h = new AppStateHarness { ControlToolPath = ToolPath };
+        MasterStoreIO.Save(new MasterStore([new(Reserved, new McpEntry(true, Config))]), h.MasterStorePath);
+        using var state = h.Create();
+        Assert.True(state.ClaudeIntegrationClash);
+        Assert.False(state.ShowsClaudeIntegrationOffer);
+        Assert.Equal(ClaudeIntegration.ClashNote, state.SetClaudeIntegrationEnabled(true));
+        Assert.False(h.Settings.ClaudeIntegrationEnabled);
+        // The user's own connector is what Claude runs.
+        Assert.Equal(Config, h.ClaudeServers()[Reserved]);
+        Assert.Null(state.SetClaudeIntegrationEnabled(false));   // turning it off always goes through
+        Assert.Null(state.Upsert("mine", new McpEntry(true, Config), Reserved));
+        state.ApplyInteractively();
+        Assert.False(state.ClaudeIntegrationClash);
+        Assert.Null(state.SetClaudeIntegrationEnabled(true));
+        Assert.Equal(ClaudeIntegration.Entry(ToolPath), h.ClaudeServers()[Reserved]);
+        Assert.Equal(Config, h.ClaudeServers()["mine"]);
+    }
+
+    // MARK: The one-time offer
+
+    [Fact]
+    public void TheOfferShowsUntilAnsweredAndNotNowDismissesItForGood()
+    {
+        using var h = new AppStateHarness { ControlToolPath = ToolPath };
+        using var state = h.Create();
+        Assert.True(state.ShowsClaudeIntegrationOffer);
+        state.AnswerClaudeIntegrationOffer(turnOn: false);
+        Assert.False(state.ShowsClaudeIntegrationOffer);
+        Assert.True(h.Settings.ClaudeIntegrationOfferAnswered);
+        Assert.False(h.Settings.ClaudeIntegrationEnabled);
+    }
+
+    [Fact]
+    public void TurnOnFromTheOfferTurnsItOn()
+    {
+        using var h = new AppStateHarness { ControlToolPath = ToolPath };
+        using var state = h.Create();
+        state.AnswerClaudeIntegrationOffer(turnOn: true);
+        Assert.False(state.ShowsClaudeIntegrationOffer);
+        Assert.True(h.Settings.ClaudeIntegrationEnabled);
+        Assert.Equal(ClaudeIntegration.Entry(ToolPath), h.ClaudeServers()[Reserved]);
+    }
+
+    [Fact]
+    public void DecidingTheSettingAnywhereAnswersTheOffer()
+    {
+        using var h = new AppStateHarness { ControlToolPath = ToolPath };
+        using var state = h.Create();
+        state.SetClaudeIntegrationEnabled(false);
+        // Off, decided in Settings or by the command line.
+        Assert.False(state.ShowsClaudeIntegrationOffer);
+        Assert.True(h.Settings.ClaudeIntegrationOfferAnswered);
+    }
+
+    [Fact]
+    public void ThereIsNoOfferWithoutABundledTool()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.False(state.ShowsClaudeIntegrationOffer);
+    }
 }

@@ -559,7 +559,13 @@ public class StringCatalogTests
         actual["SettingsModel.chooseTitle"] = SettingsModel.ChooseTitle;
         actual["SettingsModel.claudeAppHeader"] = SettingsModel.ClaudeAppHeader;
         actual["SettingsModel.claudeAppRejectedTitle"] = SettingsModel.LaunchTargetRejectedTitle;
+        actual["SettingsModel.claudeIntegrationCaption"] = SettingsModel.ClaudeIntegrationCaption;
+        actual["SettingsModel.claudeIntegrationHeader"] = SettingsModel.ClaudeIntegrationHeader;
+        actual["SettingsModel.claudeIntegrationTitle"] = SettingsModel.ClaudeIntegrationTitle;
         actual["SettingsModel.claudeTab"] = SettingsModel.ClaudeTab;
+        actual["SettingsModel.confirmClaudeChangesOffCaption"] = SettingsModel.ConfirmClaudeChangesOffCaption;
+        actual["SettingsModel.confirmClaudeChangesOnCaption"] = SettingsModel.ConfirmClaudeChangesOnCaption;
+        actual["SettingsModel.confirmClaudeChangesTitle"] = SettingsModel.ConfirmClaudeChangesTitle;
         actual["SettingsModel.confirmQuitTitle"] = SettingsModel.ConfirmQuitTitle;
         actual["SettingsModel.confirmRestartTitle"] = SettingsModel.ConfirmRestartTitle;
         actual["SettingsModel.configPathLabel"] = SettingsModel.ConfigPathLabel;

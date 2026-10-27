@@ -249,15 +249,21 @@ public final class AppState: ObservableObject {
     var isDirty: Bool { expandedServers != appliedServers }
 
     /// The enabled connectors as Claude must see them, with `${COLLECTION_DIR}` resolved against
-    /// the active collection's folder on this machine (`collectionDirectory(of:)`). The store
-    /// itself keeps the token, so the same list still resolves on the next machine, and a
-    /// published document carries it as written for each subscriber to resolve against their own
-    /// copy. With no folder the token is written as it stands — guessing one would start the
-    /// wrong program — and the row carries the caution that says so.
+    /// the active collection's folder on this machine (`collectionDirectory(of:)`), plus Connector
+    /// Control's own entry while the integration is on. The store itself keeps the token, so the
+    /// same list still resolves on the next machine, and a published document carries it as
+    /// written for each subscriber to resolve against their own copy. With no folder the token is
+    /// written as it stands — guessing one would start the wrong program — and the row carries the
+    /// caution that says so. The entry joins here and only here: the store, the collections and
+    /// every document never hold it, and it is written, compared, backed up and regenerated like
+    /// every other entry.
     var expandedServers: [String: JSONValue] {
-        let servers = store.enabledServers
-        guard let directory = collectionDirectory(of: activeCollection) else { return servers }
-        return servers.mapValues { Placeholder.expandDirectoryToken(in: $0, directory: directory) }
+        var servers = store.enabledServers
+        if let directory = collectionDirectory(of: activeCollection) {
+            servers = servers.mapValues { Placeholder.expandDirectoryToken(in: $0, directory: directory) }
+        }
+        if let entry = claudeIntegrationEntry { servers[ClaudeIntegration.entryName] = entry }
+        return servers
     }
 
     /// The folder `${COLLECTION_DIR}` stands for in `collection` on this machine, or nil when it
@@ -884,6 +890,59 @@ public final class AppState: ObservableObject {
                     self.refreshRestartState()
                 }
             }
+        }
+    }
+
+    // MARK: - Claude integration
+
+    /// A connector the active collection already holds under the reserved name — from before the
+    /// name was reserved, or synced in from an older app — leaves no room for Connector Control's
+    /// own entry: Settings dims the switch and names the clash, and nothing is added.
+    public var claudeIntegrationClash: Bool {
+        store.collections[activeCollection]?.mcps[ClaudeIntegration.entryName] != nil
+    }
+
+    /// Connector Control's own entry while the switch is on, the app has a tool to name and no
+    /// connector holds the name; nil otherwise.
+    var claudeIntegrationEntry: JSONValue? {
+        guard settings.claudeIntegrationEnabled, let path = host.controlToolPath, !claudeIntegrationClash else { return nil }
+        return ClaudeIntegration.entry(toolPath: path)
+    }
+
+    /// The popover's one-time offer: shown until it is answered, never once the setting has been
+    /// decided anywhere (Settings and the command-line tool answer it too), and never where turning
+    /// it on could not work — no bundled tool, or a connector holding the name.
+    public var showsClaudeIntegrationOffer: Bool {
+        !settings.claudeIntegrationOfferAnswered && !settings.claudeIntegrationEnabled
+            && host.controlToolPath != nil && !claudeIntegrationClash
+    }
+
+    /// Turns the integration on or off from anywhere — Settings, the offer, the command-line tool —
+    /// and applies at once, so the entry appears or goes and Restart Required follows. Deciding it
+    /// answers the offer for good. Turning it on is refused while a connector holds the name, with
+    /// the note that says so; turning it off always goes through. nil on success.
+    @discardableResult
+    public func setClaudeIntegrationEnabled(_ on: Bool) -> String? {
+        if on, claudeIntegrationClash { return ClaudeIntegration.clashNote }
+        objectWillChange.send()
+        settings.claudeIntegrationEnabled = on
+        settings.claudeIntegrationOfferAnswered = true
+        applyIfChanged()
+        return nil
+    }
+
+    public func setConfirmClaudeChanges(_ on: Bool) {
+        objectWillChange.send()
+        settings.confirmClaudeChanges = on
+    }
+
+    /// The offer's buttons: Turn On turns the integration on; Not Now dismisses the offer for good.
+    public func answerClaudeIntegrationOffer(turnOn: Bool) {
+        if turnOn {
+            setClaudeIntegrationEnabled(true)
+        } else {
+            objectWillChange.send()
+            settings.claudeIntegrationOfferAnswered = true
         }
     }
 

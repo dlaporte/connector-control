@@ -14,8 +14,16 @@ namespace ConnectorControl.Core.State;
 /// has therefore NOT necessarily run when it returns — a caller that needs the
 /// result back awaits <c>MarshalAsync</c> instead of reading a captured local.
 /// </para>
+/// <para>
+/// <c>ControlToolPath</c> is the full path Claude's entry for Connector Control names, as the app
+/// that hosts this state supplies it, or null where there is none — a development run, and the
+/// tests unless one sets it. The model never works a path out for itself: on the Mac the app
+/// passes the tool inside its own bundle, and on Windows the copy it keeps outside the update
+/// folder. Whatever is passed is what the next apply writes, so a moved or updated app corrects
+/// it then.
+/// </para>
 /// </summary>
-public sealed record AppHost(Action<Action> Marshal, Action<TimeSpan, Action> Delay, Func<DateTime> Now, Action<Action> Background)
+public sealed record AppHost(Action<Action> Marshal, Action<TimeSpan, Action> Delay, Func<DateTime> Now, Action<Action> Background, string? ControlToolPath = null)
 {
     /// <summary>Everything runs immediately on the calling thread.</summary>
     internal static AppHost Inline() => new(action => action(), (_, action) => action(), () => DateTime.UtcNow, action => action());

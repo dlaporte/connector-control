@@ -23,6 +23,13 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string BackupsCaption = "Claude’s config, the master list and collections.json are backed up automatically before every change.";
     public const string ShowInExplorerTitle = "Show in Explorer";
     public const string ClaudeAppHeader = "Claude App";
+    // "Claude integration" is the Windows sentence case; the Mac's title case says "Claude Integration".
+    public const string ClaudeIntegrationHeader = "Claude integration";
+    public const string ClaudeIntegrationTitle = "Let Claude manage Connector Control";
+    public const string ClaudeIntegrationCaption = "Adds a connector named connector-control to Claude's config, so Claude can list, switch and edit your connectors. Takes effect when Claude restarts.";
+    public const string ConfirmClaudeChangesTitle = "Confirm changes Claude makes to connectors";
+    public const string ConfirmClaudeChangesOnCaption = "Adding, editing or deleting a connector, importing, subscribing and restoring a backup ask here first.";
+    public const string ConfirmClaudeChangesOffCaption = "Claude can then change what it runs without asking here. Text Claude reads, such as a web page, could ask it to.";
     public const string ConfigPathLabel = "Config file";
     public const string LaunchTargetLabel = "Launch target";
     public const string LaunchTargetRejectedTitle = "That program can’t be used as Claude Desktop";
@@ -131,6 +138,44 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         get => settings.AutoUpdate;
         set { settings.AutoUpdate = value; Raise(); }
     }
+
+    // MARK: Claude integration
+
+    /// <summary>The switch writes through AppState, which applies at once and answers the offer.</summary>
+    public bool ClaudeIntegrationEnabled
+    {
+        get => settings.ClaudeIntegrationEnabled;
+        set { state.SetClaudeIntegrationEnabled(value); RaiseAll(); }
+    }
+
+    /// <summary>Dimmed while a connector holds the name — unless the switch is on, so it can still go off.</summary>
+    public bool CanChangeClaudeIntegration => settings.ClaudeIntegrationEnabled || !state.ClaudeIntegrationClash;
+
+    /// <summary>The clash, named under the switch; null while there is none.</summary>
+    public string? ClaudeIntegrationNote => state.ClaudeIntegrationClash ? ClaudeIntegration.ClashNote : null;
+
+    public bool ConfirmClaudeChanges
+    {
+        get => settings.ConfirmClaudeChanges;
+        set { state.SetConfirmClaudeChanges(value); Raise(); }
+    }
+
+    /// <summary>The checkbox keeps its value while the switch is off, dimmed.</summary>
+    public bool CanChangeConfirmClaudeChanges => settings.ClaudeIntegrationEnabled;
+
+    /// <summary>
+    /// Under the checkbox: what it guards while ticked, what is at stake while not, and nothing
+    /// while the switch is off.
+    /// </summary>
+    public string? ConfirmClaudeChangesCaption =>
+        !settings.ClaudeIntegrationEnabled ? null
+        : settings.ConfirmClaudeChanges ? ConfirmClaudeChangesOnCaption : ConfirmClaudeChangesOffCaption;
+
+    /// <summary>The unticked caption is a warning (amber in the view).</summary>
+    public bool ConfirmClaudeChangesCaptionIsWarning => settings.ClaudeIntegrationEnabled && !settings.ConfirmClaudeChanges;
+
+    /// <summary>The running app's version, as the Updates section shows it.</summary>
+    public string Version => updater.VersionDisplay;
 
     public bool UpdatesEnabled => updater.IsAvailable;
 

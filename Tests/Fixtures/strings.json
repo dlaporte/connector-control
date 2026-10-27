@@ -533,10 +533,19 @@
     "mac": "That app can’t be used as Claude Desktop",
     "win": "That program can’t be used as Claude Desktop"
   },
+  "SettingsModel.claudeIntegrationCaption": "Adds a connector named connector-control to Claude's config, so Claude can list, switch and edit your connectors. Takes effect when Claude restarts.",
+  "SettingsModel.claudeIntegrationHeader": {
+    "mac": "Claude Integration",
+    "win": "Claude integration"
+  },
+  "SettingsModel.claudeIntegrationTitle": "Let Claude manage Connector Control",
   "SettingsModel.claudeTab": "Claude",
   "SettingsModel.configPathLabel": {
     "win": "Config file"
   },
+  "SettingsModel.confirmClaudeChangesOffCaption": "Claude can then change what it runs without asking here. Text Claude reads, such as a web page, could ask it to.",
+  "SettingsModel.confirmClaudeChangesOnCaption": "Adding, editing or deleting a connector, importing, subscribing and restoring a backup ask here first.",
+  "SettingsModel.confirmClaudeChangesTitle": "Confirm changes Claude makes to connectors",
   "SettingsModel.confirmQuitTitle": "Confirm before quitting",
   "SettingsModel.confirmRestartTitle": "Confirm before restarting Claude",
   "SettingsModel.generalTab": "General",

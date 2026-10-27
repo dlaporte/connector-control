@@ -30,7 +30,9 @@ public sealed class AppStateHarness : IDisposable
     private readonly List<CollectionsModel> models = [];
     public DateTime Now { get; set; } = new(2026, 9, 4, 12, 0, 0, DateTimeKind.Utc);
     public PathContext Context { get; }
-    public AppHost Host { get; }
+    /// <summary>The bundled tool's path the next Create() hands AppState; null, as in a development run.</summary>
+    public string? ControlToolPath { get; set; }
+    public AppHost Host => new(Ui.Post, Delays.Add, () => Now, Background.Add, ControlToolPath);
 
     public AppStateHarness(bool seedClaudeConfig = true)
     {
@@ -41,7 +43,6 @@ public sealed class AppStateHarness : IDisposable
             File.WriteAllText(ClaudeConfigPath, Fixtures.RealisticClaudeConfig);
         }
         Context = new PathContext(new Dictionary<string, string>(StringComparer.Ordinal), new KnownFolders(Local, Roaming), new RealPathProbe());
-        Host = new AppHost(Ui.Post, Delays.Add, () => Now, Background.Add);
     }
 
     /// <summary>Runs the queued background work and pumps what it posted, until neither has

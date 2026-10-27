@@ -261,22 +261,29 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>
     /// The enabled connectors as Claude must see them, with <c>${COLLECTION_DIR}</c> resolved
-    /// against the active collection's folder on this machine (<see cref="CollectionDirectory"/>).
-    /// The store itself keeps the token, so the same list still resolves on the next machine, and
-    /// a published document carries it as written for each subscriber to resolve against their own
-    /// copy. With no folder the token is written as it stands — guessing one would start the wrong
-    /// program — and the row carries the caution that says so.
+    /// against the active collection's folder on this machine (<see cref="CollectionDirectory"/>),
+    /// plus Connector Control's own entry while the integration is on. The store itself keeps the
+    /// token, so the same list still resolves on the next machine, and a published document
+    /// carries it as written for each subscriber to resolve against their own copy. With no folder
+    /// the token is written as it stands — guessing one would start the wrong program — and the
+    /// row carries the caution that says so. The entry joins here and only here: the store, the
+    /// collections and every document never hold it, and it is written, compared, backed up and
+    /// regenerated like every other entry.
     /// </summary>
     internal IReadOnlyDictionary<string, JsonValue> ExpandedServers
     {
         get
         {
-            var servers = Store.EnabledServers;
-            if (CollectionDirectory(ActiveCollection) is not { } directory)
+            var servers = new Dictionary<string, JsonValue>(Store.EnabledServers, StringComparer.Ordinal);
+            if (CollectionDirectory(ActiveCollection) is { } directory)
             {
-                return servers;
+                servers = servers.ToDictionary(p => p.Key, p => Placeholder.ExpandDirectoryToken(p.Value, directory), StringComparer.Ordinal);
             }
-            return servers.ToDictionary(p => p.Key, p => Placeholder.ExpandDirectoryToken(p.Value, directory), StringComparer.Ordinal);
+            if (ClaudeIntegrationEntry is { } entry)
+            {
+                servers[ClaudeIntegration.EntryName] = entry;
+            }
+            return servers;
         }
     }
 
@@ -1284,6 +1291,73 @@ public sealed class AppState : ObservableObject, IDisposable
             return;
         }
         _ = PerformRestartClaudeAsync();
+    }
+
+    // MARK: Claude integration
+
+    /// <summary>
+    /// A connector the active collection already holds under the reserved name — from before the
+    /// name was reserved, or synced in from an older app — leaves no room for Connector Control's
+    /// own entry: Settings dims the switch and names the clash, and nothing is added.
+    /// </summary>
+    public bool ClaudeIntegrationClash =>
+        Store.Collections.TryGetValue(ActiveCollection, out var collection) && collection.Mcps.ContainsKey(ClaudeIntegration.EntryName);
+
+    /// <summary>
+    /// Connector Control's own entry while the switch is on, the app has a tool to name and no
+    /// connector holds the name; null otherwise.
+    /// </summary>
+    internal JsonValue? ClaudeIntegrationEntry =>
+        settings.ClaudeIntegrationEnabled && host.ControlToolPath is { } path && !ClaudeIntegrationClash
+            ? ClaudeIntegration.Entry(path)
+            : null;
+
+    /// <summary>
+    /// The popover's one-time offer: shown until it is answered, never once the setting has been
+    /// decided anywhere (Settings and the command-line tool answer it too), and never where turning
+    /// it on could not work — no bundled tool, or a connector holding the name.
+    /// </summary>
+    public bool ShowsClaudeIntegrationOffer =>
+        !settings.ClaudeIntegrationOfferAnswered && !settings.ClaudeIntegrationEnabled
+        && host.ControlToolPath is not null && !ClaudeIntegrationClash;
+
+    /// <summary>
+    /// Turns the integration on or off from anywhere — Settings, the offer, the command-line tool —
+    /// and applies at once, so the entry appears or goes and Restart Required follows. Deciding it
+    /// answers the offer for good. Turning it on is refused while a connector holds the name, with
+    /// the note that says so; turning it off always goes through. Null on success.
+    /// </summary>
+    public string? SetClaudeIntegrationEnabled(bool on)
+    {
+        if (on && ClaudeIntegrationClash)
+        {
+            return ClaudeIntegration.ClashNote;
+        }
+        settings.ClaudeIntegrationEnabled = on;
+        settings.ClaudeIntegrationOfferAnswered = true;
+        ApplyIfChanged();
+        RaiseAll();
+        return null;
+    }
+
+    public void SetConfirmClaudeChanges(bool on)
+    {
+        settings.ConfirmClaudeChanges = on;
+        RaiseAll();
+    }
+
+    /// <summary>The offer's buttons: Turn On turns the integration on; Not Now dismisses the offer for good.</summary>
+    public void AnswerClaudeIntegrationOffer(bool turnOn)
+    {
+        if (turnOn)
+        {
+            SetClaudeIntegrationEnabled(true);
+        }
+        else
+        {
+            settings.ClaudeIntegrationOfferAnswered = true;
+            RaiseAll();
+        }
     }
 
     // MARK: collections

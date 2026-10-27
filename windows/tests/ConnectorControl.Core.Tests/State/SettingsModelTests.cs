@@ -17,8 +17,9 @@ public class SettingsModelTests
         public UpdateCoordinator Updates { get; }
         public SettingsModel Model { get; }
 
-        public Rig()
+        public Rig(Action<AppStateHarness>? beforeCreate = null)
         {
+            beforeCreate?.Invoke(H);
             State = H.Create();
             Updates = new UpdateCoordinator(Updater, H.Settings, H.Notifier, H.Dialogs, AppHost.Inline());
             Model = new SettingsModel(State, H.Settings, Autostart, Install, Updater, Updates);
@@ -262,5 +263,40 @@ public class SettingsModelTests
     public void ToolRowsCarryTheNoteFromToolNote()
     {
         Assert.Equal(ToolRow.Make(Tool.Npx, ToolStatus.NotFound), new ToolRow("npx", "Not found", true, ToolNote.Make(Tool.Npx, ToolStatus.NotFound)));
+    }
+
+    // MARK: Claude integration
+
+    [Fact]
+    public void TheIntegrationSwitchAndTheConfirmCheckbox()
+    {
+        using var rig = new Rig();
+        Assert.False(rig.Model.ClaudeIntegrationEnabled);
+        Assert.True(rig.Model.CanChangeClaudeIntegration);
+        Assert.Null(rig.Model.ClaudeIntegrationNote);
+        Assert.False(rig.Model.CanChangeConfirmClaudeChanges);   // the checkbox works only while the switch is on
+        Assert.Null(rig.Model.ConfirmClaudeChangesCaption);      // its caption hides while the switch is off
+        rig.Model.ClaudeIntegrationEnabled = true;
+        Assert.True(rig.H.Settings.ClaudeIntegrationEnabled);
+        Assert.True(rig.Model.CanChangeConfirmClaudeChanges);
+        Assert.Equal(SettingsModel.ConfirmClaudeChangesOnCaption, rig.Model.ConfirmClaudeChangesCaption);
+        Assert.False(rig.Model.ConfirmClaudeChangesCaptionIsWarning);
+        rig.Model.ConfirmClaudeChanges = false;
+        Assert.False(rig.H.Settings.ConfirmClaudeChanges);
+        Assert.Equal(SettingsModel.ConfirmClaudeChangesOffCaption, rig.Model.ConfirmClaudeChangesCaption);
+        Assert.True(rig.Model.ConfirmClaudeChangesCaptionIsWarning);
+        rig.Model.ClaudeIntegrationEnabled = false;
+        Assert.False(rig.Model.ConfirmClaudeChanges);   // the checkbox keeps its value while dimmed
+        Assert.Equal(rig.Updater.VersionDisplay, rig.Model.Version);
+    }
+
+    [Fact]
+    public void AClashDimsTheSwitchAndNamesIt()
+    {
+        using var rig = new Rig(h => MasterStoreIO.Save(
+            new MasterStore([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))]),
+            h.MasterStorePath));
+        Assert.False(rig.Model.CanChangeClaudeIntegration);
+        Assert.Equal(ClaudeIntegration.ClashNote, rig.Model.ClaudeIntegrationNote);
     }
 }
