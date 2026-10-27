@@ -1073,6 +1073,13 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return NameEmptyError;
         }
+        // Connector Control's own entry goes by this name in Claude's config. A connector already
+        // holding it, from before the name was reserved, may still be saved in place, so the clash
+        // can be resolved by renaming or deleting it; nothing new may take the name.
+        if (trimmed == ClaudeIntegration.EntryName && trimmed != renamedFrom)
+        {
+            return ClaudeIntegration.ReservedNameError;
+        }
         // Read-only until both guards pass: a rejected save must leave no trace, and creating the
         // collection up front would leave an empty one behind. Swift's optional chain does the
         // same by construction.

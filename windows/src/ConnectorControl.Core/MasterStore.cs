@@ -15,6 +15,13 @@ public sealed class MasterStore : IEquatable<MasterStore>
     /// <summary>The collection a fresh store holds, and the one a store left with none makes.</summary>
     public const string DefaultCollectionName = "Default";
 
+    /// <summary>The name Connector Control's own entry goes by in Claude's config. The store never
+    /// holds a connector of this name: every reader of Claude's config and of collection documents
+    /// skips it and every writer of names refuses it, so the entry is never ingested, synced or
+    /// shared.</summary>
+    public const string ReservedConnectorName = "connector-control";
+    public const string ReservedConnectorNameError = "connector-control is reserved for Connector Control itself.";
+
     public long Version { get; }
     public string ActiveCollection { get; set; }
     public Dictionary<string, Collection> Collections { get; }

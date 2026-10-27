@@ -232,6 +232,15 @@ public class StringCatalogTests
         actual["ClaudeConfigIO.mcpServersNotObjectError"] = "mcpServers is not a JSON object";
         actual["ClaudeConfigIO.topLevelNotObjectError"] = "top level is not a JSON object";
 
+        // MARK: ClaudeIntegration
+
+        actual["ClaudeIntegration.clashNote"] = ClaudeIntegration.ClashNote;
+        actual["ClaudeIntegration.offerBody"] = ClaudeIntegration.OfferBody;
+        actual["ClaudeIntegration.offerNotNowButton"] = ClaudeIntegration.OfferNotNowButton;
+        actual["ClaudeIntegration.offerTitle"] = ClaudeIntegration.OfferTitle;
+        actual["ClaudeIntegration.offerTurnOnButton"] = ClaudeIntegration.OfferTurnOnButton;
+        actual["ClaudeIntegration.reservedNameError"] = ClaudeIntegration.ReservedNameError;
+
         // MARK: ClaudeProcess / ClaudePublisher / ClaudeRestarter / ClaudeSignature
         // ClaudeProcess.cs lives in ConnectorControl.App, which this Core test project
         // cannot reference; its literals are pinned here by hand to match

@@ -105,6 +105,12 @@
   },
   "ClaudeConfigIO.mcpServersNotObjectError": "mcpServers is not a JSON object",
   "ClaudeConfigIO.topLevelNotObjectError": "top level is not a JSON object",
+  "ClaudeIntegration.clashNote": "A connector named “connector-control” already exists. Rename it to turn this on.",
+  "ClaudeIntegration.offerBody": "Claude could list, switch and edit your connectors for you. This adds a connector named connector-control to Claude.",
+  "ClaudeIntegration.offerNotNowButton": "Not Now",
+  "ClaudeIntegration.offerTitle": "Let Claude manage Connector Control?",
+  "ClaudeIntegration.offerTurnOnButton": "Turn On",
+  "ClaudeIntegration.reservedNameError": "connector-control is reserved for Connector Control itself.",
   "ClaudeProcess.notAClaudePackageError": {
     "win": {
       "format": "{0} is not a Claude Desktop package. Choose the real Claude Desktop under Settings ▸ Claude."

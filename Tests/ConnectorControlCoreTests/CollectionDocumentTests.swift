@@ -529,4 +529,13 @@ final class CollectionDocumentTests: XCTestCase {
                        "a random query value")
         XCTAssertEqual(warnings("https://mcp.example.com/v2/servers/gmail-tools/sse#section-2"), [])
     }
+
+    func testAConnectorNamedLikeConnectorControlsOwnEntryNeverComesAcross() throws {
+        var doc = CollectionDocumentSamples.dataTeam
+        doc.connectors["connector-control"] = doc.connectors["github"]
+        let rendered = doc.render()
+        XCTAssertNil(rendered.connectors["connector-control"])
+        XCTAssertEqual(rendered.excluded["connector-control"], "connector-control is reserved for Connector Control itself.")
+        XCTAssertNotNil(rendered.connectors["github"])
+    }
 }

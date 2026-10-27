@@ -29,6 +29,12 @@ public static class Reconciler
         var destination = target ?? store.ActiveCollection;
         foreach (var (name, config) in claudeServers)
         {
+            // Connector Control's own entry is in Claude's file because the app put it there; taking it
+            // into the store would sync it, share it and show it as a row.
+            if (name == MasterStore.ReservedConnectorName)
+            {
+                continue;
+            }
             if (result.Mcps.ContainsKey(name))
             {
                 continue;
@@ -114,6 +120,13 @@ public static class Reconciler
         }
         foreach (var (name, config) in servers)
         {
+            // A backup taken while the integration was on holds the app's own entry; the restore puts
+            // it back in Claude's file, and the next apply adds or drops it by the setting, but the
+            // store never takes it in.
+            if (name == MasterStore.ReservedConnectorName)
+            {
+                continue;
+            }
             var held = result.Mcps.TryGetValue(name, out var existing);
             var entry = held ? existing! : new McpEntry(true, config);
             var rendersAsSnapshot = held && folders.Any(folder => Placeholder.ExpandDirectoryToken(entry.Config, folder) == config);

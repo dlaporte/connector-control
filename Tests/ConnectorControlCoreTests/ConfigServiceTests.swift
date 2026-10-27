@@ -472,6 +472,17 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(servers, [:])
         XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL), [:])
     }
+
+    func testALoadNeverIngestsTheReservedEntryButReturnsItWithTheFilesServers() throws {
+        let reserved = JSONValue.object(["command": .string("/x/connector-control"), "args": .array([.string("mcp")])])
+        var servers = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
+        servers["connector-control"] = reserved
+        try ClaudeConfigIO.write(mcpServers: servers, to: paths.claudeConfigURL)
+        let result = try service.loadAndReconcile()
+        XCTAssertNil(result.store.mcps["connector-control"], "the entry is the app's own, never a stored connector")
+        XCTAssertEqual(result.claudeServers?["connector-control"], reserved,
+                       "what the file holds is reported whole, so the caller's comparison sees the entry")
+    }
 }
 
 private extension ConfigService {

@@ -452,7 +452,14 @@ public struct CollectionDocument: Equatable, Sendable {
 
     public func render() -> RenderedCollection {
         var out: [String: RenderedConnector] = [:]
+        var excluded: [String: String] = [:]
         for (name, connector) in connectors {
+            // Connector Control adds an entry of this name on each machine itself; a document's
+            // connector under it could never be told apart from that entry in Claude's config.
+            if name == MasterStore.reservedConnectorName {
+                excluded[name] = MasterStore.reservedConnectorNameError
+                continue
+            }
             let env = connector.env.reduce(into: [String: String]()) { acc, pair in
                 switch pair.value {
                 case .hint: acc[pair.key] = Placeholder.marker(pair.key)
@@ -489,9 +496,9 @@ public struct CollectionDocument: Equatable, Sendable {
             }
             out[name] = RenderedConnector(config: config, needs: needs, authoredOn: authoredOn)
         }
-        // The Windows build excludes connectors the cmd /c launcher cannot carry safely; a Mac
-        // never writes that launcher, so nothing is excluded here.
-        return RenderedCollection(connectors: out, excluded: [:])
+        // The Windows build also excludes connectors the cmd /c launcher cannot carry safely; a Mac
+        // never writes that launcher.
+        return RenderedCollection(connectors: out, excluded: excluded)
     }
 
     /// A remote connector's `additional` fields (whatever the form the config came from cannot

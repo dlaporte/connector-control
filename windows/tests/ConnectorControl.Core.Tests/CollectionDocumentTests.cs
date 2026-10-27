@@ -690,4 +690,13 @@ public class CollectionDocumentTests
         Assert.Equal(["url.query.k looks like a credential"], Warnings("https://mcp.example.com/mcp?k=Zq8RkT2mWx7LpN4vHc9J"));   // a random query value
         Assert.Empty(Warnings("https://mcp.example.com/v2/servers/gmail-tools/sse#section-2"));
     }
+
+    [Fact]
+    public void AConnectorNamedLikeConnectorControlsOwnEntryNeverComesAcross()
+    {
+        var rendered = CollectionDocumentSamples.WithReservedConnector(CollectionDocumentSamples.DataTeam).Render();
+        Assert.False(rendered.Connectors.ContainsKey("connector-control"));
+        Assert.Equal("connector-control is reserved for Connector Control itself.", rendered.Excluded["connector-control"]);
+        Assert.True(rendered.Connectors.ContainsKey("github"));
+    }
 }

@@ -493,6 +493,20 @@ public class ConfigServiceTests : IDisposable
         Assert.Empty(servers);
         Assert.Empty(ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath));
     }
+
+    [Fact]
+    public void ALoadNeverIngestsTheReservedEntryButReturnsItWithTheFilesServers()
+    {
+        var reserved = JsonValue.Object(("command", JsonValue.String("/x/connector-control")), ("args", JsonValue.Array([JsonValue.String("mcp")])));
+        var servers = ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        servers["connector-control"] = reserved;
+        ClaudeConfigIO.Write(servers, paths.ClaudeConfigPath);
+        var result = service.LoadAndReconcile();
+        // The entry is the app's own, never a stored connector.
+        Assert.False(result.Store.Mcps.ContainsKey("connector-control"));
+        // What the file holds is reported whole, so the caller's comparison sees the entry.
+        Assert.Equal(reserved, result.ClaudeServers!["connector-control"]);
+    }
 }
 
 internal static class ConfigServiceLoads

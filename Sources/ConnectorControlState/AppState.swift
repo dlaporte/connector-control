@@ -790,6 +790,10 @@ public final class AppState: ObservableObject {
         let target = collection ?? activeCollection
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return AppState.nameEmptyError }
+        // Connector Control's own entry goes by this name in Claude's config. A connector already
+        // holding it, from before the name was reserved, may still be saved in place, so the clash
+        // can be resolved by renaming or deleting it; nothing new may take the name.
+        if trimmed == ClaudeIntegration.entryName, trimmed != oldName { return ClaudeIntegration.reservedNameError }
         if trimmed != oldName, store.collections[target]?.mcps[trimmed] != nil {
             return AppState.duplicateNameError(trimmed)
         }

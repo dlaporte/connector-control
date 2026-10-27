@@ -942,6 +942,13 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         var excluded = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (name, connector) in Connectors)
         {
+            // Connector Control adds an entry of this name on each machine itself; a document's
+            // connector under it could never be told apart from that entry in Claude's config.
+            if (name == MasterStore.ReservedConnectorName)
+            {
+                excluded[name] = MasterStore.ReservedConnectorNameError;
+                continue;
+            }
             var env = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var (key, value) in connector.Env)
             {

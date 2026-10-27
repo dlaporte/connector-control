@@ -44,4 +44,10 @@ public static class CollectionDocumentSamples
                 new Dictionary<string, string?> { ["server_path"] = "your ledger clone, then dist/index.js" },
                 new Dictionary<string, JsonValue> { ["type"] = JsonValue.String("stdio") }),
         });
+
+    /// <summary><paramref name="d"/> with its "github" connector also under the name Connector
+    /// Control keeps for its own entry in Claude's config.</summary>
+    public static CollectionDocument WithReservedConnector(CollectionDocument d) =>
+        new(d.Name, d.Author, d.Origin, d.Exported,
+            new Dictionary<string, CollectionDocument.Connector>(d.Connectors) { ["connector-control"] = d.Connectors["github"] });
 }

@@ -215,6 +215,15 @@ final class StringCatalogTests: XCTestCase {
         actual["ClaudeConfigIO.mcpServersNotObjectError"] = "mcpServers is not a JSON object"
         actual["ClaudeConfigIO.topLevelNotObjectError"] = "top level is not a JSON object"
 
+        // MARK: ClaudeIntegration
+
+        actual["ClaudeIntegration.clashNote"] = ClaudeIntegration.clashNote
+        actual["ClaudeIntegration.offerBody"] = ClaudeIntegration.offerBody
+        actual["ClaudeIntegration.offerNotNowButton"] = ClaudeIntegration.offerNotNowButton
+        actual["ClaudeIntegration.offerTitle"] = ClaudeIntegration.offerTitle
+        actual["ClaudeIntegration.offerTurnOnButton"] = ClaudeIntegration.offerTurnOnButton
+        actual["ClaudeIntegration.reservedNameError"] = ClaudeIntegration.reservedNameError
+
         // MARK: ClaudeRestarter / ClaudeSignature
         // ClaudeRestarter.swift lives in the ConnectorControl app target (AppKit),
         // which this test target cannot import; its one user-facing literal is
