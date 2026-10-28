@@ -21,6 +21,11 @@ final class ControlToolsGatedTests: XCTestCase {
         "env": .object(["ACME_TOKEN": .string("literal-env-secret")]),
     ])
 
+    /// The same config twice over, but for how one character is composed: é as one character, and
+    /// as e and a combining acute accent.
+    private let composed: JSONValue = .object(["command": .string("node"), "args": .array([.string("caf\u{E9}.js")])])
+    private let decomposed: JSONValue = .object(["command": .string("node"), "args": .array([.string("cafe\u{301}.js")])])
+
     private func rig(answer: Bool? = true) -> ControlRig {
         let rig = ControlRig()
         rig.confirmer.scripted = answer
@@ -117,8 +122,6 @@ final class ControlToolsGatedTests: XCTestCase {
     /// on Windows, which compares ordinally: the change is asked about, not refused as no change.
     func testAChangeOnlyInHowACharacterIsComposedIsStillAChange() throws {
         let rig = rig(); defer { rig.dispose() }
-        let composed: JSONValue = .object(["command": .string("node"), "args": .array([.string("caf\u{E9}.js")])])
-        let decomposed: JSONValue = .object(["command": .string("node"), "args": .array([.string("cafe\u{301}.js")])])
         XCTAssertNil(rig.state.upsert(name: "scoutbook", entry: MCPEntry(config: composed), renamedFrom: "scoutbook"))
         let result = try XCTUnwrap(rig.call("update_connector", ["name": .string("scoutbook"), "config": decomposed]))
         XCTAssertEqual(result.text, ControlTools.changedText("scoutbook", "Default"))
@@ -205,9 +208,18 @@ final class ControlToolsGatedTests: XCTestCase {
         let caller = ControlCaller.relay(clientName: "Cursor\n\u{202E}d"), shownAsker = #"Cursor\n\u{202E}d"#
         XCTAssertNil(rig.state.addEmptyCollection(named: collection))
         let target: [String: JSONValue] = ["collection": .string(collection)]
-        _ = rig.call("add_connector", target.merging(["name": .string(name), "config": notion]) { $1 }, as: caller)
-        _ = rig.call("update_connector", target.merging(["name": .string(name), "newName": .string("b")]) { $1 }, as: caller)
-        _ = rig.call("delete_connectors", target.merging(["names": .array([.string("b")])]) { $1 }, as: caller)
+        let results = [
+            rig.call("add_connector", target.merging(["name": .string(name), "config": notion]) { $1 }, as: caller),
+            rig.call("update_connector", target.merging(["name": .string(name), "newName": .string("b")]) { $1 }, as: caller),
+            rig.call("delete_connectors", target.merging(["names": .array([.string("b")])]) { $1 }, as: caller),
+            rig.call("delete_connectors", target.merging(["names": .array([.string(name)])]) { $1 }, as: caller),
+        ]
+        XCTAssertEqual(results.map { $0?.text }, [
+            ControlTools.addedText(shownName, shownCollection, ControlTools.onWord) + "\n" + ControlTools.needsValuesText("“NOTION_TOKEN”"),
+            ControlTools.renamedText(shownName, "b"),
+            ControlTools.deletedText("“b”", shownCollection),
+            ControlTools.noConnectorError(shownName, shownCollection),
+        ], "the answers name them so too")
         let requests = rig.confirmer.requests
         XCTAssertEqual(requests.map(\.title), [ControlTools.addTitle(shownAsker, shownName),
                                                ControlTools.changeTitle(shownAsker, shownName),
@@ -219,6 +231,9 @@ final class ControlToolsGatedTests: XCTestCase {
                        [ControlMasking.nameLabel, ControlMasking.removedPrefix + shownName, ControlMasking.addedPrefix + "b"])
         for request in requests {
             for text in [request.title, request.message] + request.code { assertPlain(text) }
+        }
+        for result in results {
+            for line in (result?.text ?? "").split(separator: "\n") { assertPlain(String(line)) }
         }
         XCTAssertEqual(rig.state.store.collections[collection]?.mcps.isEmpty, true, "added, renamed and deleted as asked")
     }

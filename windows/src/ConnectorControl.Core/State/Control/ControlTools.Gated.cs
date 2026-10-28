@@ -6,10 +6,10 @@ namespace ConnectorControl.Core.State;
 /// secrets masked — then the change itself, which runs only on Allow (or with confirmations off,
 /// or for the command-line tool) and is announced when nobody was asked.
 ///
-/// The question and the announcement name connectors, collections and the asker as others chose
-/// them — Claude names connectors, creates and renames collections without asking, and any client
-/// names itself — so every name goes through <see cref="ControlText.EscapedName"/>: none can break a line,
-/// reorder or hide text, or close its own quotes.
+/// The question, the answer and the announcement name connectors, collections and the asker as
+/// others chose them — Claude names connectors, creates and renames collections without asking, and
+/// any client names itself — so every name goes through <see cref="ControlText.EscapedName"/>: none can
+/// break a line, reorder or hide text, or close its own quotes.
 ///
 /// Mirror: Sources/ConnectorControlState/Control/ControlTools+Gated.swift
 /// </summary>
@@ -105,15 +105,17 @@ public sealed partial class ControlTools
     private ControlStep AddConnector(ControlArguments arguments, string asker)
     {
         var collection = TargetCollection(arguments);
+        var shownCollection = ControlText.EscapedName(collection);
         if (state.Store.Collections.GetValueOrDefault(collection) is not { } held)
         {
-            return new ControlStep.Refused(MasterStore.NoCollectionError(collection));
+            return new ControlStep.Refused(MasterStore.NoCollectionError(shownCollection));
         }
         if (state.IsSynced(collection))
         {
             return new ControlStep.Refused(CollectionsModel.AddConnectorDisabledTooltip);
         }
         var name = (arguments.String("name") ?? "").TrimSpaces();
+        var shownName = ControlText.EscapedName(name);
         if (name.Length == 0)
         {
             return new ControlStep.Refused(AppState.NameEmptyError);
@@ -124,7 +126,7 @@ public sealed partial class ControlTools
         }
         if (held.Mcps.ContainsKey(name))
         {
-            return new ControlStep.Refused(AppState.DuplicateNameError(name));
+            return new ControlStep.Refused(AppState.DuplicateNameError(shownName));
         }
         var config = arguments.Object("config") ?? JsonValue.Object();
         if (ConfigError(config) is { } error)
@@ -134,8 +136,7 @@ public sealed partial class ControlTools
         var on = arguments.Bool("enabled") ?? true;
         var word = on ? OnWord : OffWord;
         var active = collection == state.ActiveCollection;
-        var (shownAsker, shownName, shownCollection) = (ControlText.EscapedName(asker), ControlText.EscapedName(name),
-                                                        ControlText.EscapedName(collection));
+        var shownAsker = ControlText.EscapedName(asker);
         var request = new ConfirmationRequest(
             AddTitle(shownAsker, shownName),
             active ? AddActiveMessage(shownCollection, word) : AddMessage(shownCollection, word),
@@ -150,7 +151,7 @@ public sealed partial class ControlTools
             }
             state.ApplyInteractively();
             var needs = Placeholder.UnfilledNamesIn(config);
-            var lines = new List<string> { AddedText(name, collection, word) };
+            var lines = new List<string> { AddedText(shownName, shownCollection, word) };
             if (needs.Count > 0)
             {
                 lines.Add(NeedsValuesText(ControlText.QuotedList(needs)));
@@ -165,18 +166,20 @@ public sealed partial class ControlTools
     private ControlStep UpdateConnector(ControlArguments arguments, string asker)
     {
         var collection = TargetCollection(arguments);
+        var shownCollection = ControlText.EscapedName(collection);
         if (state.Store.Collections.GetValueOrDefault(collection) is not { } held)
         {
-            return new ControlStep.Refused(MasterStore.NoCollectionError(collection));
+            return new ControlStep.Refused(MasterStore.NoCollectionError(shownCollection));
         }
         if (state.IsSynced(collection))
         {
             return new ControlStep.Refused(CollectionsModel.LockedGlyphTooltip);
         }
         var name = arguments.String("name") ?? "";
+        var shownName = ControlText.EscapedName(name);
         if (held.Mcps.GetValueOrDefault(name) is not { } current)
         {
-            return new ControlStep.Refused(NoConnectorError(name, collection));
+            return new ControlStep.Refused(NoConnectorError(shownName, shownCollection));
         }
         var config = arguments.Object("config");
         var requestedName = arguments.String("newName");
@@ -185,6 +188,7 @@ public sealed partial class ControlTools
             return new ControlStep.Refused(NothingToChangeError);
         }
         var newName = requestedName?.TrimSpaces() ?? name;
+        var shownNewName = ControlText.EscapedName(newName);
         if (newName.Length == 0)
         {
             return new ControlStep.Refused(AppState.NameEmptyError);
@@ -196,7 +200,7 @@ public sealed partial class ControlTools
         }
         if (renamed && held.Mcps.ContainsKey(newName))
         {
-            return new ControlStep.Refused(AppState.DuplicateNameError(newName));
+            return new ControlStep.Refused(AppState.DuplicateNameError(shownNewName));
         }
         if (config is not null && ConfigError(config) is { } error)
         {
@@ -208,13 +212,11 @@ public sealed partial class ControlTools
         var reconfigured = !Identical(after, current.Config);
         if (!renamed && !reconfigured)
         {
-            return new ControlStep.Refused(UnchangedError(name));
+            return new ControlStep.Refused(UnchangedError(shownName));
         }
         var changes = ControlMasking.ChangeLines(current.Config, after, ControlMasking.Exposure.Dialog);
         var active = collection == state.ActiveCollection;
-        var (shownAsker, shownName, shownNewName, shownCollection) = (
-            ControlText.EscapedName(asker), ControlText.EscapedName(name), ControlText.EscapedName(newName),
-            ControlText.EscapedName(collection));
+        var shownAsker = ControlText.EscapedName(asker);
         IReadOnlyList<string> names = renamed ? [ControlMasking.NameLabel, ControlMasking.RemovedPrefix + shownName, ControlMasking.AddedPrefix + shownNewName] : [];
         var request = new ConfirmationRequest(
             ChangeTitle(shownAsker, shownName),
@@ -233,11 +235,11 @@ public sealed partial class ControlTools
             var lines = new List<string>();
             if (renamed)
             {
-                lines.Add(RenamedText(name, newName));
+                lines.Add(RenamedText(shownName, shownNewName));
             }
             if (reconfigured)
             {
-                lines.Add(ChangedText(newName, collection));
+                lines.Add(ChangedText(shownNewName, shownCollection));
             }
             return Done(lines, [("collection", JsonValue.String(collection)), ("name", JsonValue.String(newName)), ("previousName", JsonValue.String(name))],
                 collection, mark, RestartToApplyText,
@@ -250,9 +252,10 @@ public sealed partial class ControlTools
     private ControlStep DeleteConnectors(ControlArguments arguments, string asker)
     {
         var collection = TargetCollection(arguments);
+        var shownCollection = ControlText.EscapedName(collection);
         if (state.Store.Collections.GetValueOrDefault(collection) is not { } held)
         {
-            return new ControlStep.Refused(MasterStore.NoCollectionError(collection));
+            return new ControlStep.Refused(MasterStore.NoCollectionError(shownCollection));
         }
         if (state.IsSynced(collection))
         {
@@ -273,12 +276,12 @@ public sealed partial class ControlTools
         // All or nothing: a list with one wrong name is a mistake, not a request for the rest.
         if (names.FirstOrDefault(name => !held.Mcps.ContainsKey(name)) is { } missing)
         {
-            return new ControlStep.Refused(NoConnectorError(missing, collection));
+            return new ControlStep.Refused(NoConnectorError(ControlText.EscapedName(missing), shownCollection));
         }
         var listed = ControlText.QuotedList(names);
         var active = collection == state.ActiveCollection;
         var reachesClaude = active && names.Any(name => held.Mcps.GetValueOrDefault(name)?.Enabled == true);
-        var (shownAsker, shownCollection) = (ControlText.EscapedName(asker), ControlText.EscapedName(collection));
+        var shownAsker = ControlText.EscapedName(asker);
         var request = new ConfirmationRequest(
             DeleteTitle(shownAsker, listed),
             active ? DeleteActiveMessage(shownCollection) : DeleteMessage(shownCollection),
@@ -288,7 +291,7 @@ public sealed partial class ControlTools
             var mark = state.AppliedServers;
             state.Delete(names, collection);
             state.ApplyInteractively();
-            return Done([DeletedText(listed, collection)],
+            return Done([DeletedText(listed, shownCollection)],
                 [("collection", JsonValue.String(collection)), ("names", JsonValue.Array(names.Select(JsonValue.String)))],
                 collection, mark, RestartToApplyText,
                 notification: DeletedNotification(shownAsker, listed, shownCollection));

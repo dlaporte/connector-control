@@ -8,10 +8,10 @@ import ConnectorControlCore
 /// secrets masked — then the change itself, which runs only on Allow (or with confirmations off,
 /// or for the command-line tool) and is announced when nobody was asked.
 ///
-/// The question and the announcement name connectors, collections and the asker as others chose
-/// them — Claude names connectors, creates and renames collections without asking, and any client
-/// names itself — so every name goes through `ControlText.escapedName(_:)`: none can break a line,
-/// reorder or hide text, or close its own quotes.
+/// The question, the answer and the announcement name connectors, collections and the asker as
+/// others chose them — Claude names connectors, creates and renames collections without asking, and
+/// any client names itself — so every name goes through `ControlText.escapedName(_:)`: none can
+/// break a line, reorder or hide text, or close its own quotes.
 extension ControlTools {
     public static let takesEffectFooter = "Takes effect when Claude restarts."
     public static let configShapeError = "A connector’s config needs a “command” or a “url”."
@@ -99,19 +99,20 @@ extension ControlTools {
 
     func addConnector(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
         let collection = targetCollection(arguments)
-        guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(collection)) }
+        let shownCollection = ControlText.escapedName(collection)
+        guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
         guard !state.isSynced(collection) else { return .refused(CollectionsModel.addConnectorDisabledTooltip) }
         let name = (arguments.string("name") ?? "").trimmingCharacters(in: .whitespaces)
+        let shownName = ControlText.escapedName(name)
         guard !name.isEmpty else { return .refused(AppState.nameEmptyError) }
         guard name != ClaudeIntegration.entryName else { return .refused(ClaudeIntegration.reservedNameError) }
-        guard held.mcps[name] == nil else { return .refused(AppState.duplicateNameError(name)) }
+        guard held.mcps[name] == nil else { return .refused(AppState.duplicateNameError(shownName)) }
         let config = arguments.object("config") ?? .object([:])
         if let error = ControlTools.configError(config) { return .refused(error) }
         let on = arguments.bool("enabled") ?? true
         let word = on ? ControlTools.onWord : ControlTools.offWord
         let active = collection == state.activeCollection
-        let (shownAsker, shownName, shownCollection) = (ControlText.escapedName(asker), ControlText.escapedName(name),
-                                                        ControlText.escapedName(collection))
+        let shownAsker = ControlText.escapedName(asker)
         let request = ConfirmationRequest(
             title: ControlTools.addTitle(shownAsker, shownName),
             message: active ? ControlTools.addActiveMessage(shownCollection, word) : ControlTools.addMessage(shownCollection, word),
@@ -125,7 +126,7 @@ extension ControlTools {
             }
             state.applyInteractively()
             let needs = Placeholder.unfilledNames(in: config)
-            var lines = [ControlTools.addedText(name, collection, word)]
+            var lines = [ControlTools.addedText(shownName, shownCollection, word)]
             if !needs.isEmpty { lines.append(ControlTools.needsValuesText(ControlText.quotedList(needs))) }
             return done(lines, ["collection": .string(collection), "name": .string(name), "enabled": .bool(on),
                                 "needs": .array(needs.map(JSONValue.string))],
@@ -136,29 +137,30 @@ extension ControlTools {
 
     func updateConnector(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
         let collection = targetCollection(arguments)
-        guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(collection)) }
+        let shownCollection = ControlText.escapedName(collection)
+        guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
         guard !state.isSynced(collection) else { return .refused(CollectionsModel.lockedGlyphTooltip) }
         let name = arguments.string("name") ?? ""
-        guard let current = held.mcps[name] else { return .refused(ControlTools.noConnectorError(name, collection)) }
+        let shownName = ControlText.escapedName(name)
+        guard let current = held.mcps[name] else { return .refused(ControlTools.noConnectorError(shownName, shownCollection)) }
         let config = arguments.object("config")
         let requestedName = arguments.string("newName")
         guard config != nil || requestedName != nil else { return .refused(ControlTools.nothingToChangeError) }
         let newName = requestedName.map { $0.trimmingCharacters(in: .whitespaces) } ?? name
+        let shownNewName = ControlText.escapedName(newName)
         guard !newName.isEmpty else { return .refused(AppState.nameEmptyError) }
         let renamed = newName != name
         if renamed, newName == ClaudeIntegration.entryName { return .refused(ClaudeIntegration.reservedNameError) }
-        if renamed, held.mcps[newName] != nil { return .refused(AppState.duplicateNameError(newName)) }
+        if renamed, held.mcps[newName] != nil { return .refused(AppState.duplicateNameError(shownNewName)) }
         if let config, let error = ControlTools.configError(config) { return .refused(error) }
         let after = config ?? current.config
         // "Unchanged" compares the configs themselves, not the rendered lines: every difference is a
         // change, whether or not a line can show it.
         let reconfigured = !ControlTools.identical(after, current.config)
-        guard renamed || reconfigured else { return .refused(ControlTools.unchangedError(name)) }
+        guard renamed || reconfigured else { return .refused(ControlTools.unchangedError(shownName)) }
         let changes = ControlMasking.changeLines(from: current.config, to: after, exposure: .dialog)
         let active = collection == state.activeCollection
-        let (shownAsker, shownName, shownNewName, shownCollection) = (
-            ControlText.escapedName(asker), ControlText.escapedName(name), ControlText.escapedName(newName),
-            ControlText.escapedName(collection))
+        let shownAsker = ControlText.escapedName(asker)
         let names = renamed ? [ControlMasking.nameLabel, ControlMasking.removedPrefix + shownName, ControlMasking.addedPrefix + shownNewName] : []
         let request = ConfirmationRequest(
             title: ControlTools.changeTitle(shownAsker, shownName),
@@ -174,8 +176,8 @@ extension ControlTools {
             }
             state.applyInteractively()
             var lines: [String] = []
-            if renamed { lines.append(ControlTools.renamedText(name, newName)) }
-            if reconfigured { lines.append(ControlTools.changedText(newName, collection)) }
+            if renamed { lines.append(ControlTools.renamedText(shownName, shownNewName)) }
+            if reconfigured { lines.append(ControlTools.changedText(shownNewName, shownCollection)) }
             return done(lines, ["collection": .string(collection), "name": .string(newName), "previousName": .string(name)],
                         touching: collection, since: mark, restart: ControlTools.restartToApplyText,
                         // A rename and nothing else is announced as one; any other change by what it changed.
@@ -186,19 +188,20 @@ extension ControlTools {
 
     func deleteConnectors(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
         let collection = targetCollection(arguments)
-        guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(collection)) }
+        let shownCollection = ControlText.escapedName(collection)
+        guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
         guard !state.isSynced(collection) else { return .refused(CollectionsModel.lockedGlyphTooltip) }
         var names: [String] = []
         for name in arguments.strings("names") ?? [] where !names.contains(name) { names.append(name) }
         guard !names.isEmpty else { return .refused(ControlTools.missingArgumentError("names")) }
         // All or nothing: a list with one wrong name is a mistake, not a request for the rest.
         if let missing = names.first(where: { held.mcps[$0] == nil }) {
-            return .refused(ControlTools.noConnectorError(missing, collection))
+            return .refused(ControlTools.noConnectorError(ControlText.escapedName(missing), shownCollection))
         }
         let listed = ControlText.quotedList(names)
         let active = collection == state.activeCollection
         let reachesClaude = active && names.contains { held.mcps[$0]?.enabled == true }
-        let (shownAsker, shownCollection) = (ControlText.escapedName(asker), ControlText.escapedName(collection))
+        let shownAsker = ControlText.escapedName(asker)
         let request = ConfirmationRequest(
             title: ControlTools.deleteTitle(shownAsker, listed),
             message: active ? ControlTools.deleteActiveMessage(shownCollection) : ControlTools.deleteMessage(shownCollection),
@@ -207,7 +210,7 @@ extension ControlTools {
             let mark = state.appliedServers
             state.delete(names: names, in: collection)
             state.applyInteractively()
-            return done([ControlTools.deletedText(listed, collection)],
+            return done([ControlTools.deletedText(listed, shownCollection)],
                         ["collection": .string(collection), "names": .array(names.map(JSONValue.string))],
                         touching: collection, since: mark, restart: ControlTools.restartToApplyText,
                         notification: ControlTools.deletedNotification(shownAsker, listed, shownCollection))

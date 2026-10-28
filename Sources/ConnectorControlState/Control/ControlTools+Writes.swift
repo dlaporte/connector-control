@@ -7,6 +7,10 @@ import ConnectorControlCore
 /// connector or a collection, managing collections, refreshing a subscription, changing a setting.
 /// Some change what Claude runs and say so, with a restart when one is due; the rest touch only this
 /// app's own lists and settings. They never ask, and say what they did and what follows from it.
+///
+/// A direct change's answer is also what announces it when it lands after its caller was told it
+/// was still waiting, so it names connectors and collections as the gated tools' questions do:
+/// through `ControlText.escapedName(_:)`, since Claude chooses them.
 extension ControlTools {
     public static let restartToUseText = "Restart Claude to use it."
     public static let restartToApplyText = "Restart Claude to apply the change."
@@ -55,8 +59,10 @@ extension ControlTools {
         }
     }
 
+    /// A change refused as it was made, with the app's own sentence: through `ControlText.escaped(_:)`,
+    /// since the sentence may echo a name the caller chose.
     static func refused(_ text: String) -> ControlOutcome {
-        ControlOutcome(result: .refusal(text), notification: nil)
+        ControlOutcome(result: .refusal(ControlText.escaped(text)), notification: nil)
     }
 
     /// A write's answer: what happened, then what follows for the collection Claude runs. A write
@@ -72,7 +78,10 @@ extension ControlTools {
         // A write that never touches Claude's config (a window's setting) must not report a retry
         // an earlier, unrelated write left pending.
         let reachesClaude = touchesClaude && (collection == nil || collection == state.activeCollection)
-        let applied = state.appliedServers != mark
+        // Platform idiom: compared scalar by scalar, as the Windows mirror compares ordinally; Swift's
+        // == holds canonically equivalent text equal, and would miss a change only in how a
+        // character is composed.
+        let applied = !ControlTools.identical(.object(state.appliedServers), .object(mark))
         var then: String?
         if reachesClaude, state.applyRetryNeeded {
             text.append(ControlTools.savedNotAppliedText(state.lastError ?? ""))
@@ -95,13 +104,14 @@ extension ControlTools {
         let on = arguments.bool("enabled") ?? true
         // The active collection only, as the popover's switches act: it is the one Claude runs.
         let collection = state.activeCollection
+        let (shownName, shownCollection) = (ControlText.escapedName(name), ControlText.escapedName(collection))
         guard state.store.collections[collection]?.mcps[name] != nil else {
-            return .refused(ControlTools.noConnectorError(name, collection))
+            return .refused(ControlTools.noConnectorError(shownName, shownCollection))
         }
         return .ready(nil, perform: { [self] in
             let mark = state.appliedServers
             state.setEnabled(name, on)
-            return done([on ? ControlTools.turnedOnText(name, collection) : ControlTools.turnedOffText(name, collection)],
+            return done([on ? ControlTools.turnedOnText(shownName, shownCollection) : ControlTools.turnedOffText(shownName, shownCollection)],
                         ["collection": .string(collection), "name": .string(name), "enabled": .bool(on)],
                         touching: collection, since: mark,
                         restart: on ? ControlTools.restartToUseText : ControlTools.restartToApplyText)
@@ -112,11 +122,12 @@ extension ControlTools {
         let collection = arguments.string("collection") ?? ""
         // AppState ignores an unknown name in silence, as the chip menu can never offer one;
         // a caller that typed it hears why nothing happened.
-        guard state.store.collections[collection] != nil else { return .refused(MasterStore.noCollectionError(collection)) }
+        let shown = ControlText.escapedName(collection)
+        guard state.store.collections[collection] != nil else { return .refused(MasterStore.noCollectionError(shown)) }
         return .ready(nil, perform: { [self] in
             let mark = state.appliedServers
             state.switchCollection(to: collection)
-            return done([ControlTools.switchedText(collection)], ["activeCollection": .string(collection)],
+            return done([ControlTools.switchedText(shown)], ["activeCollection": .string(collection)],
                         touching: nil, since: mark, restart: ControlTools.restartToApplyText)
         })
     }
@@ -127,7 +138,7 @@ extension ControlTools {
             let mark = state.appliedServers
             if let error = state.addEmptyCollection(named: name) { return ControlTools.refused(error) }
             let created = MasterStore.collectionName(name)
-            return done([ControlTools.createdText(created)], ["collection": .string(created)],
+            return done([ControlTools.createdText(ControlText.escapedName(created))], ["collection": .string(created)],
                         touching: created, since: mark, restart: ControlTools.restartToApplyText)
         })
     }
@@ -139,7 +150,7 @@ extension ControlTools {
             let mark = state.appliedServers
             if let error = state.renameCollection(collection, to: newName) { return ControlTools.refused(error) }
             let renamed = MasterStore.collectionName(newName)
-            return done([ControlTools.renamedCollectionText(collection, renamed)],
+            return done([ControlTools.renamedCollectionText(ControlText.escapedName(collection), ControlText.escapedName(renamed))],
                         ["collection": .string(renamed), "previousName": .string(collection)],
                         touching: renamed, since: mark, restart: ControlTools.restartToApplyText)
         })
@@ -148,23 +159,26 @@ extension ControlTools {
     func duplicateCollection(_ arguments: ControlArguments) -> ControlStep {
         let source = arguments.string("collection") ?? ""
         let newName = arguments.string("newName") ?? ""
-        guard state.store.collections[source] != nil else { return .refused(MasterStore.noCollectionError(source)) }
+        let shownSource = ControlText.escapedName(source)
+        guard state.store.collections[source] != nil else { return .refused(MasterStore.noCollectionError(shownSource)) }
         // AppState passes over a subscribed source in silence, since the window offers Make Local
         // Copy in its place; that is not a tool here, so the caller is told where to find it.
-        guard !state.isSynced(source) else { return .refused(ControlTools.duplicateSubscribedError(source)) }
+        guard !state.isSynced(source) else { return .refused(ControlTools.duplicateSubscribedError(shownSource)) }
         return .ready(nil, perform: { [self] in
             let mark = state.appliedServers
             if let error = state.duplicateCollection(source, named: newName) { return ControlTools.refused(error) }
             let copy = MasterStore.collectionName(newName)
-            return done([ControlTools.duplicatedText(source, copy)], ["collection": .string(copy), "source": .string(source)],
+            return done([ControlTools.duplicatedText(shownSource, ControlText.escapedName(copy))],
+                        ["collection": .string(copy), "source": .string(source)],
                         touching: copy, since: mark, restart: ControlTools.restartToApplyText)
         })
     }
 
     func refreshSubscription(_ arguments: ControlArguments) -> ControlStep {
         let collection = arguments.string("collection") ?? ""
-        guard state.store.collections[collection] != nil else { return .refused(MasterStore.noCollectionError(collection)) }
-        guard state.isSynced(collection) else { return .refused(ControlTools.notSubscribedError(collection)) }
+        let shown = ControlText.escapedName(collection)
+        guard state.store.collections[collection] != nil else { return .refused(MasterStore.noCollectionError(shown)) }
+        guard state.isSynced(collection) else { return .refused(ControlTools.notSubscribedError(shown)) }
         return .ready(nil, perform: { [self] in
             state.refreshSource(for: collection)
             let answer = pendingUpdate(collection)

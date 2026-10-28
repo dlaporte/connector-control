@@ -159,6 +159,9 @@ public sealed record ControlResult(JsonValue Structured, string Text, bool IsErr
 /// </summary>
 public sealed record ConfirmationRequest(string Title, string Message, IReadOnlyList<string> Code, string? Footer)
 {
+    // Platform idiom: text is compared ordinally, as the Mac mirror compares it scalar by scalar; Swift's
+    // == would hold canonically equivalent text equal, and take a question that changed only in how a
+    // character is composed for the one the user answered.
     public bool Equals(ConfirmationRequest? other) =>
         other is not null && Title == other.Title && Message == other.Message
         && Code.SequenceEqual(other.Code, StringComparer.Ordinal) && Footer == other.Footer;

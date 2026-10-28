@@ -19,6 +19,13 @@ public class ControlToolsGatedTests
             JsonValue.String("sk-live-abc123"), JsonValue.String("https://h.example/mcp?token=abc")])),
         ("env", JsonValue.Object(("ACME_TOKEN", JsonValue.String("literal-env-secret")))));
 
+    /// <summary>The same config twice over, but for how one character is composed: é as one character, and
+    /// as e and a combining acute accent.</summary>
+    private static readonly JsonValue Composed = JsonValue.Object(("command", JsonValue.String("node")),
+        ("args", JsonValue.Array([JsonValue.String("caf\u00E9.js")])));
+    private static readonly JsonValue Decomposed = JsonValue.Object(("command", JsonValue.String("node")),
+        ("args", JsonValue.Array([JsonValue.String("cafe\u0301.js")])));
+
     private static JsonValue Args(params (string Key, JsonValue Value)[] arguments) => JsonValue.Object(arguments);
 
     private static JsonValue Text(string value) => JsonValue.String(value);
@@ -149,10 +156,8 @@ public class ControlToolsGatedTests
     public void AChangeOnlyInHowACharacterIsComposedIsStillAChange()
     {
         using var rig = Rig();
-        var composed = JsonValue.Object(("command", Text("node")), ("args", JsonValue.Array([Text("caf\u00E9.js")])));
-        var decomposed = JsonValue.Object(("command", Text("node")), ("args", JsonValue.Array([Text("cafe\u0301.js")])));
-        Assert.Null(rig.State.Upsert("scoutbook", new McpEntry(composed), "scoutbook"));
-        var result = rig.Call("update_connector", Args(("name", Text("scoutbook")), ("config", decomposed)));
+        Assert.Null(rig.State.Upsert("scoutbook", new McpEntry(Composed), "scoutbook"));
+        var result = rig.Call("update_connector", Args(("name", Text("scoutbook")), ("config", Decomposed)));
         Assert.Equal(ControlTools.ChangedText("scoutbook", "Default"), result?.Text);
         Assert.Single(rig.Confirmer.Requests);
     }
@@ -257,9 +262,20 @@ public class ControlToolsGatedTests
         var caller = new ControlCaller.Relay("Cursor\n\u202Ed");
         const string shownAsker = """Cursor\n\u{202E}d""";
         Assert.Null(rig.State.AddEmptyCollection(collection));
-        rig.Call("add_connector", Args(("collection", Text(collection)), ("name", Text(name)), ("config", Notion)), caller);
-        rig.Call("update_connector", Args(("collection", Text(collection)), ("name", Text(name)), ("newName", Text("b"))), caller);
-        rig.Call("delete_connectors", Args(("collection", Text(collection)), ("names", Names("b"))), caller);
+        ControlResult?[] results =
+        [
+            rig.Call("add_connector", Args(("collection", Text(collection)), ("name", Text(name)), ("config", Notion)), caller),
+            rig.Call("update_connector", Args(("collection", Text(collection)), ("name", Text(name)), ("newName", Text("b"))), caller),
+            rig.Call("delete_connectors", Args(("collection", Text(collection)), ("names", Names("b"))), caller),
+            rig.Call("delete_connectors", Args(("collection", Text(collection)), ("names", Names(name))), caller),
+        ];
+        // The answers name them so too.
+        Assert.Equal([
+            ControlTools.AddedText(shownName, shownCollection, ControlTools.OnWord) + "\n" + ControlTools.NeedsValuesText("“NOTION_TOKEN”"),
+            ControlTools.RenamedText(shownName, "b"),
+            ControlTools.DeletedText("“b”", shownCollection),
+            ControlTools.NoConnectorError(shownName, shownCollection),
+        ], results.Select(result => result?.Text));
         var requests = rig.Confirmer.Requests;
         Assert.Equal([ControlTools.AddTitle(shownAsker, shownName), ControlTools.ChangeTitle(shownAsker, shownName),
                       ControlTools.DeleteTitle(shownAsker, "“b”")], requests.Select(request => request.Title));
@@ -273,6 +289,10 @@ public class ControlToolsGatedTests
             {
                 AssertPlain(text);
             }
+        }
+        foreach (var line in results.SelectMany(result => (result?.Text ?? "").Split('\n')))
+        {
+            AssertPlain(line);
         }
         // Added, renamed and deleted as asked.
         Assert.Empty(rig.State.Store.Collections[collection].Mcps);

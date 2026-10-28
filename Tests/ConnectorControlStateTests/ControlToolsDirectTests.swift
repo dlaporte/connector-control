@@ -248,6 +248,23 @@ final class ControlToolsDirectTests: XCTestCase {
         XCTAssertEqual(copy.structured.value(at: applied), .bool(true))
     }
 
+    /// A write that moved what Claude's config holds only in how a character is composed has still
+    /// moved it, as on Windows, so it names the restart while Claude runs.
+    func testAMoveOnlyInHowACharacterIsComposedStillNamesTheRestart() throws {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let composed: JSONValue = .object(["command": .string("node"), "args": .array([.string("caf\u{E9}.js")])])
+        let decomposed: JSONValue = .object(["command": .string("node"), "args": .array([.string("cafe\u{301}.js")])])
+        XCTAssertNil(rig.state.upsert(name: "scoutbook", entry: MCPEntry(config: decomposed), renamedFrom: "scoutbook"))
+        rig.state.applyInteractively()
+        rig.h.claudeRunningSince(hours: 1)
+        rig.state.refreshRestartState()
+        var mark = rig.state.appliedServers
+        mark["scoutbook"] = composed
+        let outcome = rig.tools.done(["Did it."], [:], touching: "Default", since: mark, restart: ControlTools.restartToApplyText)
+        XCTAssertEqual(outcome.result.text, "Did it. " + ControlTools.restartToApplyText)
+        XCTAssertEqual(outcome.result.structured.value(at: JSONPointer(["restartRequired"])), .bool(true))
+    }
+
     func testAStaleRetryFlagDoesNotColourAnUnrelatedSetting() throws {
         let rig = ControlRig(); defer { rig.dispose() }
         do {
@@ -262,5 +279,68 @@ final class ControlToolsDirectTests: XCTestCase {
         XCTAssertEqual(result.structured.value(at: JSONPointer(["applied"])), .bool(true))
         let keep = try XCTUnwrap(rig.call("set_setting", ["key": .string("backups-to-keep"), "value": .string("30")]))
         XCTAssertEqual(keep.text, ControlTools.settingChangedText("backups-to-keep", "30"))
+    }
+
+    // MARK: Names
+
+    /// Nothing in `text` that a line would show as an escape: nothing that breaks a line, or
+    /// reorders or hides text.
+    private func assertPlain(_ text: String?, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertFalse((text ?? "").unicodeScalars.contains { ControlText.escape($0) != nil }, text ?? "nil", file: file, line: line)
+    }
+
+    /// A direct change's answer is also what announces it when it lands late, and it names
+    /// connectors and collections as others chose them: Claude creates and renames collections
+    /// without asking. Each name shows as an escape what would break a line or reorder or hide text,
+    /// and so does the app's own refusal that echoes one.
+    func testADirectChangeShowsNamesAsEscapes() throws {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let work = "Work\n\u{202E}z", shownWork = #"Work\n\u{202E}z"#
+        let team = "Team\n\u{202E}y", shownTeam = #"Team\n\u{202E}y"#
+        let copy = "Copy\u{2066}”", shownCopy = #"Copy\u{2066}\u{201D}"#
+        let name = "a\nb\u{202E}c", shownName = #"a\nb\u{202E}c"#
+        let data = "Data\n\u{202E}team", shownData = #"Data\n\u{202E}team"#
+        var results = [
+            rig.call("create_collection", ["name": .string(work)]),
+            rig.call("rename_collection", ["collection": .string(work), "newName": .string(team)]),
+            rig.call("duplicate_collection", ["collection": .string(team), "newName": .string(copy)]),
+            rig.call("switch_collection", ["collection": .string(team)]),
+        ]
+        XCTAssertNil(rig.state.upsert(name: name, entry: MCPEntry(config: .object(["command": .string("x")])), renamedFrom: nil))
+        results.append(rig.call("set_connector_enabled", ["name": .string(name), "enabled": .bool(false)]))
+        results.append(rig.call("set_connector_enabled", ["name": .string("\u{202E}"), "enabled": .bool(false)]))
+        results.append(rig.call("switch_collection", ["collection": .string("\u{202E}")]))
+        results.append(rig.call("refresh_subscription", ["collection": .string(team)]))
+        results.append(rig.call("rename_collection", ["collection": .string(copy), "newName": .string(team)]))
+        try rig.h.subscribe(rig.state, to: CollectionDocumentSamples.dataTeam, as: data)
+        results.append(rig.call("refresh_subscription", ["collection": .string(data)]))
+        XCTAssertEqual(results.map { $0?.text }, [
+            ControlTools.createdText(shownWork),
+            ControlTools.renamedCollectionText(shownWork, shownTeam),
+            ControlTools.duplicatedText(shownTeam, shownCopy),
+            ControlTools.switchedText(shownTeam),
+            ControlTools.turnedOffText(shownName, shownTeam),
+            ControlTools.noConnectorError(#"\u{202E}"#, shownTeam),
+            MasterStore.noCollectionError(#"\u{202E}"#),
+            ControlTools.notSubscribedError(shownTeam),
+            #"A collection named “Team\n\u{202E}y” already exists."#,
+            ControlTools.upToDateText(shownData),
+        ])
+        for result in results { assertPlain(result?.text) }
+        XCTAssertEqual(rig.state.store.collections[team]?.mcps[name]?.enabled, false, "each change was made as asked")
+    }
+
+    /// A direct change Claude asked for that lands after its early answer is announced in the
+    /// same words, names escaped.
+    func testALateDirectChangeIsAnnouncedWithNamesAsEscapes() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let name = "a\nb\u{202E}c"
+        XCTAssertNil(rig.state.upsert(name: name, entry: MCPEntry(config: .object(["command": .string("x")])), renamedFrom: nil))
+        rig.start("add_connector", ["name": .string("held"), "config": .object(["command": .string("node")])])
+        let queued = rig.start("set_connector_enabled", ["name": .string(name), "enabled": .bool(false)])
+        for _ in 1...20 where !rig.h.delays.pending.isEmpty { rig.h.delays.runNext() }
+        XCTAssertEqual(queued.result, ControlTools.queuedResult)
+        rig.confirmer.answer(false)
+        XCTAssertEqual(rig.h.notifier.sent.map(\.body), [ControlTools.turnedOffText(#"a\nb\u{202E}c"#, "Default")])
     }
 }

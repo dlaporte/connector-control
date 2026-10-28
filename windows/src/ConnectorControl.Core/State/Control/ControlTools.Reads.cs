@@ -250,15 +250,20 @@ public sealed partial class ControlTools
             false);
     }
 
+    /// <summary>What an update would change, in the window's own banner. It names the collection and the
+    /// connectors as others chose them — the document's author names its connectors — so each goes
+    /// through <see cref="ControlText.EscapedName"/>; refresh_subscription answers with it, and is
+    /// announced with it when it lands late.</summary>
     internal ControlResult PendingUpdate(string collection)
     {
+        var shown = ControlText.EscapedName(collection);
         if (!state.Store.Collections.ContainsKey(collection))
         {
-            return ControlResult.Refusal(MasterStore.NoCollectionError(collection));
+            return ControlResult.Refusal(MasterStore.NoCollectionError(shown));
         }
         if (!state.IsSynced(collection))
         {
-            return ControlResult.Refusal(NotSubscribedError(collection));
+            return ControlResult.Refusal(NotSubscribedError(shown));
         }
         if (state.SourceErrors.TryGetValue(collection, out var problem))
         {
@@ -270,7 +275,9 @@ public sealed partial class ControlTools
             ("added", JsonValue.Array((diff?.Added ?? []).Select(JsonValue.String))),
             ("removed", JsonValue.Array((diff?.Removed ?? []).Select(JsonValue.String))),
             ("changed", JsonValue.Array((diff?.Changed ?? []).Select(JsonValue.String))));
-        var text = diff is not null ? AppState.CollectionUpdateBanner(collection, diff.Summary()) : UpToDateText(collection);
+        var text = diff is not null
+            ? AppState.CollectionUpdateBanner(shown, ControlText.EscapedName(diff.Summary()))
+            : UpToDateText(shown);
         return new ControlResult(structured, text, false);
     }
 

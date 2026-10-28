@@ -8,6 +8,10 @@ namespace ConnectorControl.Core.State;
 /// Some change what Claude runs and say so, with a restart when one is due; the rest touch only this
 /// app's own lists and settings. They never ask, and say what they did and what follows from it.
 ///
+/// A direct change's answer is also what announces it when it lands after its caller was told it
+/// was still waiting, so it names connectors and collections as the gated tools' questions do:
+/// through <see cref="ControlText.EscapedName"/>, since Claude chooses them.
+///
 /// Mirror: Sources/ConnectorControlState/Control/ControlTools+Writes.swift
 /// </summary>
 public sealed partial class ControlTools
@@ -64,7 +68,9 @@ public sealed partial class ControlTools
         }
     }
 
-    internal static ControlOutcome Refused(string text) => new(ControlResult.Refusal(text), null);
+    /// <summary>A change refused as it was made, with the app's own sentence: through <see cref="ControlText.Escaped"/>,
+    /// since the sentence may echo a name the caller chose.</summary>
+    internal static ControlOutcome Refused(string text) => new(ControlResult.Refusal(ControlText.Escaped(text)), null);
 
     /// <summary>A write's answer: what happened, then what follows for the collection Claude runs. A write
     /// that changed what Claude's config holds (<c>AppliedServers</c> moved off <paramref name="mark"/>, taken
@@ -81,6 +87,8 @@ public sealed partial class ControlTools
         // an earlier, unrelated write left pending.
         var reachesClaude = touchesClaude && (collection is null || collection == state.ActiveCollection);
         // Compared by value: the harness clock stands still, so a timestamp could not tell a write from none.
+        // Platform idiom: compared ordinally, as the Mac mirror compares scalar by scalar; Swift's == would
+        // hold canonically equivalent text equal, and miss a change only in how a character is composed.
         var applied = !DictionaryEquality.Equal(state.AppliedServers, mark);
         string? then = null;
         if (reachesClaude && state.ApplyRetryNeeded)
@@ -116,15 +124,16 @@ public sealed partial class ControlTools
         var on = arguments.Bool("enabled") ?? true;
         // The active collection only, as the popover's switches act: it is the one Claude runs.
         var collection = state.ActiveCollection;
+        var (shownName, shownCollection) = (ControlText.EscapedName(name), ControlText.EscapedName(collection));
         if (!state.Store.Collections.TryGetValue(collection, out var held) || !held.Mcps.ContainsKey(name))
         {
-            return new ControlStep.Refused(NoConnectorError(name, collection));
+            return new ControlStep.Refused(NoConnectorError(shownName, shownCollection));
         }
         return new ControlStep.Ready(null, () =>
         {
             var mark = state.AppliedServers;
             state.SetEnabled(name, on);
-            return Done([on ? TurnedOnText(name, collection) : TurnedOffText(name, collection)],
+            return Done([on ? TurnedOnText(shownName, shownCollection) : TurnedOffText(shownName, shownCollection)],
                 [("collection", JsonValue.String(collection)), ("name", JsonValue.String(name)), ("enabled", JsonValue.Bool(on))],
                 collection, mark, on ? RestartToUseText : RestartToApplyText);
         });
@@ -135,15 +144,16 @@ public sealed partial class ControlTools
         var collection = arguments.String("collection") ?? "";
         // AppState ignores an unknown name in silence, as the chip menu can never offer one;
         // a caller that typed it hears why nothing happened.
+        var shown = ControlText.EscapedName(collection);
         if (!state.Store.Collections.ContainsKey(collection))
         {
-            return new ControlStep.Refused(MasterStore.NoCollectionError(collection));
+            return new ControlStep.Refused(MasterStore.NoCollectionError(shown));
         }
         return new ControlStep.Ready(null, () =>
         {
             var mark = state.AppliedServers;
             state.SwitchCollection(collection);
-            return Done([SwitchedText(collection)], [("activeCollection", JsonValue.String(collection))],
+            return Done([SwitchedText(shown)], [("activeCollection", JsonValue.String(collection))],
                 null, mark, RestartToApplyText);
         });
     }
@@ -159,7 +169,7 @@ public sealed partial class ControlTools
                 return Refused(error);
             }
             var created = MasterStore.CollectionName(name);
-            return Done([CreatedText(created)], [("collection", JsonValue.String(created))],
+            return Done([CreatedText(ControlText.EscapedName(created))], [("collection", JsonValue.String(created))],
                 created, mark, RestartToApplyText);
         });
     }
@@ -176,7 +186,7 @@ public sealed partial class ControlTools
                 return Refused(error);
             }
             var renamed = MasterStore.CollectionName(newName);
-            return Done([RenamedCollectionText(collection, renamed)],
+            return Done([RenamedCollectionText(ControlText.EscapedName(collection), ControlText.EscapedName(renamed))],
                 [("collection", JsonValue.String(renamed)), ("previousName", JsonValue.String(collection))],
                 renamed, mark, RestartToApplyText);
         });
@@ -186,15 +196,16 @@ public sealed partial class ControlTools
     {
         var source = arguments.String("collection") ?? "";
         var newName = arguments.String("newName") ?? "";
+        var shownSource = ControlText.EscapedName(source);
         if (!state.Store.Collections.ContainsKey(source))
         {
-            return new ControlStep.Refused(MasterStore.NoCollectionError(source));
+            return new ControlStep.Refused(MasterStore.NoCollectionError(shownSource));
         }
         // AppState passes over a subscribed source in silence, since the window offers Make Local
         // Copy in its place; that is not a tool here, so the caller is told where to find it.
         if (state.IsSynced(source))
         {
-            return new ControlStep.Refused(DuplicateSubscribedError(source));
+            return new ControlStep.Refused(DuplicateSubscribedError(shownSource));
         }
         return new ControlStep.Ready(null, () =>
         {
@@ -204,7 +215,8 @@ public sealed partial class ControlTools
                 return Refused(error);
             }
             var copy = MasterStore.CollectionName(newName);
-            return Done([DuplicatedText(source, copy)], [("collection", JsonValue.String(copy)), ("source", JsonValue.String(source))],
+            return Done([DuplicatedText(shownSource, ControlText.EscapedName(copy))],
+                [("collection", JsonValue.String(copy)), ("source", JsonValue.String(source))],
                 copy, mark, RestartToApplyText);
         });
     }
@@ -212,13 +224,14 @@ public sealed partial class ControlTools
     private ControlStep RefreshSubscription(ControlArguments arguments)
     {
         var collection = arguments.String("collection") ?? "";
+        var shown = ControlText.EscapedName(collection);
         if (!state.Store.Collections.ContainsKey(collection))
         {
-            return new ControlStep.Refused(MasterStore.NoCollectionError(collection));
+            return new ControlStep.Refused(MasterStore.NoCollectionError(shown));
         }
         if (!state.IsSynced(collection))
         {
-            return new ControlStep.Refused(NotSubscribedError(collection));
+            return new ControlStep.Refused(NotSubscribedError(shown));
         }
         return new ControlStep.Ready(null, () =>
         {

@@ -184,6 +184,21 @@ final class ControlConfirmationFlowTests: XCTestCase {
         XCTAssertTrue(rig.h.notifier.sent.isEmpty)
     }
 
+    /// The question asked again is compared with the one the user answered scalar by scalar, as on
+    /// Windows: a connector that changed only in how a character is composed while the dialog was
+    /// open has changed, and nothing is done.
+    func testAChangeWhileAskingOnlyInHowACharacterIsComposedStillCounts() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let composed: JSONValue = .object(["command": .string("node"), "args": .array([.string("caf\u{E9}.js")])])
+        let decomposed: JSONValue = .object(["command": .string("node"), "args": .array([.string("cafe\u{301}.js")])])
+        XCTAssertNil(rig.state.upsert(name: "scoutbook", entry: MCPEntry(config: composed), renamedFrom: "scoutbook"))
+        let answer = rig.start("update_connector", ["name": .string("scoutbook"), "config": config])
+        XCTAssertNil(rig.state.upsert(name: "scoutbook", entry: MCPEntry(config: decomposed), renamedFrom: "scoutbook"))
+        rig.confirmer.answer(true)
+        XCTAssertEqual(answer.result, .refusal(ControlTools.changedWhileAskingError))
+        XCTAssertNotEqual(rig.state.store.mcps["scoutbook"]?.config, config, "nothing was done")
+    }
+
     func testARefusalThatAroseWhileAskingWins() {
         let rig = ControlRig(); defer { rig.dispose() }
         let answer = rig.start("add_connector", add("x"))

@@ -309,6 +309,24 @@ public class ControlToolsDirectTests
         Assert.Equal(JsonValue.Bool(true), copy.Structured.ValueAt(applied));
     }
 
+    /// <summary>A write that moved what Claude's config holds only in how a character is composed has still
+    /// moved it, as on the Mac, so it names the restart while Claude runs.</summary>
+    [Fact]
+    public void AMoveOnlyInHowACharacterIsComposedStillNamesTheRestart()
+    {
+        using var rig = new ControlRig();
+        var composed = JsonValue.Object(("command", Text("node")), ("args", JsonValue.Array([Text("caf\u00E9.js")])));
+        var decomposed = JsonValue.Object(("command", Text("node")), ("args", JsonValue.Array([Text("cafe\u0301.js")])));
+        Assert.Null(rig.State.Upsert("scoutbook", new McpEntry(decomposed), "scoutbook"));
+        rig.State.ApplyInteractively();
+        rig.H.ClaudeRunningSince(hours: 1);
+        rig.State.RefreshRestartState();
+        var mark = new Dictionary<string, JsonValue>(rig.State.AppliedServers) { ["scoutbook"] = composed };
+        var outcome = rig.Tools.Done(["Did it."], [], "Default", mark, ControlTools.RestartToApplyText);
+        Assert.Equal("Did it. " + ControlTools.RestartToApplyText, outcome.Result.Text);
+        Assert.Equal(JsonValue.Bool(true), outcome.Result.Structured.ValueAt(new JsonPointer(["restartRequired"])));
+    }
+
     [Fact]
     public void AStaleRetryFlagDoesNotColourAnUnrelatedSetting()
     {
@@ -325,5 +343,78 @@ public class ControlToolsDirectTests
         Assert.Equal(JsonValue.Bool(true), result.Structured.ValueAt(new JsonPointer(["applied"])));
         Assert.Equal(ControlTools.SettingChangedText("backups-to-keep", "30"),
             rig.Call("set_setting", Args(("key", Text("backups-to-keep")), ("value", Text("30"))))?.Text);
+    }
+
+    // MARK: names
+
+    /// <summary>Nothing in <paramref name="text"/> that a line would show as an escape: nothing that breaks a
+    /// line, or reorders or hides text.</summary>
+    private static void AssertPlain(string? text) => Assert.DoesNotContain(text ?? "", c => ControlText.Escape(c) is not null);
+
+    /// <summary>A direct change's answer is also what announces it when it lands late, and it names
+    /// connectors and collections as others chose them: Claude creates and renames collections
+    /// without asking. Each name shows as an escape what would break a line or reorder or hide text,
+    /// and so does the app's own refusal that echoes one.</summary>
+    [Fact]
+    public void ADirectChangeShowsNamesAsEscapes()
+    {
+        using var rig = new ControlRig();
+        const string work = "Work\n\u202Ez", shownWork = """Work\n\u{202E}z""";
+        const string team = "Team\n\u202Ey", shownTeam = """Team\n\u{202E}y""";
+        const string copy = "Copy\u2066”", shownCopy = """Copy\u{2066}\u{201D}""";
+        const string name = "a\nb\u202Ec", shownName = """a\nb\u{202E}c""";
+        const string data = "Data\n\u202Eteam", shownData = """Data\n\u{202E}team""";
+        var results = new List<ControlResult?>
+        {
+            rig.Call("create_collection", Args(("name", Text(work)))),
+            rig.Call("rename_collection", Args(("collection", Text(work)), ("newName", Text(team)))),
+            rig.Call("duplicate_collection", Args(("collection", Text(team)), ("newName", Text(copy)))),
+            rig.Call("switch_collection", Args(("collection", Text(team)))),
+        };
+        Assert.Null(rig.State.Upsert(name, Command("x"), null));
+        results.Add(rig.Call("set_connector_enabled", Args(("name", Text(name)), ("enabled", JsonValue.Bool(false)))));
+        results.Add(rig.Call("set_connector_enabled", Args(("name", Text("\u202E")), ("enabled", JsonValue.Bool(false)))));
+        results.Add(rig.Call("switch_collection", Args(("collection", Text("\u202E")))));
+        results.Add(rig.Call("refresh_subscription", Args(("collection", Text(team)))));
+        results.Add(rig.Call("rename_collection", Args(("collection", Text(copy)), ("newName", Text(team)))));
+        rig.H.Subscribe(rig.State, CollectionDocumentSamples.DataTeam, collection: data);
+        results.Add(rig.Call("refresh_subscription", Args(("collection", Text(data)))));
+        Assert.Equal([
+            ControlTools.CreatedText(shownWork),
+            ControlTools.RenamedCollectionText(shownWork, shownTeam),
+            ControlTools.DuplicatedText(shownTeam, shownCopy),
+            ControlTools.SwitchedText(shownTeam),
+            ControlTools.TurnedOffText(shownName, shownTeam),
+            ControlTools.NoConnectorError("""\u{202E}""", shownTeam),
+            MasterStore.NoCollectionError("""\u{202E}"""),
+            ControlTools.NotSubscribedError(shownTeam),
+            """A collection named “Team\n\u{202E}y” already exists.""",
+            ControlTools.UpToDateText(shownData),
+        ], results.Select(result => result?.Text));
+        foreach (var result in results)
+        {
+            AssertPlain(result?.Text);
+        }
+        // Each change was made as asked.
+        Assert.False(rig.State.Store.Collections[team].Mcps[name].Enabled);
+    }
+
+    /// <summary>A direct change Claude asked for that lands after its early answer is announced in the
+    /// same words, names escaped.</summary>
+    [Fact]
+    public void ALateDirectChangeIsAnnouncedWithNamesAsEscapes()
+    {
+        using var rig = new ControlRig();
+        const string name = "a\nb\u202Ec";
+        Assert.Null(rig.State.Upsert(name, Command("x"), null));
+        rig.Start("add_connector", Args(("name", Text("held")), ("config", JsonValue.Object(("command", Text("node"))))));
+        var queued = rig.Start("set_connector_enabled", Args(("name", Text(name)), ("enabled", JsonValue.Bool(false))));
+        for (var tick = 1; tick <= 20 && rig.H.Delays.Pending.Count > 0; tick++)
+        {
+            rig.H.Delays.RunNext();
+        }
+        Assert.Equal(ControlTools.QueuedResult, queued.Result);
+        rig.Confirmer.Answer(false);
+        Assert.Equal([ControlTools.TurnedOffText("""a\nb\u{202E}c""", "Default")], rig.H.Notifier.Sent.Select(sent => sent.Body));
     }
 }

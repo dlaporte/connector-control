@@ -219,9 +219,14 @@ extension ControlTools {
                              isError: false)
     }
 
+    /// What an update would change, in the window's own banner. It names the collection and the
+    /// connectors as others chose them — the document's author names its connectors — so each goes
+    /// through `ControlText.escapedName(_:)`; refresh_subscription answers with it, and is
+    /// announced with it when it lands late.
     func pendingUpdate(_ collection: String) -> ControlResult {
-        guard state.store.collections[collection] != nil else { return .refusal(MasterStore.noCollectionError(collection)) }
-        guard state.isSynced(collection) else { return .refusal(ControlTools.notSubscribedError(collection)) }
+        let shown = ControlText.escapedName(collection)
+        guard state.store.collections[collection] != nil else { return .refusal(MasterStore.noCollectionError(shown)) }
+        guard state.isSynced(collection) else { return .refusal(ControlTools.notSubscribedError(shown)) }
         if let problem = state.sourceErrors[collection] { return .refusal(problem) }
         let diff = state.pendingUpdates[collection]
         let structured: JSONValue = .object([
@@ -230,7 +235,8 @@ extension ControlTools {
             "removed": .array((diff?.removed ?? []).map(JSONValue.string)),
             "changed": .array((diff?.changed ?? []).map(JSONValue.string)),
         ])
-        let text = diff.map { AppState.collectionUpdateBanner(collection, $0.summary()) } ?? ControlTools.upToDateText(collection)
+        let text = diff.map { AppState.collectionUpdateBanner(shown, ControlText.escapedName($0.summary())) }
+            ?? ControlTools.upToDateText(shown)
         return ControlResult(structured: structured, text: text, isError: false)
     }
 

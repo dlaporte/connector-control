@@ -240,6 +240,24 @@ public class ControlConfirmationFlowTests
         Assert.Empty(rig.H.Notifier.Sent);
     }
 
+    /// <summary>The question asked again is compared with the one the user answered ordinally, as on the
+    /// Mac: a connector that changed only in how a character is composed while the dialog was open has
+    /// changed, and nothing is done.</summary>
+    [Fact]
+    public void AChangeWhileAskingOnlyInHowACharacterIsComposedStillCounts()
+    {
+        using var rig = new ControlRig();
+        var composed = JsonValue.Object(("command", JsonValue.String("node")), ("args", JsonValue.Array([JsonValue.String("caf\u00E9.js")])));
+        var decomposed = JsonValue.Object(("command", JsonValue.String("node")), ("args", JsonValue.Array([JsonValue.String("cafe\u0301.js")])));
+        Assert.Null(rig.State.Upsert("scoutbook", new McpEntry(composed), "scoutbook"));
+        var answer = rig.Start("update_connector", JsonValue.Object(("name", JsonValue.String("scoutbook")), ("config", Config)));
+        Assert.Null(rig.State.Upsert("scoutbook", new McpEntry(decomposed), "scoutbook"));
+        rig.Confirmer.Answer(true);
+        Assert.Equal(ControlResult.Refusal(ControlTools.ChangedWhileAskingError), answer.Result);
+        // Nothing was done.
+        Assert.NotEqual(Config, rig.State.Store.Mcps["scoutbook"].Config);
+    }
+
     [Fact]
     public void ARefusalThatAroseWhileAskingWins()
     {
