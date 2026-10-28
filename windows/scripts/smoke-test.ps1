@@ -18,17 +18,17 @@
       2. LAUNCH assertions. This starts current\ConnectorControl.exe against a throwaway Claude
          config and master-list folder (CONNECTOR_CONTROL_CLAUDE_CONFIG / CONNECTOR_CONTROL_STORE_DIR
          — the same env overrides AppPaths honours), polls up to -Seconds for the first-run
-         import to write <store>\mcps.json, and asserts exactly four things:
+         import to write <store>\mcps.json, and asserts:
            a. the process is still alive;
            b. no crash.log under %LOCALAPPDATA%\Connector Control;
            c. the first-run import wrote <store>\mcps.json;
-           d. the process exits within 15 s of taskkill;
-           e. current\connector-control.exe exists and the app has copied it to
+           d. current\connector-control.exe exists and the app has copied it to
               %LOCALAPPDATA%\Connector Control\bin, byte for byte, without a word in crash.log;
-           f. the copy says its version;
-           g. connector-control.exe status --json answers through the pipe with this version;
-           h. settings set claude-integration on writes Claude's entry naming the copy;
-           i. the relay, fed a handshake and a call on standard input, answers the call.
+           e. the copy says its version;
+           f. connector-control.exe status --json answers through the pipe with this version;
+           g. settings set claude-integration on writes Claude's entry naming the copy;
+           h. the relay, fed a handshake and a call on standard input, answers the call.
+         The relay is bounded: one that does not answer in time is killed and fails the run.
          Deliberately NOT asserted, because a passive first run does not produce them:
            * backups\claude_desktop_config.original.json — ConfigService.Apply is the only caller
              of EnsureOriginalSnapshot, and AppState.Reload calls PerformApply only when the file
@@ -42,10 +42,13 @@
          the installed exe checks this build's own full package with --verify-package, the same
          rule VelopackUpdater applies to a downloaded update. Running the app's own check here,
          rather than a second copy of it in PowerShell, means the two cannot drift apart.
-      4. the uninstall hook, run as Update.exe runs it (--veloapp-uninstall) while the app is STILL
-         RUNNING, takes the entry out of Claude's config, the copy's folder out of the user PATH and
-         deletes the copy; and the running app does not put the entry back.
-      5. stops the process (a tray app has no main window to close) and copies logs to -LogDir.
+      4. the real uninstall (Update.exe --uninstall --silent) with the app STILL RUNNING. Velopack
+         ends the app's processes first and only then runs the uninstall hook, so the app is gone when the
+         hook takes the entry out of Claude's config, the copy's folder out of the user PATH and deletes the
+         copy. Asserted: the app exited, the entry is gone and the rest of the config kept, bin\ is gone,
+         the PATH is clean, nothing wrote to Claude's config afterwards, and crash.log (in the data folder,
+         which the uninstall keeps) is still absent, since the hook logs only a failure.
+      5. a safety stop of the process if it somehow still runs, and logs copied to -LogDir.
     Prints "SMOKE PASS" and exits 0; any failed assertion throws.
 
 .PARAMETER SetupExe      The ConnectorControl-<rid>-Setup.exe to check or install.
@@ -194,7 +197,10 @@ Assert-True ($toolStatus.integration.enabled -eq $false) "the integration starts
 Write-Host "== Turning the integration on from the command line"
 & $binTool settings set claude-integration on | Out-Null
 Assert-True ($LASTEXITCODE -eq 0) "settings set claude-integration on exited 0 (got $LASTEXITCODE)"
-$entry = (Get-Content $claudeConfig -Raw | ConvertFrom-Json).mcpServers.'connector-control'
+function Get-Servers { (Get-Content $claudeConfig -Raw | ConvertFrom-Json).mcpServers }
+function Get-ServerNames { @((Get-Servers).PSObject.Properties.Name) }
+# Under strict mode a missing property would throw before the assertion could say anything.
+$entry = if ((Get-ServerNames) -contains 'connector-control') { (Get-Servers).'connector-control' } else { $null }
 Assert-True ($null -ne $entry -and $entry.command -eq $binTool -and (@($entry.args) -join ',') -eq 'mcp') `
     "Claude's config names the copy (got $($entry | ConvertTo-Json -Compress))"
 
@@ -204,57 +210,84 @@ $relayInput = @(
     '{"jsonrpc":"2.0","method":"notifications/initialized"}',
     '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_status","arguments":{}}}'
 ) -join "`n"
-# Closing standard input ends the relay once the call is answered.
-$relayOutput = @($relayInput | & $binTool mcp)
+# Closing standard input ends the relay once the call is answered; a relay that never answers is killed
+# after $relayTimeoutMs instead of holding the job until its own timeout.
+$relayTimeoutMs = 30000
+$relayStart = [System.Diagnostics.ProcessStartInfo]::new($binTool, 'mcp')
+$relayStart.RedirectStandardInput = $true
+$relayStart.RedirectStandardOutput = $true
+$relayStart.RedirectStandardError = $true
+$relayStart.UseShellExecute = $false
+$relayStart.StandardInputEncoding = [System.Text.UTF8Encoding]::new($false)
+$relayProcess = [System.Diagnostics.Process]::Start($relayStart)
+$relayStdout = $relayProcess.StandardOutput.ReadToEndAsync()
+$relayStderr = $relayProcess.StandardError.ReadToEndAsync()
+$relayProcess.StandardInput.Write($relayInput + "`n")
+$relayProcess.StandardInput.Close()
+if (-not $relayProcess.WaitForExit($relayTimeoutMs)) {
+    $relayProcess.Kill($true)
+    throw "SMOKE FAIL: the relay did not end within $($relayTimeoutMs / 1000) s of its input closing"
+}
+$relayProcess.WaitForExit()
+$relayOutput = @(($relayStdout.GetAwaiter().GetResult()) -split "`r?`n" | Where-Object { $_ })
 $answer = @($relayOutput | Where-Object { $_ -like '{"id":1,*' })
 Assert-True ($answer.Count -eq 1 -and ($answer[0] | ConvertFrom-Json).result.structuredContent.version -eq $Version) `
-    "the relay answered get_status (got $($relayOutput -join ' | '))"
+    "the relay answered get_status (got $($relayOutput -join ' | ') $($relayStderr.GetAwaiter().GetResult()))"
 
-Write-Host "== The uninstall hook, with the app still running"
-# What Velopack's Update.exe runs before an uninstall: the installed app with --veloapp-uninstall. The app is
-# still running, as it is when Update.exe starts the hook: the entry must not come back once the hook has
-# taken it out. The copy's folder goes on the user PATH first, as Install Command-Line Tool puts it there.
+Write-Host "== The uninstall, with the app still running"
+# The install root goes with the uninstall: its logs are copied first. crash.log lives in the data folder,
+# which the uninstall keeps, so it is read afterwards.
+Copy-Item -Path (Join-Path $installRoot '*.log') -Destination $LogDir -ErrorAction SilentlyContinue
+Copy-Item -Path $masterList -Destination (Join-Path $LogDir 'mcps.json') -ErrorAction SilentlyContinue
+# The copy's folder goes on the user PATH first, as Install Command-Line Tool puts it there.
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 if ($null -eq $userPath) { $userPath = '' }
 [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ';' + $bin).TrimStart(';'), 'User')
-Assert-True (-not $app.HasExited) "the app is still running as the hook starts"
-$hook = Start-Process -FilePath $exe -ArgumentList @('--veloapp-uninstall', $Version) -PassThru -Wait
-Assert-True ($hook.ExitCode -eq 0) "the uninstall hook exited 0 (got $($hook.ExitCode))"
-function Get-ServerNames { (Get-Content $claudeConfig -Raw | ConvertFrom-Json).mcpServers.PSObject.Properties.Name }
-Assert-True (-not ((Get-ServerNames) -contains 'connector-control')) "the hook took the entry out of Claude's config"
+Assert-True (-not $app.HasExited) "the app is still running as the uninstall starts"
+# What Windows runs for Quiet Uninstall. Velopack ends the app's processes first and only then runs the app's
+# uninstall hook, so no running app is left to write the entry back.
+$uninstallLog = Join-Path $LogDir 'uninstall.log'
+$uninstall = Start-Process -FilePath (Join-Path $installRoot 'Update.exe') -ArgumentList @('--uninstall', '--silent', '--log', $uninstallLog) -PassThru -Wait
+# Carries little by itself: the assertions below are what prove the hook ran.
+Write-Host "     Update.exe --uninstall exited $($uninstall.ExitCode)"
+Assert-True ($app.WaitForExit(15000)) "the uninstall ended the running app"
+Assert-True (-not ((Get-ServerNames) -contains 'connector-control')) "the uninstall hook took the entry out of Claude's config"
 Assert-True ((Get-ServerNames) -contains 'smoke') "and left the rest of it"
 Assert-True (-not (Test-Path $bin)) "the hook deleted $bin"
 $pathAfter = [Environment]::GetEnvironmentVariable('Path', 'User')
 Assert-True (-not (($pathAfter -split ';') -contains $bin)) "the hook took $bin out of the user PATH"
-# The running app watches Claude's config; had the hook run before the app was ended, the app could write the
-# entry straight back. Watched for a while, since the watcher is debounced.
+# Nothing may write to Claude's config after the hook: the window passes only if the file is byte for byte
+# what the hook left, so "nothing put the entry back" is a measured fact rather than an absence of looking.
+$configAfterHook = (Get-FileHash $claudeConfig).Hash
+$writtenAfterHook = (Get-Item $claudeConfig).LastWriteTimeUtc
 $settleUntil = (Get-Date).AddSeconds(8)
-$readded = $false
-while ((Get-Date) -lt $settleUntil -and -not $readded) {
-    Start-Sleep -Milliseconds 500
-    $readded = (Get-ServerNames) -contains 'connector-control'
-}
-Assert-True (-not $readded) "the running app did not put the entry back"
+while ((Get-Date) -lt $settleUntil) { Start-Sleep -Milliseconds 500 }
+Assert-True ((Get-FileHash $claudeConfig).Hash -eq $configAfterHook -and (Get-Item $claudeConfig).LastWriteTimeUtc -eq $writtenAfterHook) "nothing touched Claude's config after the hook"
+Assert-True (-not ((Get-ServerNames) -contains 'connector-control')) "and the entry has not come back"
 Assert-True (-not (Test-Path $bin)) "nor the copy"
 
 Write-Host "== Stop"
 $stopTimeoutMs = 15000   # generous margin over how long a graceful WM_CLOSE-style shutdown should ever take
-& taskkill.exe /PID $app.Id | Out-Null      # graceful first: posts WM_CLOSE to the process's windows
-if (-not $app.WaitForExit($stopTimeoutMs)) {
-    # Expected for a tray app: with no top-level window, taskkill reports "can only be
-    # terminated forcefully" and exits non-zero. That is the normal path here, not a failure.
-    Write-Host "     graceful taskkill did not stop it (a tray app has no window to close); forcing"
-    & taskkill.exe /PID $app.Id /F | Out-Null
+# The uninstall has normally ended the app already; taskkill on a dead PID would leave $LASTEXITCODE at 128, which
+# the CI shell's trailing `exit $LASTEXITCODE` would turn into a failed step after SMOKE PASS.
+if (-not $app.HasExited) {
+    & taskkill.exe /PID $app.Id | Out-Null      # graceful first: posts WM_CLOSE to the process's windows
+    if (-not $app.WaitForExit($stopTimeoutMs)) {
+        # Expected for a tray app: with no top-level window, taskkill reports "can only be
+        # terminated forcefully" and exits non-zero. That is the normal path here, not a failure.
+        Write-Host "     graceful taskkill did not stop it (a tray app has no window to close); forcing"
+        & taskkill.exe /PID $app.Id /F | Out-Null
+    }
 }
-Assert-True ($app.WaitForExit($stopTimeoutMs)) "the process exited within $($stopTimeoutMs / 1000) s of taskkill"
-# A clean run says nothing to crash.log: not the copy, not the hook, not the stop.
+Assert-True ($app.WaitForExit($stopTimeoutMs)) "the process exited within $($stopTimeoutMs / 1000) s"
+# A clean run says nothing to crash.log: not the copy, not the hook (which logs only a failure), not the stop.
 if (Test-Path $crashLog) {
     Write-Host "--- crash.log ---"
     Get-Content $crashLog | Write-Host
     Copy-Item $crashLog (Join-Path $LogDir 'crash.log')
 }
-Assert-True (-not (Test-Path $crashLog)) "still no crash.log after the hook and the stop"
+Assert-True (-not (Test-Path $crashLog)) "still no crash.log after the uninstall and the stop"
 
-Copy-Item -Path (Join-Path $installRoot '*.log') -Destination $LogDir -ErrorAction SilentlyContinue
-Copy-Item -Path $masterList -Destination (Join-Path $LogDir 'mcps.json') -ErrorAction SilentlyContinue
 Write-Host "SMOKE PASS"
+# Explicit: the CI shell ends with $LASTEXITCODE, which a native command above may have left non-zero.
+exit 0

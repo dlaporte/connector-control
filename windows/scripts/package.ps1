@@ -159,16 +159,29 @@ if ($AzureTrustedSignFile) {
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         $zip = [System.IO.Compression.ZipFile]::OpenRead($nupkg)
         try {
-            $entry = $zip.Entries | Where-Object { [System.IO.Path]::GetFileName($_.FullName) -eq 'connector-control.exe' } | Select-Object -First 1
-            if (-not $entry) { throw "$nupkg carries no connector-control.exe" }
-            $extracted = Join-Path $check 'connector-control.exe'
-            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $extracted)
+            $extract = {
+                param([string] $fileName)
+                $found = $zip.Entries | Where-Object { [System.IO.Path]::GetFileName($_.FullName) -eq $fileName } | Select-Object -First 1
+                if (-not $found) { throw "$nupkg carries no $fileName" }
+                $target = Join-Path $check $fileName
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($found, $target)
+                $target
+            }
+            $extracted = & $extract 'connector-control.exe'
+            $extractedApp = & $extract 'ConnectorControl.exe'
         }
         finally {
             $zip.Dispose()
         }
         $signature = Get-AuthenticodeSignature -FilePath $extracted
         if ($signature.Status -ne 'Valid') { throw "connector-control.exe in $nupkg is not validly signed ($($signature.Status))" }
+        # The same signer as the app: the one check a win-arm64 package gets before it is published, and what
+        # UpdateVerifier compares on the client.
+        $appSignature = Get-AuthenticodeSignature -FilePath $extractedApp
+        if ($appSignature.Status -ne 'Valid') { throw "ConnectorControl.exe in $nupkg is not validly signed ($($appSignature.Status))" }
+        if ($signature.SignerCertificate.Subject -ne $appSignature.SignerCertificate.Subject) {
+            throw "connector-control.exe is signed by '$($signature.SignerCertificate.Subject)', ConnectorControl.exe by '$($appSignature.SignerCertificate.Subject)'"
+        }
         Write-Host "== connector-control.exe in the package is signed by $($signature.SignerCertificate.Subject)"
     }
     finally {

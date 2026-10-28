@@ -257,8 +257,9 @@ jobs:
           name: velopack-${{ matrix.rid }}
           path: windows/artifacts/${{ matrix.rid }}
           if-no-files-found: error
-          # ~155 MB per RID, the trimmed command-line tool (about 11 MB) included. The published release is the durable copy of these files;
-          # the artifact only has to outlive the smoke and publish jobs and any re-run.
+          # ~155 MB per RID: about 22 MB more than before for the trimmed command-line tool, which the
+          # package and its Setup.exe each carry. The published release is the durable copy of these
+          # files; the artifact only has to outlive the smoke and publish jobs and any re-run.
           retention-days: 14
 
   smoke:
