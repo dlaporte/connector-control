@@ -26,9 +26,10 @@ public sealed class ControlPipeServer : IDisposable
     private readonly TimeSpan timeout;
     private readonly CancellationTokenSource stopping = new();
     private readonly Lock gate = new();
-    /// <summary>The instance waiting for the next client, held from the moment it is made: disposed at once
-    /// when the app stops, so no instance that is not yet serving a client keeps the name past
-    /// <see cref="Dispose"/>.</summary>
+    /// <summary>The instance waiting for the next client, held from the moment it is made until a client
+    /// connects to it: <see cref="Dispose"/> disposes it at once. Once connected an instance is no longer
+    /// held here, and is disposed under the same lock when it is not served, or kept by its connection
+    /// when handed on; so after <see cref="Dispose"/> only a served connection can still hold the name.</summary>
     private NamedPipeServerStream? waiting;
     private Action? stopped;
 
@@ -85,7 +86,8 @@ public sealed class ControlPipeServer : IDisposable
         }
         catch (Exception)
         {
-            // The instance still waiting, if any, is let go; one already handed on is its connection's.
+            // The instance still waiting, if any, is let go; one handed on is its connection's, and Hand
+            // disposes its own when it fails.
             NamedPipeServerStream? last;
             lock (gate)
             {
@@ -150,14 +152,18 @@ public sealed class ControlPipeServer : IDisposable
                 {
                     next = null;
                 }
+                finally
+                {
+                    if (!connected)
+                    {
+                        // Let go under the lock, so a Dispose cannot return while it still holds the name.
+                        current.Dispose();
+                    }
+                }
             }
             if (connected)
             {
                 Hand(current);
-            }
-            else
-            {
-                current.Dispose();
             }
             if (next is null)
             {
@@ -185,18 +191,27 @@ public sealed class ControlPipeServer : IDisposable
     internal void Hand(NamedPipeServerStream pipe)
     {
         var connection = new PipeConnection(pipe, server, host, timeout);
-        host.Marshal(() =>
+        try
         {
-            // Checked again where the server is: a connection accepted just as the app stopped is posted
-            // after CloseAll, which would otherwise be served by an app that has quit.
-            if (stopping.IsCancellationRequested)
+            host.Marshal(() =>
             {
-                connection.Close();
-                return;
-            }
-            server.Open(connection);
-        });
-        connection.Start();
+                // Checked again where the server is: a connection accepted just as the app stopped is posted
+                // after CloseAll, which would otherwise be served by an app that has quit.
+                if (stopping.IsCancellationRequested)
+                {
+                    connection.Close();
+                    return;
+                }
+                server.Open(connection);
+            });
+            connection.Start();
+        }
+        catch (Exception)
+        {
+            // Never handed on: the client sees the end of its stream, and the instance lets the name go.
+            connection.Close();
+            throw;
+        }
     }
 
     /// <summary>Writes all of <paramref name="bytes"/> within <paramref name="timeout"/> of starting, counted

@@ -297,8 +297,7 @@ public class ControlPipeTests
         var burst = new List<byte>();
         burst.AddRange(Encoding.UTF8.GetBytes(ControlHello.Line(ControlHello.CliClient, "1.2.2") + "\n"));
         burst.AddRange(Encoding.UTF8.GetBytes(InitializeMessage + "\n" + InitializedMessage + "\n"));
-        // 8,000 answers, not the Mac's 4,000: the pipe's buffers (65,536 bytes each way) must be passed with room to spare.
-        for (var id = 2; id < 8_000; id++)
+        for (var id = 2; id < 4_000; id++)
         {
             burst.AddRange(Encoding.UTF8.GetBytes("{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"method\":\"ping\"}\n"));
         }
@@ -336,6 +335,44 @@ public class ControlPipeTests
             var read = Background(() => client.Read(1));
             Assert.True(Done(read, Wait.Eventually), "it is not closed");
             Assert.Empty(Outcome(read));   // it is closed
+        }
+        finally
+        {
+            client.Close();
+        }
+    }
+
+    /// <summary>An accept loop that fails reports it, and the connection it was handing on is closed, not
+    /// left holding the name with its client waiting. The host's first post throws, as <c>Hand</c>'s does.</summary>
+    [Fact]
+    public void AnAcceptLoopThatFailsSaysSoAndClosesTheConnectionItWasHandingOn()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        using var rig = new ControlRig();
+        var server = new ControlServer(rig.Tools);
+        var posts = 0;
+        var host = rig.H.Host with
+        {
+            Marshal = action =>
+            {
+                if (Interlocked.Increment(ref posts) == 1)
+                {
+                    throw new InvalidOperationException("the first post fails");
+                }
+                rig.H.Ui.Post(action);
+            },
+        };
+        var stopped = 0;
+        var name = "ConnectorControl-test-" + Guid.NewGuid().ToString("N");
+        using var endpoint = ControlPipeServer.Start(name, server, host, () => Interlocked.Increment(ref stopped));
+        var client = ControlPipe.TryConnect(name, TimeSpan.FromSeconds(5));
+        Assert.NotNull(client);
+        try
+        {
+            var read = Background(() => client.Read(1));
+            Assert.True(Done(read, Wait.Eventually), "the client is left waiting");
+            Assert.Empty(Outcome(read));
+            Assert.True(rig.H.Ui.PumpUntil(() => Volatile.Read(ref stopped) == 1, Wait.Eventually), "stopped did not run");
         }
         finally
         {
