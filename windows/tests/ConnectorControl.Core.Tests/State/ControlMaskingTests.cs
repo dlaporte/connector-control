@@ -195,6 +195,8 @@ public class ControlMaskingTests
                 "scopes   read",
             ],
             ControlMasking.CodeLines(oauth, ControlMasking.Exposure.Dialog));
+        Assert.Equal(["command   node", "args      --static-oauth-client-info=•••"],
+            ControlMasking.CodeLines(Local("node", ["""--static-oauth-client-info={"client_id":"a","client_secret":"csec"}"""]), ControlMasking.Exposure.Dialog));
         Assert.Equal(
             [
                 "type      remote",

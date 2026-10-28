@@ -267,8 +267,19 @@ public static class ControlMasking
                     return Mask;
                 }
             }
-            return exposure == Exposure.Masked ? Argument(arg) : arg;
+            return exposure == Exposure.Masked ? Argument(arg) : DialogArgument(arg);
         }).ToList();
+    }
+
+    /// <summary>One argument as the dialog shows it: as written, but for the value of
+    /// <c>--static-oauth-client-info=…</c>, which holds the client secret.</summary>
+    internal static string DialogArgument(string arg)
+    {
+        if (Cut(arg, "=") is not { } piece || !HidesNext(piece.Before, Exposure.Dialog) || RefersElsewhere(piece.After))
+        {
+            return arg;
+        }
+        return piece.Before + "=" + Mask;
     }
 
     /// <summary>The flag whose value holds an OAuth client's secret.</summary>

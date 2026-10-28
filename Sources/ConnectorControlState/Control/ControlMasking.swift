@@ -228,8 +228,15 @@ public enum ControlMasking {
                 if previous == "--header" || previous == "-H" { return header(arg) }
                 if hidesNext(previous, exposure), !isFlag(arg), !refersElsewhere(arg) { return mask }
             }
-            return exposure == .masked ? argument(arg) : arg
+            return exposure == .masked ? argument(arg) : dialogArgument(arg)
         }
+    }
+
+    /// One argument as the dialog shows it: as written, but for the value of
+    /// `--static-oauth-client-info=…`, which holds the client secret.
+    static func dialogArgument(_ arg: String) -> String {
+        guard let piece = cut(arg, at: "="), hidesNext(piece.before, .dialog), !refersElsewhere(piece.after) else { return arg }
+        return piece.before + "=" + mask
     }
 
     /// The flag whose value holds an OAuth client's secret.

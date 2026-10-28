@@ -164,6 +164,8 @@ final class ControlMaskingTests: XCTestCase {
             "oauth    client cid, secret ••• (set)",
             "scopes   read",
         ])
+        XCTAssertEqual(ControlMasking.codeLines(local("node", [#"--static-oauth-client-info={"client_id":"a","client_secret":"csec"}"#]),
+                                                exposure: .dialog), ["command   node", "args      --static-oauth-client-info=•••"])
         XCTAssertEqual(ControlMasking.codeLines(notion, exposure: .dialog), [
             "type      remote",
             "url       https://mcp.notion.com/mcp?x=1",
