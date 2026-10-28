@@ -51,7 +51,6 @@ HOST_PID=$!
 for _ in $(seq 1 100); do
     if grep -q '^ready ' "$SANDBOX/host.out" 2>/dev/null; then break; fi
     if ! kill -0 "$HOST_PID" 2>/dev/null; then
-        cat "$SANDBOX/host.err" >&2
         echo "::error::the test host exited before it was ready" >&2
         exit 1
     fi

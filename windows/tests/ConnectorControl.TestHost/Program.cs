@@ -60,8 +60,8 @@ internal static class Program
             var name = ControlEndpoint.PipeName(environment, ControlEndpoint.CurrentUserSid());
             var endpoint = ControlPipeServer.Start(name, server, host);
             loop.Keep(endpoint);
-            // Ctrl+C stops it as a quit stops the app, and so does closing its console; killing the process,
-            // as an update would, leaves nothing to clean up on Windows, where a pipe goes with its process.
+            // Ctrl+C stops it as a quit stops the app; killing the process, as an update would, leaves
+            // nothing to clean up on Windows, where a pipe goes with its process.
             Console.CancelKeyPress += (_, e) =>
             {
                 e.Cancel = true;
@@ -86,10 +86,21 @@ internal static class Program
         private readonly BlockingCollection<Action> work = [];
         private readonly List<object> kept = [];
 
-        public void Post(Action action) => work.Add(action);
+        // Ignored once the loop has stopped: closing the connections at a stop still marshals their
+        // closes here, and an add after CompleteAdding throws.
+        public void Post(Action action)
+        {
+            try
+            {
+                work.Add(action);
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
 
         public void After(TimeSpan delay, Action action) =>
-            _ = Task.Delay(delay).ContinueWith(_ => work.Add(action), TaskScheduler.Default);
+            _ = Task.Delay(delay).ContinueWith(_ => Post(action), TaskScheduler.Default);
 
         /// <summary>What must live as long as the loop.</summary>
         public void Keep(object value) => kept.Add(value);
