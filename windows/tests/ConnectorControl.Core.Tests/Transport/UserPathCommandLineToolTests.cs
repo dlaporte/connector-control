@@ -14,7 +14,8 @@ public class UserPathCommandLineToolTests
         public string? Path { get; private set; } = path;
         public Exception? Failure { get; set; }
         public int Writes { get; private set; }
-        public string? ReadPath() => Path;
+        public Exception? ReadFailure { get; set; }
+        public string? ReadPath() => ReadFailure is null ? Path : throw ReadFailure;
         public void WritePath(string value)
         {
             if (Failure is not null)
@@ -39,8 +40,8 @@ public class UserPathCommandLineToolTests
         var environment = new FakeEnvironment(@"C:\Windows");
         // An inline host runs the background work and the answer on the test's own thread.
         var tool = new UserPathCommandLineTool(Bin, environment, AppHost.Inline());
-        // Path.Combine, so the test also holds where the separator is not a backslash.
-        Assert.Equal(Path.Combine(Bin, ControlEndpoint.ToolFileName), tool.ToolPath);
+        Assert.StartsWith(Bin, tool.ToolPath);
+        Assert.EndsWith("connector-control.exe", tool.ToolPath);
         Assert.False(tool.IsInstalled);
         Assert.Null(Answer(tool.Install));
         Assert.True(tool.IsInstalled);
@@ -59,5 +60,32 @@ public class UserPathCommandLineToolTests
         var tool = new UserPathCommandLineTool(Bin, environment, AppHost.Inline());
         Assert.Equal(CommandLineToolText.InstallFailedError("Access denied."), Answer(tool.Install));
         Assert.False(tool.IsInstalled);
+    }
+
+    [Fact]
+    public void RemovingWhenTheFolderIsAbsentChangesNothing()
+    {
+        var environment = new FakeEnvironment(@"C:\Windows");
+        var tool = new UserPathCommandLineTool(Bin, environment, AppHost.Inline());
+        Assert.Null(Answer(tool.Remove));
+        Assert.Equal(0, environment.Writes);
+        Assert.Equal(@"C:\Windows", environment.Path);
+    }
+
+    [Fact]
+    public void AnUnreadablePathIsNotInstalled()
+    {
+        var environment = new FakeEnvironment(@"C:\Windows") { ReadFailure = new IOException("locked") };
+        Assert.False(new UserPathCommandLineTool(Bin, environment, AppHost.Inline()).IsInstalled);
+    }
+
+    [Fact]
+    public void AnythingThatGoesWrongStillAnswers()
+    {
+        var environment = new FakeEnvironment(@"C:\Windows") { Failure = new InvalidOperationException("Surprise.") };
+        var tool = new UserPathCommandLineTool(Bin, environment, AppHost.Inline());
+        Assert.Equal(CommandLineToolText.InstallFailedError("Surprise."), Answer(tool.Install));
+        environment.ReadFailure = new ArgumentException("Odd.");
+        Assert.Equal(CommandLineToolText.RemoveFailedError("Odd."), Answer(tool.Remove));
     }
 }

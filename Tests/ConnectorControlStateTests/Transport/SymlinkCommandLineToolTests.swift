@@ -19,8 +19,8 @@ final class SymlinkCommandLineToolTests: XCTestCase {
                 now: { Date() }, background: { $0() }, controlToolPath: tool, controlToolIsTransient: transient)
     }
 
-    private func make(_ dir: TempDir, _ scripts: Scripts, transient: Bool = false) -> SymlinkCommandLineTool {
-        SymlinkCommandLineTool(toolPath: tool, linkPath: dir.file("bin/connector-control").path, host: host(transient: transient),
+    private func make(_ dir: TempDir, _ scripts: Scripts, transient: Bool = false, tool: String? = nil) -> SymlinkCommandLineTool {
+        SymlinkCommandLineTool(toolPath: tool ?? self.tool, linkPath: dir.file("bin/connector-control").path, host: host(transient: transient),
                                runScript: { arguments in
                                    scripts.ran.append(arguments)
                                    return scripts.answer
@@ -60,14 +60,22 @@ final class SymlinkCommandLineToolTests: XCTestCase {
         let script = SymlinkCommandLineTool.installScript.flatMap { ["-e", $0] }
         XCTAssertEqual(scripts.ran, [script + [tool, installer.linkPath, bin.path, CommandLineToolText.adminPrompt]],
                        "the paths and the prompt go as arguments, never as script")
-        scripts.answer = (1, "execution error: User canceled. (-128)\n")
+        scripts.answer = (1, "0:332: execution error: User canceled. (-128)\n")
         XCTAssertEqual(answer(installer.install), .some(nil), "Cancel is no error")
-        scripts.answer = (1, "execution error: connector-control-occupied (3)\n")
+        scripts.answer = (1, "7:332: execution error: connector-control-occupied (3)\n")
         XCTAssertEqual(answer(installer.install), .some(CommandLineToolText.occupiedError(installer.linkPath)),
                        "a file that appeared there between the check and the password is left alone")
-        scripts.answer = (1, "execution error: The operation couldn’t be completed. (1)\n")
+        scripts.answer = (1, "7:332: execution error: ln: \(installer.linkPath): Permission denied (1)\n")
         XCTAssertEqual(answer(installer.install),
-                       .some(CommandLineToolText.installFailedError("execution error: The operation couldn’t be completed. (1)")))
+                       .some(CommandLineToolText.installFailedError("ln: \(installer.linkPath): Permission denied")),
+                       "only the reason, not AppleScript's position or exit status")
+        scripts.answer = (1, "7:332: execution error: the marker connector-control-occupied (3) came first, then more (1)\n")
+        XCTAssertEqual(answer(installer.install),
+                       .some(CommandLineToolText.installFailedError("the marker connector-control-occupied (3) came first, then more")),
+                       "the marker counts only at the end")
+        scripts.answer = (1, "7:332: execution error: not (-128) the end (1)\n")
+        XCTAssertEqual(answer(installer.install),
+                       .some(CommandLineToolText.installFailedError("not (-128) the end")), "nor does the cancel code")
     }
 
     /// Through an administrator, Remove hands the script the tool as well, and the script removes the
@@ -85,6 +93,104 @@ final class SymlinkCommandLineToolTests: XCTestCase {
         XCTAssertEqual(answer(installer.remove), .some(nil))
         XCTAssertEqual(scripts.ran, [SymlinkCommandLineTool.removeScript.flatMap { ["-e", $0] }
                                         + [installer.linkPath, tool, CommandLineToolText.adminPrompt]])
+    }
+
+    func testRemovingThroughAnAdministratorCancelsAndFailsInTheAppsWords() throws {
+        let dir = TempDir(prefix: "cli-link"); defer { dir.dispose() }
+        let bin = dir.file("bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let scripts = Scripts()
+        let installer = make(dir, scripts)
+        try FileManager.default.createSymbolicLink(atPath: installer.linkPath, withDestinationPath: tool)
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: bin.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: bin.path) }
+        scripts.answer = (1, "0:332: execution error: User canceled. (-128)\n")
+        XCTAssertEqual(answer(installer.remove), .some(nil), "Cancel is no error")
+        XCTAssertTrue(installer.isInstalled)
+        scripts.answer = (1, "7:332: execution error: rm: Permission denied (1)\n")
+        XCTAssertEqual(answer(installer.remove), .some(CommandLineToolText.removeFailedError("rm: Permission denied")))
+    }
+
+    /// The script and `isInstalled` judge the same text: a relative link that resolves to the tool is this
+    /// install's, and the script is given the link's own text to compare.
+    func testARelativeLinkToThisToolIsThisInstallsAndTheScriptGetsItsText() throws {
+        let dir = TempDir(prefix: "cli-link"); defer { dir.dispose() }
+        let bin = dir.file("bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let scripts = Scripts()
+        let installer = make(dir, scripts, tool: dir.file("app/connector-control").path)
+        try FileManager.default.createSymbolicLink(atPath: installer.linkPath, withDestinationPath: "../app/connector-control")
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: bin.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: bin.path) }
+        XCTAssertTrue(installer.isInstalled)
+        XCTAssertEqual(answer(installer.remove), .some(nil))
+        XCTAssertEqual(scripts.ran, [SymlinkCommandLineTool.removeScript.flatMap { ["-e", $0] }
+                                        + [installer.linkPath, "../app/connector-control", CommandLineToolText.adminPrompt]])
+    }
+
+    /// No password for a change that is already made.
+    func testInstallingWhatIsAlreadyInstalledAsksForNothing() throws {
+        let dir = TempDir(prefix: "cli-link"); defer { dir.dispose() }
+        let bin = dir.file("bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let scripts = Scripts()
+        let installer = make(dir, scripts)
+        try FileManager.default.createSymbolicLink(atPath: installer.linkPath, withDestinationPath: tool)
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: bin.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: bin.path) }
+        XCTAssertEqual(answer(installer.install), .some(nil))
+        XCTAssertEqual(scripts.ran, [])
+    }
+
+    /// Runs both scripts through the real `osascript` with the administrator clause taken out, on paths that
+    /// would be script or shell if anything read them as such.
+    func testTheScriptsRunWithoutAnAdministratorOnHostilePaths() throws {
+        let dir = TempDir(prefix: "cli-link"); defer { dir.dispose() }
+        let canary = dir.file("CANARY").path
+        let hostile = "it's \"q\" $(touch \(canary)) `touch \(canary)` ; touch \(canary) \\back -lead $HOME %s & | > x"
+        let toolFile = dir.file("App \(hostile)/-Contents/MacOS/connector-control")
+        try FileManager.default.createDirectory(at: toolFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("#!/bin/sh\n".utf8).write(to: toolFile)
+        let bin = dir.file("bin \(hostile)")   // not there yet: exercises mkdir -p
+        let link = bin.appendingPathComponent("connector-control").path
+        let tool = toolFile.path
+        let prompt = CommandLineToolText.adminPrompt
+        /// The script as the test may run it: no `with administrator privileges`, so no password is ever asked.
+        func run(_ script: [String], _ arguments: [String]) throws -> (Int32, String) {
+            let plain = script.map { line in
+                line.replacingOccurrences(of: #" with prompt \(item \d of argv\) with administrator privileges$"#, with: "",
+                                          options: .regularExpression)
+            }
+            XCTAssertFalse(plain.contains { $0.contains("administrator") }, "the administrator clause must be gone")
+            return SymlinkCommandLineTool.osascript(plain.flatMap { ["-e", $0] } + arguments)
+        }
+        let fileManager = FileManager.default
+        XCTAssertEqual(try run(SymlinkCommandLineTool.installScript, [tool, link, bin.path, prompt]).0, 0)
+        XCTAssertEqual(try fileManager.destinationOfSymbolicLink(atPath: link), tool, "the link is made byte for byte")
+        XCTAssertEqual(try run(SymlinkCommandLineTool.installScript, [tool, link, bin.path, prompt]).0, 0, "again, over the link")
+        XCTAssertEqual(try fileManager.destinationOfSymbolicLink(atPath: link), tool)
+
+        // Remove takes only a link that still names the tool.
+        let other = tool + "-other"
+        try fileManager.removeItem(atPath: link)
+        try fileManager.createSymbolicLink(atPath: link, withDestinationPath: other)
+        XCTAssertEqual(try run(SymlinkCommandLineTool.removeScript, [link, tool, prompt]).0, 0)
+        XCTAssertEqual(try fileManager.destinationOfSymbolicLink(atPath: link), other, "another copy's link survives")
+        try fileManager.removeItem(atPath: link)
+        try fileManager.createSymbolicLink(atPath: link, withDestinationPath: tool)
+        XCTAssertEqual(try run(SymlinkCommandLineTool.removeScript, [link, tool, prompt]).0, 0)
+        XCTAssertFalse(fileManager.fileExists(atPath: link))
+        XCTAssertNil(try? fileManager.destinationOfSymbolicLink(atPath: link))
+
+        // A file that is not a link: install says so and leaves it, remove leaves it.
+        try Data("mine".utf8).write(to: URL(fileURLWithPath: link))
+        let occupied = try run(SymlinkCommandLineTool.installScript, [tool, link, bin.path, prompt])
+        XCTAssertNotEqual(occupied.0, 0)
+        XCTAssertTrue(SymlinkCommandLineTool.reason(from: occupied.1).hasSuffix(SymlinkCommandLineTool.occupiedMarker), occupied.1)
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: link)), Data("mine".utf8))
+        XCTAssertEqual(try run(SymlinkCommandLineTool.removeScript, [link, tool, prompt]).0, 0)
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: link)), Data("mine".utf8))
+        XCTAssertFalse(fileManager.fileExists(atPath: canary), "no path was ever run as a command")
     }
 
     func testAFileThatIsNotALinkIsNeverReplaced() throws {

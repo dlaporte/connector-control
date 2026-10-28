@@ -30,10 +30,10 @@ public partial class App : Application
     private TrayController? tray;
     private SettingsModel? controlSettings;
     private ControlServer? controlServer;
+    private ControlPipeServer? controlEndpoint;
 
     /// <summary>Puts the tool on PATH for terminal use; the Settings window binds it.</summary>
     internal ICommandLineTool? CommandLineTool { get; private set; }
-    private ControlPipeServer? controlEndpoint;
 
     protected override void OnStartup(StartupEventArgs e)
     {

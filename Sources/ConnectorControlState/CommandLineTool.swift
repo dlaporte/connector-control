@@ -14,6 +14,8 @@ public protocol CommandLineTool: AnyObject {
     var isInstalled: Bool { get }
     /// Puts the tool on PATH. `completion` runs on the main actor, once, with nil when it is done or the
     /// person cancelled — `isInstalled` says which — or the reason it failed, in the app's words.
+    /// It may run before `install` returns (nothing to do, or a refusal), so a caller sets its busy state before
+    /// calling, never after.
     func install(completion: @escaping (String?) -> Void)
     /// Takes the tool off PATH; `completion` as for `install`.
     func remove(completion: @escaping (String?) -> Void)

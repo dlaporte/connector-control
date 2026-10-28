@@ -8,7 +8,8 @@ namespace ConnectorControl.Core.Transport;
 ///
 /// The command-line tool on PATH as the folder of its copy in the user PATH. No prompt: the user PATH is the
 /// user's own. A new terminal sees the change; one already open keeps the PATH it started with. The change runs
-/// off the UI thread: its broadcast gives every window up to five seconds to answer.
+/// off the UI thread: its broadcast gives every window up to a second to answer. There is no check that the app runs
+/// from where it will stay, as on the Mac: Windows installs into a fixed folder and is never transient.
 /// </summary>
 public sealed class UserPathCommandLineTool(string binDir, IUserEnvironment environment, AppHost host) : ICommandLineTool
 {
@@ -46,8 +47,9 @@ public sealed class UserPathCommandLineTool(string binDir, IUserEnvironment envi
                     environment.WritePath(changed);
                 }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
+            catch (Exception ex)
             {
+                // The task's boundary: whatever goes wrong becomes the sentence, so a bound UI is never left waiting.
                 problem = failure(ex.Message);
             }
             host.Marshal(() => completion(problem));

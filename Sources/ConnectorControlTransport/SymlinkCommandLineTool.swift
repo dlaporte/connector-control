@@ -17,13 +17,17 @@ public final class SymlinkCommandLineTool: CommandLineTool {
     static let userCancelled = "(-128)"
     /// What the install script says when a file that is not a link holds the link's path.
     static let occupiedMarker = "connector-control-occupied"
-    /// The tool, the link, the link's folder and the prompt are the run handler's items 1 to 4.
+    /// The tool, the link, the link's folder and the prompt are the run handler's items 1 to 4. A link is repointed
+    /// with `ln -sfn`; where nothing is, a plain `ln -s`, which refuses at once if a file appears there after the
+    /// check. Only a file that is swapped in for an existing link between the `-L` test and `ln -sfn` can be
+    /// replaced: the shell has no rename that refuses to replace a file, and the folder is the administrator's.
     static let installScript = [
         "on run argv",
-        #"do shell script "if [ -e " & quoted form of (item 2 of argv) & " ] && [ ! -L " & quoted form of (item 2 of argv) & " ]; then echo connector-control-occupied >&2; exit 3; fi; /bin/mkdir -p " & quoted form of (item 3 of argv) & " && /bin/ln -sfn " & quoted form of (item 1 of argv) & " " & quoted form of (item 2 of argv) with prompt (item 4 of argv) with administrator privileges"#,
+        #"do shell script "if [ -L " & quoted form of (item 2 of argv) & " ]; then /bin/ln -sfn " & quoted form of (item 1 of argv) & " " & quoted form of (item 2 of argv) & "; elif [ -e " & quoted form of (item 2 of argv) & " ]; then echo \#(occupiedMarker) >&2; exit 3; else /bin/mkdir -p " & quoted form of (item 3 of argv) & " && /bin/ln -s " & quoted form of (item 1 of argv) & " " & quoted form of (item 2 of argv) & "; fi" with prompt (item 4 of argv) with administrator privileges"#,
         "end run",
     ]
-    /// The link, the tool and the prompt are items 1 to 3: the link goes only while it points at the tool.
+    /// The link, the tool and the prompt are items 1 to 3: the link goes only while `readlink` still gives the tool
+    /// exactly as `remove` read it from the link, so the script and `isInstalled` judge the same text.
     static let removeScript = [
         "on run argv",
         #"do shell script "if [ \"$(/usr/bin/readlink " & quoted form of (item 1 of argv) & ")\" = " & quoted form of (item 2 of argv) & " ]; then /bin/rm -f " & quoted form of (item 1 of argv) & "; fi" with prompt (item 3 of argv) with administrator privileges"#,
@@ -45,8 +49,10 @@ public final class SymlinkCommandLineTool: CommandLineTool {
         self.runScript = runScript
     }
 
+    private var destination: String? { try? FileManager.default.destinationOfSymbolicLink(atPath: linkPath) }
+
     public var isInstalled: Bool {
-        guard let destination = try? FileManager.default.destinationOfSymbolicLink(atPath: linkPath) else { return false }
+        guard let destination else { return false }
         let folder = URL(fileURLWithPath: linkPath).deletingLastPathComponent()
         return URL(fileURLWithPath: destination, relativeTo: folder).standardizedFileURL.path
             == URL(fileURLWithPath: toolPath).standardizedFileURL.path
@@ -61,6 +67,11 @@ public final class SymlinkCommandLineTool: CommandLineTool {
             completion(ClaudeIntegration.moveToApplicationsError)
             return
         }
+        // Nothing to change, and no password to ask for.
+        if isInstalled {
+            completion(nil)
+            return
+        }
         let fileManager = FileManager.default
         // attributesOfItem looks at the link itself, not where it points.
         if (try? fileManager.attributesOfItem(atPath: linkPath)) != nil, !isLink {
@@ -73,7 +84,7 @@ public final class SymlinkCommandLineTool: CommandLineTool {
             return
         }
         do {
-            if isLink { try fileManager.removeItem(atPath: linkPath) }
+            if isLink { try SymlinkCommandLineTool.unlink(linkPath) }
             try fileManager.createSymbolicLink(atPath: linkPath, withDestinationPath: toolPath)
             completion(nil)
         } catch {
@@ -84,17 +95,17 @@ public final class SymlinkCommandLineTool: CommandLineTool {
     /// Takes away this install's own link and nothing else: a link to another copy, or someone's own
     /// file, stays.
     public func remove(completion: @escaping (String?) -> Void) {
-        guard isInstalled else {
+        guard let destination, isInstalled else {
             completion(nil)
             return
         }
         guard FileManager.default.isWritableFile(atPath: folder) else {
-            run(SymlinkCommandLineTool.removeScript, [linkPath, toolPath, CommandLineToolText.adminPrompt],
+            run(SymlinkCommandLineTool.removeScript, [linkPath, destination, CommandLineToolText.adminPrompt],
                 CommandLineToolText.removeFailedError, completion)
             return
         }
         do {
-            try FileManager.default.removeItem(atPath: linkPath)
+            try SymlinkCommandLineTool.unlink(linkPath)
             completion(nil)
         } catch {
             completion(CommandLineToolText.removeFailedError(AppState.friendly(error)))
@@ -110,15 +121,31 @@ public final class SymlinkCommandLineTool: CommandLineTool {
         host.background {
             let (code, error) = runScript(argv)
             host.marshal {
-                if code == 0 || error.contains(SymlinkCommandLineTool.userCancelled) {
+                // What AppleScript says ends the text: the cancel code, or the marker before the exit status.
+                let said = error.trimmingCharacters(in: .whitespacesAndNewlines)
+                let reason = SymlinkCommandLineTool.reason(from: said)
+                if code == 0 || said.hasSuffix(SymlinkCommandLineTool.userCancelled) {
                     completion(nil)
-                } else if error.contains(SymlinkCommandLineTool.occupiedMarker) {
+                } else if reason.hasSuffix(SymlinkCommandLineTool.occupiedMarker) {
                     completion(occupied)
                 } else {
-                    completion(failure(error.trimmingCharacters(in: .whitespacesAndNewlines)))
+                    completion(failure(reason))
                 }
             }
         }
+    }
+
+    /// `unlink(2)`, which never removes a directory, unlike `FileManager.removeItem`, which would take one that
+    /// was swapped in for the link with everything inside it.
+    private static func unlink(_ path: String) throws {
+        guard Darwin.unlink(path) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+    }
+
+    /// The reason in what `osascript` wrote: without its "7:332: execution error: " lead and its " (1)" exit status.
+    static func reason(from said: String) -> String {
+        said.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: #"^\d+:\d+: execution error: "#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #" \(-?\d+\)$"#, with: "", options: .regularExpression)
     }
 
     /// `/usr/bin/osascript` with `arguments`: its exit status and what it wrote on standard error.

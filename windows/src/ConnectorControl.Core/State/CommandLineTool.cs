@@ -17,7 +17,9 @@ public interface ICommandLineTool
     bool IsInstalled { get; }
 
     /// <summary>Puts the tool on PATH. <c>completion</c> runs on the UI thread, once, with null when it is done or the
-    /// person cancelled — <c>IsInstalled</c> says which — or the reason it failed, in the app's words.</summary>
+    /// person cancelled — <c>IsInstalled</c> says which — or the reason it failed, in the app's words.
+    /// It may run before <c>Install</c> returns (nothing to do, or a refusal), so a caller sets its busy state before
+    /// calling, never after.</summary>
     void Install(Action<string?> completion);
 
     /// <summary>Takes the tool off PATH; <c>completion</c> as for <c>Install</c>.</summary>
