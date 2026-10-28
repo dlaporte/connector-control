@@ -103,6 +103,7 @@
   "AppState.unreviewedConnectorError": {
     "format": "“{0}” hasn’t been reviewed for publishing. Open Publishing Settings to review it."
   },
+  "AppVersion.developmentBuild": "development build",
   "ClaudeConfigIO.mcpServersNotObjectError": "mcpServers is not a JSON object",
   "ClaudeConfigIO.topLevelNotObjectError": "top level is not a JSON object",
   "ClaudeIntegration.clashNote": "A connector named “connector-control” already exists. Rename it to turn this on.",

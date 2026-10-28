@@ -41,4 +41,24 @@ public static class ControlEndpoint
     /// named.</summary>
     public static bool MayStartApp(IReadOnlyDictionary<string, string> environment) =>
         !environment.TryGetValue(AppPaths.StoreDirEnv, out var store) || store.Length == 0;
+
+    /// <summary>Where the app records its own executable, beside the copy of the tool it keeps.</summary>
+    public const string AppPathFileName = "app-path.txt";
+
+    /// <summary>The app the tool starts: the one beside it — the packaged tool sits beside ConnectorControl.exe —
+    /// else the one the app recorded beside the copy it keeps in bin\; null when neither is there, or the
+    /// record names anything but ConnectorControl.exe.</summary>
+    public static string? AppExecutable(string toolPath, Func<string, bool> exists, Func<string, string?> readText)
+    {
+        var folder = Path.GetDirectoryName(toolPath) ?? "";
+        var beside = Path.Combine(folder, AppFileName);
+        if (exists(beside))
+        {
+            return beside;
+        }
+        var recorded = readText(Path.Combine(folder, AppPathFileName))?.Trim();
+        return recorded is { Length: > 0 }
+            && string.Equals(Path.GetFileName(recorded), AppFileName, StringComparison.OrdinalIgnoreCase)
+            && exists(recorded) ? recorded : null;
+    }
 }

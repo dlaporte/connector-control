@@ -41,4 +41,24 @@ public class ControlEndpointTests
         Assert.False(ControlPipe.IsLocalClient(false, 6), "a failure that says neither");
         Assert.False(ControlPipe.IsLocalClient(false, 0));
     }
+
+    /// <summary>The packaged tool starts the app beside it; the copy in bin\ starts the app that last refreshed
+    /// it, as that app recorded; anything else names no app.</summary>
+    [Fact]
+    public void TheToolFindsTheAppBesideItOrWhereTheAppRecordedIt()
+    {
+        var current = Path.Combine(Path.GetTempPath(), "cc-endpoint", "current");
+        var bin = Path.Combine(Path.GetTempPath(), "cc-endpoint", "bin");
+        var app = Path.Combine(current, ControlEndpoint.AppFileName);
+        var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { app };
+        var texts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [Path.Combine(bin, ControlEndpoint.AppPathFileName)] = app + "\r\n" };
+        string? Read(string path) => texts.GetValueOrDefault(path);
+        Assert.Equal(app, ControlEndpoint.AppExecutable(Path.Combine(current, ControlEndpoint.ToolFileName), files.Contains, Read));
+        Assert.Equal(app, ControlEndpoint.AppExecutable(Path.Combine(bin, ControlEndpoint.ToolFileName), files.Contains, Read));
+        files.Clear();
+        Assert.Null(ControlEndpoint.AppExecutable(Path.Combine(bin, ControlEndpoint.ToolFileName), files.Contains, Read));
+        texts[Path.Combine(bin, ControlEndpoint.AppPathFileName)] = Path.Combine(current, "notepad.exe");
+        files.Add(Path.Combine(current, "notepad.exe"));
+        Assert.Null(ControlEndpoint.AppExecutable(Path.Combine(bin, ControlEndpoint.ToolFileName), files.Contains, Read));
+    }
 }

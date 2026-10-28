@@ -1,5 +1,7 @@
 import XCTest
 import ConnectorControlCore
+import ConnectorControlTestSupport
+@testable import ConnectorControlState
 @testable import ConnectorControlTransport
 
 /// Mac only, apart from `mayStartApp`: the Windows counterpart is
@@ -28,5 +30,33 @@ final class ControlEndpointTests: XCTestCase {
                        "/Applications/Connector Control.app/Contents/MacOS/connector-control")
         XCTAssertEqual(ControlEndpoint.bundledToolPath(appExecutable: URL(fileURLWithPath: "/src/cc/.build/debug/ConnectorControl")),
                        "/src/cc/.build/debug/connector-control", "a development build's tool is built beside it")
+    }
+
+    func testTheToolKnowsTheBundleItIsIn() {
+        XCTAssertEqual(ControlEndpoint.enclosingBundle(ofTool: "/Applications/Connector Control.app/Contents/MacOS/connector-control"),
+                       "/Applications/Connector Control.app")
+        XCTAssertNil(ControlEndpoint.enclosingBundle(ofTool: "/src/cc/.build/debug/connector-control"))
+        XCTAssertNil(ControlEndpoint.enclosingBundle(ofTool: "/usr/local/bin/connector-control"), "a link is resolved before this is asked")
+    }
+
+    func testTheToolOpensOnlyTheAppItCameWithAndWithoutBringingItForward() {
+        var asked: [[String]] = []
+        XCTAssertTrue(ControlEndpoint.launchApp(executablePath: "/Applications/Connector Control.app/Contents/MacOS/connector-control",
+                                                run: { asked.append($0); return 0 }))
+        XCTAssertFalse(ControlEndpoint.launchApp(executablePath: "/src/cc/.build/debug/connector-control",
+                                                 run: { asked.append($0); return 0 }), "a tool outside a bundle starts nothing")
+        XCTAssertEqual(asked, [["-g", "/Applications/Connector Control.app"]])
+    }
+
+    func testTheToolsVersionIsItsAppsVersion() throws {
+        let dir = TempDir(prefix: "toolversion")
+        defer { dir.dispose() }
+        let app = dir.file("Connector Control.app")
+        try FileManager.default.createDirectory(at: app.appendingPathComponent("Contents/MacOS"), withIntermediateDirectories: true)
+        let info: NSDictionary = ["CFBundleShortVersionString": "1.5.0", "CFBundleVersion": "10500"]
+        XCTAssertTrue(info.write(to: app.appendingPathComponent("Contents/Info.plist"), atomically: true))
+        XCTAssertEqual(ControlEndpoint.toolVersion(executablePath: app.appendingPathComponent("Contents/MacOS/connector-control").path),
+                       "1.5.0", "the build number the Mac shows beside it is not part of the version")
+        XCTAssertEqual(ControlEndpoint.toolVersion(executablePath: "/src/cc/.build/debug/connector-control"), AppVersion.developmentBuild)
     }
 }

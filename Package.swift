@@ -4,6 +4,11 @@ import PackageDescription
 let package = Package(
     name: "ConnectorControl",
     platforms: [.macOS(.v14)],
+    products: [
+        .executable(name: "ConnectorControl", targets: ["ConnectorControl"]),
+        // The command-line tool build-app.sh puts at Contents/MacOS/connector-control.
+        .executable(name: "connector-control", targets: ["ConnectorControlCLI"]),
+    ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.0"),
     ],
@@ -21,6 +26,9 @@ let package = Package(
         .target(
             name: "ConnectorControlTransport",
             dependencies: ["ConnectorControlCore", "ConnectorControlState"]),
+        .executableTarget(
+            name: "ConnectorControlCLI",
+            dependencies: ["ConnectorControlCore", "ConnectorControlState", "ConnectorControlTransport"]),
         .executableTarget(
             name: "ConnectorControl",
             dependencies: [

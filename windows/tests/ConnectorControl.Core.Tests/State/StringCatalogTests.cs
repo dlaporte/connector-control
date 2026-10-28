@@ -321,6 +321,7 @@ public class StringCatalogTests
         actual["AppState.targetMustBeLocalError"] = AppState.TargetMustBeLocalError;
         actual["AppState.unpublishedDirectoryCaution"] = AppState.UnpublishedDirectoryCaution;
         actual["AppState.unreviewedConnectorError"] = AppState.UnreviewedConnectorError("X");
+        actual["AppVersion.developmentBuild"] = AppVersion.DevelopmentBuild;
 
         // MARK: ClaudeConfigIO
         // Both messages are inline literals inside a throw, not exposed as callable

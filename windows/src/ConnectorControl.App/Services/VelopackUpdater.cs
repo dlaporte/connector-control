@@ -1,5 +1,6 @@
 using ConnectorControl.Core;
 using ConnectorControl.Core.Services;
+using ConnectorControl.Core.State;
 using Velopack;
 using Velopack.Locators;
 using Velopack.Sources;
@@ -14,7 +15,6 @@ namespace ConnectorControl.App.Services;
 public sealed class VelopackUpdater : IUpdater
 {
     public const string RepoUrl = "https://github.com/dlaporte/connector-control";
-    private const string DevelopmentBuild = "development build";
 
     /// <summary>UpdateManager keeps its locator protected; the verifier needs PackagesDir and UpdateExePath.</summary>
     private sealed class LocatingUpdateManager(IUpdateSource source, IVelopackLocator? locator)
@@ -75,7 +75,7 @@ public sealed class VelopackUpdater : IUpdater
         }
         manager = resolved;
         FollowsPrereleases = followsPrereleases;
-        VersionDisplay = manager?.CurrentVersion?.ToString() ?? DevelopmentBuild;
+        VersionDisplay = manager?.CurrentVersion?.ToString() ?? AppVersion.DevelopmentBuild;
         this.identify = identify ?? UpdateVerifier.ExpectedIdentity;
         this.verify = verify ?? UpdateVerifier.Verify;
         this.verifyInstalled = verifyInstalled ?? UpdateVerifier.VerifyInstalledUpdater;

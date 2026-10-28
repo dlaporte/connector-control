@@ -3,6 +3,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>ConnectorControl.Core</RootNamespace>
     <AssemblyName>ConnectorControl.Core</AssemblyName>
+    <!-- The command-line tool is published trimmed with Core inside it: the trim analyzer turns any code the
+         trimmer could break into a warning, and TreatWarningsAsErrors into a failed build. -->
+    <IsTrimmable>true</IsTrimmable>
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="ConnectorControl.Core.Tests" />

@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/ConnectorControl.App/ConnectorControl.App.csproj" />
+    <Project Path="src/ConnectorControl.Cli/ConnectorControl.Cli.csproj" />
     <Project Path="src/ConnectorControl.Core/ConnectorControl.Core.csproj" />
   </Folder>
   <Folder Name="/tests/">

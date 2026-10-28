@@ -304,6 +304,7 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.targetMustBeLocalError"] = AppState.targetMustBeLocalError
         actual["AppState.unpublishedDirectoryCaution"] = AppState.unpublishedDirectoryCaution
         actual["AppState.unreviewedConnectorError"] = AppState.unreviewedConnectorError("X")
+        actual["AppVersion.developmentBuild"] = AppVersion.developmentBuild
 
         // MARK: ClaudeConfigIO
         // Both messages are inline literals inside guard/throw statements, not

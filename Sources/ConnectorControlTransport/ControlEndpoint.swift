@@ -1,5 +1,7 @@
 import Foundation
+import MachO
 import ConnectorControlCore
+import ConnectorControlState
 
 /// Mac only: the Windows counterpart is windows/src/ConnectorControl.Core/Transport/ControlEndpoint.cs.
 ///
@@ -26,5 +28,67 @@ public enum ControlEndpoint {
     /// beside the binary in a development build's `.build` folder.
     public static func bundledToolPath(appExecutable: URL) -> String {
         appExecutable.deletingLastPathComponent().appendingPathComponent(toolName).path
+    }
+
+    /// This process's executable, links resolved: the tool inside the app, also when it was run
+    /// through the link in /usr/local/bin.
+    public static func executablePath() -> String {
+        var size: UInt32 = 0
+        _ = _NSGetExecutablePath(nil, &size)
+        var buffer = [CChar](repeating: 0, count: Int(size) + 1)
+        guard _NSGetExecutablePath(&buffer, &size) == 0 else { return CommandLine.arguments[0] }
+        return URL(fileURLWithPath: String(cString: buffer)).resolvingSymlinksInPath().path
+    }
+
+    /// The app bundle the tool runs from — `…/Connector Control.app` for its
+    /// `…/Contents/MacOS/connector-control` — or nil for a tool outside one, as a development build's.
+    public static func enclosingBundle(ofTool path: String) -> String? {
+        let macOS = URL(fileURLWithPath: path).deletingLastPathComponent()
+        let contents = macOS.deletingLastPathComponent()
+        let bundle = contents.deletingLastPathComponent()
+        guard macOS.lastPathComponent == "MacOS", contents.lastPathComponent == "Contents", bundle.pathExtension == "app" else {
+            return nil
+        }
+        return bundle.path
+    }
+
+    /// The version the tool says in its hello and prints for `--version`: its app's marketing
+    /// version, read from the bundle it is in — never the build number the Mac's Settings shows
+    /// beside it.
+    public static func toolVersion(executablePath: String) -> String {
+        guard let bundle = enclosingBundle(ofTool: executablePath),
+              let info = NSDictionary(contentsOfFile: bundle + "/Contents/Info.plist") as? [String: Any],
+              let short = info["CFBundleShortVersionString"] as? String else {
+            return AppVersion.developmentBuild
+        }
+        return ControlVersion.semantic(short) ?? short
+    }
+
+    /// Opens the app the tool came with, without bringing it forward: the bundle the tool runs from,
+    /// which the /usr/local/bin link resolves into. A tool outside a bundle — a development build —
+    /// starts nothing, as a Windows tool that is not the packaged one starts nothing. False when nothing
+    /// opened.
+    public static func launchApp(executablePath: String, run: ([String]) -> Int32 = runOpen) -> Bool {
+        guard let bundle = enclosingBundle(ofTool: executablePath) else { return false }
+        return run(["-g", bundle]) == 0
+    }
+
+    /// `/usr/bin/open` with `arguments`; its exit status. Public, as the default of a public function's
+    /// argument must be. Its standard streams are the null device: the relay's are Claude's MCP stream,
+    /// which `open` must neither read nor write.
+    public static func runOpen(_ arguments: [String]) -> Int32 {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = arguments
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+        } catch {
+            return -1
+        }
+        process.waitUntilExit()
+        return process.terminationStatus
     }
 }
