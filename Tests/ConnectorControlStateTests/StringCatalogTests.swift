@@ -108,6 +108,18 @@ final class StringCatalogTests: XCTestCase {
         "ControlMasking.assignment": ["X", "Y"],
         "ControlMasking.oauthClientText": ["X", "Y"],
         "ControlMasking.remoteBridgeType": ["X"],
+        "ControlTools.connectorCountText": ["3", "7"],
+        "ControlTools.detail": ["X", "Y"],
+        "ControlTools.emptyCollectionText": ["X"],
+        "ControlTools.installHint": ["X", "Y"],
+        "ControlTools.missingArgumentError": ["X"],
+        "ControlTools.noConnectorError": ["X", "Y"],
+        "ControlTools.notOneOfError": ["X", "Y"],
+        "ControlTools.notSubscribedError": ["X"],
+        "ControlTools.statusTitle": ["X"],
+        "ControlTools.unknownToolError": ["X"],
+        "ControlTools.upToDateText": ["X"],
+        "ControlTools.wrongTypeError": ["X", "Y"],
         "CopyModel.title": ["X"],
         "EditTarget.editTitle": ["X"],
         "EditorModel.additionalTitle": ["3", "a, b"],
@@ -335,6 +347,82 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlMasking.typeLabel"] = ControlMasking.typeLabel
         actual["ControlMasking.urlLabel"] = ControlMasking.urlLabel
         actual["ControlText.listAnd"] = ControlText.listAnd
+
+        // MARK: ControlCaller / ControlSettingKey / ControlTools
+
+        actual["ControlCaller.claudeName"] = ControlCaller.claudeName
+        actual["ControlCaller.unknownClientName"] = ControlCaller.unknownClientName
+        actual["ControlSettingKey.automaticUpdates"] = ControlSettingKey.automaticUpdates
+        actual["ControlSettingKey.backupsToKeep"] = ControlSettingKey.backupsToKeep
+        actual["ControlSettingKey.claudeIntegration"] = ControlSettingKey.claudeIntegration
+        actual["ControlSettingKey.confirmClaudeChanges"] = ControlSettingKey.confirmClaudeChanges
+        actual["ControlSettingKey.confirmQuit"] = ControlSettingKey.confirmQuit
+        actual["ControlSettingKey.confirmRestart"] = ControlSettingKey.confirmRestart
+        actual["ControlSettingKey.launchAtLogin"] = ControlSettingKey.launchAtLogin
+        actual["ControlSettingKey.notifyExternalChanges"] = ControlSettingKey.notifyExternalChanges
+        actual["ControlTools.activeCollectionLabel"] = ControlTools.activeCollectionLabel
+        actual["ControlTools.activeMark"] = ControlTools.activeMark
+        actual["ControlTools.argumentsNotObjectError"] = ControlTools.argumentsNotObjectError
+        actual["ControlTools.booleanKind"] = ControlTools.booleanKind
+        actual["ControlTools.changedWhileAskingError"] = ControlTools.changedWhileAskingError
+        actual["ControlTools.claudeGroup"] = ControlTools.claudeGroup
+        actual["ControlTools.claudeLabel"] = ControlTools.claudeLabel
+        actual["ControlTools.claudeNotRunning"] = ControlTools.claudeNotRunning
+        actual["ControlTools.claudeRunning"] = ControlTools.claudeRunning
+        actual["ControlTools.claudeRunningRestart"] = ControlTools.claudeRunningRestart
+        actual["ControlTools.collectionHeader"] = ControlTools.collectionHeader
+        actual["ControlTools.collectionsGroup"] = ControlTools.collectionsGroup
+        actual["ControlTools.connectorCountText"] = ControlTools.connectorCountText(3, 7)
+        actual["ControlTools.connectorsGroup"] = ControlTools.connectorsGroup
+        actual["ControlTools.connectorsHeader"] = ControlTools.connectorsHeader
+        actual["ControlTools.declinedError"] = ControlTools.declinedError
+        actual["ControlTools.detail"] = ControlTools.detail("X", "Y")
+        actual["ControlTools.emptyCollectionText"] = ControlTools.emptyCollectionText("X")
+        actual["ControlTools.helpOptions"] = ControlTools.helpOptions
+        actual["ControlTools.helpUsage"] = ControlTools.helpUsage
+        actual["ControlTools.idHeader"] = ControlTools.idHeader
+        actual["ControlTools.installHint"] = ControlTools.installHint("X", "Y")
+        actual["ControlTools.integerKind"] = ControlTools.integerKind
+        actual["ControlTools.integrationLabel"] = ControlTools.integrationLabel
+        actual["ControlTools.integrationOffError"] = ControlTools.integrationOffError
+        actual["ControlTools.integrationOnConfirming"] = ControlTools.integrationOnConfirming
+        actual["ControlTools.integrationOnNotConfirming"] = ControlTools.integrationOnNotConfirming
+        actual["ControlTools.kindHeader"] = ControlTools.kindHeader
+        actual["ControlTools.listKind"] = ControlTools.listKind
+        actual["ControlTools.localKind"] = ControlTools.localKind
+        actual["ControlTools.masterListLabel"] = ControlTools.masterListLabel
+        actual["ControlTools.missingArgumentError"] = ControlTools.missingArgumentError("X")
+        actual["ControlTools.nameHeader"] = ControlTools.nameHeader
+        actual["ControlTools.noBackupsText"] = ControlTools.noBackupsText
+        actual["ControlTools.noConnectorError"] = ControlTools.noConnectorError("X", "Y")
+        actual["ControlTools.notOneOfError"] = ControlTools.notOneOfError("X", "Y")
+        actual["ControlTools.notSubscribedError"] = ControlTools.notSubscribedError("X")
+        actual["ControlTools.objectKind"] = ControlTools.objectKind
+        actual["ControlTools.offWord"] = ControlTools.offWord
+        actual["ControlTools.onWord"] = ControlTools.onWord
+        actual["ControlTools.problemLabel"] = ControlTools.problemLabel
+        actual["ControlTools.publishedKind"] = ControlTools.publishedKind
+        actual["ControlTools.relaySummary"] = ControlTools.relaySummary
+        actual["ControlTools.relayUsage"] = ControlTools.relayUsage
+        actual["ControlTools.runsHeader"] = ControlTools.runsHeader
+        actual["ControlTools.settingsGroup"] = ControlTools.settingsGroup
+        actual["ControlTools.sharingGroup"] = ControlTools.sharingGroup
+        actual["ControlTools.statusGroup"] = ControlTools.statusGroup
+        actual["ControlTools.statusTitle"] = ControlTools.statusTitle("X")
+        actual["ControlTools.subscribedKind"] = ControlTools.subscribedKind
+        actual["ControlTools.textKind"] = ControlTools.textKind
+        actual["ControlTools.unknownToolError"] = ControlTools.unknownToolError("X")
+        actual["ControlTools.upToDateText"] = ControlTools.upToDateText("X")
+        actual["ControlTools.updateAvailableKind"] = ControlTools.updateAvailableKind
+        actual["ControlTools.waitingText"] = ControlTools.waitingText
+        actual["ControlTools.wrongTypeError"] = ControlTools.wrongTypeError("X", "Y")
+        for tool in ControlTools.catalog {
+            actual["ControlTools.\(tool.name).description"] = tool.description
+            actual["ControlTools.\(tool.name).cliUsage"] = tool.cliUsage
+        }
+        for (name, title) in ControlTools.titles {
+            actual["ControlTools.titles.\(name)"] = title
+        }
 
         // MARK: CopyModel
 

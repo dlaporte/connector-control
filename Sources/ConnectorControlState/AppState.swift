@@ -150,6 +150,8 @@ public final class AppState: ObservableObject {
     private let host: AppHost
     private let toolProbe: ToolProbing
     private var toolsInFlight: Set<Tool> = []
+    /// Callers waiting for probes to land, with the tools each waits on.
+    private var toolWaiters: [(tools: Set<Tool>, run: MainActorAction)] = []
     private var watcher: FileWatcher?
     private var storeWatcher: FileWatcher?
     /// One watcher per bound synced collection, by collection name.
@@ -513,6 +515,10 @@ public final class AppState: ObservableObject {
         toolsInFlight.subtract(probed)
         guard !disposed else { return }
         toolStatuses.merge(results) { _, new in new }
+        // Whoever waited on these probes hears once every tool they asked about is in.
+        let ready = toolWaiters.filter { $0.tools.isDisjoint(with: toolsInFlight) }
+        toolWaiters.removeAll { $0.tools.isDisjoint(with: toolsInFlight) }
+        ready.forEach { $0.run() }
     }
 
     // MARK: - Restart-required derivation
@@ -944,6 +950,31 @@ public final class AppState: ObservableObject {
             objectWillChange.send()
             settings.claudeIntegrationOfferAnswered = true
         }
+    }
+
+    // MARK: - For the control layer
+
+    /// Whether Claude Desktop is running now, as the restart logic reads it.
+    public var isClaudeRunning: Bool { claude.isRunning }
+
+    /// Runs `completion` once none of `tools` is being probed: at once when none is, else when the
+    /// last of them is published. A state disposed meanwhile never runs it.
+    public func whenToolsProbed(_ tools: [Tool] = Tool.allCases, _ completion: @escaping MainActorAction) {
+        let wanted = Set(tools)
+        guard !wanted.isDisjoint(with: toolsInFlight) else {
+            completion()
+            return
+        }
+        toolWaiters.append((wanted, completion))
+    }
+
+    /// A change Claude made without asking — confirmations are off, or the user answered after the
+    /// call had already returned. Always announced, whatever "Notify on external changes" says:
+    /// with confirmations off it is the only sign that what Claude runs has changed. The Restart
+    /// Claude action rides along while Claude runs an older config.
+    public func notifyClaudeChange(_ body: String) {
+        notifier.notify(title: Notifications.title, body: body,
+                        category: needsClaudeRestart ? Notifications.restartCategory : nil)
     }
 
     // MARK: - Collections

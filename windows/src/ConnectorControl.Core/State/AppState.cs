@@ -91,6 +91,8 @@ public sealed class AppState : ObservableObject, IDisposable
     private readonly IToolProbe toolProbe;
     private readonly Dictionary<Tool, ToolStatus> toolStatuses = [];
     private readonly HashSet<Tool> toolsInFlight = [];
+    /// <summary>Callers waiting for probes to land, with the tools each waits on.</summary>
+    private readonly List<(HashSet<Tool> Tools, Action Run)> toolWaiters = [];
 
     private MasterStore store = MasterStore.Empty();
     private string? lastError;
@@ -220,6 +222,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// dialog's New Collection name. The Mac's <c>dialogs</c> is public for the same reason.
     /// </summary>
     public IDialogs Dialogs => dialogs;
+
+    /// <summary>
+    /// The settings behind this state, which the control layer reads the gate's settings and the
+    /// last apply date from. The Mac's <c>settings</c> is public for the same reason.
+    /// </summary>
+    public ISettings Settings => settings;
 
     /// <summary>The sidecar beside the master list, reconciled with the store on every load.</summary>
     public CollectionsFile CollectionsFile { get => collectionsFile; private set => Set(ref collectionsFile, value); }
@@ -406,6 +414,13 @@ public sealed class AppState : ObservableObject, IDisposable
                 toolStatuses[tool] = status;
             }
             Raise(nameof(ToolStatuses));
+            // Whoever waited on these probes hears once every tool they asked about is in.
+            var ready = toolWaiters.Where(waiter => !waiter.Tools.Overlaps(toolsInFlight)).ToList();
+            toolWaiters.RemoveAll(waiter => !waiter.Tools.Overlaps(toolsInFlight));
+            foreach (var waiter in ready)
+            {
+                waiter.Run();
+            }
         });
     }
 
@@ -1359,6 +1374,36 @@ public sealed class AppState : ObservableObject, IDisposable
             RaiseAll();
         }
     }
+
+    // MARK: for the control layer
+
+    /// <summary>Whether Claude Desktop is running now, as the restart logic reads it.</summary>
+    public bool IsClaudeRunning => claude.Snapshot().IsRunning;
+
+    /// <summary>
+    /// Runs <paramref name="completion"/> once none of <paramref name="tools"/> (all four when null)
+    /// is being probed: at once when none is, else when the last of them is published. A state
+    /// disposed meanwhile never runs it.
+    /// </summary>
+    public void WhenToolsProbed(IReadOnlyList<Tool>? tools, Action completion)
+    {
+        var wanted = new HashSet<Tool>(tools ?? ToolInfo.All);
+        if (!wanted.Overlaps(toolsInFlight))
+        {
+            completion();
+            return;
+        }
+        toolWaiters.Add((wanted, completion));
+    }
+
+    /// <summary>
+    /// A change Claude made without asking — confirmations are off, or the user answered after the
+    /// call had already returned. Always announced, whatever "Notify on external changes" says:
+    /// with confirmations off it is the only sign that what Claude runs has changed. The Restart
+    /// Claude action rides along while Claude runs an older config.
+    /// </summary>
+    public void NotifyClaudeChange(string body) =>
+        notifier.Notify(Notifications.Title, body, NeedsClaudeRestart ? Notifications.RestartCategory : null);
 
     // MARK: collections
 

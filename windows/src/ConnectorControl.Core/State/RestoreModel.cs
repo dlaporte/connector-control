@@ -15,7 +15,7 @@ public sealed class RestoreModel : ObservableObject
     /// </summary>
     public const string RestoreTitle = "Restore";
     public const string RestoreButton = "Restore";
-    private const string Series = "claude_desktop_config";
+    public const string Series = "claude_desktop_config";
 
     public static string ConfirmMessage(string fileName) => $"Replace Claude's config with {fileName}?";
 
