@@ -10,6 +10,7 @@ public enum ControlText {
     /// The spaces after the widest cell of a column.
     static let gap = 3
 
+    // Platform idiom: Unicode scalars here; a .NET string is UTF-16, so the Windows mirror counts runes.
     public static func width(_ text: String) -> Int { text.unicodeScalars.count }
 
     public static func pad(_ text: String, to width: Int) -> String {
@@ -38,6 +39,7 @@ public enum ControlText {
         }
     }
 
+    // Platform idiom: the spaces are stripped one at a time here; the Windows mirror's TrimEnd does it in one call.
     static func trimmingTrailingSpaces(_ line: String) -> String {
         var trimmed = line
         while trimmed.hasSuffix(" ") { trimmed.removeLast() }

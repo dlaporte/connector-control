@@ -15,7 +15,7 @@ public static class ControlText
     /// <summary>The spaces after the widest cell of a column.</summary>
     internal const int Gap = 3;
 
-    // Platform idiom: a .NET string is UTF-16, so the scalars are counted as runes (the Mac counts Unicode scalars).
+    // Platform idiom: runes here, a .NET string being UTF-16; the Mac mirror counts Unicode scalars.
     public static int Width(string text) => text.EnumerateRunes().Count();
 
     public static string Pad(string text, int width) =>
@@ -49,7 +49,7 @@ public static class ControlText
         }).ToList();
     }
 
-    // Platform idiom: the Mac strips the spaces one at a time; TrimEnd does it in one call.
+    // Platform idiom: TrimEnd strips the spaces in one call here; the Mac mirror strips them one at a time.
     internal static string TrimmingTrailingSpaces(string line) => line.TrimEnd(' ');
 
     /// <summary>“a”, “a” and “b”, “a”, “b” and “c” — names as the app's sentences list them.</summary>

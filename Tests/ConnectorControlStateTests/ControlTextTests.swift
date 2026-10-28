@@ -20,6 +20,14 @@ final class ControlTextTests: XCTestCase {
         ])
     }
 
+    /// A character outside the Basic Multilingual Plane is one scalar here and two UTF-16 units on
+    /// Windows, where widths count runes: both count it once, so both pad alike.
+    func testACharacterBeyondTheBasicPlaneIsOneColumnWide() {
+        XCTAssertEqual(ControlText.width("a😀b"), 3)
+        XCTAssertEqual(ControlText.labelled([("😀", "x"), ("ab", "y")]), ["😀    x", "ab   y"])
+        XCTAssertEqual(ControlText.table(header: nil, rows: [["𝔸𝔹", "1"], ["abc", "2"]]), ["𝔸𝔹    1", "abc   2"])
+    }
+
     func testNamesAreListedTheWayTheAppsSentencesListThem() {
         XCTAssertEqual(ControlText.quotedList(["a"]), "“a”")
         XCTAssertEqual(ControlText.quotedList(["a", "b"]), "“a” and “b”")
