@@ -191,6 +191,21 @@ public class BackupManagerTests : IDisposable
     }
 
     [Fact]
+    public void RestorableBackupsAreNewestFirstWithTheOriginalLast()
+    {
+        Assert.Empty(manager.RestorableBackups(Series));
+        manager.EnsureOriginalSnapshot(source);
+        var older = manager.BackUp(source, Series, At(1_752_600_000));
+        File.WriteAllText(source, """{"mcpServers": {"a": {}}}""");
+        var newer = manager.BackUp(source, Series, At(1_752_600_001));
+        var original = manager.OriginalSnapshotPath(Series);
+        Assert.NotNull(older);
+        Assert.NotNull(newer);
+        Assert.NotNull(original);
+        Assert.Equal([newer, older, original], manager.RestorableBackups(Series));
+    }
+
+    [Fact]
     [SupportedOSPlatform("windows")]
     public void BackupsDirectoryAndOriginalSnapshotArePrivate()
     {
@@ -233,21 +248,6 @@ public class BackupManagerTests : IDisposable
         manager.BackUp(source, "mcps");
         Assert.Single(manager.Backups(Series));
         Assert.Single(manager.Backups("mcps"));
-    }
-
-    [Fact]
-    public void RestorableBackupsAreNewestFirstWithTheOriginalLast()
-    {
-        Assert.Empty(manager.RestorableBackups(Series));
-        manager.EnsureOriginalSnapshot(source);
-        var older = manager.BackUp(source, Series, At(1_752_600_000));
-        File.WriteAllText(source, """{"mcpServers": {"a": {}}}""");
-        var newer = manager.BackUp(source, Series, At(1_752_600_001));
-        var original = manager.OriginalSnapshotPath(Series);
-        Assert.NotNull(older);
-        Assert.NotNull(newer);
-        Assert.NotNull(original);
-        Assert.Equal([newer, older, original], manager.RestorableBackups(Series));
     }
 
     [Fact]

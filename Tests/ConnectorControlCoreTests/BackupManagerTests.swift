@@ -191,8 +191,6 @@ final class BackupManagerTests: XCTestCase {
         XCTAssertEqual(mode, 0o600)
     }
 
-    /// Claude's own config is 0644; a copy would inherit that. The snapshot is
-    /// written like every other private file instead.
     func testRestorableBackupsAreNewestFirstWithTheOriginalLast() throws {
         XCTAssertEqual(try manager.restorableBackups(series: "claude_desktop_config"), [])
         try manager.ensureOriginalSnapshot(of: source)
@@ -208,6 +206,8 @@ final class BackupManagerTests: XCTestCase {
                        [newer, older, original].map { $0.resolvingSymlinksInPath() })
     }
 
+    /// Claude's own config is 0644; a copy would inherit that. The snapshot is
+    /// written like every other private file instead.
     func testOriginalSnapshotOfAWorldReadableSourceIsPrivate() throws {
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: source.path)
         try manager.ensureOriginalSnapshot(of: source)

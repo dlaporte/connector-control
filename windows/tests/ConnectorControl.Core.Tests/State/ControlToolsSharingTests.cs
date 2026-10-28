@@ -243,9 +243,8 @@ public class ControlToolsSharingTests
         var off = rig.Call("import_document", replace);
         Assert.NotNull(off);
         Assert.False(off.IsError);
-        // Nothing replaced was on.
+        // Nothing replaced was on, so the question did not say a copy stays on and neither does the answer.
         Assert.StartsWith(ControlTools.ImportedText(4, "Default"), off.Text, StringComparison.Ordinal);
-        // Nothing replaced is on.
         Assert.Equal(ControlTools.ImportMessage(4, "Default"), rig.Confirmer.Requests[^1].Message);
         Assert.Equal(from, rig.Confirmer.Requests[^1].Footer);
         var one = new CollectionDocument(CollectionDocumentSamples.DataTeam.Name, CollectionDocumentSamples.DataTeam.Author,
@@ -254,7 +253,10 @@ public class ControlToolsSharingTests
         var single = rig.H.WriteDocument(one, "dbt.json");
         Assert.Null(rig.State.AddEmptyCollection("Team"));
         Assert.Null(rig.State.Upsert("dbt", AppStateHarness.LocalConnector("mine"), null, "Team"));
-        Assert.False(rig.Call("import_document", Args(("path", Text(single)), ("into", Text("Team")), ("onClash", Text("replace"))))?.IsError);
+        var alone = rig.Call("import_document", Args(("path", Text(single)), ("into", Text("Team")), ("onClash", Text("replace"))));
+        Assert.NotNull(alone);
+        Assert.False(alone.IsError);
+        Assert.Equal(ControlTools.ImportedReplacingText(1, "Team"), alone.Text);
         Assert.Equal(ControlTools.ImportReplacingMessage(1, "Team"), rig.Confirmer.Requests[^1].Message);
         // Nothing Claude runs changes.
         Assert.Equal(ControlTools.FromFooter(single), rig.Confirmer.Requests[^1].Footer);
@@ -356,20 +358,22 @@ public class ControlToolsSharingTests
     }
 
     // The Mac mirror also refuses a FIFO, which would hold the read until something writes to it; a
-    // Windows file system has none — a pipe here is a \\.\ path, refused by its form below — so there
+    // Windows file system has none — a pipe here is a \\.\ path or a device-form \\?\ one, refused by its form below — so there
     // is no such test here.
 
     /// <summary>Windows-forced, as the <c>cmd /c</c> launcher's rule is: a path that reaches another computer
     /// or a device is refused by its form, before anything touches it. The relay is refused any full path
-    /// that starts with <c>\\</c> — opening a UNC or WebDAV path has Windows sign in to that host as the user,
-    /// with nothing asked — while the command-line tool keeps its team shares; a <c>\\.\</c> path, a device
-    /// or a pipe, is never a file to anyone. Pure, so it runs on any platform.</summary>
+    /// that starts with <c>\\</c> or <c>\??\</c> — opening a UNC or WebDAV path has Windows sign in to that host
+    /// as the user, with nothing asked — while the command-line tool keeps its team shares; a <c>\\.\</c> path,
+    /// a <c>\\?\</c> or <c>\??\</c> path to anything but a drive or a share, and a device or a pipe in any of
+    /// them, is refused to everyone, since the rule cannot tell where it leads. Pure, so it runs on any
+    /// platform.</summary>
     [Fact]
     public void ARemoteOrDevicePathIsRefusedByItsForm()
     {
         var relay = new ControlCaller.Relay("claude-ai");
         var cli = new ControlCaller.Cli();
-        foreach (var path in new[] { @"\\host\share\x.json", @"\\host@SSL\x.json", @"\\host@SSL@443\DavWWWRoot\x.json", @"\\?\UNC\host\share\x.json" })
+        foreach (var path in new[] { @"\\host\share\x.json", @"\\host@SSL\x.json", @"\\host@SSL@443\DavWWWRoot\x.json", @"\\?\UNC\host\share\x.json", @"\??\UNC\host\share\x.json" })
         {
             Assert.Equal(ControlTools.NetworkPathError, ControlTools.PathRefusal(path, relay));
             // The command line keeps its team shares.
@@ -380,7 +384,7 @@ public class ControlToolsSharingTests
             Assert.Equal(ControlTools.NotAFileError(@"\\.\pipe\x.json"), ControlTools.PathRefusal(@"\\.\pipe\x.json", caller));
             Assert.Null(ControlTools.PathRefusal(@"C:\Users\me\x.json", caller));
             Assert.Null(ControlTools.PathRefusal("/Users/me/x.json", caller));
-            foreach (var device in new[] { @"\\?\GLOBALROOT\Device\HarddiskVolume1\x.json", @"\\?\Volume{0b6c1b57-0000-0000-0000-100000000000}\x.json", @"\\?\pipe\x" })
+            foreach (var device in new[] { @"\\?\GLOBALROOT\Device\HarddiskVolume1\x.json", @"\\?\Volume{0b6c1b57-0000-0000-0000-100000000000}\x.json", @"\\?\pipe\x", @"\??\GLOBALROOT\Device\HarddiskVolume1\x.json", @"\??\Volume{0b6c1b57-0000-0000-0000-100000000000}\x.json", @"\??\pipe\x" })
             {
                 Assert.Equal(ControlTools.NotAFileError(ControlText.EscapedName(device)), ControlTools.PathRefusal(device, caller));
             }
@@ -389,6 +393,9 @@ public class ControlToolsSharingTests
         // starts with \\, this form included.
         Assert.Null(ControlTools.PathRefusal(@"\\?\C:\Users\me\x.json", cli));
         Assert.Equal(ControlTools.NetworkPathError, ControlTools.PathRefusal(@"\\?\C:\Users\me\x.json", relay));
+        // The NT prefix is the same extended path to Win32, so it is treated exactly like \\?\.
+        Assert.Null(ControlTools.PathRefusal(@"\??\C:\Users\me\x.json", cli));
+        Assert.Equal(ControlTools.NetworkPathError, ControlTools.PathRefusal(@"\??\C:\Users\me\x.json", relay));
     }
 
     /// <summary>Windows-forced: a share named with forward slashes is the same share once made full, and the relay

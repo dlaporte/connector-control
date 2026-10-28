@@ -523,25 +523,33 @@ public sealed partial class ControlTools
 
     /// <summary>Why <paramref name="caller"/> may not read the document at <paramref name="full"/>, a full path,
     /// by its form alone, or null. Windows-forced, as the <c>cmd /c</c> launcher's rule is: the relay is
-    /// refused any path that starts with <c>\\</c> — a UNC or WebDAV path, or another device form — since
-    /// opening one has Windows sign in to that host as the user, with nothing asked, while the command-line
-    /// tool keeps its team shares; and a <c>\\.\</c> path, Windows' way to a device or a pipe, is never a file
-    /// to anyone. The Mac mirror's paths have no such form. Pure, so it is tested on any platform.</summary>
+    /// refused any path that starts with <c>\\</c> or <c>\??\</c> — a UNC or WebDAV path, or another device
+    /// form — since opening one has Windows sign in to that host as the user, with nothing asked, while the
+    /// command-line tool keeps its team shares; and a <c>\\.\</c> path, Windows' way to a device or a pipe,
+    /// or a <c>\\?\</c> or <c>\??\</c> path to anything but a drive or a share, is refused to everyone, since
+    /// the rule cannot tell where it leads. The Mac mirror's paths have no such form. Pure, so it is tested
+    /// on any platform.</summary>
     internal static string? PathRefusal(string full, ControlCaller caller)
     {
         if (full.StartsWith(@"\\.\", StringComparison.Ordinal) || IsDeviceNamespace(full))
         {
             return NotAFileError(ControlText.EscapedName(full));
         }
-        return caller is ControlCaller.Relay && full.StartsWith(@"\\", StringComparison.Ordinal) ? NetworkPathError : null;
+        return caller is ControlCaller.Relay && (full.StartsWith(@"\\", StringComparison.Ordinal) || HasNtPrefix(full))
+            ? NetworkPathError : null;
     }
 
-    /// <summary>Whether <paramref name="full"/> is a <c>\\?\</c> path to anything but a drive (<c>\\?\C:\</c>) or a share
-    /// (<c>\\?\UNC\</c>): a volume by its GUID, <c>GLOBALROOT</c>, a pipe or a device, which is never a file to
-    /// anyone, the command line included.</summary>
+    /// <summary>Whether <paramref name="full"/> starts with <c>\??\</c>, the NT spelling of <c>\\?\</c>: .NET
+    /// leaves it as it is and Win32 opens it as the same extended path.</summary>
+    private static bool HasNtPrefix(string full) => full.StartsWith(@"\??\", StringComparison.Ordinal);
+
+    /// <summary>Whether <paramref name="full"/> is a <c>\\?\</c> or <c>\??\</c> path to anything but a drive
+    /// (<c>\\?\C:\</c>) or a share (<c>\\?\UNC\</c>): a volume by its GUID, <c>GLOBALROOT</c>, a pipe or a
+    /// device. The rule cannot tell where these lead — a volume path can be a real file — so they are
+    /// refused to every caller, the command line included.</summary>
     private static bool IsDeviceNamespace(string full)
     {
-        if (!full.StartsWith(@"\\?\", StringComparison.Ordinal))
+        if (!full.StartsWith(@"\\?\", StringComparison.Ordinal) && !HasNtPrefix(full))
         {
             return false;
         }
@@ -558,8 +566,8 @@ public sealed partial class ControlTools
     private static string? DocumentFileRefusal(string full)
     {
         // Platform idiom: FileInfo, which knows a folder from a file and no more, where the Mac mirror's
-        // stat(2) reads every file type; a device or a pipe here is a \\.\ path, which PathRefusal refuses by
-        // its form.
+        // stat(2) reads every file type; a device or a pipe here is a \\.\ path, or a \\?\ or \??\ one to
+        // neither a drive nor a share, which PathRefusal refuses by its form.
         var file = ControlText.EscapedName(Path.GetFileName(Path.TrimEndingDirectorySeparator(full)));
         try
         {

@@ -87,8 +87,6 @@ public sealed partial class ControlTools
         this.host = host;
     }
 
-    public IReadOnlyList<ControlToolDefinition> Definitions => Catalog;
-
     /// <summary>The running app's version: <c>get_status</c> says it, and the MCP session introduces itself with it.</summary>
     public string Version => settings.Version;
 

@@ -135,7 +135,7 @@ public sealed partial class ControlTools
     ];
 
     /// <summary>The <c>tools/list</c> entries, built once: <c>tools/call</c> looks a tool up in them on every call.</summary>
-    public static readonly IReadOnlyList<JsonValue> McpDescriptors = Catalog.Select(definition => definition.McpDescriptor).ToList();
+    public static readonly IReadOnlyList<JsonValue> McpDescriptors = Catalog.Select(definition => definition.McpDescriptor).ToList().AsReadOnly();
 
     // Platform idiom: C# puts optional parameters last, so usage, group and description come before
     // the two hints here; every call names them, in the Mac's order.

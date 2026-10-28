@@ -25,22 +25,6 @@ public class ControlToolHostTests
         Assert.Equal("1.2.2", host.Version);
     }
 
-    /// <summary><c>tools/call</c> checks the list on every call: it is built once, from the static catalog, and
-    /// every connection's host lists the same descriptors.</summary>
-    [Fact]
-    public void EveryHostListsTheOneCachedCatalog()
-    {
-        using var rig = new ControlRig();
-        var relay = new ControlToolHost(rig.Tools, isCli: false);
-        var cli = new ControlToolHost(rig.Tools, isCli: true);
-        Assert.Equal(ControlTools.Catalog.Select(definition => definition.McpDescriptor), ControlTools.McpDescriptors);
-        Assert.Equal(ControlTools.McpDescriptors, relay.ListTools());
-        Assert.Equal(ControlTools.McpDescriptors, cli.ListTools());
-        // C# can show it is one list.
-        Assert.Same(ControlTools.McpDescriptors, relay.ListTools());
-        Assert.Same(ControlTools.McpDescriptors, cli.ListTools());
-    }
-
     [Fact]
     public void TheRelayIsNamedByTheClientItIntroducedItselfAs()
     {
@@ -119,5 +103,21 @@ public class ControlToolHostTests
         var expected = rig.Call("list_collections")!.McpResult;
         Assert.Equal(JsonValue.Object(("jsonrpc", JsonValue.String("2.0")), ("id", JsonValue.Int(1)), ("result", expected)).CompactLine(),
             sent.LastOrDefault());
+    }
+
+    /// <summary><c>tools/call</c> checks the list on every call: it is built once, from the static catalog, and
+    /// every connection's host lists the same descriptors.</summary>
+    [Fact]
+    public void EveryHostListsTheOneCachedCatalog()
+    {
+        using var rig = new ControlRig();
+        var relay = new ControlToolHost(rig.Tools, isCli: false);
+        var cli = new ControlToolHost(rig.Tools, isCli: true);
+        Assert.Equal(ControlTools.Catalog.Select(definition => definition.McpDescriptor), ControlTools.McpDescriptors);
+        Assert.Equal(ControlTools.McpDescriptors, relay.ListTools());
+        Assert.Equal(ControlTools.McpDescriptors, cli.ListTools());
+        // C# can show it is one list.
+        Assert.Same(ControlTools.McpDescriptors, relay.ListTools());
+        Assert.Same(ControlTools.McpDescriptors, cli.ListTools());
     }
 }

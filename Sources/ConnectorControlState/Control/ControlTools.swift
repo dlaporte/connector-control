@@ -86,8 +86,6 @@ public final class ControlTools {
         self.host = host
     }
 
-    public var definitions: [ControlToolDefinition] { ControlTools.catalog }
-
     /// The running app's version: `get_status` says it, and the MCP session introduces itself with it.
     public var version: String { settings.version }
 

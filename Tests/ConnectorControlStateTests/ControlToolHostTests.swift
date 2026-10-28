@@ -97,5 +97,7 @@ final class ControlToolHostTests: XCTestCase {
         XCTAssertEqual(ControlTools.mcpDescriptors, ControlTools.catalog.map(\.mcpDescriptor))
         XCTAssertEqual(relay.listTools(), ControlTools.mcpDescriptors)
         XCTAssertEqual(cli.listTools(), ControlTools.mcpDescriptors)
+        // The Windows mirror also asserts the two are the very same list; JSONValue arrays are values,
+        // so Swift has no identity to compare.
     }
 }

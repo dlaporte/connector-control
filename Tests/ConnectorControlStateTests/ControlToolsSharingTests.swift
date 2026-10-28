@@ -186,7 +186,9 @@ final class ControlToolsSharingTests: XCTestCase {
         let single = try rig.h.writeDocument(one, named: "dbt.json")
         XCTAssertNil(rig.state.addEmptyCollection(named: "Team"))
         XCTAssertNil(rig.state.upsert(name: "dbt", entry: AppStateHarness.localConnector("mine"), renamedFrom: nil, in: "Team"))
-        XCTAssertEqual(rig.call("import_document", ["path": .string(single.path), "into": .string("Team"), "onClash": .string("replace")])?.isError, false)
+        let alone = try XCTUnwrap(rig.call("import_document", ["path": .string(single.path), "into": .string("Team"), "onClash": .string("replace")]))
+        XCTAssertFalse(alone.isError)
+        XCTAssertEqual(alone.text, ControlTools.importedReplacingText(1, "Team"))
         XCTAssertEqual(rig.confirmer.requests.last?.message, ControlTools.importReplacingMessage(1, "Team"))
         XCTAssertEqual(rig.confirmer.requests.last?.footer, ControlTools.fromFooter(single.path), "nothing Claude runs changes")
         XCTAssertEqual(rig.state.store.collections["Team"]?.mcps["dbt"]?.enabled, true)
@@ -276,8 +278,10 @@ final class ControlToolsSharingTests: XCTestCase {
     }
 
     // The Windows mirror also refuses, by its form, a path that reaches another computer or a
-    // device: the relay any that starts with \\ once made full, every caller a \\.\ path. A Mac
-    // path has no such form, so there is no such test here.
+    // device: the relay any that starts with \\ or \??\ once made full, every caller a \\.\ path or a
+    // \\?\ or \??\ path to anything but a drive or a share (ARemoteOrDevicePathIsRefusedByItsForm,
+    // and TheRelayIsRefusedAShareNamedWithForwardSlashes for the relay's own call). A Mac path has no
+    // such form, so there is no such test here.
 
     // MARK: subscribe
 
