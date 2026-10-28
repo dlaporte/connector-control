@@ -23,10 +23,12 @@ public sealed class ControlRig : IDisposable
     public SettingsModel SettingsModel { get; }
     public ControlTools Tools { get; }
 
-    /// <summary>A call in flight: its answer once it has one, and every progress report so far.</summary>
+    /// <summary>A call in flight: its answer once it has one, how many answers it has had (a call is
+    /// answered once), and every progress report so far.</summary>
     public sealed class Answer
     {
         public ControlResult? Result { get; set; }
+        public int Completions { get; set; }
         public List<double> Progress { get; } = [];
     }
 
@@ -58,7 +60,11 @@ public sealed class ControlRig : IDisposable
     {
         var answer = new Answer();
         Tools.Call(name, arguments ?? JsonValue.Object(), caller ?? new ControlCaller.Relay("claude-ai"),
-            answer.Progress.Add, result => answer.Result = result);
+            answer.Progress.Add, result =>
+            {
+                answer.Result = result;
+                answer.Completions++;
+            });
         H.Drain();
         return answer;
     }

@@ -48,6 +48,9 @@ extension ControlTools {
         case "duplicate_collection": return duplicateCollection(arguments)
         case "refresh_subscription": return refreshSubscription(arguments)
         case "set_setting": return setSetting(arguments, caller)
+        case "add_connector": return addConnector(arguments, caller.askerName)
+        case "update_connector": return updateConnector(arguments, caller.askerName)
+        case "delete_connectors": return deleteConnectors(arguments, caller.askerName)
         default: return .refused(ControlTools.unknownToolError(name))
         }
     }

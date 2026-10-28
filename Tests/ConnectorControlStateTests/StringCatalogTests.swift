@@ -108,8 +108,23 @@ final class StringCatalogTests: XCTestCase {
         "ControlMasking.assignment": ["X", "Y"],
         "ControlMasking.oauthClientText": ["X", "Y"],
         "ControlMasking.remoteBridgeType": ["X"],
+        "ControlTools.addActiveMessage": ["X", "Y"],
+        "ControlTools.addMessage": ["X", "Y"],
+        "ControlTools.addTitle": ["X", "Y"],
+        "ControlTools.addedNotification": ["X", "Y", "Z"],
+        "ControlTools.addedText": ["X", "Y", "Z"],
+        "ControlTools.changeActiveMessage": ["X"],
+        "ControlTools.changeMessage": ["X"],
+        "ControlTools.changeTitle": ["X", "Y"],
+        "ControlTools.changedNotification": ["X", "Y", "Z"],
+        "ControlTools.changedText": ["X", "Y"],
         "ControlTools.connectorCountText": ["3", "7"],
         "ControlTools.createdText": ["X"],
+        "ControlTools.deleteActiveMessage": ["X"],
+        "ControlTools.deleteMessage": ["X"],
+        "ControlTools.deleteTitle": ["X", "Y"],
+        "ControlTools.deletedNotification": ["X", "Y", "Z"],
+        "ControlTools.deletedText": ["X", "Y"],
         "ControlTools.detail": ["X", "Y"],
         "ControlTools.duplicateSubscribedError": ["X"],
         "ControlTools.duplicatedText": ["X", "Y"],
@@ -117,10 +132,12 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.installHint": ["X", "Y"],
         "ControlTools.integrationSetText": ["X"],
         "ControlTools.missingArgumentError": ["X"],
+        "ControlTools.needsValuesText": ["X"],
         "ControlTools.noConnectorError": ["X", "Y"],
         "ControlTools.notOneOfError": ["X", "Y"],
         "ControlTools.notSubscribedError": ["X"],
         "ControlTools.renamedCollectionText": ["X", "Y"],
+        "ControlTools.renamedText": ["X", "Y"],
         "ControlTools.savedNotAppliedText": ["X"],
         "ControlTools.settingChangedText": ["X", "Y"],
         "ControlTools.settingNotForClaudeError": ["X"],
@@ -129,6 +146,7 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.switchedText": ["X"],
         "ControlTools.turnedOffText": ["X", "Y"],
         "ControlTools.turnedOnText": ["X", "Y"],
+        "ControlTools.unchangedError": ["X"],
         "ControlTools.unknownToolError": ["X"],
         "ControlTools.upToDateText": ["X"],
         "ControlTools.wrongTypeError": ["X", "Y"],
@@ -374,8 +392,18 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlSettingKey.notifyExternalChanges"] = ControlSettingKey.notifyExternalChanges
         actual["ControlTools.activeCollectionLabel"] = ControlTools.activeCollectionLabel
         actual["ControlTools.activeMark"] = ControlTools.activeMark
+        actual["ControlTools.addActiveMessage"] = ControlTools.addActiveMessage("X", "Y")
+        actual["ControlTools.addMessage"] = ControlTools.addMessage("X", "Y")
+        actual["ControlTools.addTitle"] = ControlTools.addTitle("X", "Y")
+        actual["ControlTools.addedNotification"] = ControlTools.addedNotification("X", "Y", "Z")
+        actual["ControlTools.addedText"] = ControlTools.addedText("X", "Y", "Z")
         actual["ControlTools.argumentsNotObjectError"] = ControlTools.argumentsNotObjectError
         actual["ControlTools.booleanKind"] = ControlTools.booleanKind
+        actual["ControlTools.changeActiveMessage"] = ControlTools.changeActiveMessage("X")
+        actual["ControlTools.changeMessage"] = ControlTools.changeMessage("X")
+        actual["ControlTools.changeTitle"] = ControlTools.changeTitle("X", "Y")
+        actual["ControlTools.changedNotification"] = ControlTools.changedNotification("X", "Y", "Z")
+        actual["ControlTools.changedText"] = ControlTools.changedText("X", "Y")
         actual["ControlTools.changedWhileAskingError"] = ControlTools.changedWhileAskingError
         actual["ControlTools.claudeGroup"] = ControlTools.claudeGroup
         actual["ControlTools.claudeLabel"] = ControlTools.claudeLabel
@@ -384,11 +412,17 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.claudeRunningRestart"] = ControlTools.claudeRunningRestart
         actual["ControlTools.collectionHeader"] = ControlTools.collectionHeader
         actual["ControlTools.collectionsGroup"] = ControlTools.collectionsGroup
+        actual["ControlTools.configShapeError"] = ControlTools.configShapeError
         actual["ControlTools.connectorCountText"] = ControlTools.connectorCountText(3, 7)
         actual["ControlTools.connectorsGroup"] = ControlTools.connectorsGroup
         actual["ControlTools.connectorsHeader"] = ControlTools.connectorsHeader
         actual["ControlTools.createdText"] = ControlTools.createdText("X")
         actual["ControlTools.declinedError"] = ControlTools.declinedError
+        actual["ControlTools.deleteActiveMessage"] = ControlTools.deleteActiveMessage("X")
+        actual["ControlTools.deleteMessage"] = ControlTools.deleteMessage("X")
+        actual["ControlTools.deleteTitle"] = ControlTools.deleteTitle("X", "Y")
+        actual["ControlTools.deletedNotification"] = ControlTools.deletedNotification("X", "Y", "Z")
+        actual["ControlTools.deletedText"] = ControlTools.deletedText("X", "Y")
         actual["ControlTools.detail"] = ControlTools.detail("X", "Y")
         actual["ControlTools.duplicateSubscribedError"] = ControlTools.duplicateSubscribedError("X")
         actual["ControlTools.duplicatedText"] = ControlTools.duplicatedText("X", "Y")
@@ -410,11 +444,13 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.masterListLabel"] = ControlTools.masterListLabel
         actual["ControlTools.missingArgumentError"] = ControlTools.missingArgumentError("X")
         actual["ControlTools.nameHeader"] = ControlTools.nameHeader
+        actual["ControlTools.needsValuesText"] = ControlTools.needsValuesText("X")
         actual["ControlTools.noBackupsText"] = ControlTools.noBackupsText
         actual["ControlTools.noConnectorError"] = ControlTools.noConnectorError("X", "Y")
         actual["ControlTools.noQuestionError"] = ControlTools.noQuestionError
         actual["ControlTools.notOneOfError"] = ControlTools.notOneOfError("X", "Y")
         actual["ControlTools.notSubscribedError"] = ControlTools.notSubscribedError("X")
+        actual["ControlTools.nothingToChangeError"] = ControlTools.nothingToChangeError
         actual["ControlTools.objectKind"] = ControlTools.objectKind
         actual["ControlTools.offWord"] = ControlTools.offWord
         actual["ControlTools.onWord"] = ControlTools.onWord
@@ -424,6 +460,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.relaySummary"] = ControlTools.relaySummary
         actual["ControlTools.relayUsage"] = ControlTools.relayUsage
         actual["ControlTools.renamedCollectionText"] = ControlTools.renamedCollectionText("X", "Y")
+        actual["ControlTools.renamedText"] = ControlTools.renamedText("X", "Y")
         actual["ControlTools.restartToApplyText"] = ControlTools.restartToApplyText
         actual["ControlTools.restartToUseText"] = ControlTools.restartToUseText
         actual["ControlTools.runsHeader"] = ControlTools.runsHeader
@@ -437,9 +474,11 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.subscribedKind"] = ControlTools.subscribedKind
         actual["ControlTools.switchValueError"] = ControlTools.switchValueError("X")
         actual["ControlTools.switchedText"] = ControlTools.switchedText("X")
+        actual["ControlTools.takesEffectFooter"] = ControlTools.takesEffectFooter
         actual["ControlTools.textKind"] = ControlTools.textKind
         actual["ControlTools.turnedOffText"] = ControlTools.turnedOffText("X", "Y")
         actual["ControlTools.turnedOnText"] = ControlTools.turnedOnText("X", "Y")
+        actual["ControlTools.unchangedError"] = ControlTools.unchangedError("X")
         actual["ControlTools.unknownToolError"] = ControlTools.unknownToolError("X")
         actual["ControlTools.upToDateText"] = ControlTools.upToDateText("X")
         actual["ControlTools.updateAvailableKind"] = ControlTools.updateAvailableKind

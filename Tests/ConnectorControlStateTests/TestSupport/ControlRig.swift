@@ -18,9 +18,11 @@ final class ControlRig {
     let settingsModel: SettingsModel
     let tools: ControlTools
 
-    /// A call in flight: its answer once it has one, and every progress report so far.
+    /// A call in flight: its answer once it has one, how many answers it has had (a call is
+    /// answered once), and every progress report so far.
     final class Answer {
         var result: ControlResult?
+        var completions = 0
         var progress: [Double] = []
     }
 
@@ -47,7 +49,10 @@ final class ControlRig {
                as caller: ControlCaller = .relay(clientName: "claude-ai")) -> Answer {
         let answer = Answer()
         tools.call(name: name, arguments: .object(arguments), caller: caller,
-                   progress: { answer.progress.append($0) }, completion: { answer.result = $0 })
+                   progress: { answer.progress.append($0) }, completion: {
+                       answer.result = $0
+                       answer.completions += 1
+                   })
         h.drain()
         return answer
     }

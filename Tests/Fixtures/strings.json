@@ -274,12 +274,42 @@
   "ControlText.listAnd": " and ",
   "ControlTools.activeCollectionLabel": "Active collection",
   "ControlTools.activeMark": "active",
+  "ControlTools.addActiveMessage": {
+    "format": "It would join “{0}”, the collection Claude is running, switched {1}, and run:"
+  },
+  "ControlTools.addMessage": {
+    "format": "It would join “{0}”, switched {1}, and run:"
+  },
+  "ControlTools.addTitle": {
+    "format": "{0} wants to add “{1}”"
+  },
   "ControlTools.add_connector.cliUsage": "add <name> --json <config> | --file <path>",
   "ControlTools.add_connector.description": "Add a connector. config is what Claude Desktop runs, as its config file holds it: {\"command\": ..., \"args\": [...], \"env\": {...}} for a local server, or an npx mcp-remote command line for a remote one. Never write a secret the user has not given you: put ${CC_NEEDS:NAME} in its place, and the user fills it in in Connector Control. The connector goes into the active collection unless collection names another, switched on unless enabled is false.",
+  "ControlTools.addedNotification": {
+    "format": "{0} added “{1}” to “{2}”."
+  },
+  "ControlTools.addedText": {
+    "format": "Added “{0}” to “{1}”, switched {2}."
+  },
   "ControlTools.apply_update.cliUsage": "apply-update <collection>",
   "ControlTools.apply_update.description": "Apply the update waiting for a subscribed collection. get_pending_update shows what it changes.",
   "ControlTools.argumentsNotObjectError": "The arguments must be a JSON object.",
   "ControlTools.booleanKind": "true or false",
+  "ControlTools.changeActiveMessage": {
+    "format": "In “{0}”, the collection Claude is running:"
+  },
+  "ControlTools.changeMessage": {
+    "format": "In “{0}”:"
+  },
+  "ControlTools.changeTitle": {
+    "format": "{0} wants to change “{1}”"
+  },
+  "ControlTools.changedNotification": {
+    "format": "{0} changed “{1}” in “{2}”."
+  },
+  "ControlTools.changedText": {
+    "format": "Changed “{0}” in “{1}”."
+  },
   "ControlTools.changedWhileAskingError": "This changed while Connector Control was asking, so nothing was done. Ask again.",
   "ControlTools.check_tools.cliUsage": "doctor",
   "ControlTools.check_tools.description": "Whether npx, node, uvx and uv are installed where Claude can find them. A connector launched through a missing one shows only \"server disconnected\" in Claude.",
@@ -290,6 +320,7 @@
   "ControlTools.claudeRunningRestart": "running · restart required",
   "ControlTools.collectionHeader": "COLLECTION",
   "ControlTools.collectionsGroup": "Collections",
+  "ControlTools.configShapeError": "A connector’s config needs a “command” or a “url”.",
   "ControlTools.connectorCountText": {
     "format": "{0} connectors, {1} on"
   },
@@ -301,10 +332,25 @@
     "format": "Created “{0}”."
   },
   "ControlTools.declinedError": "You declined this change in Connector Control.",
+  "ControlTools.deleteActiveMessage": {
+    "format": "From “{0}”, the collection Claude is running. A copy remains in Backups."
+  },
+  "ControlTools.deleteMessage": {
+    "format": "From “{0}”. A copy remains in Backups."
+  },
+  "ControlTools.deleteTitle": {
+    "format": "{0} wants to delete {1}"
+  },
   "ControlTools.delete_collection.cliUsage": "collection delete <name>",
   "ControlTools.delete_collection.description": "Delete a collection and its connectors. A copy remains in Connector Control's backups; a subscribed collection's file is left alone.",
   "ControlTools.delete_connectors.cliUsage": "delete <name>…",
   "ControlTools.delete_connectors.description": "Delete connectors. A copy remains in Connector Control's backups.",
+  "ControlTools.deletedNotification": {
+    "format": "{0} deleted {1} from “{2}”."
+  },
+  "ControlTools.deletedText": {
+    "format": "Deleted {0} from “{1}”."
+  },
   "ControlTools.detail": {
     "format": "{0} · {1}"
   },
@@ -358,6 +404,9 @@
     "format": "“{0}” is required."
   },
   "ControlTools.nameHeader": "NAME",
+  "ControlTools.needsValuesText": {
+    "format": "It needs a value for {0}: fill it in Connector Control."
+  },
   "ControlTools.noBackupsText": "No backups yet.",
   "ControlTools.noConnectorError": {
     "format": "There’s no connector named “{0}” in “{1}”."
@@ -369,6 +418,7 @@
   "ControlTools.notSubscribedError": {
     "format": "“{0}” isn’t a subscribed collection."
   },
+  "ControlTools.nothingToChangeError": "Give a new config, a new name, or both.",
   "ControlTools.objectKind": "a JSON object",
   "ControlTools.offWord": "off",
   "ControlTools.onWord": "on",
@@ -383,6 +433,9 @@
   "ControlTools.rename_collection.description": "Rename a collection.",
   "ControlTools.renamedCollectionText": {
     "format": "Renamed the collection “{0}” to “{1}”."
+  },
+  "ControlTools.renamedText": {
+    "format": "Renamed “{0}” to “{1}”."
   },
   "ControlTools.restartToApplyText": "Restart Claude to apply the change.",
   "ControlTools.restartToUseText": "Restart Claude to use it.",
@@ -421,6 +474,7 @@
   "ControlTools.switchedText": {
     "format": "Switched to “{0}”."
   },
+  "ControlTools.takesEffectFooter": "Takes effect when Claude restarts.",
   "ControlTools.textKind": "text",
   "ControlTools.titles.add_connector": "Add connector",
   "ControlTools.titles.apply_update": "Apply update",
@@ -451,6 +505,9 @@
   },
   "ControlTools.turnedOnText": {
     "format": "Turned on “{0}” in “{1}”."
+  },
+  "ControlTools.unchangedError": {
+    "format": "“{0}” already has that config."
   },
   "ControlTools.unknownToolError": {
     "format": "There’s no tool named “{0}”."

@@ -57,6 +57,9 @@ public sealed partial class ControlTools
             case "duplicate_collection": return DuplicateCollection(arguments);
             case "refresh_subscription": return RefreshSubscription(arguments);
             case "set_setting": return SetSetting(arguments, caller);
+            case "add_connector": return AddConnector(arguments, caller.AskerName);
+            case "update_connector": return UpdateConnector(arguments, caller.AskerName);
+            case "delete_connectors": return DeleteConnectors(arguments, caller.AskerName);
             default: return new ControlStep.Refused(UnknownToolError(name));
         }
     }
