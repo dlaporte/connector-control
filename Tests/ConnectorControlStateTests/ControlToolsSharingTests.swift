@@ -12,6 +12,12 @@ final class ControlToolsSharingTests: XCTestCase {
         return rig
     }
 
+    /// Runs everything the host delayed, as time passing would: a restart due, and the tick a
+    /// question answered at once leaves behind, which finds its call answered and does nothing.
+    private func runDelays(_ rig: ControlRig) {
+        while !rig.h.delays.pending.isEmpty { rig.h.delays.runNext() }
+    }
+
     /// Nothing in `text` that a line would show as an escape: nothing that breaks a line, or
     /// reorders or hides text.
     private func assertPlain(_ text: String, file: StaticString = #filePath, line: UInt = #line) {
@@ -485,16 +491,17 @@ final class ControlToolsSharingTests: XCTestCase {
         XCTAssertEqual(rig.call("restart_claude"), .refusal(ControlTools.declinedError), "asked although confirmations are off")
         XCTAssertEqual(rig.confirmer.requests.last, ConfirmationRequest(
             title: ControlTools.restartItselfTitle, message: ControlTools.restartMessage, code: [], footer: nil))
+        XCTAssertFalse(rig.h.delays.pending.contains { $0.delay == ControlTools.restartDelay }, "a declined restart leaves nothing for later")
+        runDelays(rig)
         XCTAssertEqual(rig.h.claude.restartCalls, 0)
-        XCTAssertTrue(rig.h.delays.pending.isEmpty, "a declined restart leaves nothing for later")
         XCTAssertEqual(rig.call("restart_claude", as: .cli)?.text, ControlTools.restartingText)
-        rig.h.delays.runNext()
+        runDelays(rig)
         XCTAssertEqual(rig.h.claude.restartCalls, 1)
         XCTAssertEqual(rig.confirmer.requests.count, 1)
         rig.confirmer.scripted = true
         _ = rig.call("restart_claude", as: .relay(clientName: "Cursor"))
         XCTAssertEqual(rig.confirmer.requests.last?.title, ControlTools.restartTitle("Cursor"))
-        rig.h.delays.runNext()
+        runDelays(rig)
         XCTAssertEqual(rig.h.claude.restartCalls, 2)
         XCTAssertTrue(rig.h.notifier.sent.isEmpty, "a restart is asked about, never announced")
     }
@@ -507,8 +514,7 @@ final class ControlToolsSharingTests: XCTestCase {
         rig.h.dialogs.nextConfirm = false
         _ = rig.call("restart_claude")
         _ = rig.call("restart_claude", as: .cli)
-        rig.h.delays.runNext()
-        rig.h.delays.runNext()
+        runDelays(rig)
         XCTAssertEqual(rig.h.claude.restartCalls, 2)
         XCTAssertEqual(rig.h.dialogs.confirms, [])
     }
@@ -519,7 +525,10 @@ final class ControlToolsSharingTests: XCTestCase {
         let rig = rig(); defer { rig.dispose() }
         XCTAssertEqual(rig.call("restart_claude")?.text, ControlTools.restartingText)
         XCTAssertEqual(rig.h.claude.restartCalls, 0, "answered, not yet restarted")
-        XCTAssertEqual(rig.h.delays.pending.map(\.delay), [ControlTools.restartDelay])
+        XCTAssertEqual(rig.h.delays.pending.map(\.delay), [ControlTools.progressInterval, ControlTools.restartDelay],
+                       "the wait's first tick, set before the question was put, then the restart")
+        rig.h.delays.runNext()
+        XCTAssertEqual(rig.h.claude.restartCalls, 0, "the tick finds the call answered and does nothing")
         rig.h.delays.runNext()
         XCTAssertEqual(rig.h.claude.restartCalls, 1)
         _ = rig.call("restart_claude")

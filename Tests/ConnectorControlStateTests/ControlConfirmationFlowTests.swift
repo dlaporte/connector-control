@@ -126,6 +126,25 @@ final class ControlConfirmationFlowTests: XCTestCase {
         XCTAssertTrue(rig.h.notifier.sent.isEmpty, "the caller heard the outcome itself")
     }
 
+    /// The app's dialog is modal: `confirm` returns only once the user has answered, while its run
+    /// loop runs what the host delays. The wait starts before the question is put, so the caller
+    /// still hears progress and, at `confirmationWait`, that the answer is awaited; the Allow that
+    /// follows applies and is announced once.
+    func testAModalDialogStillLetsTheCallerHearItIsWaiting() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let delays = rig.h.delays
+        rig.confirmer.scripted = true
+        rig.confirmer.whileOpen = { while !delays.pending.isEmpty { delays.runNext() } }
+        let answer = rig.start("add_connector", add("x"))
+        XCTAssertEqual(answer.progress, [5, 10, 15, 20, 25, 30, 35, 40, 45, 50])
+        XCTAssertEqual(answer.result, ControlTools.waitingResult)
+        XCTAssertEqual(answer.completions, 1)
+        XCTAssertNotNil(rig.state.store.mcps["x"], "the Allow, given after the early answer, still counts")
+        XCTAssertEqual(rig.h.notifier.sent.map(\.body), [ControlTools.addedNotification("Claude", "x", "Default")],
+                       "announced once, since the caller had already been answered")
+        XCTAssertTrue(rig.h.delays.pending.isEmpty)
+    }
+
     func testWritesRunOneAtATimeAndReadsDoNotWait() throws {
         let rig = ControlRig(); defer { rig.dispose() }
         let first = rig.start("add_connector", add("a"))

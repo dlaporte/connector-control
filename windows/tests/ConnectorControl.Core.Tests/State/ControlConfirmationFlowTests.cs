@@ -164,6 +164,34 @@ public class ControlConfirmationFlowTests
         Assert.Empty(rig.H.Notifier.Sent);
     }
 
+    /// <summary>The app's dialog is modal: <c>Confirm</c> returns only once the user has answered, while
+    /// its run loop runs what the host delays. The wait starts before the question is put, so the caller
+    /// still hears progress and, at <see cref="ControlTools.ConfirmationWait"/>, that the answer is
+    /// awaited; the Allow that follows applies and is announced once.</summary>
+    [Fact]
+    public void AModalDialogStillLetsTheCallerHearItIsWaiting()
+    {
+        using var rig = new ControlRig();
+        var delays = rig.H.Delays;
+        rig.Confirmer.Scripted = true;
+        rig.Confirmer.WhileOpen = () =>
+        {
+            while (delays.Pending.Count > 0)
+            {
+                delays.RunNext();
+            }
+        };
+        var answer = rig.Start("add_connector", Add("x"));
+        Assert.Equal([5.0, 10, 15, 20, 25, 30, 35, 40, 45, 50], answer.Progress);
+        Assert.Equal(ControlTools.WaitingResult, answer.Result);
+        Assert.Equal(1, answer.Completions);
+        // The Allow, given after the early answer, still counts.
+        Assert.True(rig.State.Store.Mcps.ContainsKey("x"));
+        // Announced once, since the caller had already been answered.
+        Assert.Equal([ControlTools.AddedNotification("Claude", "x", "Default")], rig.H.Notifier.Sent.Select(sent => sent.Body));
+        Assert.Empty(rig.H.Delays.Pending);
+    }
+
     [Fact]
     public void WritesRunOneAtATimeAndReadsDoNotWait()
     {

@@ -199,6 +199,10 @@ public class ControlWriteQueueTests
         rig.Tools.Call("add_connector", JsonValue.Object(("name", JsonValue.String("a")), ("config", JsonValue.Object())),
             Claude, _ => { }, answers.Add);
         Assert.Equal([ControlResult.Refusal("no dialog")], answers);
+        // The wait's tick, set before the question was put, finds the call answered and says nothing more.
+        Assert.Equal([TimeSpan.FromSeconds(ControlTools.ProgressInterval)], rig.H.Delays.Pending.Select(pending => pending.Delay));
+        rig.H.Delays.RunNext();
+        Assert.Single(answers);
         Assert.Empty(rig.H.Delays.Pending);
         rig.Confirmer.Throws = null;
         rig.Confirmer.Scripted = true;

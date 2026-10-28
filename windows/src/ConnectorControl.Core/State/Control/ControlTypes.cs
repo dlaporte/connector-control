@@ -182,7 +182,17 @@ public sealed record ConfirmationRequest(string Title, string Message, IReadOnly
 
 /// <summary>
 /// The confirmation dialog: the app shows it with Don't Allow as the default answer and calls
-/// <c>completion</c> once, with true only for Allow.
+/// <c>completion</c> with true only for Allow. The write queue relies on this contract:
+/// <list type="bullet">
+/// <item><c>completion</c> is called exactly once on every path, the dialog's window closed without an
+/// answer included (as Don't Allow);</item>
+/// <item><c>Confirm</c> may return before the user answers or only after (a modal dialog): the call's wait
+/// has started before it is asked, and its progress and early answer run in the dialog's run loop;</item>
+/// <item>a <c>completion</c> never called holds the write queue for good: every later write, the command
+/// line's included, only ever answers "queued";</item>
+/// <item>C# only: it never throws once its dialog is showing. It may throw before showing anything,
+/// which ends the call as refused; after that, a failure calls <c>completion(false)</c>.</item>
+/// </list>
 /// </summary>
 public interface IControlConfirmer
 {

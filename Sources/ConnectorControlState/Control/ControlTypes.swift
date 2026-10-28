@@ -206,7 +206,14 @@ public struct ConfirmationRequest: Equatable, Sendable {
 }
 
 /// The confirmation dialog: the app shows it with Don't Allow as the default answer and calls
-/// `completion` once, with true only for Allow.
+/// `completion` with true only for Allow. The write queue relies on this contract:
+/// - `completion` is called exactly once on every path, the dialog's window closed without an
+///   answer included (as Don't Allow);
+/// - `confirm` may return before the user answers or only after (a modal dialog): the call's wait
+///   has started before it is asked, and its progress and early answer run in the dialog's run loop;
+/// - a `completion` never called holds the write queue for good: every later write, the command
+///   line's included, only ever answers "queued".
+/// The Windows mirror adds that its confirmer never throws once its dialog is showing.
 @MainActor
 public protocol ControlConfirmer: AnyObject {
     func confirm(_ request: ConfirmationRequest, completion: @escaping (Bool) -> Void)

@@ -4,7 +4,8 @@ namespace ConnectorControl.Core.State;
 /// The tools as one connection's MCP session sees them. The transport makes one per connection
 /// and says, from the connection's hello, whether it is the command-line tool; anything else is
 /// the relay, and the relay's asker is whoever the client said it was in <c>initialize</c>, read at
-/// each call because the session learns it only then.
+/// each call because the session learns it only then. <c>Tools</c> is the app's one <see cref="ControlTools"/>,
+/// shared by every connection's host, never one per connection: see its note.
 ///
 /// Mirror: Sources/ConnectorControlState/Control/ControlToolHost.swift
 /// </summary>

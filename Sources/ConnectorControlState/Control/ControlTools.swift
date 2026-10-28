@@ -11,6 +11,10 @@ import ConnectorControlCore
 /// Reads answer at once. Writes run one at a time, in the order they arrive. One that asks the user
 /// holds the line until the user answers, however long that takes, while its caller hears progress
 /// every `progressInterval` and, at `confirmationWait`, that the answer is still awaited.
+///
+/// One per app: every connection's `ControlToolHost` shares the one instance. Claude Desktop opens
+/// two relay connections, one for chat and one for its agent mode, beside any command-line one, and
+/// the write queue that runs changes one at a time is this instance's.
 @MainActor
 public final class ControlTools {
     public static let integrationOffError = "Claude integration is turned off in Connector Control."
@@ -171,9 +175,13 @@ public final class ControlTools {
                     finish(call, .refusal(ControlTools.noQuestionError))
                     return
                 }
+                // The wait starts before the question is put: the app's dialog is modal, so
+                // `confirm` may return only once the user has answered, and the progress and early
+                // answer run inside its run loop meanwhile. One answered at once leaves a tick that
+                // finds the call answered and does nothing.
                 call.asking = true
+                startWaiting(call)
                 confirmer.confirm(request) { [weak self] allowed in self?.answered(call, request, fingerprint, allowed) }
-                if !call.answered { startWaiting(call) }
             }
         }
     }

@@ -11,6 +11,10 @@ namespace ConnectorControl.Core.State;
 /// every <see cref="ProgressInterval"/> and, at <see cref="ConfirmationWait"/>, that the answer is
 /// still awaited.
 ///
+/// One per app: every connection's <c>ControlToolHost</c> shares the one instance. Claude Desktop opens
+/// two relay connections, one for chat and one for its agent mode, beside any command-line one, and
+/// the write queue that runs changes one at a time is this instance's.
+///
 /// Mirror: Sources/ConnectorControlState/Control/ControlTools.swift
 /// </summary>
 public sealed partial class ControlTools
@@ -207,12 +211,13 @@ public sealed partial class ControlTools
                                 Finish(call, ControlResult.Refusal(NoQuestionError));
                                 return;
                             }
+                            // The wait starts before the question is put: the app's dialog is modal, so
+                            // Confirm may return only once the user has answered, and the progress and
+                            // early answer run inside its run loop meanwhile. One answered at once leaves a
+                            // tick that finds the call answered and does nothing.
                             call.Asking = true;
+                            StartWaiting(call);
                             confirmer.Confirm(request, allowed => Answered(call, request, ready.Fingerprint, allowed));
-                            if (!call.Answered)
-                            {
-                                StartWaiting(call);
-                            }
                             break;
                     }
                     break;

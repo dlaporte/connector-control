@@ -17,6 +17,17 @@ public class ControlToolsSharingTests
         return rig;
     }
 
+    /// <summary>Runs everything the host delayed, as time passing would: a restart due, and the tick a
+    /// question answered at once leaves behind, which finds its call answered and does nothing.</summary>
+    private static void RunDelays(ControlRig rig)
+    {
+        while (rig.H.Delays.Pending.Count > 0)
+        {
+            rig.H.Delays.RunNext();
+        }
+        rig.H.Drain();
+    }
+
     /// <summary>Nothing in <paramref name="text"/> that a line would show as an escape: nothing that breaks a
     /// line, or reorders or hides text.</summary>
     private static void AssertPlain(string text) => Assert.DoesNotContain(text, c => ControlText.Escape(c) is not null);
@@ -603,18 +614,18 @@ public class ControlToolsSharingTests
         Assert.Equal(ControlResult.Refusal(ControlTools.DeclinedError), rig.Call("restart_claude"));
         Assert.Equal(new ConfirmationRequest(ControlTools.RestartItselfTitle, ControlTools.RestartMessage, [], null),
             rig.Confirmer.Requests[^1]);
-        Assert.Equal(0, rig.H.Claude.RestartCalls);
         // A declined restart leaves nothing for later.
-        Assert.Empty(rig.H.Delays.Pending);
+        Assert.DoesNotContain(TimeSpan.FromSeconds(ControlTools.RestartDelay), rig.H.Delays.Pending.Select(pending => pending.Delay));
+        RunDelays(rig);
+        Assert.Equal(0, rig.H.Claude.RestartCalls);
         Assert.Equal(ControlTools.RestartingText, rig.Call("restart_claude", caller: new ControlCaller.Cli())?.Text);
-        rig.H.Delays.RunNext();
+        RunDelays(rig);
         Assert.Equal(1, rig.H.Claude.RestartCalls);
         Assert.Single(rig.Confirmer.Requests);
         rig.Confirmer.Scripted = true;
         rig.Call("restart_claude", caller: new ControlCaller.Relay("Cursor"));
-        rig.H.Delays.RunNext();
-        rig.H.Drain();
         Assert.Equal(ControlTools.RestartTitle("Cursor"), rig.Confirmer.Requests[^1].Title);
+        RunDelays(rig);
         Assert.Equal(2, rig.H.Claude.RestartCalls);
         // A restart is asked about, never announced.
         Assert.Empty(rig.H.Notifier.Sent);
@@ -630,9 +641,7 @@ public class ControlToolsSharingTests
         rig.H.Dialogs.NextConfirm = false;
         rig.Call("restart_claude");
         rig.Call("restart_claude", caller: new ControlCaller.Cli());
-        rig.H.Delays.RunNext();
-        rig.H.Delays.RunNext();
-        rig.H.Drain();
+        RunDelays(rig);
         Assert.Equal(2, rig.H.Claude.RestartCalls);
         Assert.Empty(rig.H.Dialogs.Confirms);
     }
@@ -646,7 +655,13 @@ public class ControlToolsSharingTests
         Assert.Equal(ControlTools.RestartingText, rig.Call("restart_claude")?.Text);
         // Answered, not yet restarted.
         Assert.Equal(0, rig.H.Claude.RestartCalls);
-        Assert.Equal([TimeSpan.FromSeconds(ControlTools.RestartDelay)], rig.H.Delays.Pending.Select(pending => pending.Delay));
+        // The wait's first tick, set before the question was put, then the restart.
+        Assert.Equal([TimeSpan.FromSeconds(ControlTools.ProgressInterval), TimeSpan.FromSeconds(ControlTools.RestartDelay)],
+            rig.H.Delays.Pending.Select(pending => pending.Delay));
+        rig.H.Delays.RunNext();
+        rig.H.Drain();
+        // The tick finds the call answered and does nothing.
+        Assert.Equal(0, rig.H.Claude.RestartCalls);
         rig.H.Delays.RunNext();
         rig.H.Drain();
         Assert.Equal(1, rig.H.Claude.RestartCalls);
