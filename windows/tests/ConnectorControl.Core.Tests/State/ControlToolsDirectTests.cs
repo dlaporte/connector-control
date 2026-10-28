@@ -1,3 +1,4 @@
+using ConnectorControl.Core.Services;
 using ConnectorControl.Core.State;
 using ConnectorControl.Core.Tests.TestSupport;
 
@@ -25,6 +26,54 @@ public class ControlToolsDirectTests
         Assert.False(rig.H.ClaudeServers().ContainsKey("aws-mcp"));
         Assert.False(rig.State.Store.Mcps["aws-mcp"].Enabled);
         Assert.Empty(rig.Confirmer.Requests);
+        // What Claude runs changed, so the user hears of it.
+        Assert.Equal([(Notifications.Title, ControlTools.TurnedOffNotification("Claude", "aws-mcp") + " " + ControlTools.RestartToApplyText,
+                (string?)Notifications.RestartCategory)],
+            rig.H.Notifier.Sent);
+    }
+
+    /// <summary>Claude's own switches change what Claude runs without anyone being asked, so the user hears
+    /// of each one that does, whatever the confirmation setting: on, off, and switching the
+    /// collection, the asker and the names as the gated tools' notifications show them.</summary>
+    [Fact]
+    public void ClaudesSwitchesThatChangeWhatItRunsAreAnnounced()
+    {
+        foreach (var confirm in new[] { true, false })
+        {
+            using var rig = new ControlRig(confirm: confirm);
+            const string work = "Work\n\u202Ez";
+            Assert.Null(rig.State.AddEmptyCollection(work));
+            Assert.False(rig.Call("set_connector_enabled", Args(("name", Text("aws-mcp")), ("enabled", JsonValue.Bool(false))))?.IsError);
+            Assert.False(rig.Call("set_connector_enabled", Args(("name", Text("aws-mcp")), ("enabled", JsonValue.Bool(true))),
+                new ControlCaller.Relay("Cursor"))?.IsError);
+            Assert.False(rig.Call("switch_collection", Args(("collection", Text(work))))?.IsError);
+            Assert.Equal(
+                [
+                    ControlTools.TurnedOffNotification("Claude", "aws-mcp"),
+                    ControlTools.TurnedOnNotification("Cursor", "aws-mcp"),
+                    ControlTools.SwitchedNotification("Claude", """Work\n\u{202E}z"""),
+                ],
+                rig.H.Notifier.Sent.Select(sent => sent.Body));
+            Assert.Empty(rig.Confirmer.Requests);
+        }
+    }
+
+    /// <summary>A switch that leaves what Claude runs as it was is not announced: one already in place, and
+    /// the command line's, which are the user's own.</summary>
+    [Fact]
+    public void ASwitchThatChangesNothingClaudeRunsOrComesFromTheCommandLineIsNotAnnounced()
+    {
+        using var rig = new ControlRig();
+        Assert.Null(rig.State.AddEmptyCollection("Work"));
+        Assert.False(rig.Call("set_connector_enabled", Args(("name", Text("aws-mcp")), ("enabled", JsonValue.Bool(true))))?.IsError);
+        Assert.False(rig.Call("switch_collection", Args(("collection", Text("Default"))))?.IsError);
+        // Nothing Claude runs changed.
+        Assert.Empty(rig.H.Notifier.Sent);
+        Assert.False(rig.Call("set_connector_enabled", Args(("name", Text("aws-mcp")), ("enabled", JsonValue.Bool(false))),
+            new ControlCaller.Cli())?.IsError);
+        Assert.False(rig.Call("switch_collection", Args(("collection", Text("Work"))), new ControlCaller.Cli())?.IsError);
+        Assert.Equal("Work", rig.State.ActiveCollection);
+        // The command line's changes are the user's.
         Assert.Empty(rig.H.Notifier.Sent);
     }
 
@@ -70,6 +119,8 @@ public class ControlToolsDirectTests
             + ControlTools.SavedNotAppliedText(rig.State.LastError!), result.Text);
         Assert.Equal(JsonValue.Bool(false), result.Structured.ValueAt(new JsonPointer(["applied"])));
         Assert.True(rig.State.ApplyRetryNeeded);
+        // What Claude runs did not change.
+        Assert.Empty(rig.H.Notifier.Sent);
     }
 
     [Fact]
@@ -416,5 +467,24 @@ public class ControlToolsDirectTests
         Assert.Equal(ControlTools.QueuedResult, queued.Result);
         rig.Confirmer.Answer(false);
         Assert.Equal([ControlTools.TurnedOffText("""a\nb\u{202E}c""", "Default")], rig.H.Notifier.Sent.Select(sent => sent.Body));
+    }
+
+    /// <summary>A switch Claude asked for that lands after its early answer and moves what Claude runs is
+    /// announced once, in its notification's words.</summary>
+    [Fact]
+    public void ALateSwitchThatChangesWhatClaudeRunsIsAnnouncedOnce()
+    {
+        using var rig = new ControlRig();
+        rig.Start("add_connector", Args(("name", Text("held")), ("config", JsonValue.Object(("command", Text("node"))))));
+        var queued = rig.Start("set_connector_enabled", Args(("name", Text("aws-mcp")), ("enabled", JsonValue.Bool(false))));
+        for (var tick = 1; tick <= 20 && rig.H.Delays.Pending.Count > 0; tick++)
+        {
+            rig.H.Delays.RunNext();
+        }
+        Assert.Equal(ControlTools.QueuedResult, queued.Result);
+        rig.Confirmer.Answer(false);
+        Assert.False(rig.State.Store.Mcps["aws-mcp"].Enabled);
+        Assert.Equal([ControlTools.TurnedOffNotification("Claude", "aws-mcp")], rig.H.Notifier.Sent.Select(sent => sent.Body));
+        Assert.Equal(1, queued.Completions);
     }
 }

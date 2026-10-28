@@ -8,9 +8,12 @@ import ConnectorControlCore
 /// Some change what Claude runs and say so, with a restart when one is due; the rest touch only this
 /// app's own lists and settings. They never ask, and say what they did and what follows from it.
 ///
-/// A direct change's answer is also what announces it when it lands after its caller was told it
-/// was still waiting, so it names connectors and collections as the gated tools' questions do:
-/// through `ControlText.escapedName(_:)`, since Claude chooses them.
+/// Switching a connector or the collection is the one direct change that can move what Claude runs,
+/// so when Claude's does, nobody having been asked, the user hears of it in a notification that names
+/// who asked, as the gated tools' do. Any other direct change's answer is what announces it when it
+/// lands after its caller was told it was still waiting, so answers and notifications name
+/// connectors and collections as the gated tools' questions do: through
+/// `ControlText.escapedName(_:)`, since Claude chooses them.
 extension ControlTools {
     public static let restartToUseText = "Restart Claude to use it."
     public static let restartToApplyText = "Restart Claude to apply the change."
@@ -23,6 +26,12 @@ extension ControlTools {
     public static func turnedOffText(_ name: String, _ collection: String) -> String { "Turned off “\(name)” in “\(collection)”." }
 
     public static func switchedText(_ collection: String) -> String { "Switched to “\(collection)”." }
+
+    public static func turnedOnNotification(_ asker: String, _ name: String) -> String { "\(asker) turned on “\(name)”." }
+
+    public static func turnedOffNotification(_ asker: String, _ name: String) -> String { "\(asker) turned off “\(name)”." }
+
+    public static func switchedNotification(_ asker: String, _ collection: String) -> String { "\(asker) switched to “\(collection)”." }
 
     public static func createdText(_ collection: String) -> String { "Created “\(collection)”." }
 
@@ -45,8 +54,8 @@ extension ControlTools {
     func prepare(_ name: String, _ arguments: ControlArguments, _ caller: ControlCaller) -> ControlStep {
         if let prepareOverride { return prepareOverride(name, arguments, caller) }
         switch name {
-        case "set_connector_enabled": return setEnabled(arguments)
-        case "switch_collection": return switchCollection(arguments)
+        case "set_connector_enabled": return setEnabled(arguments, caller.askerName)
+        case "switch_collection": return switchCollection(arguments, caller.askerName)
         case "create_collection": return createCollection(arguments)
         case "rename_collection": return renameCollection(arguments)
         case "duplicate_collection": return duplicateCollection(arguments)
@@ -76,10 +85,11 @@ extension ControlTools {
     /// write) while Claude runs an older config says to restart; one that could not write it says
     /// the change was saved and gives the app's own message. `collection` nil is a write that
     /// reaches Claude whatever is active; `touchesClaude` false is one that cannot reach it at all. The notification, for a change nobody was asked about,
-    /// carries the same restart sentence.
+    /// carries the same restart sentence. `announcing`: a direct change that is announced, with its
+    /// notification, when it moved what Claude runs, and carries none when it did not.
     func done(_ lines: [String], _ fields: [String: JSONValue], touching collection: String?,
               since mark: [String: JSONValue], restart: String, notification: String? = nil,
-              touchesClaude: Bool = true) -> ControlOutcome {
+              announcing: Bool = false, touchesClaude: Bool = true) -> ControlOutcome {
         var text = lines
         // A write that never touches Claude's config (a window's setting) must not report a retry
         // an earlier, unrelated write left pending.
@@ -100,12 +110,14 @@ extension ControlTools {
         var structured = fields
         structured["restartRequired"] = .bool(applied && state.needsClaudeRestart)
         structured["applied"] = .bool(!(reachesClaude && state.applyRetryNeeded))
+        let note = announcing && !applied ? nil : notification
         return ControlOutcome(
             result: ControlResult(structured: .object(structured), text: text.joined(separator: "\n"), isError: false),
-            notification: notification.map { note in then.map { note + " " + $0 } ?? note })
+            notification: note.map { note in then.map { note + " " + $0 } ?? note },
+            announces: announcing && applied)
     }
 
-    func setEnabled(_ arguments: ControlArguments) -> ControlStep {
+    func setEnabled(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
         let name = arguments.string("name") ?? ""
         let on = arguments.bool("enabled") ?? true
         // The active collection only, as the popover's switches act: it is the one Claude runs.
@@ -117,14 +129,18 @@ extension ControlTools {
         return .ready(nil, perform: { [self] in
             let mark = state.appliedServers
             state.setEnabled(name, on)
+            let shownAsker = ControlText.escapedName(asker)
             return done([on ? ControlTools.turnedOnText(shownName, shownCollection) : ControlTools.turnedOffText(shownName, shownCollection)],
                         ["collection": .string(collection), "name": .string(name), "enabled": .bool(on)],
                         touching: collection, since: mark,
-                        restart: on ? ControlTools.restartToUseText : ControlTools.restartToApplyText)
+                        restart: on ? ControlTools.restartToUseText : ControlTools.restartToApplyText,
+                        notification: on ? ControlTools.turnedOnNotification(shownAsker, shownName)
+                                         : ControlTools.turnedOffNotification(shownAsker, shownName),
+                        announcing: true)
         })
     }
 
-    func switchCollection(_ arguments: ControlArguments) -> ControlStep {
+    func switchCollection(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
         let collection = arguments.string("collection") ?? ""
         // AppState ignores an unknown name in silence, as the chip menu can never offer one;
         // a caller that typed it hears why nothing happened.
@@ -134,7 +150,8 @@ extension ControlTools {
             let mark = state.appliedServers
             state.switchCollection(to: collection)
             return done([ControlTools.switchedText(shown)], ["activeCollection": .string(collection)],
-                        touching: nil, since: mark, restart: ControlTools.restartToApplyText)
+                        touching: nil, since: mark, restart: ControlTools.restartToApplyText,
+                        notification: ControlTools.switchedNotification(ControlText.escapedName(asker), shown), announcing: true)
         })
     }
 

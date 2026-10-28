@@ -34,7 +34,9 @@ final class ControlGateMatrixTests: XCTestCase {
                         let relay = caller != .cli
                         let refused = relay && !integration
                         let asked = relay && integration && (gate == .alwaysConfirm || (gate == .gated && confirm))
-                        let announced = relay && integration && gate == .gated && !confirm
+                        // A direct change is announced when it moves what Claude runs, as switching
+                        // from Default to the empty Work does.
+                        let announced = relay && integration && (gate == .direct || (gate == .gated && !confirm))
                         XCTAssertEqual(result == .refusal(ControlTools.integrationOffError), refused, label)
                         XCTAssertEqual(!rig.confirmer.requests.isEmpty, asked, label)
                         XCTAssertEqual(!rig.h.notifier.sent.isEmpty, announced, label)

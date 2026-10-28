@@ -288,12 +288,13 @@ public sealed partial class ControlTools
     }
 
     /// <summary>Announces a change that landed when nobody else will hear of it: always for one made without
-    /// asking, and for any other once its caller has already been told it is still waiting, so a
-    /// change Claude asked for never lands unannounced. The command line's own changes are the
-    /// user's, and never announced. The tool's own notification says it, or else its answer.</summary>
+    /// asking, for a direct change that moved what Claude runs (<c>Announces</c>), and for any other once
+    /// its caller has already been told it is still waiting, so a change Claude asked for never lands
+    /// unannounced. The command line's own changes are the user's, and never announced. The tool's
+    /// own notification says it, or else its answer; it is posted once, however many of these hold.</summary>
     private void Announce(ToolCall call, ControlOutcome outcome, bool unasked)
     {
-        if (outcome.Result.IsError || call.Caller is ControlCaller.Cli || !(unasked || call.Delivered))
+        if (outcome.Result.IsError || call.Caller is ControlCaller.Cli || !(unasked || outcome.Announces || call.Delivered))
         {
             return;
         }
@@ -488,8 +489,10 @@ internal abstract record ControlStep
     public sealed record Ready(ConfirmationRequest? Request, Func<ControlOutcome> Perform, string? Fingerprint = null) : ControlStep;
 }
 
-/// <summary>What a performed write answers, and what a notification says about it when nobody was asked.</summary>
-internal sealed record ControlOutcome(ControlResult Result, string? Notification);
+/// <summary>What a performed write answers, and what a notification says about it when nobody was asked.
+/// <c>Announces</c>: a direct change that moved what Claude runs, which the user hears of although
+/// nobody was asked and its caller has its answer.</summary>
+internal sealed record ControlOutcome(ControlResult Result, string? Notification, bool Announces = false);
 
 /// <summary>A call's arguments by name. The schema check has already run, so a present argument has the
 /// type its schema declares.</summary>

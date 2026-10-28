@@ -16,7 +16,44 @@ final class ControlToolsDirectTests: XCTestCase {
         XCTAssertNil(try rig.h.claudeServers()["aws-mcp"])
         XCTAssertEqual(rig.state.store.mcps["aws-mcp"]?.enabled, false)
         XCTAssertTrue(rig.confirmer.requests.isEmpty, "a switch is a direct change: nobody is asked")
-        XCTAssertTrue(rig.h.notifier.sent.isEmpty)
+        XCTAssertEqual(rig.h.notifier.sent, [FakeNotifier.Sent(
+            title: Notifications.title, body: ControlTools.turnedOffNotification("Claude", "aws-mcp") + " " + ControlTools.restartToApplyText,
+            category: Notifications.restartCategory)], "what Claude runs changed, so the user hears of it")
+    }
+
+    /// Claude's own switches change what Claude runs without anyone being asked, so the user hears
+    /// of each one that does, whatever the confirmation setting: on, off, and switching the
+    /// collection, the asker and the names as the gated tools' notifications show them.
+    func testClaudesSwitchesThatChangeWhatItRunsAreAnnounced() {
+        for confirm in [true, false] {
+            let rig = ControlRig(confirm: confirm); defer { rig.dispose() }
+            let work = "Work\n\u{202E}z"
+            XCTAssertNil(rig.state.addEmptyCollection(named: work))
+            XCTAssertEqual(rig.call("set_connector_enabled", ["name": .string("aws-mcp"), "enabled": .bool(false)])?.isError, false)
+            XCTAssertEqual(rig.call("set_connector_enabled", ["name": .string("aws-mcp"), "enabled": .bool(true)],
+                                    as: .relay(clientName: "Cursor"))?.isError, false)
+            XCTAssertEqual(rig.call("switch_collection", ["collection": .string(work)])?.isError, false)
+            XCTAssertEqual(rig.h.notifier.sent.map(\.body), [
+                ControlTools.turnedOffNotification("Claude", "aws-mcp"),
+                ControlTools.turnedOnNotification("Cursor", "aws-mcp"),
+                ControlTools.switchedNotification("Claude", #"Work\n\u{202E}z"#),
+            ], "confirm:\(confirm)")
+            XCTAssertTrue(rig.confirmer.requests.isEmpty, "confirm:\(confirm)")
+        }
+    }
+
+    /// A switch that leaves what Claude runs as it was is not announced: one already in place, and
+    /// the command line's, which are the user's own.
+    func testASwitchThatChangesNothingClaudeRunsOrComesFromTheCommandLineIsNotAnnounced() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        XCTAssertNil(rig.state.addEmptyCollection(named: "Work"))
+        XCTAssertEqual(rig.call("set_connector_enabled", ["name": .string("aws-mcp"), "enabled": .bool(true)])?.isError, false)
+        XCTAssertEqual(rig.call("switch_collection", ["collection": .string("Default")])?.isError, false)
+        XCTAssertTrue(rig.h.notifier.sent.isEmpty, "nothing Claude runs changed")
+        XCTAssertEqual(rig.call("set_connector_enabled", ["name": .string("aws-mcp"), "enabled": .bool(false)], as: .cli)?.isError, false)
+        XCTAssertEqual(rig.call("switch_collection", ["collection": .string("Work")], as: .cli)?.isError, false)
+        XCTAssertEqual(rig.state.activeCollection, "Work")
+        XCTAssertTrue(rig.h.notifier.sent.isEmpty, "the command line's changes are the user's")
     }
 
     func testTurningOnNamesNoRestartWhileClaudeIsNotRunning() throws {
@@ -54,6 +91,7 @@ final class ControlToolsDirectTests: XCTestCase {
                        + ControlTools.savedNotAppliedText(try XCTUnwrap(rig.state.lastError)))
         XCTAssertEqual(result.structured.value(at: JSONPointer(["applied"])), .bool(false))
         XCTAssertTrue(rig.state.applyRetryNeeded)
+        XCTAssertTrue(rig.h.notifier.sent.isEmpty, "what Claude runs did not change")
     }
 
     func testSwitchingCollections() throws {
@@ -342,5 +380,19 @@ final class ControlToolsDirectTests: XCTestCase {
         XCTAssertEqual(queued.result, ControlTools.queuedResult)
         rig.confirmer.answer(false)
         XCTAssertEqual(rig.h.notifier.sent.map(\.body), [ControlTools.turnedOffText(#"a\nb\u{202E}c"#, "Default")])
+    }
+
+    /// A switch Claude asked for that lands after its early answer and moves what Claude runs is
+    /// announced once, in its notification's words.
+    func testALateSwitchThatChangesWhatClaudeRunsIsAnnouncedOnce() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        rig.start("add_connector", ["name": .string("held"), "config": .object(["command": .string("node")])])
+        let queued = rig.start("set_connector_enabled", ["name": .string("aws-mcp"), "enabled": .bool(false)])
+        for _ in 1...20 where !rig.h.delays.pending.isEmpty { rig.h.delays.runNext() }
+        XCTAssertEqual(queued.result, ControlTools.queuedResult)
+        rig.confirmer.answer(false)
+        XCTAssertEqual(rig.state.store.mcps["aws-mcp"]?.enabled, false)
+        XCTAssertEqual(rig.h.notifier.sent.map(\.body), [ControlTools.turnedOffNotification("Claude", "aws-mcp")])
+        XCTAssertEqual(queued.completions, 1)
     }
 }

@@ -588,6 +588,9 @@
   },
   "ControlTools.switch_collection.cliUsage": "use <collection>",
   "ControlTools.switch_collection.description": "Make a collection active. Claude runs its connectors after its next restart.",
+  "ControlTools.switchedNotification": {
+    "format": "{0} switched to “{1}”."
+  },
   "ControlTools.switchedText": {
     "format": "Switched to “{0}”."
   },
@@ -617,8 +620,14 @@
   "ControlTools.titles.subscribe": "Subscribe to collection",
   "ControlTools.titles.switch_collection": "Switch collection",
   "ControlTools.titles.update_connector": "Change connector",
+  "ControlTools.turnedOffNotification": {
+    "format": "{0} turned off “{1}”."
+  },
   "ControlTools.turnedOffText": {
     "format": "Turned off “{0}” in “{1}”."
+  },
+  "ControlTools.turnedOnNotification": {
+    "format": "{0} turned on “{1}”."
   },
   "ControlTools.turnedOnText": {
     "format": "Turned on “{0}” in “{1}”."

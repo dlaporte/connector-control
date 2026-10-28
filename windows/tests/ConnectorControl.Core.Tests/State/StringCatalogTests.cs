@@ -186,8 +186,11 @@ public class StringCatalogTests
         ["ControlTools.subscribedNotification"] = ["X", "Y", "Z"],
         ["ControlTools.subscribedText"] = ["X", "Y"],
         ["ControlTools.switchValueError"] = ["X"],
+        ["ControlTools.switchedNotification"] = ["X", "Y"],
         ["ControlTools.switchedText"] = ["X"],
+        ["ControlTools.turnedOffNotification"] = ["X", "Y"],
         ["ControlTools.turnedOffText"] = ["X", "Y"],
+        ["ControlTools.turnedOnNotification"] = ["X", "Y"],
         ["ControlTools.turnedOnText"] = ["X", "Y"],
         ["ControlTools.unchangedError"] = ["X"],
         ["ControlTools.unknownToolError"] = ["X"],
@@ -562,10 +565,13 @@ public class StringCatalogTests
         actual["ControlTools.subscribedNotification"] = ControlTools.SubscribedNotification("X", "Y", "Z");
         actual["ControlTools.subscribedText"] = ControlTools.SubscribedText("X", "Y");
         actual["ControlTools.switchValueError"] = ControlTools.SwitchValueError("X");
+        actual["ControlTools.switchedNotification"] = ControlTools.SwitchedNotification("X", "Y");
         actual["ControlTools.switchedText"] = ControlTools.SwitchedText("X");
         actual["ControlTools.takesEffectFooter"] = ControlTools.TakesEffectFooter;
         actual["ControlTools.textKind"] = ControlTools.TextKind;
+        actual["ControlTools.turnedOffNotification"] = ControlTools.TurnedOffNotification("X", "Y");
         actual["ControlTools.turnedOffText"] = ControlTools.TurnedOffText("X", "Y");
+        actual["ControlTools.turnedOnNotification"] = ControlTools.TurnedOnNotification("X", "Y");
         actual["ControlTools.turnedOnText"] = ControlTools.TurnedOnText("X", "Y");
         actual["ControlTools.unchangedError"] = ControlTools.UnchangedError("X");
         actual["ControlTools.unknownToolError"] = ControlTools.UnknownToolError("X");

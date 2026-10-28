@@ -227,11 +227,12 @@ public final class ControlTools {
     }
 
     /// Announces a change that landed when nobody else will hear of it: always for one made without
-    /// asking, and for any other once its caller has already been told it is still waiting, so a
-    /// change Claude asked for never lands unannounced. The command line's own changes are the
-    /// user's, and never announced. The tool's own notification says it, or else its answer.
+    /// asking, for a direct change that moved what Claude runs (`announces`), and for any other once
+    /// its caller has already been told it is still waiting, so a change Claude asked for never lands
+    /// unannounced. The command line's own changes are the user's, and never announced. The tool's
+    /// own notification says it, or else its answer; it is posted once, however many of these hold.
     private func announce(_ call: Call, _ outcome: ControlOutcome, unasked: Bool) {
-        guard !outcome.result.isError, call.caller != .cli, unasked || call.delivered else { return }
+        guard !outcome.result.isError, call.caller != .cli, unasked || outcome.announces || call.delivered else { return }
         // The Windows mirror catches around this: a C# notifier can throw, and Swift's does not. The
         // change has applied whatever the notifier does, so its answer stays a success.
         state.notifyClaudeChange(outcome.notification ?? outcome.result.text)
@@ -377,9 +378,12 @@ enum ControlStep {
 }
 
 /// What a performed write answers, and what a notification says about it when nobody was asked.
+/// `announces`: a direct change that moved what Claude runs, which the user hears of although
+/// nobody was asked and its caller has its answer.
 struct ControlOutcome {
     let result: ControlResult
     let notification: String?
+    var announces = false
 }
 
 /// A call's arguments by name. The schema check has already run, so a present argument has the

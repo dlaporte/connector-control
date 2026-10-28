@@ -51,7 +51,9 @@ public class ControlGateMatrixTests
                         var relay = caller is not ControlCaller.Cli;
                         var refused = relay && !integration;
                         var asked = relay && integration && (gate == ControlGateClass.AlwaysConfirm || (gate == ControlGateClass.Gated && confirm));
-                        var announced = relay && integration && gate == ControlGateClass.Gated && !confirm;
+                        // A direct change is announced when it moves what Claude runs, as switching
+                        // from Default to the empty Work does.
+                        var announced = relay && integration && (gate == ControlGateClass.Direct || (gate == ControlGateClass.Gated && !confirm));
                         Assert.True(refused == (result == ControlResult.Refusal(ControlTools.IntegrationOffError)), label);
                         Assert.True(asked == (rig.Confirmer.Requests.Count > 0), label);
                         Assert.True(announced == (rig.H.Notifier.Sent.Count > 0), label);

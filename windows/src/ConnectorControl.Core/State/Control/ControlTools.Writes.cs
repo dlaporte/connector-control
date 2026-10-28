@@ -8,9 +8,12 @@ namespace ConnectorControl.Core.State;
 /// Some change what Claude runs and say so, with a restart when one is due; the rest touch only this
 /// app's own lists and settings. They never ask, and say what they did and what follows from it.
 ///
-/// A direct change's answer is also what announces it when it lands after its caller was told it
-/// was still waiting, so it names connectors and collections as the gated tools' questions do:
-/// through <see cref="ControlText.EscapedName"/>, since Claude chooses them.
+/// Switching a connector or the collection is the one direct change that can move what Claude runs,
+/// so when Claude's does, nobody having been asked, the user hears of it in a notification that names
+/// who asked, as the gated tools' do. Any other direct change's answer is what announces it when it
+/// lands after its caller was told it was still waiting, so answers and notifications name
+/// connectors and collections as the gated tools' questions do: through
+/// <see cref="ControlText.EscapedName"/>, since Claude chooses them.
 ///
 /// Mirror: Sources/ConnectorControlState/Control/ControlTools+Writes.swift
 /// </summary>
@@ -27,6 +30,12 @@ public sealed partial class ControlTools
     public static string TurnedOffText(string name, string collection) => $"Turned off “{name}” in “{collection}”.";
 
     public static string SwitchedText(string collection) => $"Switched to “{collection}”.";
+
+    public static string TurnedOnNotification(string asker, string name) => $"{asker} turned on “{name}”.";
+
+    public static string TurnedOffNotification(string asker, string name) => $"{asker} turned off “{name}”.";
+
+    public static string SwitchedNotification(string asker, string collection) => $"{asker} switched to “{collection}”.";
 
     public static string CreatedText(string collection) => $"Created “{collection}”.";
 
@@ -54,8 +63,8 @@ public sealed partial class ControlTools
         }
         switch (name)
         {
-            case "set_connector_enabled": return SetEnabled(arguments);
-            case "switch_collection": return SwitchCollection(arguments);
+            case "set_connector_enabled": return SetEnabled(arguments, caller.AskerName);
+            case "switch_collection": return SwitchCollection(arguments, caller.AskerName);
             case "create_collection": return CreateCollection(arguments);
             case "rename_collection": return RenameCollection(arguments);
             case "duplicate_collection": return DuplicateCollection(arguments);
@@ -85,10 +94,11 @@ public sealed partial class ControlTools
     /// before the write) while Claude runs an older config says to restart; one that could not write it says
     /// the change was saved and gives the app's own message. <paramref name="collection"/> null is a write that
     /// reaches Claude whatever is active; <paramref name="touchesClaude"/> false is one that cannot reach it at all. The notification, for a change nobody was asked about,
-    /// carries the same restart sentence.</summary>
+    /// carries the same restart sentence. <paramref name="announcing"/>: a direct change that is announced, with its
+    /// notification, when it moved what Claude runs, and carries none when it did not.</summary>
     internal ControlOutcome Done(List<string> lines, IReadOnlyList<(string Key, JsonValue Value)> fields, string? collection,
                                  IReadOnlyDictionary<string, JsonValue> mark, string restart, string? notification = null,
-                                 bool touchesClaude = true)
+                                 bool announcing = false, bool touchesClaude = true)
     {
         var text = lines.ToList();
         // A write that never touches Claude's config (a window's setting) must not report a retry
@@ -121,12 +131,14 @@ public sealed partial class ControlTools
             ("restartRequired", JsonValue.Bool(applied && state.NeedsClaudeRestart)),
             ("applied", JsonValue.Bool(!(reachesClaude && state.ApplyRetryNeeded))),
         ]).ToArray();
+        var note = announcing && !applied ? null : notification;
         return new ControlOutcome(
             new ControlResult(JsonValue.Object(structured), string.Join("\n", text), false),
-            notification is null ? null : then is null ? notification : notification + " " + then);
+            note is null ? null : then is null ? note : note + " " + then,
+            Announces: announcing && applied);
     }
 
-    private ControlStep SetEnabled(ControlArguments arguments)
+    private ControlStep SetEnabled(ControlArguments arguments, string asker)
     {
         var name = arguments.String("name") ?? "";
         var on = arguments.Bool("enabled") ?? true;
@@ -141,13 +153,16 @@ public sealed partial class ControlTools
         {
             var mark = state.AppliedServers;
             state.SetEnabled(name, on);
+            var shownAsker = ControlText.EscapedName(asker);
             return Done([on ? TurnedOnText(shownName, shownCollection) : TurnedOffText(shownName, shownCollection)],
                 [("collection", JsonValue.String(collection)), ("name", JsonValue.String(name)), ("enabled", JsonValue.Bool(on))],
-                collection, mark, on ? RestartToUseText : RestartToApplyText);
+                collection, mark, on ? RestartToUseText : RestartToApplyText,
+                notification: on ? TurnedOnNotification(shownAsker, shownName) : TurnedOffNotification(shownAsker, shownName),
+                announcing: true);
         });
     }
 
-    private ControlStep SwitchCollection(ControlArguments arguments)
+    private ControlStep SwitchCollection(ControlArguments arguments, string asker)
     {
         var collection = arguments.String("collection") ?? "";
         // AppState ignores an unknown name in silence, as the chip menu can never offer one;
@@ -162,7 +177,8 @@ public sealed partial class ControlTools
             var mark = state.AppliedServers;
             state.SwitchCollection(collection);
             return Done([SwitchedText(shown)], [("activeCollection", JsonValue.String(collection))],
-                null, mark, RestartToApplyText);
+                null, mark, RestartToApplyText,
+                notification: SwitchedNotification(ControlText.EscapedName(asker), shown), announcing: true);
         });
     }
 

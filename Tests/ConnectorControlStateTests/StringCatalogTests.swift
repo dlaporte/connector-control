@@ -180,8 +180,11 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.subscribedNotification": ["X", "Y", "Z"],
         "ControlTools.subscribedText": ["X", "Y"],
         "ControlTools.switchValueError": ["X"],
+        "ControlTools.switchedNotification": ["X", "Y"],
         "ControlTools.switchedText": ["X"],
+        "ControlTools.turnedOffNotification": ["X", "Y"],
         "ControlTools.turnedOffText": ["X", "Y"],
+        "ControlTools.turnedOnNotification": ["X", "Y"],
         "ControlTools.turnedOnText": ["X", "Y"],
         "ControlTools.unchangedError": ["X"],
         "ControlTools.unknownToolError": ["X"],
@@ -553,10 +556,13 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.subscribedNotification"] = ControlTools.subscribedNotification("X", "Y", "Z")
         actual["ControlTools.subscribedText"] = ControlTools.subscribedText("X", "Y")
         actual["ControlTools.switchValueError"] = ControlTools.switchValueError("X")
+        actual["ControlTools.switchedNotification"] = ControlTools.switchedNotification("X", "Y")
         actual["ControlTools.switchedText"] = ControlTools.switchedText("X")
         actual["ControlTools.takesEffectFooter"] = ControlTools.takesEffectFooter
         actual["ControlTools.textKind"] = ControlTools.textKind
+        actual["ControlTools.turnedOffNotification"] = ControlTools.turnedOffNotification("X", "Y")
         actual["ControlTools.turnedOffText"] = ControlTools.turnedOffText("X", "Y")
+        actual["ControlTools.turnedOnNotification"] = ControlTools.turnedOnNotification("X", "Y")
         actual["ControlTools.turnedOnText"] = ControlTools.turnedOnText("X", "Y")
         actual["ControlTools.unchangedError"] = ControlTools.unchangedError("X")
         actual["ControlTools.unknownToolError"] = ControlTools.unknownToolError("X")
