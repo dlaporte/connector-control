@@ -14,15 +14,9 @@ public sealed class ConsoleEncodingScope : IDisposable
     private readonly Action<Encoding> set;
     private Encoding? previous;
 
-    /// <summary><paramref name="change"/> false leaves the encoding alone — for output that is not on a
-    /// console — and so restores nothing.</summary>
-    public ConsoleEncodingScope(Func<Encoding> get, Action<Encoding> set, bool change = true)
+    public ConsoleEncodingScope(Func<Encoding> get, Action<Encoding> set)
     {
         this.set = set;
-        if (!change)
-        {
-            return;
-        }
         try
         {
             var before = get();

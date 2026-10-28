@@ -10,7 +10,7 @@ public class ConsoleEncodingScopeTests
     private static readonly Encoding Original = Encoding.Latin1;
 
     [Fact]
-    public void TheEncodingIsPutBackOnceHoweverOftenAndFromWhicheverThread()
+    public void TheEncodingIsPutBackOnceHoweverOftenItIsAskedFor()
     {
         var current = Original;
         var sets = 0;
@@ -21,17 +21,6 @@ public class ConsoleEncodingScopeTests
         scope.Dispose();
         Assert.Same(Original, current);
         Assert.Equal(2, sets);
-    }
-
-    [Fact]
-    public void ABeginningThatNeverChangedItRestoresNothing()
-    {
-        var current = Original;
-        var sets = 0;
-        using (new ConsoleEncodingScope(() => current, e => { current = e; sets++; }, change: false))
-        {
-        }
-        Assert.Equal(0, sets);
     }
 
     [Fact]

@@ -17,6 +17,7 @@ internal sealed class ConsoleText : IDisposable
     private readonly Stream stdout = Console.OpenStandardOutput();
     private readonly Stream stderr = Console.OpenStandardError();
     private ConsoleEncodingScope? encoding;
+    private volatile bool cancelled;
 
     /// <summary>Starts printing as UTF-8 on a console. The relay does not call this: Claude's streams are pipes.</summary>
     public void UseUtf8()
@@ -25,12 +26,22 @@ internal sealed class ConsoleText : IDisposable
         {
             return;
         }
-        encoding = new ConsoleEncodingScope(() => Console.OutputEncoding, e => Console.OutputEncoding = e);
-        // The handler leaves termination to the usual exit; the code page is put back first.
+        // Registered before the code page changes and removed after it is put back, so no Ctrl-C falls
+        // between the two. The handler leaves termination to the usual exit; the code page is put back first.
         Console.CancelKeyPress += OnCancel;
+        encoding = new ConsoleEncodingScope(() => Console.OutputEncoding, e => Console.OutputEncoding = e);
+        if (cancelled)
+        {
+            // A Ctrl-C that came while the page was being changed found nothing to put back.
+            encoding.Restore();
+        }
     }
 
-    private void OnCancel(object? sender, ConsoleCancelEventArgs e) => encoding?.Restore();
+    private void OnCancel(object? sender, ConsoleCancelEventArgs e)
+    {
+        cancelled = true;
+        encoding?.Restore();
+    }
 
     public void Write(ControlOutput output)
     {
@@ -61,8 +72,8 @@ internal sealed class ConsoleText : IDisposable
 
     public void Dispose()
     {
-        Console.CancelKeyPress -= OnCancel;
         encoding?.Dispose();
+        Console.CancelKeyPress -= OnCancel;
         stdout.Dispose();
         stderr.Dispose();
     }

@@ -28,7 +28,9 @@ internal static class Program
         {
             // Whatever else goes wrong ends as the tool's one other failure does, in a line and not .NET's
             // stack trace, and with the console put back by the dispose below. The Mac has no unhandled
-            // exceptions to catch: its errors are all handled where they arise.
+            // exceptions to catch: its errors are all handled where they arise. The trade-off: an unexpected
+            // error is reported as unreachable (exit 3), not with its detail; the Mac's equivalent is a trap.
+            console.UseUtf8();
             console.Write(ControlOutput.Unreachable(ControlClient.UnreachableError));
             return ControlOutput.UnreachableExit;
         }
@@ -47,6 +49,12 @@ internal static class Program
         ControlClient Client(Action? announce) => new(() => ControlPipe.TryConnect(pipe, ConnectWait), launch, announce);
         switch (invocation)
         {
+            case ControlInvocation.Help:
+                return Emit(console, new ControlOutput(ControlTools.HelpText(), null, ControlOutput.DoneExit));
+            case ControlInvocation.Version:
+                return Emit(console, new ControlOutput(ControlCommandLine.VersionLine(version), null, ControlOutput.DoneExit));
+            case ControlInvocation.Usage usage:
+                return Emit(console, ControlOutput.Usage(usage.Message));
             case ControlInvocation.Relay:
                 // Claude's streams are pipes: bytes, never the console's code page. The relay's stdout is
                 // Claude's protocol stream: nothing of ours goes on it.
@@ -55,12 +63,6 @@ internal static class Program
                 {
                     return new ControlRelayRunner(Client(announce: null), version, input, output).Run();
                 }
-            case ControlInvocation.Help:
-                return Emit(console, new ControlOutput(ControlTools.HelpText(), null, ControlOutput.DoneExit));
-            case ControlInvocation.Version:
-                return Emit(console, new ControlOutput(ControlCommandLine.VersionLine(version), null, ControlOutput.DoneExit));
-            case ControlInvocation.Usage usage:
-                return Emit(console, ControlOutput.Usage(usage.Message));
             case ControlInvocation.Call call:
                 console.UseUtf8();
                 return Emit(console, Run(call, Client(() => console.Error(ControlClient.StartingText)), version, console));
