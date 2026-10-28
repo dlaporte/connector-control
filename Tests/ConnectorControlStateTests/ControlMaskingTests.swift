@@ -154,7 +154,7 @@ final class ControlMaskingTests: XCTestCase {
             "command   docker",
             "args      run -e API_KEY=hunter2 --token abc https://u:pw@h.example/x?k=v --header X-Key: ••• --static-oauth-client-info ••• img",
             "env       GITHUB_TOKEN = ••• (set)",
-            "other     apiKey",
+            "apiKey    ••• (set)",
         ])
         let oauth = RemotePattern.encode(RemoteConfig(url: "https://h.example/mcp?tenant=acme",
                                                       auth: .oauthClient(clientID: "cid", clientSecret: "csec", scopes: "read")))
@@ -179,6 +179,41 @@ final class ControlMaskingTests: XCTestCase {
         for secret in [token, "hval", "csec", "topsecret", "t0k"] { XCTAssertFalse(shown.contains(secret), secret) }
         XCTAssertEqual(ControlMasking.changeLines(from: local("node", []), to: adding("apiKey", .string("topsecret"), to: local("node", [])),
                                                   exposure: .dialog), ["apiKey", "  + ••• (set)"])
+    }
+
+    /// What would run includes every key, not only those the lines model: a key no field shows
+    /// gets a line of its own, and so does an argument mcp-remote's decoded form does not carry.
+    func testCodeLinesShowEveryKeyAndArgumentTheFieldsDoNot() {
+        let cwd = adding("cwd", .string("/srv/app"), to: local("node", ["s.js"]))
+        XCTAssertEqual(ControlMasking.codeLines(cwd, exposure: .dialog), ["command   node", "args      s.js", "cwd       /srv/app"])
+        let sse = adding("type", .string("sse"), to: notion)
+        XCTAssertEqual(ControlMasking.codeLines(sse, exposure: .dialog), [
+            "type      remote",
+            "          sse",
+            "url       https://mcp.notion.com/mcp?x=1",
+            "headers   Authorization = ••• (set)",
+            "          X-Empty = needs your value",
+        ])
+        let bridged = adding("cwd", .string("/tmp"),
+                             to: remote(["--static-oauth-client-metadata", #"{"redirect_uri":"https://evil.example/cb"}"#]))
+        XCTAssertEqual(ControlMasking.codeLines(bridged, exposure: .dialog), [
+            "type   remote, through mcp-remote",
+            "url    https://h.example/mcp",
+            #"args   --static-oauth-client-metadata {"redirect_uri":"https://evil.example/cb"}"#,
+            "cwd    /tmp",
+        ])
+        let secret: JSONValue = .object(["command": .string("node"), "apiKey": .string("topsecret"),
+                                         "auth": .object(["user": .string("bob"), "pass": .string("hunter2")])])
+        XCTAssertEqual(ControlMasking.codeLines(secret, exposure: .dialog),
+                       ["command   node", #"apiKey    ••• (set)"#, #"auth      {"pass":"set","user":"set"}"#])
+        for exposure in [ControlMasking.Exposure.masked, .dialog, .revealed] {
+            let lines = [cwd, sse, bridged, secret].map { ControlMasking.codeLines($0, exposure: exposure).joined(separator: "\n") }
+            XCTAssertTrue(lines[0].contains("cwd       /srv/app"), "\(exposure)")
+            XCTAssertTrue(lines[1].contains("          sse"), "\(exposure)")
+            XCTAssertTrue(lines[2].contains("args   --static-oauth-client-metadata ") && lines[2].contains("cwd    /tmp"), "\(exposure)")
+            XCTAssertTrue(lines[3].contains("apiKey    "), "\(exposure)")
+            XCTAssertEqual(lines[3].contains("topsecret") || lines[3].contains("hunter2"), exposure == .revealed, "\(exposure)")
+        }
     }
 
     func testANonStringEnvironmentOrHeaderValueReadsAsSet() {

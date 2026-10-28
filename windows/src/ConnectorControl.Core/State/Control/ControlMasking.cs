@@ -395,20 +395,33 @@ public static class ControlMasking
 
     /// <summary>What a connector runs, one field per line, for <c>get_connector</c>'s text and the confirmation
     /// dialogs: a connector reached through mcp-remote by its URL and how it signs in; one reached
-    /// by URL alone by its URL and headers; anything else by its command, arguments and environment.</summary>
-    public static IReadOnlyList<string> CodeLines(JsonValue config, Exposure exposure = Exposure.Masked) =>
-        ControlText.Labelled(View(config, exposure).Fields.SelectMany(field =>
-            field.Values.Select((value, index) => (index == 0 ? field.Label : "", value.Shown))).ToList());
+    /// by URL alone by its URL and headers; anything else by its command, arguments and environment.
+    /// Every top-level key those do not show in full follows on a line of its own, so the add
+    /// dialog shows everything that would run. Fields that share a label share its line.</summary>
+    public static IReadOnlyList<string> CodeLines(JsonValue config, Exposure exposure = Exposure.Masked)
+    {
+        var all = Fields(config, exposure);
+        var labels = new List<string>();
+        foreach (var field in all)
+        {
+            if (!labels.Contains(field.Label))
+            {
+                labels.Add(field.Label);
+            }
+        }
+        return ControlText.Labelled(labels.SelectMany(label =>
+            all.Where(field => field.Label == label).SelectMany(field => field.Values).Select((value, index) =>
+                (index == 0 ? label : "", value.Shown))).ToList());
+    }
 
     /// <summary>The fields an edit changes, for the change confirmation: each changed field's label, then
     /// "− " before each value it loses and "+ " before each it gains. A secret that changed shows
     /// as changed although both sides read "••• (set)". Every difference between the two configs
-    /// shows: a top-level key the fields do not show in full gets a field of its own, labelled with
-    /// its name, in place of the code lines' list of other keys.</summary>
+    /// shows, as every key shows on the code lines.</summary>
     public static IReadOnlyList<string> ChangeLines(JsonValue before, JsonValue after, Exposure exposure = Exposure.Masked)
     {
-        var old = ChangeFields(before, exposure);
-        var @new = ChangeFields(after, exposure);
+        var old = Fields(before, exposure);
+        var @new = Fields(after, exposure);
         var labels = new List<string>();
         foreach (var field in @new.Concat(old))
         {
@@ -443,9 +456,9 @@ public static class ControlMasking
     private static bool Same(string one, string other) =>
         string.Equals(one, other, StringComparison.Ordinal);
 
-    /// <summary>The fields <see cref="ChangeLines"/> compares: the code lines' fields but the list of other keys, then a
-    /// field for each top-level key those do not show in full.</summary>
-    private static List<Field> ChangeFields(JsonValue config, Exposure exposure)
+    /// <summary>The fields the code lines and change lines show: the shape's own, then a field for each
+    /// top-level key those do not show in full.</summary>
+    private static List<Field> Fields(JsonValue config, Exposure exposure)
     {
         if (config.Kind != JsonKind.Object)
         {
@@ -453,7 +466,7 @@ public static class ControlMasking
         }
         var (fields, shown) = View(config, exposure);
         var properties = config.ObjectProperties;
-        return fields.Where(field => field.Label != OtherLabel).Concat(properties.Keys.Where(key => !shown.Contains(key))
+        return fields.Concat(properties.Keys.Where(key => !shown.Contains(key))
             .Order(StringComparer.Ordinal)
             .Select(key =>
                 // Raw with its key, so it never matches a field's raw under the same label (a
@@ -642,7 +655,7 @@ public static class ControlMasking
         return (fields, shown);
     }
 
-    /// <summary>Anything else: its command, arguments and environment, and the names of its other keys.</summary>
+    /// <summary>Anything else: its command, arguments and environment.</summary>
     private static (List<Field> Fields, HashSet<string> Shown) LocalView(JsonValue config, Exposure exposure)
     {
         var model = FormMapper.Analyze(config).Model;
@@ -668,11 +681,6 @@ public static class ControlMasking
         {
             fields.Add(SecretField(EnvLabel, env.ObjectProperties, exposure));
             shown.Add("env");
-        }
-        if (model.Additional.Count > 0)
-        {
-            var keys = string.Join(", ", model.Additional.Keys.Order(StringComparer.Ordinal));
-            fields.Add(new Field(OtherLabel, [(keys, keys)]));
         }
         return (fields, shown);
     }

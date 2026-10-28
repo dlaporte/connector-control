@@ -331,20 +331,26 @@ public enum ControlMasking {
     /// What a connector runs, one field per line, for `get_connector`'s text and the confirmation
     /// dialogs: a connector reached through mcp-remote by its URL and how it signs in; one reached
     /// by URL alone by its URL and headers; anything else by its command, arguments and environment.
+    /// Every top-level key those do not show in full follows on a line of its own, so the add
+    /// dialog shows everything that would run. Fields that share a label share its line.
     public static func codeLines(_ config: JSONValue, exposure: Exposure = .masked) -> [String] {
-        ControlText.labelled(view(config, exposure).fields.flatMap { field in
-            field.values.enumerated().map { index, value in (index == 0 ? field.label : "", value.shown) }
+        let all = fields(config, exposure)
+        var labels: [String] = []
+        for field in all where !labels.contains(field.label) { labels.append(field.label) }
+        return ControlText.labelled(labels.flatMap { label in
+            all.filter { $0.label == label }.flatMap(\.values).enumerated().map { index, value in
+                (index == 0 ? label : "", value.shown)
+            }
         })
     }
 
     /// The fields an edit changes, for the change confirmation: each changed field's label, then
     /// "− " before each value it loses and "+ " before each it gains. A secret that changed shows
     /// as changed although both sides read "••• (set)". Every difference between the two configs
-    /// shows: a top-level key the fields do not show in full gets a field of its own, labelled with
-    /// its name, in place of the code lines' list of other keys.
+    /// shows, as every key shows on the code lines.
     public static func changeLines(from before: JSONValue, to after: JSONValue, exposure: Exposure = .masked) -> [String] {
-        let old = changeFields(before, exposure)
-        let new = changeFields(after, exposure)
+        let old = fields(before, exposure)
+        let new = fields(after, exposure)
         var labels: [String] = []
         for field in new + old where !labels.contains(field.label) { labels.append(field.label) }
         var lines: [String] = []
@@ -371,14 +377,14 @@ public enum ControlMasking {
         one.unicodeScalars.elementsEqual(other.unicodeScalars)
     }
 
-    /// The fields `changeLines` compares: the code lines' fields but the list of other keys, then a
-    /// field for each top-level key those do not show in full.
-    static func changeFields(_ config: JSONValue, _ exposure: Exposure) -> [Field] {
+    /// The fields the code lines and change lines show: the shape's own, then a field for each
+    /// top-level key those do not show in full.
+    static func fields(_ config: JSONValue, _ exposure: Exposure) -> [Field] {
         guard case .object(let object) = config else {
             return [Field(label: otherLabel, values: [(raw(.array([config])), valueText("", config, exposure))])]
         }
         let (fields, shown) = view(config, exposure)
-        return fields.filter { $0.label != otherLabel } + object.keys.filter { !shown.contains($0) }
+        return fields + object.keys.filter { !shown.contains($0) }
             .sorted { $0.ordinallyPrecedes($1) }
             .map { key in
                 // Raw with its key, so it never matches a field's raw under the same label (a
@@ -520,7 +526,7 @@ public enum ControlMasking {
         return (fields, shown)
     }
 
-    /// Anything else: its command, arguments and environment, and the names of its other keys.
+    /// Anything else: its command, arguments and environment.
     static func localView(_ config: JSONValue, _ object: [String: JSONValue],
                           _ exposure: Exposure) -> (fields: [Field], shown: Set<String>) {
         let model = FormMapper.analyze(config).model
@@ -536,10 +542,6 @@ public enum ControlMasking {
         if case .object(let env)? = object["env"], !env.isEmpty {
             fields.append(secretField(envLabel, env, exposure))
             shown.insert("env")
-        }
-        if !model.additional.isEmpty {
-            let keys = model.additional.keys.sorted { $0.ordinallyPrecedes($1) }.joined(separator: ", ")
-            fields.append(Field(label: otherLabel, values: [(keys, keys)]))
         }
         return (fields, shown)
     }

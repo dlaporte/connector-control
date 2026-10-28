@@ -183,7 +183,7 @@ public class ControlMaskingTests
                 "command   docker",
                 "args      run -e API_KEY=hunter2 --token abc https://u:pw@h.example/x?k=v --header X-Key: ••• --static-oauth-client-info ••• img",
                 "env       GITHUB_TOKEN = ••• (set)",
-                "other     apiKey",
+                "apiKey    ••• (set)",
             ],
             ControlMasking.CodeLines(docker, ControlMasking.Exposure.Dialog));
         var oauth = OAuthClient("https://h.example/mcp?tenant=acme", "read");
@@ -214,6 +214,48 @@ public class ControlMaskingTests
         }
         Assert.Equal(["apiKey", "  + ••• (set)"],
             ControlMasking.ChangeLines(Local("node", []), Adding("apiKey", S("topsecret"), Local("node", [])), ControlMasking.Exposure.Dialog));
+    }
+
+    /// <summary>What would run includes every key, not only those the lines model: a key no field shows
+    /// gets a line of its own, and so does an argument mcp-remote's decoded form does not carry.</summary>
+    [Fact]
+    public void CodeLinesShowEveryKeyAndArgumentTheFieldsDoNot()
+    {
+        var cwd = Adding("cwd", S("/srv/app"), Local("node", ["s.js"]));
+        Assert.Equal(["command   node", "args      s.js", "cwd       /srv/app"], ControlMasking.CodeLines(cwd, ControlMasking.Exposure.Dialog));
+        var sse = Adding("type", S("sse"), Notion);
+        Assert.Equal(
+            [
+                "type      remote",
+                "          sse",
+                "url       https://mcp.notion.com/mcp?x=1",
+                "headers   Authorization = ••• (set)",
+                "          X-Empty = needs your value",
+            ],
+            ControlMasking.CodeLines(sse, ControlMasking.Exposure.Dialog));
+        var bridged = Adding("cwd", S("/tmp"),
+            Remote(["--static-oauth-client-metadata", """{"redirect_uri":"https://evil.example/cb"}"""]));
+        Assert.Equal(
+            [
+                "type   remote, through mcp-remote",
+                "url    https://h.example/mcp",
+                """args   --static-oauth-client-metadata {"redirect_uri":"https://evil.example/cb"}""",
+                "cwd    /tmp",
+            ],
+            ControlMasking.CodeLines(bridged, ControlMasking.Exposure.Dialog));
+        var secret = JsonValue.Object(("command", S("node")), ("apiKey", S("topsecret")),
+            ("auth", JsonValue.Object(("user", S("bob")), ("pass", S("hunter2")))));
+        Assert.Equal(["command   node", "apiKey    ••• (set)", """auth      {"pass":"set","user":"set"}"""],
+            ControlMasking.CodeLines(secret, ControlMasking.Exposure.Dialog));
+        foreach (var exposure in new[] { ControlMasking.Exposure.Masked, ControlMasking.Exposure.Dialog, ControlMasking.Exposure.Revealed })
+        {
+            var lines = new[] { cwd, sse, bridged, secret }.Select(config => string.Join("\n", ControlMasking.CodeLines(config, exposure))).ToList();
+            Assert.True(lines[0].Contains("cwd       /srv/app"), $"{exposure}");
+            Assert.True(lines[1].Contains("          sse"), $"{exposure}");
+            Assert.True(lines[2].Contains("args   --static-oauth-client-metadata ") && lines[2].Contains("cwd    /tmp"), $"{exposure}");
+            Assert.True(lines[3].Contains("apiKey    "), $"{exposure}");
+            Assert.True((lines[3].Contains("topsecret") || lines[3].Contains("hunter2")) == (exposure == ControlMasking.Exposure.Revealed), $"{exposure}");
+        }
     }
 
     [Fact]
