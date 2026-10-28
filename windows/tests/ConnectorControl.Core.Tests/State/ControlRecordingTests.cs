@@ -60,6 +60,8 @@ public class ControlRecordingTests
     {
         using var rig = Check("direct-write").Rig;
         Assert.False(rig.State.Store.Mcps["github"].Enabled);
+        Assert.True(rig.H.Settings.ClaudeIntegrationEnabled, "Claude cannot turn the integration off");
+        Assert.True(rig.H.Settings.ConfirmClaudeChanges, "Claude cannot turn confirmations off");
     }
 
     [Fact]
@@ -99,11 +101,48 @@ public class ControlRecordingTests
         Assert.False(rig.State.Store.Mcps.ContainsKey(ClaudeIntegration.EntryName));
     }
 
+    /// <summary>The command-line tool is the user: never asked, never announced, and the only caller that may
+    /// change the two Claude settings.</summary>
+    [Fact]
+    public void CommandLine()
+    {
+        using var rig = Check("cli").Rig;
+        Assert.Empty(rig.Confirmer.Requests);
+        Assert.True(rig.State.Store.Mcps.ContainsKey("notion"));
+        Assert.False(rig.H.Settings.ConfirmClaudeChanges);
+        Assert.False(rig.H.Settings.ClaudeIntegrationEnabled);
+        Assert.Empty(rig.H.Notifier.Sent);
+    }
+
+    /// <summary>A relay that gives the command-line tool's own name is still the relay.</summary>
+    [Fact]
+    public void Impersonation()
+    {
+        using var rig = Check("impersonation").Rig;
+        Assert.Equal([ControlTools.AddTitle("connector-control", "notion")], rig.Confirmer.Requests.Select(request => request.Title));
+        Assert.False(rig.State.Store.Mcps.ContainsKey("notion"));
+        Assert.True(rig.H.Settings.ClaudeIntegrationEnabled);
+    }
+
     [Fact]
     public void ProtocolErrors()
     {
         var replay = Check("protocol-errors");
         using var rig = replay.Rig;
         Assert.Equal("claude-ai", replay.Session.ClientName);
+    }
+
+    /// <summary>A directive the replay does not know fails it, rather than leaving the rig at its default.</summary>
+    [Fact]
+    public void ADirectiveTheReplayDoesNotKnowFailsIt()
+    {
+        foreach (var line in new[] { "#! confirm of", "#! caller CLI", "#! colour on", "#! backup off", "#! backup", "#! answer  allow",
+                                     "#! answer allow ", "#!caller cli", "caller cli" })
+        {
+            Assert.Throws<FormatException>(() => ControlTranscript.Directives([line]));
+        }
+        Assert.Throws<FormatException>(() => ControlTranscript.Directives(["#! confirm on", "#! confirm off"]));
+        Assert.Equal(new Dictionary<string, string> { ["caller"] = "cli", ["answer"] = "deny" },
+            ControlTranscript.Directives(["# A comment.", "#! caller cli", "#! answer deny", "> {}", "< {}"]));
     }
 }

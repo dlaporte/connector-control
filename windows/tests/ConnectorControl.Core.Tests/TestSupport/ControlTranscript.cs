@@ -18,6 +18,12 @@ namespace ConnectorControl.Core.Tests.TestSupport;
 public static class ControlTranscript
 {
     public const string MasterListToken = "<master-list>";
+    /// <summary>Each directive's key and the values it takes.</summary>
+    public static readonly IReadOnlyDictionary<string, string[]> DirectiveValues = new Dictionary<string, string[]>(StringComparer.Ordinal)
+    {
+        ["integration"] = ["on", "off"], ["confirm"] = ["on", "off"], ["answer"] = ["allow", "deny"],
+        ["caller"] = ["relay", "cli"], ["backup"] = ["on"],
+    };
 
     public sealed record Replay(ControlRig Rig, McpSession Session, IReadOnlyList<string> Expected, IReadOnlyList<string> Actual);
 
@@ -25,12 +31,7 @@ public static class ControlTranscript
     public static Replay Run(string name)
     {
         var lines = Fixtures.Text($"control/{name}.transcript").Split('\n').Where(line => line.Length > 0).ToList();
-        var settings = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var line in lines.Where(line => line.StartsWith("#! ", StringComparison.Ordinal)))
-        {
-            var parts = line[3..].Split(' ', 2);
-            if (parts.Length == 2) { settings[parts[0]] = parts[1]; }
-        }
+        var settings = Directives(lines);
         var rig = new ControlRig(integration: settings.GetValueOrDefault("integration") != "off",
                                  confirm: settings.GetValueOrDefault("confirm") != "off",
                                  claudeConfig: Fixtures.Text("control/claude_config.json"));
@@ -67,5 +68,30 @@ public static class ControlTranscript
             actual.AddRange(sent.Select(produced => produced.Replace(escaped, MasterListToken, StringComparison.Ordinal)));
         }
         return new Replay(rig, session, expected, actual);
+    }
+
+    /// <summary>The rig's set-up from a recording's <c>#!</c> lines. A key or value it does not know, a key
+    /// given twice, or a line of none of the four kinds fails the replay, rather than leaving the rig at
+    /// its default unnoticed. The Mac throws its own <c>FormatError</c>.</summary>
+    public static Dictionary<string, string> Directives(IEnumerable<string> lines)
+    {
+        var settings = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("#!", StringComparison.Ordinal))
+            {
+                var parts = line.StartsWith("#! ", StringComparison.Ordinal) ? line[3..].Split(' ') : [];
+                if (parts.Length != 2 || !DirectiveValues.TryGetValue(parts[0], out var values) || !values.Contains(parts[1], StringComparer.Ordinal))
+                {
+                    throw new FormatException($"Not a directive the replay knows: {line}");
+                }
+                if (!settings.TryAdd(parts[0], parts[1])) { throw new FormatException($"A directive given twice: {line}"); }
+            }
+            else if (!new[] { "# ", "> ", "< " }.Any(prefix => line.StartsWith(prefix, StringComparison.Ordinal)))
+            {
+                throw new FormatException($"Not a line the replay knows: {line}");
+            }
+        }
+        return settings;
     }
 }

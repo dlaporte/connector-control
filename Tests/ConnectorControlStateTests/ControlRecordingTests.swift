@@ -42,6 +42,8 @@ final class ControlRecordingTests: XCTestCase {
     func testDirectWrite() throws {
         let rig = try check("direct-write").rig; defer { rig.dispose() }
         XCTAssertEqual(rig.state.store.mcps["github"]?.enabled, false)
+        XCTAssertTrue(rig.h.settings.claudeIntegrationEnabled, "Claude cannot turn the integration off")
+        XCTAssertTrue(rig.h.settings.confirmClaudeChanges, "Claude cannot turn confirmations off")
     }
 
     func testGatedAllowed() throws {
@@ -72,8 +74,38 @@ final class ControlRecordingTests: XCTestCase {
         XCTAssertNil(rig.state.store.mcps[ClaudeIntegration.entryName])
     }
 
+    /// The command-line tool is the user: never asked, never announced, and the only caller that may
+    /// change the two Claude settings.
+    func testCommandLine() throws {
+        let rig = try check("cli").rig; defer { rig.dispose() }
+        XCTAssertTrue(rig.confirmer.requests.isEmpty)
+        XCTAssertNotNil(rig.state.store.mcps["notion"])
+        XCTAssertFalse(rig.h.settings.confirmClaudeChanges)
+        XCTAssertFalse(rig.h.settings.claudeIntegrationEnabled)
+        XCTAssertTrue(rig.h.notifier.sent.isEmpty)
+    }
+
+    /// A relay that gives the command-line tool's own name is still the relay.
+    func testImpersonation() throws {
+        let rig = try check("impersonation").rig; defer { rig.dispose() }
+        XCTAssertEqual(rig.confirmer.requests.map(\.title), [ControlTools.addTitle("connector-control", "notion")])
+        XCTAssertNil(rig.state.store.mcps["notion"])
+        XCTAssertTrue(rig.h.settings.claudeIntegrationEnabled)
+    }
+
     func testProtocolErrors() throws {
         let replay = try check("protocol-errors"); defer { replay.rig.dispose() }
         XCTAssertEqual(replay.session.clientName, "claude-ai", "a second initialize renamed the asker")
+    }
+
+    /// A directive the replay does not know fails it, rather than leaving the rig at its default.
+    func testADirectiveTheReplayDoesNotKnowFailsIt() throws {
+        for line in ["#! confirm of", "#! caller CLI", "#! colour on", "#! backup off", "#! backup", "#! answer  allow",
+                     "#! answer allow ", "#!caller cli", "caller cli"] {
+            XCTAssertThrowsError(try ControlTranscript.directives([line]), line)
+        }
+        XCTAssertThrowsError(try ControlTranscript.directives(["#! confirm on", "#! confirm off"]), "given twice")
+        XCTAssertEqual(try ControlTranscript.directives(["# A comment.", "#! caller cli", "#! answer deny", "> {}", "< {}"]),
+                       ["caller": "cli", "answer": "deny"])
     }
 }

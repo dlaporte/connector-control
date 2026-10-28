@@ -18,6 +18,16 @@ import ConnectorControlTestSupport
 @MainActor
 enum ControlTranscript {
     static let masterListToken = "<master-list>"
+    /// Each directive's key and the values it takes.
+    static let directiveValues: [String: Set<String>] = [
+        "integration": ["on", "off"], "confirm": ["on", "off"], "answer": ["allow", "deny"],
+        "caller": ["relay", "cli"], "backup": ["on"],
+    ]
+
+    /// A recording the replay cannot read as written. The Windows mirror throws `FormatException`.
+    struct FormatError: Error, CustomStringConvertible {
+        let description: String
+    }
 
     struct Replay {
         let rig: ControlRig
@@ -30,11 +40,7 @@ enum ControlTranscript {
     static func replay(_ name: String) throws -> Replay {
         let url = Fixtures.url("control/\(name).transcript")
         let lines = try String(contentsOf: url, encoding: .utf8).components(separatedBy: "\n").filter { !$0.isEmpty }
-        var settings: [String: String] = [:]
-        for line in lines where line.hasPrefix("#! ") {
-            let parts = line.dropFirst(3).split(separator: " ", maxSplits: 1).map(String.init)
-            if parts.count == 2 { settings[parts[0]] = parts[1] }
-        }
+        let settings = try directives(lines)
         let rig = ControlRig(integration: settings["integration"] != "off", confirm: settings["confirm"] != "off",
                              claudeConfig: Fixtures.text("control/claude_config.json"))
         switch settings["answer"] {
@@ -76,5 +82,26 @@ enum ControlTranscript {
             expected = actual
         }
         return Replay(rig: rig, session: session, expected: expected, actual: actual)
+    }
+
+    /// The rig's set-up from a recording's `#!` lines. A key or value it does not know, a key given
+    /// twice, or a line of none of the four kinds fails the replay, rather than leaving the rig at
+    /// its default unnoticed.
+    static func directives(_ lines: [String]) throws -> [String: String] {
+        var settings: [String: String] = [:]
+        for line in lines {
+            if line.hasPrefix("#!") {
+                let parts = line.hasPrefix("#! ")
+                    ? line.dropFirst(3).split(separator: " ", omittingEmptySubsequences: false).map(String.init) : []
+                guard parts.count == 2, directiveValues[parts[0]]?.contains(parts[1]) == true else {
+                    throw FormatError(description: "Not a directive the replay knows: \(line)")
+                }
+                guard settings[parts[0]] == nil else { throw FormatError(description: "A directive given twice: \(line)") }
+                settings[parts[0]] = parts[1]
+            } else if !["# ", "> ", "< "].contains(where: { line.hasPrefix($0) }) {
+                throw FormatError(description: "Not a line the replay knows: \(line)")
+            }
+        }
+        return settings
     }
 }
