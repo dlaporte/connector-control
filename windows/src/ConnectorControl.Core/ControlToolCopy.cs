@@ -81,7 +81,16 @@ public static class ControlToolCopy
             }
             catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && aside is not null)
             {
-                move(aside, target);
+                try
+                {
+                    move(aside, target);
+                }
+                catch (Exception rollback) when (rollback is IOException or UnauthorizedAccessException)
+                {
+                    // Both are said, the cause first. The old copy stays aside, and the next launch's sweep and
+                    // refresh place a new one.
+                    throw new IOException($"{ex.Message} The old copy could not be put back either: {rollback.Message}", ex);
+                }
                 throw;
             }
             return true;

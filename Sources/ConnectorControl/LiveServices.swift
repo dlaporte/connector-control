@@ -55,6 +55,8 @@ final class LiveServices {
                 path: ControlEndpoint.socketPath(environment: paths.environment, appSupport: paths.appSupport),
                 server: controlServer, host: host)
         } catch {
+            // The system keeps NSLog's lines. The Windows counterpart is App.Log, which writes crash.log in the
+            // app's data folder, since a tray app there has no console.
             NSLog("Connector Control: the control socket is unavailable: %@", String(describing: error))
             state.reportControlEndpointUnavailable()
         }

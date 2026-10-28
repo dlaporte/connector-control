@@ -131,6 +131,29 @@ public class ControlToolCopyTests : IDisposable
         Assert.Single(failures);
     }
 
+    /// <summary>When the old copy cannot be put back either, both failures are said, the cause first; the old copy
+    /// is left aside, and the next launch's refresh places a new one.</summary>
+    [Fact]
+    public void AnOldCopyThatCannotBePutBackIsSaidAfterTheCause()
+    {
+        Package("v1");
+        ControlToolCopy.Refresh(Packaged, DataDir, App);
+        Package("v2");
+        void Move(string from, string to)
+        {
+            if (to == Copy)
+            {
+                throw new IOException(from.EndsWith(ControlToolCopy.StagingSuffix, StringComparison.Ordinal) ? "placing failed" : "putting back failed");
+            }
+            File.Move(from, to);
+        }
+        Assert.False(ControlToolCopy.Refresh(Packaged, DataDir, App, failures.Add, Move));
+        Assert.Matches("placing failed.*putting back failed", Assert.Single(failures));
+        Assert.Equal(new[] { "v1" }, Aside().Select(File.ReadAllText));
+        Assert.True(ControlToolCopy.Refresh(Packaged, DataDir, App));
+        Assert.Equal("v2", File.ReadAllText(Copy));
+    }
+
     /// <summary>The record is the app's own step, after the copy: one that cannot be written neither stops the
     /// copy nor goes unseen. A folder where the record goes fails it the same way on every platform.</summary>
     [Fact]
