@@ -40,4 +40,12 @@ public class SingleInstanceTests
     [InlineData(new[] { "--something-else" }, false)]
     public void ToastActivationIsRecognisedSoItStaysSilent(string[] arguments, bool expected) =>
         Assert.Equal(expected, SingleInstance.IsToastActivation(arguments));
+
+    [Theory]
+    [InlineData(new[] { "--background" }, true)]
+    [InlineData(new[] { "--Background" }, true)]
+    [InlineData(new[] { "-background" }, false)]
+    [InlineData(new string[0], false)]
+    public void ABackgroundLaunchIsRecognisedSoItStaysSilent(string[] arguments, bool expected) =>
+        Assert.Equal(expected, SingleInstance.IsBackgroundLaunch(arguments));
 }

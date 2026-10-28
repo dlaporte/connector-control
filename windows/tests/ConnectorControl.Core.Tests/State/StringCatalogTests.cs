@@ -334,6 +334,8 @@ public class StringCatalogTests
         // MARK: ClaudeIntegration
 
         actual["ClaudeIntegration.clashNote"] = ClaudeIntegration.ClashNote;
+        actual["ClaudeIntegration.endpointUnavailableText"] = ClaudeIntegration.EndpointUnavailableText;
+        actual["ClaudeIntegration.moveToApplicationsError"] = ClaudeIntegration.MoveToApplicationsError;
         actual["ClaudeIntegration.offerBody"] = ClaudeIntegration.OfferBody;
         actual["ClaudeIntegration.offerNotNowButton"] = ClaudeIntegration.OfferNotNowButton;
         actual["ClaudeIntegration.offerTitle"] = ClaudeIntegration.OfferTitle;

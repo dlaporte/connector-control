@@ -317,6 +317,8 @@ final class StringCatalogTests: XCTestCase {
         // MARK: ClaudeIntegration
 
         actual["ClaudeIntegration.clashNote"] = ClaudeIntegration.clashNote
+        actual["ClaudeIntegration.endpointUnavailableText"] = ClaudeIntegration.endpointUnavailableText
+        actual["ClaudeIntegration.moveToApplicationsError"] = ClaudeIntegration.moveToApplicationsError
         actual["ClaudeIntegration.offerBody"] = ClaudeIntegration.offerBody
         actual["ClaudeIntegration.offerNotNowButton"] = ClaudeIntegration.offerNotNowButton
         actual["ClaudeIntegration.offerTitle"] = ClaudeIntegration.offerTitle

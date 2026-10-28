@@ -107,6 +107,9 @@ public final class AppState: ObservableObject {
     @Published public private(set) var store: MasterStore = .empty
     /// Settable: the restore sheet reports its failure here.
     @Published public var lastError: String?
+    /// Why Claude and the command-line tool cannot reach this app — its control endpoint could not be
+    /// served, or stopped being served — or nil while it serves. Settings shows it.
+    @Published public private(set) var controlEndpointProblem: String?
     @Published public private(set) var needsClaudeRestart = false
     /// True when the last apply threw; keeps a retry affordance visible even
     /// after reload() refreshes lastError.
@@ -912,24 +915,30 @@ public final class AppState: ObservableObject {
     /// connector holds the name; nil otherwise.
     var claudeIntegrationEntry: JSONValue? {
         guard settings.claudeIntegrationEnabled, let path = host.controlToolPath, !claudeIntegrationClash else { return nil }
+        // An app run from where it will not stay leaves the entry exactly as Claude's config has it,
+        // rather than write a path that will be gone once the app is moved or its disk image ejected.
+        if host.controlToolIsTransient { return appliedServers[ClaudeIntegration.entryName] }
         return ClaudeIntegration.entry(toolPath: path)
     }
 
     /// The popover's one-time offer: shown until it is answered, never once the setting has been
     /// decided anywhere (Settings and the command-line tool answer it too), and never where turning
-    /// it on could not work — no bundled tool, or a connector holding the name.
+    /// it on could not work — no bundled tool, a connector holding the name, or an app that runs
+    /// from where it will not stay.
     public var showsClaudeIntegrationOffer: Bool {
         !settings.claudeIntegrationOfferAnswered && !settings.claudeIntegrationEnabled
-            && host.controlToolPath != nil && !claudeIntegrationClash
+            && host.controlToolPath != nil && !claudeIntegrationClash && !host.controlToolIsTransient
     }
 
     /// Turns the integration on or off from anywhere — Settings, the offer, the command-line tool —
     /// and applies at once, so the entry appears or goes and Restart Required follows. Deciding it
-    /// answers the offer for good. Turning it on is refused while a connector holds the name, with
-    /// the note that says so; turning it off always goes through. nil on success.
+    /// answers the offer for good. Turning it on is refused while a connector holds the name, or
+    /// while the app runs from where it will not stay, with the sentence that says so; turning it
+    /// off always goes through. nil on success.
     @discardableResult
     public func setClaudeIntegrationEnabled(_ on: Bool) -> String? {
         if on, claudeIntegrationClash { return ClaudeIntegration.clashNote }
+        if on, host.controlToolIsTransient { return ClaudeIntegration.moveToApplicationsError }
         objectWillChange.send()
         settings.claudeIntegrationEnabled = on
         settings.claudeIntegrationOfferAnswered = true
@@ -953,6 +962,11 @@ public final class AppState: ObservableObject {
     }
 
     // MARK: - For the control layer
+
+    /// The app could not serve its control endpoint, or has stopped serving it.
+    public func reportControlEndpointUnavailable() {
+        controlEndpointProblem = ClaudeIntegration.endpointUnavailableText
+    }
 
     /// Whether Claude Desktop is running now, as the restart logic reads it.
     public var isClaudeRunning: Bool { claude.isRunning }

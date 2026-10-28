@@ -96,6 +96,7 @@ public sealed class AppState : ObservableObject, IDisposable
 
     private MasterStore store = MasterStore.Empty();
     private string? lastError;
+    private string? controlEndpointProblem;
     private bool needsClaudeRestart;
     private bool applyRetryNeeded;
     private IReadOnlyDictionary<string, JsonValue> appliedServers = EmptyServers;
@@ -198,6 +199,10 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>Settable: the restore dialog reports its failure here.</summary>
     public string? LastError { get => lastError; set => Set(ref lastError, value); }
+
+    /// <summary>Why Claude and the command-line tool cannot reach this app — its control endpoint could not be
+    /// served, or stopped being served — or null while it serves. Settings shows it.</summary>
+    public string? ControlEndpointProblem { get => controlEndpointProblem; private set => Set(ref controlEndpointProblem, value); }
 
     private bool storeNotPrivate;
     /// <summary>
@@ -1322,31 +1327,50 @@ public sealed class AppState : ObservableObject, IDisposable
     /// Connector Control's own entry while the switch is on, the app has a tool to name and no
     /// connector holds the name; null otherwise.
     /// </summary>
-    internal JsonValue? ClaudeIntegrationEntry =>
-        settings.ClaudeIntegrationEnabled && host.ControlToolPath is { } path && !ClaudeIntegrationClash
-            ? ClaudeIntegration.Entry(path)
-            : null;
+    internal JsonValue? ClaudeIntegrationEntry
+    {
+        get
+        {
+            if (!settings.ClaudeIntegrationEnabled || host.ControlToolPath is not { } path || ClaudeIntegrationClash)
+            {
+                return null;
+            }
+            // An app run from where it will not stay leaves the entry exactly as Claude's config has it,
+            // rather than write a path that will be gone once the app is moved or its disk image ejected.
+            if (host.ControlToolIsTransient)
+            {
+                return AppliedServers.GetValueOrDefault(ClaudeIntegration.EntryName);
+            }
+            return ClaudeIntegration.Entry(path);
+        }
+    }
 
     /// <summary>
     /// The popover's one-time offer: shown until it is answered, never once the setting has been
     /// decided anywhere (Settings and the command-line tool answer it too), and never where turning
-    /// it on could not work — no bundled tool, or a connector holding the name.
+    /// it on could not work — no bundled tool, a connector holding the name, or an app that runs
+    /// from where it will not stay.
     /// </summary>
     public bool ShowsClaudeIntegrationOffer =>
         !settings.ClaudeIntegrationOfferAnswered && !settings.ClaudeIntegrationEnabled
-        && host.ControlToolPath is not null && !ClaudeIntegrationClash;
+        && host.ControlToolPath is not null && !ClaudeIntegrationClash && !host.ControlToolIsTransient;
 
     /// <summary>
     /// Turns the integration on or off from anywhere — Settings, the offer, the command-line tool —
     /// and applies at once, so the entry appears or goes and Restart Required follows. Deciding it
-    /// answers the offer for good. Turning it on is refused while a connector holds the name, with
-    /// the note that says so; turning it off always goes through. Null on success.
+    /// answers the offer for good. Turning it on is refused while a connector holds the name, or
+    /// while the app runs from where it will not stay, with the sentence that says so; turning it
+    /// off always goes through. Null on success.
     /// </summary>
     public string? SetClaudeIntegrationEnabled(bool on)
     {
         if (on && ClaudeIntegrationClash)
         {
             return ClaudeIntegration.ClashNote;
+        }
+        if (on && host.ControlToolIsTransient)
+        {
+            return ClaudeIntegration.MoveToApplicationsError;
         }
         settings.ClaudeIntegrationEnabled = on;
         settings.ClaudeIntegrationOfferAnswered = true;
@@ -1376,6 +1400,9 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     // MARK: for the control layer
+
+    /// <summary>The app could not serve its control endpoint, or has stopped serving it.</summary>
+    public void ReportControlEndpointUnavailable() => ControlEndpointProblem = ClaudeIntegration.EndpointUnavailableText;
 
     /// <summary>Whether Claude Desktop is running now, as the restart logic reads it.</summary>
     public bool IsClaudeRunning => claude.Snapshot().IsRunning;

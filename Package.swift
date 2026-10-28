@@ -34,6 +34,7 @@ let package = Package(
             dependencies: [
                 "ConnectorControlCore",
                 "ConnectorControlState",
+                "ConnectorControlTransport",
                 .product(name: "Sparkle", package: "Sparkle"),
             ]),
         // Test support shared by both test targets (TempDir, fixtures, ACL

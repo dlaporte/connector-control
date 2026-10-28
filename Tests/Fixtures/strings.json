@@ -107,6 +107,8 @@
   "ClaudeConfigIO.mcpServersNotObjectError": "mcpServers is not a JSON object",
   "ClaudeConfigIO.topLevelNotObjectError": "top level is not a JSON object",
   "ClaudeIntegration.clashNote": "A connector named “connector-control” already exists. Rename it to turn this on.",
+  "ClaudeIntegration.endpointUnavailableText": "Claude and the command-line tool can’t reach Connector Control. Quit any other copy that is running, then restart this one.",
+  "ClaudeIntegration.moveToApplicationsError": "Move Connector Control to Applications, then try again.",
   "ClaudeIntegration.offerBody": "Claude could list, switch and edit your connectors for you. This adds a connector named connector-control to Claude.",
   "ClaudeIntegration.offerNotNowButton": "Not Now",
   "ClaudeIntegration.offerTitle": "Let Claude manage Connector Control?",

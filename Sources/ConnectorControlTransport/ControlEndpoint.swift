@@ -30,6 +30,18 @@ public enum ControlEndpoint {
         appExecutable.deletingLastPathComponent().appendingPathComponent(toolName).path
     }
 
+    /// Whether the app runs from somewhere it will not stay: a translocated copy — what macOS runs when
+    /// a quarantined app is opened where it was downloaded — or a read-only volume, such as its disk
+    /// image. A path there is gone once the app is moved or the image ejected.
+    public static func isTransient(bundle: URL, volumeIsReadOnly: (URL) -> Bool = ControlEndpoint.volumeIsReadOnly) -> Bool {
+        bundle.path.contains("/AppTranslocation/") || volumeIsReadOnly(bundle)
+    }
+
+    /// Whether `url` is on a volume nothing can be written to.
+    public static func volumeIsReadOnly(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.volumeIsReadOnlyKey]))?.volumeIsReadOnly ?? false
+    }
+
     /// This process's executable, links resolved: the tool inside the app, also when it was run
     /// through the link in /usr/local/bin.
     public static func executablePath() -> String {

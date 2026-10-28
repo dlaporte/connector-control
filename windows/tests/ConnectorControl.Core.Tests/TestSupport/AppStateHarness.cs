@@ -30,9 +30,11 @@ public sealed class AppStateHarness : IDisposable
     private readonly List<CollectionsModel> models = [];
     public DateTime Now { get; set; } = new(2026, 9, 4, 12, 0, 0, DateTimeKind.Utc);
     public PathContext Context { get; }
-    /// <summary>The bundled tool's path the next Create() hands AppState; null, as in a development run.</summary>
+    /// <summary>The bundled tool's path the next Create() hands AppState; null unless a test sets one.</summary>
     public string? ControlToolPath { get; set; }
-    public AppHost Host => new(Ui.Post, Delays.Add, () => Now, Background.Add, ControlToolPath);
+    /// <summary>Whether the next Create()'s app runs from where it will not stay.</summary>
+    public bool ControlToolIsTransient { get; set; }
+    public AppHost Host => new(Ui.Post, Delays.Add, () => Now, Background.Add, ControlToolPath, ControlToolIsTransient);
 
     public AppStateHarness(bool seedClaudeConfig = true)
     {

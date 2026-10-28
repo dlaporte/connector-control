@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
 using ConnectorControl.App.Services;
@@ -5,13 +6,15 @@ using ConnectorControl.App.Tray;
 using ConnectorControl.App.Views;
 using ConnectorControl.Core;
 using ConnectorControl.Core.State;
+using ConnectorControl.Core.Transport;
 
 namespace ConnectorControl.App;
 
 /// <summary>
 /// Composition root: Velopack hook first,
 /// single-instance guard, platform services, AppState (which reloads and arms
-/// watchers), the update coordinator, windows, tray icon, first-run tip.
+/// watchers), the update coordinator, the control layer Claude and the
+/// command-line tool reach, windows, tray icon, first-run tip.
 /// No window is shown at startup; the tray icon is the app.
 /// </summary>
 public partial class App : Application
@@ -23,6 +26,9 @@ public partial class App : Application
     private FlyoutModel? flyoutModel;
     private FlyoutWindow? flyout;
     private TrayController? tray;
+    private SettingsModel? controlSettings;
+    private ControlServer? controlServer;
+    private ControlPipeServer? controlEndpoint;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -41,8 +47,9 @@ public partial class App : Application
         {
             // A user double-clicking the shortcut of a running tray app must see something;
             // Windows relaunching us to deliver a toast click must not (the toolkit's COM
-            // server already routed it to the running process).
-            if (!SingleInstance.IsToastActivation(e.Args))
+            // server already routed it to the running process), and nor must the command-line
+            // tool starting an app that was already starting: it asked only for the app to run.
+            if (!SingleInstance.IsToastActivation(e.Args) && !SingleInstance.IsBackgroundLaunch(e.Args))
             {
                 instance.SignalShow();
             }
@@ -50,7 +57,13 @@ public partial class App : Application
             return;
         }
 
-        var host = UiThread.Host();
+        var dataDir = ServiceFactory.DefaultDataDir;
+        // Claude's entry runs the copy of the tool outside Velopack's update folder, which an update
+        // rewrites, ending whatever runs from it. The copy is refreshed off the UI thread; its path never
+        // changes, so the entry names it whatever the refresh finds.
+        var appExecutable = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, ControlEndpoint.AppFileName);
+        _ = Task.Run(() => ControlToolCopy.Refresh(Path.Combine(AppContext.BaseDirectory, ControlEndpoint.ToolFileName), dataDir, appExecutable));
+        var host = UiThread.Host(ControlToolCopy.ToolPath(dataDir));
         // CreateDefault performs the toast COM registration, so it must precede any Notify.
         services = ServiceFactory.CreateDefault(host.Marshal);
         // No owner: WpfDialogs falls back to whichever of our windows is active, so a dialog
@@ -61,6 +74,7 @@ public partial class App : Application
         state.QuitRequested += () => Shutdown();
         updates = new UpdateCoordinator(services.Updater, services.Settings, services.Notifier, dialogs, host);
         updates.Start();   // only arms the delayed first check through host.Delay
+        StartControl(state, services, updates, host, paths);
         var windows = new WindowRegistry(state, services, updates, dialogs);
         flyoutModel = new FlyoutModel(state, services.Settings);
         flyout = new FlyoutWindow(flyoutModel, windows);
@@ -69,8 +83,36 @@ public partial class App : Application
         FirstRunTip.ShowIfNeeded(services.Settings, services.Notifier);
     }
 
+    /// <summary>The control layer: the one ControlTools every connection shares, the server that gives each its
+    /// own session, and the pipe it listens on.</summary>
+    private void StartControl(AppState appState, PlatformServices platform, UpdateCoordinator coordinator, AppHost host, PathContext paths)
+    {
+        controlSettings = new SettingsModel(appState, platform.Settings, platform.Autostart, platform.ClaudeInstall, platform.Updater, coordinator);
+        // Declines every question: until the app can show its confirmation dialog, a change Claude must be
+        // asked about is refused rather than made unasked.
+        var tools = new ControlTools(appState, controlSettings, new DecliningConfirmer(), host);
+        controlServer = new ControlServer(tools);
+        try
+        {
+            controlEndpoint = ControlPipeServer.Start(ControlEndpoint.PipeName(paths.Environment, ControlEndpoint.CurrentUserSid()),
+                controlServer, host, stopped: appState.ReportControlEndpointUnavailable);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Another copy of the app serves the pipe, or another account holds its name: the app runs without
+            // one, and says so.
+            Trace.TraceWarning($"Connector Control: the control pipe is unavailable: {ex.Message}");
+            appState.ReportControlEndpointUnavailable();
+        }
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
+        // The pipe first, then every connection, both on the UI thread: no connection opens once the
+        // server has closed them all.
+        controlEndpoint?.Dispose();
+        controlServer?.CloseAll();
+        controlSettings?.Dispose();
         tray?.Dispose();
         updates?.Dispose();
         flyoutModel?.Dispose();

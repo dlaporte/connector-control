@@ -259,4 +259,48 @@ public class ClaudeIntegrationTests
         using var state = h.Create();
         Assert.False(state.ShowsClaudeIntegrationOffer);
     }
+
+    // MARK: Where the app runs from, and whether it can be reached
+
+    /// <summary>A Mac app run from where it will not stay — translocated, or from its disk image — refuses to
+    /// turn the integration on, and leaves an entry Claude already has exactly as it is rather than write a
+    /// path that will be gone. Turning it off still works.</summary>
+    [Fact]
+    public void AnAppRunFromWhereItWillNotStayRefusesTheIntegrationAndLeavesTheEntry()
+    {
+        using var h = new AppStateHarness();
+        var installed = ClaudeIntegration.Entry(ToolPath);
+        h.WriteClaudeServers([.. h.ClaudeServers().Select(p => (p.Key, p.Value)), (Reserved, installed)]);
+        h.Settings.ClaudeIntegrationEnabled = true;
+        h.ControlToolPath = "/private/var/folders/xy/T/AppTranslocation/0A1B/d/Connector Control.app/Contents/MacOS/connector-control";
+        h.ControlToolIsTransient = true;
+        using var state = h.Create();
+        h.Drain();
+        // The entry Claude has is left as it is.
+        Assert.Equal(installed, h.ClaudeServers()[Reserved]);
+        Assert.False(state.IsDirty);
+        Assert.Null(state.SetClaudeIntegrationEnabled(false));   // turning it off still works
+        Assert.False(h.ClaudeServers().ContainsKey(Reserved));
+        Assert.Equal(ClaudeIntegration.MoveToApplicationsError, state.SetClaudeIntegrationEnabled(true));
+        Assert.False(h.Settings.ClaudeIntegrationEnabled);
+        Assert.False(h.ClaudeServers().ContainsKey(Reserved));
+    }
+
+    [Fact]
+    public void TheOfferIsNotMadeWhereTurningItOnWouldBeRefused()
+    {
+        using var h = new AppStateHarness { ControlToolPath = ToolPath, ControlToolIsTransient = true };
+        using var state = h.Create();
+        Assert.False(state.ShowsClaudeIntegrationOffer);
+    }
+
+    [Fact]
+    public void AnEndpointThatCannotBeServedIsReportedInOneSentence()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.ControlEndpointProblem);
+        state.ReportControlEndpointUnavailable();
+        Assert.Equal(ClaudeIntegration.EndpointUnavailableText, state.ControlEndpointProblem);
+    }
 }

@@ -164,6 +164,8 @@ public class UpdateVerifierTests : IDisposable
     [InlineData("connectorcontrol.core.dll", true)]
     [InlineData("Squirrel.exe", true)]
     [InlineData("Update.exe", true)]
+    [InlineData("connector-control.exe", true)]
+    [InlineData("Connector-Control.exe", true)]
     [InlineData("System.Runtime.dll", false)]
     [InlineData("Markdig.dll", false)]
     public void OnlyTheAppsOwnFilesAndTheUpdaterMustCarryItsSignature(string name, bool expected)

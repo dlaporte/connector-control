@@ -230,4 +230,42 @@ final class ClaudeIntegrationTests: XCTestCase {
         let (h, state) = AppStateHarness.started(); defer { h.dispose() }
         XCTAssertFalse(state.showsClaudeIntegrationOffer)
     }
+
+    // MARK: Where the app runs from, and whether it can be reached
+
+    /// A Mac app run from where it will not stay — translocated, or from its disk image — refuses to
+    /// turn the integration on, and leaves an entry Claude already has exactly as it is rather than
+    /// write a path that will be gone. Turning it off still works.
+    func testAnAppRunFromWhereItWillNotStayRefusesTheIntegrationAndLeavesTheEntry() throws {
+        let h = AppStateHarness(); defer { h.dispose() }
+        let installed = ClaudeIntegration.entry(toolPath: toolPath)
+        try h.writeClaudeServers(try h.claudeServers().map { ($0.key, $0.value) } + [(reserved, installed)])
+        h.settings.claudeIntegrationEnabled = true
+        h.controlToolPath = "/private/var/folders/xy/T/AppTranslocation/0A1B/d/Connector Control.app/Contents/MacOS/connector-control"
+        h.controlToolIsTransient = true
+        let state = h.create()
+        h.drain()
+        XCTAssertEqual(try h.claudeServers()[reserved], installed, "the entry Claude has is left as it is")
+        XCTAssertFalse(state.isDirty)
+        XCTAssertNil(state.setClaudeIntegrationEnabled(false), "turning it off still works")
+        XCTAssertNil(try h.claudeServers()[reserved])
+        XCTAssertEqual(state.setClaudeIntegrationEnabled(true), ClaudeIntegration.moveToApplicationsError)
+        XCTAssertFalse(h.settings.claudeIntegrationEnabled)
+        XCTAssertNil(try h.claudeServers()[reserved])
+    }
+
+    func testTheOfferIsNotMadeWhereTurningItOnWouldBeRefused() {
+        let h = AppStateHarness(); defer { h.dispose() }
+        h.controlToolPath = toolPath
+        h.controlToolIsTransient = true
+        XCTAssertFalse(h.create().showsClaudeIntegrationOffer)
+    }
+
+    func testAnEndpointThatCannotBeServedIsReportedInOneSentence() {
+        let h = AppStateHarness(); defer { h.dispose() }
+        let state = h.create()
+        XCTAssertNil(state.controlEndpointProblem)
+        state.reportControlEndpointUnavailable()
+        XCTAssertEqual(state.controlEndpointProblem, ClaudeIntegration.endpointUnavailableText)
+    }
 }

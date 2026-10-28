@@ -39,6 +39,17 @@ final class ControlEndpointTests: XCTestCase {
         XCTAssertNil(ControlEndpoint.enclosingBundle(ofTool: "/usr/local/bin/connector-control"), "a link is resolved before this is asked")
     }
 
+    func testAnAppRunFromWhereItWillNotStayIsTransient() {
+        let translocated = URL(fileURLWithPath: "/private/var/folders/xy/T/AppTranslocation/0A1B/d/Connector Control.app")
+        XCTAssertTrue(ControlEndpoint.isTransient(bundle: translocated, volumeIsReadOnly: { _ in false }))
+        XCTAssertTrue(ControlEndpoint.isTransient(bundle: URL(fileURLWithPath: "/Volumes/Connector Control/Connector Control.app"),
+                                                  volumeIsReadOnly: { _ in true }), "its disk image")
+        XCTAssertFalse(ControlEndpoint.isTransient(bundle: URL(fileURLWithPath: "/Applications/Connector Control.app"),
+                                                   volumeIsReadOnly: { _ in false }))
+        let dir = TempDir(prefix: "transient"); defer { dir.dispose() }
+        XCTAssertFalse(ControlEndpoint.isTransient(bundle: dir.url), "a folder on this Mac's own disk, read for real")
+    }
+
     func testTheToolOpensOnlyTheAppItCameWithAndWithoutBringingItForward() {
         var asked: [[String]] = []
         XCTAssertTrue(ControlEndpoint.launchApp(executablePath: "/Applications/Connector Control.app/Contents/MacOS/connector-control",

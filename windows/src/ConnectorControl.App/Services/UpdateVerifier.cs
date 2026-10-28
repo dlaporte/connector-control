@@ -39,11 +39,13 @@ public static class UpdateVerifier
 
     /// <summary>
     /// The files an attacker would have to replace to run code in this app's name: its own
-    /// executables and assemblies, and the updater. These must carry this app's own signature;
-    /// a trusted third party's is not enough.
+    /// executables and assemblies, the command-line tool, and the updater. These must carry this
+    /// app's own signature; a trusted third party's is not enough.
     /// </summary>
     internal static bool MustBeOurs(string fileName) =>
         fileName.StartsWith("ConnectorControl", StringComparison.OrdinalIgnoreCase)
+        // The command-line tool: Claude's entry runs its copy, and the PATH may.
+        || fileName.StartsWith("connector-control", StringComparison.OrdinalIgnoreCase)
         || string.Equals(fileName, "Squirrel.exe", StringComparison.OrdinalIgnoreCase)
         || string.Equals(fileName, "Update.exe", StringComparison.OrdinalIgnoreCase);
 
