@@ -256,6 +256,89 @@ public class ControlToolsSharingTests
         Assert.False(rig.State.Store.Collections["Default"].Mcps.ContainsKey("dbt"));
     }
 
+    /// <summary>Every caller's path is checked before anything reads it: it must name a regular file of at
+    /// most the most a message carries. A folder, or a file too large, is refused in so many words,
+    /// before anyone is asked.</summary>
+    [Fact]
+    public void ADocumentPathMustNameAFileOfAtMostAMegabyte()
+    {
+        using var rig = Rig();
+        var folder = rig.H.Dir.File("folder");
+        Directory.CreateDirectory(folder);
+        var big = rig.H.Dir.File("big.json");
+        File.WriteAllBytes(big, Enumerable.Repeat((byte)0x20, McpSession.MaxMessageBytes + 1).ToArray());
+        foreach (var caller in new ControlCaller[] { new ControlCaller.Relay("claude-ai"), new ControlCaller.Cli() })
+        {
+            foreach (var tool in new[] { "import_document", "subscribe" })
+            {
+                Assert.Equal(ControlResult.Refusal(ControlTools.NotAFileError("folder")), rig.Call(tool, Args(("path", Text(folder))), caller));
+                Assert.Equal(ControlResult.Refusal(ControlTools.NotAFileError("folder")),
+                    rig.Call(tool, Args(("path", Text(folder + Path.DirectorySeparatorChar))), caller));
+                Assert.Equal(ControlResult.Refusal(ControlTools.DocumentTooLargeError("big.json")), rig.Call(tool, Args(("path", Text(big))), caller));
+            }
+        }
+        Assert.Empty(rig.Confirmer.Requests);
+    }
+
+    /// <summary>A link is read as what it names: one to a folder is refused as the folder is, and one to a
+    /// document is that document.</summary>
+    [Fact]
+    public void ADocumentPathThatIsALinkIsReadAsWhatItNames()
+    {
+        using var rig = Rig();
+        var folder = rig.H.Dir.File("folder");
+        Directory.CreateDirectory(folder);
+        var toFolder = rig.H.Dir.File("folder.json");
+        var document = rig.H.WriteDocument(CollectionDocumentSamples.DataTeam, "team.json");
+        var toDocument = rig.H.Dir.File("alias.json");
+        try
+        {
+            File.CreateSymbolicLink(toFolder, folder);
+            File.CreateSymbolicLink(toDocument, document);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            // Creating a symlink on Windows needs Developer Mode or elevation; a CI agent
+            // without either cannot exercise this, so there is nothing to assert.
+            // GitHub's hosted Windows runners are elevated, so under FailSkips=true (ci.runsettings) this skip would surface as a failure if that ever changed.
+            Assert.Skip("symlink creation is not permitted in this environment");
+            return;
+        }
+        foreach (var tool in new[] { "import_document", "subscribe" })
+        {
+            Assert.Equal(ControlResult.Refusal(ControlTools.NotAFileError("folder.json")), rig.Call(tool, Args(("path", Text(toFolder)))));
+        }
+        Assert.Equal(ControlTools.ImportedText(4, "Default"), rig.Call("import_document", Args(("path", Text(toDocument))))?.Text);
+    }
+
+    // The Mac mirror also refuses a FIFO, which would hold the read until something writes to it; a
+    // Windows file system has none — a pipe here is a \\.\ path, refused by its form below — so there
+    // is no such test here.
+
+    /// <summary>Windows-forced, as the <c>cmd /c</c> launcher's rule is: a path that reaches another computer
+    /// or a device is refused by its form, before anything touches it. The relay is refused any full path
+    /// that starts with <c>\\</c> — opening a UNC or WebDAV path has Windows sign in to that host as the user,
+    /// with nothing asked — while the command-line tool keeps its team shares; a <c>\\.\</c> path, a device
+    /// or a pipe, is never a file to anyone. Pure, so it runs on any platform.</summary>
+    [Fact]
+    public void ARemoteOrDevicePathIsRefusedByItsForm()
+    {
+        var relay = new ControlCaller.Relay("claude-ai");
+        var cli = new ControlCaller.Cli();
+        foreach (var path in new[] { @"\\host\share\x.json", @"\\host@SSL\x.json", @"\\host@SSL@443\DavWWWRoot\x.json", @"\\?\UNC\host\share\x.json" })
+        {
+            Assert.Equal(ControlTools.NetworkPathError, ControlTools.PathRefusal(path, relay));
+            // The command line keeps its team shares.
+            Assert.Null(ControlTools.PathRefusal(path, cli));
+        }
+        foreach (var caller in new ControlCaller[] { relay, cli })
+        {
+            Assert.Equal(ControlTools.NotAFileError(@"\\.\pipe\x.json"), ControlTools.PathRefusal(@"\\.\pipe\x.json", caller));
+            Assert.Null(ControlTools.PathRefusal(@"C:\Users\me\x.json", caller));
+            Assert.Null(ControlTools.PathRefusal("/Users/me/x.json", caller));
+        }
+    }
+
     // MARK: subscribe
 
     [Fact]

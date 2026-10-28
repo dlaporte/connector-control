@@ -388,6 +388,9 @@
   "ControlTools.detail": {
     "format": "{0} · {1}"
   },
+  "ControlTools.documentTooLargeError": {
+    "format": "“{0}” is over 1 MB, too large for a collection file."
+  },
   "ControlTools.duplicateSubscribedError": {
     "format": "“{0}” is subscribed; copy it in Connector Control with Make Local Copy."
   },
@@ -472,6 +475,9 @@
   "ControlTools.needsValuesText": {
     "format": "It needs a value for {0}: fill it in Connector Control."
   },
+  "ControlTools.networkPathError": {
+    "win": "Only the command-line tool can read a file on a network share or through a device path. Copy it to this PC first."
+  },
   "ControlTools.noBackupError": {
     "format": "There’s no backup named “{0}”."
   },
@@ -482,6 +488,9 @@
   "ControlTools.noQuestionError": "Connector Control couldn’t ask about this change, so nothing was done.",
   "ControlTools.noUpdateError": {
     "format": "“{0}” has no update waiting."
+  },
+  "ControlTools.notAFileError": {
+    "format": "“{0}” isn’t a file."
   },
   "ControlTools.notOneOfError": {
     "format": "“{0}” must be one of {1}."

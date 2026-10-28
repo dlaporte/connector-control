@@ -74,8 +74,8 @@ public sealed partial class ControlTools
             case "update_connector": return UpdateConnector(arguments, caller.AskerName);
             case "delete_connectors": return DeleteConnectors(arguments, caller.AskerName);
             case "delete_collection": return DeleteCollection(arguments, caller.AskerName);
-            case "import_document": return ImportDocument(arguments, caller.AskerName);
-            case "subscribe": return SubscribeDocument(arguments, caller.AskerName);
+            case "import_document": return ImportDocument(arguments, caller);
+            case "subscribe": return SubscribeDocument(arguments, caller);
             case "apply_update": return ApplyUpdate(arguments, caller.AskerName);
             case "restore_backup": return RestoreBackup(arguments, caller.AskerName);
             case "restart_claude": return RestartClaude(caller.AskerName);

@@ -309,6 +309,7 @@ public sealed partial class ControlTools
     public const string RestartMessage = "Claude Desktop will quit and reopen to pick up the change. The reply in progress stops; the conversation is kept.";
     public const string RestartingText = "Restarting Claude Desktop.";
     public const string IntoOrNewCollectionError = "Give “into” or “newCollection”, not both.";
+    public const string NetworkPathError = "Only the command-line tool can read a file on a network share or through a device path. Copy it to this PC first.";
 
     public static string DeleteCollectionTitle(string asker, string collection) => $"{asker} wants to delete the collection “{collection}”";
 
@@ -337,6 +338,10 @@ public sealed partial class ControlTools
         : $"{asker} copied {count} connectors into “{collection}”.";
 
     public static string NothingToImportError(string file) => $"Nothing in “{file}” would come across.";
+
+    public static string NotAFileError(string file) => $"“{file}” isn’t a file.";
+
+    public static string DocumentTooLargeError(string file) => $"“{file}” is over 1 MB, too large for a collection file.";
 
     public static string SubscribeTitle(string asker, string file) => $"{asker} wants to subscribe to “{file}”";
 
@@ -504,7 +509,54 @@ public sealed partial class ControlTools
         }
     }
 
-    private ControlStep ImportDocument(ControlArguments arguments, string asker)
+    /// <summary>Why <paramref name="caller"/> may not read the document at <paramref name="full"/>, a full path,
+    /// by its form alone, or null. Windows-forced, as the <c>cmd /c</c> launcher's rule is: the relay is
+    /// refused any path that starts with <c>\\</c> — a UNC or WebDAV path, or another device form — since
+    /// opening one has Windows sign in to that host as the user, with nothing asked, while the command-line
+    /// tool keeps its team shares; and a <c>\\.\</c> path, Windows' way to a device or a pipe, is never a file
+    /// to anyone. The Mac mirror's paths have no such form. Pure, so it is tested on any platform.</summary>
+    internal static string? PathRefusal(string full, ControlCaller caller)
+    {
+        if (full.StartsWith(@"\\.\", StringComparison.Ordinal))
+        {
+            return NotAFileError(ControlText.EscapedName(full));
+        }
+        return caller is ControlCaller.Relay && full.StartsWith(@"\\", StringComparison.Ordinal) ? NetworkPathError : null;
+    }
+
+    /// <summary>Why the document at <paramref name="full"/> is not read, or null to read it, found before anything
+    /// opens it, so no path can stall the app or reach what is not a file: it must be a regular file, or a link
+    /// to one — not a folder, a device, or a link to one — of at most <see cref="McpSession.MaxMessageBytes"/>,
+    /// the most a message carries. A path with nothing there is left to the read, which says so in the
+    /// system's words.</summary>
+    private static string? DocumentFileRefusal(string full)
+    {
+        // Platform idiom: FileInfo, which knows a folder from a file and no more, where the Mac mirror's
+        // stat(2) reads every file type; a device or a pipe here is a \\.\ path, which PathRefusal refuses by
+        // its form.
+        var file = ControlText.EscapedName(Path.GetFileName(Path.TrimEndingDirectorySeparator(full)));
+        try
+        {
+            FileSystemInfo info = new FileInfo(full);
+            if (info.LinkTarget is not null)
+            {
+                // A link is read as what it finally names.
+                info = info.ResolveLinkTarget(returnFinalTarget: true) ?? info;
+            }
+            if (Directory.Exists(info.FullName) || (info.Exists && info.Attributes.HasFlag(FileAttributes.Device)))
+            {
+                return NotAFileError(file);
+            }
+            return info is FileInfo { Exists: true } found && found.Length > McpSession.MaxMessageBytes ? DocumentTooLargeError(file) : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A link that loops, or a path that cannot be looked at, is the read's to report.
+            return null;
+        }
+    }
+
+    private ControlStep ImportDocument(ControlArguments arguments, ControlCaller caller)
     {
         var path = arguments.String("path") ?? "";
         // An empty path names the working folder on the Mac and is no path at all here: refused alike
@@ -522,6 +574,10 @@ public sealed partial class ControlTools
         if (full is null)
         {
             return new ControlStep.Refused(ControlText.Escaped(unusable ?? EditorModel.NotValidJson, [Path.GetFileName(path)]));
+        }
+        if ((PathRefusal(full, caller) ?? DocumentFileRefusal(full)) is { } refusal)
+        {
+            return new ControlStep.Refused(refusal);
         }
         var file = ControlText.EscapedName(Path.GetFileName(full));
         var (document, bytes, failure) = AppState.ReadDocument(full);
@@ -578,7 +634,7 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(NothingToImportError(file));
         }
-        var shownAsker = ControlText.EscapedName(asker);
+        var shownAsker = ControlText.EscapedName(caller.AskerName);
         var request = new ConfirmationRequest(
             ImportTitle(shownAsker, file),
             newCollection is null ? ImportMessage(count, shownTarget) : ImportNewMessage(count, shownTarget),
@@ -602,7 +658,7 @@ public sealed partial class ControlTools
         });
     }
 
-    private ControlStep SubscribeDocument(ControlArguments arguments, string asker)
+    private ControlStep SubscribeDocument(ControlArguments arguments, ControlCaller caller)
     {
         var path = arguments.String("path") ?? "";
         // As import_document refuses it.
@@ -614,6 +670,11 @@ public sealed partial class ControlTools
         if (full is null)
         {
             return new ControlStep.Refused(ControlText.Escaped(unusable ?? EditorModel.NotValidJson, [Path.GetFileName(path)]));
+        }
+        // As import_document checks it.
+        if ((PathRefusal(full, caller) ?? DocumentFileRefusal(full)) is { } refusal)
+        {
+            return new ControlStep.Refused(refusal);
         }
         // Platform idiom: as import_document reads it.
         var file = ControlText.EscapedName(Path.GetFileName(full));
@@ -636,7 +697,7 @@ public sealed partial class ControlTools
         var shownName = ControlText.EscapedName(name);
         var rendered = document.Render();
         var count = rendered.Connectors.Count;
-        var shownAsker = ControlText.EscapedName(asker);
+        var shownAsker = ControlText.EscapedName(caller.AskerName);
         var request = new ConfirmationRequest(
             SubscribeTitle(shownAsker, file),
             SubscribeMessage(shownName, count),

@@ -192,6 +192,59 @@ final class ControlToolsSharingTests: XCTestCase {
         XCTAssertNil(rig.state.store.collections["Default"]?.mcps["dbt"])
     }
 
+    /// Every caller's path is checked before anything reads it: it must name a regular file of at
+    /// most the most a message carries. A folder, or a file too large, is refused in so many words,
+    /// before anyone is asked.
+    func testADocumentPathMustNameAFileOfAtMostAMegabyte() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let folder = rig.h.dir.file("folder")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let big = rig.h.dir.file("big.json")
+        try Data(repeating: 0x20, count: McpSession.maxMessageBytes + 1).write(to: big)
+        for caller in [ControlCaller.relay(clientName: "claude-ai"), .cli] {
+            for tool in ["import_document", "subscribe"] {
+                XCTAssertEqual(rig.call(tool, ["path": .string(folder.path)], as: caller), .refusal(ControlTools.notAFileError("folder")), tool)
+                XCTAssertEqual(rig.call(tool, ["path": .string(folder.path + "/")], as: caller), .refusal(ControlTools.notAFileError("folder")), tool)
+                XCTAssertEqual(rig.call(tool, ["path": .string(big.path)], as: caller), .refusal(ControlTools.documentTooLargeError("big.json")), tool)
+            }
+        }
+        XCTAssertTrue(rig.confirmer.requests.isEmpty)
+    }
+
+    /// A link is read as what it names: one to a folder is refused as the folder is, and one to a
+    /// document is that document.
+    func testADocumentPathThatIsALinkIsReadAsWhatItNames() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let folder = rig.h.dir.file("folder")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let toFolder = rig.h.dir.file("folder.json")
+        try FileManager.default.createSymbolicLink(at: toFolder, withDestinationURL: folder)
+        let document = try rig.h.writeDocument(CollectionDocumentSamples.dataTeam, named: "team.json")
+        let toDocument = rig.h.dir.file("alias.json")
+        try FileManager.default.createSymbolicLink(at: toDocument, withDestinationURL: document)
+        for tool in ["import_document", "subscribe"] {
+            XCTAssertEqual(rig.call(tool, ["path": .string(toFolder.path)]), .refusal(ControlTools.notAFileError("folder.json")), tool)
+        }
+        XCTAssertEqual(rig.call("import_document", ["path": .string(toDocument.path)])?.text, ControlTools.importedText(4, "Default"))
+    }
+
+    /// A FIFO would hold the read until something writes to it, stalling the app: it is refused for
+    /// what it is, before anything opens it. The Windows mirror has no such file — a pipe there is a
+    /// `\\.\` path, which it refuses by its form — so there is no such test there.
+    func testADocumentPathNamingAFIFOIsRefusedWithoutOpeningIt() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let fifo = rig.h.dir.file("pipe.json")
+        XCTAssertEqual(mkfifo(fifo.path, 0o600), 0)
+        for tool in ["import_document", "subscribe"] {
+            XCTAssertEqual(rig.call(tool, ["path": .string(fifo.path)]), .refusal(ControlTools.notAFileError("pipe.json")), tool)
+        }
+        XCTAssertTrue(rig.confirmer.requests.isEmpty)
+    }
+
+    // The Windows mirror also refuses, by its form, a path that reaches another computer or a
+    // device: the relay any that starts with \\ once made full, every caller a \\.\ path. A Mac
+    // path has no such form, so there is no such test here.
+
     // MARK: subscribe
 
     func testSubscribingAsksThenFollowsTheFileReadOnlyWithEverythingOff() throws {

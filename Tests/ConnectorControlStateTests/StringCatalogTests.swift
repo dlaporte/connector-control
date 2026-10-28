@@ -137,6 +137,7 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.deletedText": ["X", "Y"],
         "ControlTools.deletesClause": ["X"],
         "ControlTools.detail": ["X", "Y"],
+        "ControlTools.documentTooLargeError": ["X"],
         "ControlTools.duplicateSubscribedError": ["X"],
         "ControlTools.duplicatedText": ["X", "Y"],
         "ControlTools.emptyCollectionText": ["X"],
@@ -157,6 +158,7 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.noBackupError": ["X"],
         "ControlTools.noConnectorError": ["X", "Y"],
         "ControlTools.noUpdateError": ["X"],
+        "ControlTools.notAFileError": ["X"],
         "ControlTools.notOneOfError": ["X", "Y"],
         "ControlTools.notSubscribedError": ["X"],
         "ControlTools.nothingToImportError": ["X"],
@@ -476,6 +478,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.deletedText"] = ControlTools.deletedText("X", "Y")
         actual["ControlTools.deletesClause"] = ControlTools.deletesClause("X")
         actual["ControlTools.detail"] = ControlTools.detail("X", "Y")
+        actual["ControlTools.documentTooLargeError"] = ControlTools.documentTooLargeError("X")
         actual["ControlTools.duplicateSubscribedError"] = ControlTools.duplicateSubscribedError("X")
         actual["ControlTools.duplicatedText"] = ControlTools.duplicatedText("X", "Y")
         actual["ControlTools.emptyCollectionText"] = ControlTools.emptyCollectionText("X")
@@ -513,6 +516,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.noConnectorError"] = ControlTools.noConnectorError("X", "Y")
         actual["ControlTools.noQuestionError"] = ControlTools.noQuestionError
         actual["ControlTools.noUpdateError"] = ControlTools.noUpdateError("X")
+        actual["ControlTools.notAFileError"] = ControlTools.notAFileError("X")
         actual["ControlTools.notOneOfError"] = ControlTools.notOneOfError("X", "Y")
         actual["ControlTools.notSubscribedError"] = ControlTools.notSubscribedError("X")
         actual["ControlTools.nothingToChangeError"] = ControlTools.nothingToChangeError

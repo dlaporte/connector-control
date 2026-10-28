@@ -259,6 +259,10 @@ extension ControlTools {
 
     public static func nothingToImportError(_ file: String) -> String { "Nothing in “\(file)” would come across." }
 
+    public static func notAFileError(_ file: String) -> String { "“\(file)” isn’t a file." }
+
+    public static func documentTooLargeError(_ file: String) -> String { "“\(file)” is over 1 MB, too large for a collection file." }
+
     public static func subscribeTitle(_ asker: String, _ file: String) -> String { "\(asker) wants to subscribe to “\(file)”" }
 
     public static func subscribeMessage(_ collection: String, _ count: Int) -> String {
@@ -375,7 +379,23 @@ extension ControlTools {
         })
     }
 
-    func importDocument(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
+    /// Why the document at `url` is not read, or nil to read it, found with a stat before anything
+    /// opens it, so no path can stall the app or reach what is not a file: it must be a regular
+    /// file, or a link to one — not a folder, a FIFO, a device, or a link to one — of at most
+    /// `McpSession.maxMessageBytes`, the most a message carries. A path with nothing there is left
+    /// to the read, which says so in the system's words.
+    static func documentFileRefusal(_ url: URL) -> String? {
+        // Platform idiom: stat(2), which follows a link and reads every file type; the Windows mirror
+        // reads FileInfo, which knows a folder from a file and no more, and refuses a device by its
+        // \\.\ form.
+        var status = stat()
+        guard stat(url.path, &status) == 0 else { return nil }
+        let file = ControlText.escapedName(url.lastPathComponent)
+        guard status.st_mode & S_IFMT == S_IFREG else { return notAFileError(file) }
+        return status.st_size > Int64(McpSession.maxMessageBytes) ? documentTooLargeError(file) : nil
+    }
+
+    func importDocument(_ arguments: ControlArguments, _ caller: ControlCaller) -> ControlStep {
         let path = arguments.string("path") ?? ""
         // An empty path names the working folder here and is no path at all on Windows: refused
         // alike on both.
@@ -387,6 +407,11 @@ extension ControlTools {
         // Platform idiom: a URL takes any text, and the read below refuses what names no file; the
         // Windows mirror first refuses a path .NET cannot make full.
         let url = URL(fileURLWithPath: path).standardizedFileURL
+        // The Windows mirror first refuses, by its form, a path that reaches another computer or a
+        // device: the relay any that starts with \\ once made full — opening one has Windows sign in
+        // to that host as the user, with nothing asked — and every caller a \\.\ path. A Mac path
+        // has no such form.
+        if let refusal = ControlTools.documentFileRefusal(url) { return .refused(refusal) }
         let file = ControlText.escapedName(url.lastPathComponent)
         let (read, bytes, failure) = AppState.readDocument(at: url)
         guard let document = read, let bytes else {
@@ -422,7 +447,7 @@ extension ControlTools {
         for name in rendered.connectors.keys { choices[name] = held[name] == nil ? .add : clash }
         let count = choices.values.filter { $0 != .skip }.count
         guard count > 0 else { return .refused(ControlTools.nothingToImportError(file)) }
-        let shownAsker = ControlText.escapedName(asker)
+        let shownAsker = ControlText.escapedName(caller.askerName)
         let request = ConfirmationRequest(
             title: ControlTools.importTitle(shownAsker, file),
             message: newCollection == nil ? ControlTools.importMessage(count, shownTarget) : ControlTools.importNewMessage(count, shownTarget),
@@ -443,12 +468,14 @@ extension ControlTools {
         })
     }
 
-    func subscribeDocument(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
+    func subscribeDocument(_ arguments: ControlArguments, _ caller: ControlCaller) -> ControlStep {
         let path = arguments.string("path") ?? ""
         // As import_document refuses it.
         guard !path.isEmpty else { return .refused(ControlTools.missingArgumentError("path")) }
         // Platform idiom: as import_document reads it.
         let url = URL(fileURLWithPath: path).standardizedFileURL
+        // As import_document checks it.
+        if let refusal = ControlTools.documentFileRefusal(url) { return .refused(refusal) }
         let file = ControlText.escapedName(url.lastPathComponent)
         let (read, bytes, failure) = AppState.readDocument(at: url)
         guard let document = read, let bytes else {
@@ -465,7 +492,7 @@ extension ControlTools {
         let shownName = ControlText.escapedName(name)
         let rendered = document.render()
         let count = rendered.connectors.count
-        let shownAsker = ControlText.escapedName(asker)
+        let shownAsker = ControlText.escapedName(caller.askerName)
         let request = ConfirmationRequest(
             title: ControlTools.subscribeTitle(shownAsker, file),
             message: ControlTools.subscribeMessage(shownName, count),

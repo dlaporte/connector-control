@@ -143,6 +143,7 @@ public class StringCatalogTests
         ["ControlTools.deletedText"] = ["X", "Y"],
         ["ControlTools.deletesClause"] = ["X"],
         ["ControlTools.detail"] = ["X", "Y"],
+        ["ControlTools.documentTooLargeError"] = ["X"],
         ["ControlTools.duplicateSubscribedError"] = ["X"],
         ["ControlTools.duplicatedText"] = ["X", "Y"],
         ["ControlTools.emptyCollectionText"] = ["X"],
@@ -163,6 +164,7 @@ public class StringCatalogTests
         ["ControlTools.noBackupError"] = ["X"],
         ["ControlTools.noConnectorError"] = ["X", "Y"],
         ["ControlTools.noUpdateError"] = ["X"],
+        ["ControlTools.notAFileError"] = ["X"],
         ["ControlTools.notOneOfError"] = ["X", "Y"],
         ["ControlTools.notSubscribedError"] = ["X"],
         ["ControlTools.nothingToImportError"] = ["X"],
@@ -485,6 +487,7 @@ public class StringCatalogTests
         actual["ControlTools.deletedText"] = ControlTools.DeletedText("X", "Y");
         actual["ControlTools.deletesClause"] = ControlTools.DeletesClause("X");
         actual["ControlTools.detail"] = ControlTools.Detail("X", "Y");
+        actual["ControlTools.documentTooLargeError"] = ControlTools.DocumentTooLargeError("X");
         actual["ControlTools.duplicateSubscribedError"] = ControlTools.DuplicateSubscribedError("X");
         actual["ControlTools.duplicatedText"] = ControlTools.DuplicatedText("X", "Y");
         actual["ControlTools.emptyCollectionText"] = ControlTools.EmptyCollectionText("X");
@@ -517,11 +520,13 @@ public class StringCatalogTests
         actual["ControlTools.missingArgumentError"] = ControlTools.MissingArgumentError("X");
         actual["ControlTools.nameHeader"] = ControlTools.NameHeader;
         actual["ControlTools.needsValuesText"] = ControlTools.NeedsValuesText("X");
+        actual["ControlTools.networkPathError"] = ControlTools.NetworkPathError;
         actual["ControlTools.noBackupError"] = ControlTools.NoBackupError("X");
         actual["ControlTools.noBackupsText"] = ControlTools.NoBackupsText;
         actual["ControlTools.noConnectorError"] = ControlTools.NoConnectorError("X", "Y");
         actual["ControlTools.noQuestionError"] = ControlTools.NoQuestionError;
         actual["ControlTools.noUpdateError"] = ControlTools.NoUpdateError("X");
+        actual["ControlTools.notAFileError"] = ControlTools.NotAFileError("X");
         actual["ControlTools.notOneOfError"] = ControlTools.NotOneOfError("X", "Y");
         actual["ControlTools.notSubscribedError"] = ControlTools.NotSubscribedError("X");
         actual["ControlTools.nothingToChangeError"] = ControlTools.NothingToChangeError;
