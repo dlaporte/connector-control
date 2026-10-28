@@ -23,12 +23,14 @@ final class ControlOutputTests: XCTestCase {
     }
 
     func testAnErrorTheSessionAnsweredIsARefusal() throws {
-        let line = McpSession.errorLine(code: McpSession.invalidParamsCode, message: ControlTools.needsNewerAppError("9.0.0"), id: .int(2))
+        // A slash in the sentence tells the escaped writer from the unescaped one.
+        let message = ControlTools.needsNewerAppError("9.0.0") + " See /Applications/Connector Control.app."
+        let line = McpSession.errorLine(code: McpSession.invalidParamsCode, message: message, id: .int(2))
         let error = try JSONValue.parse(Data(line.utf8))
         XCTAssertEqual(ControlOutput.answer(error, json: false),
-                       ControlOutput(stdout: nil, stderr: ControlTools.needsNewerAppError("9.0.0"), exitCode: 1))
+                       ControlOutput(stdout: nil, stderr: message, exitCode: 1))
         XCTAssertEqual(ControlOutput.answer(error, json: true).stdout,
-                       JSONValue.object(["error": .string(ControlTools.needsNewerAppError("9.0.0"))]).compactLine())
+                       JSONValue.object(["error": .string(message)]).compactLine(escapingSlashes: false))
     }
 
     /// `--json` is for reading and scripts: a path comes out as written. The wire format still escapes it.

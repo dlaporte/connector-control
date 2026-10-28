@@ -28,10 +28,12 @@ public class ControlOutputTests
     [Fact]
     public void AnErrorTheSessionAnsweredIsARefusal()
     {
-        var line = McpSession.ErrorLine(McpSession.InvalidParamsCode, ControlTools.NeedsNewerAppError("9.0.0"), JsonValue.Int(2));
+        // A slash in the sentence tells the escaped writer from the unescaped one.
+        var message = ControlTools.NeedsNewerAppError("9.0.0") + " See /Applications/Connector Control.app.";
+        var line = McpSession.ErrorLine(McpSession.InvalidParamsCode, message, JsonValue.Int(2));
         var error = JsonValue.Parse(line);
-        Assert.Equal(new ControlOutput(null, ControlTools.NeedsNewerAppError("9.0.0"), 1), ControlOutput.Answer(error, false));
-        Assert.Equal(JsonValue.Object(("error", JsonValue.String(ControlTools.NeedsNewerAppError("9.0.0")))).CompactLine(),
+        Assert.Equal(new ControlOutput(null, message, 1), ControlOutput.Answer(error, false));
+        Assert.Equal(JsonValue.Object(("error", JsonValue.String(message))).CompactLine(escapeSlashes: false),
             ControlOutput.Answer(error, true).Stdout);
     }
 
