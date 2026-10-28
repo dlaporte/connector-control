@@ -109,28 +109,28 @@ final class StringCatalogTests: XCTestCase {
         "ControlMasking.oauthClientText": ["X", "Y"],
         "ControlMasking.remoteBridgeType": ["X"],
         "ControlTools.connectorCountText": ["3", "7"],
+        "ControlTools.createdText": ["X"],
         "ControlTools.detail": ["X", "Y"],
+        "ControlTools.duplicateSubscribedError": ["X"],
+        "ControlTools.duplicatedText": ["X", "Y"],
         "ControlTools.emptyCollectionText": ["X"],
         "ControlTools.installHint": ["X", "Y"],
+        "ControlTools.integrationSetText": ["X"],
         "ControlTools.missingArgumentError": ["X"],
         "ControlTools.noConnectorError": ["X", "Y"],
         "ControlTools.notOneOfError": ["X", "Y"],
         "ControlTools.notSubscribedError": ["X"],
-        "ControlTools.statusTitle": ["X"],
-        "ControlTools.unknownToolError": ["X"],
-        "ControlTools.upToDateText": ["X"],
-        "ControlTools.createdText": ["X"],
-        "ControlTools.duplicateSubscribedError": ["X"],
-        "ControlTools.duplicatedText": ["X", "Y"],
-        "ControlTools.integrationSetText": ["X"],
         "ControlTools.renamedCollectionText": ["X", "Y"],
         "ControlTools.savedNotAppliedText": ["X"],
         "ControlTools.settingChangedText": ["X", "Y"],
         "ControlTools.settingNotForClaudeError": ["X"],
+        "ControlTools.statusTitle": ["X"],
         "ControlTools.switchValueError": ["X"],
         "ControlTools.switchedText": ["X"],
         "ControlTools.turnedOffText": ["X", "Y"],
         "ControlTools.turnedOnText": ["X", "Y"],
+        "ControlTools.unknownToolError": ["X"],
+        "ControlTools.upToDateText": ["X"],
         "ControlTools.wrongTypeError": ["X", "Y"],
         "CopyModel.title": ["X"],
         "EditTarget.editTitle": ["X"],
@@ -387,8 +387,11 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.connectorCountText"] = ControlTools.connectorCountText(3, 7)
         actual["ControlTools.connectorsGroup"] = ControlTools.connectorsGroup
         actual["ControlTools.connectorsHeader"] = ControlTools.connectorsHeader
+        actual["ControlTools.createdText"] = ControlTools.createdText("X")
         actual["ControlTools.declinedError"] = ControlTools.declinedError
         actual["ControlTools.detail"] = ControlTools.detail("X", "Y")
+        actual["ControlTools.duplicateSubscribedError"] = ControlTools.duplicateSubscribedError("X")
+        actual["ControlTools.duplicatedText"] = ControlTools.duplicatedText("X", "Y")
         actual["ControlTools.emptyCollectionText"] = ControlTools.emptyCollectionText("X")
         actual["ControlTools.helpOptions"] = ControlTools.helpOptions
         actual["ControlTools.helpUsage"] = ControlTools.helpUsage
@@ -399,6 +402,8 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.integrationOffError"] = ControlTools.integrationOffError
         actual["ControlTools.integrationOnConfirming"] = ControlTools.integrationOnConfirming
         actual["ControlTools.integrationOnNotConfirming"] = ControlTools.integrationOnNotConfirming
+        actual["ControlTools.integrationSetText"] = ControlTools.integrationSetText("X")
+        actual["ControlTools.keepCountError"] = ControlTools.keepCountError
         actual["ControlTools.kindHeader"] = ControlTools.kindHeader
         actual["ControlTools.listKind"] = ControlTools.listKind
         actual["ControlTools.localKind"] = ControlTools.localKind
@@ -418,30 +423,25 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.queuedText"] = ControlTools.queuedText
         actual["ControlTools.relaySummary"] = ControlTools.relaySummary
         actual["ControlTools.relayUsage"] = ControlTools.relayUsage
+        actual["ControlTools.renamedCollectionText"] = ControlTools.renamedCollectionText("X", "Y")
+        actual["ControlTools.restartToApplyText"] = ControlTools.restartToApplyText
+        actual["ControlTools.restartToUseText"] = ControlTools.restartToUseText
         actual["ControlTools.runsHeader"] = ControlTools.runsHeader
+        actual["ControlTools.savedNotAppliedText"] = ControlTools.savedNotAppliedText("X")
+        actual["ControlTools.settingChangedText"] = ControlTools.settingChangedText("X", "Y")
+        actual["ControlTools.settingNotForClaudeError"] = ControlTools.settingNotForClaudeError("X")
         actual["ControlTools.settingsGroup"] = ControlTools.settingsGroup
         actual["ControlTools.sharingGroup"] = ControlTools.sharingGroup
         actual["ControlTools.statusGroup"] = ControlTools.statusGroup
         actual["ControlTools.statusTitle"] = ControlTools.statusTitle("X")
         actual["ControlTools.subscribedKind"] = ControlTools.subscribedKind
-        actual["ControlTools.textKind"] = ControlTools.textKind
-        actual["ControlTools.unknownToolError"] = ControlTools.unknownToolError("X")
-        actual["ControlTools.upToDateText"] = ControlTools.upToDateText("X")
-        actual["ControlTools.createdText"] = ControlTools.createdText("X")
-        actual["ControlTools.duplicateSubscribedError"] = ControlTools.duplicateSubscribedError("X")
-        actual["ControlTools.duplicatedText"] = ControlTools.duplicatedText("X", "Y")
-        actual["ControlTools.integrationSetText"] = ControlTools.integrationSetText("X")
-        actual["ControlTools.keepCountError"] = ControlTools.keepCountError
-        actual["ControlTools.renamedCollectionText"] = ControlTools.renamedCollectionText("X", "Y")
-        actual["ControlTools.restartToApplyText"] = ControlTools.restartToApplyText
-        actual["ControlTools.restartToUseText"] = ControlTools.restartToUseText
-        actual["ControlTools.savedNotAppliedText"] = ControlTools.savedNotAppliedText("X")
-        actual["ControlTools.settingChangedText"] = ControlTools.settingChangedText("X", "Y")
-        actual["ControlTools.settingNotForClaudeError"] = ControlTools.settingNotForClaudeError("X")
         actual["ControlTools.switchValueError"] = ControlTools.switchValueError("X")
         actual["ControlTools.switchedText"] = ControlTools.switchedText("X")
+        actual["ControlTools.textKind"] = ControlTools.textKind
         actual["ControlTools.turnedOffText"] = ControlTools.turnedOffText("X", "Y")
         actual["ControlTools.turnedOnText"] = ControlTools.turnedOnText("X", "Y")
+        actual["ControlTools.unknownToolError"] = ControlTools.unknownToolError("X")
+        actual["ControlTools.upToDateText"] = ControlTools.upToDateText("X")
         actual["ControlTools.updateAvailableKind"] = ControlTools.updateAvailableKind
         actual["ControlTools.waitingText"] = ControlTools.waitingText
         actual["ControlTools.wrongTypeError"] = ControlTools.wrongTypeError("X", "Y")

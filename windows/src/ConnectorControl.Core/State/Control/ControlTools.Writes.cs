@@ -3,8 +3,10 @@ using System.Globalization;
 namespace ConnectorControl.Core.State;
 
 /// <summary>
-/// The write tools that change nothing a connector runs, apart from switching one on or off: they
-/// never ask, and say what they did and what follows from it.
+/// The write tools that need no question, because each is the user's own kind of change: switching a
+/// connector or a collection, managing collections, refreshing a subscription, changing a setting.
+/// Some change what Claude runs and say so, with a restart when one is due; the rest touch only this
+/// app's own lists and settings. They never ask, and say what they did and what follows from it.
 ///
 /// Mirror: Sources/ConnectorControlState/Control/ControlTools+Writes.swift
 /// </summary>
@@ -65,13 +67,16 @@ public sealed partial class ControlTools
     /// that changed what Claude's config holds (<c>AppliedServers</c> moved off <paramref name="mark"/>, taken
     /// before the write) while Claude runs an older config says to restart; one that could not write it says
     /// the change was saved and gives the app's own message. <paramref name="collection"/> null is a write that
-    /// reaches Claude whatever is active. The notification, for a change nobody was asked about,
+    /// reaches Claude whatever is active; <paramref name="touchesClaude"/> false is one that cannot reach it at all. The notification, for a change nobody was asked about,
     /// carries the same restart sentence.</summary>
     internal ControlOutcome Done(List<string> lines, IReadOnlyList<(string Key, JsonValue Value)> fields, string? collection,
-                                 IReadOnlyDictionary<string, JsonValue> mark, string restart, string? notification = null)
+                                 IReadOnlyDictionary<string, JsonValue> mark, string restart, string? notification = null,
+                                 bool touchesClaude = true)
     {
         var text = lines.ToList();
-        var reachesClaude = collection is null || collection == state.ActiveCollection;
+        // A write that never touches Claude's config (a window's setting) must not report a retry
+        // an earlier, unrelated write left pending.
+        var reachesClaude = touchesClaude && (collection is null || collection == state.ActiveCollection);
         // Compared by value: the harness clock stands still, so a timestamp could not tell a write from none.
         var applied = !DictionaryEquality.Equal(state.AppliedServers, mark);
         string? then = null;
@@ -222,14 +227,21 @@ public sealed partial class ControlTools
     private ControlStep SetSetting(ControlArguments arguments, ControlCaller caller)
     {
         var key = arguments.String("key") ?? "";
+        // Only ASCII space and tab are trimmed, as on the Mac.
         var raw = (arguments.String("value") ?? "").Trim(' ', '\t');
+        // An unknown key is refused before its value is looked at, so a typo hears which keys exist.
+        if (!ControlSettingKey.All.Contains(key))
+        {
+            return new ControlStep.Refused(NotOneOfError("key", string.Join(", ", ControlSettingKey.All)));
+        }
         if (caller is not ControlCaller.Cli && ControlSettingKey.IsUserOnly(key))
         {
             return new ControlStep.Refused(SettingNotForClaudeError(key));
         }
         if (key == ControlSettingKey.BackupsToKeep)
         {
-            if (!int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var count)
+            // Digits only: no sign, as on the Mac.
+            if (!raw.All(char.IsAsciiDigit) || !int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var count)
                 || count < SettingsModel.MinKeepCount || count > SettingsModel.MaxKeepCount)
             {
                 return new ControlStep.Refused(KeepCountError);
@@ -240,7 +252,7 @@ public sealed partial class ControlTools
                 settings.BackupKeepCount = count;
                 return Done([SettingChangedText(key, count.ToString(CultureInfo.InvariantCulture))],
                     [("key", JsonValue.String(key)), ("value", JsonValue.Int(count))],
-                    null, mark, RestartToApplyText);
+                    null, mark, RestartToApplyText, touchesClaude: false);
             });
         }
         var lowered = raw.ToLowerInvariant();
@@ -290,7 +302,8 @@ public sealed partial class ControlTools
                     return Refused(NotOneOfError("key", string.Join(", ", ControlSettingKey.All)));
             }
             return Done(lines, [("key", JsonValue.String(key)), ("value", JsonValue.Bool(on))],
-                null, mark, on ? RestartToUseText : RestartToApplyText);
+                null, mark, on ? RestartToUseText : RestartToApplyText,
+                touchesClaude: key == ControlSettingKey.ClaudeIntegration);
         });
     }
 }

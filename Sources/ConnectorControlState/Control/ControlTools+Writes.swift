@@ -3,8 +3,10 @@ import ConnectorControlCore
 
 /// Mirror: windows/src/ConnectorControl.Core/State/Control/ControlTools.Writes.cs
 ///
-/// The write tools that change nothing a connector runs, apart from switching one on or off: they
-/// never ask, and say what they did and what follows from it.
+/// The write tools that need no question, because each is the user's own kind of change: switching a
+/// connector or a collection, managing collections, refreshing a subscription, changing a setting.
+/// Some change what Claude runs and say so, with a restart when one is due; the rest touch only this
+/// app's own lists and settings. They never ask, and say what they did and what follows from it.
 extension ControlTools {
     public static let restartToUseText = "Restart Claude to use it."
     public static let restartToApplyText = "Restart Claude to apply the change."
@@ -58,12 +60,15 @@ extension ControlTools {
     /// that changed what Claude's config holds (`appliedServers` moved off `mark`, taken before the
     /// write) while Claude runs an older config says to restart; one that could not write it says
     /// the change was saved and gives the app's own message. `collection` nil is a write that
-    /// reaches Claude whatever is active. The notification, for a change nobody was asked about,
+    /// reaches Claude whatever is active; `touchesClaude` false is one that cannot reach it at all. The notification, for a change nobody was asked about,
     /// carries the same restart sentence.
     func done(_ lines: [String], _ fields: [String: JSONValue], touching collection: String?,
-              since mark: [String: JSONValue], restart: String, notification: String? = nil) -> ControlOutcome {
+              since mark: [String: JSONValue], restart: String, notification: String? = nil,
+              touchesClaude: Bool = true) -> ControlOutcome {
         var text = lines
-        let reachesClaude = collection == nil || collection == state.activeCollection
+        // A write that never touches Claude's config (a window's setting) must not report a retry
+        // an earlier, unrelated write left pending.
+        let reachesClaude = touchesClaude && (collection == nil || collection == state.activeCollection)
         let applied = state.appliedServers != mark
         var then: String?
         if reachesClaude, state.applyRetryNeeded {
@@ -166,17 +171,24 @@ extension ControlTools {
 
     func setSetting(_ arguments: ControlArguments, _ caller: ControlCaller) -> ControlStep {
         let key = arguments.string("key") ?? ""
-        let raw = (arguments.string("value") ?? "").trimmingCharacters(in: .whitespaces)
+        // Only ASCII space and tab are trimmed, as on Windows.
+        let raw = (arguments.string("value") ?? "").trimmingCharacters(in: CharacterSet(charactersIn: " \t"))
+        // An unknown key is refused before its value is looked at, so a typo hears which keys exist.
+        guard ControlSettingKey.all.contains(key) else {
+            return .refused(ControlTools.notOneOfError("key", ControlSettingKey.all.joined(separator: ", ")))
+        }
         if caller != .cli, ControlSettingKey.isUserOnly(key) { return .refused(ControlTools.settingNotForClaudeError(key)) }
         if key == ControlSettingKey.backupsToKeep {
-            guard let count = Int(raw), (SettingsModel.minKeepCount...SettingsModel.maxKeepCount).contains(count) else {
+            // Digits only: no sign, as on Windows.
+            guard !raw.isEmpty, raw.utf8.allSatisfy({ (48...57).contains($0) }), let count = Int(raw),
+                  (SettingsModel.minKeepCount...SettingsModel.maxKeepCount).contains(count) else {
                 return .refused(ControlTools.keepCountError)
             }
             return .ready(nil, perform: { [self] in
                 let mark = state.appliedServers
                 settings.backupKeepCount = count
                 return done([ControlTools.settingChangedText(key, String(count))], ["key": .string(key), "value": .int(count)],
-                            touching: nil, since: mark, restart: ControlTools.restartToApplyText)
+                            touching: nil, since: mark, restart: ControlTools.restartToApplyText, touchesClaude: false)
             })
         }
         let lowered = raw.lowercased()
@@ -206,7 +218,8 @@ extension ControlTools {
             default: return ControlTools.refused(ControlTools.notOneOfError("key", ControlSettingKey.all.joined(separator: ", ")))
             }
             return done(lines, ["key": .string(key), "value": .bool(on)], touching: nil, since: mark,
-                        restart: on ? ControlTools.restartToUseText : ControlTools.restartToApplyText)
+                        restart: on ? ControlTools.restartToUseText : ControlTools.restartToApplyText,
+                        touchesClaude: key == ControlSettingKey.claudeIntegration)
         })
     }
 }

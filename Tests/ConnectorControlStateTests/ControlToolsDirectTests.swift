@@ -100,7 +100,9 @@ final class ControlToolsDirectTests: XCTestCase {
         XCTAssertEqual(rig.call("refresh_subscription", ["collection": .string("Data team")])?.text,
                        AppState.collectionUpdateBanner("Data team", "deletes github"))
         try Data("{half".utf8).write(to: url)
-        XCTAssertEqual(rig.call("refresh_subscription", ["collection": .string("Data team")])?.isError, true,
+        let unreadable = try XCTUnwrap(rig.call("refresh_subscription", ["collection": .string("Data team")]))
+        XCTAssertTrue(unreadable.isError)
+        XCTAssertEqual(unreadable.text, try XCTUnwrap(rig.state.sourceErrors["Data team"]),
                        "an unreadable file is refused with the app's own sentence")
     }
 
@@ -163,5 +165,102 @@ final class ControlToolsDirectTests: XCTestCase {
         rig.state.reload(trigger: .quietStoreAdoption)
         XCTAssertEqual(rig.call("set_setting", ["key": .string("claude-integration"), "value": .string("on")], as: .cli),
                        .refusal(ClaudeIntegration.clashNote))
+    }
+
+    private func settingsSnapshot(_ rig: ControlRig) -> String {
+        let s = rig.h.settings
+        return "\(s.backupKeepCount) \(s.notifyExternalChanges) \(s.confirmBeforeRestart) \(s.confirmBeforeQuit) "
+            + "\(s.claudeIntegrationEnabled) \(s.confirmClaudeChanges) \(rig.autostart.enabled) \(rig.settingsModel.autoUpdate)"
+    }
+
+    func testTheKeepCountIsDigitsOnlyWithAsciiSpaceAndTabTrimmed() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        for bad in ["+30", "-5", "30\u{00A0}", "\u{00A0}30", "3 0", ""] {
+            XCTAssertEqual(rig.call("set_setting", ["key": .string("backups-to-keep"), "value": .string(bad)]),
+                           .refusal(ControlTools.keepCountError), bad)
+        }
+        XCTAssertEqual(rig.h.settings.backupKeepCount, 20)
+        XCTAssertEqual(rig.call("set_setting", ["key": .string("backups-to-keep"), "value": .string(" \t30\t ")])?.text,
+                       ControlTools.settingChangedText("backups-to-keep", "30"))
+        XCTAssertEqual(rig.h.settings.backupKeepCount, 30)
+    }
+
+    func testTheRelayCannotReachAKeyOutsideItsAllowlist() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let before = settingsSnapshot(rig)
+        for key in ["Claude-Integration", " claude-integration", "confirm-claude-changes ", "master-list"] {
+            let result = rig.call("set_setting", ["key": .string(key), "value": .string("off")])
+            XCTAssertEqual(result?.isError, true, key)
+        }
+        XCTAssertEqual(settingsSnapshot(rig), before)
+        XCTAssertTrue(rig.confirmer.requests.isEmpty)
+    }
+
+    func testTheCommandLineIsRefusedAnUnknownKeyWithTheNotOneOfSentence() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        XCTAssertEqual(rig.call("set_setting", ["key": .string("master-list"), "value": .string("off")], as: .cli),
+                       .refusal(ControlTools.notOneOfError("key", ControlSettingKey.all.joined(separator: ", "))))
+    }
+
+    func testAnUnknownKeyIsRefusedWhenPreparedBeforeItsValueIsChecked() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        for caller in [ControlCaller.cli, .relay(clientName: "claude-ai")] {
+            guard case .refused(let reason) = rig.tools.prepare("set_setting",
+                ControlArguments(values: ["key": .string("foo"), "value": .string("maybe")]), caller) else {
+                return XCTFail("an unknown key must be refused in prepare")
+            }
+            XCTAssertEqual(reason, ControlTools.notOneOfError("key", ControlSettingKey.all.joined(separator: ", ")))
+        }
+    }
+
+    func testAWriteThatChangesNothingClaudeRunsNamesNoRestart() throws {
+        let rig = ControlRig(); defer { rig.dispose() }
+        rig.h.claudeRunningSince(hours: 1)
+        rig.state.refreshRestartState()
+        let restart = JSONPointer(["restartRequired"])
+        let quit = try XCTUnwrap(rig.call("set_setting", ["key": .string("confirm-quit"), "value": .string("off")]))
+        XCTAssertEqual(quit.text, ControlTools.settingChangedText("confirm-quit", "off"))
+        XCTAssertEqual(quit.structured.value(at: restart), .bool(false))
+        let created = try XCTUnwrap(rig.call("create_collection", ["name": .string("Work")]))
+        XCTAssertEqual(created.text, ControlTools.createdText("Work"))
+        XCTAssertEqual(created.structured.value(at: restart), .bool(false))
+        let already = try XCTUnwrap(rig.call("set_connector_enabled", ["name": .string("aws-mcp"), "enabled": .bool(true)]))
+        XCTAssertEqual(already.text, ControlTools.turnedOnText("aws-mcp", "Default"))
+        XCTAssertEqual(already.structured.value(at: restart), .bool(false))
+    }
+
+    func testAWriteThatChangesWhatClaudeRunsNamesTheRestart() throws {
+        let rig = ControlRig(); defer { rig.dispose() }
+        rig.h.claudeRunningSince(hours: 1)
+        rig.state.refreshRestartState()
+        let restart = JSONPointer(["restartRequired"]), applied = JSONPointer(["applied"])
+        XCTAssertNil(rig.state.addEmptyCollection(named: "Work"))
+        let switched = try XCTUnwrap(rig.call("switch_collection", ["collection": .string("Work")]))
+        XCTAssertEqual(switched.text, ControlTools.switchedText("Work") + " " + ControlTools.restartToApplyText)
+        XCTAssertEqual(switched.structured.value(at: restart), .bool(true))
+        XCTAssertEqual(switched.structured.value(at: applied), .bool(true))
+        let renamed = try XCTUnwrap(rig.call("rename_collection", ["collection": .string("Work"), "newName": .string("Team")]))
+        XCTAssertEqual(renamed.structured.value(at: applied), .bool(true))
+        XCTAssertEqual(renamed.structured.value(at: restart), .bool(false), "the active collection's name is not in Claude's config")
+        let copy = try XCTUnwrap(rig.call("duplicate_collection", ["collection": .string("Team"), "newName": .string("Copy")]))
+        XCTAssertEqual(copy.text, ControlTools.duplicatedText("Team", "Copy"))
+        XCTAssertEqual(copy.structured.value(at: restart), .bool(false))
+        XCTAssertEqual(copy.structured.value(at: applied), .bool(true))
+    }
+
+    func testAStaleRetryFlagDoesNotColourAnUnrelatedSetting() throws {
+        let rig = ControlRig(); defer { rig.dispose() }
+        do {
+            let block = try WriteBlock(rig.h.claudeConfigURL)
+            defer { block.dispose() }
+            XCTAssertTrue(block.isEffective)
+            rig.call("set_connector_enabled", ["name": .string("aws-mcp"), "enabled": .bool(false)])
+        }
+        XCTAssertTrue(rig.state.applyRetryNeeded)
+        let result = try XCTUnwrap(rig.call("set_setting", ["key": .string("confirm-quit"), "value": .string("off")]))
+        XCTAssertEqual(result.text, ControlTools.settingChangedText("confirm-quit", "off"))
+        XCTAssertEqual(result.structured.value(at: JSONPointer(["applied"])), .bool(true))
+        let keep = try XCTUnwrap(rig.call("set_setting", ["key": .string("backups-to-keep"), "value": .string("30")]))
+        XCTAssertEqual(keep.text, ControlTools.settingChangedText("backups-to-keep", "30"))
     }
 }

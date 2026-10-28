@@ -125,7 +125,11 @@ public class ControlToolsDirectTests
         Assert.Equal(AppState.CollectionUpdateBanner("Data team", "deletes github"),
             rig.Call("refresh_subscription", Args(("collection", Text("Data team"))))?.Text);
         File.WriteAllText(path, "{half");
-        Assert.True(rig.Call("refresh_subscription", Args(("collection", Text("Data team"))))?.IsError);
+        var unreadable = rig.Call("refresh_subscription", Args(("collection", Text("Data team"))));
+        Assert.NotNull(unreadable);
+        Assert.True(unreadable.IsError);
+        // The app's own sentence.
+        Assert.Equal(rig.State.SourceErrors["Data team"], unreadable.Text);
     }
 
     [Fact]
@@ -200,5 +204,126 @@ public class ControlToolsDirectTests
         rig.State.Reload(ReloadTrigger.QuietStoreAdoption);
         Assert.Equal(ControlResult.Refusal(ClaudeIntegration.ClashNote),
             rig.Call("set_setting", Args(("key", Text("claude-integration")), ("value", Text("on"))), new ControlCaller.Cli()));
+    }
+
+    private static string SettingsSnapshot(ControlRig rig)
+    {
+        var s = rig.H.Settings;
+        return $"{s.BackupKeepCount} {s.NotifyExternalChanges} {s.ConfirmBeforeRestart} {s.ConfirmBeforeQuit} "
+            + $"{s.ClaudeIntegrationEnabled} {s.ConfirmClaudeChanges} {rig.Autostart.Enabled} {rig.SettingsModel.AutoUpdate}";
+    }
+
+    [Fact]
+    public void TheKeepCountIsDigitsOnlyWithAsciiSpaceAndTabTrimmed()
+    {
+        using var rig = new ControlRig();
+        foreach (var bad in new[] { "+30", "-5", "30\u00A0", "\u00A030", "3 0", "" })
+        {
+            Assert.Equal(ControlResult.Refusal(ControlTools.KeepCountError),
+                rig.Call("set_setting", Args(("key", Text("backups-to-keep")), ("value", Text(bad)))));
+        }
+        Assert.Equal(20, rig.H.Settings.BackupKeepCount);
+        Assert.Equal(ControlTools.SettingChangedText("backups-to-keep", "30"),
+            rig.Call("set_setting", Args(("key", Text("backups-to-keep")), ("value", Text(" \t30\t "))))?.Text);
+        Assert.Equal(30, rig.H.Settings.BackupKeepCount);
+    }
+
+    [Fact]
+    public void TheRelayCannotReachAKeyOutsideItsAllowlist()
+    {
+        using var rig = new ControlRig();
+        var before = SettingsSnapshot(rig);
+        foreach (var key in new[] { "Claude-Integration", " claude-integration", "confirm-claude-changes ", "master-list" })
+        {
+            Assert.True(rig.Call("set_setting", Args(("key", Text(key)), ("value", Text("off"))))?.IsError, key);
+        }
+        Assert.Equal(before, SettingsSnapshot(rig));
+        Assert.Empty(rig.Confirmer.Requests);
+    }
+
+    [Fact]
+    public void TheCommandLineIsRefusedAnUnknownKeyWithTheNotOneOfSentence()
+    {
+        using var rig = new ControlRig();
+        Assert.Equal(ControlResult.Refusal(ControlTools.NotOneOfError("key", string.Join(", ", ControlSettingKey.All))),
+            rig.Call("set_setting", Args(("key", Text("master-list")), ("value", Text("off"))), new ControlCaller.Cli()));
+    }
+
+    [Fact]
+    public void AnUnknownKeyIsRefusedWhenPreparedBeforeItsValueIsChecked()
+    {
+        using var rig = new ControlRig();
+        foreach (ControlCaller caller in new ControlCaller[] { new ControlCaller.Cli(), new ControlCaller.Relay("claude-ai") })
+        {
+            var step = rig.Tools.Prepare("set_setting",
+                new ControlArguments(new Dictionary<string, JsonValue> { ["key"] = Text("foo"), ["value"] = Text("maybe") }), caller);
+            var refused = Assert.IsType<ControlStep.Refused>(step);
+            Assert.Equal(ControlTools.NotOneOfError("key", string.Join(", ", ControlSettingKey.All)), refused.Reason);
+        }
+    }
+
+    [Fact]
+    public void AWriteThatChangesNothingClaudeRunsNamesNoRestart()
+    {
+        using var rig = new ControlRig();
+        rig.H.ClaudeRunningSince(hours: 1);
+        rig.State.RefreshRestartState();
+        var restart = new JsonPointer(["restartRequired"]);
+        var quit = rig.Call("set_setting", Args(("key", Text("confirm-quit")), ("value", Text("off"))));
+        Assert.NotNull(quit);
+        Assert.Equal(ControlTools.SettingChangedText("confirm-quit", "off"), quit.Text);
+        Assert.Equal(JsonValue.Bool(false), quit.Structured.ValueAt(restart));
+        var created = rig.Call("create_collection", Args(("name", Text("Work"))));
+        Assert.NotNull(created);
+        Assert.Equal(ControlTools.CreatedText("Work"), created.Text);
+        Assert.Equal(JsonValue.Bool(false), created.Structured.ValueAt(restart));
+        var already = rig.Call("set_connector_enabled", Args(("name", Text("aws-mcp")), ("enabled", JsonValue.Bool(true))));
+        Assert.NotNull(already);
+        Assert.Equal(ControlTools.TurnedOnText("aws-mcp", "Default"), already.Text);
+        Assert.Equal(JsonValue.Bool(false), already.Structured.ValueAt(restart));
+    }
+
+    [Fact]
+    public void AWriteThatChangesWhatClaudeRunsNamesTheRestart()
+    {
+        using var rig = new ControlRig();
+        rig.H.ClaudeRunningSince(hours: 1);
+        rig.State.RefreshRestartState();
+        var restart = new JsonPointer(["restartRequired"]);
+        var applied = new JsonPointer(["applied"]);
+        Assert.Null(rig.State.AddEmptyCollection("Work"));
+        var switched = rig.Call("switch_collection", Args(("collection", Text("Work"))));
+        Assert.NotNull(switched);
+        Assert.Equal(ControlTools.SwitchedText("Work") + " " + ControlTools.RestartToApplyText, switched.Text);
+        Assert.Equal(JsonValue.Bool(true), switched.Structured.ValueAt(restart));
+        Assert.Equal(JsonValue.Bool(true), switched.Structured.ValueAt(applied));
+        var renamed = rig.Call("rename_collection", Args(("collection", Text("Work")), ("newName", Text("Team"))));
+        Assert.NotNull(renamed);
+        Assert.Equal(JsonValue.Bool(true), renamed.Structured.ValueAt(applied));
+        // The active collection's name is not in Claude's config.
+        Assert.Equal(JsonValue.Bool(false), renamed.Structured.ValueAt(restart));
+        var copy = rig.Call("duplicate_collection", Args(("collection", Text("Team")), ("newName", Text("Copy"))));
+        Assert.NotNull(copy);
+        Assert.Equal(ControlTools.DuplicatedText("Team", "Copy"), copy.Text);
+        Assert.Equal(JsonValue.Bool(false), copy.Structured.ValueAt(restart));
+        Assert.Equal(JsonValue.Bool(true), copy.Structured.ValueAt(applied));
+    }
+
+    [Fact]
+    public void AStaleRetryFlagDoesNotColourAnUnrelatedSetting()
+    {
+        using var rig = new ControlRig();
+        using (var block = new WriteBlock(rig.H.ClaudeConfigPath))
+        {
+            Assert.True(block.IsEffective);
+            rig.Call("set_connector_enabled", Args(("name", Text("aws-mcp")), ("enabled", JsonValue.Bool(false))));
+        }
+        Assert.True(rig.State.ApplyRetryNeeded);
+        var result = rig.Call("set_setting", Args(("key", Text("confirm-quit")), ("value", Text("off"))));
+        Assert.NotNull(result);
+        Assert.Equal(ControlTools.SettingChangedText("confirm-quit", "off"), result.Text);
+        Assert.Equal(JsonValue.Bool(true), result.Structured.ValueAt(new JsonPointer(["applied"])));
+        Assert.Equal(ControlTools.SettingChangedText("backups-to-keep", "30"),
+            rig.Call("set_setting", Args(("key", Text("backups-to-keep")), ("value", Text("30"))))?.Text);
     }
 }
