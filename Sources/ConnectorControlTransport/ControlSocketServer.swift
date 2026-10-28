@@ -8,40 +8,69 @@ import ConnectorControlState
 /// written on a queue of its own; what it reads reaches the server on the main actor, through the
 /// app's `AppHost`, so the server and the tools never leave it.
 public final class ControlSocketServer: @unchecked Sendable {
-    /// A client that has read nothing for this long has its connection closed: its lines would
-    /// otherwise pile up in the app.
+    /// A write that takes longer than this, in all, closes its connection: a client that stops reading,
+    /// or reads too slowly, would otherwise hold its lines in the app.
     public static let writeTimeout = 30
 
     public let path: String
     private let listener: ControlSocketListener
     private let acceptQueue = DispatchQueue(label: "com.dlaporte.connector-control.accept")
+    private let server: ControlServer
+    private let host: AppHost
+    private let allowedUID: uid_t
+    private let timeout: Double
+    private let lock = NSLock()
+    private var stopped = false
 
-    private init(path: String, listener: ControlSocketListener) {
+    private init(path: String, listener: ControlSocketListener, server: ControlServer, host: AppHost,
+                 allowedUID: uid_t, timeout: Double) {
         self.path = path
         self.listener = listener
+        self.server = server
+        self.host = host
+        self.allowedUID = allowedUID
+        self.timeout = timeout
     }
 
     /// Listens at `path` and hands every connection from `allowedUID` — this user, but for a test —
-    /// to `server`. Anyone else's is closed before a byte is read.
-    public static func start(path: String, server: ControlServer, host: AppHost,
-                             allowedUID: uid_t = getuid()) throws -> ControlSocketServer {
+    /// to `server`. Anyone else's is closed before a byte is read. `timeout` is a test's way to a
+    /// short write timeout.
+    public static func start(path: String, server: ControlServer, host: AppHost, allowedUID: uid_t = getuid(),
+                             timeout: Double = Double(writeTimeout)) throws -> ControlSocketServer {
         let listener = try ControlSocketListener.listen(at: path)
-        let endpoint = ControlSocketServer(path: path, listener: listener)
-        listener.start(queue: endpoint.acceptQueue) { stream in
-            guard stream.peerUID == allowedUID else {
-                stream.close()
-                return
-            }
-            stream.setWriteTimeout(seconds: writeTimeout)
-            let connection = SocketConnection(stream: stream)
-            host.marshal { _ = server.open(connection) }
-            Thread.detachNewThread { connection.readAll(server: server, host: host) }
-        }
+        let endpoint = ControlSocketServer(path: path, listener: listener, server: server, host: host,
+                                           allowedUID: allowedUID, timeout: timeout)
+        listener.start(queue: endpoint.acceptQueue) { [endpoint] stream in endpoint.accept(stream) }
         return endpoint
     }
 
-    /// The app is quitting: no new connections, and no socket file left behind.
+    /// One new connection, on the accept queue.
+    func accept(_ stream: ControlSocketStream) {
+        guard stream.peerUID == allowedUID, !isStopped else {
+            stream.close()
+            return
+        }
+        stream.setWriteTimeout(seconds: timeout)
+        let connection = SocketConnection(stream: stream)
+        let (server, host) = (self.server, self.host)
+        // Checked again where the server is: an accept already running when the app stopped posts its
+        // connection after `closeAll`, which would otherwise be served by an app that has quit.
+        host.marshal { [self] in
+            guard !isStopped else {
+                connection.close()
+                return
+            }
+            _ = server.open(connection)
+        }
+        Thread.detachNewThread { connection.readAll(server: server, host: host) }
+    }
+
+    private var isStopped: Bool { lock.withLock { stopped } }
+
+    /// The app is quitting: no new connections, and no socket file left behind. Called before the
+    /// server closes every connection, so none opens after that.
     public func stop() {
+        lock.withLock { stopped = true }
         listener.close()
     }
 }

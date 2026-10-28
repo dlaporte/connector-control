@@ -15,8 +15,13 @@ final class SocketRig {
     let path: String
     let server: ControlServer
     private(set) var endpoint: ControlSocketServer?
+    private let allowedUID: uid_t
+    private let writeTimeout: Double
 
-    init(integration: Bool = true, confirm: Bool = true, allowedUID: uid_t = getuid()) throws {
+    init(integration: Bool = true, confirm: Bool = true, allowedUID: uid_t = getuid(),
+         writeTimeout: Double = Double(ControlSocketServer.writeTimeout)) throws {
+        self.allowedUID = allowedUID
+        self.writeTimeout = writeTimeout
         rig = ControlRig(integration: integration, confirm: confirm)
         var template = Array("/tmp/cc-XXXXXX".utf8CString)
         guard mkdtemp(&template) != nil else { throw ControlSocketError.system("mkdtemp", errno) }
@@ -25,7 +30,8 @@ final class SocketRig {
         guard chmod(folder, 0o755) == 0 else { throw ControlSocketError.system("chmod", errno) }
         path = folder + "/" + ControlEndpoint.socketName
         server = ControlServer(tools: rig.tools)
-        endpoint = try ControlSocketServer.start(path: path, server: server, host: rig.h.host, allowedUID: allowedUID)
+        endpoint = try ControlSocketServer.start(path: path, server: server, host: rig.h.host, allowedUID: allowedUID,
+                                                timeout: writeTimeout)
     }
 
     /// The app quitting: the socket goes, and every connection with it.
@@ -37,7 +43,8 @@ final class SocketRig {
 
     /// The app starting again, with the same state.
     func restart() throws {
-        endpoint = try ControlSocketServer.start(path: path, server: server, host: rig.h.host)
+        endpoint = try ControlSocketServer.start(path: path, server: server, host: rig.h.host, allowedUID: allowedUID,
+                                                timeout: writeTimeout)
     }
 
     func dispose() {

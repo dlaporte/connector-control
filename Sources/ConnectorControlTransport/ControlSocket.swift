@@ -92,8 +92,15 @@ public final class ControlSocketListener: @unchecked Sendable {
     public static func listen(at path: String) throws -> ControlSocketListener {
         var address = try ControlSocket.address(path)
         let folder = (path as NSString).deletingLastPathComponent
-        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true,
-                                                attributes: [.posixPermissions: 0o700])
+        do {
+            try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true,
+                                                    attributes: [.posixPermissions: 0o700])
+        } catch {
+            // A file where the folder should be is a refusal of its own; anything else is the system's.
+            var blocker = stat()
+            if lstat(folder, &blocker) == 0, blocker.st_mode & S_IFMT != S_IFDIR { throw ControlSocketError.folderNotOwned(folder) }
+            throw ControlSocketError.system("createDirectory", Int32((error as NSError).code))
+        }
         var folderInfo = stat()
         guard lstat(folder, &folderInfo) == 0, folderInfo.st_mode & S_IFMT == S_IFDIR, folderInfo.st_uid == getuid() else {
             throw ControlSocketError.folderNotOwned(folder)
@@ -153,31 +160,36 @@ public final class ControlSocketListener: @unchecked Sendable {
         return .stale
     }
 
-    /// Hands each new connection to `accepted`, on `queue`, until `close()`.
+    /// Hands each new connection to `accepted`, on `queue`, until `close()`. Starting a listener that is
+    /// closed, or already started, does nothing.
     public func start(queue: DispatchQueue, accepted: @escaping @Sendable (ControlSocketStream) -> Void) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !closed, source == nil else { return }
         _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         source.setEventHandler { [fd] in
             while true {
                 let client = Darwin.accept(fd, nil, nil)
                 guard client >= 0 else {
-                    // Out of descriptors, the listener stays readable and this handler would spin:
+                    // Nothing more waiting, or a connection that went away before it was taken: on to
+                    // the next, or back to waiting.
+                    if errno == EAGAIN || errno == EWOULDBLOCK { return }
+                    if errno == EINTR || errno == ECONNABORTED { continue }
+                    // Any other failure — out of descriptors, buffers or memory — can leave the
+                    // connection waiting, so the listener stays readable and this handler would spin:
                     // accepting pauses instead, and the waiting client is taken once it resumes.
-                    if errno == EMFILE || errno == ENFILE {
-                        source.suspend()
-                        queue.asyncAfter(deadline: .now() + ControlSocketListener.descriptorPause) { source.resume() }
-                    }
+                    source.suspend()
+                    queue.asyncAfter(deadline: .now() + ControlSocketListener.descriptorPause) { source.resume() }
                     return
                 }
-                // A socket accepted from a non-blocking listener is non-blocking too on macOS; its
-                // reader blocks, so it is made blocking again.
-                _ = fcntl(client, F_SETFL, fcntl(client, F_GETFL) & ~O_NONBLOCK)
-                ControlSocket.noSIGPIPE(client)
-                accepted(ControlSocketStream(fd: client))
+                let stream = ControlSocketStream(fd: client)
+                stream.makeNonBlocking()
+                accepted(stream)
             }
         }
         source.setCancelHandler { [fd] in Darwin.close(fd) }
-        lock.withLock { self.source = source }
+        self.source = source
         source.resume()
     }
 
@@ -201,6 +213,7 @@ public final class ControlSocketStream: ControlStream, @unchecked Sendable {
     let fd: Int32
     private let lock = NSLock()
     private var shut = false
+    private var writeTimeout: Double?
 
     init(fd: Int32) {
         self.fd = fd
@@ -223,6 +236,7 @@ public final class ControlSocketStream: ControlStream, @unchecked Sendable {
         }
         guard result == 0 else { throw ControlSocketError.system("connect", errno) }
         if let owner, stream.peerUID != owner { throw ControlSocketError.notOwner(path) }
+        stream.makeNonBlocking()
         return stream
     }
 
@@ -233,38 +247,65 @@ public final class ControlSocketStream: ControlStream, @unchecked Sendable {
         return getpeereid(fd, &uid, &gid) == 0 ? uid : nil
     }
 
+    /// Reads and writes wait on the descriptor with `poll`, so a write can keep to a deadline: the
+    /// descriptor is non-blocking, once connected. (A socket accepted from a non-blocking listener is
+    /// non-blocking on macOS already, and is no longer made blocking.)
+    func makeNonBlocking() {
+        _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
+    }
+
     public func read(maximum: Int) -> Data {
         var buffer = [UInt8](repeating: 0, count: maximum)
         while true {
             let count = Darwin.read(fd, &buffer, maximum)
             if count > 0 { return Data(buffer[0..<count]) }
             if count < 0, errno == EINTR { continue }
+            if count < 0, errno == EAGAIN || errno == EWOULDBLOCK {
+                // Closing shuts the socket down, which wakes this wait.
+                var pending = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+                if poll(&pending, 1, -1) < 0, errno != EINTR { return Data() }
+                continue
+            }
             return Data()
         }
     }
 
+    /// Writes all of `data`, within the write timeout if one is set: the deadline is the whole write's,
+    /// taken when it starts. A socket's own send timeout starts over each time the peer reads a little,
+    /// so a client reading slowly could hold a write open without end; here the descriptor is waited
+    /// on against the time that remains, and a write that is not done by the deadline has failed.
     public func write(_ data: Data) -> Bool {
-        data.withUnsafeBytes { raw -> Bool in
+        let limit = lock.withLock { writeTimeout }
+        let deadline = limit.map { DispatchTime.now().uptimeNanoseconds + UInt64($0 * 1_000_000_000) }
+        return data.withUnsafeBytes { raw -> Bool in
             guard let base = raw.baseAddress else { return true }
             var offset = 0
             while offset < raw.count {
-                let written = Darwin.write(fd, base + offset, raw.count - offset)
-                if written > 0 {
-                    offset += written
-                } else if written < 0, errno == EINTR {
+                let sent = Darwin.send(fd, base + offset, raw.count - offset, 0)
+                if sent > 0 {
+                    offset += sent
                     continue
-                } else {
-                    return false
                 }
+                if sent < 0, errno == EINTR { continue }
+                guard sent < 0, errno == EAGAIN || errno == EWOULDBLOCK else { return false }
+                var wait: Int32 = -1
+                if let deadline {
+                    let now = DispatchTime.now().uptimeNanoseconds
+                    guard now < deadline else { return false }
+                    wait = Int32(min((deadline - now + 999_999) / 1_000_000, UInt64(Int32.max)))
+                }
+                var pending = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+                let ready = poll(&pending, 1, wait)
+                if ready == 0 { return false }
+                if ready < 0, errno != EINTR { return false }
             }
             return true
         }
     }
 
-    /// How long a write may wait for the other end to read before it fails.
-    public func setWriteTimeout(seconds: Int) {
-        var limit = timeval(tv_sec: seconds, tv_usec: 0)
-        _ = setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &limit, socklen_t(MemoryLayout<timeval>.size))
+    /// How long a write may take, in all, before it fails. Unset, a write waits for as long as it must.
+    public func setWriteTimeout(seconds: Double) {
+        lock.withLock { writeTimeout = seconds }
     }
 
     public func close() {

@@ -122,7 +122,13 @@ final class ControlSocketTests: XCTestCase {
         extra.say(#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#)
         XCTAssertTrue(socket.until { extra.isEnded })
         XCTAssertEqual(extra.lines, [])
-        XCTAssertEqual(clients.count, ControlServer.maxConnections)
+        // The ones already in are still served, and none was dropped to make room.
+        clients[0].hello()
+        clients[0].say(initialize, initialized, #"{"jsonrpc":"2.0","id":2,"method":"ping"}"#)
+        XCTAssertTrue(socket.until { clients[0].answers()[.int(2)] != nil })
+        XCTAssertTrue(clients.allSatisfy { !$0.isEnded })
+        XCTAssertEqual(socket.server.connectionCount, ControlServer.maxConnections)
+        withExtendedLifetime(clients) {}
     }
 
     func testAnotherUsersConnectionIsClosedBeforeAnythingIsRead() throws {
@@ -230,15 +236,152 @@ final class ControlSocketTests: XCTestCase {
         relay.hello(ControlHello.relayClient)
         relay.say(initialize, initialized, deleteAws)
         XCTAssertTrue(socket.until { socket.rig.confirmer.waitingCount == 1 })
+        let waiting = socket.rig.h.delays.pending.count
         let cli = try socket.connect()
         cli.hello()
         cli.say(initialize, initialized,
-                #"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"create_collection","arguments":{"name":"Later"}}}"#)
-        XCTAssertTrue(socket.until { cli.answers()[.int(1)] != nil })
+                #"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"_meta":{"progressToken":"p"},"name":"create_collection","arguments":{"name":"Later"}}}"#)
+        // Its write reached the server and is queued behind the relay's, so closing drops a write
+        // that was waiting, not one that never arrived.
+        // Progress reaches a call only once it waits its turn, so hearing it proves the write is queued.
+        XCTAssertTrue(socket.until { socket.rig.h.delays.pending.count > waiting })
+        for _ in 0..<socket.rig.h.delays.pending.count { socket.rig.h.delays.runNext() }
+        XCTAssertTrue(socket.until { cli.lines.contains { $0.contains(#""progressToken":"p""#) } })
         cli.stream.close()
         XCTAssertTrue(socket.until { socket.server.connectionCount == 1 })
         socket.rig.confirmer.answer(false)
         XCTAssertTrue(socket.until { relay.answers()[.int(2)] != nil })
         XCTAssertNil(socket.rig.state.store.collections["Later"], "the command line's write never ran")
     }
+
+    /// A regular file where the folder should be is a refusal, not a Foundation error.
+    func testAFileWhereTheFolderShouldBeIsRefused() throws {
+        let socket = try SocketRig(); defer { socket.dispose() }
+        let file = socket.folder + "/file"
+        try Data("mine".utf8).write(to: URL(fileURLWithPath: file))
+        XCTAssertThrowsError(try ControlSocketListener.listen(at: file + "/control.sock")) {
+            XCTAssertEqual($0 as? ControlSocketError, .folderNotOwned(file))
+        }
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: file)), Data("mine".utf8))
+    }
+
+    /// Starting a listener that is closed, or already started, does nothing.
+    func testStartingAClosedOrStartedListenerDoesNothing() throws {
+        let socket = try SocketRig(); defer { socket.dispose() }
+        let path = socket.folder + "/again.sock"
+        let queue = DispatchQueue(label: "test.accept")
+        let count = Locked(0)
+        let listener = try ControlSocketListener.listen(at: path)
+        listener.start(queue: queue) { stream in count.add(); stream.close() }
+        listener.start(queue: queue) { stream in count.add(); stream.close() }
+        let first = try ControlSocketStream.connect(to: path)
+        XCTAssertTrue(pollUntil { count.value == 1 })
+        XCTAssertEqual(first.read(maximum: 1), Data())
+        listener.close()
+        listener.start(queue: queue) { _ in count.add() }
+        listener.close()
+        XCTAssertThrowsError(try ControlSocketStream.connect(to: path))
+        XCTAssertEqual(count.value, 1)
+    }
+
+    /// The server closes a client that never reads, within a few times the timeout, and the app goes on.
+    func testAClientThatNeverReadsIsClosedWithinTheTimeout() throws {
+        let socket = try SocketRig(writeTimeout: WriteDeadline.short); defer { socket.dispose() }
+        let stream = try ControlSocketStream.connect(to: socket.path)
+        var burst = Data((ControlHello.line(client: ControlHello.cliClient, version: "1.2.2") + "\n").utf8)
+        burst.append(Data((initialize + "\n" + initialized + "\n").utf8))
+        for id in 2..<4_000 { burst.append(Data(#"{"jsonrpc":"2.0","id":\#(id),"method":"ping"}"#.utf8) + Data("\n".utf8)) }
+        XCTAssertTrue(stream.write(burst))
+        XCTAssertTrue(socket.until { socket.server.connectionCount == 1 })
+        let began = Date()
+        XCTAssertTrue(socket.until { socket.server.connectionCount == 0 })
+        XCTAssertLessThan(Date().timeIntervalSince(began), 3 * WriteDeadline.short + 3)
+        withExtendedLifetime(stream) {}
+    }
+
+    /// An accept already running when the app stops posts its connection after the app has closed them
+    /// all; the connection is closed, not opened.
+    func testAConnectionAcceptedBeforeStopButOpenedAfterIsClosedNotOpened() throws {
+        let socket = try SocketRig(); defer { socket.dispose() }
+        let endpoint = try XCTUnwrap(socket.endpoint)
+        let (served, client) = try socketPair()
+        endpoint.accept(served)
+        socket.stop()
+        socket.rig.h.ui.pump()
+        XCTAssertEqual(socket.server.connectionCount, 0)
+        XCTAssertEqual(client.read(maximum: 1), Data(), "it is closed")
+    }
+
+    func testARestartedServerStillRefusesAnotherUser() throws {
+        let socket = try SocketRig(allowedUID: getuid() &+ 1); defer { socket.dispose() }
+        socket.stop()
+        try socket.restart()
+        let client = try socket.connect()
+        client.hello()
+        XCTAssertTrue(socket.until { client.isEnded })
+        XCTAssertEqual(socket.server.connectionCount, 0)
+    }
+
+    private func socketPair() throws -> (ControlSocketStream, ControlSocketStream) {
+        var fds: [Int32] = [0, 0]
+        guard socketpair(AF_UNIX, SOCK_STREAM, 0, &fds) == 0 else { throw ControlSocketError.system("socketpair", errno) }
+        ControlSocket.noSIGPIPE(fds[0])
+        ControlSocket.noSIGPIPE(fds[1])
+        let streams = (ControlSocketStream(fd: fds[0]), ControlSocketStream(fd: fds[1]))
+        streams.0.makeNonBlocking()
+        streams.1.makeNonBlocking()
+        return streams
+    }
+
+    /// A write is bounded as a whole: a peer that reads nothing, and a line bigger than what is free
+    /// in the socket's buffer, end it at the deadline and not at some multiple of it.
+    func testAWriteToAPeerThatReadsNothingFailsAtTheDeadline() throws {
+        let (server, client) = try socketPair()
+        server.setWriteTimeout(seconds: WriteDeadline.short)
+        let began = Date()
+        XCTAssertFalse(server.write(Data(repeating: 0x61, count: 262_144)))
+        // Cut at the deadline, not after a partial write and a second wait of the same length.
+        XCTAssertLessThan(Date().timeIntervalSince(began), 1.5 * WriteDeadline.short + 0.3)
+        withExtendedLifetime(client) {}
+    }
+
+    /// A peer that reads a little at a time, each read within the timeout, does not keep a write going
+    /// past the deadline: the wait does not start over when some of it is read.
+    func testAWriteToAPeerThatReadsSlowlyFailsAtTheDeadline() throws {
+        let (server, client) = try socketPair()
+        server.setWriteTimeout(seconds: WriteDeadline.short)
+        Thread.detachNewThread {
+            while !client.read(maximum: 1_024).isEmpty { usleep(50_000) }
+        }
+        let began = Date()
+        XCTAssertFalse(server.write(Data(repeating: 0x61, count: 262_144)))
+        XCTAssertLessThan(Date().timeIntervalSince(began), WriteDeadline.bound)
+        client.close()
+    }
+}
+
+/// The short write timeout the tests give the server, and how long a write past it may take to be
+/// cut: generous, since only a write that is never cut matters.
+enum WriteDeadline {
+    static let short = 0.5
+    static var bound: TimeInterval { 3 * short + 1 }
+}
+
+/// A counter two threads may touch.
+final class Locked: @unchecked Sendable {
+    private let lock = NSLock()
+    private var number: Int
+    init(_ number: Int) { self.number = number }
+    func add() { lock.withLock { number += 1 } }
+    var value: Int { lock.withLock { number } }
+}
+
+/// Waits on real background work, for at most `Wait.eventually`.
+func pollUntil(_ condition: () -> Bool) -> Bool {
+    let end = Date().addingTimeInterval(Wait.eventually)
+    while !condition() {
+        if Date() > end { return false }
+        usleep(5_000)
+    }
+    return true
 }
