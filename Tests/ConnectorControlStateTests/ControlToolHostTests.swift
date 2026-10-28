@@ -56,6 +56,20 @@ final class ControlToolHostTests: XCTestCase {
         XCTAssertTrue(sent.last?.contains(#""isError":true"#) ?? false)
     }
 
+    /// Only the transport's word makes a connection the command-line tool: a relay client that gives
+    /// the tool's own name is still the relay, and still asked.
+    func testARelayCallingItselfTheCommandLineToolIsStillAsked() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        rig.confirmer.scripted = false
+        let (session, sent) = connect(rig, isCLI: false, client: MasterStore.reservedConnectorName)
+        XCTAssertEqual(session.clientName, "connector-control")
+        session.receive(#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add_connector","arguments":{"name":"x","config":{"command":"node"}}}}"#)
+        rig.h.drain()
+        XCTAssertEqual(rig.confirmer.requests.map(\.title), [ControlTools.addTitle("connector-control", "x")])
+        XCTAssertNil(rig.state.store.mcps["x"])
+        XCTAssertTrue(sent().last?.contains(#""isError":true"#) ?? false)
+    }
+
     func testACommandLineConnectionIsNeverAsked() {
         let rig = ControlRig(); defer { rig.dispose() }
         let (session, _) = connect(rig, isCLI: true, client: "connector-control")

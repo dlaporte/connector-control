@@ -66,6 +66,22 @@ public class ControlToolHostTests
         Assert.Contains("\"isError\":true", sent.LastOrDefault() ?? "");
     }
 
+    /// <summary>Only the transport's word makes a connection the command-line tool: a relay client that gives
+    /// the tool's own name is still the relay, and still asked.</summary>
+    [Fact]
+    public void ARelayCallingItselfTheCommandLineToolIsStillAsked()
+    {
+        using var rig = new ControlRig();
+        rig.Confirmer.Scripted = false;
+        var (session, sent) = Connect(rig, isCli: false, client: MasterStore.ReservedConnectorName);
+        Assert.Equal("connector-control", session.ClientName);
+        session.Receive("""{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add_connector","arguments":{"name":"x","config":{"command":"node"}}}}""");
+        rig.H.Drain();
+        Assert.Equal([ControlTools.AddTitle("connector-control", "x")], rig.Confirmer.Requests.Select(request => request.Title));
+        Assert.False(rig.State.Store.Mcps.ContainsKey("x"));
+        Assert.Contains("\"isError\":true", sent.LastOrDefault() ?? "");
+    }
+
     [Fact]
     public void ACommandLineConnectionIsNeverAsked()
     {
