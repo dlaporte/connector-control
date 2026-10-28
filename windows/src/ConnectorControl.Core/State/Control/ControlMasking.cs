@@ -11,14 +11,22 @@ namespace ConnectorControl.Core.State;
 /// URL's user name or path segment that reads as a credential, read "•••". Placeholders —
 /// <c>${CC_NEEDS:…}</c> and <c>${COLLECTION_DIR}</c> — name what is missing rather than what is secret, and
 /// show as written when they are the whole value. Every rule is plain string work, with no URL
-/// parser, so both platforms mask the same text the same way. <c>reveal</c> (the command-line tool's
-/// <c>show --reveal</c>, never Claude's) turns it all off.
+/// parser, so both platforms mask the same text the same way. Structured output is masked or, for
+/// the command-line tool's <c>show --reveal</c> (never Claude's), revealed; the line renderers take an
+/// <see cref="Exposure"/>, which adds the confirmation dialog's.
 /// The Mac mirror is main-actor only; C# has no isolation to declare.
 ///
 /// Mirror: Sources/ConnectorControlState/Control/ControlMasking.swift
 /// </summary>
 public static class ControlMasking
 {
+    /// <summary>How much a line renderer shows. <c>Masked</c>: what Claude and the command-line tool see.
+    /// <c>Dialog</c>: the confirmation dialogs, whose text never goes back to Claude — the command,
+    /// arguments and URL in full, with environment and header values, the OAuth client secret and
+    /// every value under a key named for a secret still masked. <c>Revealed</c>: everything as written,
+    /// for the command-line tool's <c>show --reveal</c>.</summary>
+    public enum Exposure { Masked, Dialog, Revealed }
+
     public const string Mask = "•••";
     /// <summary>A secret's state in structured output.</summary>
     public const string SetState = "set";
@@ -234,9 +242,14 @@ public static class ControlMasking
     /// <summary>An argument list: each through <see cref="Argument"/>, and also the value after a flag named for a
     /// secret (<c>--api-key x</c>, <c>--static-oauth-client-info {…}</c>) unless it is itself a flag, and a
     /// header after <c>--header</c> or <c>-H</c>.</summary>
-    public static IReadOnlyList<string> Arguments(IReadOnlyList<string> args, bool reveal = false)
+    public static IReadOnlyList<string> Arguments(IReadOnlyList<string> args, bool reveal = false) =>
+        Arguments(args, reveal ? Exposure.Revealed : Exposure.Masked);
+
+    /// <summary>An argument list as <c>exposure</c> shows it. The dialog keeps every argument as written but a
+    /// header's value and the OAuth client info, which holds the client secret.</summary>
+    internal static IReadOnlyList<string> Arguments(IReadOnlyList<string> args, Exposure exposure)
     {
-        if (reveal)
+        if (exposure == Exposure.Revealed)
         {
             return args;
         }
@@ -249,14 +262,27 @@ public static class ControlMasking
                 {
                     return Header(arg);
                 }
-                if (IsFlag(previous) && Cut(previous, "=") is null && CredentialHeuristics.NamesASecret(previous)
-                    && !IsFlag(arg) && !RefersElsewhere(arg))
+                if (HidesNext(previous, exposure) && !IsFlag(arg) && !RefersElsewhere(arg))
                 {
                     return Mask;
                 }
             }
-            return Argument(arg);
+            return exposure == Exposure.Masked ? Argument(arg) : arg;
         }).ToList();
+    }
+
+    /// <summary>The flag whose value holds an OAuth client's secret.</summary>
+    internal const string OauthClientInfoFlag = "--static-oauth-client-info";
+
+    /// <summary>Whether the value after <c>flag</c> is a secret: after any flag named for one when masked, and
+    /// only after the OAuth client info in the dialog.</summary>
+    internal static bool HidesNext(string flag, Exposure exposure)
+    {
+        if (exposure == Exposure.Dialog)
+        {
+            return flag == OauthClientInfoFlag;
+        }
+        return IsFlag(flag) && Cut(flag, "=") is null && CredentialHeuristics.NamesASecret(flag);
     }
 
     /// <summary>"Name: value" with the value masked unless it is empty or a reference.</summary>
@@ -279,9 +305,12 @@ public static class ControlMasking
     /// <summary>The keys whose values are secrets by name: every value under them is.</summary>
     internal static readonly IReadOnlySet<string> SecretKeys = new HashSet<string>(StringComparer.Ordinal) { "env", "headers" };
 
+    internal static bool NamesASecret(string key) =>
+        SecretKeys.Contains(key) || CredentialHeuristics.NamesASecret(key);
+
     /// <summary>The config as structured output carries it, in its own shape: <c>env</c> and <c>headers</c> values
     /// become "set" or "needs value", and so does every string or number under a key named for a
-    /// secret; an array is an argument list through <see cref="Arguments"/>, and every other string goes
+    /// secret; an array is an argument list through <see cref="Arguments(IReadOnlyList{string}, bool)"/>, and every other string goes
     /// through <see cref="Argument"/>, a URL through <see cref="Url"/>.</summary>
     public static JsonValue MaskedConfig(JsonValue config, bool reveal = false)
     {
@@ -291,7 +320,7 @@ public static class ControlMasking
         }
         if (config.Kind != JsonKind.Object)
         {
-            return MaskedLeaves(config, secret: false);
+            return Leaves(config, Exposure.Masked, secret: false);
         }
         var result = new Dictionary<string, JsonValue>(StringComparer.Ordinal);
         foreach (var (key, value) in config.ObjectProperties)
@@ -303,39 +332,51 @@ public static class ControlMasking
             }
             else
             {
-                result[key] = MaskedLeaves(value, secret: SecretKeys.Contains(key) || CredentialHeuristics.NamesASecret(key));
+                result[key] = Leaves(value, Exposure.Masked, secret: NamesASecret(key));
             }
         }
         return JsonValue.Object(result);
     }
 
-    /// <summary><c>value</c> masked: under a key named for a secret (<c>secret</c>) every string or number reads
-    /// "set" or "needs value"; elsewhere an array is an argument list, its strings masked as
-    /// <see cref="Arguments"/> masks them, and every other string goes through <see cref="Argument"/>.</summary>
-    internal static JsonValue MaskedLeaves(JsonValue value, bool secret)
+    /// <summary><c>value</c> as <c>exposure</c> shows it: under a key named for a secret (<c>secret</c>) every string or
+    /// number reads "set" or "needs value"; masked, an array is an argument list, its strings
+    /// masked as <see cref="Arguments(IReadOnlyList{string}, bool)"/> masks them and anything after a flag named for a secret too, and
+    /// every other string goes through <see cref="Argument"/>; in the dialog an array is an argument list as
+    /// the dialog shows one, and the rest is as written.</summary>
+    internal static JsonValue Leaves(JsonValue value, Exposure exposure, bool secret)
     {
+        if (exposure == Exposure.Revealed)
+        {
+            return value;
+        }
         switch (value.Kind)
         {
             case JsonKind.String:
-                return JsonValue.String(secret ? SecretState(value.StringValue) : Argument(value.StringValue));
+                if (secret)
+                {
+                    return JsonValue.String(SecretState(value.StringValue));
+                }
+                return exposure == Exposure.Masked ? JsonValue.String(Argument(value.StringValue)) : value;
             case JsonKind.Int:
             case JsonKind.Double:
                 return secret ? JsonValue.String(SetState) : value;
             case JsonKind.Array:
                 if (secret)
                 {
-                    return JsonValue.Array(value.ArrayItems.Select(item => MaskedLeaves(item, secret: true)));
+                    return JsonValue.Array(value.ArrayItems.Select(item => Leaves(item, exposure, secret: true)));
                 }
-                var shown = Arguments(value.ArrayItems.Select(item => item.Kind == JsonKind.String ? item.StringValue : "").ToList());
+                var shown = Arguments(value.ArrayItems.Select(item => item.Kind == JsonKind.String ? item.StringValue : "").ToList(), exposure);
                 return JsonValue.Array(value.ArrayItems.Zip(shown, (item, text) =>
-                    item.Kind == JsonKind.String ? JsonValue.String(text) : MaskedLeaves(item, secret: false)));
+                    item.Kind == JsonKind.String ? JsonValue.String(text) : Leaves(item, exposure, secret: text == Mask)));
             case JsonKind.Object:
                 return JsonValue.Object(value.ObjectProperties.Select(item => new KeyValuePair<string, JsonValue>(
-                    item.Key, MaskedLeaves(item.Value, secret || CredentialHeuristics.NamesASecret(item.Key)))));
+                    item.Key, Leaves(item.Value, exposure, secret || CredentialHeuristics.NamesASecret(item.Key)))));
             default:
                 return value;
         }
     }
+
+    // MARK: Lines
 
     /// <summary>One field of a config as a person reads it: its label, and each value as written (<c>Raw</c>,
     /// which tells a changed secret from an unchanged one) and as shown.</summary>
@@ -344,17 +385,19 @@ public static class ControlMasking
     /// <summary>What a connector runs, one field per line, for <c>get_connector</c>'s text and the confirmation
     /// dialogs: a connector reached through mcp-remote by its URL and how it signs in; one reached
     /// by URL alone by its URL and headers; anything else by its command, arguments and environment.</summary>
-    public static IReadOnlyList<string> CodeLines(JsonValue config, bool reveal = false) =>
-        ControlText.Labelled(Fields(config, reveal).SelectMany(field =>
+    public static IReadOnlyList<string> CodeLines(JsonValue config, Exposure exposure = Exposure.Masked) =>
+        ControlText.Labelled(View(config, exposure).Fields.SelectMany(field =>
             field.Values.Select((value, index) => (index == 0 ? field.Label : "", value.Shown))).ToList());
 
     /// <summary>The fields an edit changes, for the change confirmation: each changed field's label, then
     /// "− " before each value it loses and "+ " before each it gains. A secret that changed shows
-    /// as changed although both sides read "••• (set)".</summary>
-    public static IReadOnlyList<string> ChangeLines(JsonValue before, JsonValue after)
+    /// as changed although both sides read "••• (set)". Every difference between the two configs
+    /// shows: a top-level key the fields do not show in full gets a field of its own, labelled with
+    /// its name, in place of the code lines' list of other keys.</summary>
+    public static IReadOnlyList<string> ChangeLines(JsonValue before, JsonValue after, Exposure exposure = Exposure.Masked)
     {
-        var old = Fields(before, false);
-        var @new = Fields(after, false);
+        var old = ChangeFields(before, exposure);
+        var @new = ChangeFields(after, exposure);
         var labels = new List<string>();
         foreach (var field in @new.Concat(old))
         {
@@ -366,10 +409,10 @@ public static class ControlMasking
         var lines = new List<string>();
         foreach (var label in labels)
         {
-            var was = old.FirstOrDefault(field => field.Label == label)?.Values ?? [];
-            var now = @new.FirstOrDefault(field => field.Label == label)?.Values ?? [];
-            var lost = was.Where(item => !now.Any(other => other.Raw == item.Raw && other.Shown == item.Shown)).ToList();
-            var gained = now.Where(item => !was.Any(other => other.Raw == item.Raw && other.Shown == item.Shown)).ToList();
+            var was = old.Where(field => field.Label == label).SelectMany(field => field.Values).ToList();
+            var now = @new.Where(field => field.Label == label).SelectMany(field => field.Values).ToList();
+            var lost = was.Where(item => !now.Any(other => Same(other, item))).ToList();
+            var gained = now.Where(item => !was.Any(other => Same(other, item))).ToList();
             if (lost.Count == 0 && gained.Count == 0)
             {
                 continue;
@@ -381,90 +424,263 @@ public static class ControlMasking
         return lines;
     }
 
-    private static List<Field> Fields(JsonValue config, bool reveal)
+    // Platform idiom: values are compared scalar by scalar on the Mac, as they are compared
+    // ordinally here; Swift's == holds canonically equivalent text equal, which would hide a change.
+    private static bool Same((string Raw, string Shown) one, (string Raw, string Shown) other) =>
+        Same(one.Raw, other.Raw) && Same(one.Shown, other.Shown);
+
+    private static bool Same(string one, string other) =>
+        string.Equals(one, other, StringComparison.Ordinal);
+
+    /// <summary>The fields <see cref="ChangeLines"/> compares: the code lines' fields but the list of other keys, then a
+    /// field for each top-level key those do not show in full.</summary>
+    private static List<Field> ChangeFields(JsonValue config, Exposure exposure)
     {
-        // Decodes with RemotePattern.Decode, which also reads `cmd /c npx …`, so a Windows connector shows the same lines.
-        if (RemotePattern.Decode(config) is { } remote)
-        {
-            var fields = new List<Field>
-            {
-                new(TypeLabel, [(remote.Package, RemoteBridgeType(remote.Package))]),
-                new(UrlLabel, [(remote.Url, Url(remote.Url, reveal))]),
-            };
-            switch (remote.Auth)
-            {
-                case RemoteAuth.Bearer bearer:
-                    fields.Add(new Field(HeadersLabel, [(bearer.Token, Assignment("Authorization", SecretText(bearer.Token, reveal)))]));
-                    break;
-                case RemoteAuth.Header header:
-                    fields.Add(new Field(HeadersLabel, [(header.Name + ":" + header.Value, Assignment(header.Name, SecretText(header.Value, reveal)))]));
-                    break;
-                case RemoteAuth.OAuthClient client:
-                    fields.Add(new Field(OauthLabel, [(client.ClientId + ":" + client.ClientSecret,
-                        OauthClientText(client.ClientId, SecretText(client.ClientSecret, reveal)))]));
-                    if (client.Scopes.Length > 0)
-                    {
-                        fields.Add(new Field(ScopesLabel, [(client.Scopes, client.Scopes)]));
-                    }
-                    break;
-            }
-            if (remote.ExtraArgs.Count > 0)
-            {
-                fields.Add(new Field(ArgsLabel, [(string.Join(" ", remote.ExtraArgs), string.Join(" ", Arguments(remote.ExtraArgs, reveal)))]));
-            }
-            return fields.Concat(EnvFields(remote.PassthroughEnv, reveal)).ToList();
-        }
         if (config.Kind != JsonKind.Object)
         {
-            return [];
+            return [new Field(OtherLabel, [(Raw(JsonValue.Array([config])), ValueText("", config, exposure))])];
         }
+        var (fields, shown) = View(config, exposure);
         var properties = config.ObjectProperties;
-        if (!properties.ContainsKey("command") && properties.TryGetValue("url", out var urlValue) && urlValue.Kind == JsonKind.String)
+        return fields.Where(field => field.Label != OtherLabel).Concat(properties.Keys.Where(key => !shown.Contains(key))
+            .Order(StringComparer.Ordinal)
+            .Select(key =>
+                // Raw with its key, so it never matches a field's raw under the same label (a
+                // `url` key beside mcp-remote's URL).
+                new Field(key, [(Raw(JsonValue.Array([JsonValue.String(key), properties[key]])), ValueText(key, properties[key], exposure))]))).ToList();
+    }
+
+    /// <summary>A top-level key's value on a line, after <see cref="Leaves"/>: a string as itself, anything else as one
+    /// line of JSON; a string under a key named for a secret as <see cref="SecretText"/> shows it.</summary>
+    private static string ValueText(string key, JsonValue value, Exposure exposure)
+    {
+        if (value.Kind == JsonKind.String)
         {
-            var address = urlValue.StringValue;
-            var fields = new List<Field>
+            if (NamesASecret(key))
             {
-                new(TypeLabel, [("", CollectionsModel.RemoteType)]),
-                new(UrlLabel, [(address, Url(address, reveal))]),
-            };
-            if (properties.TryGetValue("headers", out var headersValue) && headersValue.Kind == JsonKind.Object)
-            {
-                var headers = headersValue.ObjectProperties;
-                var values = headers.Keys.Order(StringComparer.Ordinal).Select(name =>
-                {
-                    var text = headers[name].Kind == JsonKind.String ? headers[name].StringValue : "";
-                    return (Raw: name + ":" + text, Shown: Assignment(name, SecretText(text, reveal)));
-                }).ToList();
-                fields.Add(new Field(HeadersLabel, values));
+                return SecretText(value.StringValue, exposure == Exposure.Revealed);
             }
-            return fields;
+            return exposure == Exposure.Masked ? Argument(value.StringValue) : value.StringValue;
         }
+        return CompactText(Leaves(value, exposure, NamesASecret(key)));
+    }
+
+    /// <summary>A value as written, for telling one from another: every part of it, nothing shown.</summary>
+    private static string Raw(JsonValue value) =>
+        CompactText(value);
+
+    // Platform idiom: JSONEncoder with sorted keys and unescaped slashes on the Mac, which this
+    // writes byte for byte as AppleJsonFormat.EditorText without its line breaks.
+    /// <summary>One line of JSON.</summary>
+    private static string CompactText(JsonValue value) =>
+        AppleJsonWriter.Write(value, AppleJsonFormat.EditorText with { Pretty = false });
+
+    /// <summary>The fields of <c>config</c> as <c>exposure</c> shows them, and the top-level keys they show in full.</summary>
+    private static (List<Field> Fields, HashSet<string> Shown) View(JsonValue config, Exposure exposure)
+    {
+        if (config.Kind != JsonKind.Object)
+        {
+            return ([], []);
+        }
+        // Platform idiom: RemotePattern.Decode here also reads `cmd /c npx …`, so a Windows
+        // connector shows the same lines; the Mac has no such launcher.
+        if (RemotePattern.Decode(config) is { } remote)
+        {
+            return RemoteView(config, remote, exposure);
+        }
+        if (config["command"] is null && config["url"] is { Kind: JsonKind.String } address)
+        {
+            return UrlView(config, address.StringValue, exposure);
+        }
+        return LocalView(config, exposure);
+    }
+
+    /// <summary>A connector reached through mcp-remote: its bridge, URL and sign-in, every argument those
+    /// do not show, and its environment but the variable a header reads. The sign-in shows only
+    /// the flags <see cref="RemotePattern.Encode"/> writes for it; one written any other way (spacing, a second
+    /// copy, a field the decoder drops) shows among the arguments. The bridge's value as written
+    /// holds the launcher, so dropping <c>-y</c> shows as a change.</summary>
+    private static (List<Field> Fields, HashSet<string> Shown) RemoteView(JsonValue config, RemoteConfig remote, Exposure exposure)
+    {
+        var args = Strings(config["args"]);
+        var found = args.FindIndex(arg => Same(arg, remote.Package));
+        var bridge = found < 0 ? 0 : found;
+        var launcher = new[] { config["command"] ?? JsonValue.Null }.Concat(args.Take(bridge + 1).Select(JsonValue.String));
+        var fields = new List<Field>
+        {
+            new(TypeLabel, [(Raw(JsonValue.Array(launcher)), RemoteBridgeType(remote.Package))]),
+            new(UrlLabel, [(Raw(JsonValue.String(remote.Url)), Url(remote.Url, exposure != Exposure.Masked))]),
+        };
+        var reveal = exposure == Exposure.Revealed;
+        switch (remote.Auth)
+        {
+            case RemoteAuth.Bearer bearer:
+                fields.Add(new Field(HeadersLabel,
+                    [(Raw(JsonValue.Array([JsonValue.String(bearer.Token)])), Assignment("Authorization", SecretText(bearer.Token, reveal)))]));
+                break;
+            case RemoteAuth.Header header:
+                fields.Add(new Field(HeadersLabel,
+                    [(Raw(JsonValue.Array([JsonValue.String(header.Name), JsonValue.String(header.Value)])), Assignment(header.Name, SecretText(header.Value, reveal)))]));
+                break;
+            case RemoteAuth.OAuthClient client:
+                fields.Add(new Field(OauthLabel,
+                    [(Raw(JsonValue.Array([JsonValue.String(client.ClientId), JsonValue.String(client.ClientSecret)])),
+                        OauthClientText(client.ClientId, SecretText(client.ClientSecret, reveal)))]));
+                if (client.Scopes.Length > 0)
+                {
+                    fields.Add(new Field(ScopesLabel, [(Raw(JsonValue.String(client.Scopes)), client.Scopes)]));
+                }
+                break;
+        }
+        var signIn = SignInArguments(remote.Auth);
+        var rest = Unmodelled(args.Skip(bridge + 2).ToList(), signIn.Pairs);
+        var kept = rest.OfType<string>().ToList();
+        if (kept.Count > 0)
+        {
+            fields.Add(new Field(ArgsLabel, [(Raw(JsonValue.Array(rest.Select(item => item is null ? JsonValue.Null : JsonValue.String(item)))),
+                string.Join(" ", Arguments(kept, exposure)))]));
+        }
+        var shown = new HashSet<string>(StringComparer.Ordinal) { "command", "args" };
+        if (config["env"] is { Kind: JsonKind.Object } env && env.ObjectProperties.Count > 0)
+        {
+            var passthrough = env.ObjectProperties.Where(item => !signIn.Variables.Contains(item.Key)).ToDictionary(StringComparer.Ordinal);
+            if (passthrough.Count > 0)
+            {
+                fields.Add(SecretField(EnvLabel, passthrough, exposure));
+            }
+            shown.Add("env");
+        }
+        return (fields, shown);
+    }
+
+    /// <summary>The sign-in flags and values <see cref="RemotePattern.Encode"/> writes for <c>auth</c>, in pairs, and the
+    /// variables it sets for them.</summary>
+    private static (List<List<string>> Pairs, HashSet<string> Variables) SignInArguments(RemoteAuth auth)
+    {
+        // Platform idiom: encoded with the plain npx launcher, the Mac mirror's only one, named here so
+        // a decoded `cmd /c npx` launcher does not move where the pairs start.
+        var encoded = RemotePattern.Encode(new RemoteConfig("", auth, RemoteLaunchStyle.Npx, [],
+            new Dictionary<string, string>(), RemotePattern.DefaultPackage));
+        var args = Strings(encoded["args"]);
+        var variables = new HashSet<string>(StringComparer.Ordinal);
+        if (encoded["env"] is { Kind: JsonKind.Object } env)
+        {
+            variables.UnionWith(env.ObjectProperties.Keys);
+        }
+        // Past "-y", the bridge and the URL, encode writes nothing but sign-in pairs.
+        var pairs = new List<List<string>>();
+        for (var index = 3; index < args.Count - 1; index += 2)
+        {
+            pairs.Add([args[index], args[index + 1]]);
+        }
+        return (pairs, variables);
+    }
+
+    /// <summary>The arguments after the URL with each of <c>signIn</c>'s pairs that they hold, once, replaced by
+    /// null, where the sign-in fields show it, so where a pair stands among the other arguments
+    /// shows but not the order of two pairs, which mcp-remote reads by name. A pair is a flag and
+    /// its value as the decoder pairs them: <c>--header</c>, <c>--static-oauth-client-info</c> or
+    /// <c>--static-oauth-client-metadata</c> before another argument.</summary>
+    private static List<string?> Unmodelled(List<string> args, List<List<string>> signIn)
+    {
+        var expected = signIn.ToList();
+        var kept = new List<string?>();
+        var index = 0;
+        while (index < args.Count)
+        {
+            if (SignInFlags.Contains(args[index]) && index + 1 < args.Count)
+            {
+                var pair = new List<string> { args[index], args[index + 1] };
+                var match = expected.FindIndex(item => item.Count == 2 && Same(item[0], pair[0]) && Same(item[1], pair[1]));
+                if (match >= 0)
+                {
+                    expected.RemoveAt(match);
+                    kept.Add(null);
+                }
+                else
+                {
+                    kept.AddRange(pair);
+                }
+                index += 2;
+            }
+            else
+            {
+                kept.Add(args[index]);
+                index += 1;
+            }
+        }
+        return kept;
+    }
+
+    private static readonly string[] SignInFlags = ["--header", OauthClientInfoFlag, "--static-oauth-client-metadata"];
+
+    /// <summary>A connector reached by URL alone: its URL and headers.</summary>
+    private static (List<Field> Fields, HashSet<string> Shown) UrlView(JsonValue config, string address, Exposure exposure)
+    {
+        var fields = new List<Field>
+        {
+            new(TypeLabel, [(Raw(JsonValue.Null), CollectionsModel.RemoteType)]),
+            new(UrlLabel, [(Raw(JsonValue.String(address)), Url(address, exposure != Exposure.Masked))]),
+        };
+        var shown = new HashSet<string>(StringComparer.Ordinal) { "url" };
+        if (config["headers"] is { Kind: JsonKind.Object } headers && headers.ObjectProperties.Count > 0)
+        {
+            fields.Add(SecretField(HeadersLabel, headers.ObjectProperties, exposure));
+            shown.Add("headers");
+        }
+        return (fields, shown);
+    }
+
+    /// <summary>Anything else: its command, arguments and environment, and the names of its other keys.</summary>
+    private static (List<Field> Fields, HashSet<string> Shown) LocalView(JsonValue config, Exposure exposure)
+    {
         var model = FormMapper.Analyze(config).Model;
-        var local = new List<Field> { new(CommandLabel, [(model.Command, Argument(model.Command, reveal))]) };
+        var fields = new List<Field>
+        {
+            new(CommandLabel, [(Raw(config["command"] ?? JsonValue.Null), exposure == Exposure.Masked ? Argument(model.Command) : model.Command)]),
+        };
+        var shown = new HashSet<string>(StringComparer.Ordinal);
+        if (config["command"] is { Kind: JsonKind.String })
+        {
+            shown.Add("command");
+        }
         if (model.Args.Count > 0)
         {
-            local.Add(new Field(ArgsLabel, [(string.Join(" ", model.Args), string.Join(" ", Arguments(model.Args, reveal)))]));
+            fields.Add(new Field(ArgsLabel, [(Raw(JsonValue.Array(model.Args.Select(JsonValue.String))),
+                string.Join(" ", Arguments(model.Args, exposure)))]));
         }
-        local.AddRange(EnvFields(model.Env, reveal));
+        if (config["args"] is { Kind: JsonKind.Array } items && items.ArrayItems.Length > 0 && items.ArrayItems.Length == model.Args.Count)
+        {
+            shown.Add("args");
+        }
+        if (config["env"] is { Kind: JsonKind.Object } env && env.ObjectProperties.Count > 0)
+        {
+            fields.Add(SecretField(EnvLabel, env.ObjectProperties, exposure));
+            shown.Add("env");
+        }
         if (model.Additional.Count > 0)
         {
             var keys = string.Join(", ", model.Additional.Keys.Order(StringComparer.Ordinal));
-            local.Add(new Field(OtherLabel, [(keys, keys)]));
+            fields.Add(new Field(OtherLabel, [(keys, keys)]));
         }
-        return local;
+        return (fields, shown);
     }
 
-    private static List<Field> EnvFields(IReadOnlyDictionary<string, string> env, bool reveal)
-    {
-        if (env.Count == 0)
+    /// <summary>Environment variables or headers by name, each value as <see cref="SecretText"/> shows it; one that is
+    /// not a string is set, and shows as JSON only when revealed.</summary>
+    private static Field SecretField(string label, IReadOnlyDictionary<string, JsonValue> values, Exposure exposure) =>
+        new(label, values.Keys.Order(StringComparer.Ordinal).Select(name =>
         {
-            return [];
-        }
-        var values = env.Keys.Order(StringComparer.Ordinal).Select(name =>
-        {
-            var value = env[name];
-            return (Raw: name + "=" + value, Shown: Assignment(name, SecretText(value, reveal)));
-        }).ToList();
-        return [new Field(EnvLabel, values)];
-    }
+            var value = values[name];
+            var shown = exposure == Exposure.Revealed ? CompactText(value) : SetText;
+            if (value.Kind == JsonKind.String)
+            {
+                shown = SecretText(value.StringValue, exposure == Exposure.Revealed);
+            }
+            return (Raw(JsonValue.Array([JsonValue.String(name), value])), Assignment(name, shown));
+        }).ToList());
+
+    /// <summary>The strings of an array value; nothing else.</summary>
+    private static List<string> Strings(JsonValue? value) =>
+        value is { Kind: JsonKind.Array } ? value.ArrayItems.Where(item => item.Kind == JsonKind.String).Select(item => item.StringValue).ToList() : [];
 }

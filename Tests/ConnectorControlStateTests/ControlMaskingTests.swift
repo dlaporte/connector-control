@@ -19,6 +19,34 @@ final class ControlMaskingTests: XCTestCase {
         RemotePattern.encode(RemoteConfig(url: url, auth: .bearer(token: token)))
     }
 
+    private var notion: JSONValue {
+        .object([
+            "url": .string("https://mcp.notion.com/mcp?x=1"),
+            "headers": .object(["Authorization": .string("Bearer t0k"), "X-Empty": .string("")]),
+        ])
+    }
+
+    /// An mcp-remote config for https://h.example/mcp, written by hand: `bridge` before the URL,
+    /// `args` after it.
+    private func remote(_ args: [String], env: [String: JSONValue] = [:], bridge: [String] = ["-y", "mcp-remote"]) -> JSONValue {
+        var object: [String: JSONValue] = [
+            "command": .string("npx"),
+            "args": .array((bridge + ["https://h.example/mcp"] + args).map(JSONValue.string)),
+        ]
+        if !env.isEmpty { object["env"] = .object(env) }
+        return .object(object)
+    }
+
+    private func local(_ command: String, _ args: [String]) -> JSONValue {
+        .object(["command": .string(command), "args": .array(args.map(JSONValue.string))])
+    }
+
+    private func adding(_ key: String, _ value: JSONValue, to config: JSONValue) -> JSONValue {
+        guard case .object(var object) = config else { return config }
+        object[key] = value
+        return .object(object)
+    }
+
     func testEnvironmentValuesReadAsSetOrNeedsValue() {
         XCTAssertEqual(ControlMasking.maskedConfig(github), .object([
             "command": .string("npx"),
@@ -76,10 +104,97 @@ final class ControlMaskingTests: XCTestCase {
         ])
     }
 
+    func testCodeLinesForAConnectorReachedByURLAlone() {
+        XCTAssertEqual(ControlMasking.codeLines(notion), [
+            "type      remote",
+            "url       https://mcp.notion.com/mcp?x=•••",
+            "headers   Authorization = ••• (set)",
+            "          X-Empty = needs your value",
+        ])
+    }
+
+    func testCodeLinesForAnOAuthClientShowItsIDButNotItsSecret() {
+        let config = RemotePattern.encode(RemoteConfig(url: "https://h.example/mcp",
+                                                       auth: .oauthClient(clientID: "cid", clientSecret: "csec", scopes: "read write")))
+        XCTAssertEqual(ControlMasking.codeLines(config), [
+            "type     remote, through mcp-remote",
+            "url      https://h.example/mcp",
+            "oauth    client cid, secret ••• (set)",
+            "scopes   read write",
+        ])
+        XCTAssertTrue(ControlMasking.codeLines(config, exposure: .revealed).contains("oauth    client cid, secret csec"))
+    }
+
+    func testAHeaderAfterDashHIsMaskedAsAfterHeader() {
+        XCTAssertEqual(ControlMasking.arguments(["-H", "X-Api-Key: abc", "-H", "Authorization:${AUTH}"]),
+                       ["-H", "X-Api-Key: •••", "-H", "Authorization:${AUTH}"])
+    }
+
     func testRevealShowsEverythingAsWritten() {
         XCTAssertEqual(ControlMasking.maskedConfig(github, reveal: true), github)
-        XCTAssertTrue(ControlMasking.codeLines(github, reveal: true).contains("          GITHUB_TOKEN = \(token)"))
+        XCTAssertTrue(ControlMasking.codeLines(github, exposure: .revealed).contains("          GITHUB_TOKEN = \(token)"))
         XCTAssertEqual(ControlMasking.url("https://u:p@h.example/?a=b", reveal: true), "https://u:p@h.example/?a=b")
+        XCTAssertEqual(ControlMasking.arguments(["--token", "abc", token, "--header", "X-Key: v"], reveal: true),
+                       ["--token", "abc", token, "--header", "X-Key: v"])
+    }
+
+    /// The confirmation dialog, which nothing sends back to Claude, shows what would run in full:
+    /// only environment and header values, the OAuth client secret and a key named for a secret
+    /// stay masked.
+    func testTheDialogShowsTheCommandArgumentsAndURLInFull() {
+        let docker: JSONValue = .object([
+            "command": .string("docker"),
+            "args": .array(["run", "-e", "API_KEY=hunter2", "--token", "abc", "https://u:pw@h.example/x?k=v",
+                            "--header", "X-Key: hval", "--static-oauth-client-info", #"{"client_id":"a","client_secret":"csec"}"#,
+                            "img"].map(JSONValue.string)),
+            "env": .object(["GITHUB_TOKEN": .string(token)]),
+            "apiKey": .string("topsecret"),
+        ])
+        XCTAssertEqual(ControlMasking.codeLines(docker, exposure: .dialog), [
+            "command   docker",
+            "args      run -e API_KEY=hunter2 --token abc https://u:pw@h.example/x?k=v --header X-Key: ••• --static-oauth-client-info ••• img",
+            "env       GITHUB_TOKEN = ••• (set)",
+            "other     apiKey",
+        ])
+        let oauth = RemotePattern.encode(RemoteConfig(url: "https://h.example/mcp?tenant=acme",
+                                                      auth: .oauthClient(clientID: "cid", clientSecret: "csec", scopes: "read")))
+        XCTAssertEqual(ControlMasking.codeLines(oauth, exposure: .dialog), [
+            "type     remote, through mcp-remote",
+            "url      https://h.example/mcp?tenant=acme",
+            "oauth    client cid, secret ••• (set)",
+            "scopes   read",
+        ])
+        XCTAssertEqual(ControlMasking.codeLines(notion, exposure: .dialog), [
+            "type      remote",
+            "url       https://mcp.notion.com/mcp?x=1",
+            "headers   Authorization = ••• (set)",
+            "          X-Empty = needs your value",
+        ])
+        let shown = [docker, oauth, notion].flatMap { config in
+            ControlMasking.codeLines(config, exposure: .dialog)
+                + ControlMasking.changeLines(from: .object([:]), to: config, exposure: .dialog)
+        }.joined(separator: "\n")
+        for secret in [token, "hval", "csec", "topsecret", "t0k"] { XCTAssertFalse(shown.contains(secret), secret) }
+        XCTAssertEqual(ControlMasking.changeLines(from: local("node", []), to: adding("apiKey", .string("topsecret"), to: local("node", [])),
+                                                  exposure: .dialog), ["apiKey", "  + ••• (set)"])
+    }
+
+    func testANonStringEnvironmentOrHeaderValueReadsAsSet() {
+        let node: JSONValue = .object(["command": .string("node"), "env": .object(["PORT": .int(8080), "TOKEN": .string("hunter2")])])
+        XCTAssertEqual(ControlMasking.codeLines(node), ["command   node", "env       PORT = ••• (set)", "          TOKEN = ••• (set)"])
+        XCTAssertEqual(ControlMasking.maskedConfig(node),
+                       .object(["command": .string("node"), "env": .object(["PORT": .string("set"), "TOKEN": .string("set")])]))
+        let native: JSONValue = .object(["url": .string("https://h.example/mcp"), "headers": .object(["X-Retries": .int(3)])])
+        XCTAssertEqual(ControlMasking.codeLines(native), ["type      remote", "url       https://h.example/mcp", "headers   X-Retries = ••• (set)"])
+        XCTAssertEqual(ControlMasking.codeLines(native, exposure: .revealed).last, "headers   X-Retries = 3")
+        let bridged = remote(["--header", "Authorization:${AUTH_HEADER}"],
+                             env: ["AUTH_HEADER": .string("Bearer s3cr3t"), "RETRIES": .int(3)])
+        XCTAssertEqual(ControlMasking.codeLines(bridged), [
+            "type      remote, through mcp-remote",
+            "url       https://h.example/mcp",
+            "headers   Authorization = ••• (set)",
+            "env       RETRIES = ••• (set)",
+        ])
     }
 
     func testChangeLinesShowOnlyWhatDiffersAndAChangedSecretAsChanged() {
@@ -94,6 +209,88 @@ final class ControlMaskingTests: XCTestCase {
             "  + Authorization = ••• (set)",
         ])
         XCTAssertEqual(ControlMasking.changeLines(from: before, to: before), [])
+    }
+
+    func testChangeLinesForALocalConnector() {
+        let after: JSONValue = .object([
+            "command": .string("npx"),
+            "args": .array([.string("-y"), .string("@modelcontextprotocol/server-github"), .string("--read-only")]),
+            "env": .object(["GITHUB_TOKEN": .string(token + "x"), "EMPTY": .string("x"), "LATER": .string("${CC_NEEDS:LATER}")]),
+        ])
+        XCTAssertEqual(ControlMasking.changeLines(from: github, to: after), [
+            "args",
+            "  − -y @modelcontextprotocol/server-github",
+            "  + -y @modelcontextprotocol/server-github --read-only",
+            "env",
+            "  − EMPTY = needs your value",
+            "  − GITHUB_TOKEN = ••• (set)",
+            "  + EMPTY = ••• (set)",
+            "  + GITHUB_TOKEN = ••• (set)",
+        ])
+    }
+
+    /// Every difference between two configs shows as at least one change, whatever the view: a
+    /// confirmation that showed none would let a change through unseen.
+    func testEveryDifferenceShowsAsAChange() {
+        let info = #"{"client_id":"a","client_secret":"s"}"#
+        let edits: [(String, JSONValue, JSONValue)] = [
+            ("another key", adding("cwd", .string("/a"), to: local("node", ["s.js"])), adding("cwd", .string("/b"), to: local("node", ["s.js"]))),
+            ("type", adding("type", .string("sse"), to: notion), adding("type", .string("http"), to: notion)),
+            ("unparseable client info", remote(["--static-oauth-client-info", "not json one"]),
+             remote(["--static-oauth-client-info", "not json two"])),
+            ("client metadata", remote(["--static-oauth-client-info", info, "--static-oauth-client-metadata", #"{"redirect_uri":"https://a.example/cb","scope":"read"}"#]),
+             remote(["--static-oauth-client-info", info, "--static-oauth-client-metadata", #"{"redirect_uri":"https://evil.example/cb","scope":"read"}"#])),
+            ("an env value", adding("env", .object(["A": .string("one")]), to: local("node", [])),
+             adding("env", .object(["A": .string("two")]), to: local("node", []))),
+            ("a header value", adding("headers", .object(["Authorization": .string("Bearer one")]), to: .object(["url": .string("https://h.example/mcp")])),
+             adding("headers", .object(["Authorization": .string("Bearer two")]), to: .object(["url": .string("https://h.example/mcp")]))),
+            ("a bridged env value", remote([], env: ["DEBUG": .string("1")]), remote([], env: ["DEBUG": .string("2")])),
+            ("a bearer token", splunk(url: "https://h.example/mcp", token: "one"), splunk(url: "https://h.example/mcp", token: "two")),
+            ("arguments split differently", local("node", ["--name", "x y"]), local("node", ["--name", "x", "y"])),
+            ("-y dropped", remote([]), remote([], bridge: ["mcp-remote"])),
+            ("a header beside an OAuth client", remote(["--static-oauth-client-info", info, "--header", "X:${AUTH_HEADER}"], env: ["AUTH_HEADER": .string("v1")]),
+             remote(["--static-oauth-client-info", info, "--header", "X:${AUTH_HEADER}"], env: ["AUTH_HEADER": .string("v2")])),
+            ("an empty env", local("node", []), adding("env", .object([:]), to: local("node", []))),
+            ("a non-string env value", remote([], env: ["RETRIES": .int(3)]), remote([], env: ["RETRIES": .int(4)])),
+            ("a url key beside the bridge", remote([]), adding("url", .string("https://h.example/mcp"), to: remote([]))),
+        ]
+        for (name, before, after) in edits {
+            for exposure in [ControlMasking.Exposure.masked, .dialog, .revealed] {
+                XCTAssertFalse(ControlMasking.changeLines(from: before, to: after, exposure: exposure).isEmpty, "\(name), \(exposure)")
+                XCTAssertEqual(ControlMasking.changeLines(from: before, to: before, exposure: exposure), [], "\(name), \(exposure)")
+            }
+        }
+        XCTAssertEqual(ControlMasking.changeLines(from: edits[0].1, to: edits[0].2), ["cwd", "  − /a", "  + /b"])
+        XCTAssertEqual(ControlMasking.changeLines(from: edits[1].1, to: edits[1].2), ["type", "  − sse", "  + http"])
+        XCTAssertEqual(ControlMasking.changeLines(from: edits[2].1, to: edits[2].2),
+                       ["args", "  − --static-oauth-client-info •••", "  + --static-oauth-client-info •••"])
+        XCTAssertEqual(ControlMasking.changeLines(from: edits[3].1, to: edits[3].2),
+                       ["args", "  − --static-oauth-client-metadata •••", "  + --static-oauth-client-metadata •••"])
+        XCTAssertEqual(ControlMasking.changeLines(from: edits[3].1, to: edits[3].2, exposure: .dialog), [
+            "args",
+            #"  − --static-oauth-client-metadata {"redirect_uri":"https://a.example/cb","scope":"read"}"#,
+            #"  + --static-oauth-client-metadata {"redirect_uri":"https://evil.example/cb","scope":"read"}"#,
+        ])
+        for exposure in [ControlMasking.Exposure.masked, .dialog] {
+            XCTAssertEqual(ControlMasking.changeLines(from: edits[4].1, to: edits[4].2, exposure: exposure),
+                           ["env", "  − A = ••• (set)", "  + A = ••• (set)"], "a secret that changed shows as changed, still masked")
+            XCTAssertEqual(ControlMasking.changeLines(from: adding("apiKey", .string("one"), to: local("node", [])),
+                                                      to: adding("apiKey", .string("two"), to: local("node", [])), exposure: exposure),
+                           ["apiKey", "  − ••• (set)", "  + ••• (set)"])
+        }
+        XCTAssertEqual(ControlMasking.changeLines(from: edits[4].1, to: edits[4].2, exposure: .revealed), ["env", "  − A = one", "  + A = two"])
+    }
+
+    /// A key no field models shows its value as one line of JSON, written the same on both platforms.
+    func testAnUnmodelledKeyShowsItsValueAsJSON() {
+        let metadata: JSONValue = .object(["n": .int(1), "name": .string("café"), "redirect": .string("https://a.example/cb")])
+        for exposure in [ControlMasking.Exposure.masked, .dialog, .revealed] {
+            XCTAssertEqual(ControlMasking.changeLines(from: notion, to: adding("metadata", metadata, to: notion), exposure: exposure),
+                           ["metadata", #"  + {"n":1,"name":"café","redirect":"https://a.example/cb"}"#], "\(exposure)")
+        }
+        let nested: JSONValue = .object(["a": .array([.double(1.5), .bool(true), .null]), "q": .string(#"say "hi" \ now"#)])
+        XCTAssertEqual(ControlMasking.changeLines(from: notion, to: adding("nested", nested, to: notion)),
+                       ["nested", #"  + {"a":[1.5,true,null],"q":"say \"hi\" \\ now"}"#])
     }
 
     func testNoSecretSurvivesMasking() throws {
@@ -115,10 +312,6 @@ final class ControlMaskingTests: XCTestCase {
             XCTAssertFalse(structured.contains(secret), "structured: \(secret)", file: file, line: line)
             XCTAssertFalse(text.contains(secret), "text: \(secret)", file: file, line: line)
         }
-    }
-
-    private func local(_ command: String, _ args: [String]) -> JSONValue {
-        .object(["command": .string(command), "args": .array(args.map(JSONValue.string))])
     }
 
     func testAPlaceholderInsideAnArgumentLeavesTheRestMasked() throws {
@@ -177,6 +370,7 @@ final class ControlMaskingTests: XCTestCase {
         try assertHidden(["hunter2"], in: oauth)
         try assertHidden(["hunter2"], in: key)
         try assertHidden(["hunter2"], in: .object(["command": .string("node"), "args": .array([.string("--token"), .string("hunter2"), .int(1)])]))
+        try assertHidden(["987654321"], in: .object(["command": .string("node"), "args": .array([.string("--token"), .int(987654321)])]))
     }
 
     func testAFlagAfterASecretNamedFlagIsNotTakenForItsValue() {
