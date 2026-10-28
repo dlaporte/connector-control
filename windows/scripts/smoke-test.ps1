@@ -48,7 +48,8 @@
          copy. Asserted: the app exited, the entry is gone and the rest of the config kept, bin\ is gone,
          the PATH is clean, nothing wrote to Claude's config afterwards, and crash.log (in the data folder,
          which the uninstall keeps) is still absent, since the hook logs only a failure.
-      5. a safety stop of the process if it somehow still runs, and logs copied to -LogDir.
+      5. a safety stop of the process if it somehow still runs. (The logs are copied to -LogDir before the
+         uninstall, which deletes the install root.)
     Prints "SMOKE PASS" and exits 0; any failed assertion throws.
 
 .PARAMETER SetupExe      The ConnectorControl-<rid>-Setup.exe to check or install.
@@ -57,7 +58,7 @@
 .PARAMETER Version       The version the package was built with (asserted against current\sq.version).
 .PARAMETER Channel       The channel the package was built with (asserted against current\sq.version).
 .PARAMETER Seconds       How long to wait for the first-run import before giving up.
-.PARAMETER LogDir        Where setup.log, crash.log and the imported mcps.json are copied.
+.PARAMETER LogDir        Where setup.log, uninstall.log, crash.log and the imported mcps.json are copied.
 .PARAMETER ExpectSigned  Fail unless Setup.exe, the installed exe, and this build's own full
                          package all pass the app's own update-signature check.
 #>
@@ -115,7 +116,7 @@ if ($ExpectSigned) { Assert-True ($setupSignature.Status -eq 'Valid') "Setup.exe
 
 Write-Host "== Silent install"
 $setupLog = Join-Path $LogDir 'setup.log'
-$setup = Start-Process -FilePath $SetupExe -ArgumentList @('--silent', '--log', $setupLog) -PassThru -Wait
+$setup = Start-Process -FilePath $SetupExe -ArgumentList @('--silent', '--log', "`"$setupLog`"") -PassThru -Wait
 Assert-True ($setup.ExitCode -eq 0) "Setup.exe --silent exited 0 (got $($setup.ExitCode))"
 $exe = Join-Path $installRoot 'current/ConnectorControl.exe'
 Assert-True (Test-Path $exe) "installed executable is $exe (the path RegistryAutostart records)"
@@ -134,7 +135,7 @@ if ($ExpectSigned) {
     $nupkg = Join-Path (Split-Path -Parent $SetupExe) "ConnectorControl-$Version-$Channel-full.nupkg"
     Assert-True (Test-Path $nupkg) "full package sits beside Setup.exe ($nupkg)"
     $report = Join-Path $sandbox 'verify-report.txt'
-    $verify = Start-Process -FilePath $exe -ArgumentList @('--verify-package', $nupkg, '--report', $report) -PassThru -Wait
+    $verify = Start-Process -FilePath $exe -ArgumentList @('--verify-package', "`"$nupkg`"", '--report', "`"$report`"") -PassThru -Wait
     $reportText = if (Test-Path $report) { (Get-Content $report -Raw).Trim() } else { '(no report written)' }
     Write-Host "     $reportText"
     Assert-True ($verify.ExitCode -eq 0) "--verify-package exited 0 (got $($verify.ExitCode))"
@@ -191,8 +192,12 @@ Assert-True ($versionLine -eq "connector-control $Version") "the copy says its v
 $statusJson = (& $tool status --json) -join "`n"
 Assert-True ($LASTEXITCODE -eq 0) "connector-control.exe status --json exited 0 (got $LASTEXITCODE: $statusJson)"
 $toolStatus = $statusJson | ConvertFrom-Json
-Assert-True ($toolStatus.version -eq $Version) "status --json says version $Version (got '$($toolStatus.version)')"
-Assert-True ($toolStatus.integration.enabled -eq $false) "the integration starts off"
+# Read safely: under strict mode a missing property (an error-shaped answer) would throw without the output.
+$toolVersion = if ($toolStatus.PSObject.Properties.Name -contains 'version') { $toolStatus.version } else { $null }
+Assert-True ($toolVersion -eq $Version) "status --json says version $Version (got '$statusJson')"
+$integration = if ($toolStatus.PSObject.Properties.Name -contains 'integration') { $toolStatus.integration } else { $null }
+$integrationOn = if ($null -ne $integration -and $integration.PSObject.Properties.Name -contains 'enabled') { $integration.enabled } else { $null }
+Assert-True ($integrationOn -eq $false) "the integration starts off (got '$statusJson')"
 
 Write-Host "== Turning the integration on from the command line"
 & $binTool settings set claude-integration on | Out-Null
@@ -229,9 +234,21 @@ if (-not $relayProcess.WaitForExit($relayTimeoutMs)) {
     throw "SMOKE FAIL: the relay did not end within $($relayTimeoutMs / 1000) s of its input closing"
 }
 $relayProcess.WaitForExit()
+Assert-True ($relayProcess.ExitCode -eq 0) "the relay exited 0 once its input closed (got $($relayProcess.ExitCode): $($relayStderr.GetAwaiter().GetResult()))"
 $relayOutput = @(($relayStdout.GetAwaiter().GetResult()) -split "`r?`n" | Where-Object { $_ })
 $answer = @($relayOutput | Where-Object { $_ -like '{"id":1,*' })
-Assert-True ($answer.Count -eq 1 -and ($answer[0] | ConvertFrom-Json).result.structuredContent.version -eq $Version) `
+$answerVersion = $null
+if ($answer.Count -eq 1) {
+    $parsed = $answer[0] | ConvertFrom-Json
+    # Walked one property at a time: an error answer has no result, and strict mode would throw without the output.
+    $node = $parsed
+    foreach ($name in 'result', 'structuredContent', 'version') {
+        if ($null -eq $node -or $node -isnot [pscustomobject] -or $node.PSObject.Properties.Name -notcontains $name) { $node = $null; break }
+        $node = $node.$name
+    }
+    $answerVersion = $node
+}
+Assert-True ($answerVersion -eq $Version) `
     "the relay answered get_status (got $($relayOutput -join ' | ') $($relayStderr.GetAwaiter().GetResult()))"
 
 Write-Host "== The uninstall, with the app still running"
@@ -247,9 +264,14 @@ Assert-True (-not $app.HasExited) "the app is still running as the uninstall sta
 # What Windows runs for Quiet Uninstall. Velopack ends the app's processes first and only then runs the app's
 # uninstall hook, so no running app is left to write the entry back.
 $uninstallLog = Join-Path $LogDir 'uninstall.log'
-$uninstall = Start-Process -FilePath (Join-Path $installRoot 'Update.exe') -ArgumentList @('--uninstall', '--silent', '--log', $uninstallLog) -PassThru -Wait
+$uninstall = Start-Process -FilePath (Join-Path $installRoot 'Update.exe') -ArgumentList @('--uninstall', '--silent', '--log', "`"$uninstallLog`"") -PassThru -Wait
 # Carries little by itself: the assertions below are what prove the hook ran.
 Write-Host "     Update.exe --uninstall exited $($uninstall.ExitCode)"
+$uninstallText = if (Test-Path $uninstallLog) { Get-Content $uninstallLog -Raw } else { '' }
+Assert-True ($uninstall.ExitCode -eq 0) "Update.exe --uninstall exited 0 (got $($uninstall.ExitCode)); log: $uninstallText"
+# Velopack's own line for a hook that ran and succeeded; the other two are its words for one that did not.
+if ($uninstallText -match 'Hook exited with non-zero exit code|Failed to start hook') { Write-Host $uninstallText }
+Assert-True (($uninstallText -notmatch 'Hook exited with non-zero exit code|Failed to start hook') -and ($uninstallText -match 'Hook executed successfully')) "Velopack ran the uninstall hook and it succeeded (see $uninstallLog)"
 Assert-True ($app.WaitForExit(15000)) "the uninstall ended the running app"
 Assert-True (-not ((Get-ServerNames) -contains 'connector-control')) "the uninstall hook took the entry out of Claude's config"
 Assert-True ((Get-ServerNames) -contains 'smoke') "and left the rest of it"

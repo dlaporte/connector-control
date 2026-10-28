@@ -16,7 +16,7 @@ internal sealed class RegistryUserEnvironment : IUserEnvironment
     private const uint WmSettingChange = 0x001A;
     private const uint SmtoAbortIfHung = 0x0002;
     // The registry write has already happened by the time of the broadcast, so only the change notice is at stake;
-    // it waits up to this long for each window that does not answer, and Velopack ends the uninstall hook at 30 s.
+    // it waits up to this long for each window that does not answer, and Velopack ends the uninstall hook at 60 s.
     private const uint ReplyTimeoutMs = 1000;
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SendMessageTimeoutW", SetLastError = true)]
