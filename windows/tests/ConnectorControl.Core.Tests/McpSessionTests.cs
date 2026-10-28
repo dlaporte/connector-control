@@ -115,6 +115,15 @@ public class McpSessionTests
     }
 
     [Fact]
+    public void AnEscapedLoneSurrogateIsAParseError()
+    {
+        const string ParseError = """{"error":{"code":-32700,"message":"Parse error"},"id":null,"jsonrpc":"2.0"}""";
+        session.Receive("""{"jsonrpc":"2.0","id":4,"method":"tools/list","params":{"a":"\ud800"}}""");
+        session.Receive("""{"jsonrpc":"2.0","id":5,"method":"tools/list","params":{"\udc00":1}}""");
+        Assert.Equal([ParseError, ParseError], sent);
+    }
+
+    [Fact]
     public void MalformedJsonIsAParseError()
     {
         session.Receive("{nope");

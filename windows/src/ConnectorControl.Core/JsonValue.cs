@@ -155,6 +155,21 @@ public sealed class JsonValue : IEquatable<JsonValue>
         return value;
     }
 
+    /// <summary>The current string or property name. Platform idiom: Foundation reports an escaped lone
+    /// surrogate as a decoding error, where .NET's reader throws <see cref="InvalidOperationException"/>
+    /// from <c>GetString</c>; it is rethrown as the <see cref="JsonException"/> every caller handles.</summary>
+    private static string ReadString(ref Utf8JsonReader reader)
+    {
+        try
+        {
+            return reader.GetString()!;
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new JsonException("The string is not valid text.", ex);
+        }
+    }
+
     private static JsonValue ReadValue(ref Utf8JsonReader reader)
     {
         switch (reader.TokenType)
@@ -166,7 +181,7 @@ public sealed class JsonValue : IEquatable<JsonValue>
             case JsonTokenType.False:
                 return Bool(false);
             case JsonTokenType.String:
-                return String(reader.GetString()!);
+                return String(ReadString(ref reader));
             case JsonTokenType.Number:
                 return ReadNumber(ref reader);
             case JsonTokenType.StartArray:
@@ -183,7 +198,7 @@ public sealed class JsonValue : IEquatable<JsonValue>
                 var builder = EmptyObject.ToBuilder();
                 while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
                 {
-                    var key = reader.GetString()!;
+                    var key = ReadString(ref reader);
                     if (!reader.Read())
                     {
                         throw new JsonException("Property without a value.");

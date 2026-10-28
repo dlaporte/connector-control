@@ -20,7 +20,8 @@ public protocol ControlConnection: AnyObject, Sendable {
 /// says who it is (`ControlHello`); the connection then gets a `ControlToolHost` and an `McpSession`
 /// of its own over the app's one `ControlTools`, which every connection shares — the write queue
 /// that runs changes one at a time is that one instance's. A handful of connections are served at
-/// once: Claude Desktop opens two relays, beside any command line.
+/// once: Claude Desktop opens two relays, beside any command line. Main-actor only: the endpoint
+/// hands each frame over on the main thread, where the tools run.
 @MainActor
 public final class ControlServer {
     public static let maxConnections = 8
@@ -73,11 +74,14 @@ public final class ControlServer {
 
     /// Every connection, as the app quits.
     public func closeAll() {
-        for link in links {
+        // Taken and cleared first: a connection whose `close` calls back into `close` must not change
+        // the list this walks, nor be closed a second time.
+        let closing = links
+        links.removeAll()
+        for link in closing {
             link.end()
             link.connection.close()
         }
-        links.removeAll()
     }
 
     /// The hello decides the caller, and is consumed here: it never reaches the session.
@@ -88,7 +92,8 @@ public final class ControlServer {
         host.clientVersion = hello.version
         // A call that was waiting when its connection closed is still answered, once the user
         // responds, and that answer goes to the session of a connection that is gone: nothing is
-        // written to it.
+        // written to it. Here, releasing the link at close already makes the weak capture nil; the
+        // closed flag is what stops it on Windows, where the closure holds the link.
         let session = McpSession(host: host, version: host.version, send: { [weak link] line in
             guard let link, !link.isClosed else { return }
             link.connection.send(line)

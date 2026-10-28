@@ -36,6 +36,11 @@ final class ControlHelloTests: XCTestCase {
         XCTAssertEqual(ControlHello.parse(bytes), ControlHello.unknown)
     }
 
+    func testAnEscapedLoneSurrogateIsTheRelay() {
+        XCTAssertEqual(parse(#"{"client":"cli","version":"\ud800"}"#), ControlHello.unknown)
+        XCTAssertEqual(parse(#"{"client":"cli","version":"1.5.0","\udc00":1}"#), ControlHello.unknown)
+    }
+
     func testTheHelloLineIsCompactKeySortedJSON() {
         XCTAssertEqual(ControlHello.line(client: ControlHello.cliClient, version: "1.5.0"), #"{"client":"cli","version":"1.5.0"}"#)
         XCTAssertEqual(ControlHello.line(client: ControlHello.relayClient, version: "1.5.0"), #"{"client":"relay","version":"1.5.0"}"#)

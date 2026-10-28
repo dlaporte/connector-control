@@ -52,6 +52,13 @@ public class ControlHelloTests
     }
 
     [Fact]
+    public void AnEscapedLoneSurrogateIsTheRelay()
+    {
+        Assert.Equal(ControlHello.Unknown, Parse("""{"client":"cli","version":"\ud800"}"""));
+        Assert.Equal(ControlHello.Unknown, Parse("""{"client":"cli","version":"1.5.0","\udc00":1}"""));
+    }
+
+    [Fact]
     public void TheHelloLineIsCompactKeySortedJson()
     {
         Assert.Equal("""{"client":"cli","version":"1.5.0"}""", ControlHello.Line(ControlHello.CliClient, "1.5.0"));

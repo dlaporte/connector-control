@@ -90,6 +90,13 @@ final class McpSessionTests: XCTestCase {
         XCTAssertEqual(sent.count, 1)
     }
 
+    func testAnEscapedLoneSurrogateIsAParseError() {
+        let parseError = #"{"error":{"code":-32700,"message":"Parse error"},"id":null,"jsonrpc":"2.0"}"#
+        session.receive(#"{"jsonrpc":"2.0","id":4,"method":"tools/list","params":{"a":"\ud800"}}"#)
+        session.receive(#"{"jsonrpc":"2.0","id":5,"method":"tools/list","params":{"\udc00":1}}"#)
+        XCTAssertEqual(sent, [parseError, parseError])
+    }
+
     func testMalformedJSONIsAParseError() {
         session.receive("{nope")
         XCTAssertEqual(sent, [#"{"error":{"code":-32700,"message":"Parse error"},"id":null,"jsonrpc":"2.0"}"#])

@@ -78,6 +78,20 @@ final class ControlServerTests: XCTestCase {
         XCTAssertEqual(connection.sent, [])
     }
 
+    func testAHelloWithALoneSurrogateIsTheRelayAndTheNextLineIsNotTakenAsTheHello() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let server = ControlServer(tools: rig.tools)
+        let connection = FakeConnection()
+        server.open(connection)
+        say(server, connection, #"{"client":"cli","version":"\ud800"}"#,
+            ControlHello.line(client: ControlHello.cliClient, version: "1.2.2"))
+        XCTAssertEqual(server.hosts.map(\.isCLI), [false], "the second line is not a second hello")
+        XCTAssertEqual(server.hosts.count, 1)
+        XCTAssertNil(server.hosts[0].clientVersion)
+        XCTAssertEqual(connection.sent, [#"{"error":{"code":-32600,"message":"Invalid Request"},"id":null,"jsonrpc":"2.0"}"#],
+                       "it reached the session, which refused it as no request")
+    }
+
     func testFramesAfterTheHelloReachTheSessionAsBytes() {
         let rig = ControlRig(); defer { rig.dispose() }
         let server = ControlServer(tools: rig.tools)
@@ -131,11 +145,13 @@ final class ControlServerTests: XCTestCase {
     func testAnAnswerAfterTheConnectionClosedIsSentNowhere() {
         let rig = ControlRig(); defer { rig.dispose() }
         let server = ControlServer(tools: rig.tools)
-        let connection = FakeConnection()
+        let connection = FakeConnection(), other = FakeConnection()
         server.open(connection)
+        server.open(other)
         say(server, connection, ControlHello.line(client: ControlHello.relayClient, version: "1.2.2"), ControlServerTests.initializeMessage,
             ControlServerTests.initializedMessage,
             #"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"delete_connectors","arguments":{"names":["aws-mcp"]}}}"#)
+        say(server, other, ControlHello.line(client: ControlHello.relayClient, version: "1.2.2"))
         rig.h.drain()
         XCTAssertEqual(rig.confirmer.waitingCount, 1)
         let before = connection.sent.count
@@ -143,10 +159,45 @@ final class ControlServerTests: XCTestCase {
         rig.confirmer.answer(true)
         rig.h.drain()
         XCTAssertEqual(connection.sent.count, before, "nothing is written after close")
-        let other = FakeConnection()
-        server.open(other)
+        XCTAssertEqual(other.sent, [], "and the answer reaches no other connection")
+        XCTAssertNil(rig.state.store.mcps["aws-mcp"], "the allowed change still applies")
+        XCTAssertEqual(rig.h.notifier.sent.filter { $0.body.contains("deleted") }.count, 1, "and is announced once")
+    }
+
+    func testClosingTwiceClosesOnce() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let server = ControlServer(tools: rig.tools)
+        let connection = FakeConnection()
+        server.open(connection)
+        server.close(connection)
+        connection.closed = false
+        server.close(connection)
+        XCTAssertFalse(connection.closed, "a second close does nothing")
+        XCTAssertEqual(server.connectionCount, 0)
+    }
+
+    /// A connection that, as it closes, tells the server it closed.
+    final class ReentrantConnection: ControlConnection, @unchecked Sendable {
+        var server: ControlServer?
+        var closeCalls = 0
+        func send(_ line: String) {}
+        func close() {
+            closeCalls += 1
+            MainActor.assumeIsolated { server?.close(self) }
+        }
+    }
+
+    func testAConnectionThatClosesTheServerAgainWhileItIsClosingAllIsSafe() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let server = ControlServer(tools: rig.tools)
+        let connections = (0..<3).map { _ in ReentrantConnection() }
+        for connection in connections {
+            connection.server = server
+            server.open(connection)
+        }
         server.closeAll()
-        XCTAssertEqual(other.sent, [])
+        XCTAssertEqual(connections.map(\.closeCalls), [1, 1, 1], "each is closed exactly once")
+        XCTAssertEqual(server.connectionCount, 0)
     }
 
     /// The point of sharing one ControlTools: a change from one connection waits behind another

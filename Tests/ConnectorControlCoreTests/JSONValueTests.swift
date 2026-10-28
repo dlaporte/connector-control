@@ -93,6 +93,11 @@ final class JSONValueTests: XCTestCase {
         XCTAssertThrowsError(try JSONValue.parse(Data(#"{"a": 1"#.utf8)))
     }
 
+    func testAnEscapedLoneSurrogateThrows() {
+        XCTAssertThrowsError(try JSONValue.parse(Data(#""\ud800""#.utf8)))
+        XCTAssertThrowsError(try JSONValue.parse(Data(#"{"\udc00":1}"#.utf8)))
+    }
+
     /// A file saved by an editor that writes a BOM (common on Windows) must
     /// still parse — Foundation's JSONDecoder skips it.
     func testUtf8BomIsAccepted() throws {

@@ -26,6 +26,8 @@ public interface IControlConnection
 /// and an <see cref="McpSession"/> of its own over the app's one <see cref="ControlTools"/>, which every
 /// connection shares — the write queue that runs changes one at a time is that one instance's. A
 /// handful of connections are served at once: Claude Desktop opens two relays, beside any command line.
+/// UI-thread only (the Swift side is <c>@MainActor</c>): the endpoint hands each frame over on the UI
+/// thread, where the tools run.
 /// </summary>
 public sealed class ControlServer(ControlTools tools)
 {
@@ -95,12 +97,15 @@ public sealed class ControlServer(ControlTools tools)
     /// <summary>Every connection, as the app quits.</summary>
     public void CloseAll()
     {
-        foreach (var link in links)
+        // Taken and cleared first: a connection whose Close calls back into Close must not change the
+        // list this walks, nor be closed a second time.
+        var closing = links.ToList();
+        links.Clear();
+        foreach (var link in closing)
         {
             link.End();
             link.Connection.Close();
         }
-        links.Clear();
     }
 
     /// <summary>The hello decides the caller, and is consumed here: it never reaches the session.</summary>
@@ -110,7 +115,8 @@ public sealed class ControlServer(ControlTools tools)
         var host = new ControlToolHost(Tools, hello.IsCli) { ClientVersion = hello.Version };
         // A call that was waiting when its connection closed is still answered, once the user
         // responds, and that answer goes to the session of a connection that is gone: nothing is
-        // written to it.
+        // written to it. Here the closed flag is what stops it, as the closure holds the link; on the
+        // Mac, releasing the link at close already makes its weak capture nil.
         var session = new McpSession(host, host.Version, text =>
         {
             if (!link.IsClosed)

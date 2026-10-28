@@ -14,7 +14,7 @@ public class ControlServerTests
     private sealed class FakeConnection : IControlConnection
     {
         public List<string> Sent { get; } = [];
-        public bool Closed { get; private set; }
+        public bool Closed { get; set; }
         public void Send(string line) => Sent.Add(line);
         public void Close() => Closed = true;
     }
@@ -99,6 +99,22 @@ public class ControlServerTests
     }
 
     [Fact]
+    public void AHelloWithALoneSurrogateIsTheRelayAndTheNextLineIsNotTakenAsTheHello()
+    {
+        using var rig = new ControlRig();
+        var server = new ControlServer(rig.Tools);
+        var connection = new FakeConnection();
+        server.Open(connection);
+        Say(server, connection, """{"client":"cli","version":"\ud800"}""",
+            ControlHello.Line(ControlHello.CliClient, "1.2.2"));
+        Assert.Equal([false], server.Hosts.Select(host => host.IsCli));   // the second line is not a second hello
+        Assert.Single(server.Hosts);
+        Assert.Null(server.Hosts[0].ClientVersion);
+        // it reached the session, which refused it as no request
+        Assert.Equal(["""{"error":{"code":-32600,"message":"Invalid Request"},"id":null,"jsonrpc":"2.0"}"""], connection.Sent);
+    }
+
+    [Fact]
     public void FramesAfterTheHelloReachTheSessionAsBytes()
     {
         using var rig = new ControlRig();
@@ -162,9 +178,12 @@ public class ControlServerTests
         using var rig = new ControlRig();
         var server = new ControlServer(rig.Tools);
         var connection = new FakeConnection();
+        var other = new FakeConnection();
         server.Open(connection);
+        server.Open(other);
         Say(server, connection, ControlHello.Line(ControlHello.RelayClient, "1.2.2"), InitializeMessage, InitializedMessage,
             """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"delete_connectors","arguments":{"names":["aws-mcp"]}}}""");
+        Say(server, other, ControlHello.Line(ControlHello.RelayClient, "1.2.2"));
         rig.H.Drain();
         Assert.Equal(1, rig.Confirmer.WaitingCount);
         var before = connection.Sent.Count;
@@ -172,10 +191,55 @@ public class ControlServerTests
         rig.Confirmer.Answer(true);
         rig.H.Drain();
         Assert.Equal(before, connection.Sent.Count);   // nothing is written after close
-        var other = new FakeConnection();
-        server.Open(other);
+        Assert.Empty(other.Sent);   // and the answer reaches no other connection
+        Assert.False(rig.State.Store.Mcps.ContainsKey("aws-mcp"));   // the allowed change still applies
+        Assert.Single(rig.H.Notifier.Sent, sent => sent.Body.Contains("deleted"));   // and is announced once
+    }
+
+    [Fact]
+    public void ClosingTwiceClosesOnce()
+    {
+        using var rig = new ControlRig();
+        var server = new ControlServer(rig.Tools);
+        var connection = new FakeConnection();
+        server.Open(connection);
+        server.Close(connection);
+        connection.Closed = false;
+        server.Close(connection);
+        Assert.False(connection.Closed);   // a second close does nothing
+        Assert.Equal(0, server.ConnectionCount);
+    }
+
+    /// <summary>A connection that, as it closes, tells the server it closed.</summary>
+    private sealed class ReentrantConnection : IControlConnection
+    {
+        public ControlServer? Server { get; set; }
+        public int CloseCalls { get; private set; }
+        public void Send(string line)
+        {
+        }
+
+        public void Close()
+        {
+            CloseCalls++;
+            Server?.Close(this);
+        }
+    }
+
+    [Fact]
+    public void AConnectionThatClosesTheServerAgainWhileItIsClosingAllIsSafe()
+    {
+        using var rig = new ControlRig();
+        var server = new ControlServer(rig.Tools);
+        var connections = Enumerable.Range(0, 3).Select(_ => new ReentrantConnection()).ToList();
+        foreach (var connection in connections)
+        {
+            connection.Server = server;
+            server.Open(connection);
+        }
         server.CloseAll();
-        Assert.Empty(other.Sent);
+        Assert.Equal([1, 1, 1], connections.Select(connection => connection.CloseCalls));   // each is closed exactly once
+        Assert.Equal(0, server.ConnectionCount);
     }
 
     /// <summary>The point of sharing one ControlTools: a change from one connection waits behind another

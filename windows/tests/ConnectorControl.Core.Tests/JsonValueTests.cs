@@ -97,6 +97,13 @@ public class JsonValueTests
     }
 
     [Fact]
+    public void AnEscapedLoneSurrogateThrowsJsonException()
+    {
+        Assert.Throws<JsonException>(() => JsonValue.Parse("\"\\ud800\""));
+        Assert.Throws<JsonException>(() => JsonValue.Parse("{\"\\udc00\":1}"));
+    }
+
+    [Fact]
     public void FirstDuplicateKeyWins()
     {
         Assert.Equal(JsonValue.Int(1), JsonValue.Parse("{\"k\": 1, \"k\": 2}")["k"]);
