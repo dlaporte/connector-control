@@ -9,13 +9,15 @@ namespace ConnectorControl.Core.Tests.Transport;
 /// <summary>
 /// Windows only: the Mac counterpart is Tests/ConnectorControlStateTests/Transport/ControlRelayRunnerTests.swift.
 ///
-/// The relay between a stand-in for Claude — two anonymous pipes — and the app's real named pipe.
+/// The relay between a stand-in for Claude — two anonymous pipes — and the app's real named pipe, or, where a
+/// fact must decide what the app has sent when, a scripted stand-in for the app. The facts over the real pipe
+/// are Windows only; the scripted one runs everywhere.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public class ControlRelayRunnerTests
 {
     /// <summary>Claude's end: what it says goes to the relay's standard input; what the relay writes to its
-    /// standard output is read here on a thread of its own.</summary>
+    /// standard output is read here on a thread of its own, unless the fact reads nothing.</summary>
     private sealed class Claude
     {
         private readonly AnonymousPipeServerStream toRelay = new(PipeDirection.Out);
@@ -23,11 +25,17 @@ public class ControlRelayRunnerTests
         private readonly Lock gate = new();
         private readonly List<string> received = [];
         private int closed;
+        private bool ended;
 
-        public Claude()
+        public Claude(bool reading = true)
         {
             Input = new AnonymousPipeClientStream(PipeDirection.In, toRelay.ClientSafePipeHandle);
             Output = new AnonymousPipeClientStream(PipeDirection.Out, fromRelay.ClientSafePipeHandle);
+            if (!reading)
+            {
+                ended = true;
+                return;
+            }
             // A thread of its own, as the Mac's: this read blocks until the relay's output is closed.
             new Thread(() =>
             {
@@ -57,6 +65,10 @@ public class ControlRelayRunnerTests
                 finally
                 {
                     fromRelay.Dispose();
+                    lock (gate)
+                    {
+                        ended = true;
+                    }
                 }
             })
             { IsBackground = true }.Start();
@@ -67,6 +79,18 @@ public class ControlRelayRunnerTests
 
         /// <summary>The relay's standard output.</summary>
         public Stream Output { get; }
+
+        /// <summary>Everything the relay wrote has been read: its standard output has closed.</summary>
+        public bool IsEnded
+        {
+            get
+            {
+                lock (gate)
+                {
+                    return ended;
+                }
+            }
+        }
 
         public IReadOnlyList<string> Lines
         {
@@ -102,6 +126,10 @@ public class ControlRelayRunnerTests
             Input.Dispose();
         }
 
+        /// <summary>Claude goes away without a word: the read end of the relay's standard output closes. Only for
+        /// a Claude that reads nothing, so no thread of the fact's is reading it.</summary>
+        public void StopReading() => fromRelay.Dispose();
+
         /// <summary>The answers so far, by request id, each request's in the order they came.</summary>
         public Dictionary<JsonValue, List<string>> Answers()
         {
@@ -131,6 +159,126 @@ public class ControlRelayRunnerTests
         }
 
         public List<string>? AnswersTo(int id) => Answers().GetValueOrDefault(JsonValue.Int(id));
+    }
+
+    /// <summary>The app's end of one connection, scripted: it keeps what the relay writes, hands the relay what the
+    /// fact sends, and refuses every write once the fact says the app has gone.</summary>
+    private sealed class ScriptedApp : IControlStream
+    {
+        private readonly object gate = new();
+        private readonly List<string> written = [];
+        private readonly List<string> refused = [];
+        private readonly Queue<byte[]> toRead = new();
+        private bool finished;
+        private bool closed;
+        private bool gone;
+        private bool writeClosed;
+
+        public byte[] Read(int maximum)
+        {
+            lock (gate)
+            {
+                while (toRead.Count == 0 && !finished && !closed)
+                {
+                    Monitor.Wait(gate);
+                }
+                return closed || toRead.Count == 0 ? [] : toRead.Dequeue();
+            }
+        }
+
+        public bool Write(byte[] data)
+        {
+            lock (gate)
+            {
+                var lines = Encoding.UTF8.GetString(data).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                if (gone || writeClosed || closed)
+                {
+                    refused.AddRange(lines);
+                    return false;
+                }
+                written.AddRange(lines);
+                return true;
+            }
+        }
+
+        public void CloseWrite()
+        {
+            lock (gate)
+            {
+                writeClosed = true;
+            }
+        }
+
+        public void Close()
+        {
+            lock (gate)
+            {
+                closed = true;
+                Monitor.PulseAll(gate);
+            }
+        }
+
+        public IReadOnlyList<string> Lines
+        {
+            get
+            {
+                lock (gate)
+                {
+                    return [.. written];
+                }
+            }
+        }
+
+        public IReadOnlyList<string> RefusedLines
+        {
+            get
+            {
+                lock (gate)
+                {
+                    return [.. refused];
+                }
+            }
+        }
+
+        public bool IsWriteClosed
+        {
+            get
+            {
+                lock (gate)
+                {
+                    return writeClosed;
+                }
+            }
+        }
+
+        /// <summary>The app sends a line, which waits for the relay to read it.</summary>
+        public void Send(string line)
+        {
+            lock (gate)
+            {
+                toRead.Enqueue(Encoding.UTF8.GetBytes(line + "\n"));
+                Monitor.PulseAll(gate);
+            }
+        }
+
+        /// <summary>The app goes: every write from now on fails, while what it sent is still there to be read.</summary>
+        public void Goes()
+        {
+            lock (gate)
+            {
+                gone = true;
+            }
+        }
+
+        /// <summary>The stream ends once what the app sent has been read.</summary>
+        public void Finish()
+        {
+            lock (gate)
+            {
+                finished = true;
+                Monitor.PulseAll(gate);
+            }
+        }
     }
 
     private const string Initialize = ControlServerTests.InitializeMessage;
@@ -177,19 +325,29 @@ public class ControlRelayRunnerTests
 
     /// <summary>Every fact ends here, in a <c>finally</c>, whatever it asserted: Claude closes its side, the relay
     /// is waited for, and only once it has ended are its standard input and output closed, so no thread the
-    /// fact started is left behind. That the relay ended is asserted only when the fact got that far: thrown
-    /// from a <c>finally</c>, it would hide the failure that brought it here. Platform idiom: the Mac records
-    /// the failure without throwing.</summary>
-    private static void End(Claude claude, ExitCode exit, PipeRig pipe, bool asserted)
+    /// fact started is left behind. Then, with all the relay wrote read, each request it answered was answered
+    /// once. All this is asserted only when the fact got that far: thrown from a <c>finally</c>, it would hide
+    /// the failure that brought it here. Platform idiom: the Mac records the failure without throwing.</summary>
+    private static void End(Claude claude, ExitCode exit, PipeRig? pipe, bool asserted)
     {
         claude.Close();
-        var ended = pipe.Until(() => exit.Value is not null);
+        var ended = Until(pipe, () => exit.Value is not null);
         if (ended)
         {
             claude.RelayEnded();
         }
-        Assert.True(ended || !asserted, "the relay did not end once Claude closed its side");
+        if (!asserted)
+        {
+            return;
+        }
+        Assert.True(ended, "the relay did not end once Claude closed its side");
+        Assert.True(Until(pipe, () => claude.IsEnded), "the relay's standard output did not close");
+        Assert.All(claude.Answers(), answers => Assert.Single(answers.Value));
     }
+
+    /// <summary>Waits for <paramref name="condition"/>, running what the pipe's endpoint marshalled when there is one.</summary>
+    private static bool Until(PipeRig? pipe, Func<bool> condition) =>
+        pipe?.Until(condition) ?? Wait.Until(condition, Wait.Eventually);
 
     private static ControlClient Client(PipeRig pipe, Func<bool>? launch = null)
     {
@@ -304,6 +462,67 @@ public class ControlRelayRunnerTests
             Assert.Equal(ControlOutput.UnreachableExit, exit.Value);
             Assert.Equal([McpSession.ErrorLine(McpSession.InternalErrorCode, ControlClient.NotRunningError, JsonValue.Int(1))],
                 claude.AnswersTo(1));
+            asserted = true;
+        }
+        finally
+        {
+            End(claude, exit, pipe, asserted);
+        }
+    }
+
+    /// <summary>The app answers a call and goes; the relay, not yet having read that answer, fails to write the
+    /// next call. The answer still reaches Claude as the app gave it — a call that went through is never told
+    /// to try again — and only the call that never arrived is. Scripted, so it runs on every platform.</summary>
+    [Fact]
+    public void AnAnswerTheAppSentBeforeItWentReachesClaudeAfterAFailedWrite()
+    {
+        var app = new ScriptedApp();
+        var claude = new Claude();
+        var (_, exit) = Run(claude, new ControlClient(() => app, launch: null, announce: null));
+        var asserted = false;
+        try
+        {
+            claude.Say(Initialize);
+            Assert.True(Until(null, () => app.Lines.Contains(Initialize)));
+            app.Send("""{"id":1,"jsonrpc":"2.0","result":{}}""");
+            Assert.True(Until(null, () => claude.AnswersTo(1) is not null));
+            claude.Say(Call(2));
+            Assert.True(Until(null, () => app.Lines.Contains(Call(2))));
+            app.Goes();
+            claude.Say(Call(3));
+            Assert.True(Until(null, () => app.RefusedLines.Contains(Call(3))));
+            const string answered = """{"id":2,"jsonrpc":"2.0","result":{"content":[],"isError":false,"structuredContent":{}}}""";
+            app.Send(answered);
+            app.Finish();
+            Assert.True(Until(null, () => claude.AnswersTo(2) is not null && claude.AnswersTo(3) is not null));
+            Assert.Equal([answered], claude.AnswersTo(2));   // the app's own answer, not restarted
+            Assert.Contains(ControlRelay.RestartedError, claude.AnswersTo(3)![0], StringComparison.Ordinal);
+            Assert.True(app.IsWriteClosed, "only the writing half was ended");
+            asserted = true;
+        }
+        finally
+        {
+            End(claude, exit, null, asserted);
+        }
+    }
+
+    /// <summary>Claude going away while the relay writes to it ends the relay as any failed write to Claude does.
+    /// Windows reports the broken pipe as an <see cref="IOException"/>; the Mac's counterpart also proves the
+    /// relay is not ended by SIGPIPE instead.</summary>
+    [Fact]
+    public void TheRelayEndsWhenClaudeGoesWhileItWrites()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        using var pipe = new PipeRig();
+        var claude = new Claude(reading: false);
+        var (_, exit) = Run(claude, Client(pipe));
+        var asserted = false;
+        try
+        {
+            claude.StopReading();
+            claude.Say(Initialize);
+            Assert.True(pipe.Until(() => exit.Value is not null));
+            Assert.Equal(ControlOutput.DoneExit, exit.Value);
             asserted = true;
         }
         finally

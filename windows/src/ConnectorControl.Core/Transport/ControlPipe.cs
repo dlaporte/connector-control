@@ -129,4 +129,11 @@ public sealed class ControlPipeStream(PipeStream pipe) : IControlStream
             pipe.Dispose();
         }
     }
+
+    /// <summary>Nothing: a pipe has no half-close. A write to the pipe fails only once the app's end is gone, and
+    /// then a read still gives what the app sent before it went and then the end, so nothing need be ended
+    /// here for the reader to finish. The Mac's socket shuts its writing half.</summary>
+    public void CloseWrite()
+    {
+    }
 }

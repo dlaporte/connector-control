@@ -11,4 +11,8 @@ public protocol ControlStream: AnyObject, Sendable {
     func write(_ data: Data) -> Bool
     /// Ends the stream both ways; a read waiting on it returns empty. Safe to call more than once.
     func close()
+    /// Ends only the writing half: the app reads the end of the stream and closes its side, while what it
+    /// had already sent can still be read here. Safe to call more than once. Platform idiom: Windows has
+    /// no half-close for a pipe, so there this does nothing.
+    func closeWrite()
 }

@@ -7,6 +7,7 @@ final class ControlClientTests: XCTestCase {
         func read(maximum: Int) -> Data { Data() }
         func write(_ data: Data) -> Bool { true }
         func close() {}
+        func closeWrite() {}
     }
 
     /// What the client's closures count and the clock they read: a class, since the client's closures

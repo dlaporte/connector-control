@@ -37,6 +37,8 @@ public final class ControlRelay {
     private var pending: [(id: JSONValue, method: String)] = []
     /// Lines from Claude waiting for a connection.
     private var held: [String] = []
+    /// A connection has been asked for and is neither made nor failed yet.
+    private var connecting = false
     private var replayID: JSONValue?
     private var replays = 0
     /// Claude has closed its side: the relay ends once nothing it forwarded is left unanswered.
@@ -62,7 +64,9 @@ public final class ControlRelay {
             held.append(line)
             // After the first handshake only a request reconnects, and may start the app: a
             // notification, or a line that is no message at all, waits for the next request.
-            return handshakeDone && message?["id"] == nil ? [] : [.connect]
+            if handshakeDone, message?["id"] == nil { return [] }
+            connecting = true
+            return [.connect]
         }
         var actions = forward(line, message)
         if closing, pending.isEmpty { actions.append(.exit(ControlOutput.doneExit)) }
@@ -71,6 +75,7 @@ public final class ControlRelay {
 
     public func connectSucceeded() -> [Action] {
         isConnected = true
+        connecting = false
         var actions: [Action] = []
         if handshakeDone, var replay = initialize {
             replays += 1
@@ -83,16 +88,23 @@ public final class ControlRelay {
         let lines = held
         held = []
         for line in lines { actions += forward(line, ControlRelay.message(line)) }
+        if closing, pending.isEmpty { actions.append(.exit(ControlOutput.doneExit)) }
         return actions
     }
 
-    /// No connection could be made: each request held for it is answered with `reason`. Before the
-    /// first handshake there is nothing to keep running for, and the relay ends.
+    /// No connection could be made: each request held for it is answered with `reason`, as `forward`
+    /// waits for one — under an id the session answers by, once. Before the first handshake there is
+    /// nothing to keep running for, and the relay ends.
     public func connectFailed(_ reason: String) -> [Action] {
+        connecting = false
         let lines = held
         held = []
-        var actions: [Action] = lines.compactMap { line in
-            ControlRelay.message(line).flatMap { ControlRelay.failure($0, reason) }.map(Action.toClaude)
+        var answered: [JSONValue] = []
+        var actions: [Action] = []
+        for line in lines {
+            guard let request = ControlRelay.request(ControlRelay.message(line)), !answered.contains(request.id) else { continue }
+            answered.append(request.id)
+            actions.append(.toClaude(ControlRelay.failure(id: request.id, method: request.method, reason)))
         }
         if !handshakeDone {
             actions.append(.exit(ControlOutput.unreachableExit))
@@ -135,9 +147,11 @@ public final class ControlRelay {
         return actions
     }
 
-    /// Claude closed its side: the relay ends now, or once what it forwarded is answered.
+    /// Claude closed its side: the relay ends now, or once what it forwarded is answered. A connection on
+    /// its way settles what it holds first, and ends the relay then.
     public func claudeClosed() -> [Action] {
         closing = true
+        guard !connecting else { return [] }
         return pending.isEmpty || !isConnected ? [.exit(ControlOutput.doneExit)] : []
     }
 
@@ -145,11 +159,17 @@ public final class ControlRelay {
     /// one whose id is neither a string nor an integer, or is already running, is answered with id null
     /// or not at all.
     private func forward(_ line: String, _ message: [String: JSONValue]?) -> [Action] {
-        if let message, case .string(let method)? = message["method"], let raw = message["id"],
-           let id = McpSession.validID(raw), !pending.contains(where: { $0.id == id }) {
-            pending.append((id, method))
+        if let request = ControlRelay.request(message), !pending.contains(where: { $0.id == request.id }) {
+            pending.append(request)
         }
         return [.toApp(line)]
+    }
+
+    /// A request's id and method, when its id is one the session answers by: a string or an integer.
+    static func request(_ message: [String: JSONValue]?) -> (id: JSONValue, method: String)? {
+        guard let message, case .string(let method)? = message["method"], let raw = message["id"],
+              let id = McpSession.validID(raw) else { return nil }
+        return (id, method)
     }
 
     /// The object a line holds, read only to know what the line is — never to change it.
@@ -157,11 +177,6 @@ public final class ControlRelay {
         guard McpSession.nests(atMost: McpSession.maxNestingDepth, line),
               case .object(let fields)? = try? JSONValue.parse(Data(line.utf8)) else { return nil }
         return fields
-    }
-
-    static func failure(_ message: [String: JSONValue], _ reason: String) -> String? {
-        guard let id = message["id"], case .string(let method)? = message["method"] else { return nil }
-        return failure(id: id, method: method, reason)
     }
 
     /// What a request gets when the app cannot answer it: a tool call a refusal, read as Claude reads

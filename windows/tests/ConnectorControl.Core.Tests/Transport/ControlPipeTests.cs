@@ -15,8 +15,9 @@ namespace ConnectorControl.Core.Tests.Transport;
 ///
 /// The control layer on a real pipe: what reaches the server, what it answers, and who it lets in.
 ///
-/// Ten of the Mac's facts have no pipe to test, and the file says so here rather than leaving them out
-/// unremarked. A pipe leaves no file behind, so there is no stale socket to replace, no file that is not a
+/// Eleven of the Mac's facts have no pipe to test, and the file says so here rather than leaving them out
+/// unremarked. A pipe has no half-close, so a client cannot end only its writing half
+/// (testAClientThatEndsItsWritingHalfIsClosedByTheServer: one). A pipe leaves no file behind, so there is no stale socket to replace, no file that is not a
 /// socket to leave alone, no socket whose connect fails for another reason, and no listener that is started
 /// twice or after it is closed (testALiveSocketIsLeftAloneAndAStaleOneIsReplaced,
 /// testAFileThatIsNotASocketIsLeftAlone, testASocketThatFailsForAnotherReasonIsLeftAlone,

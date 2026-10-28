@@ -12,14 +12,19 @@ public class ControlRelayTests
     private const string Initialized = """{"jsonrpc":"2.0","method":"notifications/initialized"}""";
     private const string InitializeAnswer = """{"id":0,"jsonrpc":"2.0","result":{"capabilities":{"tools":{}},"protocolVersion":"2025-11-25","serverInfo":{"name":"connector-control","version":"1.5.0"}}}""";
 
-    private static string Call(int id) =>
-        $$$$"""{"jsonrpc":"2.0","id":{{{{id}}}},"method":"tools/call","params":{"name":"get_status","arguments":{}}}""";
+    private static string Call(int id) => Call(rawId: id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    /// <summary>A call whose id is written as <paramref name="rawId"/> is, JSON and all.</summary>
+    private static string Call(string rawId) =>
+        $$$$"""{"jsonrpc":"2.0","id":{{{{rawId}}}},"method":"tools/call","params":{"name":"get_status","arguments":{}}}""";
 
     private static string Answer(int id) =>
         $$$$"""{"id":{{{{id}}}},"jsonrpc":"2.0","result":{"content":[],"isError":false,"structuredContent":{}}}""";
 
-    private static ControlRelay.Action Refused(int id, string reason) =>
-        new ControlRelay.Action.ToClaude(JsonValue.Object(("jsonrpc", JsonValue.String("2.0")), ("id", JsonValue.Int(id)),
+    private static ControlRelay.Action Refused(int id, string reason) => Refused(JsonValue.Int(id), reason);
+
+    private static ControlRelay.Action Refused(JsonValue id, string reason) =>
+        new ControlRelay.Action.ToClaude(JsonValue.Object(("jsonrpc", JsonValue.String("2.0")), ("id", id),
             ("result", ControlResult.Refusal(reason).McpResult)).CompactLine());
 
     private static ControlRelay.Action ToApp(string line) => new ControlRelay.Action.ToApp(line);
@@ -128,6 +133,21 @@ public class ControlRelayTests
         Assert.Equal([ToApp(Initialized), ToApp(cancel), ToApp(""), ToApp(Call(11))], relay.ConnectSucceeded().Skip(1));
     }
 
+    /// <summary>Ids are told apart as the session reads them: 1 and 1.0 are one id, the integer 1, on both
+    /// platforms; "1" is another.</summary>
+    [Fact]
+    public void IdsAreToldApartAsTheSessionReadsThem()
+    {
+        var relay = Started();
+        _ = relay.FromClaude(Call(rawId: "1"));
+        _ = relay.FromClaude(Call(rawId: "\"1\""));
+        _ = relay.FromClaude(Call(rawId: "1.0"));
+        const string answeredAsOnePointZero = """{"id":1.0,"jsonrpc":"2.0","result":{}}""";
+        Assert.Equal([ToClaude(answeredAsOnePointZero)], relay.FromApp(answeredAsOnePointZero));
+        // the answer under 1.0 settled 1, and nothing more was waited for under it
+        Assert.Equal([Refused(JsonValue.String("1"), ControlRelay.RestartedError)], relay.ConnectionLost());
+    }
+
     [Fact]
     public void AFailedReconnectAnswersTheRequestAndTheNextTriesAgain()
     {
@@ -136,6 +156,20 @@ public class ControlRelayTests
         Assert.Equal([Connect()], relay.FromClaude(Call(5)));
         Assert.Equal([Refused(5, ControlClient.UnreachableError)], relay.ConnectFailed(ControlClient.UnreachableError));
         Assert.Equal([Connect()], relay.FromClaude(Call(6)));
+    }
+
+    /// <summary>A connection that cannot be made answers what was held for it as the session would have: once for
+    /// each id, and never under an id the session would not answer by.</summary>
+    [Fact]
+    public void AFailedReconnectAnswersEachHeldRequestOnceUnderItsOwnId()
+    {
+        var relay = Started();
+        _ = relay.ConnectionLost();
+        _ = relay.FromClaude(Call(14));
+        _ = relay.FromClaude(Call(14));
+        _ = relay.FromClaude("""{"jsonrpc":"2.0","id":1.5,"method":"ping"}""");
+        _ = relay.FromClaude("""{"jsonrpc":"2.0","id":null,"method":"ping"}""");
+        Assert.Equal([Refused(14, ControlClient.UnreachableError)], relay.ConnectFailed(ControlClient.UnreachableError));
     }
 
     [Fact]
@@ -165,5 +199,22 @@ public class ControlRelayTests
         _ = relay.FromClaude(Call(7));
         Assert.Empty(relay.ClaudeClosed());
         Assert.Equal([ToClaude(Answer(7)), Exit(ControlOutput.DoneExit)], relay.FromApp(Answer(7)));
+    }
+
+    /// <summary>Once Claude has closed its side, whatever settles the last request ends the relay — its answer,
+    /// the connection going, or a connection that could not be made — so the relay never outlives it.</summary>
+    [Fact]
+    public void OnceClaudeHasClosedALostOrFailedConnectionEndsTheRelay()
+    {
+        var lost = Started();
+        _ = lost.FromClaude(Call(12));
+        Assert.Empty(lost.ClaudeClosed());
+        Assert.Equal([Refused(12, ControlRelay.RestartedError), Exit(ControlOutput.DoneExit)], lost.ConnectionLost());
+        var failed = Started();
+        _ = failed.ConnectionLost();
+        Assert.Equal([Connect()], failed.FromClaude(Call(13)));
+        Assert.Empty(failed.ClaudeClosed());   // the connection on its way settles the request first
+        Assert.Equal([Refused(13, ControlClient.UnreachableError), Exit(ControlOutput.DoneExit)],
+            failed.ConnectFailed(ControlClient.UnreachableError));
     }
 }

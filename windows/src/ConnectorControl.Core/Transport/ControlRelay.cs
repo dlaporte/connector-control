@@ -49,6 +49,8 @@ public sealed class ControlRelay
     private readonly List<(JsonValue Id, string Method)> pending = [];
     /// <summary>Lines from Claude waiting for a connection.</summary>
     private readonly List<string> held = [];
+    /// <summary>A connection has been asked for and is neither made nor failed yet.</summary>
+    private bool connecting;
     private JsonValue? replayId;
     private int replays;
     /// <summary>Claude has closed its side: the relay ends once nothing it forwarded is left unanswered.</summary>
@@ -77,7 +79,12 @@ public sealed class ControlRelay
             held.Add(line);
             // After the first handshake only a request reconnects, and may start the app: a
             // notification, or a line that is no message at all, waits for the next request.
-            return handshakeDone && message?["id"] is null ? [] : [new Action.Connect()];
+            if (handshakeDone && message?["id"] is null)
+            {
+                return [];
+            }
+            connecting = true;
+            return [new Action.Connect()];
         }
         var actions = Forward(line, message);
         if (closing && pending.Count == 0)
@@ -90,6 +97,7 @@ public sealed class ControlRelay
     public IReadOnlyList<Action> ConnectSucceeded()
     {
         IsConnected = true;
+        connecting = false;
         var actions = new List<Action>();
         if (handshakeDone && initialize is { } replay)
         {
@@ -108,23 +116,31 @@ public sealed class ControlRelay
         {
             actions.AddRange(Forward(line, Message(line)));
         }
+        if (closing && pending.Count == 0)
+        {
+            actions.Add(new Action.Exit(ControlOutput.DoneExit));
+        }
         return actions;
     }
 
     /// <summary>No connection could be made: each request held for it is answered with
-    /// <paramref name="reason"/>. Before the first handshake there is nothing to keep running for, and the
-    /// relay ends.</summary>
+    /// <paramref name="reason"/>, as <see cref="Forward"/> waits for one — under an id the session answers by,
+    /// once. Before the first handshake there is nothing to keep running for, and the relay ends.</summary>
     public IReadOnlyList<Action> ConnectFailed(string reason)
     {
+        connecting = false;
         var lines = held.ToList();
         held.Clear();
+        var answered = new List<JsonValue>();
         var actions = new List<Action>();
         foreach (var line in lines)
         {
-            if (Message(line) is { } message && Failure(message, reason) is { } answer)
+            if (Request(Message(line)) is not { } request || answered.Contains(request.Id))
             {
-                actions.Add(new Action.ToClaude(answer));
+                continue;
             }
+            answered.Add(request.Id);
+            actions.Add(new Action.ToClaude(Failure(request.Id, request.Method, reason)));
         }
         if (!handshakeDone)
         {
@@ -190,10 +206,15 @@ public sealed class ControlRelay
         return actions;
     }
 
-    /// <summary>Claude closed its side: the relay ends now, or once what it forwarded is answered.</summary>
+    /// <summary>Claude closed its side: the relay ends now, or once what it forwarded is answered. A connection on
+    /// its way settles what it holds first, and ends the relay then.</summary>
     public IReadOnlyList<Action> ClaudeClosed()
     {
         closing = true;
+        if (connecting)
+        {
+            return [];
+        }
         return pending.Count == 0 || !IsConnected ? [new Action.Exit(ControlOutput.DoneExit)] : [];
     }
 
@@ -202,13 +223,19 @@ public sealed class ControlRelay
     /// or not at all.</summary>
     private List<Action> Forward(string line, JsonValue? message)
     {
-        if (message is not null && message["method"] is { Kind: JsonKind.String } method && message["id"] is { } raw
-            && McpSession.ValidId(raw) is { } id && !pending.Exists(entry => entry.Id == id))
+        if (Request(message) is { } request && !pending.Exists(entry => entry.Id == request.Id))
         {
-            pending.Add((id, method.StringValue));
+            pending.Add(request);
         }
         return [new Action.ToApp(line)];
     }
+
+    /// <summary>A request's id and method, when its id is one the session answers by: a string or an integer.</summary>
+    internal static (JsonValue Id, string Method)? Request(JsonValue? message) =>
+        message is not null && message["method"] is { Kind: JsonKind.String } method && message["id"] is { } raw
+            && McpSession.ValidId(raw) is { } id
+            ? (id, method.StringValue)
+            : null;
 
     /// <summary>The object a line holds, read only to know what the line is — never to change it.</summary>
     internal static JsonValue? Message(string line)
@@ -228,9 +255,6 @@ public sealed class ControlRelay
         }
         return fields.Kind == JsonKind.Object ? fields : null;
     }
-
-    internal static string? Failure(JsonValue message, string reason) =>
-        message["id"] is { } id && message["method"] is { Kind: JsonKind.String } method ? Failure(id, method.StringValue, reason) : null;
 
     /// <summary>What a request gets when the app cannot answer it: a tool call a refusal, read as Claude reads
     /// any other; anything else a JSON-RPC error.</summary>

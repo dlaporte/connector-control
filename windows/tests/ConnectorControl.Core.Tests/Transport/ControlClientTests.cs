@@ -12,6 +12,10 @@ public class ControlClientTests
         public void Close()
         {
         }
+
+        public void CloseWrite()
+        {
+        }
     }
 
     /// <summary>What the client's closures count and the clock they read.</summary>

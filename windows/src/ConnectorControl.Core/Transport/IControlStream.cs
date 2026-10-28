@@ -17,4 +17,9 @@ public interface IControlStream
 
     /// <summary>Ends the stream both ways; a read waiting on it returns empty. Safe to call more than once.</summary>
     void Close();
+
+    /// <summary>Ends only the writing half: the app reads the end of the stream and closes its side, while what it
+    /// had already sent can still be read here. Safe to call more than once. Platform idiom: Windows has no
+    /// half-close for a pipe, so here this does nothing.</summary>
+    void CloseWrite();
 }

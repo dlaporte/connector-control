@@ -115,11 +115,13 @@ public sealed class ControlRelayRunner(ControlClient client, string version, Str
             switch (action)
             {
                 case ControlRelay.Action.ToApp toApp:
-                    // A write that fails gives the connection up; the actions after it in this batch find no
-                    // connection and give up nothing more, since the relay answers a lost connection once.
-                    if (stream?.Write(Encoding.UTF8.GetBytes(toApp.Line + "\n")) != true)
+                    // A write that fails ends only the writing half. What the app sent before it went is still
+                    // read and passed on, and the end of the stream after it gives the connection up: a call
+                    // that went through is never told to try again, and one this write or a later one carried
+                    // is told so once.
+                    if (stream is { } current && !current.Write(Encoding.UTF8.GetBytes(toApp.Line + "\n")))
                     {
-                        Lose();
+                        current.CloseWrite();
                     }
                     break;
                 case ControlRelay.Action.ToClaude toClaude:
@@ -210,7 +212,9 @@ public sealed class ControlRelayRunner(ControlClient client, string version, Str
         Perform(relay.ConnectionLost());
     }
 
-    /// <summary>A line for Claude. When Claude's side has gone there is nobody left to relay for.</summary>
+    /// <summary>A line for Claude. When Claude's side has gone there is nobody left to relay for. Platform idiom: a
+    /// Claude that has gone is a broken pipe, which .NET reports as an <see cref="IOException"/>; the Mac asks
+    /// for EPIPE in place of SIGPIPE.</summary>
     private void ToClaude(string line)
     {
         try

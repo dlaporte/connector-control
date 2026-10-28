@@ -9,16 +9,21 @@ final class ControlRelayTests: XCTestCase {
     private let initialized = #"{"jsonrpc":"2.0","method":"notifications/initialized"}"#
     private let initializeAnswer = #"{"id":0,"jsonrpc":"2.0","result":{"capabilities":{"tools":{}},"protocolVersion":"2025-11-25","serverInfo":{"name":"connector-control","version":"1.5.0"}}}"#
 
-    private func call(_ id: Int) -> String {
-        #"{"jsonrpc":"2.0","id":\#(id),"method":"tools/call","params":{"name":"get_status","arguments":{}}}"#
+    private func call(_ id: Int) -> String { call(rawID: String(id)) }
+
+    /// A call whose id is written as `rawID` is, JSON and all.
+    private func call(rawID: String) -> String {
+        #"{"jsonrpc":"2.0","id":\#(rawID),"method":"tools/call","params":{"name":"get_status","arguments":{}}}"#
     }
 
     private func answer(_ id: Int) -> String {
         #"{"id":\#(id),"jsonrpc":"2.0","result":{"content":[],"isError":false,"structuredContent":{}}}"#
     }
 
-    private func refused(_ id: Int, _ reason: String) -> ControlRelay.Action {
-        .toClaude(JSONValue.object(["jsonrpc": .string("2.0"), "id": .int(id),
+    private func refused(_ id: Int, _ reason: String) -> ControlRelay.Action { refused(.int(id), reason) }
+
+    private func refused(_ id: JSONValue, _ reason: String) -> ControlRelay.Action {
+        .toClaude(JSONValue.object(["jsonrpc": .string("2.0"), "id": id,
                                     "result": ControlResult.refusal(reason).mcpResult]).compactLine())
     }
 
@@ -107,12 +112,37 @@ final class ControlRelayTests: XCTestCase {
         XCTAssertEqual(Array(relay.connectSucceeded().dropFirst()), [.toApp(initialized), .toApp(cancel), .toApp(""), .toApp(call(11))])
     }
 
+    /// Ids are told apart as the session reads them: 1 and 1.0 are one id, the integer 1, on both
+    /// platforms; "1" is another.
+    func testIDsAreToldApartAsTheSessionReadsThem() {
+        let relay = started()
+        _ = relay.fromClaude(call(rawID: "1"))
+        _ = relay.fromClaude(call(rawID: #""1""#))
+        _ = relay.fromClaude(call(rawID: "1.0"))
+        let answeredAsOnePointZero = #"{"id":1.0,"jsonrpc":"2.0","result":{}}"#
+        XCTAssertEqual(relay.fromApp(answeredAsOnePointZero), [.toClaude(answeredAsOnePointZero)])
+        XCTAssertEqual(relay.connectionLost(), [refused(.string("1"), ControlRelay.restartedError)],
+                       "the answer under 1.0 settled 1, and nothing more was waited for under it")
+    }
+
     func testAFailedReconnectAnswersTheRequestAndTheNextTriesAgain() {
         let relay = started()
         _ = relay.connectionLost()
         XCTAssertEqual(relay.fromClaude(call(5)), [.connect])
         XCTAssertEqual(relay.connectFailed(ControlClient.unreachableError), [refused(5, ControlClient.unreachableError)])
         XCTAssertEqual(relay.fromClaude(call(6)), [.connect])
+    }
+
+    /// A connection that cannot be made answers what was held for it as the session would have: once for
+    /// each id, and never under an id the session would not answer by.
+    func testAFailedReconnectAnswersEachHeldRequestOnceUnderItsOwnID() {
+        let relay = started()
+        _ = relay.connectionLost()
+        _ = relay.fromClaude(call(14))
+        _ = relay.fromClaude(call(14))
+        _ = relay.fromClaude(#"{"jsonrpc":"2.0","id":1.5,"method":"ping"}"#)
+        _ = relay.fromClaude(#"{"jsonrpc":"2.0","id":null,"method":"ping"}"#)
+        XCTAssertEqual(relay.connectFailed(ControlClient.unreachableError), [refused(14, ControlClient.unreachableError)])
     }
 
     func testAFailedFirstHandshakeEndsTheRelay() {
@@ -137,5 +167,20 @@ final class ControlRelayTests: XCTestCase {
         _ = relay.fromClaude(call(7))
         XCTAssertEqual(relay.claudeClosed(), [])
         XCTAssertEqual(relay.fromApp(answer(7)), [.toClaude(answer(7)), .exit(ControlOutput.doneExit)])
+    }
+
+    /// Once Claude has closed its side, whatever settles the last request ends the relay — its answer,
+    /// the connection going, or a connection that could not be made — so the relay never outlives it.
+    func testOnceClaudeHasClosedALostOrFailedConnectionEndsTheRelay() {
+        let lost = started()
+        _ = lost.fromClaude(call(12))
+        XCTAssertEqual(lost.claudeClosed(), [])
+        XCTAssertEqual(lost.connectionLost(), [refused(12, ControlRelay.restartedError), .exit(ControlOutput.doneExit)])
+        let failed = started()
+        _ = failed.connectionLost()
+        XCTAssertEqual(failed.fromClaude(call(13)), [.connect])
+        XCTAssertEqual(failed.claudeClosed(), [], "the connection on its way settles the request first")
+        XCTAssertEqual(failed.connectFailed(ControlClient.unreachableError),
+                       [refused(13, ControlClient.unreachableError), .exit(ControlOutput.doneExit)])
     }
 }

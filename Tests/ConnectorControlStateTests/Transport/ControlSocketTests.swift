@@ -235,6 +235,20 @@ final class ControlSocketTests: XCTestCase {
                                                                       message: ControlTools.needsNewerAppError("99.0.0"), id: .int(2))])
     }
 
+    /// A client that ends only its writing half — as the relay does when a write to the app fails — is at
+    /// the end of its stream to the server, which closes the connection, and the client's reading ends
+    /// too once it has read what was sent to it.
+    func testAClientThatEndsItsWritingHalfIsClosedByTheServer() throws {
+        let socket = try SocketRig(); defer { socket.dispose() }
+        let client = try socket.connect()
+        client.hello()
+        client.say(#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#)
+        XCTAssertTrue(socket.until { client.answers()[.int(1)] != nil })
+        client.stream.closeWrite()
+        XCTAssertTrue(socket.until { socket.server.connectionCount == 0 && client.isEnded })
+        XCTAssertEqual(client.lines, [#"{"id":1,"jsonrpc":"2.0","result":{}}"#])
+    }
+
     /// A command line that goes away while its write waits behind a dialog takes the write with it.
     func testClosingTheConnectionDropsItsWaitingWrite() throws {
         let socket = try SocketRig(); defer { socket.dispose() }

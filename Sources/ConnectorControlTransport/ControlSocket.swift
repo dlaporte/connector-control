@@ -326,4 +326,12 @@ public final class ControlSocketStream: ControlStream, @unchecked Sendable {
             Darwin.shutdown(fd, SHUT_RDWR)
         }
     }
+
+    /// The peer reads the end of the stream; what it sends can still be read here until it closes.
+    public func closeWrite() {
+        lock.withLock {
+            guard !shut else { return }
+            Darwin.shutdown(fd, SHUT_WR)
+        }
+    }
 }

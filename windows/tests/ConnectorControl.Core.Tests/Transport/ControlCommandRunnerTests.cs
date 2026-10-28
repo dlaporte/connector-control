@@ -23,6 +23,10 @@ public class ControlCommandRunnerTests
         public void Close()
         {
         }
+
+        public void CloseWrite()
+        {
+        }
     }
 
     private const string Answered = """{"id":1,"jsonrpc":"2.0","result":{}}""";

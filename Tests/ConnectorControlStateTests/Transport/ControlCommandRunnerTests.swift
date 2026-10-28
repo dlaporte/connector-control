@@ -12,6 +12,7 @@ final class ControlCommandRunnerTests: XCTestCase {
         func read(maximum: Int) -> Data { replies.isEmpty ? Data() : Data((replies.removeFirst() + "\n").utf8) }
         func write(_ data: Data) -> Bool { written.append(data); return true }
         func close() {}
+        func closeWrite() {}
     }
 
     private let answered = #"{"id":1,"jsonrpc":"2.0","result":{}}"#

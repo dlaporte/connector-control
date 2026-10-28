@@ -36,6 +36,11 @@ public final class ControlRelayRunner: @unchecked Sendable {
 
     /// Relays until Claude closes its side or the relay must end, and returns the exit code.
     public func run() -> Int32 {
+        // A write to a Claude that has gone fails with EPIPE and ends the relay as any failed write to
+        // Claude does, where SIGPIPE would end the process outright. An output that cannot take this — a
+        // file, say — raises no SIGPIPE either, so failing is let be. Platform idiom: Windows reports a
+        // broken pipe as an IOException.
+        _ = fcntl(output, F_SETNOSIGPIPE, 1)
         Thread.detachNewThread { [self] in readClaude() }
         ended.wait()
         return queue.sync { exitCode ?? ControlOutput.doneExit }
@@ -75,9 +80,11 @@ public final class ControlRelayRunner: @unchecked Sendable {
             guard exitCode == nil else { return }
             switch action {
             case .toApp(let line):
-                // A write that fails gives the connection up; the actions after it in this batch find no
-                // connection and give up nothing more, since the relay answers a lost connection once.
-                if stream?.write(Data((line + "\n").utf8)) != true { lose() }
+                // A write that fails ends only the writing half. What the app sent before it went is still
+                // read and passed on, and the end of the stream after it gives the connection up: a call
+                // that went through is never told to try again, and one this write or a later one carried
+                // is told so once.
+                if let stream, !stream.write(Data((line + "\n").utf8)) { stream.closeWrite() }
             case .toClaude(let line):
                 toClaude(line)
             case .connect:
@@ -128,7 +135,9 @@ public final class ControlRelayRunner: @unchecked Sendable {
         perform(relay.connectionLost())
     }
 
-    /// A line for Claude. When Claude's side has gone there is nobody left to relay for.
+    /// A line for Claude. When Claude's side has gone there is nobody left to relay for. Platform idiom: a
+    /// Claude that has gone is EPIPE, asked for in `run()` in place of SIGPIPE; Windows reports a broken
+    /// pipe as an IOException.
     private func toClaude(_ line: String) {
         let data = Data((line + "\n").utf8)
         let written = data.withUnsafeBytes { raw -> Bool in
